@@ -1,0 +1,28 @@
+const { decode_token } = require("../utils/jsonwebtoken");
+
+const verify_auth = (req, res, next) => {
+    try {
+        const token = req.cookies.access_token;
+
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "Unauthorized"
+            });
+        }
+
+        const decoded = decode_token(token);
+
+        req.user = decoded;
+
+        next();
+
+    } catch (error) {
+        return res.status(401).json({
+            success: false,
+            message: "Invalid token"
+        });
+    }
+};
+
+module.exports = { verify_auth };

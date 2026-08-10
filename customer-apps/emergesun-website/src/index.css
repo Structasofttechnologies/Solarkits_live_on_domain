@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #28377f;
+  --color-orange: #f39220;
+  --color-button: #f39220;
+  --color-submit-button: #FF5733;
+  --color-navy: #000080;
+  --color-yellow: #FFA500;
+  --color-green: #308d08;
+  --color-purple: #35297e;
+  --color-pista: #58D38F;
+  --color-deep-orange: #FF5733;
+  --color-gray-dark: #52595D;
+  --color-light-gray: #dadada;
+  --color-background-gray: #dadada;
+  --color-hint-gray: #757575;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff;
+  color: #1a1a1a;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Custom styles for animations & layout utilities */
+.bounce-scroll {
+  physics: bouncing; /* visual match for Flutter BouncingScrollPhysics */
+}
+
+/* Custom background animations */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Sine wave animation for video elements */
+@keyframes wave {
+  0% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+  50% { transform: translate(-5px, 5px) scale(1.05); opacity: 0.6; }
+  100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
+}
+
+.wave-animation {
+  animation: wave 4s ease-in-out infinite alternate;
+}
+
+header {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+header::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}

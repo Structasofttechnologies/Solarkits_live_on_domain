@@ -1,0 +1,62 @@
+[
+  {
+    "_id": "6a0c02e8623d0970cd491f6d",
+    "name": "DIY Solar Projects",
+    "slug": "diy-solar-projects",
+    "description": "DIY Solar Projects SaaS Product",
+    "is_active": true,
+    "is_system": false,
+    "is_protected": false,
+    "is_deleted": false
+  },
+  {
+    "_id": "6a0c02e8623d0970cd491f6e",
+    "name": "EPC Project Management ERP",
+    "slug": "epc-project-management-erp",
+    "description": "EPC Project Management ERP SaaS Product",
+    "is_active": true,
+    "is_system": false,
+    "is_protected": false,
+    "is_deleted": false
+  },
+  {
+    "_id": "6a0c02e8623d0970cd491f6f",
+    "name": "Solar AMC Management",
+    "slug": "solar-amc-management",
+    "description": "Solar AMC Management SaaS Product",
+    "is_active": true,
+    "is_system": false,
+    "is_protected": false,
+    "is_deleted": false
+  },
+  {
+    "_id": "6a0c02e8623d0970cd491f70",
+    "name": "Solar Installer Marketplace",
+    "slug": "solar-installer-marketplace",
+    "description": "Solar Installer Marketplace SaaS Product",
+    "is_active": true,
+    "is_system": false,
+    "is_protected": false,
+    "is_deleted": false
+  },
+  {
+    "_id": "6a0c02e8623d0970cd491f71",
+    "name": "Solar Mega Watt Projects",
+    "slug": "solar-mega-watt-projects",
+    "description": "Solar Mega Watt Projects SaaS Product",
+    "is_active": true,
+    "is_system": false,
+    "is_protected": false,
+    "is_deleted": false
+  },
+  {
+    "_id": "6a0c02e8623d0970cd491f72",
+    "name": "Solar Shop",
+    "slug": "solar-shop",
+    "description": "Solar Shop SaaS Product",
+    "is_active": true,
+    "is_system": false,
+    "is_protected": false,
+    "is_deleted": false
+  }
+]
