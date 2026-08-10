@@ -1,4 +1,4 @@
-# ---------------- STAGE 1: Build cms-auth-frontend ----------------
+﻿# ---------------- STAGE 1: Build cms-auth-frontend ----------------
 FROM node:22-alpine AS auth-builder
 WORKDIR /app
 COPY cms-auth-frontend/package*.json ./
@@ -8,74 +8,74 @@ RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/auth-api" >> .env
 RUN npm run build
 
-# ---------------- STAGE 2: Build emergesun-admin-panel-frontend ----------------
+# ---------------- STAGE 2: Build solarkits-admin-panel-frontend ----------------
 FROM node:22-alpine AS admin-builder
 WORKDIR /app
-COPY emergesun-admin-panel-frontend/package*.json ./
+COPY solarkits-admin-panel-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-admin-panel-frontend/ ./
+COPY solarkits-admin-panel-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN sed -i '/VITE_AUTH_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/admin-api" >> .env
 RUN echo "VITE_AUTH_API_URL=/auth-api" >> .env
 RUN npm run build
 
-# ---------------- STAGE 3: Build emergesun-developer-panel-frontend ----------------
+# ---------------- STAGE 3: Build solarkits-developer-panel-frontend ----------------
 FROM node:22-alpine AS developer-builder
 WORKDIR /app
-COPY emergesun-developer-panel-frontend/package*.json ./
+COPY solarkits-developer-panel-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-developer-panel-frontend/ ./
+COPY solarkits-developer-panel-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/developer-api" >> .env
 RUN npm run build
 
-# ---------------- STAGE 4: Build emergesun-operation-management-panel-frontend ----------------
+# ---------------- STAGE 4: Build solarkits-operation-management-panel-frontend ----------------
 FROM node:22-alpine AS operation-builder
 WORKDIR /app
-COPY emergesun-operation-management-panel-frontend/package*.json ./
+COPY solarkits-operation-management-panel-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-operation-management-panel-frontend/ ./
+COPY solarkits-operation-management-panel-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/operation-management-api" >> .env
 RUN npm run build
 
-# ---------------- STAGE 5: Build emergesun-warehouse-panel-frontend ----------------
+# ---------------- STAGE 5: Build solarkits-warehouse-panel-frontend ----------------
 FROM node:22-alpine AS warehouse-builder
 WORKDIR /app
-COPY emergesun-warehouse-panel-frontend/package*.json ./
+COPY solarkits-warehouse-panel-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-warehouse-panel-frontend/ ./
+COPY solarkits-warehouse-panel-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/warehouse-api" >> .env
 RUN npm run build -- --base=/warehouse-management-panel/
 
-# ---------------- STAGE 6: Build emergesun-account-panel-frontend ----------------
+# ---------------- STAGE 6: Build solarkits-account-panel-frontend ----------------
 FROM node:22-alpine AS account-builder
 WORKDIR /app
-COPY emergesun-account-panel-frontend/package*.json ./
+COPY solarkits-account-panel-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-account-panel-frontend/ ./
+COPY solarkits-account-panel-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/account-api" >> .env
 RUN npm run build
 
-# ---------------- STAGE 7: Build emergesun-epc-panel-frontend ----------------
+# ---------------- STAGE 7: Build solarkits-epc-panel-frontend ----------------
 FROM node:22-alpine AS epc-builder
 WORKDIR /app
-COPY emergesun-epc-panel-frontend/package*.json ./
+COPY solarkits-epc-panel-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-epc-panel-frontend/ ./
+COPY solarkits-epc-panel-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/api" >> .env
 RUN npm run build
 
-# ---------------- STAGE 8: Build emergesun-solarshop-india-frontend ----------------
+# ---------------- STAGE 8: Build solarkits-solarshop-india-frontend ----------------
 FROM node:22-alpine AS solarshop-builder
 WORKDIR /app
-COPY emergesun-solarshop-india-frontend/package*.json ./
+COPY solarkits-solarshop-india-frontend/package*.json ./
 RUN npm install --no-audit --no-fund --legacy-peer-deps
-COPY emergesun-solarshop-india-frontend/ ./
+COPY solarkits-solarshop-india-frontend/ ./
 RUN touch .env && sed -i '/VITE_API_URL/d' .env || true
 RUN echo "VITE_API_URL=/api" >> .env
 RUN npm run build -- --base=/solarshop-india/
@@ -98,11 +98,11 @@ RUN apk add --no-cache nodejs npm
 WORKDIR /app
 
 # Copy and install backend dependencies
-COPY emergesun-central-backend/package*.json ./
+COPY solarkits-central-backend/package*.json ./
 RUN npm install --production --no-audit --no-fund --legacy-peer-deps
 
 # Copy backend source
-COPY emergesun-central-backend/ ./
+COPY solarkits-central-backend/ ./
 
 # Copy built frontend assets from builder stages to Nginx directories
 COPY --from=auth-builder /app/dist /usr/share/nginx/html/auth

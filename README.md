@@ -1,110 +1,142 @@
-# Emergesun Project Ecosystem
+# SolarKits — B2B Solar E-Commerce Ecosystem ☀️🔋
 
-Welcome to the **Emergesun Project** ecosystem. This repository serves as a monorepo-style collection of multiple integrated applications designed for solar shop operations, administrative management, warehouse logistics, account operations, supplier coordination, and developer tools.
-
-## 🌟 Overview
-
-The ecosystem consists of eight main functional areas, each with a dedicated frontend and backend:
-
-1. **CMS Authentication**: Centralized authentication service for all panels.
-2. **Admin Panel**: Comprehensive management dashboard for administrators.
-3. **Developer Panel**: Tools and module management for developers.
-4. **Solar Shop India**: Customer-facing platform for the Indian solar market.
-5. **Operation Management Panel**: Operational control, task scheduling, and tracking.
-6. **Warehouse Panel**: Inventory control, stock routing, and warehousing logs.
-7. **Account Panel**: Ledger management, invoicing, and financial reports.
-8. **Supplier Panel**: Supplier onboarding, stock provisioning, and quotes.
-
-## 🏗️ Architecture
-
-The projects follow a standardized stack:
-- **Frontend**: React + Vite + Tailwind CSS v4 + Framer Motion.
-- **Backend**: Node.js + Express + Mongoose (MongoDB) + MySQL (support).
-- **Reverse Proxy**: Nginx (Local development entry point).
-
-### Port Mapping & Routing
-
-All services are integrated through a local Nginx reverse proxy (listening on port `5176`).
-
-| Application / Service | Frontend Port | Backend Port | Nginx Route |
-| :--- | :--- | :--- | :--- |
-| **CMS Auth** | `5173` | `3000` | `/` (Auth), `/auth-api/` |
-| **Admin Panel** | `5174` | `3001` | `/admin-panel/`, `/admin-api/` |
-| **Developer Panel** | `5175` | `3002` | `/developer-panel/`, `/developer-api/` |
-| **Solar Shop India** | `5177` | `3003` | `/solarshop/` (TBD), `/solarshop-api/` (TBD) |
-| **Operation Management**| `5178` | `3004` | `/operation-management-panel/`, `/operation-management-api/` |
-| **Warehouse Panel** | `5179` | `3005` | `/warehouse-management-panel/`, `/warehouse-api/` |
-| **Account Panel** | `5180` | `3006` | `/account-panel/`, `/account-api/` |
-| **Supplier Panel** | `5181` | `3007` | `/supplier-panel/` (TBD), `/supplier-api/` (TBD) |
-
-## 📁 Project Structure
-
-```text
-Emergesun-Project-/
-├── cms-auth-backend/                         # Auth API (Node.js)
-├── cms-auth-frontend/                        # Auth UI (React)
-├── emergesun-account-panel-backend/          # Account API (Node.js)
-├── emergesun-account-panel-frontend/         # Account UI (React)
-├── emergesun-admin-panel-backend/            # Admin API (Node.js)
-├── emergesun-admin-panel-frontend/           # Admin UI (React)
-├── emergesun-developer-panel-backend/        # Developer API (Node.js)
-├── emergesun-developer-panel-frontend/       # Developer UI (React)
-├── emergesun-operation-management-panel-backend/ # Operation API (Node.js)
-├── emergesun-operation-management-panel-frontend/# Operation UI (React)
-├── emergesun-solarshop-india-backend/        # Solar Shop API (Node.js)
-├── emergesun-solarshop-india-frontend/       # Solar Shop UI (React)
-├── emergesun-warehouse-panel-backend/        # Warehouse API (Node.js)
-├── emergesun-warehouse-panel-frontend/       # Warehouse UI (React)
-├── supplier-panel-backend/                   # Supplier API (Node.js)
-├── supplier-panel-frontend/                  # Supplier UI (React)
-├── nginx.conf                                # Local Nginx Configurations
-└── README.md                                 # This file
-```
-
-## 🚀 Local Setup
-
-### Prerequisites
-- **Node.js**: v18+ recommended.
-- **MongoDB**: Atlas or local instance.
-- **MySQL**: Local instance for binary logs / legacy data.
-- **Nginx**: Installed on your local machine (e.g., `C:\nginx-1.28.1`).
-
-### Quick Start
-1. **Configure Nginx**:
-   - Use the provided [nginx.conf](file:///d:/Emergesun/Emergesun-Project-/nginx.conf) in your Nginx installation.
-   - Update paths if necessary.
-2. **Setup Environment Variables**:
-   - Navigate to each project directory (both frontend and backend).
-   - Copy `example.env` to `.env` and update variables as needed.
-3. **Install & Run**:
-   - For any project:
-     ```bash
-     npm install
-     npm run dev
-     ```
-4. **Access the App**:
-   - Open `http://localhost:5176` in your browser.
-
-## 📜 Individual Documentation
-
-Detailed documentation for each project can be found in their respective directories:
-
-- [CMS Auth Backend](file:///d:/Emergesun/Emergesun-Project-/cms-auth-backend/README.md)
-- [CMS Auth Frontend](file:///d:/Emergesun/Emergesun-Project-/cms-auth-frontend/README.md)
-- [Account Panel Backend](file:///d:/Emergesun/Emergesun-Project-/emergesun-account-panel-backend/README.md)
-- [Account Panel Frontend](file:///d:/Emergesun/Emergesun-Project-/emergesun-account-panel-frontend/README.md)
-- [Admin Panel Backend](file:///d:/Emergesun/Emergesun-Project-/emergesun-admin-panel-backend/README.md)
-- [Admin Panel Frontend](file:///d:/Emergesun/Emergesun-Project-/emergesun-admin-panel-frontend/README.md)
-- [Developer Panel Backend](file:///d:/Emergesun/Emergesun-Project-/emergesun-developer-panel-backend/README.md)
-- [Developer Panel Frontend](file:///d:/Emergesun/Emergesun-Project-/emergesun-developer-panel-frontend/README.md)
-- [Operation Management Backend](file:///d:/Emergesun/Emergesun-Project-/emergesun-operation-management-panel-backend/README.md)
-- [Operation Management Frontend](file:///d:/Emergesun/Emergesun-Project-/emergesun-operation-management-panel-frontend/README.md)
-- [Solar Shop India Backend](file:///d:/Emergesun/Emergesun-Project-/emergesun-solarshop-india-backend/README.md)
-- [Solar Shop India Frontend](file:///d:/Emergesun/Emergesun-Project-/emergesun-solarshop-india-frontend/README.md)
-- [Warehouse Panel Backend](file:///d:/Emergesun/Emergesun-Project-/emergesun-warehouse-panel-backend/README.md)
-- [Warehouse Panel Frontend](file:///d:/Emergesun/Emergesun-Project-/emergesun-warehouse-panel-frontend/README.md)
-- [Supplier Panel Backend](file:///d:/Emergesun/Emergesun-Project-/supplier-panel-backend/README.md)
-- [Supplier Panel Frontend](file:///d:/Emergesun/Emergesun-Project-/supplier-panel-frontend/README.md)
+Welcome to the **SolarKits** repository. **SolarKits** is a comprehensive, enterprise-grade B2B E-Commerce & Operations Ecosystem designed specifically for bulk solar equipment sales, distribution, and lifecycle management. It connects B2B solar customers, EPC contractors, solar dealers, equipment manufacturers/suppliers, warehouse teams, financial accounts, and system administrators into one integrated platform.
 
 ---
-© 2026 Emergesun Projects.
+
+## 🌟 Platform Overview
+
+SolarKits powers the digital transformation of B2B solar commerce by enabling solar dealers, commercial installers, and EPC contractors to purchase high-quality solar products, packaged solar kits, inverters, panels, and accessories directly at wholesale rates with dynamic quote generation and multi-warehouse logistics.
+
+### 🏬 Target Audience & Use Cases
+- **B2B Solar Buyers & EPC Contractors**: Purchase bulk solar components, customcombo solar kits, track orders, request custom quotations, and manage project installations.
+- **Suppliers & Manufacturers**: Onboard products, manage brand catalogs, supply chain inventory, and manage quotation bids.
+- **Warehouse Logistics Teams**: Oversee inward inventory, stock activations, SKU serial tracking, dispatch management, and delivery logistics.
+- **Finance & Accounts Teams**: Manage ledgers, invoice generation, payment processing, supplier registries, and financial reporting.
+- **Operations & Management**: Order lifecycle management, staff access control, and task routing.
+
+---
+
+## 🏗️ Repository Architecture
+
+SolarKits v2.0 is organized into three primary high-performance modules:
+
+```text
+SolarKits v2.0/
+├── customer-apps/
+│   └── solarkits-solarshop-india/        # Customer-facing B2B Solar Shop Marketplace UI (React + Vite)
+│
+├── internal-admin-portal/
+│   └── solarkits-unified-admin/          # Unified Staff & Operations Portal (React + Vite)
+│       ├── src/portals/admin/            # System Administration & Website Config
+│       ├── src/portals/accounts/         # Accounts, Ledgers & Invoicing
+│       ├── src/portals/warehouse/        # Warehouse & Inventory Control
+│       ├── src/portals/operations/       # Order & Dispatch Management
+│       ├── src/portals/developer/        # Module Management & Developer Utilities
+│       └── src/portals/cms-auth/         # Security Gateway & Role Selection
+│
+├── backend/
+│   └── solarkits-central-backend/        # Centralized REST API Service (Node.js + Express + MongoDB)
+│       └── src/modules/
+│           ├── solarkits-website/        # Website Content Management API
+│           ├── solarshop-india/          # B2B Store API & Checkout Engine
+│           ├── admin-panel/              # Core Administration API
+│           ├── warehouse-panel/          # Warehouse & Stock Activation API
+│           ├── supplier-panel/           # Supplier Onboarding API
+│           └── accounts-panel/           # Ledger & Financial API
+│
+├── Dockerfile                            # Multi-stage Containerization Build File
+├── nginx.conf                            # Development Nginx Reverse Proxy Configuration
+├── nginx.prod.conf.template              # Production Nginx NGINX Deployment Template
+└── README.md                             # Project Documentation
+```
+
+---
+
+## ⚡ Key Features
+
+### 🛒 1. B2B Solar Shop Marketplace (`customer-apps/solarkits-solarshop-india`)
+- **Product Catalog**: Solar panels (Mono PERC, TopCon, Bifacial), Ongrid/Offgrid/Hybrid inverters, Mounting structures, Solar batteries, and BOS accessories.
+- **Custom Solar Kits Configurator**: Pre-packaged and custom solar system kits tailored for residential, commercial, and industrial rooftop projects.
+- **EPC Contractor Onboarding**: Registration, business document verification, and tier-based trade pricing.
+- **B2B Bulk Checkout & Quote Generator**: Dynamic cart calculation, tax estimation, and payment integration.
+
+### 🏢 2. Unified Internal Staff Portal (`internal-admin-portal/solarkits-unified-admin`)
+- **Single-Sign-On (SSO) Security Gateway**: Multi-tenant access control for staff members based on assigned roles.
+- **Admin Dashboard**: Comprehensive site setting controls, website banner updates, pricing plans, and EPC approvals.
+- **Warehouse & Inventory Hub**: Stock inward logs, SKU serial assignment, inventory transfer, and delivery tracking.
+- **Accounts & Supplier Portal**: Supplier registries, ledger auditing, tax invoice management, and payout verification.
+- **Operations & Logistics Control**: Live order tracking, dispatch status monitoring, and customer support ticket routing.
+
+### ⚙️ 3. Centralized API Server (`backend/solarkits-central-backend`)
+- **Unified MongoDB Architecture**: High-speed database handling core product catalogs, user credentials, orders, and geolocation boundary data.
+- **Cloudinary Media Assets**: Automatic asset folder management and cloud-hosted product image uploads.
+- **Automated Communication**: Transactional emails and OTP verification via Nodemailer and SMS gateways.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend Core**: React 19, Vite, React Router v7, Redux Toolkit
+- **Styling & UI**: Tailwind CSS v4, Framer Motion, Lucide Icons, React Icons
+- **Backend Runtime**: Node.js, Express.js
+- **Database & Storage**: MongoDB (Mongoose ORM), Cloudinary
+- **DevOps & Proxy**: Docker, Nginx, Powershell automation scripts
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Node.js**: v18.x or higher
+- **MongoDB**: Local MongoDB instance or MongoDB Atlas Connection URI
+- **Nginx**: (Optional for local multi-port routing)
+
+### Quick Start Guide
+
+#### 1. Backend Server Setup
+```bash
+cd backend/solarkits-central-backend
+npm install
+npm run dev
+```
+*Backend runs by default on `http://localhost:3000` or port configured in `.env`.*
+
+#### 2. B2B Customer Solar Shop Frontend Setup
+```bash
+cd customer-apps/solarkits-solarshop-india
+npm install
+npm run dev
+```
+*Solar Shop UI runs by default on `http://localhost:5173`.*
+
+#### 3. Unified Internal Admin Portal Setup
+```bash
+cd internal-admin-portal/solarkits-unified-admin
+npm install
+npm run dev
+```
+*Unified Admin Portal runs by default on `http://localhost:5174`.*
+
+---
+
+## 🔒 Security & Environment Configuration
+
+Each application sub-folder contains an `example.env` file. Create a `.env` file in each directory with your specific configurations:
+
+```env
+# Backend .env Example
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/solarkits-project
+JWT_SECRET=your_jwt_secret_key
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+---
+
+## 📜 License & Copyright
+
+© 2026 **SolarKits Technologies Pvt. Ltd.** All Rights Reserved.  
+*B2B Solar E-Commerce Ecosystem Platform.*
