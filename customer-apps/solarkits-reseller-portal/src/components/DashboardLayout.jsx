@@ -62,10 +62,14 @@ export default function DashboardLayout() {
   }, [token, navigate]);
 
   useEffect(() => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
     fetchMe();
     const timer = setInterval(fetchMe, 5000);
     return () => clearInterval(timer);
-  }, [fetchMe]);
+  }, [token, fetchMe, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("reseller_token");
