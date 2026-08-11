@@ -1,4 +1,4 @@
-﻿// pages/Login.jsx
+// pages/Login.jsx
 import { useState, useEffect, useRef } from"react";
 import { useNavigate, Link } from"react-router-dom";
 import { useDispatch } from"react-redux";
@@ -305,21 +305,12 @@ export default function Login() {
         const user = response.data.account || response.data.user;
         dispatch(setUser(user));
         sessionStorage.setItem('user', JSON.stringify(user));
-        dispatch(setAlert({ type:"success", message:"Direct Login successful!" }));
+        dispatch(setAlert({ type:"success", message:"Direct Login successful! Welcome back." }));
         navigate("/dashboard");
       }
     } catch (error) {
-      console.error("Direct login API error, logging in with developer account fallback:", error);
-      const mockUser = {
-        id: "dev_cust_001",
-        email: cred.email,
-        name: "Developer Account",
-        status: "approved"
-      };
-      dispatch(setUser(mockUser));
-      sessionStorage.setItem('user', JSON.stringify(mockUser));
-      dispatch(setAlert({ type:"success", message:"Logged in as Developer Account!" }));
-      navigate("/dashboard");
+      const msg = error.response?.data?.message || "Login failed. Please check credentials.";
+      dispatch(setAlert({ type:"error", message: msg }));
     } finally {
       setLoading(false);
     }

@@ -157,9 +157,10 @@ app.use("/api/website/v1/megawatt", megawatt_router);
 app.use("/api/website/v1/amc", amc_router);
 
 
-// Initialize Schedulers / Cron routines
+// Initialize Schedulers / Cron routines & Auto-seed demo accounts
 require('./modules/solarshop-india/utils/scheduler');
 require('./modules/warehouse-panel/utils/scheduler');
+require('./utils/autoSeedAccounts');
 
 // Start Express unified server
 app.listen(port, () => {
