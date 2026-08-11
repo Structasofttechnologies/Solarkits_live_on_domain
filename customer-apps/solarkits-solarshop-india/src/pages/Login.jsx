@@ -196,6 +196,17 @@ export default function Login() {
       if (response.data.success) {
         const user = response.data.account || response.data.user;
 
+        const { accessToken, refreshToken } = response.data;
+        if (accessToken) {
+          if (rememberMe) {
+            localStorage.setItem('access_token', accessToken);
+            if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+          } else {
+            sessionStorage.setItem('access_token', accessToken);
+            if (refreshToken) sessionStorage.setItem('refresh_token', refreshToken);
+          }
+        }
+
         dispatch(setUser(user));
 
         if (rememberMe) {
@@ -303,6 +314,11 @@ export default function Login() {
 
       if (response.data.success) {
         const user = response.data.account || response.data.user;
+        const { accessToken, refreshToken } = response.data;
+        if (accessToken) {
+          sessionStorage.setItem('access_token', accessToken);
+          if (refreshToken) sessionStorage.setItem('refresh_token', refreshToken);
+        }
         dispatch(setUser(user));
         sessionStorage.setItem('user', JSON.stringify(user));
         dispatch(setAlert({ type:"success", message:"Direct Login successful! Welcome back." }));

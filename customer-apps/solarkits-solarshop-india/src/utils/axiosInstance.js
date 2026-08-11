@@ -23,6 +23,29 @@ const axiosInstance = axios.create({
   withCredentials: true, // always send cookies
 });
 
+// Helper getters for stored tokens
+const getStoredAccessToken = () => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+};
+
+const getStoredRefreshToken = () => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('refresh_token') || sessionStorage.getItem('refresh_token');
+};
+
+// ─── Request Interceptor ───────────────────────────────────────────────────
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = getStoredAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Track whether a token refresh is already in flight so concurrent 401s
 // don't all trigger their own refresh requests.
 let isRefreshing = false;
@@ -74,23 +97,43 @@ axiosInstance.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Attempt to get a new access_token using the refresh_token cookie
-        await axios.post(
+        const storedRefreshToken = getStoredRefreshToken();
+        // Attempt to get a new access_token using cookie or stored refresh_token
+        const refreshResponse = await axios.post(
           `${API_BASE}/india/v1/auth/refresh-token`,
-          {},
-          { withCredentials: true }
+          { refreshToken: storedRefreshToken },
+          { 
+            withCredentials: true,
+            headers: storedRefreshToken ? { 'x-refresh-token': storedRefreshToken } : {}
+          }
         );
+
+        if (refreshResponse.data?.accessToken) {
+          if (localStorage.getItem('refresh_token')) {
+            localStorage.setItem('access_token', refreshResponse.data.accessToken);
+            if (refreshResponse.data.refreshToken) {
+              localStorage.setItem('refresh_token', refreshResponse.data.refreshToken);
+            }
+          } else {
+            sessionStorage.setItem('access_token', refreshResponse.data.accessToken);
+            if (refreshResponse.data.refreshToken) {
+              sessionStorage.setItem('refresh_token', refreshResponse.data.refreshToken);
+            }
+          }
+        }
 
         // Refresh succeeded — flush the queue and retry the original request
         processQueue(null);
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         // Refresh also failed — clear stale session data and reject.
-        // Do NOT use window.location.href here — that causes an infinite
-        // reload loop when the user is already on /auth/login.
         processQueue(refreshError);
         try {
           sessionStorage.removeItem("user");
+          sessionStorage.removeItem("access_token");
+          sessionStorage.removeItem("refresh_token");
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
         } catch (_) {}
 
         return Promise.reject(refreshError);

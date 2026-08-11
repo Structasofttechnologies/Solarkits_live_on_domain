@@ -107,7 +107,11 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
     try {
       await dispatch(logout()).unwrap();
       localStorage.removeItem("user");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
       sessionStorage.removeItem("user");
+      sessionStorage.removeItem("access_token");
+      sessionStorage.removeItem("refresh_token");
       dispatch(setAlert({ type: "success", message: "Logged out successfully" }));
       navigate("/auth/login");
     } catch (err) {

@@ -7,6 +7,7 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
+app.set('trust proxy', 1);
 const port = process.env.PORT || 5000;
 const ipv4 = process.env.IPV4 || 'http://localhost';
 

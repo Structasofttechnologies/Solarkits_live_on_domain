@@ -558,18 +558,19 @@ const login = async (req, res) => {
             user_agent: req.headers["user-agent"]
         });
 
-        // 🍪 Cookies
+        // 🍪 Cookies & Helper
+        const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
         res.cookie("access_token", accessToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            secure: isHttps,
+            sameSite: isHttps ? "none" : "lax",
             maxAge: 15 * 60 * 1000
         });
 
         res.cookie("refresh_token", refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            secure: isHttps,
+            sameSite: isHttps ? "none" : "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
@@ -594,6 +595,8 @@ const login = async (req, res) => {
         return res.json({
             success: true,
             message: "Login successful",
+            accessToken,
+            refreshToken,
             account: {
                 id: account._id,
                 name: account.name,
@@ -614,7 +617,7 @@ const login = async (req, res) => {
 
 const refresh_token = async (req, res) => {
     try {
-        const token = req.cookies.refresh_token;
+        const token = req.cookies?.refresh_token || req.body?.refreshToken || req.headers['x-refresh-token'];
 
         if (!token) {
             return res.status(401).json({
@@ -670,23 +673,26 @@ const refresh_token = async (req, res) => {
             { expiresIn: "15m" }
         );
 
+        const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
         res.cookie("access_token", newAccessToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            secure: isHttps,
+            sameSite: isHttps ? "none" : "lax",
             maxAge: 15 * 60 * 1000
         });
 
         res.cookie("refresh_token", newRefreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            secure: isHttps,
+            sameSite: isHttps ? "none" : "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
         return res.json({
             success: true,
-            message: "Token refreshed"
+            message: "Token refreshed",
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken
         });
 
     } catch (error) {
@@ -921,7 +927,10 @@ const reset_password = async (req, res) => {
 
 const get_me = async (req, res) => {
     try {
-        const token = req.cookies?.access_token;
+        let token = req.cookies?.access_token;
+        if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            token = req.headers.authorization.split(' ')[1];
+        }
 
         if (!token) {
             return res.status(401).json({

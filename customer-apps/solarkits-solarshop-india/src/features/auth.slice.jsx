@@ -60,6 +60,11 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('user');
+        sessionStorage.removeItem('access_token');
+        sessionStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
       }
     },
 
@@ -86,6 +91,11 @@ const authSlice = createSlice({
         state.loading = false;
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('user');
+          sessionStorage.removeItem('access_token');
+          sessionStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
         }
       })
       .addCase(logout.pending, (state) => {
@@ -97,11 +107,21 @@ const authSlice = createSlice({
         state.loading = false;
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('user');
+          sessionStorage.removeItem('access_token');
+          sessionStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
         }
       })
       .addCase(logout.rejected, (state) => {
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('user');
+          sessionStorage.removeItem('access_token');
+          sessionStorage.removeItem('refresh_token');
+          localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
         }
         state.user = null;
         state.isAuthenticated = false;
