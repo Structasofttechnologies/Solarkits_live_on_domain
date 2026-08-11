@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -13,7 +13,11 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 import ComboKitConfigurations from "../pages/solar-shop/combokit-configurations/ComboKitConfigurations";
-import { FiSliders } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage } from "react-icons/fi";
+
+// Phase 1: Reseller Management
+const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
+const ProjectSettings = lazy(() => import("../pages/solar-shop/project-settings/ProjectSettings"));
 
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
@@ -97,6 +101,80 @@ const menus = [
                     path: "/admin-panel/solar-shop/order-management-settings/checkout-cart",
                     unique_id: "ADM_ORDER_SETTINGS"
                 }
+            ]
+        },
+    ],
+    [
+        // ── Phase 1: Reseller Management ─────────────────────────────
+        {
+            name: "Reseller Management",
+            icon: <FiUsers />,
+            path: "/admin-panel/solar-shop/reseller-management",
+            unique_id: "RSL_MGMT",
+            subMenu: [
+                {
+                    name: "Reseller Accounts",
+                    icon: <FiUsers />,
+                    path: "/admin-panel/solar-shop/reseller-management/resellers",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Reseller Types",
+                    icon: <FiTag />,
+                    path: "/admin-panel/solar-shop/reseller-management/types",
+                    unique_id: "RSL_TYPES"
+                },
+                {
+                    name: "Reseller Plans",
+                    icon: <HiCube />,
+                    path: "/admin-panel/solar-shop/reseller-management/plans",
+                    unique_id: "RSL_PLAN"
+                },
+                {
+                    name: "Territories",
+                    icon: <FiMapPin />,
+                    path: "/admin-panel/solar-shop/reseller-management/territories",
+                    unique_id: "RSL_TERRITORY"
+                },
+                {
+                    name: "Product Authorization",
+                    icon: <FiPackage />,
+                    path: "/admin-panel/solar-shop/reseller-management/product-auth",
+                    unique_id: "RSL_PROD_AUTH"
+                },
+                {
+                    name: "Reseller EPC Buyers",
+                    icon: <FaUserCheck />,
+                    path: "/admin-panel/solar-shop/reseller-management/epc-buyers",
+                    unique_id: "RSL_EPC_BUYERS"
+                },
+                {
+                    name: "Reseller Orders",
+                    icon: <FaFileInvoiceDollar />,
+                    path: "/admin-panel/solar-shop/reseller-management/orders",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Wallet & Ledger",
+                    icon: <FaWallet />,
+                    path: "/admin-panel/solar-shop/reseller-management/wallet",
+                    unique_id: "RSL_WALLET"
+                },
+            ]
+        },
+        // ── Phase 1: Project Settings ─────────────────────────────────
+        {
+            name: "Project Settings",
+            icon: <FiSettings />,
+            path: "/admin-panel/solar-shop/project-settings",
+            unique_id: "ADM_INDUSTRY_TYPES",
+            subMenu: [
+                {
+                    name: "Industry Types",
+                    icon: <FiTag />,
+                    path: "/admin-panel/solar-shop/project-settings/industry-types",
+                    unique_id: "ADM_INDUSTRY_TYPES"
+                },
             ]
         },
     ],
@@ -469,6 +547,50 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_WH_KIT_ACT">
                                                 <Suspense fallback={<Loader text="Loading Warehouse Kit Configuration..." />}>
                                                     <WarehouseKitConfig moduleUniqueId="ADM_WH_KIT_ACT" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+
+                                    {/* ── Phase 1: Reseller Management ─────────────────────── */}
+                                    <Route
+                                        path="/reseller-management/*"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
+                                                    <ResellerManagement />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/reseller-management/*"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
+                                                    <ResellerManagement />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+
+                                    {/* ── Phase 1: Project Settings ──────────────────────── */}
+                                    <Route
+                                        path="/project-settings/*"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_INDUSTRY_TYPES">
+                                                <Suspense fallback={<Loader text="Loading Project Settings..." />}>
+                                                    <ProjectSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/project-settings/*"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_INDUSTRY_TYPES">
+                                                <Suspense fallback={<Loader text="Loading Project Settings..." />}>
+                                                    <ProjectSettings />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

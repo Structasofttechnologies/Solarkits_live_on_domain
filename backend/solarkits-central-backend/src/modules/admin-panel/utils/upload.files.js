@@ -91,14 +91,13 @@ function stream_upload(buffer, options) {
 //   "public/uploads/brands" → "solarkits/public/uploads/brands"
 // -----------------------------------------------
 const imageFileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
+  const allowedTypes = /jpeg|jpg|png|gif|webp|pdf/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
 
-  if (extname && mimetype) {
+  if (extname) {
     return cb(null, true);
   } else {
-    return cb(new Error("Only image files (jpeg, jpg, png, gif, webp) are allowed!"), false);
+    return cb(new Error("Only image (jpeg, jpg, png, gif, webp) and PDF files are allowed!"), false);
   }
 };
 

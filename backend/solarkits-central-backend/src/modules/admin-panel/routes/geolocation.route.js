@@ -8,6 +8,9 @@ const check_permissions = require('../middlewares/check.permissions');
 router.post("/request-deactivation-otp", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['add'] }]), geolocation_handler.deactivation_otp)
 
 router.get("/countries", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_LOC', permissions: ['view'] }, { unique_code: 'ADM_MFG_BRANDS', permissions: ['view'] },]), geolocation_handler.get_countries)
+router.get("/get-countries", check_auth, geolocation_handler.get_countries);
+router.get("/get-states", check_auth, geolocation_handler.get_states);
+router.get("/get-districts", check_auth, geolocation_handler.get_districts);
 router.get("/active-countries",
     check_auth,
     check_permissions([

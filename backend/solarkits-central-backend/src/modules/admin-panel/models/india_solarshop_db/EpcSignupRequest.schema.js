@@ -11,6 +11,10 @@ const schema = new mongoose.Schema({
   reference_image: { type: String, default: null },
   reviewed_by:     { type: mongoose.Schema.Types.ObjectId, default: null }, // user_id
   reviewed_at:     { type: Date, default: null },
+  // --- Phase 5: Reseller Onboarding Pipeline (backward-compatible) ---
+  onboarded_by_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
+  onboarding_source:        { type: String, enum: ['direct', 'reseller'], default: 'direct' },
+  // ------------------------------------------------------------------
   created_at:      { type: Date, default: Date.now },
 }, { collection: 'epc_signup_requests', timestamps: false, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 

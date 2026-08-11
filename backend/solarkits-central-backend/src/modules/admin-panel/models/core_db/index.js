@@ -42,6 +42,11 @@ module.exports = {
   ValidationLog: require('./validation_logs.schema'),
   SeederVersion: require('./seeder_versions.schema'),
   ComboKitVariant: require('./combo_kit_variants.schema'),
+
+  // --- Phase 1: Reseller Management Masters ---
+  IndustryType: require('./industry_types.schema'),
+  ProjectTypeIndustryMap: require('./project_type_industry_maps.schema'),
 };
+
 
 

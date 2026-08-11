@@ -204,6 +204,7 @@ const get_countries = async (req, res) => {
       message: "Fetched all countries successfully.",
       status: "success",
       countries,
+      data: countries,
     });
   } catch (err) {
     console.error("❌ get_countries error:", err);
@@ -224,10 +225,12 @@ const get_active_countries = async (req, res) => {
       is_active: true, 
       $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
     }).sort({ name: 1 });
+    const formatted = countries.map(c => ({ ...c.toObject({ virtuals: true }), id: c._id.toString() }));
     return res.status(200).json({
       message: "Fetched all active countries successfully.",
       status: "success",
-      countries: countries.map(c => ({ ...c.toObject({ virtuals: true }), id: c._id.toString() })),
+      countries: formatted,
+      data: formatted,
     });
   } catch (err) {
     console.error("❌ get_active_countries error:", err);
@@ -403,7 +406,7 @@ const deactivate_country_logic = async (country_id) => {
  */
 const get_states = async (req, res) => {
   try {
-    const { country_id } = req.body;
+    const country_id = req.body?.country_id || req.query?.country_id || req.body?.country;
     if (!country_id) {
       return res.status(400).json({
         message: "country_id is required",
@@ -521,6 +524,7 @@ const get_states = async (req, res) => {
       message: "Fetched states successfully.",
       status: "success",
       states,
+      data: states,
     });
   } catch (err) {
     console.error("❌ get_states error:", err);
@@ -538,16 +542,20 @@ const get_states = async (req, res) => {
  */
 const get_active_states = async (req, res) => {
   try {
-    const { country_id } = req.body;
-    const states = await GeoLevel1.find({ 
-      level_0: country_id, 
+    const country_id = req.body?.country_id || req.query?.country_id || req.body?.country;
+    const query = { 
       is_active: true, 
       $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
-    }).sort({ name: 1 });
+    };
+    if (country_id) query.level_0 = country_id;
+
+    const states = await GeoLevel1.find(query).sort({ name: 1 });
+    const formatted = states.map(s => ({ ...s.toObject({ virtuals: true }), id: s._id.toString(), country_id: s.level_0 ? s.level_0.toString() : null }));
     return res.status(200).json({
       message: "Fetched all active states successfully.",
       status: "success",
-      states: states.map(s => ({ ...s.toObject({ virtuals: true }), id: s._id.toString(), country_id: s.level_0 ? s.level_0.toString() : null })),
+      states: formatted,
+      data: formatted,
     });
   } catch (err) {
     console.error("❌ get_active_states error:", err);
@@ -751,7 +759,7 @@ const deactivate_state_logic = async (state_id) => {
  */
 const get_districts = async (req, res) => {
   try {
-    const { state_id } = req.body;
+    const state_id = req.body?.state_id || req.query?.state_id || req.body?.state;
     if (!state_id) {
       return res.status(400).json({
         message: "state_id is required",
@@ -830,6 +838,7 @@ const get_districts = async (req, res) => {
       message: "Fetched districts successfully.",
       status: "success",
       districts,
+      data: districts,
     });
   } catch (err) {
     console.error("❌ get_districts error:", err);
@@ -847,16 +856,20 @@ const get_districts = async (req, res) => {
  */
 const get_active_districts = async (req, res) => {
   try {
-    const { state_id } = req.body;
-    const districts = await GeoLevel2.find({ 
-      level_1: state_id, 
+    const state_id = req.body?.state_id || req.query?.state_id || req.body?.state;
+    const query = { 
       is_active: true, 
       $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
-    }).sort({ name: 1 });
+    };
+    if (state_id) query.level_1 = state_id;
+
+    const districts = await GeoLevel2.find(query).sort({ name: 1 });
+    const formatted = districts.map(d => ({ ...d.toObject({ virtuals: true }), id: d._id.toString(), state_id: d.level_1 ? d.level_1.toString() : null }));
     return res.status(200).json({
       message: "Fetched all active districts successfully.",
       status: "success",
-      districts: districts.map(d => ({ ...d.toObject({ virtuals: true }), id: d._id.toString(), state_id: d.level_1 ? d.level_1.toString() : null })),
+      districts: formatted,
+      data: formatted,
     });
   } catch (err) {
     console.error("❌ get_active_districts error:", err);

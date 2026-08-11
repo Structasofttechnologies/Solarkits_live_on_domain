@@ -1,0 +1,412 @@
+/**
+ * reseller.admin.handler.js
+ *
+ * Admin controller for managing Reseller accounts & KYC review queue.
+ * Phase 2 — Reseller Management System
+ *
+ * Pattern: { status: "success"|"error", data, message }
+ */
+
+const mongoose = require('mongoose');
+const {
+  Reseller,
+  ResellerKyc,
+  ResellerPlan,
+  ResellerPlanSubscription,
+  AuditLog,
+} = require('../models/india_solarshop_db');
+const { CmsUser } = require('../models/user_db');
+const { logAudit } = require('../utils/audit.service');
+
+// ─── 1. LIST RESELLERS ────────────────────────────────────────────────────────
+/**
+ * GET /admin-api/resellers/list
+ * Query params: ?page=1&limit=20&search=...&kyc_status=...&activation_status=...&reseller_type_id=...
+ */
+const list_resellers = async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+
+    const { search, kyc_status, activation_status, reseller_type_id } = req.query;
+    const query = { deleted_at: null };
+
+    if (kyc_status) query.kyc_status = kyc_status;
+    if (activation_status) query.activation_status = activation_status;
+    if (reseller_type_id && mongoose.Types.ObjectId.isValid(reseller_type_id)) {
+      query.reseller_type_id = reseller_type_id;
+    }
+
+    if (search && search.trim()) {
+      const regex = new RegExp(search.trim(), 'i');
+      query.$or = [
+        { business_name: regex },
+        { email: regex },
+        { mobile: regex },
+        { gst_number: regex },
+      ];
+    }
+
+    const [rows, total] = await Promise.all([
+      Reseller.find(query)
+        .populate('reseller_type_id', 'name slug commercial_mode')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Reseller.countDocuments(query),
+    ]);
+
+    const data = rows.map((r) => ({
+      id:                r._id,
+      business_name:     r.business_name,
+      gst_number:        r.gst_number,
+      pan_number:        r.pan_number,
+      aadhaar_masked:    r.aadhaar_masked,
+      mobile:            r.mobile,
+      email:             r.email,
+      commercial_mode:   r.commercial_mode,
+      reseller_type:     r.reseller_type_id ? { id: r.reseller_type_id._id, name: r.reseller_type_id.name, mode: r.reseller_type_id.commercial_mode } : null,
+      address:           r.address,
+      kyc_status:        r.kyc_status,
+      agreement_status:  r.agreement_status,
+      activation_status: r.activation_status,
+      is_active:         r.is_active,
+      created_at:        r.created_at,
+    }));
+
+    return res.json({
+      status: 'success',
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.admin] list_resellers error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 2. GET SINGLE RESELLER DETAIL ───────────────────────────────────────────
+/**
+ * GET /admin-api/resellers/:id
+ */
+const get_reseller_detail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    const [reseller, kyc, subscription, auditLogs] = await Promise.all([
+      Reseller.findOne({ _id: id, deleted_at: null })
+        .populate('reseller_type_id', 'name slug commercial_mode description')
+        .lean(),
+      ResellerKyc.findOne({ reseller_id: id }).lean(),
+      ResellerPlanSubscription.findOne({ reseller_id: id, status: 'active' }).populate('plan_id').lean(),
+      AuditLog.find({ entity_id: id }).sort({ created_at: -1 }).limit(50).lean(),
+    ]);
+
+    if (!reseller) {
+      return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+    }
+
+    if (kyc && kyc.verified_by) {
+      const vUser = await CmsUser.findById(kyc.verified_by).select('name email').lean();
+      kyc.verified_by = vUser ? { id: vUser._id, name: vUser.name, email: vUser.email } : null;
+    }
+
+    return res.json({
+      status: 'success',
+      data: {
+        reseller: {
+          id:                reseller._id,
+          business_name:     reseller.business_name,
+          gst_number:        reseller.gst_number,
+          pan_number:        reseller.pan_number,
+          aadhaar_masked:    reseller.aadhaar_masked,
+          mobile:            reseller.mobile,
+          email:             reseller.email,
+          commercial_mode:   reseller.commercial_mode,
+          reseller_type:     reseller.reseller_type_id,
+          address:           reseller.address,
+          kyc_status:        reseller.kyc_status,
+          agreement_status:  reseller.agreement_status,
+          activation_status: reseller.activation_status,
+          is_email_verified:  reseller.is_email_verified,
+          is_mobile_verified: reseller.is_mobile_verified,
+          is_active:         reseller.is_active,
+          created_at:        reseller.created_at,
+        },
+        kyc: kyc || null,
+        active_subscription: subscription || null,
+        audit_history: auditLogs.map(l => ({
+          id:          l._id,
+          action:      l.action,
+          actor_type:  l.actor_type,
+          actor_id:    l.actor_id,
+          created_at:  l.created_at,
+          snapshot:    l.after_snapshot,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.admin] get_reseller_detail error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 3. REVIEW KYC (Verify / Reject / Request Resubmission) ──────────────────
+/**
+ * PUT /admin-api/resellers/:id/kyc/review
+ * Body: { decision: "verify"|"reject"|"resubmit", note?: string }
+ */
+const review_kyc = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, note } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    if (!decision || !['verify', 'reject', 'resubmit'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'decision must be verify, reject, or resubmit' });
+    }
+
+    if ((decision === 'reject' || decision === 'resubmit') && (!note || !note.trim())) {
+      return res.status(400).json({ status: 'error', message: 'Reason note is required when rejecting or requesting resubmission' });
+    }
+
+    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
+    if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+
+    let kyc = await ResellerKyc.findOne({ reseller_id: id });
+    if (!kyc) {
+      kyc = await ResellerKyc.create({ reseller_id: id, status: 'draft' });
+    }
+
+    const beforeResellerStatus = reseller.kyc_status;
+    const beforeKycStatus = kyc.status;
+
+    let targetKycStatus = 'pending';
+    let actionCode = 'KYC_REVIEW';
+
+    const validAdminId = req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : null;
+
+    if (decision === 'verify') {
+      targetKycStatus = 'verified';
+      actionCode = 'KYC_VERIFY';
+      kyc.verified_by = validAdminId;
+      kyc.verified_at = new Date();
+      kyc.rejected_reason = null;
+      kyc.resubmission_note = null;
+
+      // Auto-activate reseller upon KYC verification
+      reseller.activation_status = 'active';
+      reseller.is_active = true;
+    } else if (decision === 'reject') {
+      targetKycStatus = 'rejected';
+      actionCode = 'KYC_REJECT';
+      kyc.rejected_reason = note.trim();
+    } else if (decision === 'resubmit') {
+      targetKycStatus = 'resubmission_required';
+      actionCode = 'KYC_RESUBMIT_REQUEST';
+      kyc.resubmission_note = note.trim();
+    }
+
+    // Update KYC document
+    kyc.status = targetKycStatus;
+    kyc.history.push({
+      status: targetKycStatus,
+      actor_type: 'cms_user',
+      actor_id: validAdminId,
+      note: note ? note.trim() : null,
+      timestamp: new Date(),
+    });
+    await kyc.save();
+
+    // Update Reseller document
+    reseller.kyc_status = targetKycStatus;
+    reseller.updated_by = validAdminId;
+    await reseller.save();
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id,
+      action: actionCode,
+      entity_type: 'resellers',
+      entity_id: id,
+      before_snapshot: { kyc_status: beforeResellerStatus, kyc_doc_status: beforeKycStatus },
+      after_snapshot: { kyc_status: targetKycStatus, note: note ? note.trim() : null },
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      message: `KYC review decision recorded: ${targetKycStatus}`,
+      data: {
+        reseller_id: id,
+        kyc_status:  targetKycStatus,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.admin] review_kyc error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 4. CHANGE ACTIVATION STATUS (Activate / Suspend / Terminate) ───────────
+/**
+ * PUT /admin-api/resellers/:id/activation-status
+ * Body: { activation_status: "active"|"suspended"|"terminated", reason?: string }
+ */
+const change_activation_status = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { activation_status, reason } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    if (!['active', 'suspended', 'terminated', 'pending'].includes(activation_status)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid activation_status' });
+    }
+
+    const validAdminId = req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : null;
+    const reasonText = reason && reason.trim() ? reason.trim() : `Account ${activation_status} by Admin`;
+
+    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
+    if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+
+    const beforeStatus = reseller.activation_status;
+
+    // Safety rule: Cannot activate a reseller whose KYC is not verified
+    if (activation_status === 'active' && reseller.kyc_status !== 'verified') {
+      return res.status(409).json({
+        status: 'error',
+        message: `Cannot activate reseller: KYC status is "${reseller.kyc_status}". KYC must be verified first.`,
+      });
+    }
+
+    reseller.activation_status = activation_status;
+    reseller.is_active = activation_status === 'active';
+    reseller.updated_by = validAdminId;
+    await reseller.save();
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: validAdminId,
+      action: `RESELLER_${activation_status.toUpperCase()}`,
+      entity_type: 'resellers',
+      entity_id: id,
+      before_snapshot: { activation_status: beforeStatus },
+      after_snapshot: { activation_status, reason: reasonText },
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Reseller activation status updated to "${activation_status}"`,
+      data: { id: reseller._id, activation_status: reseller.activation_status },
+    });
+  } catch (error) {
+    console.error('[reseller.admin] change_activation_status error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 5. ASSIGN PLAN TO RESELLER (Admin Manual Subscription) ─────────────────
+/**
+ * POST /admin-api/resellers/:id/subscription/assign
+ * Body: { plan_id, payment_reference?, amount_paid? }
+ */
+const assign_plan_to_reseller = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { plan_id, payment_reference, amount_paid } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+    if (!plan_id || !mongoose.Types.ObjectId.isValid(plan_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid plan_id is required' });
+    }
+
+    const [reseller, plan] = await Promise.all([
+      Reseller.findOne({ _id: id, deleted_at: null }),
+      ResellerPlan.findOne({ _id: plan_id, deleted_at: null, is_active: true }),
+    ]);
+
+    if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+    if (!plan) return res.status(404).json({ status: 'error', message: 'Active plan not found' });
+
+    // Calculate expiry
+    const startDate = new Date();
+    const expiryDate = new Date(startDate);
+    if (plan.validity_unit === 'months') {
+      expiryDate.setMonth(expiryDate.getMonth() + plan.validity_value);
+    } else {
+      expiryDate.setFullYear(expiryDate.getFullYear() + plan.validity_value);
+    }
+
+    const graceExpiryDate = new Date(expiryDate);
+    const graceDays = plan.renewal_rules?.grace_period_days || 15;
+    graceExpiryDate.setDate(graceExpiryDate.getDate() + graceDays);
+
+    // Cancel existing active subscription if any
+    await ResellerPlanSubscription.updateMany(
+      { reseller_id: id, status: 'active' },
+      { $set: { status: 'cancelled' } }
+    );
+
+    const subscription = await ResellerPlanSubscription.create({
+      reseller_id: id,
+      plan_id: plan._id,
+      start_date: startDate,
+      expiry_date: expiryDate,
+      grace_expiry_date: graceExpiryDate,
+      amount_paid: amount_paid != null ? Number(amount_paid) : plan.one_time_fee,
+      currency: plan.currency,
+      payment_reference: payment_reference ? payment_reference.trim() : 'ADMIN_MANUAL_ASSIGNMENT',
+      status: 'active',
+    });
+
+    reseller.plan_subscription_id = subscription._id;
+    reseller.updated_by = req.user?.id || null;
+    await reseller.save();
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id,
+      action: 'RESELLER_PLAN_SUBSCRIPTION_ASSIGN',
+      entity_type: 'reseller_plan_subscriptions',
+      entity_id: subscription._id,
+      after_snapshot: subscription.toObject(),
+      req,
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      message: `Plan "${plan.name}" successfully assigned to ${reseller.business_name}`,
+      data: { subscription_id: subscription._id, plan_id: plan._id, expiry_date: expiryDate },
+    });
+  } catch (error) {
+    console.error('[reseller.admin] assign_plan_to_reseller error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+module.exports = {
+  list_resellers,
+  get_reseller_detail,
+  review_kyc,
+  change_activation_status,
+  assign_plan_to_reseller,
+};

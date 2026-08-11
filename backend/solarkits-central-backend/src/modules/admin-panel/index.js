@@ -40,6 +40,17 @@ app.use('/product-sku-prices', require('./routes/product_sku_prices.route'));
 app.use('/price-requests', require('./routes/price_requests.route'));
 app.use('/suppliers', require('./routes/suppliers.route'));
 
+// ─── Phase 1 - 7: Reseller Management System ───────────────────────────────────
+app.use('/industry-types',             require('./routes/industry.types.route'));
+app.use('/reseller-mgmt/types',        require('./routes/reseller.types.route'));
+app.use('/reseller-mgmt/territories',  require('./routes/reseller.territory.route'));
+app.use('/reseller-mgmt/product-auth', require('./routes/reseller.prodauth.route'));
+app.use('/reseller-mgmt/epc-buyers',   require('./routes/reseller.epc.route'));
+app.use('/reseller-mgmt/orders',       require('./routes/reseller.orders.route'));
+app.use('/reseller-mgmt/wallet',       require('./routes/reseller.wallet.route'));
+app.use('/reseller-mgmt',              require('./routes/reseller.admin.route'));
+app.use('/resellers/plans',            require('./routes/reseller.plans.route'));
+
 // Force nodemon reload: variant config subdocument ID preservation
 app.listen(port, () =>
   console.log(`Server started on ${ipv4}:${port}`)

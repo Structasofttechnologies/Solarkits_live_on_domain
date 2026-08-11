@@ -28,6 +28,7 @@ app.use(cookieParser());
 
 // Static uploads folder
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use('/public/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
 // 1. CMS Auth routes
 app.use('/auth-api', require('./modules/cms-auth/routes/auth.route'));
@@ -57,11 +58,21 @@ adminRouter.use('/combo-kits', require('./modules/admin-panel/routes/combo_kits.
 adminRouter.use('/combo-kit-variants', require('./modules/admin-panel/routes/combo_kit_variants.route'));
 adminRouter.use('/product-sku-prices', require('./modules/admin-panel/routes/product_sku_prices.route'));
 adminRouter.use('/price-requests', require('./modules/admin-panel/routes/price_requests.route'));
-adminRouter.use('/suppliers', require('./modules/admin-panel/routes/suppliers.route'));
 adminRouter.use('/amc-plans', require('./modules/AMC-panel/routes/amc.routes'));
 adminRouter.use('/epc-plans', require('./modules/AMC-panel/routes/epc.routes'));
 adminRouter.use('/amc-auth', require('./modules/AMC-panel/routes/auth.login.routes'));
+adminRouter.use('/industry-types', require('./modules/admin-panel/routes/industry.types.route'));
+adminRouter.use('/reseller-mgmt/types', require('./modules/admin-panel/routes/reseller.types.route'));
+adminRouter.use('/reseller-mgmt/territories', require('./modules/admin-panel/routes/reseller.territory.route'));
+adminRouter.use('/reseller-mgmt/product-auth', require('./modules/admin-panel/routes/reseller.prodauth.route'));
+adminRouter.use('/reseller-mgmt/epc-buyers', require('./modules/admin-panel/routes/reseller.epc.route'));
+adminRouter.use('/reseller-mgmt/orders', require('./modules/admin-panel/routes/reseller.orders.route'));
+adminRouter.use('/reseller-mgmt/wallet', require('./modules/admin-panel/routes/reseller.wallet.route'));
+adminRouter.use('/reseller-mgmt/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
+adminRouter.use('/resellers/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
+adminRouter.use('/reseller-mgmt', require('./modules/admin-panel/routes/reseller.admin.route'));
 app.use('/admin-api', adminRouter);
+app.use('/api', adminRouter);
 app.use('/api/amc-plans', require('./modules/AMC-panel/routes/amc.routes'));
 app.use('/api/epc-plans', require('./modules/AMC-panel/routes/epc.routes'));
 app.use('/api/amc-auth', require('./modules/AMC-panel/routes/auth.login.routes'));

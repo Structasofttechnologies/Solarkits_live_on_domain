@@ -14,6 +14,11 @@ const schema = new mongoose.Schema({
   is_email_verified: { type: Boolean, default: false },
   is_whatsapp_verified: { type: Boolean, default: false },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  // --- Phase 5: Reseller Onboarding Pipeline (backward-compatible) ---
+  onboarded_by_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
+  onboarding_source:        { type: String, enum: ['direct', 'reseller'], default: 'direct' },
+  reseller_assigned_date:   { type: Date, default: null },
+  // ------------------------------------------------------------------
   deleted_at: { type: Date, default: null }
 }, { 
   collection: 'epc_accounts', 

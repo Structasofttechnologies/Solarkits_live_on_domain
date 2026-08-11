@@ -17,6 +17,14 @@ const schema = new mongoose.Schema({
     price:                     { type: Number, required: true }
   }],
   status:                      { type: String, enum: ['pending', 'confirmed', 'completed', 'cancelled'], default: 'pending' },
+  // --- Phase 6: Reseller Dual-Mode Order Tagging (backward-compatible) ---
+  reseller_id:                 { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
+  reseller_commercial_mode:    { type: String, enum: ['commission', 'dealer'], default: null },
+  reseller_commission_rate:    { type: Number, default: 0 },
+  reseller_commission_amount:  { type: Number, default: 0 },
+  dealer_discount_amount:      { type: Number, default: 0 },
+  dealer_invoice_number:       { type: String, default: null },
+  // ------------------------------------------------------------------------
   created_at:                  { type: Date, default: Date.now }
 }, { collection: 'purchase_orders', timestamps: false, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
