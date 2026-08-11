@@ -8,7 +8,6 @@ import Alert from "./components/Alert";
 import SignUp from "./pages/SignUp";
 import ForgotPassword from "./pages/ForgotPassword";
 import LandingPage from "./pages/LandingPage";
-import ComingSoon from "./pages/ComingSoon";
 import PrivacyPolicy from "./pages/policies/PrivacyPolicy";
 import TermsOfService from "./pages/policies/TermsOfService";
 import RefundPolicy from "./pages/policies/RefundPolicy";
@@ -17,12 +16,6 @@ import { useEffect } from "react";
 import { checkAuth } from "./features/auth.slice";
 import { fetchCart } from "./features/slice";
 import AuthDialog from "./components/AuthDialog";
-
-// Check if running in local development mode (localhost / 127.0.0.1 / dev mode)
-const isLocalDev =
-  import.meta.env.DEV ||
-  typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
 function AppContent() {
   const dispatch = useDispatch();
@@ -54,10 +47,10 @@ function AppContent() {
         <Route path="/refund-policy" element={<RefundPolicy />} />
         <Route path="/shipping-policy" element={<ShippingPolicy />} />
 
-        {/* Auth routes: Show real Login/SignUp pages on Localhost, show Coming Soon on Live Production */}
-        <Route path="/auth/signup" element={isLocalDev ? <SignUp /> : <ComingSoon />} />
-        <Route path="/auth/login" element={isLocalDev ? <Login /> : <ComingSoon />} />
-        <Route path="/auth/forgot-password" element={isLocalDev ? <ForgotPassword /> : <ComingSoon />} />
+        {/* Auth routes */}
+        <Route path="/auth/signup" element={<SignUp />} />
+        <Route path="/auth/login" element={<Login />} />
+        <Route path="/auth/forgot-password" element={<ForgotPassword />} />
 
         {/* Protected dashboard routes */}
         <Route path="/*" element={<Board />} />
