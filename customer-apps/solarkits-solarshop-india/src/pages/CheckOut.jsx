@@ -1,9 +1,9 @@
-﻿import React, { useState, useEffect, useMemo } from"react";
+import React, { useState, useEffect, useMemo } from"react";
 import { useSelector, useDispatch } from"react-redux";
 import { useNavigate } from"react-router-dom";
 import axios from"axios";
 import { 
-  FiClock, FiTag, FiCheckCircle, FiAlertTriangle, FiShoppingCart, FiCreditCard, FiLock, FiAward, FiMapPin
+  FiClock, FiTag, FiCheckCircle, FiAlertTriangle, FiShoppingCart, FiCreditCard, FiLock, FiAward, FiMapPin, FiUsers
 } from "react-icons/fi";
 import { clearCart } from "@/features/slice";
 import { setAlert } from "@/features/alert.slice";
@@ -19,6 +19,7 @@ export default function CheckOut() {
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.slice.cart);
   const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
+  const { user } = useSelector((state) => state.auth_slice);
   
   // Settings & Status
   const [loading, setLoading] = useState(true);
@@ -647,6 +648,23 @@ export default function CheckOut() {
           <span className="bg-amber-500 text-white font-mono font-bold px-3 py-1.5 rounded-lg text-sm shadow">
             {formatTime(timeLeft)} Remaining
           </span>
+        </div>
+      )}
+
+      {/* Reseller Order Attribution Notice */}
+      {user?.reseller?.business_name && (
+        <div className="bg-emerald-500/10 border border-emerald-500/25 p-4 rounded-2xl flex items-center gap-3 text-emerald-700 dark:text-emerald-300 shadow-sm">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400">
+            <FiUsers size={20} />
+          </div>
+          <div className="text-xs">
+            <p className="font-extrabold text-sm text-emerald-800 dark:text-emerald-200">
+              Partner Network Attribution: {user.reseller.business_name}
+            </p>
+            <p className="mt-0.5 opacity-90">
+              This order will be processed and assigned under your authorized Reseller Partner (<strong>{user.reseller.business_name}</strong>).
+            </p>
+          </div>
         </div>
       )}
 

@@ -33,7 +33,7 @@ router.delete(
 router.get(
   "/get-products",
   check_auth,
-  check_permissions([{ unique_code: "ADM_SKU", permissions: ["view"] }, { unique_code: "ADM_BETCHMARK_PRICE_MASTER", permissions: ["view"] }]),
+  check_permissions([{ unique_code: "ADM_SKU", permissions: ["view"] }, { unique_code: "ADM_BETCHMARK_PRICE_MASTER", permissions: ["view"] }, { unique_code: "RSL_PROD_AUTH", permissions: ["view"] }, { unique_code: "RSL_PRODAUTH", permissions: ["view"] }]),
   handler.get_products
 );
 

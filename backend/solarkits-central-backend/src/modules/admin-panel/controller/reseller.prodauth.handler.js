@@ -8,7 +8,9 @@
  */
 
 const mongoose = require('mongoose');
-const { Reseller, ResellerProductAuthorization } = require('../models/india_solarshop_db');
+const { Reseller, ResellerProductAuthorization, WarehouseComboKit } = require('../models/india_solarshop_db');
+const { ProjectCategory, ProjectSubcategory, Product } = require('../models/core_db');
+const { CmsUser } = require('../models/user_db');
 const { evaluateResellerProductAuthorization } = require('../utils/product.authorization.service');
 const { logAudit } = require('../utils/audit.service');
 
@@ -24,11 +26,11 @@ const list_product_authorizations = async (req, res) => {
     }
 
     const rows = await ResellerProductAuthorization.find({ reseller_id: id })
-      .populate('category_id', 'name')
-      .populate('subcategory_id', 'name')
-      .populate('product_id', 'name sku_code')
-      .populate('kit_id', 'kit_name kit_code')
-      .populate('assigned_by', 'name email')
+      .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
+      .populate({ path: 'assigned_by', model: CmsUser, select: 'name email' })
       .sort({ created_at: -1 })
       .lean();
 
@@ -186,9 +188,119 @@ const check_product_auth = async (req, res) => {
   }
 };
 
+// ─── 5. SEED DUMMY RULES ──────────────────────────────────────────────────────
+/**
+ * POST /admin-api/reseller-mgmt/product-auth/seed-dummy/:id
+ */
+const seed_dummy_rules = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
+    if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+
+    const rooftopCategory = await ProjectCategory.findOne({ name: /Solar Rooftop/i });
+    const groundCategory = await ProjectCategory.findOne({ name: /Ground-Mounted/i });
+    const residentialSubcategory = await ProjectSubcategory.findOne({ name: /Residential/i });
+    const adaniProduct = await Product.findOne({ name: /Adani Solar Mono PERC/i });
+    const tataProduct = await Product.findOne({ name: /Tata Power Mono PERC/i });
+
+    // Clear existing rules for clean dummy testing
+    await ResellerProductAuthorization.deleteMany({ reseller_id: id });
+
+    const dummyRules = [
+      {
+        reseller_id: id,
+        scope_type: 'all',
+        is_authorized: true,
+        source: 'admin_override',
+        assigned_by: req.user?.id || null,
+        override_reason: 'Base catalog access granted for standard tier reseller',
+        status: 'active',
+      },
+      {
+        reseller_id: id,
+        scope_type: 'category',
+        category_id: rooftopCategory ? rooftopCategory._id : null,
+        is_authorized: true,
+        source: 'admin_override',
+        assigned_by: req.user?.id || null,
+        override_reason: 'Rooftop Solar category access approved for commercial installations',
+        status: 'active',
+      },
+      {
+        reseller_id: id,
+        scope_type: 'category',
+        category_id: groundCategory ? groundCategory._id : null,
+        is_authorized: false,
+        source: 'admin_override',
+        assigned_by: req.user?.id || null,
+        override_reason: 'Ground-Mounted utility projects restricted for standard reseller license',
+        status: 'active',
+      },
+      {
+        reseller_id: id,
+        scope_type: 'subcategory',
+        subcategory_id: residentialSubcategory ? residentialSubcategory._id : null,
+        is_authorized: true,
+        source: 'admin_override',
+        assigned_by: req.user?.id || null,
+        override_reason: 'Residential solar rooftop kits whitelisted for priority regional distribution',
+        status: 'active',
+      },
+      {
+        reseller_id: id,
+        scope_type: 'product',
+        product_id: adaniProduct ? adaniProduct._id : null,
+        is_authorized: false,
+        source: 'admin_override',
+        assigned_by: req.user?.id || null,
+        override_reason: 'Restricted SKU: Adani Mono PERC allocated exclusively to tier-1 partners',
+        status: 'active',
+      },
+      {
+        reseller_id: id,
+        scope_type: 'product',
+        product_id: tataProduct ? tataProduct._id : null,
+        is_authorized: true,
+        source: 'admin_override',
+        assigned_by: req.user?.id || null,
+        override_reason: 'Authorized high-demand Tata Power Mono PERC panel for direct sales',
+        status: 'active',
+      }
+    ].filter(r => r.scope_type === 'all' || r.category_id || r.subcategory_id || r.product_id);
+
+    const created = await ResellerProductAuthorization.insertMany(dummyRules);
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id,
+      action: 'RESELLER_PRODUCT_AUTH_SEED_DUMMY',
+      entity_type: 'reseller_product_authorizations',
+      entity_id: reseller._id,
+      after_snapshot: { count: created.length },
+      req,
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      message: `Successfully seeded ${created.length} dummy product authorization rules`,
+      data: created,
+    });
+  } catch (error) {
+    console.error('[reseller.prodauth] seed_dummy_rules error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   list_product_authorizations,
   assign_product_authorization,
   revoke_product_authorization,
   check_product_auth,
+  seed_dummy_rules,
 };
+

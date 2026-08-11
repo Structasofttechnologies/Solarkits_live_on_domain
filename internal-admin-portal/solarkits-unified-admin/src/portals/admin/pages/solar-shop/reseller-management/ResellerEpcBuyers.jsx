@@ -178,13 +178,13 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
                         {b.status === "pending" && (
                           <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => handleReview(b.id, "approved")}
+                              onClick={() => handleReview(b.signup_request_id || b.id, "approved")}
                               className="px-3 py-1.5 rounded-xl bg-success text-white text-xs font-semibold hover:bg-success-hover transition-all shadow-sm"
                             >
                               Approve
                             </button>
                             <button
-                              onClick={() => handleReview(b.id, "rejected")}
+                              onClick={() => handleReview(b.signup_request_id || b.id, "rejected")}
                               className="px-3 py-1.5 rounded-xl bg-danger-soft text-danger text-xs font-semibold hover:bg-danger hover:text-white transition-all"
                             >
                               Reject

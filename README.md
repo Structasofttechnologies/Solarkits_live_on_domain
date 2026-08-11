@@ -140,3 +140,20 @@ CLOUDINARY_API_SECRET=your_api_secret
 
 © 2026 **SolarKits Technologies Pvt. Ltd.** All Rights Reserved.  
 *B2B Solar E-Commerce Ecosystem Platform.*
+
+
+
+
+live login panel on render: 
+
+admin url :- https://solarkits-unified-admin.onrender.com
+
+solar reseller : https://solarkits-reseller-portal.onrender.com
+
+solar shop : https://solarkits-solarshop-india.onrender.com
+
+
+new epc login id and pword :- 
+Login URL: http://localhost:5177/auth/login
+Email / Phone: samir@gmail.com (ya WhatsApp 9874561230)
+Password: 1234

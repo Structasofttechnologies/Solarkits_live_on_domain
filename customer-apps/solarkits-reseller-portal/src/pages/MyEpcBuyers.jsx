@@ -4,6 +4,7 @@ import { FiUsers, FiPlus, FiCheckCircle, FiClock, FiXCircle, FiLoader, FiMail, F
 
 export default function MyEpcBuyers() {
   const [buyers, setBuyers] = useState([]);
+  const [territories, setTerritories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
@@ -28,6 +29,19 @@ export default function MyEpcBuyers() {
 
   useEffect(() => {
     fetchBuyers();
+    api.get('/india/v1/reseller/territories')
+      .then((res) => {
+        if (res.data?.status === "success" && res.data.data?.length > 0) {
+          setTerritories(res.data.data);
+          const first = res.data.data[0];
+          setForm((f) => ({
+            ...f,
+            state_id: first.state_id || first.state?.id || "",
+            district_id: first.district_id || first.district?.id || "",
+          }));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleRegisterEpc = async (e) => {
@@ -172,6 +186,34 @@ export default function MyEpcBuyers() {
                   />
                 </div>
               </div>
+
+              {territories.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Authorized Operating Territory *</label>
+                  <select
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      const selected = territories.find(t => String(t.id || t._id) === String(e.target.value));
+                      if (selected) {
+                        setForm({
+                          ...form,
+                          state_id: selected.state_id || selected.state?.id || "",
+                          district_id: selected.district_id || selected.district?.id || "",
+                        });
+                      }
+                    }}
+                  >
+                    {territories.map((t) => {
+                      const locName = t.location_name || (t.district?.name ? `${t.district.name}, ${t.state?.name || ''}` : t.state?.name || 'Authorized Territory');
+                      return (
+                        <option key={t.id || t._id} value={t.id || t._id}>
+                          {locName} ({t.territory_level || 'district'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Password *</label>

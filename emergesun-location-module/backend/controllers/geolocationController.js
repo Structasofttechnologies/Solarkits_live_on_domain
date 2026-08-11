@@ -1,0 +1,1458 @@
+const { 
+  GeoLevel0, GeoLevel1, GeoLevel2, GeoLevel3, GeoLevel4, 
+  Cluster, Zone, ExcludedUrbanCity, ExcludedRuralCity 
+} = require('../models/geolocation_db');
+const { Level0: BoundaryLevel0, Level1: BoundaryLevel1, Level2: BoundaryLevel2 } = require('../models/boundary_db');
+const { CmsUser, Otp } = require('../models/user_db');
+const bcrypt = require('bcrypt');
+const { sendOTP } = require("../utils/nodemailer");
+const { geolocation_db } = require("../config/databases");
+const mongoose = require("mongoose");
+
+const deactivation_otp = async (req, res) => {
+  try {
+    const { type, country, state, district } = req.body;
+    const { id } = req.user;
+
+    if (!type) {
+      return res.status(400).json({ status: "error", message: "type is required." });
+    }
+    if (!['country', 'state', 'district'].includes(type)) {
+      return res.status(400).json({ status: "error", message: "Invalid type. Must be one of 'country', 'state', or 'district'." });
+    }
+
+    let user = await CmsUser.findById(id);
+    if (!user) {
+      user = { email: req.user.email || 'admin@emergesun.com' };
+    }
+
+    let entityName = "";
+    let purpose = "";
+
+    if (type === 'country') {
+      const countryData = await GeoLevel0.findById(country);
+      if (!countryData) return res.status(404).json({ status: "error", message: "Country not found." });
+      entityName = countryData.name;
+      purpose = 'deactivate_country';
+    } else if (type === 'state') {
+      const stateData = await GeoLevel1.findById(state);
+      if (!stateData) return res.status(404).json({ status: "error", message: "State not found." });
+      entityName = stateData.name;
+      purpose = 'deactivate_state';
+    } else if (type === 'district') {
+      const districtData = await GeoLevel2.findById(district);
+      if (!districtData) return res.status(404).json({ status: "error", message: "District not found." });
+      entityName = districtData.name;
+      purpose = 'deactivate_district';
+    }
+
+    const otp = await sendOTP(user.email, `Code for deactivate ${type}.`, `This OTP for deactivate ${entityName}.`);
+    const hashed_otp = await bcrypt.hash(otp.otp, 10);
+    const expires_at = new Date(Date.now() + 3 * 60 * 1000);
+
+    await Otp.create({
+      user_id: id,
+      otp: hashed_otp,
+      purpose,
+      expires_at
+    });
+
+    return res.status(200).json({ status: "success", message: "OTP sent successfully." });
+  } catch (err) {
+    console.error("❌ deactivation_otp error:", err);
+    return res.status(500).json({ status: "error", message: "Failed to send OTP", error: err.message });
+  }
+};
+
+const get_countries = async (req, res) => {
+  try {
+    const countries_raw = await GeoLevel0.aggregate([
+      { $match: { $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] } },
+      {
+        $lookup: {
+          from: 'geolocation_level_1',
+          let: { countryId: '$_id' },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $eq: ['$level_0', '$$countryId'] }, 
+                    { $eq: ['$is_active', true] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_states'
+        }
+      },
+      {
+        $lookup: {
+          from: 'geolocation_level_2',
+          let: { stateIds: { $ifNull: ['$active_states._id', []] } },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $in: ['$level_1', '$$stateIds'] }, 
+                    { $eq: ['$is_active', true] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_districts'
+        }
+      },
+      {
+        $lookup: {
+          from: 'clusters',
+          let: { stateIds: { $ifNull: ['$active_states._id', []] } },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $in: ['$level_1', '$$stateIds'] }, 
+                    { $eq: ['$is_active', true] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_clusters'
+        }
+      },
+      {
+        $lookup: {
+          from: 'zones',
+          let: { clusterIds: { $ifNull: ['$active_clusters._id', []] } },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $in: ['$cluster', '$$clusterIds'] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_zones'
+        }
+      },
+      {
+        $project: {
+          id: { $toString: '$_id' },
+          name: 1,
+          iso2: 1,
+          is_active: 1,
+          active_states_count: { $size: { $ifNull: ['$active_states', []] } },
+          active_districts_count: { $size: { $ifNull: ['$active_districts', []] } },
+          active_clusters_count: { $size: { $ifNull: ['$active_clusters', []] } },
+          active_zones_count: { $size: { $ifNull: ['$active_zones', []] } }
+        }
+      },
+      { $sort: { name: 1 } }
+    ]);
+
+    const boundaries = await BoundaryLevel0.find({}).select('iso2 lat lng geometry_type').lean();
+    const bMap = boundaries.reduce((acc, b) => { acc[b.iso2] = b; return acc; }, {});
+    const countries = countries_raw.map(c => {
+      const b = bMap[c.iso2] || {};
+      return {
+        ...c,
+        lat: b.lat || 0,
+        lng: b.lng || 0,
+        geometry: {
+          type: b.geometry_type || 'Point',
+          coordinates: []
+        },
+        boundary: []
+      };
+    });
+
+    return res.status(200).json({
+      message: "Fetched all countries successfully.",
+      status: "success",
+      countries,
+      data: countries,
+    });
+  } catch (err) {
+    console.error("❌ get_countries error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_active_countries = async (req, res) => {
+  try {
+    const countries = await GeoLevel0.find({ 
+      is_active: true, 
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+    }).sort({ name: 1 });
+    const formatted = countries.map(c => ({ ...c.toObject({ virtuals: true }), id: c._id.toString() }));
+    return res.status(200).json({
+      message: "Fetched all active countries successfully.",
+      status: "success",
+      countries: formatted,
+      data: formatted,
+    });
+  } catch (err) {
+    console.error("❌ get_active_countries error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_country = async (req, res) => {
+  try {
+    const { country } = req.body;
+    if (!country) return res.status(400).json({ message: "Country name is required.", status: "error" });
+
+    const geoData = await GeoLevel0.findOne({
+      name: { $regex: new RegExp(`^${country}$`, "i") },
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+    });
+
+    if (!geoData) return res.status(404).json({ message: "Country not found.", status: "error" });
+
+    const boundaryData = await BoundaryLevel0.findOne({ iso2: geoData.iso2 });
+
+    return res.status(200).json({
+      message: "Fetched country successfully.",
+      status: "success",
+      country: {
+        id: geoData._id.toString(),
+        name: geoData.name,
+        iso2: geoData.iso2,
+        lat: boundaryData?.lat || 0,
+        lng: boundaryData?.lng || 0,
+        geometry: {
+          type: boundaryData?.geometry_type || (boundaryData?.coordinates ? boundaryData.coordinates.type : 'Point'),
+          coordinates: boundaryData?.coordinates?.coordinates || [],
+        },
+        boundary: boundaryData?.coordinates?.coordinates || [],
+      },
+    });
+  } catch (err) {
+    console.error("❌ get_country error:", err);
+    res.status(500).json({ message: "Internal server error.", error: err.message });
+  }
+};
+
+const activate_country = async (req, res) => {
+  try {
+    const { country_id } = req.body;
+    if (!country_id) return res.status(400).json({ message: "country is required", status: "error" });
+
+    const country = await GeoLevel0.findById(country_id);
+    if (!country) return res.status(404).json({ message: "Country not found", status: "error" });
+
+    if (country.is_active) {
+      return res.status(200).json({ message: "Country is already active.", status: "success", country });
+    }
+
+    await GeoLevel0.updateOne({ _id: country_id }, { $set: { is_active: true } });
+    return res.status(200).json({
+      message: `Country '${country.name}' has been activated successfully.`,
+      status: "success",
+      country_id: country_id.toString(),
+    });
+  } catch (err) {
+    console.error("❌ activate country error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const deactivate_country = async (req, res) => {
+  try {
+    const { country_id, otp } = req.body;
+    const { id } = req.user;
+
+    if (!country_id || !otp) {
+      return res.status(400).json({ message: "country_id and otp are required", status: "error" });
+    }
+
+    const otp_record = await Otp.findOne({ user_id: id, purpose: 'deactivate_country' }).sort({ created_at: -1 });
+    if (!otp_record) return res.status(404).json({ status: "error", message: "No OTP found. Please request a new OTP." });
+    if (new Date(otp_record.expires_at) < new Date()) return res.status(410).json({ status: "error", message: "OTP has expired. Please request a new one." });
+
+    const is_otp_valid = await bcrypt.compare(otp, otp_record.otp);
+    if (!is_otp_valid) return res.status(400).json({ status: "error", message: "Invalid OTP. Please try again." });
+
+    const country = await GeoLevel0.findById(country_id);
+    if (!country) return res.status(404).json({ status: "error", message: "Country not found" });
+
+    await GeoLevel0.updateOne({ _id: country_id }, { $set: { is_active: false } });
+    return res.status(200).json({ 
+      message: `Country '${country.name}' has been deactivated successfully.`, 
+      status: "success", 
+      country_id: country_id.toString() 
+    });
+  } catch (err) {
+    console.error("❌ deactivate_country error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_states = async (req, res) => {
+  try {
+    const country_id = req.body?.country_id || req.query?.country_id || req.body?.country;
+    if (!country_id) return res.status(400).json({ message: "country_id is required", status: "error" });
+
+    const geoCountry = await GeoLevel0.findById(country_id);
+    if (!geoCountry) return res.status(404).json({ message: "Country not found", status: "error" });
+
+    const states_raw = await GeoLevel1.aggregate([
+      { 
+        $match: { 
+          level_0: new mongoose.Types.ObjectId(country_id), 
+          $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+        } 
+      },
+      {
+        $lookup: {
+          from: 'geolocation_level_2',
+          let: { stateId: '$_id' },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $eq: ['$level_1', '$$stateId'] }, 
+                    { $eq: ['$is_active', true] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_districts'
+        }
+      },
+      {
+        $lookup: {
+          from: 'clusters',
+          let: { stateId: '$_id' },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $eq: ['$level_1', '$$stateId'] }, 
+                    { $eq: ['$is_active', true] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_clusters'
+        }
+      },
+      {
+        $lookup: {
+          from: 'zones',
+          let: { clusterIds: { $ifNull: ['$active_clusters._id', []] } },
+          pipeline: [
+            { 
+              $match: { 
+                $expr: { 
+                  $and: [ 
+                    { $in: ['$cluster', '$$clusterIds'] }, 
+                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
+                  ] 
+                } 
+              } 
+            }
+          ],
+          as: 'active_zones'
+        }
+      },
+      {
+        $project: {
+          id: { $toString: '$_id' },
+          name: 1,
+          is_active: 1,
+          active_districts_count: { $size: { $ifNull: ['$active_districts', []] } },
+          active_clusters_count: { $size: { $ifNull: ['$active_clusters', []] } },
+          active_zones_count: { $size: { $ifNull: ['$active_zones', []] } }
+        }
+      },
+      { $sort: { name: 1 } }
+    ]);
+
+    const boundaryCountry = await BoundaryLevel0.findOne({ iso2: geoCountry.iso2 }).select('_id').lean();
+    let bMap = {};
+    if (boundaryCountry) {
+      const boundaries = await BoundaryLevel1.find({ level_0: boundaryCountry._id }).select('name lat lng geometry_type').lean();
+      bMap = boundaries.reduce((acc, b) => { acc[b.name.toLowerCase()] = b; return acc; }, {});
+    }
+
+    const states = states_raw.map(s => {
+      const b = bMap[s.name.toLowerCase()] || {};
+      return {
+        ...s,
+        lat: b.lat || 0,
+        lng: b.lng || 0,
+        geometry: {
+          type: b.geometry_type || 'Point',
+          coordinates: []
+        },
+        boundary: []
+      };
+    });
+
+    return res.status(200).json({ message: "Fetched states successfully.", status: "success", states, data: states });
+  } catch (err) {
+    console.error("❌ get_states error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_active_states = async (req, res) => {
+  try {
+    const country_id = req.body?.country_id || req.query?.country_id || req.body?.country;
+    const query = { 
+      is_active: true, 
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+    };
+    if (country_id) query.level_0 = country_id;
+
+    const states = await GeoLevel1.find(query).sort({ name: 1 });
+    const formatted = states.map(s => ({ ...s.toObject({ virtuals: true }), id: s._id.toString(), country_id: s.level_0 ? s.level_0.toString() : null }));
+    return res.status(200).json({ message: "Fetched all active states successfully.", status: "success", states: formatted, data: formatted });
+  } catch (err) {
+    console.error("❌ get_active_states error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_state = async (req, res) => {
+  try {
+    const { state, country } = req.body;
+    if (!state || !country) return res.status(400).json({ message: "Both state and country names are required.", status: "error" });
+
+    const country_doc = await GeoLevel0.findOne({
+      name: { $regex: new RegExp(`^${country}$`, "i") },
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+    });
+
+    if (!country_doc) return res.status(404).json({ message: `Country "${country}" not found.`, status: "error" });
+
+    const geoData = await GeoLevel1.findOne({
+      name: { $regex: new RegExp(`^${state}$`, "i") },
+      level_0: country_doc._id,
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+    });
+
+    if (!geoData) return res.status(404).json({ message: `State "${state}" not found under country "${country}".`, status: "error" });
+
+    const boundaryCountry = await BoundaryLevel0.findOne({ iso2: country_doc.iso2 });
+    let boundaryData = null;
+    if (boundaryCountry) {
+      boundaryData = await BoundaryLevel1.findOne({ level_0: boundaryCountry._id, name: { $regex: new RegExp(`^${state}$`, "i") } });
+    }
+
+    return res.status(200).json({
+      message: "Fetched state successfully.",
+      status: "success",
+      state: {
+        id: geoData._id.toString(),
+        name: geoData.name,
+        lat: boundaryData?.lat || 0,
+        lng: boundaryData?.lng || 0,
+        geometry: {
+          type: boundaryData?.geometry_type || (boundaryData?.coordinates ? boundaryData.coordinates.type : 'Point'),
+          coordinates: boundaryData?.coordinates?.coordinates || [],
+        },
+        boundary: boundaryData?.coordinates?.coordinates || [],
+      },
+    });
+  } catch (err) {
+    console.error("❌ get_state error:", err);
+    res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const activate_state = async (req, res) => {
+  try {
+    const { state_id } = req.body;
+    if (!state_id) return res.status(400).json({ message: "state_id is required", status: "error" });
+
+    const state = await GeoLevel1.findById(state_id).populate('level_0');
+    if (!state) return res.status(404).json({ message: "State not found", status: "error" });
+
+    if (!state.level_0 || !state.level_0.is_active) {
+      return res.status(400).json({ message: "Cannot activate state because its parent country is inactive.", status: "error" });
+    }
+
+    if (state.is_active) {
+      return res.status(200).json({ message: "State is already active.", status: "success", state });
+    }
+
+    await GeoLevel1.updateOne({ _id: state_id }, { $set: { is_active: true } });
+    return res.status(200).json({ message: `State '${state.name}' has been activated successfully.`, status: "success", state_id: state_id.toString() });
+  } catch (err) {
+    console.error("❌ activate_state error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const deactivate_state = async (req, res) => {
+  try {
+    const { state_id, otp } = req.body;
+    const { id } = req.user;
+
+    if (!state_id || !otp) return res.status(400).json({ message: "state_id and otp are required", status: "error" });
+
+    const otp_record = await Otp.findOne({ user_id: id, purpose: 'deactivate_state' }).sort({ created_at: -1 });
+    if (!otp_record) return res.status(404).json({ status: "error", message: "No OTP found. Please request a new OTP." });
+    if (new Date(otp_record.expires_at) < new Date()) return res.status(410).json({ status: "error", message: "OTP has expired. Please request a new one." });
+
+    const is_otp_valid = await bcrypt.compare(otp, otp_record.otp);
+    if (!is_otp_valid) return res.status(400).json({ status: "error", message: "Invalid OTP. Please try again." });
+
+    const state = await GeoLevel1.findById(state_id);
+    if (!state) return res.status(404).json({ status: "error", message: "State not found" });
+
+    await GeoLevel1.updateOne({ _id: state_id }, { $set: { is_active: false } });
+    return res.status(200).json({ message: `State '${state.name}' has been deactivated successfully.`, status: "success", state_id: state_id.toString() });
+  } catch (err) {
+    console.error("❌ deactivate_state error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_districts = async (req, res) => {
+  try {
+    const state_id = req.body?.state_id || req.query?.state_id || req.body?.state;
+    if (!state_id) return res.status(400).json({ message: "state_id is required", status: "error" });
+
+    const geoState = await GeoLevel1.findById(state_id).populate('level_0');
+    if (!geoState) return res.status(404).json({ message: "State not found", status: "error" });
+
+    const districts_raw = await GeoLevel2.aggregate([
+      { 
+        $match: { 
+          level_1: new mongoose.Types.ObjectId(state_id), 
+          $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+        } 
+      },
+      {
+        $lookup: {
+          from: 'geolocation_level_3',
+          localField: '_id',
+          foreignField: 'level_2',
+          as: 'urban_cities'
+        }
+      },
+      {
+        $lookup: {
+          from: 'geolocation_level_4',
+          let: { urbanIds: { $ifNull: ['$urban_cities._id', []] } },
+          pipeline: [
+            { $match: { $expr: { $in: ['$level_3', '$$urbanIds'] } } }
+          ],
+          as: 'rural_cities'
+        }
+      },
+      {
+        $project: {
+          id: { $toString: '$_id' },
+          name: 1,
+          is_active: 1,
+          urban_cities_count: { $size: { $ifNull: ['$urban_cities', []] } },
+          rural_cities_count: { $size: { $ifNull: ['$rural_cities', []] } }
+        }
+      },
+      { $sort: { name: 1 } }
+    ]);
+
+    const boundaryCountry = await BoundaryLevel0.findOne({ iso2: geoState.level_0.iso2 }).select('_id').lean();
+    let bMap = {};
+    if (boundaryCountry) {
+      const boundaryState = await BoundaryLevel1.findOne({ level_0: boundaryCountry._id, name: { $regex: new RegExp(`^${geoState.name}$`, 'i') } }).select('_id').lean();
+      if (boundaryState) {
+        const boundaries = await BoundaryLevel2.find({ level_1: boundaryState._id }).select('name lat lng geometry_type').lean();
+        bMap = boundaries.reduce((acc, b) => { acc[b.name.toLowerCase()] = b; return acc; }, {});
+      }
+    }
+
+    const districts = districts_raw.map(d => {
+      const b = bMap[d.name.toLowerCase()] || {};
+      return {
+        ...d,
+        lat: b.lat || 0,
+        lng: b.lng || 0,
+        geometry: {
+          type: b.geometry_type || 'Point',
+          coordinates: []
+        },
+        boundary: []
+      };
+    });
+
+    return res.status(200).json({ message: "Fetched districts successfully.", status: "success", districts, data: districts });
+  } catch (err) {
+    console.error("❌ get_districts error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_active_districts = async (req, res) => {
+  try {
+    const state_id = req.body?.state_id || req.query?.state_id || req.body?.state;
+    const query = { 
+      is_active: true, 
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+    };
+    if (state_id) query.level_1 = state_id;
+
+    const districts = await GeoLevel2.find(query).sort({ name: 1 });
+    const formatted = districts.map(d => ({ ...d.toObject({ virtuals: true }), id: d._id.toString(), state_id: d.level_1 ? d.level_1.toString() : null }));
+    return res.status(200).json({ message: "Fetched all active districts successfully.", status: "success", districts: formatted, data: formatted });
+  } catch (err) {
+    console.error("❌ get_active_districts error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_district = async (req, res) => {
+  try {
+    const { district, state, country } = req.body;
+    if (!district || !state || !country) return res.status(400).json({ message: "District, state, and country names are required.", status: "error" });
+
+    const country_doc = await GeoLevel0.findOne({ 
+      name: { $regex: new RegExp(`^${country}$`, "i") }, 
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+    });
+    if (!country_doc) return res.status(404).json({ message: `Country "${country}" not found.`, status: "error" });
+
+    const state_doc = await GeoLevel1.findOne({ 
+      name: { $regex: new RegExp(`^${state}$`, "i") }, 
+      level_0: country_doc._id, 
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+    });
+    if (!state_doc) return res.status(404).json({ message: `State "${state}" not found under "${country}".`, status: "error" });
+
+    const district_doc = await GeoLevel2.findOne({ 
+      name: { $regex: new RegExp(`^${district}$`, "i") }, 
+      level_1: state_doc._id, 
+      $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+    });
+    if (!district_doc) return res.status(404).json({ message: `District "${district}" not found under "${state}".`, status: "error" });
+
+    const boundaryCountry = await BoundaryLevel0.findOne({ iso2: country_doc.iso2 });
+    let boundaryState = null;
+    let boundaryData = null;
+    if (boundaryCountry) {
+      boundaryState = await BoundaryLevel1.findOne({ level_0: boundaryCountry._id, name: { $regex: new RegExp(`^${state}$`, "i") } });
+      if (boundaryState) {
+        boundaryData = await BoundaryLevel2.findOne({ level_1: boundaryState._id, name: { $regex: new RegExp(`^${district}$`, "i") } });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Fetched district successfully.",
+      status: "success",
+      district: {
+        id: district_doc._id.toString(),
+        name: district_doc.name,
+        lat: boundaryData?.lat || 0,
+        lng: boundaryData?.lng || 0,
+        geometry: {
+          type: boundaryData?.geometry_type || (boundaryData?.coordinates ? boundaryData.coordinates.type : 'Point'),
+          coordinates: boundaryData?.coordinates?.coordinates || [],
+        },
+        boundary: boundaryData?.coordinates?.coordinates || [],
+      },
+    });
+  } catch (err) {
+    console.error("❌ get_district error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const activate_district = async (req, res) => {
+  try {
+    const { district_id } = req.body;
+    if (!district_id) return res.status(400).json({ message: "district_id is required", status: "error" });
+
+    const district = await GeoLevel2.findById(district_id).populate({
+      path: 'level_1',
+      populate: { path: 'level_0' }
+    });
+
+    if (!district) return res.status(404).json({ message: "District not found", status: "error" });
+
+    if (!district.level_1 || !district.level_1.level_0 || !district.level_1.level_0.is_active) {
+      return res.status(400).json({ message: "Cannot activate district because its parent country is inactive.", status: "error" });
+    }
+
+    if (!district.level_1.is_active) {
+      return res.status(400).json({ message: "Cannot activate district because its parent state is inactive.", status: "error" });
+    }
+
+    if (district.is_active) {
+      return res.status(200).json({ message: "District is already active.", status: "success", district });
+    }
+
+    await GeoLevel2.updateOne({ _id: district_id }, { $set: { is_active: true } });
+    return res.status(200).json({ message: `District '${district.name}' has been activated successfully.`, status: "success", district_id: district_id.toString() });
+  } catch (err) {
+    console.error("❌ activate_district error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const deactivate_district = async (req, res) => {
+  try {
+    const { district_id, otp } = req.body;
+    const { id } = req.user;
+
+    if (!district_id || !otp) return res.status(400).json({ message: "district_id and otp are required", status: "error" });
+
+    const otp_record = await Otp.findOne({ user_id: id, purpose: 'deactivate_district' }).sort({ created_at: -1 });
+    if (!otp_record) return res.status(404).json({ status: "error", message: "No OTP found. Please request a new OTP." });
+    if (new Date(otp_record.expires_at) < new Date()) return res.status(410).json({ status: "error", message: "OTP has expired. Please request a new one." });
+
+    const is_otp_valid = await bcrypt.compare(otp, otp_record.otp);
+    if (!is_otp_valid) return res.status(400).json({ status: "error", message: "Invalid OTP. Please try again." });
+
+    const district = await GeoLevel2.findById(district_id);
+    if (!district) return res.status(404).json({ status: "error", message: "District not found" });
+
+    await GeoLevel2.updateOne({ _id: district_id }, { $set: { is_active: false } });
+    return res.status(200).json({ message: `District '${district.name}' has been deactivated successfully.`, status: "success", district_id: district_id.toString() });
+  } catch (err) {
+    console.error("❌ deactivate_district error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_urban_cities = async (req, res) => {
+  try {
+    const { district_id } = req.params;
+    if (!district_id) return res.status(400).json({ message: "district_id is required", status: "error" });
+    const urban_cities = await GeoLevel3.find({ level_2: district_id }).sort({ name: 1 });
+    return res.status(200).json({
+      message: "Fetched urban cities successfully.",
+      status: "success",
+      urban_cities: urban_cities.map(u => ({ ...u.toObject({ virtuals: true }), id: u._id.toString(), district_id: u.level_2 ? u.level_2.toString() : null })),
+    });
+  } catch (err) {
+    console.error("❌ get_urban_cities error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const add_urban_cities = async (req, res) => {
+  const session = await geolocation_db.startSession();
+  session.startTransaction();
+  try {
+    const { district_id, cities } = req.body;
+    if (!district_id || !cities || !Array.isArray(cities) || cities.length === 0) {
+      return res.status(400).json({ message: "district_id and cities array are required", status: "error" });
+    }
+
+    const seen = new Set();
+    for (const c of cities) {
+      const key = `${c.lat}_${c.lng}`;
+      if (seen.has(key)) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `Duplicate coordinates inside request: lat=${c.lat}, lng=${c.lng}`, status: "error" });
+      }
+      seen.add(key);
+    }
+
+    for (const city of cities) {
+      await ExcludedUrbanCity.deleteOne({ lat: city.lat, lng: city.lng }).session(session);
+      
+      const existing = await GeoLevel3.findOne({ lat: city.lat, lng: city.lng }).populate('level_2').session(session);
+      if (existing) {
+        await session.abortTransaction();
+        return res.status(409).json({
+          message: `Urban city ${existing.name} already exists for lat=${city.lat}, lng=${city.lng} in district ${existing.level_2 ? existing.level_2.name : 'unknown'}.`,
+          status: "error",
+        });
+      }
+
+      const existingRural = await GeoLevel4.findOne({ lat: city.lat, lng: city.lng }).populate({ path: 'level_3', populate: { path: 'level_2' } }).session(session);
+      if (existingRural) {
+        await session.abortTransaction();
+        return res.status(409).json({
+          message: `Urban city conflicts with existing rural city ${existingRural.name} under urban city ${existingRural.level_3.name} in district ${existingRural.level_3.level_2.name} for lat=${city.lat}, lng=${city.lng}.`,
+          status: "error",
+        });
+      }
+
+      const existingExcludedRural = await ExcludedRuralCity.findOne({ lat: city.lat, lng: city.lng }).session(session);
+      if (existingExcludedRural) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `Urban city conflicts with excluded rural city for lat=${city.lat}, lng=${city.lng}.`, status: "error" });
+      }
+    }
+
+    const insertDocs = cities.map(city => ({
+      level_2: district_id,
+      name: city.name,
+      lat: city.lat,
+      lng: city.lng
+    }));
+
+    await GeoLevel3.insertMany(insertDocs, { session });
+    await session.commitTransaction();
+
+    return res.status(201).json({ message: "Urban cities added successfully.", status: "success" });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error("❌ add_urban_cities error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const exclude_urban_city = async (req, res) => {
+  const session = await geolocation_db.startSession();
+  session.startTransaction();
+  try {
+    const { name, lat, lng, district_id } = req.body;
+    if (!name || !lat || !lng) {
+      return res.status(400).json({ message: "name, lat and lng are required", status: "error" });
+    }
+
+    if (district_id) {
+      const district = await GeoLevel2.findById(district_id).session(session);
+      if (!district) {
+        await session.abortTransaction();
+        return res.status(404).json({ message: "District not found.", status: "error" });
+      }
+      
+      const alreadyExcluded = await ExcludedUrbanCity.findOne({ lat, lng }).session(session);
+      if (alreadyExcluded) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This urban city is already excluded.", status: "error" });
+      }
+
+      const existingUrban = await GeoLevel3.findOne({ lat, lng, level_2: district_id }).session(session);
+      if (!existingUrban) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This urban city does not exist in this district.", status: "error" });
+      }
+
+      const ruralCities = await GeoLevel4.find({ level_3: existingUrban._id }).session(session);
+      if (ruralCities.length > 0) {
+        const excludeRuralDocs = ruralCities.map(rc => ({ name: rc.name, lat: rc.lat, lng: rc.lng }));
+        await ExcludedRuralCity.insertMany(excludeRuralDocs, { session });
+        await GeoLevel4.deleteMany({ level_3: existingUrban._id }).session(session);
+      }
+
+      await GeoLevel3.deleteOne({ _id: existingUrban._id }).session(session);
+      await ExcludedUrbanCity.create([{ name, lat, lng }], { session });
+    } else {
+      const alreadyExcluded = await ExcludedUrbanCity.findOne({ lat, lng }).session(session);
+      if (alreadyExcluded) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This urban city is already excluded.", status: "error" });
+      }
+
+      const existingUrban = await GeoLevel3.findOne({ lat, lng }).populate('level_2').session(session);
+      if (existingUrban) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `This urban city already exists in another district: ${existingUrban.level_2.name}`, status: "error" });
+      }
+
+      const existingRural = await GeoLevel4.findOne({ lat, lng }).populate({ path: 'level_3', populate: { path: 'level_2' } }).session(session);
+      if (existingRural) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `This urban city conflicts with an existing rural city ${existingRural.name}, district ${existingRural.level_3.level_2.name}`, status: "error" });
+      }
+
+      const existingExcludedRural = await ExcludedRuralCity.findOne({ lat, lng }).session(session);
+      if (existingExcludedRural) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This urban city conflicts with an excluded rural city.", status: "error" });
+      }
+
+      await ExcludedUrbanCity.create([{ name, lat, lng }], { session });
+    }
+
+    await session.commitTransaction();
+    return res.status(201).json({ status: "success", message: "Urban city and its associated rural cities have been excluded successfully." });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error("❌ exclude_urban_city error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const delete_excluded_urban_city = async (req, res) => {
+  try {
+    const { city_id } = req.params;
+    if (!city_id) return res.status(400).json({ message: "city_id is required", status: "error" });
+    await ExcludedUrbanCity.findByIdAndDelete(city_id);
+    return res.status(200).json({ message: "Excluded urban city deleted successfully.", status: "success" });
+  } catch (err) {
+    console.error("❌ delete_excluded_urban_city error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_excluded_urban_cities = async (req, res) => {
+  try {
+    const excluded_cities = await ExcludedUrbanCity.find().sort({ name: 1 });
+    return res.status(200).json({ 
+      message: "Fetched excluded urban cities successfully.", 
+      status: "success", 
+      excluded_cities: excluded_cities.map(c => ({ ...c.toObject({ virtuals: true }), id: c._id.toString() })) 
+    });
+  } catch (err) {
+    console.error("❌ get_excluded_urban_cities error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_rural_cities = async (req, res) => {
+  try {
+    const { urban_city_id } = req.params;
+    if (!urban_city_id) return res.status(400).json({ message: "urban_city_id is required", status: "error" });
+    const rural_cities = await GeoLevel4.find({ level_3: urban_city_id }).sort({ name: 1 });
+    return res.status(200).json({
+      message: "Fetched rural cities successfully.",
+      status: "success",
+      rural_cities: rural_cities.map(r => ({ ...r.toObject({ virtuals: true }), id: r._id.toString(), urban_city_id: r.level_3 ? r.level_3.toString() : null })),
+    });
+  } catch (err) {
+    console.error("❌ get_rural_cities error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const add_rural_cities = async (req, res) => {
+  const session = await geolocation_db.startSession();
+  session.startTransaction();
+  try {
+    const { urban_city_id, cities } = req.body;
+    if (!urban_city_id || !cities || !Array.isArray(cities) || cities.length === 0) {
+      return res.status(400).json({ message: "urban_city_id and cities array are required", status: "error" });
+    }
+
+    const parentUrban = await GeoLevel3.findById(urban_city_id).session(session);
+    if (!parentUrban) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Urban city not found.", status: "error" });
+    }
+
+    const seen = new Set();
+    for (const c of cities) {
+      const key = `${c.lat}_${c.lng}`;
+      if (seen.has(key)) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `Duplicate coordinates: lat=${c.lat}, lng=${c.lng}`, status: "error" });
+      }
+      seen.add(key);
+    }
+
+    for (const city of cities) {
+      await ExcludedRuralCity.deleteOne({ lat: city.lat, lng: city.lng }).session(session);
+
+      const existingUrban = await GeoLevel3.findOne({ lat: city.lat, lng: city.lng }).session(session);
+      if (existingUrban) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `Conflict: This location already exists as an Urban city: ${existingUrban.name} (lat=${city.lat}, lng=${city.lng})`, status: "error" });
+      }
+
+      const existingRural = await GeoLevel4.findOne({ lat: city.lat, lng: city.lng }).populate('level_3').session(session);
+      if (existingRural) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `Conflict: Rural city '${existingRural.name}' already exists under urban '${existingRural.level_3.name}' (lat=${city.lat}, lng=${city.lng})`, status: "error" });
+      }
+
+      const existingExcludedUrban = await ExcludedUrbanCity.findOne({ lat: city.lat, lng: city.lng }).session(session);
+      if (existingExcludedUrban) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: `Conflict: This point exists inside Excluded Urban Cities (lat=${city.lat}, lng=${city.lng})`, status: "error" });
+      }
+    }
+
+    const insertDocs = cities.map(city => ({
+      level_3: urban_city_id,
+      name: city.name,
+      lat: city.lat,
+      lng: city.lng
+    }));
+
+    await GeoLevel4.insertMany(insertDocs, { session });
+    await session.commitTransaction();
+
+    return res.status(201).json({ message: "Rural cities added successfully.", status: "success" });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error("❌ add_rural_cities error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const exclude_rural_city = async (req, res) => {
+  const session = await geolocation_db.startSession();
+  session.startTransaction();
+  try {
+    const { name, lat, lng, urban_city_id } = req.body;
+    if (!name || !lat || !lng) return res.status(400).json({ message: "name, lat, lng are required", status: "error" });
+
+    if (urban_city_id) {
+      const urban = await GeoLevel3.findById(urban_city_id).session(session);
+      if (!urban) {
+        await session.abortTransaction();
+        return res.status(404).json({ message: "Urban city not found.", status: "error" });
+      }
+
+      const alreadyExcluded = await ExcludedRuralCity.findOne({ lat, lng }).session(session);
+      if (alreadyExcluded) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This rural city is already excluded.", status: "error" });
+      }
+
+      const existingRural = await GeoLevel4.findOne({ lat, lng, level_3: urban_city_id }).session(session);
+      if (!existingRural) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This rural city does not exist under this urban city.", status: "error" });
+      }
+
+      await GeoLevel4.deleteOne({ _id: existingRural._id }).session(session);
+      await ExcludedRuralCity.create([{ name, lat, lng }], { session });
+    } else {
+      const alreadyExcluded = await ExcludedRuralCity.findOne({ lat, lng }).session(session);
+      if (alreadyExcluded) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "This rural city is already excluded.", status: "error" });
+      }
+
+      const existingRural = await GeoLevel4.findOne({ lat, lng }).session(session);
+      if (existingRural) {
+        await GeoLevel4.deleteOne({ _id: existingRural._id }).session(session);
+      }
+
+      const excludedUrbanConflict = await ExcludedUrbanCity.findOne({ lat, lng }).session(session);
+      if (excludedUrbanConflict) {
+        await session.abortTransaction();
+        return res.status(409).json({ message: "Conflict: This point belongs to excluded urban city.", status: "error" });
+      }
+
+      await ExcludedRuralCity.create([{ name, lat, lng }], { session });
+    }
+
+    await session.commitTransaction();
+    return res.status(201).json({ status: "success", message: "Rural city excluded successfully." });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error("❌ exclude_rural_city error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const delete_excluded_rural_city = async (req, res) => {
+  try {
+    const { city_id } = req.params;
+    if (!city_id) return res.status(400).json({ message: "city_id is required", status: "error" });
+    await ExcludedRuralCity.findByIdAndDelete(city_id);
+    return res.status(200).json({ message: "Excluded rural city deleted successfully.", status: "success" });
+  } catch (err) {
+    console.error("❌ delete_excluded_rural_city error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const get_excluded_rural_cities = async (req, res) => {
+  try {
+    const excluded_cities = await ExcludedRuralCity.find().sort({ name: 1 });
+    return res.status(200).json({ 
+      message: "Fetched excluded rural cities successfully.", 
+      status: "success", 
+      excluded_cities: excluded_cities.map(c => ({ ...c.toObject({ virtuals: true }), id: c._id.toString() })) 
+    });
+  } catch (err) {
+    console.error("❌ get_excluded_rural_cities error:", err);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: err.message });
+  }
+};
+
+const add_cluster = async (req, res) => {
+  const session = await geolocation_db.startSession();
+  session.startTransaction();
+  try {
+    const { name, state_id, district_ids } = req.body;
+    if (!name || !state_id) return res.status(400).json({ message: "name and state_id are required", status: "error" });
+    if (!district_ids || district_ids.length === 0) return res.status(400).json({ message: "minimum one district_id is required to create a cluster", status: "error" });
+
+    const existingCluster = await Cluster.findOne({ name, level_1: state_id, deleted_at: null }).session(session);
+    if (existingCluster) {
+      await session.abortTransaction();
+      return res.status(409).json({ message: "Cluster already exists.", status: "error" });
+    }
+
+    const [newCluster] = await Cluster.create([{ name, level_1: state_id }], { session });
+    
+    for (const district_id of district_ids) {
+      const updateRes = await GeoLevel2.updateOne({ _id: district_id }, { $set: { cluster: newCluster._id } }).session(session);
+      if (updateRes.matchedCount === 0) {
+        await session.abortTransaction();
+        return res.status(404).json({ status: "error", message: `District with id ${district_id} not found` });
+      }
+    }
+
+    const assignedDistricts = await GeoLevel2.find({ _id: { $in: district_ids } }).select('id name').session(session);
+    await session.commitTransaction();
+
+    return res.status(201).json({
+      status: "success",
+      message: "Cluster added successfully.",
+      cluster: {
+        id: newCluster._id.toString(),
+        name,
+        districts: assignedDistricts.map(d => ({ id: d._id.toString(), name: d.name })),
+      }
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("❌ add_cluster error:", error);
+    return res.status(500).json({ status: "error", message: "Internal server error.", error: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const get_clusters = async (req, res) => {
+  try {
+    const { state_id } = req.params;
+    if (!state_id) return res.status(400).json({ message: "state_id is required", status: "error" });
+
+    const clusters = await Cluster.find({ level_1: state_id, deleted_at: null }).lean();
+
+    for (let cluster of clusters) {
+      const districts = await GeoLevel2.find({ cluster: cluster._id }).select('name').lean();
+      cluster.districts = districts.map(d => ({ id: d._id.toString(), name: d.name }));
+      cluster.id = cluster._id.toString();
+      cluster.state_id = cluster.level_1 ? cluster.level_1.toString() : null;
+    }
+
+    return res.status(200).json({ message: "Fetched clusters successfully.", status: "success", clusters });
+  } catch (error) {
+    console.error("❌ get_clusters error:", error);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: error.message });
+  }
+};
+
+const assign_district_to_cluster = async (req, res) => {
+  try {
+    const { cluster_id, district_id } = req.body;
+    if (!cluster_id || !district_id) return res.status(400).json({ message: "cluster_id and district_id are required", status: "error" });
+
+    const cluster = await Cluster.findById(cluster_id);
+    if (!cluster) return res.status(404).json({ status: "error", message: "Cluster not found" });
+
+    const district = await GeoLevel2.findById(district_id).populate('cluster');
+    if (!district) return res.status(404).json({ status: "error", message: "District not found" });
+
+    if (district.cluster) {
+      return res.status(400).json({ status: "error", message: `District is already assigned to a cluster ${district.cluster.name}.` });
+    }
+
+    if (district.level_1.toString() !== cluster.level_1.toString()) {
+      return res.status(400).json({ status: "error", message: "Cluster and District do not belong to the same state." });
+    }
+
+    await GeoLevel2.updateOne({ _id: district_id }, { $set: { cluster: cluster_id } });
+    return res.status(200).json({ status: "success", message: "Cluster assigned to district successfully." });
+  } catch (error) {
+    console.error("❌ assign_district_to_cluster error:", error);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: error.message });
+  }
+};
+
+const reassign_district_to_another_cluster_otp = async (req, res) => {
+  try {
+    const { cluster_id, district_id } = req.body;
+    const { id } = req.user;
+    if (!cluster_id || !district_id) return res.status(400).json({ message: "cluster_id, district_id are required." });
+
+    let user = await CmsUser.findById(id);
+    if (!user) user = { email: req.user.email || 'admin@emergesun.com' };
+
+    const cluster = await Cluster.findById(cluster_id);
+    if (!cluster) return res.status(404).json({ status: "error", message: "Cluster not found" });
+
+    const district = await GeoLevel2.findById(district_id).populate('cluster');
+    if (!district) return res.status(404).json({ status: "error", message: "District not found" });
+
+    if (district.level_1.toString() !== cluster.level_1.toString()) {
+      return res.status(400).json({ status: "error", message: "Cluster and District do not belong to the same state." });
+    }
+
+    const otp = await sendOTP(user.email, 'Code for reassigning districts to another cluster', `This is the OTP to reassign district ${district.name} from cluster ${district.cluster ? district.cluster.name : 'none'} to another cluster ${cluster.name}`);
+    const hashed_otp = await bcrypt.hash(otp.otp, 10);
+    const expires_at = new Date(Date.now() + 3 * 60 * 1000);
+
+    await Otp.create({
+      user_id: id,
+      otp: hashed_otp,
+      purpose: 'reassign_districts_to_another_cluster',
+      expires_at
+    });
+
+    return res.status(200).json({ message: "OTP sent to registered email. Please verify to proceed.", status: "success" });
+  } catch (error) {
+    console.error("❌ reassign_district_to_another_cluster_otp error:", error);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: error.message });
+  }
+};
+
+const reassign_district_to_another_cluster = async (req, res) => {
+  try {
+    const { cluster_id, district_id, otp } = req.body;
+    const { id } = req.user;
+    if (!cluster_id || !district_id || !otp) return res.status(400).json({ message: "cluster_id, district_id and otp are required." });
+
+    const otp_record = await Otp.findOne({ user_id: id, purpose: 'reassign_districts_to_another_cluster' }).sort({ created_at: -1 });
+    if (!otp_record) return res.status(400).json({ status: "error", message: "OTP not found. Please request a new OTP." });
+    if (new Date() > otp_record.expires_at) return res.status(400).json({ status: "error", message: "OTP has expired. Please request a new OTP." });
+    
+    const is_otp_valid = await bcrypt.compare(otp, otp_record.otp);
+    if (!is_otp_valid) return res.status(400).json({ status: "error", message: "Invalid OTP. Please try again." });
+
+    const cluster = await Cluster.findById(cluster_id);
+    if (!cluster) return res.status(404).json({ status: "error", message: "Cluster not found" });
+
+    const district = await GeoLevel2.findById(district_id);
+    if (!district) return res.status(404).json({ status: "error", message: "District not found" });
+
+    if (district.level_1.toString() !== cluster.level_1.toString()) {
+      return res.status(400).json({ status: "error", message: "Cluster and District do not belong to the same state." });
+    }
+
+    await GeoLevel2.updateOne({ _id: district_id }, { $set: { cluster: cluster_id } });
+    return res.status(200).json({ status: "success", message: "District reassigned to another cluster successfully." });
+  } catch (error) {
+    console.error("❌ reassign_district_to_another_cluster error:", error);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: error.message });
+  }
+};
+
+const delete_cluster_otp = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const { cluster_id, state_id } = req.params;
+    if (!cluster_id || !state_id) return res.status(400).json({ message: "cluster_id and state_id are required", status: "error" });
+
+    const cluster = await Cluster.findById(cluster_id);
+    if (!cluster) return res.status(404).json({ status: "error", message: "Cluster not found" });
+
+    if (cluster.level_1.toString() !== state_id) {
+      return res.status(400).json({ status: "error", message: "Cluster does not belong to the same state." });
+    }
+
+    let user = await CmsUser.findById(id);
+    if (!user) user = { email: req.user.email || 'admin@emergesun.com' };
+
+    const otp = await sendOTP(user.email, 'Code for deleting cluster', `This is the OTP to delete cluster ${cluster.name}`);
+    const hashed_otp = await bcrypt.hash(otp.otp, 10);
+    const expires_at = new Date(Date.now() + 3 * 60 * 1000);
+
+    await Otp.create({
+      user_id: id,
+      otp: hashed_otp,
+      purpose: 'delete_cluster',
+      expires_at
+    });
+
+    return res.status(200).json({ status: 'success', message: 'OTP sent to registered email. Please verify to proceed.' });
+  } catch (error) {
+    console.error("❌ delete_cluster_otp error:", error);
+    return res.status(500).json({ message: "Internal server error.", status: "error", error: error.message });
+  }
+};
+
+const delete_cluster = async (req, res) => {
+  const session = await geolocation_db.startSession();
+  session.startTransaction();
+  try {
+    const { id } = req.user;
+    const { cluster_id, state_id, otp } = req.body;
+    if (!cluster_id || !state_id || !otp) return res.status(400).json({ message: "cluster_id, state_id and otp are required", status: "error" });
+
+    const otp_record = await Otp.findOne({ user_id: id, purpose: 'delete_cluster' }).sort({ created_at: -1 });
+    if (!otp_record) return res.status(400).json({ status: "error", message: "OTP not found. Please request a new OTP." });
+    if (new Date() > otp_record.expires_at) return res.status(400).json({ status: "error", message: "OTP has expired. Please request a new OTP." });
+    
+    const is_otp_valid = await bcrypt.compare(otp, otp_record.otp);
+    if (!is_otp_valid) return res.status(400).json({ status: "error", message: "Invalid OTP. Please try again." });
+
+    const cluster = await Cluster.findById(cluster_id).session(session);
+    if (!cluster) return res.status(404).json({ status: "error", message: "Cluster not found" });
+
+    if (cluster.level_1.toString() !== state_id) {
+      return res.status(400).json({ status: "error", message: "Cluster does not belong to the same state." });
+    }
+
+    await GeoLevel2.updateMany({ cluster: cluster_id }, { $set: { cluster: null } }).session(session);
+    await Cluster.deleteOne({ _id: cluster_id }).session(session);
+    
+    await session.commitTransaction();
+    return res.status(200).json({ status: 'success', message: 'Cluster deleted successfully.' });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("❌ delete_cluster error:", error);
+    return res.status(500).json({ status: 'error', message: "Internal server error.", error: error.message });
+  } finally {
+    session.endSession();
+  }
+};
+
+const edit_cluster_name = async (req, res) => {
+  try {
+    const { cluster_id, name } = req.body;
+    if (!cluster_id || !name) {
+      return res.status(400).json({ message: "cluster_id and name are required", status: "error" });
+    }
+
+    const cluster = await Cluster.findById(cluster_id);
+    if (!cluster) {
+      return res.status(404).json({ status: "error", message: "Cluster not found" });
+    }
+
+    const existingCluster = await Cluster.findOne({
+      name: name.trim(),
+      level_1: cluster.level_1,
+      _id: { $ne: cluster_id },
+      deleted_at: null
+    });
+
+    if (existingCluster) {
+      return res.status(409).json({ message: "Another cluster with this name already exists in this state.", status: "error" });
+    }
+
+    cluster.name = name.trim();
+    await cluster.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Cluster name updated successfully.",
+      cluster: {
+        id: cluster._id.toString(),
+        name: cluster.name
+      }
+    });
+  } catch (error) {
+    console.error("❌ edit_cluster_name error:", error);
+    return res.status(500).json({ status: "error", message: "Internal server error.", error: error.message });
+  }
+};
+
+const get_zones_by_cluster = async (req, res) => {
+  try {
+    const { cluster_id } = req.params;
+    if (!cluster_id) {
+      return res.status(400).json({ status: "error", message: "cluster_id is required." });
+    }
+    const zones = await Zone.find({ cluster: cluster_id, deleted_at: null })
+      .populate('districts')
+      .lean();
+    return res.status(200).json({ status: "success", zones });
+  } catch (error) {
+    console.error("Error in get_zones_by_cluster:", error);
+    return res.status(500).json({ status: "error", message: "Internal server error." });
+  }
+};
+
+const add_zone = async (req, res) => {
+  try {
+    const { name, cluster_id, district_ids } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ status: "error", message: "Zone name is required." });
+    }
+    if (!cluster_id) {
+      return res.status(400).json({ status: "error", message: "cluster_id is required." });
+    }
+    
+    const zone = new Zone({
+      name: name.trim(),
+      cluster: cluster_id,
+      districts: district_ids || []
+    });
+    await zone.save();
+    
+    const populated = await Zone.findById(zone._id).populate('districts').lean();
+    return res.status(201).json({ status: "success", zone: populated });
+  } catch (error) {
+    console.error("Error in add_zone:", error);
+    return res.status(500).json({ status: "error", message: "Internal server error." });
+  }
+};
+
+const delete_zone = async (req, res) => {
+  try {
+    const { zone_id } = req.params;
+    if (!zone_id) {
+      return res.status(400).json({ status: "error", message: "zone_id is required." });
+    }
+    
+    await Zone.findByIdAndUpdate(zone_id, { deleted_at: new Date() });
+    return res.status(200).json({ status: "success", message: "Zone deleted successfully." });
+  } catch (error) {
+    console.error("Error in delete_zone:", error);
+    return res.status(500).json({ status: "error", message: "Internal server error." });
+  }
+};
+
+module.exports = {
+  deactivation_otp,
+  get_countries,
+  get_active_countries,
+  get_country,
+  get_states,
+  get_active_states,
+  get_state,
+  get_districts,
+  get_active_districts,
+  get_district,
+  activate_country,
+  activate_state,
+  activate_district,
+  deactivate_country,
+  deactivate_state,
+  deactivate_district,
+  get_urban_cities,
+  add_urban_cities,
+  exclude_urban_city,
+  get_excluded_urban_cities,
+  delete_excluded_urban_city,
+  get_rural_cities,
+  add_rural_cities,
+  exclude_rural_city,
+  get_excluded_rural_cities,
+  delete_excluded_rural_city,
+  add_cluster,
+  get_clusters,
+  assign_district_to_cluster,
+  reassign_district_to_another_cluster_otp,
+  reassign_district_to_another_cluster,
+  delete_cluster_otp,
+  delete_cluster,
+  edit_cluster_name,
+  get_zones_by_cluster,
+  add_zone,
+  delete_zone
+};

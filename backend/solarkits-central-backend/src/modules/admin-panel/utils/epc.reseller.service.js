@@ -14,6 +14,7 @@ const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const {
   Reseller,
+  ResellerTerritory,
   EpcAccount,
   EpcSignupRequest,
 } = require('../models/india_solarshop_db');
@@ -39,9 +40,23 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
   }
 
   // 2. Verify Territory match
+  let effStateId = state_id;
+  let effDistrictId = district_id;
+
+  if (!effStateId || !effDistrictId) {
+    const activeTerritories = await ResellerTerritory.find({ reseller_id: resellerId, status: 'active' }).lean();
+    if (activeTerritories.length > 0) {
+      if (!effStateId && activeTerritories[0].state_id) effStateId = activeTerritories[0].state_id;
+      if (!effDistrictId && activeTerritories[0].district_id) effDistrictId = activeTerritories[0].district_id;
+    } else if (reseller.address?.state_id) {
+      if (!effStateId) effStateId = reseller.address.state_id;
+      if (!effDistrictId) effDistrictId = reseller.address.district_id;
+    }
+  }
+
   const territoryCheck = await validateEpcResellerTerritoryMatch(resellerId, {
-    state_id,
-    district_id,
+    state_id: effStateId,
+    district_id: effDistrictId,
   });
 
   if (!territoryCheck.is_matched) {
@@ -68,8 +83,8 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     email:                    cleanEmail,
     whatsapp:                 cleanWhatsapp,
     password_hash,
-    states:                   state_id ? [state_id] : [],
-    districts:                district_id ? [district_id] : [],
+    states:                   effStateId ? [effStateId] : [],
+    districts:                effDistrictId ? [effDistrictId] : [],
     status:                   'pending',
     onboarded_by_reseller_id: resellerId,
     onboarding_source:        'reseller',
@@ -83,7 +98,7 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     email:                    cleanEmail,
     whatsapp:                 cleanWhatsapp,
     status:                   'pending',
-    state_id:                 state_id,
+    state_id:                 effStateId,
     reference_image:          reference_image || null,
     onboarded_by_reseller_id: resellerId,
     onboarding_source:        'reseller',
@@ -108,22 +123,37 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
 
 /**
  * Approve or Reject a reseller-onboarded EPC Buyer signup request (Admin function).
+ * Accepts either EpcSignupRequest._id or EpcAccount._id for idOrSignupRequestId.
  */
-async function reviewResellerEpcSignup(signupRequestId, adminUserId, decision, note) {
+async function reviewResellerEpcSignup(idOrSignupRequestId, adminUserId, decision, note) {
   if (!['approved', 'rejected'].includes(decision)) {
     throw new Error('Decision must be approved or rejected');
   }
 
-  const signupReq = await EpcSignupRequest.findById(signupRequestId);
-  if (!signupReq) throw new Error('EPC signup request not found');
+  let signupReq = null;
+  if (mongoose.Types.ObjectId.isValid(idOrSignupRequestId)) {
+    signupReq = await EpcSignupRequest.findOne({
+      $or: [{ _id: idOrSignupRequestId }, { account_id: idOrSignupRequestId }],
+    });
+  }
 
-  signupReq.status = decision;
-  signupReq.reviewed_by = adminUserId;
-  signupReq.reviewed_at = new Date();
-  await signupReq.save();
+  if (signupReq) {
+    signupReq.status = decision;
+    signupReq.reviewed_by = adminUserId;
+    signupReq.reviewed_at = new Date();
+    await signupReq.save();
+  }
 
-  // Update corresponding EPC Account
-  const epcAccount = await EpcAccount.findById(signupReq.account_id);
+  const targetAccountId = signupReq ? signupReq.account_id : idOrSignupRequestId;
+  let epcAccount = null;
+  if (mongoose.Types.ObjectId.isValid(targetAccountId)) {
+    epcAccount = await EpcAccount.findById(targetAccountId);
+  }
+
+  if (!epcAccount && !signupReq) {
+    throw new Error('EPC account or signup request not found');
+  }
+
   if (epcAccount) {
     epcAccount.status = decision;
     if (decision === 'approved') {
@@ -137,12 +167,16 @@ async function reviewResellerEpcSignup(signupRequestId, adminUserId, decision, n
     actor_type: 'cms_user',
     actor_id: adminUserId,
     action: decision === 'approved' ? 'RESELLER_EPC_APPROVE' : 'RESELLER_EPC_REJECT',
-    entity_type: 'epc_signup_requests',
-    entity_id: signupRequestId,
+    entity_type: signupReq ? 'epc_signup_requests' : 'epc_accounts',
+    entity_id: signupReq ? signupReq._id : idOrSignupRequestId,
     after_snapshot: { status: decision, note },
   });
 
-  return { signup_request_id: signupRequestId, status: decision };
+  return {
+    signup_request_id: signupReq ? signupReq._id : null,
+    account_id: epcAccount ? epcAccount._id : idOrSignupRequestId,
+    status: decision,
+  };
 }
 
 module.exports = {

@@ -14,6 +14,7 @@ import {
   FiGrid,
   FiLayers,
   FiBox,
+  FiZap,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -59,6 +60,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
 
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
+  const [products, setProducts] = useState([]);
   const [saving, setSaving] = useState(false);
 
   // Load categories
@@ -78,6 +80,17 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
       })
       .catch((e) => console.error(e));
   }, []);
+
+  // Load products when scope is product
+  useEffect(() => {
+    if (form.scope_type === "product") {
+      axios.get(`${API_BASE}/products/get-products?req_for=view&unique_id=ADM_SKU`, { headers: authHeaderObj() })
+        .then((res) => {
+          if (res.data?.status === "success") setProducts(res.data.data);
+        })
+        .catch((e) => console.error(e));
+    }
+  }, [form.scope_type]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -173,6 +186,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
               <option value="all">All Catalog Products & Kits</option>
               <option value="category">Category Scope</option>
               <option value="subcategory">Subcategory Scope</option>
+              <option value="product">Specific Product (SKU) Scope</option>
             </select>
           </div>
 
@@ -207,6 +221,24 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
                 <option value="">Select Subcategory...</option>
                 {subcategories.map((sc) => (
                   <option key={sc.id} value={sc.id}>{sc.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Product Picker */}
+          {form.scope_type === "product" && (
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">Specific Product <span className="text-danger">*</span></label>
+              <select
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={form.product_id}
+                onChange={(e) => setForm({ ...form, product_id: e.target.value })}
+                required
+              >
+                <option value="">Select Product...</option>
+                {products.map((p) => (
+                  <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
                 ))}
               </select>
             </div>
@@ -248,6 +280,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
   const [selectedResellerId, setSelectedResellerId] = useState("");
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [modal, setModal] = useState(false);
 
   // Load Resellers
@@ -291,6 +324,24 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
     }
   };
 
+  const handleSeedDummy = async () => {
+    if (!selectedResellerId) return;
+    setSeeding(true);
+    try {
+      const res = await apiFetch("post", `/seed-dummy/${selectedResellerId}?req_for=add&unique_id=${MODULE_UID}`);
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: res.data?.message || "Dummy product auth rules seeded successfully!" }));
+        fetchRules();
+      } else {
+        dispatch(setAlert({ type: "error", message: res.data?.message || "Seeding failed" }));
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Seeding failed" }));
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -304,13 +355,24 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             Manage product catalog whitelists, category access permissions, and SKU blacklists per reseller
           </p>
         </div>
-        <button
-          onClick={() => setModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30"
-        >
-          <FiPlus size={16} />
-          Add Authorization Rule
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSeedDummy}
+            disabled={seeding || !selectedResellerId}
+            className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/20 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+            title="Seed 5-6 dummy product authorization rules for testing"
+          >
+            {seeding ? <FiLoader className="animate-spin" size={16} /> : <FiZap size={16} />}
+            Seed Dummy Rules
+          </button>
+          <button
+            onClick={() => setModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30"
+          >
+            <FiPlus size={16} />
+            Add Authorization Rule
+          </button>
+        </div>
       </div>
 
       {/* Reseller Selector Bar */}

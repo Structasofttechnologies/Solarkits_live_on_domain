@@ -37,8 +37,13 @@ const list_reseller_epc_buyers = async (req, res) => {
       .sort({ created_at: -1 })
       .lean();
 
+    const epcIds = rows.map((r) => r._id);
+    const signupRequests = await EpcSignupRequest.find({ account_id: { $in: epcIds } }).lean();
+    const signupMap = new Map(signupRequests.map((s) => [s.account_id.toString(), s._id.toString()]));
+
     const data = rows.map((r) => ({
       id:                     r._id,
+      signup_request_id:      signupMap.get(r._id.toString()) || null,
       name:                   r.name,
       email:                  r.email,
       whatsapp:               r.whatsapp,

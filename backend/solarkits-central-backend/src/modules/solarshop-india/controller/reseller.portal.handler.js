@@ -527,15 +527,17 @@ const get_reseller_my_territories = async (req, res) => {
  */
 const get_reseller_authorized_products = async (req, res) => {
   try {
-    const { ResellerProductAuthorization } = require('../../admin-panel/models/india_solarshop_db');
+    const { ResellerProductAuthorization, WarehouseComboKit } = require('../../admin-panel/models/india_solarshop_db');
+    const { ProjectCategory, ProjectSubcategory, Product } = require('../../admin-panel/models/core_db');
+
     const rules = await ResellerProductAuthorization.find({
       reseller_id: req.reseller._id,
       status: 'active',
     })
-      .populate('category_id', 'name')
-      .populate('subcategory_id', 'name')
-      .populate('product_id', 'name sku_code')
-      .populate('kit_id', 'kit_name kit_code')
+      .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
       .lean();
 
     return res.json({

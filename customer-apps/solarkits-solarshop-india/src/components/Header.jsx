@@ -4,7 +4,7 @@ import { MdMenu, MdSettings, MdLogin, MdLogout } from "react-icons/md";
 import { FaWarehouse, FaLock, FaExclamationTriangle } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { HiUser, HiUserAdd } from "react-icons/hi";
-import { FiSun, FiMoon, FiShoppingCart, FiTrash2, FiChevronRight, FiMapPin } from "react-icons/fi";
+import { FiSun, FiMoon, FiShoppingCart, FiTrash2, FiChevronRight, FiMapPin, FiUsers } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "@/features/auth.slice";
@@ -218,6 +218,17 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
         />
       </div>
 
+      {/* Reseller Partner Badge */}
+      {user?.reseller?.business_name && (
+        <div
+          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold shadow-xs"
+          title={`Attributed Reseller Partner: ${user.reseller.business_name} (${user.reseller.commercial_mode || 'Partner'} Mode)`}
+        >
+          <FiUsers className="text-emerald-500" size={13} />
+          <span>Partner Network: <strong className="text-emerald-700 dark:text-emerald-300">{user.reseller.business_name}</strong></span>
+        </div>
+      )}
+
       {/* Right side - Actions */}
       <div className="flex items-center space-x-3">
         {/* Theme Toggle */}
@@ -373,6 +384,11 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
             <div className="hidden sm:block">
               <p className="text-sm font-semibold text-text-primary dark:text-info">{user?.name}</p>
               <p className="text-xs text-text-secondary">{user?.email}</p>
+              {user?.reseller?.business_name && (
+                <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
+                  <FiUsers size={10} /> Partner: {user.reseller.business_name}
+                </p>
+              )}
             </div>
 
             {/* User Menu Popup */}

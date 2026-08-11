@@ -19,6 +19,7 @@ router.get(
     { unique_code: 'RSL_MGMT', permissions: ['view'] },
     { unique_code: 'RSL_TERRITORY', permissions: ['view'] },
     { unique_code: 'RSL_PRODAUTH', permissions: ['view'] },
+    { unique_code: 'RSL_PROD_AUTH', permissions: ['view'] },
     { unique_code: 'RSL_EPC', permissions: ['view'] },
     { unique_code: 'RSL_ORDER', permissions: ['view'] },
     { unique_code: 'RSL_WALLET', permissions: ['view'] },

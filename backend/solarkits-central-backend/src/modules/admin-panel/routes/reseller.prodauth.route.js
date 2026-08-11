@@ -43,4 +43,11 @@ router.get(
   handler.check_product_auth
 );
 
+router.post(
+  '/seed-dummy/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_PROD_AUTH', permissions: ['add'] }]),
+  handler.seed_dummy_rules
+);
+
 module.exports = router;
