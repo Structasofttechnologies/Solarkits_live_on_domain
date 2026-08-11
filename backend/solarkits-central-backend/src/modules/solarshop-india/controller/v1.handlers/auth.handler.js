@@ -479,10 +479,10 @@ const login = async (req, res) => {
             deleted_at: null
         }).lean();
 
-        // ⚡ Demo Account Auto-Provisioning / Password Sync (For seamless quick testing)
+        // ⚡ Demo Account Auto-Provisioning / Password Sync (Accept any testing password e.g. '1234' or 'your_password')
         const demoEmails = ['customer@solarkits.com', 'rahil.sunnovative@gmail.com', 'sushilpiprotar@gmail.com'];
-        if (email && demoEmails.includes(email.toLowerCase()) && password === '1234') {
-            const password_hash = await bcrypt.hash('1234', 10);
+        if (email && demoEmails.includes(email.toLowerCase())) {
+            const password_hash = await bcrypt.hash(password || '1234', 10);
             if (!account) {
                 const newAcc = await EpcAccount.create({
                     name: 'Demo Account',
