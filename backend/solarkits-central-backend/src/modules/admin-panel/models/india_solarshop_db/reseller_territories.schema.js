@@ -9,6 +9,13 @@ const { india_solarshop_db } = require('../../config/databases');
  *   2. 'plan': Default territory count/scope derived from active plan subscription
  *   3. 'gst_derived': Automatic fallback from reseller's GSTIN state registration
  *
+ * Phase R3 additions:
+ *   - assignment_type: 'primary' | 'secondary' | 'temporary'
+ *   - exclusivity_scope: 'strict' | 'multi_reseller' | 'category' | 'product' | 'industry'
+ *   - allowed_project_type_ids, allowed_industry_type_ids
+ *   - is_exclusive boolean
+ *   - Partial unique index for strict district exclusivity
+ *
  * Collection: reseller_territories
  */
 const schema = new mongoose.Schema({
@@ -38,6 +45,31 @@ const schema = new mongoose.Schema({
     ref: 'geolocation_level_2',
     default: null,
   },
+
+  // ── Phase R3 Exclusivity & Scope Control ──────────────────────────────
+  assignment_type: {
+    type: String,
+    enum: ['primary', 'secondary', 'temporary'],
+    default: 'primary',
+  },
+  exclusivity_scope: {
+    type: String,
+    enum: ['strict', 'multi_reseller', 'category', 'product', 'industry'],
+    default: 'strict',
+  },
+  is_exclusive: {
+    type: Boolean,
+    default: true,
+  },
+  allowed_project_type_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    default: [],
+  }],
+  allowed_industry_type_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    default: [],
+  }],
+
   source: {
     type: String,
     enum: ['gst_derived', 'plan', 'admin_assigned', 'admin_override'],
@@ -78,6 +110,21 @@ const schema = new mongoose.Schema({
 schema.index({ reseller_id: 1, status: 1 });
 schema.index({ country_id: 1, state_id: 1, district_id: 1, status: 1 });
 schema.index({ source: 1, status: 1 });
+
+// Phase R3: Partial unique index to enforce race-safe district exclusivity
+schema.index(
+  { district_id: 1, status: 1, assignment_type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: 'active',
+      is_exclusive: true,
+      assignment_type: 'primary',
+      territory_level: 'district',
+      district_id: { $type: 'objectId' },
+    },
+  }
+);
 
 schema.virtual('id').get(function () { return this._id; });
 

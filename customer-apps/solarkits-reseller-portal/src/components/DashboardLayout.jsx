@@ -14,6 +14,8 @@ import {
   FiAlertCircle,
   FiBell,
   FiX,
+  FiBox,
+  FiTag,
 } from "react-icons/fi";
 import api from "../services/api";
 
@@ -23,6 +25,8 @@ const NAV_ITEMS = [
   { name: "Subscription Plans", icon: FiZap, path: "/plans" },
   { name: "My Territories", icon: FiMapPin, path: "/territories" },
   { name: "Authorized Catalog", icon: FiPackage, path: "/catalog" },
+  { name: "B2B Stock & Procurement", icon: FiBox, path: "/procurement-inventory" },
+  { name: "Storefront Pricing (MAP)", icon: FiTag, path: "/storefront-listings" },
   { name: "My EPC Buyers", icon: FiUsers, path: "/epc-buyers" },
   { name: "My Orders", icon: FiShoppingCart, path: "/orders" },
   { name: "Wallet & Ledgers", icon: FiCreditCard, path: "/wallet" },

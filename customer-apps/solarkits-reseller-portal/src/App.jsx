@@ -7,9 +7,11 @@ import KycWorkspace from "./pages/KycWorkspace";
 import PlansPortal from "./pages/PlansPortal";
 import MyTerritories from "./pages/MyTerritories";
 import AuthorizedCatalog from "./pages/AuthorizedCatalog";
-import MyEpcBuyers from "./pages/MyEpcBuyers";
 import MyOrders from "./pages/MyOrders";
 import WalletPortal from "./pages/WalletPortal";
+import ProcurementInventory from "./pages/ProcurementInventory";
+import StorefrontListings from "./pages/StorefrontListings";
+import MyEpcBuyers from "./pages/MyEpcBuyers";
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
           <Route path="/plans" element={<PlansPortal />} />
           <Route path="/territories" element={<MyTerritories />} />
           <Route path="/catalog" element={<AuthorizedCatalog />} />
+          <Route path="/procurement-inventory" element={<ProcurementInventory />} />
+          <Route path="/storefront-listings" element={<StorefrontListings />} />
           <Route path="/epc-buyers" element={<MyEpcBuyers />} />
           <Route path="/orders" element={<MyOrders />} />
           <Route path="/wallet" element={<WalletPortal />} />

@@ -13,6 +13,12 @@ dist-ssr
 *.local
 .env
 
+# Migration tool artifacts
+migration-backups/
+migration-checkpoints/
+migration-reports/
+migrate/node_modules/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

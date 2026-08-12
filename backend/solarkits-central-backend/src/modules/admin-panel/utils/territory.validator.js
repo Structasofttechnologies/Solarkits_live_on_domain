@@ -1,19 +1,21 @@
 /**
  * territory.validator.js
  *
- * Server-side Territory Validation Service & Precedence Engine.
+ * Server-side Territory Validation Service, Precedence Engine & Atomic Assignment.
  * Phase 3 — Reseller Management System
- *
- * Rules & Precedence:
- *   1. 'admin_override' / 'admin_assigned': Explicit admin territory assignments override plan defaults.
- *   2. 'plan': Active plan subscription territory limits & level.
- *   3. 'gst_derived': Fallback to reseller's registered GSTIN state.
+ * Phase R3 — District Exclusivity, Partial Index Guard & Territory History Logging.
  *
  * Security Guard: Never trust client-submitted territory authorization.
  * Always re-evaluate on server before allowing catalog view, EPC buyer creation, or order confirmation.
  */
 
-const { Reseller, ResellerTerritory, ResellerPlanSubscription } = require('../models/india_solarshop_db');
+const {
+  Reseller,
+  ResellerTerritory,
+  TerritoryAssignmentHistory,
+  SolarShopSettings,
+} = require('../models/india_solarshop_db');
+const { logAudit } = require('./audit.service');
 
 /**
  * Check if a location (country, state, district) is covered by active reseller territories.
@@ -103,7 +105,183 @@ async function validateEpcResellerTerritoryMatch(resellerId, epcAddress = {}) {
   };
 }
 
+/**
+ * Phase R3: Atomic Race-Safe Territory Assignment Service.
+ *
+ * Enforces:
+ *   1. District Exclusivity Policy from solarshop_settings (`territory_exclusivity_mode`).
+ *   2. Detection of conflicting active primary assignment for the district.
+ *   3. Rejection unless an override_reason is provided.
+ *   4. Revocation of existing active assignment if overridden.
+ *   5. Immutable log entry in territory_assignment_history.
+ *   6. Central audit logging.
+ */
+async function assignTerritoryAtomic({
+  reseller_id,
+  territory_level,
+  country_id,
+  state_id,
+  district_id,
+  assignment_type = 'primary',
+  exclusivity_scope = 'strict',
+  is_exclusive = true,
+  allowed_project_type_ids = [],
+  allowed_industry_type_ids = [],
+  source = 'admin_assigned',
+  override_reason = null,
+  expiry_date = null,
+  actor_id = null,
+  req = null,
+}) {
+  const reseller = await Reseller.findOne({ _id: reseller_id, deleted_at: null });
+  if (!reseller) {
+    return { success: false, message: 'Reseller account not found or deleted' };
+  }
+
+  // 1. Fetch platform exclusivity policy
+  const settings = await SolarShopSettings.findOne().lean();
+  const globalMode = settings?.territory_exclusivity_mode || 'strict';
+
+  const isDistrictExclusive = (
+    territory_level === 'district' &&
+    district_id &&
+    is_exclusive &&
+    assignment_type === 'primary' &&
+    (exclusivity_scope === 'strict' || globalMode === 'strict')
+  );
+
+  // 2. Conflict Check
+  let conflictingTerritory = null;
+  if (isDistrictExclusive) {
+    conflictingTerritory = await ResellerTerritory.findOne({
+      district_id: district_id,
+      territory_level: 'district',
+      assignment_type: 'primary',
+      is_exclusive: true,
+      status: 'active',
+    });
+
+    if (conflictingTerritory && String(conflictingTerritory.reseller_id) !== String(reseller_id)) {
+      // Conflict detected with a DIFFERENT reseller
+      if (!override_reason || !override_reason.trim()) {
+        const conflictingReseller = await Reseller.findById(conflictingTerritory.reseller_id).select('business_name email').lean();
+        return {
+          success: false,
+          code: 'EXCLUSIVE_DISTRICT_CONFLICT',
+          conflicting_reseller_id: conflictingTerritory.reseller_id,
+          conflicting_reseller_name: conflictingReseller?.business_name || 'Another Reseller',
+          message: `District is exclusively assigned to reseller "${conflictingReseller?.business_name || conflictingTerritory.reseller_id}". An explicit override_reason is required to replace this assignment.`,
+        };
+      }
+    }
+  }
+
+  // 3. Handle Override Revocation if conflicting territory exists and reason is provided
+  if (conflictingTerritory && String(conflictingTerritory.reseller_id) !== String(reseller_id)) {
+    const beforeRevoke = conflictingTerritory.toObject();
+    conflictingTerritory.status = 'revoked';
+    await conflictingTerritory.save();
+
+    // Record revocation history
+    await TerritoryAssignmentHistory.create({
+      territory_id: conflictingTerritory._id,
+      reseller_id: conflictingTerritory.reseller_id,
+      action: 'OVERRIDE',
+      territory_level: conflictingTerritory.territory_level,
+      country_id: conflictingTerritory.country_id,
+      state_id: conflictingTerritory.state_id,
+      district_id: conflictingTerritory.district_id,
+      assignment_type: conflictingTerritory.assignment_type,
+      exclusivity_scope: conflictingTerritory.exclusivity_scope,
+      source: 'admin_override',
+      reason: `Revoked via admin override in favor of reseller ${reseller_id}. Reason: ${override_reason.trim()}`,
+      actor_id: actor_id,
+      before_snapshot: beforeRevoke,
+      after_snapshot: conflictingTerritory.toObject(),
+    });
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: actor_id,
+      action: 'TERRITORY_REVOKE_OVERRIDE',
+      entity_type: 'reseller_territories',
+      entity_id: conflictingTerritory._id,
+      before_snapshot: beforeRevoke,
+      after_snapshot: conflictingTerritory.toObject(),
+      reason: override_reason.trim(),
+      metadata: { replaced_by_reseller_id: reseller_id },
+      req,
+    });
+  }
+
+  // 4. Create New Territory Entry
+  try {
+    const newTerritory = await ResellerTerritory.create({
+      reseller_id,
+      territory_level,
+      country_id,
+      state_id: state_id || null,
+      district_id: district_id || null,
+      assignment_type,
+      exclusivity_scope,
+      is_exclusive,
+      allowed_project_type_ids,
+      allowed_industry_type_ids,
+      source: conflictingTerritory ? 'admin_override' : source,
+      override_reason: override_reason ? override_reason.trim() : null,
+      assigned_by: actor_id,
+      expiry_date: expiry_date || null,
+      status: 'active',
+    });
+
+    // Record assignment history
+    await TerritoryAssignmentHistory.create({
+      territory_id: newTerritory._id,
+      reseller_id: newTerritory.reseller_id,
+      action: conflictingTerritory ? 'OVERRIDE' : 'ASSIGN',
+      territory_level: newTerritory.territory_level,
+      country_id: newTerritory.country_id,
+      state_id: newTerritory.state_id,
+      district_id: newTerritory.district_id,
+      assignment_type: newTerritory.assignment_type,
+      exclusivity_scope: newTerritory.exclusivity_scope,
+      source: newTerritory.source,
+      reason: newTerritory.override_reason,
+      actor_id: actor_id,
+      before_snapshot: null,
+      after_snapshot: newTerritory.toObject(),
+    });
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: actor_id,
+      action: conflictingTerritory ? 'TERRITORY_OVERRIDE' : 'TERRITORY_ASSIGN',
+      entity_type: 'reseller_territories',
+      entity_id: newTerritory._id,
+      after_snapshot: newTerritory.toObject(),
+      reason: override_reason ? override_reason.trim() : null,
+      req,
+    });
+
+    return {
+      success: true,
+      territory: newTerritory,
+      overridden_previous_assignment: Boolean(conflictingTerritory),
+    };
+  } catch (error) {
+    if (error.code === 11000) {
+      return {
+        success: false,
+        code: 'EXCLUSIVE_DISTRICT_CONFLICT',
+        message: 'District is strictly exclusive and already assigned to another reseller (MongoDB partial index rejection).',
+      };
+    }
+    throw error;
+  }
+}
+
 module.exports = {
   validateResellerTerritoryAccess,
   validateEpcResellerTerritoryMatch,
+  assignTerritoryAtomic,
 };

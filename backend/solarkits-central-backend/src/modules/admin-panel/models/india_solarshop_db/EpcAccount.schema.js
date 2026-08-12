@@ -14,11 +14,22 @@ const schema = new mongoose.Schema({
   is_email_verified: { type: Boolean, default: false },
   is_whatsapp_verified: { type: Boolean, default: false },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+
   // --- Phase 5: Reseller Onboarding Pipeline (backward-compatible) ---
   onboarded_by_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
   onboarding_source:        { type: String, enum: ['direct', 'reseller'], default: 'direct' },
   reseller_assigned_date:   { type: Date, default: null },
-  // ------------------------------------------------------------------
+
+  // --- Phase R4: Canonical GSTIN & Reseller Identity ---
+  gstin:                    { type: String, default: null, trim: true, uppercase: true, maxlength: 20 },
+  gstin_verified_at:        { type: Date, default: null },
+  gstin_legal_name:         { type: String, default: null, trim: true },
+  gstin_trade_name:         { type: String, default: null, trim: true },
+  gstin_registration_status:{ type: String, default: null, trim: true },
+  is_gstin_active:          { type: Boolean, default: false },
+  primary_reseller_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
+  onboarding_gstin_log_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'gst_verification_logs', default: null },
+
   deleted_at: { type: Date, default: null }
 }, { 
   collection: 'epc_accounts', 
@@ -26,6 +37,10 @@ const schema = new mongoose.Schema({
   toJSON: { virtuals: true }, 
   toObject: { virtuals: true } 
 });
+
+schema.index({ gstin: 1 }, { sparse: true });
+schema.index({ primary_reseller_id: 1, deleted_at: 1 });
+schema.index({ onboarded_by_reseller_id: 1, deleted_at: 1 });
 
 schema.virtual('id').get(function () { return this._id; });
 module.exports = db.model('epc_accounts', schema);

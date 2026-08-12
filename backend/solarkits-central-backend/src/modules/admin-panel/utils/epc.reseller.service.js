@@ -1,13 +1,17 @@
 /**
  * epc.reseller.service.js
  *
- * Reseller-Onboarded EPC Buyer Pipeline Service.
+ * Reseller-Onboarded EPC Buyer Pipeline Service & GSTIN Conflict Resolution Engine.
  * Phase 5 — Reseller Management System
+ * Phase R4 — Canonical GSTIN Uniqueness, EpcResellerRelationships & Transfer Request Queue.
  *
  * Rules:
  *   1. Reseller must be active and KYC verified before onboarding EPC buyers.
  *   2. EPC buyer's operating location MUST fall within reseller's authorized territory.
- *   3. Direct customers (onboarded_by_reseller_id === null) remain 100% backward-compatible.
+ *   3. If GSTIN is provided, verify via Quick eKYC provider adapter.
+ *   4. One GSTIN = One canonical EPC account. If GSTIN is already registered under another reseller,
+ *      do not overwrite directly — create a pending EpcTransferRequest for Admin review.
+ *   5. Track active & historical EPC-to-Reseller links via epc_reseller_relationships.
  */
 
 const bcrypt = require('bcrypt');
@@ -17,15 +21,18 @@ const {
   ResellerTerritory,
   EpcAccount,
   EpcSignupRequest,
+  EpcResellerRelationship,
+  EpcTransferRequest,
 } = require('../models/india_solarshop_db');
 const { validateEpcResellerTerritoryMatch } = require('./territory.validator');
+const { performGstVerification } = require('../services/gst.verification.service');
 const { logAudit } = require('./audit.service');
 
 /**
  * Register a new EPC Buyer sub-account via Reseller onboarding.
  */
 async function registerEpcByReseller(resellerId, epcData = {}) {
-  const { name, email, whatsapp, password, company_name, state_id, district_id, reference_image } = epcData;
+  const { name, email, whatsapp, password, company_name, state_id, district_id, reference_image, gstin } = epcData;
 
   // 1. Verify reseller active and KYC status
   const reseller = await Reseller.findOne({ _id: resellerId, deleted_at: null }).lean();
@@ -63,7 +70,78 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     throw new Error(`Territory validation failed: ${territoryCheck.reason}`);
   }
 
-  // 3. Check existing email / whatsapp
+  // 3. Optional GSTIN Verification & Duplicate Conflict Check
+  let cleanGstin = gstin ? gstin.trim().toUpperCase() : null;
+  let gstResult = null;
+
+  if (cleanGstin) {
+    gstResult = await performGstVerification({
+      gstin: cleanGstin,
+      entity_type: 'epc_buyer',
+      verified_by: String(resellerId),
+      options: { provider: process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'mock' },
+    });
+
+    if (!gstResult.is_valid) {
+      throw new Error(`GSTIN Verification Failed: ${gstResult.error_message}`);
+    }
+
+    // Check existing account with this GSTIN
+    const existingGstinAccount = await EpcAccount.findOne({
+      gstin: cleanGstin,
+      deleted_at: null,
+    });
+
+    if (existingGstinAccount) {
+      const currentResellerId = existingGstinAccount.primary_reseller_id || existingGstinAccount.onboarded_by_reseller_id;
+
+      if (currentResellerId && String(currentResellerId) !== String(resellerId)) {
+        // GSTIN Conflict: Registered under another reseller. Create pending transfer request.
+        let existingReq = await EpcTransferRequest.findOne({
+          gstin: cleanGstin,
+          requested_by_reseller_id: resellerId,
+          status: 'pending',
+        });
+
+        if (!existingReq) {
+          existingReq = await EpcTransferRequest.create({
+            epc_id: existingGstinAccount._id,
+            requested_by_reseller_id: resellerId,
+            current_reseller_id: currentResellerId,
+            gstin: cleanGstin,
+            status: 'pending',
+            reason: `GSTIN ${cleanGstin} conflict during reseller onboarding by ${reseller.business_name}`,
+          });
+
+          await logAudit({
+            actor_type: 'reseller',
+            actor_id: resellerId,
+            action: 'EPC_TRANSFER_REQUEST_CREATED',
+            entity_type: 'epc_transfer_requests',
+            entity_id: existingReq._id,
+            metadata: { gstin: cleanGstin, current_reseller_id: currentResellerId },
+          });
+        }
+
+        return {
+          status: 'transfer_pending',
+          transfer_request_id: existingReq._id,
+          gstin: cleanGstin,
+          message: 'An EPC account with this GSTIN is already registered under another reseller. A transfer request has been submitted for Admin review.',
+        };
+      }
+
+      if (currentResellerId && String(currentResellerId) === String(resellerId)) {
+        return {
+          account_id: existingGstinAccount._id,
+          status: existingGstinAccount.status,
+          message: 'An EPC account with this GSTIN is already registered under your account.',
+        };
+      }
+    }
+  }
+
+  // 4. Check existing email / whatsapp
   const cleanEmail = (email || '').trim().toLowerCase();
   const cleanWhatsapp = (whatsapp || '').trim();
 
@@ -77,7 +155,7 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
 
   const password_hash = await bcrypt.hash(password || 'EpcPass@123', 10);
 
-  // 4. Create EPC Account
+  // 5. Create EPC Account
   const epcAccount = await EpcAccount.create({
     name:                     name.trim(),
     email:                    cleanEmail,
@@ -87,11 +165,28 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     districts:                effDistrictId ? [effDistrictId] : [],
     status:                   'pending',
     onboarded_by_reseller_id: resellerId,
+    primary_reseller_id:      resellerId,
     onboarding_source:        'reseller',
     reseller_assigned_date:   new Date(),
+    gstin:                    cleanGstin,
+    gstin_verified_at:        gstResult ? new Date() : null,
+    gstin_legal_name:         gstResult?.legal_name || null,
+    gstin_trade_name:         gstResult?.trade_name || null,
+    gstin_registration_status:gstResult?.business_status || null,
+    is_gstin_active:          Boolean(gstResult?.is_valid),
+    onboarding_gstin_log_id:  gstResult?.log_id || null,
   });
 
-  // 5. Create EPC Signup Request for Admin Review Queue
+  // 6. Create Active Relationship
+  await EpcResellerRelationship.create({
+    epc_id: epcAccount._id,
+    reseller_id: resellerId,
+    gstin: cleanGstin,
+    effective_from: new Date(),
+    status: 'active',
+  });
+
+  // 7. Create EPC Signup Request for Admin Review Queue
   const signupRequest = await EpcSignupRequest.create({
     account_id:               epcAccount._id,
     company_name:             (company_name || name).trim(),
@@ -110,7 +205,7 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     action: 'RESELLER_EPC_ONBOARD',
     entity_type: 'epc_accounts',
     entity_id: epcAccount._id,
-    after_snapshot: { epc_account_id: epcAccount._id, company_name, reseller_id: resellerId },
+    after_snapshot: { epc_account_id: epcAccount._id, company_name, reseller_id: resellerId, gstin: cleanGstin },
   });
 
   return {
@@ -118,12 +213,12 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     signup_request_id: signupRequest._id,
     status:            'pending',
     company_name:      signupRequest.company_name,
+    gstin:             cleanGstin,
   };
 }
 
 /**
  * Approve or Reject a reseller-onboarded EPC Buyer signup request (Admin function).
- * Accepts either EpcSignupRequest._id or EpcAccount._id for idOrSignupRequestId.
  */
 async function reviewResellerEpcSignup(idOrSignupRequestId, adminUserId, decision, note) {
   if (!['approved', 'rejected'].includes(decision)) {
@@ -179,7 +274,104 @@ async function reviewResellerEpcSignup(idOrSignupRequestId, adminUserId, decisio
   };
 }
 
+/**
+ * List EPC GSTIN conflict / transfer requests (Admin view).
+ */
+async function listEpcTransferRequests(query = {}) {
+  const filter = {};
+  if (query.status) filter.status = query.status;
+
+  const rows = await EpcTransferRequest.find(filter)
+    .populate('epc_id', 'name email whatsapp gstin')
+    .populate('requested_by_reseller_id', 'business_name email mobile')
+    .populate('current_reseller_id', 'business_name email mobile')
+    .sort({ created_at: -1 })
+    .lean();
+
+  return rows;
+}
+
+/**
+ * Approve or Reject an EPC Reseller Transfer Request (Admin function).
+ */
+async function reviewEpcTransferRequest(requestId, adminUserId, decision, reviewNote = '') {
+  if (!['approved', 'rejected'].includes(decision)) {
+    throw new Error('Decision must be approved or rejected');
+  }
+
+  const transferReq = await EpcTransferRequest.findById(requestId);
+  if (!transferReq) {
+    throw new Error('Transfer request not found');
+  }
+  if (transferReq.status !== 'pending') {
+    throw new Error(`Transfer request is already ${transferReq.status}`);
+  }
+
+  transferReq.status = decision;
+  transferReq.reviewed_by = adminUserId;
+  transferReq.reviewed_at = new Date();
+  transferReq.review_note = reviewNote ? reviewNote.trim() : null;
+  await transferReq.save();
+
+  if (decision === 'approved' && transferReq.epc_id) {
+    const epcId = transferReq.epc_id;
+    const newResellerId = transferReq.requested_by_reseller_id;
+
+    // Revoke current active relationship
+    await EpcResellerRelationship.updateMany(
+      { epc_id: epcId, status: 'active' },
+      { $set: { status: 'transferred', effective_to: new Date() } }
+    );
+
+    // Create new active relationship
+    await EpcResellerRelationship.create({
+      epc_id: epcId,
+      reseller_id: newResellerId,
+      gstin: transferReq.gstin,
+      effective_from: new Date(),
+      status: 'active',
+      assigned_by: adminUserId,
+      transfer_reason: reviewNote || 'Approved via Admin Transfer Request Review',
+    });
+
+    // Update EPC account primary reseller
+    await EpcAccount.findByIdAndUpdate(epcId, {
+      $set: {
+        primary_reseller_id: newResellerId,
+        onboarded_by_reseller_id: newResellerId,
+        reseller_assigned_date: new Date(),
+      },
+    });
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: adminUserId,
+      action: 'EPC_RESELLER_TRANSFER_APPROVED',
+      entity_type: 'epc_transfer_requests',
+      entity_id: requestId,
+      metadata: { epc_id: epcId, old_reseller_id: transferReq.current_reseller_id, new_reseller_id: newResellerId },
+      reason: reviewNote,
+    });
+  } else if (decision === 'rejected') {
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: adminUserId,
+      action: 'EPC_RESELLER_TRANSFER_REJECTED',
+      entity_type: 'epc_transfer_requests',
+      entity_id: requestId,
+      reason: reviewNote,
+    });
+  }
+
+  return {
+    transfer_request_id: transferReq._id,
+    status: decision,
+  };
+}
+
 module.exports = {
   registerEpcByReseller,
   reviewResellerEpcSignup,
+  listEpcTransferRequests,
+  reviewEpcTransferRequest,
 };

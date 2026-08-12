@@ -17,6 +17,7 @@ import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage } from "reac
 
 // Phase 1: Reseller Management
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
+const ResellerSettings = lazy(() => import("../pages/solar-shop/reseller-management/ResellerSettings"));
 const ProjectSettings = lazy(() => import("../pages/solar-shop/project-settings/ProjectSettings"));
 
 const Home = lazy(() => import("../pages/solar-shop/Home"));
@@ -159,6 +160,12 @@ const menus = [
                     icon: <FaWallet />,
                     path: "/admin-panel/solar-shop/reseller-management/wallet",
                     unique_id: "RSL_WALLET"
+                },
+                {
+                    name: "Reseller Settings",
+                    icon: <FiSettings />,
+                    path: "/admin-panel/solar-shop/reseller-management/settings",
+                    unique_id: "RSL_SETTINGS"
                 },
             ]
         },
@@ -569,6 +576,26 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="RSL_MGMT">
                                                 <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
                                                     <ResellerManagement />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/reseller-management/settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Reseller Settings..." />}>
+                                                    <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/reseller-management/settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Reseller Settings..." />}>
+                                                    <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

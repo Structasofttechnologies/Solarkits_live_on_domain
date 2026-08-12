@@ -1,19 +1,16 @@
 /**
  * reseller.wallet.admin.handler.js
  *
- * Admin controller for Commission Engine & Wallet Ledger System.
- * Phase 7 — Reseller Management System
+ * Admin controller for Reseller Wallet Settlement, Ledger Audit & Payout Reviews.
+ * Phase R9 — Reseller Management System
  *
  * Pattern: { status: "success"|"error", data, message }
  */
 
 const mongoose = require('mongoose');
-const {
-  ResellerWallet,
-  ResellerWalletLedger,
-  ResellerPayoutRequest,
-} = require('../models/india_solarshop_db');
-const { processPayoutDecision } = require('../utils/wallet.ledger.service');
+const { ResellerWallet, ResellerWalletLedger, ResellerPayoutRequest } = require('../models/india_solarshop_db');
+const { settleOrderCommission } = require('../services/reseller.commission.service');
+const { logAudit } = require('../utils/audit.service');
 
 // ─── 1. LIST RESELLER WALLETS ─────────────────────────────────────────────────
 /**
@@ -21,24 +18,17 @@ const { processPayoutDecision } = require('../utils/wallet.ledger.service');
  */
 const list_reseller_wallets = async (req, res) => {
   try {
-    const wallets = await ResellerWallet.find({})
-      .populate('reseller_id', 'business_name email mobile gst_number commercial_mode activation_status')
-      .sort({ available_balance: -1 })
+    const filter = {};
+    if (req.query.reseller_id && mongoose.Types.ObjectId.isValid(req.query.reseller_id)) {
+      filter.reseller_id = req.query.reseller_id;
+    }
+
+    const wallets = await ResellerWallet.find(filter)
+      .populate('reseller_id', 'business_name email mobile commercial_mode')
+      .sort({ updated_at: -1 })
       .lean();
 
-    const data = wallets.map((w) => ({
-      id:                w._id,
-      reseller:          w.reseller_id,
-      available_balance: w.available_balance,
-      pending_balance:   w.pending_balance,
-      total_earned:      w.total_earned,
-      total_withdrawn:   w.total_withdrawn,
-      currency:          w.currency,
-      status:            w.status,
-      updated_at:        w.updated_at,
-    }));
-
-    return res.json({ status: 'success', data });
+    return res.json({ status: 'success', data: wallets });
   } catch (error) {
     console.error('[reseller.wallet.admin] list_reseller_wallets error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
@@ -48,97 +38,176 @@ const list_reseller_wallets = async (req, res) => {
 // ─── 2. LIST PAYOUT REQUESTS ──────────────────────────────────────────────────
 /**
  * GET /admin-api/reseller-mgmt/wallet/payouts
- * Query: ?status=pending|paid|rejected
  */
 const list_payout_requests = async (req, res) => {
   try {
-    const { status, reseller_id } = req.query;
-    const query = {};
-
-    if (status) query.status = status;
-    if (reseller_id && mongoose.Types.ObjectId.isValid(reseller_id)) {
-      query.reseller_id = reseller_id;
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.reseller_id && mongoose.Types.ObjectId.isValid(req.query.reseller_id)) {
+      filter.reseller_id = req.query.reseller_id;
     }
 
-    const rows = await ResellerPayoutRequest.find(query)
-      .populate('reseller_id', 'business_name email mobile gst_number commercial_mode')
-      .populate('processed_by', 'name email')
+    const payouts = await ResellerPayoutRequest.find(filter)
+      .populate('reseller_id', 'business_name email mobile')
       .sort({ created_at: -1 })
       .lean();
 
-    const data = rows.map((p) => ({
-      id:                    p._id,
-      reseller:              p.reseller_id,
-      amount:                p.amount,
-      bank_details:          p.bank_details_snapshot,
-      status:                p.status,
-      transaction_reference: p.transaction_reference,
-      processed_by:          p.processed_by,
-      rejection_reason:      p.rejection_reason,
-      payout_date:           p.payout_date,
-      created_at:            p.created_at,
-    }));
-
-    return res.json({ status: 'success', data });
+    return res.json({ status: 'success', data: payouts });
   } catch (error) {
     console.error('[reseller.wallet.admin] list_payout_requests error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
 
-// ─── 3. PROCESS PAYOUT DECISION ───────────────────────────────────────────────
+// ─── 3. SETTLE COMMISSION MANUALLY (Admin) ────────────────────────────────────
 /**
- * PUT /admin-api/reseller-mgmt/wallet/payouts/process/:id
- * Body: { decision: "paid"|"rejected", transaction_reference?, rejection_reason? }
+ * POST /admin-api/reseller-mgmt/wallet/settle-commission
+ * Body: { order_id, order_type ("epc_order"|"purchase_order") }
  */
-const process_payout_request = async (req, res) => {
+const settle_commission_manual = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { decision, transaction_reference, rejection_reason } = req.body;
-
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ status: 'error', message: 'Valid payout request ID required' });
+    const { order_id, order_type } = req.body;
+    if (!order_id || !mongoose.Types.ObjectId.isValid(order_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid order_id is required' });
     }
 
-    const result = await processPayoutDecision({
-      payoutRequestId:      id,
-      adminUserId:          req.user?.id,
-      decision,
-      transactionReference: transaction_reference,
-      rejectionReason:      rejection_reason,
+    const result = await settleOrderCommission({
+      order_id,
+      order_type: order_type || 'epc_order',
+      actor_id: req.user?.id || null,
+      req,
     });
 
     return res.json({
       status: 'success',
-      message: `Payout request processed as ${result.payout.status}`,
+      message: result.already_settled
+        ? `Commission for order ${result.order_number || order_id} was already settled`
+        : `Commission settled successfully for order ${result.order_number}`,
       data: result,
     });
   } catch (error) {
-    console.error('[reseller.wallet.admin] process_payout_request error:', error.message);
-    return res.status(400).json({ status: 'error', message: error.message });
+    console.error('[reseller.wallet.admin] settle_commission_manual error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message || 'Internal server error' });
   }
 };
 
-// ─── 4. GET RESELLER LEDGER HISTORY ───────────────────────────────────────────
+// ─── 4. LIST WALLET LEDGERS (Admin) ───────────────────────────────────────────
 /**
- * GET /admin-api/reseller-mgmt/wallet/ledger/:reseller_id
+ * GET /admin-api/reseller-mgmt/wallet/ledgers OR /ledger/:reseller_id
  */
-const get_reseller_ledger_history = async (req, res) => {
+const list_wallet_ledgers = async (req, res) => {
   try {
-    const { reseller_id } = req.params;
-    if (!reseller_id || !mongoose.Types.ObjectId.isValid(reseller_id)) {
-      return res.status(400).json({ status: 'error', message: 'Valid reseller_id required' });
+    const filter = {};
+    const targetResellerId = req.params.reseller_id || req.query.reseller_id;
+    if (targetResellerId && mongoose.Types.ObjectId.isValid(targetResellerId)) {
+      filter.reseller_id = targetResellerId;
+    }
+    if (req.query.transaction_type) {
+      filter.transaction_type = req.query.transaction_type;
     }
 
-    const rows = await ResellerWalletLedger.find({ reseller_id })
-      .populate('reference_order_id', '_id status selling_price_snapshot')
-      .populate('reference_payout_id', '_id status amount')
+    const ledgers = await ResellerWalletLedger.find(filter)
+      .populate('reseller_id', 'business_name email mobile')
       .sort({ created_at: -1 })
       .lean();
 
-    return res.json({ status: 'success', data: rows });
+    return res.json({ status: 'success', data: ledgers });
   } catch (error) {
-    console.error('[reseller.wallet.admin] get_reseller_ledger_history error:', error);
+    console.error('[reseller.wallet.admin] list_wallet_ledgers error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 5. REVIEW PAYOUT REQUEST (Admin Approve / Reject) ──────────────────────
+/**
+ * PUT /admin-api/reseller-mgmt/wallet/payout-review/:id OR /payouts/process/:id
+ * Body: { decision: "approved"|"rejected", review_note?: string }
+ */
+const review_payout_request = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const decision = req.body.decision || (req.body.status === 'processed' ? 'approved' : req.body.status);
+    const review_note = req.body.review_note || req.body.notes;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid payout request ID is required' });
+    }
+    if (!decision || !['approved', 'rejected', 'processed'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'decision must be approved or rejected' });
+    }
+
+    const targetDecision = decision === 'processed' ? 'approved' : decision;
+
+    const payout = await ResellerPayoutRequest.findById(id);
+    if (!payout) return res.status(404).json({ status: 'error', message: 'Payout request not found' });
+    if (payout.status !== 'pending') {
+      return res.status(400).json({ status: 'error', message: `Payout request is already ${payout.status}` });
+    }
+
+    const wallet = await ResellerWallet.findOne({ reseller_id: payout.reseller_id });
+    if (!wallet) return res.status(404).json({ status: 'error', message: 'Reseller wallet not found' });
+
+    payout.status = targetDecision;
+    payout.processed_by = req.user?.id || null;
+    payout.processed_at = new Date();
+    if (review_note) payout.notes = review_note.trim();
+    await payout.save();
+
+    if (targetDecision === 'approved') {
+      wallet.pending_balance = Math.max(0, wallet.pending_balance - payout.amount);
+      wallet.total_withdrawn = wallet.total_withdrawn + payout.amount;
+      if (wallet.pending_balance_paise) wallet.pending_balance_paise = Math.max(0, wallet.pending_balance_paise - Math.round(payout.amount * 100));
+      if (wallet.total_withdrawn_paise) wallet.total_withdrawn_paise = wallet.total_withdrawn_paise + Math.round(payout.amount * 100);
+      await wallet.save();
+
+      await ResellerWalletLedger.create({
+        reseller_id: payout.reseller_id,
+        transaction_type: 'payout_debit',
+        amount: -payout.amount,
+        balance_type: 'pending',
+        balance_after: wallet.available_balance,
+        reference_payout_id: payout._id,
+        idempotency_key: `PAYOUT-DEBIT-${payout._id}`,
+        narration: `Payout approved by admin. Reference: ${payout.payout_reference || payout._id}`,
+        created_by: req.user?.id || null,
+      });
+    } else if (targetDecision === 'rejected') {
+      wallet.pending_balance = Math.max(0, wallet.pending_balance - payout.amount);
+      wallet.available_balance = wallet.available_balance + payout.amount;
+      if (wallet.pending_balance_paise) wallet.pending_balance_paise = Math.max(0, wallet.pending_balance_paise - Math.round(payout.amount * 100));
+      if (wallet.available_balance_paise) wallet.available_balance_paise = wallet.available_balance_paise + Math.round(payout.amount * 100);
+      await wallet.save();
+
+      await ResellerWalletLedger.create({
+        reseller_id: payout.reseller_id,
+        transaction_type: 'payout_reversal',
+        amount: payout.amount,
+        balance_type: 'available',
+        balance_after: wallet.available_balance,
+        reference_payout_id: payout._id,
+        idempotency_key: `PAYOUT-REVERSAL-${payout._id}`,
+        narration: `Payout rejected by admin (${review_note || 'No reason provided'}). Funds reverted to available balance.`,
+        created_by: req.user?.id || null,
+      });
+    }
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id,
+      action: targetDecision === 'approved' ? 'PAYOUT_APPROVE' : 'PAYOUT_REJECT',
+      entity_type: 'reseller_payout_requests',
+      entity_id: payout._id,
+      after_snapshot: { status: targetDecision, notes: review_note },
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Payout request ${targetDecision} successfully`,
+      data: payout,
+    });
+  } catch (error) {
+    console.error('[reseller.wallet.admin] review_payout_request error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
@@ -146,6 +215,9 @@ const get_reseller_ledger_history = async (req, res) => {
 module.exports = {
   list_reseller_wallets,
   list_payout_requests,
-  process_payout_request,
-  get_reseller_ledger_history,
+  settle_commission_manual,
+  list_wallet_ledgers,
+  review_payout_request,
+  process_payout_request: review_payout_request,
+  get_reseller_ledger_history: list_wallet_ledgers,
 };

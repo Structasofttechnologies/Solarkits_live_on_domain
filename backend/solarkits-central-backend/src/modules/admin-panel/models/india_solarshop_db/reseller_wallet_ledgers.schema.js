@@ -5,6 +5,8 @@ const { india_solarshop_db } = require('../../config/databases');
  * reseller_wallet_ledgers — Double-entry audit ledger for Reseller wallet movements.
  * Enforces financial idempotency via unique idempotency_key index.
  * Collection: reseller_wallet_ledgers
+ *
+ * Phase R9: Integer Paise accounting, TDS, and TCS fields added.
  */
 const schema = new mongoose.Schema({
   reseller_id: {
@@ -16,7 +18,7 @@ const schema = new mongoose.Schema({
     type: String,
     enum: [
       'commission_credit', // Earned commission credited to available balance
-      'payout_debit',       // Funds debited upon successful payout payout
+      'payout_debit',       // Funds debited upon successful payout
       'payout_hold',        // Funds moved to pending upon payout request
       'payout_reversal',    // Funds returned to available upon rejected payout
       'bonus',              // Incentive bonus
@@ -37,9 +39,16 @@ const schema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+
+  // ── Phase R9: Integer Paise Accounting Fields ───────────────────────────
+  gross_amount_paise:   { type: Number, default: 0 },
+  tds_amount_paise:     { type: Number, default: 0 },
+  tcs_amount_paise:     { type: Number, default: 0 },
+  net_amount_paise:     { type: Number, default: 0 },
+  balance_after_paise:  { type: Number, default: 0 },
+
   reference_order_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'purchase_orders',
     default: null,
   },
   reference_payout_id: {

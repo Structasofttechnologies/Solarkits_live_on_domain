@@ -1,8 +1,9 @@
-const { CmsLevel, CmsDepartment, CmsRole, CmsUser, CmsModule, CmsRoleWiseModule } = require('../../models/user_db');
+const bcrypt = require('bcrypt');
+const { CmsLevel, CmsDepartment, CmsRole, CmsUser, CmsModule, CmsRoleWiseModule, CmsPanel, RolePanel, DepartmentPanel, SaaSProduct, PanelSaaSProduct } = require('../../models/user_db');
 const cmsModulesData = require('../seed_data/cms_modules.json');
 
 const seedCMS = async () => {
-  console.log('🔑 Seeding CMS Levels, Departments, Roles, Users, and Modules...');
+  console.log('🔑 Seeding CMS Levels, Departments, Roles, Users, Panels, and Modules...');
 
   // 1. Seed cms_levels
   const defaultLevels = [
@@ -28,12 +29,76 @@ const seedCMS = async () => {
   if (!globalLevel) throw new Error('Global level could not be found or seeded.');
   const clusterLevel = await CmsLevel.findOne({ name: 'cluster' });
 
+  // 1.5. Seed cms_panels
+  const defaultPanels = [
+    {
+      _id: '69f9be08711beb75adfcf941',
+      name: 'Admin Panel',
+      slug: 'admin-panel',
+      url_prefix: '/admin-panel',
+      is_active: true,
+      is_deleted: false,
+    },
+    {
+      name: 'Developer Panel',
+      slug: 'developer-panel',
+      url_prefix: '/developer-panel',
+      is_active: true,
+      is_deleted: false,
+    },
+    {
+      name: 'Account Panel',
+      slug: 'account-panel',
+      url_prefix: '/account-panel',
+      is_active: true,
+      is_deleted: false,
+    },
+    {
+      name: 'Operation Management Panel',
+      slug: 'operation-management-panel',
+      url_prefix: '/operation-management-panel',
+      is_active: true,
+      is_deleted: false,
+    },
+    {
+      name: 'Warehouse Management Panel',
+      slug: 'warehouse-management-panel',
+      url_prefix: '/warehouse-management-panel',
+      is_active: true,
+      is_deleted: false,
+    },
+  ];
+
+  const seededPanelDocs = [];
+  for (const p of defaultPanels) {
+    let panel = await CmsPanel.findOne({ url_prefix: p.url_prefix });
+    if (!panel) {
+      panel = await CmsPanel.create(p);
+      console.log(`  ✓ Panel '${p.name}' seeded.`);
+    } else if (!panel.slug) {
+      panel.slug = p.slug;
+      await panel.save();
+    }
+    seededPanelDocs.push(panel);
+  }
+
+  // Seed PanelSaaSProduct links
+  const allSaaSProducts = await SaaSProduct.find({ is_active: true, is_deleted: false });
+  for (const pDoc of seededPanelDocs) {
+    for (const prodDoc of allSaaSProducts) {
+      const pspExists = await PanelSaaSProduct.findOne({ panel_id: pDoc._id, saas_product_id: prodDoc._id });
+      if (!pspExists) {
+        await PanelSaaSProduct.create({ panel_id: pDoc._id, saas_product_id: prodDoc._id });
+      }
+    }
+  }
+
   // 2. Seed cms_departments (is_system: true)
   let superAdminDept = await CmsDepartment.findOne({ name: 'Super Admin' });
   if (!superAdminDept) {
     superAdminDept = await CmsDepartment.create({
       name: 'Super Admin',
-      panel_id: null,
+      panel_id: seededPanelDocs[0]._id,
       level: 'global',
       country_id: null,
       is_system: true,
@@ -60,29 +125,66 @@ const seedCMS = async () => {
     console.log(`  ✓ Role 'Super Admin' seeded.`);
   }
 
-  // 4. Seed cms_users (Super Admin User from environment variable)
-  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
-  if (superAdminEmail) {
-    const emailLower = superAdminEmail.toLowerCase().trim();
-    const exists = await CmsUser.findOne({ email: emailLower });
+  // Link Super Admin role to all panels in RolePanel
+  for (const pDoc of seededPanelDocs) {
+    const rpExists = await RolePanel.findOne({ role_id: superAdminRole._id, panel_id: pDoc._id });
+    if (!rpExists) {
+      await RolePanel.create({ role_id: superAdminRole._id, panel_id: pDoc._id });
+    }
+  }
+
+  // 4. Seed cms_users (Developer Quick Access Admin Accounts)
+  const defaultAdminUsers = [
+    {
+      name: 'Super Admin',
+      email: (process.env.SUPER_ADMIN_EMAIL || 'rahil.sunnovative@gmail.com').toLowerCase().trim(),
+      phone: process.env.SUPER_ADMIN_PHONE || '9913421453',
+    },
+    {
+      name: 'Accountant',
+      email: 'sushilpiprotar@gmail.com',
+      phone: '9876543211',
+    },
+    {
+      name: 'Account Manager',
+      email: 'rahil@solarkits.com',
+      phone: '9876543212',
+    },
+  ];
+
+  const defaultPasscodeHash = await bcrypt.hash('1234', 10);
+
+  for (const admin of defaultAdminUsers) {
+    const exists = await CmsUser.findOne({ email: admin.email });
     if (!exists) {
       await CmsUser.create({
-        name: 'Ravi Harsoda',
-        email: emailLower,
-        phone_code: process.env.SUPER_ADMIN_PHONE_CODE || '+91',
-        phone: process.env.SUPER_ADMIN_PHONE || '0000000000',
+        name: admin.name,
+        email: admin.email,
+        phone_code: '+91',
+        phone: admin.phone,
         parent_user_id: null,
         role_id: superAdminRole._id,
-        passcode: null,
-        is_verified: false,
+        passcode: defaultPasscodeHash,
+        is_verified: true,
         is_system: true,
         is_protected: true,
         is_active: true
       });
-      console.log(`  ✓ Super Admin user seeded for email: ${superAdminEmail}`);
+      console.log(`  ✓ Admin user seeded for email: ${admin.email}`);
+    } else {
+      const updateData = {
+        is_verified: true,
+        is_active: true,
+        role_id: superAdminRole._id,
+        is_system: true,
+        is_protected: true
+      };
+      if (!exists.passcode) {
+        updateData.passcode = defaultPasscodeHash;
+      }
+      await CmsUser.findByIdAndUpdate(exists._id, { $set: updateData });
+      console.log(`  ✓ Verified & updated admin account: ${admin.email}`);
     }
-  } else {
-    console.log('⚠️ SUPER_ADMIN_EMAIL env variable not set. Skipping user seeding.');
   }
 
   // 5. Upsert CMS Modules from seed JSON using bulkWrite
@@ -123,7 +225,6 @@ const seedCMS = async () => {
 
 
   // 6. Upsert Account Panel modules (cluster level)
-  const { CmsPanel } = require('../../models/user_db');
   const accountPanel = await CmsPanel.findOne({ url_prefix: '/account-panel', is_deleted: false });
   if (accountPanel && clusterLevel) {
     const accModules = [

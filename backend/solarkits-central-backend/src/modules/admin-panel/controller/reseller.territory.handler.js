@@ -3,15 +3,16 @@
  *
  * Admin controller for Reseller Territory assignments & coverage checks.
  * Phase 3 — Reseller Management System
+ * Phase R3 — District Exclusivity, Atomic Assignments & Territory History Logging.
  *
  * Pattern: { status: "success"|"error", data, message }
  */
 
 const mongoose = require('mongoose');
-const { Reseller, ResellerTerritory } = require('../models/india_solarshop_db');
+const { Reseller, ResellerTerritory, TerritoryAssignmentHistory } = require('../models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { CmsUser } = require('../models/user_db');
-const { validateResellerTerritoryAccess } = require('../utils/territory.validator');
+const { validateResellerTerritoryAccess, assignTerritoryAtomic } = require('../utils/territory.validator');
 const { logAudit } = require('../utils/audit.service');
 
 // ─── 1. LIST RESELLER TERRITORIES ─────────────────────────────────────────────
@@ -57,21 +58,24 @@ const list_reseller_territories = async (req, res) => {
       else if (c) location_name = c.name;
 
       return {
-        id:              r._id,
-        reseller_id:     r.reseller_id,
-        territory_level: r.territory_level,
-        country:         c,
-        state:           s,
-        district:        d,
-        location_name:   location_name,
-        source:          r.source,
+        id:                r._id,
+        reseller_id:       r.reseller_id,
+        territory_level:   r.territory_level,
+        country:           c,
+        state:             s,
+        district:          d,
+        location_name:     location_name,
+        assignment_type:   r.assignment_type || 'primary',
+        exclusivity_scope: r.exclusivity_scope || 'strict',
+        is_exclusive:      r.is_exclusive !== false,
+        source:            r.source,
         precedence_source: r.source,
-        override_reason: r.override_reason,
-        assigned_by:     r.assigned_by ? uMap[r.assigned_by.toString()] : null,
-        effective_date:  r.effective_date,
-        expiry_date:     r.expiry_date,
-        status:          r.status,
-        created_at:      r.created_at,
+        override_reason:   r.override_reason,
+        assigned_by:       r.assigned_by ? uMap[r.assigned_by.toString()] : null,
+        effective_date:    r.effective_date,
+        expiry_date:       r.expiry_date,
+        status:            r.status,
+        created_at:        r.created_at,
       };
     });
 
@@ -82,15 +86,28 @@ const list_reseller_territories = async (req, res) => {
   }
 };
 
-// ─── 2. ASSIGN TERRITORY ──────────────────────────────────────────────────────
+// ─── 2. ASSIGN TERRITORY (Atomic Exclusivity Check) ───────────────────────────
 /**
  * POST /admin-api/resellers/:id/territories/assign
- * Body: { territory_level, country_id, state_id?, district_id?, source?, override_reason?, expiry_date? }
+ * Body: { territory_level, country_id, state_id?, district_id?, assignment_type?, exclusivity_scope?, is_exclusive?, source?, override_reason?, expiry_date? }
  */
 const assign_territory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { territory_level, country_id, state_id, district_id, source, override_reason, expiry_date } = req.body;
+    const {
+      territory_level,
+      country_id,
+      state_id,
+      district_id,
+      assignment_type,
+      exclusivity_scope,
+      is_exclusive,
+      allowed_project_type_ids,
+      allowed_industry_type_ids,
+      source,
+      override_reason,
+      expiry_date,
+    } = req.body;
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
@@ -108,52 +125,43 @@ const assign_territory = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid district_id is required for district level' });
     }
 
-    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
-    if (!reseller) {
-      return res.status(404).json({ status: 'error', message: 'Reseller account not found' });
-    }
-
-    // Check for duplicate active assignment
-    const query = {
-      reseller_id:     id,
-      territory_level: territory_level,
-      country_id:      country_id,
-      state_id:        state_id || null,
-      district_id:     district_id || null,
-      status:          'active',
-    };
-    const existing = await ResellerTerritory.findOne(query);
-    if (existing) {
-      return res.status(409).json({ status: 'error', message: 'This territory is already assigned to the reseller' });
-    }
-
-    const territory = await ResellerTerritory.create({
-      reseller_id:     id,
-      territory_level: territory_level,
-      country_id:      country_id,
-      state_id:        state_id || null,
-      district_id:     district_id || null,
-      source:          source || 'admin_assigned',
-      override_reason: override_reason ? override_reason.trim() : null,
-      assigned_by:     req.user?.id || null,
-      expiry_date:     expiry_date || null,
-      status:          'active',
-    });
-
-    await logAudit({
-      actor_type:  'cms_user',
-      actor_id:    req.user?.id,
-      action:      'ASSIGN_RESELLER_TERRITORY',
-      entity_type: 'reseller_territories',
-      entity_id:   territory._id,
-      after_snapshot: { reseller_id: id, territory_level, country_id, state_id, district_id },
+    const result = await assignTerritoryAtomic({
+      reseller_id: id,
+      territory_level,
+      country_id,
+      state_id,
+      district_id,
+      assignment_type,
+      exclusivity_scope,
+      is_exclusive,
+      allowed_project_type_ids,
+      allowed_industry_type_ids,
+      source,
+      override_reason,
+      expiry_date,
+      actor_id: req.user?.id || null,
       req,
     });
 
+    if (!result.success) {
+      if (result.code === 'EXCLUSIVE_DISTRICT_CONFLICT') {
+        return res.status(409).json({
+          status: 'error',
+          code: result.code,
+          message: result.message,
+          conflicting_reseller_id: result.conflicting_reseller_id,
+          conflicting_reseller_name: result.conflicting_reseller_name,
+        });
+      }
+      return res.status(400).json({ status: 'error', message: result.message });
+    }
+
     return res.status(201).json({
       status: 'success',
-      message: 'Territory assigned successfully',
-      data: territory,
+      message: result.overridden_previous_assignment
+        ? 'Territory assigned successfully via administrative override'
+        : 'Territory assigned successfully',
+      data: result.territory,
     });
   } catch (error) {
     console.error('[reseller.territory] assign_territory error:', error);
@@ -172,10 +180,32 @@ const remove_territory = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid territory assignment ID is required' });
     }
 
-    const territory = await ResellerTerritory.findByIdAndDelete(id);
+    const territory = await ResellerTerritory.findById(id);
     if (!territory) {
       return res.status(404).json({ status: 'error', message: 'Territory assignment not found' });
     }
+
+    const beforeSnapshot = territory.toObject();
+    territory.status = 'revoked';
+    await territory.save();
+
+    // Log to territory_assignment_history
+    await TerritoryAssignmentHistory.create({
+      territory_id: territory._id,
+      reseller_id: territory.reseller_id,
+      action: 'REVOKE',
+      territory_level: territory.territory_level,
+      country_id: territory.country_id,
+      state_id: territory.state_id,
+      district_id: territory.district_id,
+      assignment_type: territory.assignment_type,
+      exclusivity_scope: territory.exclusivity_scope,
+      source: territory.source,
+      reason: req.body?.reason || 'Manual removal by Admin',
+      actor_id: req.user?.id || null,
+      before_snapshot: beforeSnapshot,
+      after_snapshot: territory.toObject(),
+    });
 
     await logAudit({
       actor_type:  'cms_user',
@@ -183,18 +213,42 @@ const remove_territory = async (req, res) => {
       action:      'REMOVE_RESELLER_TERRITORY',
       entity_type: 'reseller_territories',
       entity_id:   territory._id,
-      before_snapshot: territory.toObject(),
+      before_snapshot: beforeSnapshot,
+      after_snapshot: territory.toObject(),
+      reason: req.body?.reason || null,
       req,
     });
 
-    return res.json({ status: 'success', message: 'Territory assignment removed successfully' });
+    return res.json({ status: 'success', message: 'Territory assignment revoked successfully' });
   } catch (error) {
     console.error('[reseller.territory] remove_territory error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
 
-// ─── 4. VALIDATE/CHECK TERRITORY ACCESS ───────────────────────────────────────
+// ─── 4. GET TERRITORY ASSIGNMENT HISTORY ──────────────────────────────────────
+/**
+ * GET /admin-api/resellers/:id/territories/history
+ */
+const get_territory_history = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    const history = await TerritoryAssignmentHistory.find({ reseller_id: id })
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.json({ status: 'success', data: history });
+  } catch (error) {
+    console.error('[reseller.territory] get_territory_history error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 5. VALIDATE/CHECK TERRITORY ACCESS ───────────────────────────────────────
 /**
  * POST /admin-api/resellers/:id/territories/validate
  * Body: { country_id, state_id, district_id }
@@ -204,8 +258,7 @@ const validate_territory_access = async (req, res) => {
     const { id } = req.params;
     const { country_id, state_id, district_id } = req.body;
 
-    const result = await validateResellerTerritoryAccess({
-      reseller_id: id,
+    const result = await validateResellerTerritoryAccess(id, {
       country_id,
       state_id,
       district_id,
@@ -222,5 +275,6 @@ module.exports = {
   list_reseller_territories,
   assign_territory,
   remove_territory,
+  get_territory_history,
   validate_territory_access,
 };

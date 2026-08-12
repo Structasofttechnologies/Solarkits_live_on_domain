@@ -43,4 +43,11 @@ router.get(
   handler.get_reseller_ledger_history
 );
 
+router.post(
+  '/settle-commission',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_COMM_SETTLE', permissions: ['add', 'edit'] }, { unique_code: 'RSL_WALLET', permissions: ['edit'] }]),
+  handler.settle_commission_manual
+);
+
 module.exports = router;

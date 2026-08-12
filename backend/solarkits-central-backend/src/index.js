@@ -27,6 +27,10 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Phase R1: NoSQL injection guard — strips keys containing '$' or '.' from
+// req.body, req.params and req.query before reaching any controller.
+app.use(require('./modules/admin-panel/middlewares/mongo.sanitize'));
+
 // Static uploads folder
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 app.use('/public/uploads', express.static(path.join(__dirname, '../public/uploads')));
@@ -72,6 +76,11 @@ adminRouter.use('/reseller-mgmt/wallet', require('./modules/admin-panel/routes/r
 adminRouter.use('/reseller-mgmt/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
 adminRouter.use('/resellers/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
 adminRouter.use('/reseller-mgmt', require('./modules/admin-panel/routes/reseller.admin.route'));
+adminRouter.use('/reseller-mgmt/procurement', require('./modules/admin-panel/routes/reseller.procurement.route'));
+adminRouter.use('/reseller-mgmt/pricing-rules', require('./modules/admin-panel/routes/reseller.pricing.route'));
+adminRouter.use('/reseller-mgmt/analytics', require('./modules/admin-panel/routes/reseller.analytics.route'));
+// Phase R1: Platform-wide settings (exclusivity policy, settlement config, activation requirements)
+adminRouter.use('/reseller-mgmt/settings', require('./modules/admin-panel/routes/reseller.settings.route'));
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/amc-plans', require('./modules/AMC-panel/routes/amc.routes'));

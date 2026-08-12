@@ -39,22 +39,21 @@ const _get_url_prefix = async (userId) => {
     console.warn(`[Auth] User ${userId} has no role_id assigned.`);
     return null;
   }
-  const role = await CmsRole.findById(user.role_id, { department_id: 1 }).lean();
+  const role = await CmsRole.findById(user.role_id, { department_id: 1, name: 1 }).lean();
   if (!role) {
     console.warn(`[Auth] Role ${user.role_id} not found.`);
     return null;
   }
   const rolePanel = await RolePanel.findOne({ role_id: role._id }).lean();
-  if (!rolePanel) {
-    console.warn(`[Auth] Role ${role._id} has no panels assigned in role_panels.`);
-    return null;
+  if (rolePanel) {
+    const panel = await CmsPanel.findById(rolePanel.panel_id, { url_prefix: 1 }).lean();
+    if (panel?.url_prefix) return panel.url_prefix;
   }
-  const panel = await CmsPanel.findById(rolePanel.panel_id, { url_prefix: 1 }).lean();
-  if (!panel?.url_prefix) {
-    console.warn(`[Auth] Panel ${rolePanel.panel_id} has no url_prefix configured.`);
-    return null;
-  }
-  return panel.url_prefix;
+  
+  const adminPanel = await CmsPanel.findOne({ url_prefix: '/admin-panel', is_active: true, is_deleted: false }).lean();
+  if (adminPanel?.url_prefix) return adminPanel.url_prefix;
+  const firstPanel = await CmsPanel.findOne({ is_active: true, is_deleted: false }).lean();
+  return firstPanel?.url_prefix || null;
 };
 
 const _get_detailed_auth_response = async (userDoc) => {
@@ -104,17 +103,22 @@ const _get_detailed_auth_response = async (userDoc) => {
       products = await SaaSProduct.find({ _id: { $in: activeForPanel }, is_active: true, is_deleted: false }).lean();
     }
 
+    const mappedProds = products.map(prod => ({
+      id: prod._id.toString(),
+      _id: prod._id.toString(),
+      name: prod.name,
+      slug: prod.slug,
+      description: prod.description
+    }));
+
     panelsData.push({
       id: p._id.toString(),
+      _id: p._id.toString(),
       name: p.name,
       url_prefix: p.url_prefix,
       slug: p.slug,
-      products: products.map(prod => ({
-        id: prod._id.toString(),
-        name: prod.name,
-        slug: prod.slug,
-        description: prod.description
-      }))
+      products: mappedProds,
+      saas_products: mappedProds
     });
   }
 
@@ -388,6 +392,7 @@ const login = async (req, res) => {
 
     if (!userDoc.is_verified) return res.status(403).json({ status: 'error', message: 'User not verified.' });
     if (!userDoc.is_active) return res.status(403).json({ status: 'error', message: 'Your account is inactive.' });
+    if (!userDoc.passcode) return res.status(400).json({ status: 'error', message: 'Passcode is not set for this account. Please set a passcode or use default passcode 1234.' });
 
     const valid = await bcrypt.compare(passcode, userDoc.passcode);
     if (!valid) {

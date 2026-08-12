@@ -36,6 +36,13 @@ router.delete(
   handler.remove_territory
 );
 
+router.get(
+  '/history/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_TERR_HIST', permissions: ['view'] }, { unique_code: 'RSL_TERRITORY', permissions: ['view'] }]),
+  handler.get_territory_history
+);
+
 router.post(
   '/validate/:id',
   check_auth,

@@ -7,6 +7,11 @@ const { india_solarshop_db } = require('../../config/databases');
  * Defines explicit grant (whitelist) or restriction (blacklist) per category,
  * subcategory, product, or kit.
  *
+ * Phase R5 additions:
+ *   - district_id: Optional district scoping
+ *   - allowed_project_type_ids: Scoping by project type
+ *   - allowed_industry_type_ids: Scoping by industry type
+ *
  * Collection: reseller_product_authorizations
  */
 const schema = new mongoose.Schema({
@@ -14,6 +19,11 @@ const schema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'resellers',
     required: true,
+  },
+  district_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'geolocation_level_2',
+    default: null,
   },
   scope_type: {
     type: String,
@@ -41,6 +51,14 @@ const schema = new mongoose.Schema({
     ref: 'warehouse_combo_kits',
     default: null,
   },
+  allowed_project_type_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    default: [],
+  }],
+  allowed_industry_type_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    default: [],
+  }],
 
   is_authorized: {
     type: Boolean,
@@ -49,7 +67,7 @@ const schema = new mongoose.Schema({
   },
   source: {
     type: String,
-    enum: ['plan_default', 'admin_override', 'commercial_mode'],
+    enum: ['plan_default', 'admin_override', 'commercial_mode', 'district_rule'],
     required: true,
     default: 'admin_override',
   },
@@ -87,6 +105,7 @@ const schema = new mongoose.Schema({
 
 schema.index({ reseller_id: 1, status: 1 });
 schema.index({ scope_type: 1, category_id: 1, subcategory_id: 1, product_id: 1 });
+schema.index({ district_id: 1, status: 1 });
 
 schema.virtual('id').get(function () { return this._id; });
 

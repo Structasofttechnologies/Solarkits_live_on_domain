@@ -1,18 +1,22 @@
 /**
  * reseller.checkout.handler.js
  *
- * Handler for Dual-Mode Reseller Checkout validation & Admin Order Tracking.
- * Phase 6 — Reseller Management System
+ * Handler for Dual-Mode Reseller Checkout validation, EPC Order Creation & Stock Holds.
+ * Phase 6 & Phase R8 — Reseller Management System
  *
  * Pattern: { status: "success"|"error", data, message }
  */
 
 const mongoose = require('mongoose');
-const { PurchaseOrder, Reseller } = require('../models/india_solarshop_db');
+const { PurchaseOrder, EpcOrder } = require('../models/india_solarshop_db');
 const {
   validateResellerCheckoutGuards,
   calculateDualModeOrderPricing,
 } = require('../utils/reseller.checkout.service');
+const {
+  processEpcCheckout,
+  confirmEpcOrderPayment,
+} = require('../services/epc.order.service');
 
 // ─── 1. VALIDATE CHECKOUT ─────────────────────────────────────────────────────
 /**
@@ -65,7 +69,64 @@ const validate_checkout = async (req, res) => {
   }
 };
 
-// ─── 2. ADMIN LIST RESELLER ORDERS ────────────────────────────────────────────
+// ─── 2. CREATE EPC ORDER (Territory Routing & 15-min Stock Hold) ─────────────
+/**
+ * POST /api/india/v1/epc/checkout/create
+ * Body: { items: [...], delivery_address: {...}, payment_reference? }
+ */
+const create_epc_order = async (req, res) => {
+  try {
+    const epcId = req.epc_buyer?._id || req.body.epc_id;
+    if (!epcId || !mongoose.Types.ObjectId.isValid(epcId)) {
+      return res.status(400).json({ status: 'error', message: 'Valid epc_id is required' });
+    }
+
+    const result = await processEpcCheckout({
+      epc_id: epcId,
+      items: req.body.items,
+      delivery_address: req.body.delivery_address || {},
+      payment_reference: req.body.payment_reference || null,
+      actor_id: epcId,
+      req,
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      message: `EPC order ${result.order.order_number} created and stock reserved (15-min hold)`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[reseller.checkout] create_epc_order error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
+// ─── 3. CONFIRM EPC ORDER PAYMENT (Convert Hold to Sales Out) ────────────────
+/**
+ * POST /api/india/v1/epc/checkout/confirm
+ * Body: { order_id, payment_reference }
+ */
+const confirm_epc_payment = async (req, res) => {
+  try {
+    const { order_id, payment_reference } = req.body;
+    if (!order_id || !mongoose.Types.ObjectId.isValid(order_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid order_id is required' });
+    }
+
+    const order = await confirmEpcOrderPayment(order_id, payment_reference, req.user?.id || req.epc_buyer?._id || null, req);
+
+    return res.json({
+      status: 'success',
+      message: `Payment confirmed for EPC order ${order.order_number}`,
+      data: order,
+    });
+  } catch (error) {
+    console.error('[reseller.checkout] confirm_epc_payment error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
+// ─── 4. ADMIN LIST RESELLER ORDERS ────────────────────────────────────────────
 /**
  * GET /admin-api/reseller-mgmt/orders/list
  * Query: ?reseller_id=...&commercial_mode=...&status=...
@@ -117,5 +178,7 @@ const list_reseller_orders = async (req, res) => {
 
 module.exports = {
   validate_checkout,
+  create_epc_order,
+  confirm_epc_payment,
   list_reseller_orders,
 };

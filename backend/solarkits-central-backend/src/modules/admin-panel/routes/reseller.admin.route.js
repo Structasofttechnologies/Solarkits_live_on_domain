@@ -51,10 +51,31 @@ router.put(
 );
 
 router.post(
-  '/subscription/assign/:id',
+  '/gst-verify',
   check_auth,
-  check_permissions([{ unique_code: 'RSL_PLAN', permissions: ['edit'] }]),
-  handler.assign_plan_to_reseller
+  check_permissions([{ unique_code: 'RSL_GST_VERIFY', permissions: ['add', 'edit'] }]),
+  handler.verify_gstin_admin
+);
+
+router.get(
+  '/activation-readiness/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_MGMT', permissions: ['view'] }]),
+  handler.get_activation_readiness
+);
+
+router.get(
+  '/epc-conflicts',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_EPC_CONFLICT', permissions: ['view'] }, { unique_code: 'RSL_EPC', permissions: ['view'] }]),
+  handler.list_epc_conflicts
+);
+
+router.put(
+  '/epc-transfer/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_EPC_TRANSFER', permissions: ['edit'] }, { unique_code: 'RSL_EPC', permissions: ['edit'] }]),
+  handler.review_epc_transfer
 );
 
 module.exports = router;

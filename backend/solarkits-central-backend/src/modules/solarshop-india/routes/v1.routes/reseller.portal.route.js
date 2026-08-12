@@ -13,17 +13,19 @@ const router = express.Router();
 const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
 const handler = require('../../controller/reseller.portal.handler');
 const { upload_files, upload_any_files } = require('../../../admin-panel/utils/upload.files');
+// Phase R1: Rate limiting on reseller auth and GST verify endpoints
+const { authRateLimiter, gstRateLimiter } = require('../../../admin-panel/middlewares/rate.limit');
 
 const kycDocUpload = upload_any_files('public/uploads/kyc', 10);
 
 // ── Public Auth & Registration ───────────────────────────────────────────────
 router.get('/types', handler.get_active_types);
-router.post('/auth/register', handler.register_reseller);
-router.post('/auth/login', handler.login_reseller);
+router.post('/auth/register', authRateLimiter, handler.register_reseller);
+router.post('/auth/login',    authRateLimiter, handler.login_reseller);
 router.post('/auth/logout', handler.logout_reseller);
 
 // ── GST Verification (Public format & adapter check) ──────────────────────────
-router.post('/gst/verify', handler.verify_gstin);
+router.post('/gst/verify', gstRateLimiter, handler.verify_gstin);
 
 // ── Protected Reseller Endpoints ──────────────────────────────────────────────
 router.get('/auth/me', verify_reseller_auth, handler.get_reseller_me);
@@ -43,5 +45,21 @@ router.get('/wallet/me', verify_reseller_auth, walletPortalHandler.get_my_wallet
 router.get('/wallet/ledger', verify_reseller_auth, walletPortalHandler.get_my_ledger);
 router.post('/wallet/withdraw', verify_reseller_auth, walletPortalHandler.request_withdrawal);
 router.get('/wallet/payouts', verify_reseller_auth, walletPortalHandler.get_my_payouts);
+
+// Procurement & Stock Inventory Routes
+const procurementHandler = require('../../../admin-panel/controller/reseller.procurement.handler');
+router.post('/procurement/create', verify_reseller_auth, procurementHandler.create_order);
+router.get('/procurement/list', verify_reseller_auth, procurementHandler.list_procurement_orders);
+router.get('/inventory', verify_reseller_auth, procurementHandler.get_inventory_balance);
+
+// Storefront Listings Routes
+const pricingHandler = require('../../../admin-panel/controller/reseller.pricing.handler');
+const checkoutHandler = require('../../../admin-panel/controller/reseller.checkout.handler');
+router.get('/listings', verify_reseller_auth, pricingHandler.list_reseller_listings);
+router.post('/listings', verify_reseller_auth, pricingHandler.upsert_reseller_listing);
+
+// EPC Buyer Checkout Routes
+router.post('/epc-checkout/create', checkoutHandler.create_epc_order);
+router.post('/epc-checkout/confirm', checkoutHandler.confirm_epc_payment);
 
 module.exports = router;

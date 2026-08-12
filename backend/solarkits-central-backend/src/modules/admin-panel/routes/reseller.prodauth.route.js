@@ -50,4 +50,26 @@ router.post(
   handler.seed_dummy_rules
 );
 
+// ── District Product Rules Routes ─────────────────────────────────────────────
+router.get(
+  '/district-rules',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_DIST_RULE', permissions: ['view'] }, { unique_code: 'RSL_PROD_AUTH', permissions: ['view'] }]),
+  handler.list_district_product_rules
+);
+
+router.post(
+  '/district-rules',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_DIST_RULE', permissions: ['add'] }, { unique_code: 'RSL_PROD_AUTH', permissions: ['add'] }]),
+  handler.create_district_product_rule
+);
+
+router.delete(
+  '/district-rules/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_DIST_RULE', permissions: ['delete'] }, { unique_code: 'RSL_PROD_AUTH', permissions: ['delete'] }]),
+  handler.delete_district_product_rule
+);
+
 module.exports = router;

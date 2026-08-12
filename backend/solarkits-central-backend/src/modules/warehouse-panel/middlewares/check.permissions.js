@@ -141,7 +141,7 @@ const check_permissions = (permissionChecks) => {
           countryId = new mongoose.Types.ObjectId(user.country);
         } else {
           // Dynamic lookup inside geolocations connection
-          const geoDb = mongoose.connections.find(conn => conn.name === 'solarkits_geolocations' || conn.name?.includes('geolocations'));
+          const geoDb = mongoose.connections.find(conn => conn.name === 'solarkits_geolocations' || conn.name?.includes('geolocations')) || mongoose.connection;
           if (geoDb) {
             try {
               const GeoCountry = geoDb.models['geolocation_level_0'] || geoDb.model('geolocation_level_0', new mongoose.Schema({ name: String }));

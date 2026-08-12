@@ -4,6 +4,8 @@ const { india_solarshop_db } = require('../../config/databases');
 /**
  * reseller_wallets — Primary Wallet balance tracking per Reseller.
  * Collection: reseller_wallets
+ *
+ * Phase R9: Integer Paise accounting fields added alongside backward-compatible INR fields.
  */
 const schema = new mongoose.Schema({
   reseller_id: {
@@ -12,30 +14,21 @@ const schema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  available_balance: {
-    type: Number,
-    required: true,
-    default: 0,
-    min: 0,
-  },
-  pending_balance: {
-    type: Number,
-    required: true,
-    default: 0,
-    min: 0,
-  },
-  total_earned: {
-    type: Number,
-    required: true,
-    default: 0,
-    min: 0,
-  },
-  total_withdrawn: {
-    type: Number,
-    required: true,
-    default: 0,
-    min: 0,
-  },
+
+  // ── Backward-compatible INR fields ───────────────────────────────────────
+  available_balance: { type: Number, required: true, default: 0, min: 0 },
+  pending_balance:   { type: Number, required: true, default: 0, min: 0 },
+  total_earned:      { type: Number, required: true, default: 0, min: 0 },
+  total_withdrawn:   { type: Number, required: true, default: 0, min: 0 },
+
+  // ── Phase R9: Integer Paise Accounting Fields ───────────────────────────
+  available_balance_paise: { type: Number, default: 0, min: 0 },
+  pending_balance_paise:   { type: Number, default: 0, min: 0 },
+  total_earned_paise:      { type: Number, default: 0, min: 0 },
+  total_withdrawn_paise:   { type: Number, default: 0, min: 0 },
+  tds_deducted_paise:      { type: Number, default: 0, min: 0 },
+  tcs_deducted_paise:      { type: Number, default: 0, min: 0 },
+
   currency: {
     type: String,
     default: 'INR',

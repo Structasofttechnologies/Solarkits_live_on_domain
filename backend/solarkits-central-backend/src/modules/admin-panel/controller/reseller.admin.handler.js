@@ -17,6 +17,9 @@ const {
 } = require('../models/india_solarshop_db');
 const { CmsUser } = require('../models/user_db');
 const { logAudit } = require('../utils/audit.service');
+const { evaluateActivationReadiness } = require('../services/reseller.activation.service');
+const { performGstVerification } = require('../services/gst.verification.service');
+const { listEpcTransferRequests, reviewEpcTransferRequest } = require('../utils/epc.reseller.service');
 
 // ─── 1. LIST RESELLERS ────────────────────────────────────────────────────────
 /**
@@ -207,17 +210,20 @@ const review_kyc = async (req, res) => {
       kyc.rejected_reason = null;
       kyc.resubmission_note = null;
 
-      // Auto-activate reseller upon KYC verification
+      // Update lifecycle status to kyc_verified
+      reseller.reseller_lifecycle_status = 'kyc_verified';
       reseller.activation_status = 'active';
       reseller.is_active = true;
     } else if (decision === 'reject') {
       targetKycStatus = 'rejected';
       actionCode = 'KYC_REJECT';
       kyc.rejected_reason = note.trim();
+      reseller.reseller_lifecycle_status = 'kyc_rejected';
     } else if (decision === 'resubmit') {
       targetKycStatus = 'resubmission_required';
       actionCode = 'KYC_RESUBMIT_REQUEST';
       kyc.resubmission_note = note.trim();
+      reseller.reseller_lifecycle_status = 'kyc_resubmission_required';
     }
 
     // Update KYC document
@@ -253,6 +259,7 @@ const review_kyc = async (req, res) => {
       data: {
         reseller_id: id,
         kyc_status:  targetKycStatus,
+        lifecycle_status: reseller.reseller_lifecycle_status,
       },
     });
   } catch (error) {
@@ -261,7 +268,26 @@ const review_kyc = async (req, res) => {
   }
 };
 
-// ─── 4. CHANGE ACTIVATION STATUS (Activate / Suspend / Terminate) ───────────
+// ─── 4. GET ACTIVATION READINESS ─────────────────────────────────────────────
+/**
+ * GET /admin-api/resellers/:id/activation-readiness
+ */
+const get_activation_readiness = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    const readiness = await evaluateActivationReadiness(id);
+    return res.json({ status: 'success', data: readiness });
+  } catch (error) {
+    console.error('[reseller.admin] get_activation_readiness error:', error.message);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
+// ─── 5. CHANGE ACTIVATION STATUS (Activate / Suspend / Terminate) ───────────
 /**
  * PUT /admin-api/resellers/:id/activation-status
  * Body: { activation_status: "active"|"suspended"|"terminated", reason?: string }
@@ -287,16 +313,28 @@ const change_activation_status = async (req, res) => {
 
     const beforeStatus = reseller.activation_status;
 
-    // Safety rule: Cannot activate a reseller whose KYC is not verified
-    if (activation_status === 'active' && reseller.kyc_status !== 'verified') {
-      return res.status(409).json({
-        status: 'error',
-        message: `Cannot activate reseller: KYC status is "${reseller.kyc_status}". KYC must be verified first.`,
-      });
+    // Safety Rule: If activating, evaluate activation readiness via service
+    if (activation_status === 'active') {
+      const readiness = await evaluateActivationReadiness(id);
+      if (!readiness.is_ready_for_activation) {
+        return res.status(409).json({
+          status: 'error',
+          message: `Cannot activate reseller. Missing requirements: ${readiness.missing_requirements.join(', ')}`,
+          data: readiness,
+        });
+      }
     }
 
     reseller.activation_status = activation_status;
     reseller.is_active = activation_status === 'active';
+    if (activation_status === 'active') {
+      reseller.reseller_lifecycle_status = 'active';
+    } else if (activation_status === 'suspended') {
+      reseller.reseller_lifecycle_status = 'suspended';
+    } else if (activation_status === 'terminated') {
+      reseller.reseller_lifecycle_status = 'terminated';
+    }
+
     reseller.updated_by = validAdminId;
     await reseller.save();
 
@@ -308,16 +346,56 @@ const change_activation_status = async (req, res) => {
       entity_id: id,
       before_snapshot: { activation_status: beforeStatus },
       after_snapshot: { activation_status, reason: reasonText },
+      reason: reasonText,
       req,
     });
 
     return res.json({
       status: 'success',
       message: `Reseller activation status updated to "${activation_status}"`,
-      data: { id: reseller._id, activation_status: reseller.activation_status },
+      data: { id: reseller._id, activation_status: reseller.activation_status, lifecycle_status: reseller.reseller_lifecycle_status },
     });
   } catch (error) {
     console.error('[reseller.admin] change_activation_status error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 6. ADMIN GST VERIFY ──────────────────────────────────────────────────────
+/**
+ * POST /admin-api/reseller-mgmt/gst-verify
+ * Body: { reseller_id, gstin }
+ */
+const verify_gstin_admin = async (req, res) => {
+  try {
+    const { reseller_id, gstin } = req.body;
+    if (!gstin) return res.status(400).json({ status: 'error', message: 'gstin is required' });
+
+    const result = await performGstVerification({
+      gstin,
+      entity_type: 'reseller',
+      entity_id: reseller_id || null,
+      verified_by: req.user?.id || 'system',
+      options: { provider: process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'mock' },
+    });
+
+    if (result.is_valid && reseller_id && mongoose.Types.ObjectId.isValid(reseller_id)) {
+      await Reseller.findByIdAndUpdate(reseller_id, {
+        $set: {
+          gst_number: result.gstin,
+          gst_legal_name: result.legal_name,
+          gst_trade_name: result.trade_name,
+          gst_registration_status: result.business_status || 'ACTIVE',
+          gst_verified_at: new Date(),
+          gst_verification_log_id: result.log_id,
+          reseller_lifecycle_status: 'gst_verified',
+        },
+      });
+    }
+
+    return res.json({ status: 'success', data: result });
+  } catch (error) {
+    console.error('[reseller.admin] verify_gstin_admin error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
@@ -403,10 +481,58 @@ const assign_plan_to_reseller = async (req, res) => {
   }
 };
 
+// ─── 7. LIST EPC GSTIN CONFLICTS / TRANSFER REQUESTS ─────────────────────────
+/**
+ * GET /admin-api/reseller-mgmt/epc-conflicts
+ * Query params: ?status=pending|approved|rejected
+ */
+const list_epc_conflicts = async (req, res) => {
+  try {
+    const rows = await listEpcTransferRequests(req.query);
+    return res.json({ status: 'success', data: rows });
+  } catch (error) {
+    console.error('[reseller.admin] list_epc_conflicts error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 8. REVIEW EPC TRANSFER REQUEST ───────────────────────────────────────────
+/**
+ * PUT /admin-api/reseller-mgmt/epc-transfer/:id
+ * Body: { decision: "approved"|"rejected", review_note?: string }
+ */
+const review_epc_transfer = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, review_note } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid transfer request ID is required' });
+    }
+    if (!decision || !['approved', 'rejected'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'decision must be approved or rejected' });
+    }
+
+    const result = await reviewEpcTransferRequest(id, req.user?.id || null, decision, review_note);
+    return res.json({
+      status: 'success',
+      message: `EPC transfer request ${decision} successfully`,
+      data: result,
+    });
+  } catch (error) {
+    console.error('[reseller.admin] review_epc_transfer error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
 module.exports = {
   list_resellers,
   get_reseller_detail,
   review_kyc,
+  get_activation_readiness,
   change_activation_status,
   assign_plan_to_reseller,
+  verify_gstin_admin,
+  list_epc_conflicts,
+  review_epc_transfer,
 };

@@ -88,8 +88,7 @@ const get_districts_by_state = async (req, res) => {
 // Boundary DB Setup and District Boundary Lookup Endpoint
 // -------------------------------------------------------------
 const { geolocation_boundary_db } = require("../../../../config/databases");
-const MONGODB_GEOLOCATION_BOUNDARIES = process.env.MONGODB_GEOLOCATION_BOUNDARIES || process.env.MONGODB_GEOLOCATIONS || "mongodb+srv://test:U00VAHrtpWdqln6W@cluster0.gqiyonh.mongodb.net/solarkits_geolocations?retryWrites=true&w=majority";
-const boundaryDb = geolocation_boundary_db || mongoose.createConnection(MONGODB_GEOLOCATION_BOUNDARIES);
+const boundaryDb = geolocation_boundary_db || mongoose;
 
 const boundaryCountrySchema = new mongoose.Schema({
   iso2: { type: String, required: true }

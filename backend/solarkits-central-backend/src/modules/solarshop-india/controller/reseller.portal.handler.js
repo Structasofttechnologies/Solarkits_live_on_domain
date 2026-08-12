@@ -20,6 +20,7 @@ const {
   GstVerificationLog,
 } = require('../../admin-panel/models/india_solarshop_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
+const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
 const { logAudit } = require('../../admin-panel/utils/audit.service');
 const { generate_token } = require('../utils/jsonwebtoken');
 
@@ -262,27 +263,31 @@ const verify_gstin = async (req, res) => {
     const { gstin } = req.body;
     if (!gstin) return res.status(400).json({ status: 'error', message: 'gstin is required' });
 
-    const result = await verifyGstin(gstin, { provider: process.env.GST_VERIFY_PROVIDER || 'mock' });
-
-    // Record log entry
-    await GstVerificationLog.create({
-      entity_type:        'reseller',
-      entity_id:          req.reseller?._id || null,
-      gstin:              result.gstin,
-      provider:           result.provider,
-      request_payload:    { gstin },
-      response_snapshot:  result.raw_response,
-      legal_name:         result.legal_name,
-      trade_name:         result.trade_name,
-      business_status:    result.business_status,
-      registration_state: result.registration_state,
-      is_valid:           result.is_valid,
-      error_message:      result.error_message,
-      verified_by:        req.reseller?._id ? String(req.reseller._id) : 'system',
+    const result = await performGstVerification({
+      gstin,
+      entity_type: 'reseller',
+      entity_id: req.reseller?._id || null,
+      verified_by: req.reseller?._id ? String(req.reseller._id) : 'system',
+      options: { provider: process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'mock' },
     });
 
     if (!result.is_valid) {
       return res.status(400).json({ status: 'error', message: result.error_message, data: result });
+    }
+
+    // If authenticated reseller, update identity details on reseller entity
+    if (req.reseller?._id) {
+      await Reseller.findByIdAndUpdate(req.reseller._id, {
+        $set: {
+          gst_number: result.gstin,
+          gst_legal_name: result.legal_name,
+          gst_trade_name: result.trade_name,
+          gst_registration_status: result.business_status || 'ACTIVE',
+          gst_verified_at: new Date(),
+          gst_verification_log_id: result.log_id,
+          reseller_lifecycle_status: 'gst_verified',
+        },
+      });
     }
 
     return res.json({ status: 'success', data: result });
@@ -306,6 +311,14 @@ const upload_kyc_document = async (req, res) => {
       return res.status(400).json({ status: 'error', message: `Invalid doc_type. Allowed: ${allowedDocs.join(', ')}` });
     }
 
+    // Phase R2 Guard: Lock document upload if KYC is already verified
+    if (req.reseller?.kyc_status === 'verified') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Your KYC has already been verified and approved. Document modification is locked.',
+      });
+    }
+
     if (!req.file && (!req.files || req.files.length === 0)) {
       return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     }
@@ -315,6 +328,13 @@ const upload_kyc_document = async (req, res) => {
     let kyc = await ResellerKyc.findOne({ reseller_id: req.reseller._id });
     if (!kyc) {
       kyc = await ResellerKyc.create({ reseller_id: req.reseller._id, status: 'draft' });
+    }
+
+    if (kyc.status === 'verified') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'KYC record is verified and locked.',
+      });
     }
 
     // Save document metadata (secure key stored, direct public URL omitted)
@@ -353,6 +373,10 @@ const upload_kyc_document = async (req, res) => {
  */
 const submit_kyc = async (req, res) => {
   try {
+    if (req.reseller?.kyc_status === 'verified') {
+      return res.status(400).json({ status: 'error', message: 'KYC is already verified and active.' });
+    }
+
     const kyc = await ResellerKyc.findOne({ reseller_id: req.reseller._id });
     if (!kyc) {
       return res.status(400).json({ status: 'error', message: 'No KYC record found. Please upload documents first.' });
@@ -377,8 +401,13 @@ const submit_kyc = async (req, res) => {
     });
     await kyc.save();
 
-    // Update Reseller status to pending review
-    await Reseller.findByIdAndUpdate(req.reseller._id, { $set: { kyc_status: 'submitted' } });
+    // Update Reseller status to pending review + lifecycle status
+    await Reseller.findByIdAndUpdate(req.reseller._id, {
+      $set: {
+        kyc_status: 'submitted',
+        reseller_lifecycle_status: 'kyc_submitted',
+      },
+    });
 
     await logAudit({
       actor_type:  'reseller',

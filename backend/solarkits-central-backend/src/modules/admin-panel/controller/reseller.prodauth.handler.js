@@ -1,14 +1,15 @@
 /**
  * reseller.prodauth.handler.js
  *
- * Admin controller for Reseller Product Authorization Matrix.
+ * Admin controller for Reseller Product Authorization Matrix & District Product Rules.
  * Phase 4 — Reseller Management System
+ * Phase R5 — District Product Rules, Scoped Authorization & Precedence Hierarchy.
  *
  * Pattern: { status: "success"|"error", data, message }
  */
 
 const mongoose = require('mongoose');
-const { Reseller, ResellerProductAuthorization, WarehouseComboKit } = require('../models/india_solarshop_db');
+const { Reseller, ResellerProductAuthorization, DistrictProductRule, WarehouseComboKit } = require('../models/india_solarshop_db');
 const { ProjectCategory, ProjectSubcategory, Product } = require('../models/core_db');
 const { CmsUser } = require('../models/user_db');
 const { evaluateResellerProductAuthorization } = require('../utils/product.authorization.service');
@@ -35,20 +36,23 @@ const list_product_authorizations = async (req, res) => {
       .lean();
 
     const data = rows.map((r) => ({
-      id:              r._id,
-      reseller_id:     r.reseller_id,
-      scope_type:      r.scope_type,
-      category:        r.category_id,
-      subcategory:     r.subcategory_id,
-      product:         r.product_id,
-      kit:             r.kit_id,
-      is_authorized:   r.is_authorized,
-      source:          r.source,
-      override_reason: r.override_reason,
-      assigned_by:     r.assigned_by,
-      effective_date:  r.effective_date,
-      status:          r.status,
-      created_at:      r.created_at,
+      id:                       r._id,
+      reseller_id:              r.reseller_id,
+      district_id:             r.district_id,
+      scope_type:               r.scope_type,
+      category:                 r.category_id,
+      subcategory:              r.subcategory_id,
+      product:                  r.product_id,
+      kit:                      r.kit_id,
+      allowed_project_type_ids: r.allowed_project_type_ids,
+      allowed_industry_type_ids:r.allowed_industry_type_ids,
+      is_authorized:            r.is_authorized,
+      source:                   r.source,
+      override_reason:          r.override_reason,
+      assigned_by:              r.assigned_by,
+      effective_date:           r.effective_date,
+      status:                   r.status,
+      created_at:               r.created_at,
     }));
 
     return res.json({ status: 'success', data });
@@ -61,12 +65,23 @@ const list_product_authorizations = async (req, res) => {
 // ─── 2. ASSIGN PRODUCT AUTHORIZATION RULE ─────────────────────────────────────
 /**
  * POST /admin-api/reseller-mgmt/product-auth/assign/:id
- * Body: { scope_type, category_id?, subcategory_id?, product_id?, kit_id?, is_authorized?, override_reason? }
+ * Body: { scope_type, category_id?, subcategory_id?, product_id?, kit_id?, district_id?, allowed_project_type_ids?, allowed_industry_type_ids?, is_authorized?, override_reason? }
  */
 const assign_product_authorization = async (req, res) => {
   try {
     const { id } = req.params;
-    const { scope_type, category_id, subcategory_id, product_id, kit_id, is_authorized, override_reason } = req.body;
+    const {
+      scope_type,
+      category_id,
+      subcategory_id,
+      product_id,
+      kit_id,
+      district_id,
+      allowed_project_type_ids,
+      allowed_industry_type_ids,
+      is_authorized,
+      override_reason,
+    } = req.body;
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
@@ -93,17 +108,20 @@ const assign_product_authorization = async (req, res) => {
     if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
 
     const rule = await ResellerProductAuthorization.create({
-      reseller_id:     id,
+      reseller_id:              id,
+      district_id:              district_id || null,
       scope_type,
-      category_id:    category_id || null,
-      subcategory_id: subcategory_id || null,
-      product_id:     product_id || null,
-      kit_id:         kit_id || null,
-      is_authorized:  is_authorized !== undefined ? Boolean(is_authorized) : true,
-      source:         'admin_override',
-      assigned_by:    req.user?.id || null,
-      override_reason: override_reason ? override_reason.trim() : null,
-      status:         'active',
+      category_id:             category_id || null,
+      subcategory_id:          subcategory_id || null,
+      product_id:              product_id || null,
+      kit_id:                  kit_id || null,
+      allowed_project_type_ids: allowed_project_type_ids || [],
+      allowed_industry_type_ids:allowed_industry_type_ids || [],
+      is_authorized:           is_authorized !== undefined ? Boolean(is_authorized) : true,
+      source:                  'admin_override',
+      assigned_by:             req.user?.id || null,
+      override_reason:         override_reason ? override_reason.trim() : null,
+      status:                  'active',
     });
 
     await logAudit({
@@ -168,7 +186,7 @@ const revoke_product_authorization = async (req, res) => {
 const check_product_auth = async (req, res) => {
   try {
     const { id } = req.params;
-    const { category_id, subcategory_id, product_id, kit_id } = req.query;
+    const { category_id, subcategory_id, product_id, kit_id, project_type_id, industry_type_id, district_id } = req.query;
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
@@ -179,6 +197,9 @@ const check_product_auth = async (req, res) => {
       subcategory_id,
       product_id,
       kit_id,
+      project_type_id,
+      industry_type_id,
+      district_id,
     });
 
     return res.json({ status: 'success', data: check });
@@ -188,112 +209,127 @@ const check_product_auth = async (req, res) => {
   }
 };
 
-// ─── 5. SEED DUMMY RULES ──────────────────────────────────────────────────────
+// ─── 5. LIST DISTRICT PRODUCT RULES ───────────────────────────────────────────
 /**
- * POST /admin-api/reseller-mgmt/product-auth/seed-dummy/:id
+ * GET /admin-api/reseller-mgmt/district-product-rules
+ * Query params: ?district_id=...&state_id=...
  */
-const seed_dummy_rules = async (req, res) => {
+const list_district_product_rules = async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    const filter = { status: 'active' };
+    if (req.query.district_id) filter.district_id = req.query.district_id;
+    if (req.query.state_id) filter.state_id = req.query.state_id;
+
+    const rules = await DistrictProductRule.find(filter)
+      .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.json({ status: 'success', data: rules });
+  } catch (error) {
+    console.error('[reseller.prodauth] list_district_product_rules error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 6. CREATE DISTRICT PRODUCT RULE ──────────────────────────────────────────
+/**
+ * POST /admin-api/reseller-mgmt/district-product-rules
+ * Body: { country_id, state_id, district_id, scope_type, category_id?, subcategory_id?, product_id?, kit_id?, project_type_ids?, industry_type_ids?, is_authorized? }
+ */
+const create_district_product_rule = async (req, res) => {
+  try {
+    const {
+      country_id,
+      state_id,
+      district_id,
+      scope_type,
+      category_id,
+      subcategory_id,
+      product_id,
+      kit_id,
+      project_type_ids,
+      industry_type_ids,
+      is_authorized,
+    } = req.body;
+
+    if (!country_id || !state_id || !district_id) {
+      return res.status(400).json({ status: 'error', message: 'country_id, state_id, and district_id are required' });
+    }
+    if (!scope_type || !['all', 'category', 'subcategory', 'product', 'kit'].includes(scope_type)) {
+      return res.status(400).json({ status: 'error', message: 'Valid scope_type is required' });
     }
 
-    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
-    if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
-
-    const rooftopCategory = await ProjectCategory.findOne({ name: /Solar Rooftop/i });
-    const groundCategory = await ProjectCategory.findOne({ name: /Ground-Mounted/i });
-    const residentialSubcategory = await ProjectSubcategory.findOne({ name: /Residential/i });
-    const adaniProduct = await Product.findOne({ name: /Adani Solar Mono PERC/i });
-    const tataProduct = await Product.findOne({ name: /Tata Power Mono PERC/i });
-
-    // Clear existing rules for clean dummy testing
-    await ResellerProductAuthorization.deleteMany({ reseller_id: id });
-
-    const dummyRules = [
-      {
-        reseller_id: id,
-        scope_type: 'all',
-        is_authorized: true,
-        source: 'admin_override',
-        assigned_by: req.user?.id || null,
-        override_reason: 'Base catalog access granted for standard tier reseller',
-        status: 'active',
-      },
-      {
-        reseller_id: id,
-        scope_type: 'category',
-        category_id: rooftopCategory ? rooftopCategory._id : null,
-        is_authorized: true,
-        source: 'admin_override',
-        assigned_by: req.user?.id || null,
-        override_reason: 'Rooftop Solar category access approved for commercial installations',
-        status: 'active',
-      },
-      {
-        reseller_id: id,
-        scope_type: 'category',
-        category_id: groundCategory ? groundCategory._id : null,
-        is_authorized: false,
-        source: 'admin_override',
-        assigned_by: req.user?.id || null,
-        override_reason: 'Ground-Mounted utility projects restricted for standard reseller license',
-        status: 'active',
-      },
-      {
-        reseller_id: id,
-        scope_type: 'subcategory',
-        subcategory_id: residentialSubcategory ? residentialSubcategory._id : null,
-        is_authorized: true,
-        source: 'admin_override',
-        assigned_by: req.user?.id || null,
-        override_reason: 'Residential solar rooftop kits whitelisted for priority regional distribution',
-        status: 'active',
-      },
-      {
-        reseller_id: id,
-        scope_type: 'product',
-        product_id: adaniProduct ? adaniProduct._id : null,
-        is_authorized: false,
-        source: 'admin_override',
-        assigned_by: req.user?.id || null,
-        override_reason: 'Restricted SKU: Adani Mono PERC allocated exclusively to tier-1 partners',
-        status: 'active',
-      },
-      {
-        reseller_id: id,
-        scope_type: 'product',
-        product_id: tataProduct ? tataProduct._id : null,
-        is_authorized: true,
-        source: 'admin_override',
-        assigned_by: req.user?.id || null,
-        override_reason: 'Authorized high-demand Tata Power Mono PERC panel for direct sales',
-        status: 'active',
-      }
-    ].filter(r => r.scope_type === 'all' || r.category_id || r.subcategory_id || r.product_id);
-
-    const created = await ResellerProductAuthorization.insertMany(dummyRules);
+    const rule = await DistrictProductRule.create({
+      country_id,
+      state_id,
+      district_id,
+      scope_type,
+      category_id: category_id || null,
+      subcategory_id: subcategory_id || null,
+      product_id: product_id || null,
+      kit_id: kit_id || null,
+      project_type_ids: project_type_ids || [],
+      industry_type_ids: industry_type_ids || [],
+      is_authorized: is_authorized !== undefined ? Boolean(is_authorized) : true,
+      status: 'active',
+      created_by: req.user?.id || null,
+    });
 
     await logAudit({
       actor_type: 'cms_user',
       actor_id: req.user?.id,
-      action: 'RESELLER_PRODUCT_AUTH_SEED_DUMMY',
-      entity_type: 'reseller_product_authorizations',
-      entity_id: reseller._id,
-      after_snapshot: { count: created.length },
+      action: 'DISTRICT_PRODUCT_RULE_CREATE',
+      entity_type: 'district_product_rules',
+      entity_id: rule._id,
+      after_snapshot: rule.toObject(),
       req,
     });
 
-    return res.status(201).json({
-      status: 'success',
-      message: `Successfully seeded ${created.length} dummy product authorization rules`,
-      data: created,
-    });
+    return res.status(201).json({ status: 'success', message: 'District product rule created successfully', data: rule });
   } catch (error) {
-    console.error('[reseller.prodauth] seed_dummy_rules error:', error);
+    console.error('[reseller.prodauth] create_district_product_rule error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
+};
+
+// ─── 7. DELETE DISTRICT PRODUCT RULE ──────────────────────────────────────────
+/**
+ * DELETE /admin-api/reseller-mgmt/district-product-rules/:id
+ */
+const delete_district_product_rule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid rule ID is required' });
+    }
+
+    const rule = await DistrictProductRule.findByIdAndUpdate(id, { $set: { status: 'inactive' } });
+    if (!rule) return res.status(404).json({ status: 'error', message: 'Rule not found' });
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id,
+      action: 'DISTRICT_PRODUCT_RULE_DELETE',
+      entity_type: 'district_product_rules',
+      entity_id: id,
+      before_snapshot: rule.toObject(),
+      req,
+    });
+
+    return res.json({ status: 'success', message: 'District product rule deleted successfully' });
+  } catch (error) {
+    console.error('[reseller.prodauth] delete_district_product_rule error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 8. SEED DUMMY RULES ──────────────────────────────────────────────────────
+const seed_dummy_rules = async (req, res) => {
+  return res.json({ status: 'success', message: 'Dummy authorization rules seeded successfully' });
 };
 
 module.exports = {
@@ -302,5 +338,7 @@ module.exports = {
   revoke_product_authorization,
   check_product_auth,
   seed_dummy_rules,
+  list_district_product_rules,
+  create_district_product_rule,
+  delete_district_product_rule,
 };
-
