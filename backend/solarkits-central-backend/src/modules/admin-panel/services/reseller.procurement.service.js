@@ -7,6 +7,7 @@
  * Strict Integer Paise Financial Accounting (1 INR = 100 Paise).
  */
 
+const mongoose = require('mongoose');
 const {
   Reseller,
   ResellerProcurementOrder,
@@ -202,7 +203,7 @@ async function calculateCurrentItemStock(resellerId, itemType, productId, kitId)
  */
 async function getResellerInventoryBalance(resellerId) {
   const ledgers = await ResellerInventoryLedger.aggregate([
-    { $match: { reseller_id: new mongoose.Types.ObjectId(resellerId) } },
+    { $match: { reseller_id: new mongoose.Types.ObjectId(String(resellerId)) } },
     { $sort: { created_at: 1 } },
     {
       $group: {

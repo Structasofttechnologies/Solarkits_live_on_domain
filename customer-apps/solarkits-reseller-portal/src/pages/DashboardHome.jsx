@@ -66,9 +66,9 @@ export default function DashboardHome() {
               </div>
             </div>
           </div>
-          <Link to="/kyc" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shrink-0 cursor-pointer flex items-center gap-1.5">
-            <FiShield size={16} /> View Verified KYC
-          </Link>
+          <div className="px-4 py-2 bg-emerald-200/80 text-emerald-900 rounded-xl text-xs font-black shrink-0 flex items-center gap-1.5 border border-emerald-300">
+            <FiCheckCircle size={16} className="text-emerald-700" /> Account Verified & Locked
+          </div>
         </div>
       ) : reseller?.kyc_status === "submitted" ? (
         <div className="p-6 rounded-2xl bg-blue-50 border-2 border-blue-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">

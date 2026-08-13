@@ -18,7 +18,6 @@ import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage } from "reac
 // Phase 1: Reseller Management
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
 const ResellerSettings = lazy(() => import("../pages/solar-shop/reseller-management/ResellerSettings"));
-const ProjectSettings = lazy(() => import("../pages/solar-shop/project-settings/ProjectSettings"));
 
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
@@ -166,21 +165,6 @@ const menus = [
                     icon: <FiSettings />,
                     path: "/admin-panel/solar-shop/reseller-management/settings",
                     unique_id: "RSL_SETTINGS"
-                },
-            ]
-        },
-        // ── Phase 1: Project Settings ─────────────────────────────────
-        {
-            name: "Project Settings",
-            icon: <FiSettings />,
-            path: "/admin-panel/solar-shop/project-settings",
-            unique_id: "ADM_INDUSTRY_TYPES",
-            subMenu: [
-                {
-                    name: "Industry Types",
-                    icon: <FiTag />,
-                    path: "/admin-panel/solar-shop/project-settings/industry-types",
-                    unique_id: "ADM_INDUSTRY_TYPES"
                 },
             ]
         },
@@ -601,27 +585,7 @@ export default function SolarShopDashboard() {
                                         }
                                     />
 
-                                    {/* ── Phase 1: Project Settings ──────────────────────── */}
-                                    <Route
-                                        path="/project-settings/*"
-                                        element={
-                                            <PermissionGuard requiredUniqueId="ADM_INDUSTRY_TYPES">
-                                                <Suspense fallback={<Loader text="Loading Project Settings..." />}>
-                                                    <ProjectSettings />
-                                                </Suspense>
-                                            </PermissionGuard>
-                                        }
-                                    />
-                                    <Route
-                                        path="/:countryName/project-settings/*"
-                                        element={
-                                            <PermissionGuard requiredUniqueId="ADM_INDUSTRY_TYPES">
-                                                <Suspense fallback={<Loader text="Loading Project Settings..." />}>
-                                                    <ProjectSettings />
-                                                </Suspense>
-                                            </PermissionGuard>
-                                        }
-                                    />
+
                                 </Routes>
                             </motion.div>
                         </AnimatePresence>

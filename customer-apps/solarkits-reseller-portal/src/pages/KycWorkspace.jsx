@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, Link } from "react-router-dom";
 import api from "../services/api";
 import {
   FiShield,
@@ -12,6 +12,7 @@ import {
   FiArrowLeft,
   FiFileText,
   FiCheck,
+  FiLock,
 } from "react-icons/fi";
 
 const STEP_DOCS = {
@@ -106,6 +107,50 @@ export default function KycWorkspace() {
   };
 
   const isStep1Complete = Boolean(uploadedDocs.pan_card && uploadedDocs.shop_photo);
+
+  // Industry Standard Guard: If KYC is verified & completed, lock document modification and hide wizard
+  if (reseller?.kyc_status === 'verified') {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 bg-white border border-slate-200 rounded-3xl shadow-xl text-center space-y-6">
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
+          <FiCheckCircle size={44} />
+        </div>
+        <div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase tracking-wider border border-emerald-300">
+            <FiLock size={12} /> KYC Completed & Locked
+          </span>
+          <h2 className="text-2xl font-black text-slate-900 mt-3">
+            Account Identity Verification Approved
+          </h2>
+          <p className="text-sm font-medium text-slate-600 mt-2 max-w-md mx-auto">
+            Your business KYC documents have been verified and approved by Admin. In accordance with regulatory standards, verified accounts are locked against modification.
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left text-xs space-y-2.5">
+          <div className="flex justify-between border-b border-slate-200 pb-2 font-semibold text-slate-700">
+            <span>Verified Business:</span>
+            <span className="font-extrabold text-slate-900">{reseller.business_name}</span>
+          </div>
+          <div className="flex justify-between border-b border-slate-200 pb-2 font-semibold text-slate-700">
+            <span>GSTIN Number:</span>
+            <span className="font-extrabold text-slate-900">{reseller.gst_number || 'N/A'}</span>
+          </div>
+          <div className="flex justify-between font-semibold text-slate-700">
+            <span>Compliance Status:</span>
+            <span className="font-black text-emerald-600 uppercase tracking-wider">100% Verified & Active</span>
+          </div>
+        </div>
+
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl transition-all shadow-md shadow-blue-500/25"
+        >
+          Return to Overview Dashboard →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto">

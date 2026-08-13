@@ -65,12 +65,6 @@ const menus = [
           path: "/admin-panel/operations/manufacturing-brands",
           unique_id: "ADM_MFG_BRANDS"
         },
-        {
-          name: "Company SaaS Products",
-          icon: <FaGlobe />,
-          path: "/admin-panel/operations/company-saas-products",
-          unique_id: "ADM_SAAS_PRODS"
-        },
       ],
     },
     {

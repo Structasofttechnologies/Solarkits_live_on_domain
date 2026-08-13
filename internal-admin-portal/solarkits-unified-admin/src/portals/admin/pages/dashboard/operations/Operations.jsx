@@ -5,7 +5,6 @@ import { PermissionGuard } from "@/components/PermissionGuard";
 
 const CompanyWarehouses = lazy(() => import("./CompanyWarehouses"));
 const ManufacturingBrands = lazy(() => import("./ManufacturingBrands"));
-const CompanySaaSProducts = lazy(() => import("./CompanySaaSProducts"));
 
 export default function Operations() {
     return (
@@ -21,13 +20,6 @@ export default function Operations() {
                 <PermissionGuard requiredUniqueId="ADM_MFG_BRANDS">
                     <Suspense fallback={<Loader text='Load Manufacturing Brands...' />}>
                         <ManufacturingBrands moduleUniqueId="ADM_MFG_BRANDS" />
-                    </Suspense>
-                </PermissionGuard>
-            } />
-            <Route path='/company-saas-products/*' element={
-                <PermissionGuard requiredUniqueId="ADM_SAAS_PRODS">
-                    <Suspense fallback={<Loader text='Load Company SaaS Products...' />}>
-                        <CompanySaaSProducts moduleUniqueId="ADM_SAAS_PRODS" />
                     </Suspense>
                 </PermissionGuard>
             } />

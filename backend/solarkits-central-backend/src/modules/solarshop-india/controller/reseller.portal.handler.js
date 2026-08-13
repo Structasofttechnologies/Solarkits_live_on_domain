@@ -17,12 +17,32 @@ const {
   ResellerKyc,
   ResellerPlan,
   ResellerPlanSubscription,
+  ResellerTerritory,
   GstVerificationLog,
 } = require('../../admin-panel/models/india_solarshop_db');
+const { GeoLevel0, GeoLevel1 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
 const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
 const { logAudit } = require('../../admin-panel/utils/audit.service');
 const { generate_token } = require('../utils/jsonwebtoken');
+
+// ─── GST State Code → State Name Map (India, as per GSTIN standard) ───────────
+const GST_STATE_CODE_MAP = {
+  '01': 'Jammu & Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab',
+  '04': 'Chandigarh', '05': 'Uttarakhand', '06': 'Haryana',
+  '07': 'Delhi', '08': 'Rajasthan', '09': 'Uttar Pradesh',
+  '10': 'Bihar', '11': 'Sikkim', '12': 'Arunachal Pradesh',
+  '13': 'Nagaland', '14': 'Manipur', '15': 'Mizoram',
+  '16': 'Tripura', '17': 'Meghalaya', '18': 'Assam',
+  '19': 'West Bengal', '20': 'Jharkhand', '21': 'Odisha',
+  '22': 'Chhattisgarh', '23': 'Madhya Pradesh', '24': 'Gujarat',
+  '25': 'Daman & Diu', '26': 'Dadra & Nagar Haveli', '27': 'Maharashtra',
+  '28': 'Andhra Pradesh', '29': 'Karnataka', '30': 'Goa',
+  '31': 'Lakshadweep', '32': 'Kerala', '33': 'Tamil Nadu',
+  '34': 'Puducherry', '35': 'Andaman & Nicobar Islands', '36': 'Telangana',
+  '37': 'Andhra Pradesh (New)', '38': 'Ladakh', '97': 'Other Territory',
+  '99': 'Centre Jurisdiction',
+};
 
 // ─── 1. REGISTER ─────────────────────────────────────────────────────────────
 /**
@@ -31,7 +51,12 @@ const { generate_token } = require('../utils/jsonwebtoken');
  */
 const register_reseller = async (req, res) => {
   try {
-    const { business_name, email, mobile, password, reseller_type_id, gst_number, pan_number, aadhaar_masked, address } = req.body;
+    const {
+      business_name, contact_person, email, mobile, password,
+      reseller_type_id, gst_number, pan_number, aadhaar_masked,
+      address, commercial_mode, gst_verified,
+      gst_legal_name, gst_trade_name,
+    } = req.body;
 
     if (!business_name || !business_name.trim()) {
       return res.status(400).json({ status: 'error', message: 'business_name is required' });
@@ -56,6 +81,7 @@ const register_reseller = async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanMobile = mobile.trim();
+    const cleanGst = gst_number ? gst_number.trim().toUpperCase() : null;
 
     // Check duplicate email or mobile
     const existing = await Reseller.findOne({
@@ -67,22 +93,50 @@ const register_reseller = async (req, res) => {
       return res.status(409).json({ status: 'error', message: `${field} is already registered.` });
     }
 
+    // ── Auto-resolve state from GSTIN state code ──────────────────────────────
+    const resolvedAddress = { ...(address || {}) };
+    if (cleanGst && cleanGst.length >= 2) {
+      const stateCode = cleanGst.substring(0, 2);
+      const stateName = GST_STATE_CODE_MAP[stateCode];
+      if (stateName) {
+        resolvedAddress.gst_state_code = stateCode;
+        resolvedAddress.gst_state_name = stateName;
+        // If state field is not already set, pre-fill from GST
+        if (!resolvedAddress.state) resolvedAddress.state = stateName;
+        if (!resolvedAddress.city) resolvedAddress.city = stateName; // fallback until EPC assigns district
+      }
+    }
+
     const password_hash = await bcrypt.hash(password, 10);
 
-    const reseller = await Reseller.create({
-      business_name:   business_name.trim(),
-      email:           cleanEmail,
-      mobile:          cleanMobile,
+    // Determine commercial_mode: honour explicit body param, else use type default
+    const finalCommercialMode = commercial_mode || resellerType.commercial_mode;
+
+    const resellerData = {
+      business_name:    business_name.trim(),
+      contact_person:   contact_person ? contact_person.trim() : undefined,
+      email:            cleanEmail,
+      mobile:           cleanMobile,
       password_hash,
-      commercial_mode: resellerType.commercial_mode,
+      commercial_mode:  finalCommercialMode,
       reseller_type_id: resellerType._id,
-      gst_number:      gst_number ? gst_number.trim().toUpperCase() : null,
-      pan_number:      pan_number ? pan_number.trim().toUpperCase() : null,
-      aadhaar_masked:  aadhaar_masked ? aadhaar_masked.trim() : null,
-      address:         address || {},
-      kyc_status:      'draft',
+      gst_number:       cleanGst,
+      pan_number:       pan_number ? pan_number.trim().toUpperCase() : null,
+      aadhaar_masked:   aadhaar_masked ? aadhaar_masked.trim() : null,
+      address:          resolvedAddress,
+      kyc_status:       'draft',
       activation_status: 'pending',
-    });
+    };
+
+    // If GST was pre-verified on client side, store legal/trade names and set lifecycle
+    if (gst_verified && cleanGst) {
+      resellerData.gst_legal_name = gst_legal_name || null;
+      resellerData.gst_trade_name = gst_trade_name || null;
+      resellerData.gst_verified_at = new Date();
+      resellerData.reseller_lifecycle_status = 'gst_verified';
+    }
+
+    const reseller = await Reseller.create(resellerData);
 
     // Create empty initial KYC container
     await ResellerKyc.create({
@@ -90,13 +144,46 @@ const register_reseller = async (req, res) => {
       status:      'draft',
     });
 
+    // Auto-create initial GST-derived territory entry for immediate activation & visibility in admin portal
+    try {
+      let indiaCountry = await GeoLevel0.findOne({ name: /india/i }).lean();
+      if (!indiaCountry) {
+        indiaCountry = await GeoLevel0.findOne().lean();
+      }
+      let matchedState = null;
+      if (resolvedAddress.gst_state_name) {
+        const cleanStateName = resolvedAddress.gst_state_name.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+        matchedState = await GeoLevel1.findOne({ name: new RegExp(cleanStateName, 'i') }).lean();
+      }
+
+      if (indiaCountry) {
+        await ResellerTerritory.create({
+          reseller_id:     reseller._id,
+          territory_level: matchedState ? 'state' : 'country',
+          country_id:      indiaCountry._id,
+          state_id:        matchedState ? matchedState._id : null,
+          source:          'gst_derived',
+          status:          'active',
+          override_reason: `Auto-assigned from GSTIN registration state (${resolvedAddress.gst_state_name || 'India'})`,
+        });
+      }
+    } catch (terErr) {
+      console.warn('[register_reseller] auto territory creation notice:', terErr.message);
+    }
+
     await logAudit({
       actor_type:  'reseller',
       actor_id:    reseller._id,
       action:      'RESELLER_REGISTER',
       entity_type: 'resellers',
       entity_id:   reseller._id,
-      after_snapshot: { business_name: reseller.business_name, email: reseller.email, commercial_mode: reseller.commercial_mode },
+      after_snapshot: {
+        business_name:   reseller.business_name,
+        email:           reseller.email,
+        commercial_mode: reseller.commercial_mode,
+        gst_verified:    !!gst_verified,
+        gst_state:       resolvedAddress.gst_state_name || null,
+      },
       req,
     });
 
@@ -110,6 +197,7 @@ const register_reseller = async (req, res) => {
         mobile:          reseller.mobile,
         commercial_mode: reseller.commercial_mode,
         kyc_status:      reseller.kyc_status,
+        gst_state:       resolvedAddress.gst_state_name || null,
       },
     });
   } catch (error) {
@@ -260,12 +348,14 @@ const get_reseller_me = async (req, res) => {
  */
 const verify_gstin = async (req, res) => {
   try {
-    const { gstin } = req.body;
+    const { gstin, context } = req.body;
     if (!gstin) return res.status(400).json({ status: 'error', message: 'gstin is required' });
 
+    const cleanGst = gstin.trim().toUpperCase();
+
     const result = await performGstVerification({
-      gstin,
-      entity_type: 'reseller',
+      gstin: cleanGst,
+      entity_type: context === 'epc_onboarding' ? 'epc_buyer' : 'reseller',
       entity_id: req.reseller?._id || null,
       verified_by: req.reseller?._id ? String(req.reseller._id) : 'system',
       options: { provider: process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'mock' },
@@ -275,7 +365,62 @@ const verify_gstin = async (req, res) => {
       return res.status(400).json({ status: 'error', message: result.error_message, data: result });
     }
 
-    // If authenticated reseller, update identity details on reseller entity
+    // ── EPC Buyer Onboarding Context Validation ──────────────────────────────
+    if (context === 'epc_onboarding' && req.reseller?._id) {
+      const { EpcAccount, ResellerTerritory } = require('../../admin-panel/models/india_solarshop_db');
+      const { validateResellerTerritoryAccess } = require('../../admin-panel/utils/territory.validator');
+
+      // 1. Resolve State from GSTIN State Code
+      const epcStateCode = cleanGst.substring(0, 2);
+      const epcStateName = GST_STATE_CODE_MAP[epcStateCode] || null;
+
+      let matchedState = null;
+      if (epcStateName) {
+        const cleanName = epcStateName.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+        matchedState = await GeoLevel1.findOne({ name: new RegExp(cleanName, 'i') }).lean();
+      }
+
+      // 2. Validate Territory Match
+      const territoryCheck = await validateResellerTerritoryAccess(req.reseller._id, {
+        state_id: matchedState?._id || null,
+      });
+
+      // Fetch Reseller's Authorized Territories for display info
+      const activeTerritories = await ResellerTerritory.find({ reseller_id: req.reseller._id, status: 'active' })
+        .populate('state_id', 'name')
+        .lean();
+
+      const resellerStateNames = activeTerritories
+        .map(t => t.state_id?.name)
+        .filter(Boolean);
+
+      if (resellerStateNames.length === 0 && req.reseller.address?.gst_state_name) {
+        resellerStateNames.push(req.reseller.address.gst_state_name);
+      }
+
+      // 3. Unique EPC Partner Check
+      const existingEpc = await EpcAccount.findOne({ gstin: cleanGst, deleted_at: null }).lean();
+
+      return res.json({
+        status: 'success',
+        data: {
+          ...result,
+          gst_state_code: epcStateCode,
+          gst_state_name: epcStateName,
+          territory_matched: territoryCheck.is_allowed,
+          territory_reason: territoryCheck.reason,
+          authorized_territories: resellerStateNames,
+          is_unique: !existingEpc,
+          existing_epc: existingEpc ? {
+            id: existingEpc._id,
+            company_name: existingEpc.company_name || existingEpc.name,
+            status: existingEpc.status,
+          } : null,
+        },
+      });
+    }
+
+    // ── Reseller Self Registration / Profile Update ────────────────────────────
     if (req.reseller?._id) {
       await Reseller.findByIdAndUpdate(req.reseller._id, {
         $set: {

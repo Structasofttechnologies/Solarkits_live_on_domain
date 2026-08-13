@@ -13,6 +13,8 @@ const ResellerProductAuth = lazy(() => import("./ResellerProductAuth"));
 const ResellerEpcBuyers = lazy(() => import("./ResellerEpcBuyers"));
 const ResellerOrders = lazy(() => import("./ResellerOrders"));
 const ResellerWalletManager = lazy(() => import("./ResellerWalletManager"));
+const ResellerSettings = lazy(() => import("./ResellerSettings"));
+
 
 /**
  * ResellerManagement router — top-level router for all reseller management sub-pages.
@@ -140,8 +142,21 @@ function ResellerManagement() {
           </PermissionGuard>
         }
       />
+
+      {/* Reseller Platform Settings */}
+      <Route
+        path="/settings"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_SETTINGS">
+            <Suspense fallback={<Loader text="Loading Reseller Settings..." />}>
+              <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
     </Routes>
   );
 }
 
 export default ResellerManagement;
+

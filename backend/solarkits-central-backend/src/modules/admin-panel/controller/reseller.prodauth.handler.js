@@ -10,7 +10,7 @@
 
 const mongoose = require('mongoose');
 const { Reseller, ResellerProductAuthorization, DistrictProductRule, WarehouseComboKit } = require('../models/india_solarshop_db');
-const { ProjectCategory, ProjectSubcategory, Product } = require('../models/core_db');
+const { ProjectCategory, ProjectSubcategory, Product, IndustryType } = require('../models/core_db');
 const { CmsUser } = require('../models/user_db');
 const { evaluateResellerProductAuthorization } = require('../utils/product.authorization.service');
 const { logAudit } = require('../utils/audit.service');
@@ -31,6 +31,7 @@ const list_product_authorizations = async (req, res) => {
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
       .populate({ path: 'product_id', model: Product, select: 'name sku_code' })
       .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
+      .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name' })
       .populate({ path: 'assigned_by', model: CmsUser, select: 'name email' })
       .sort({ created_at: -1 })
       .lean();

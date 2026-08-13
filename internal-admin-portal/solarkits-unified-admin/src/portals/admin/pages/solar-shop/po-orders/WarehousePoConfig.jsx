@@ -67,7 +67,7 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
   const [filterSystemType, setFilterSystemType] = useState("");
   const [filterProjectRange, setFilterProjectRange] = useState("");
   const [filterIndustryTypes, setFilterIndustryTypes] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [filterCategories, setFilterCategories] = useState([]);
   const [filterSubcategories, setFilterSubcategories] = useState([]);
   const [filterSystemTypes, setFilterSystemTypes] = useState([]);
   const [filterProjectRanges, setFilterProjectRanges] = useState([]);

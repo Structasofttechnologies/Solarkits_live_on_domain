@@ -27,7 +27,7 @@ export default function NoActiveCountries({ productName }) {
         variant="primary"
         size="md"
         className="flex items-center gap-2 px-6 py-2.5 rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 font-bold"
-        onClick={() => navigate("/admin-panel/operations/company-saas-products")}
+        onClick={() => navigate("/admin-panel/operations/company-warehouses")}
       >
         Go to Configurations
         <FaChevronRight size={12} />

@@ -13,6 +13,7 @@ const {
   ResellerKyc,
   ResellerPlan,
   ResellerPlanSubscription,
+  ResellerTerritory,
   AuditLog,
 } = require('../models/india_solarshop_db');
 const { CmsUser } = require('../models/user_db');
@@ -106,13 +107,18 @@ const get_reseller_detail = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
 
-    const [reseller, kyc, subscription, auditLogs] = await Promise.all([
+    const [reseller, kyc, subscription, auditLogs, territories] = await Promise.all([
       Reseller.findOne({ _id: id, deleted_at: null })
         .populate('reseller_type_id', 'name slug commercial_mode description')
         .lean(),
       ResellerKyc.findOne({ reseller_id: id }).lean(),
       ResellerPlanSubscription.findOne({ reseller_id: id, status: 'active' }).populate('plan_id').lean(),
       AuditLog.find({ entity_id: id }).sort({ created_at: -1 }).limit(50).lean(),
+      ResellerTerritory.find({ reseller_id: id, status: 'active' })
+        .populate('state_id', 'name iso_code')
+        .populate('district_id', 'name code')
+        .sort({ created_at: -1 })
+        .lean(),
     ]);
 
     if (!reseller) {
@@ -148,6 +154,16 @@ const get_reseller_detail = async (req, res) => {
         },
         kyc: kyc || null,
         active_subscription: subscription || null,
+        territories: territories.map((t) => ({
+          id:                t._id,
+          scope_level:       t.territory_level,
+          territory_level:   t.territory_level,
+          location_name:     t.district_id?.name ? `${t.district_id.name}, ${t.state_id?.name || ''}` : t.state_id?.name || 'Authorized Territory',
+          precedence_source: t.source || 'admin_assigned',
+          source:            t.source || 'admin_assigned',
+          override_reason:   t.override_reason || null,
+          created_at:        t.created_at,
+        })),
         audit_history: auditLogs.map(l => ({
           id:          l._id,
           action:      l.action,

@@ -99,7 +99,7 @@ export default function DashboardLayout() {
 
           {/* Navigation Items */}
           <nav className="p-4 space-y-1.5">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter(item => !(item.path === "/kyc" && reseller?.kyc_status === "verified")).map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (

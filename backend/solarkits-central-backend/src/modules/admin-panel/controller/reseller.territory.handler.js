@@ -22,32 +22,39 @@ const { logAudit } = require('../utils/audit.service');
 const list_reseller_territories = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    const isAll = id === 'all';
+
+    if (!isAll && (!id || !mongoose.Types.ObjectId.isValid(id))) {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
 
-    const rows = await ResellerTerritory.find({ reseller_id: id })
+    const query = isAll ? {} : { reseller_id: id };
+    const rows = await ResellerTerritory.find(query)
       .sort({ created_at: -1 })
       .lean();
 
-    const countryIds = [...new Set(rows.map((r) => r.country_id).filter(Boolean))];
-    const stateIds = [...new Set(rows.map((r) => r.state_id).filter(Boolean))];
-    const districtIds = [...new Set(rows.map((r) => r.district_id).filter(Boolean))];
-    const assignedByIds = [...new Set(rows.map((r) => r.assigned_by).filter(Boolean))];
+    const resellerIds  = [...new Set(rows.map((r) => r.reseller_id).filter(Boolean))];
+    const countryIds   = [...new Set(rows.map((r) => r.country_id).filter(Boolean))];
+    const stateIds     = [...new Set(rows.map((r) => r.state_id).filter(Boolean))];
+    const districtIds  = [...new Set(rows.map((r) => r.district_id).filter(Boolean))];
+    const assignedByIds= [...new Set(rows.map((r) => r.assigned_by).filter(Boolean))];
 
-    const [countries, states, districts, users] = await Promise.all([
+    const [resellers, countries, states, districts, users] = await Promise.all([
+      resellerIds.length ? Reseller.find({ _id: { $in: resellerIds } }).select('business_name email mobile commercial_mode gst_number').lean() : [],
       countryIds.length ? GeoLevel0.find({ _id: { $in: countryIds } }).select('name iso2 currency').lean() : [],
       stateIds.length ? GeoLevel1.find({ _id: { $in: stateIds } }).select('name state_code').lean() : [],
       districtIds.length ? GeoLevel2.find({ _id: { $in: districtIds } }).select('name').lean() : [],
       assignedByIds.length ? CmsUser.find({ _id: { $in: assignedByIds } }).select('name email').lean() : [],
     ]);
 
+    const rMap = resellers.reduce((acc, r) => { acc[r._id.toString()] = { id: r._id, business_name: r.business_name, email: r.email, mobile: r.mobile, commercial_mode: r.commercial_mode, gst_number: r.gst_number }; return acc; }, {});
     const cMap = countries.reduce((acc, c) => { acc[c._id.toString()] = { id: c._id, name: c.name, iso2: c.iso2, currency: c.currency }; return acc; }, {});
     const sMap = states.reduce((acc, s) => { acc[s._id.toString()] = { id: s._id, name: s.name, state_code: s.state_code }; return acc; }, {});
     const dMap = districts.reduce((acc, d) => { acc[d._id.toString()] = { id: d._id, name: d.name }; return acc; }, {});
     const uMap = users.reduce((acc, u) => { acc[u._id.toString()] = { id: u._id, name: u.name, email: u.email }; return acc; }, {});
 
     const data = rows.map((r) => {
+      const reseller = r.reseller_id ? rMap[r.reseller_id.toString()] : null;
       const c = r.country_id ? cMap[r.country_id.toString()] : null;
       const s = r.state_id ? sMap[r.state_id.toString()] : null;
       const d = r.district_id ? dMap[r.district_id.toString()] : null;
@@ -60,6 +67,8 @@ const list_reseller_territories = async (req, res) => {
       return {
         id:                r._id,
         reseller_id:       r.reseller_id,
+        reseller:          reseller,
+        scope_level:       r.territory_level,
         territory_level:   r.territory_level,
         country:           c,
         state:             s,

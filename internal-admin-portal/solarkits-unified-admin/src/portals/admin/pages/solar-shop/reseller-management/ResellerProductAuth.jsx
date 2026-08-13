@@ -48,38 +48,60 @@ function AuthStatusBadge({ isAuthorized }) {
 function AssignAuthModal({ resellers, onClose, onAssigned }) {
   const dispatch = useDispatch();
   const [form, setForm] = useState({
-    reseller_id:     "",
-    scope_type:      "category",
-    category_id:     "",
-    subcategory_id:  "",
-    product_id:      "",
-    kit_id:          "",
-    is_authorized:   true,
-    override_reason: "",
+    reseller_id:      "",
+    industry_type_id: "",
+    scope_type:       "category",
+    category_id:      "",
+    subcategory_id:   "",
+    product_id:       "",
+    kit_id:           "",
+    is_authorized:    true,
+    override_reason:  "",
   });
 
+  const [industries, setIndustries] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [kits, setKits] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  // Load categories
+  // Load Industries on mount
   useEffect(() => {
-    axios.get(`${API_BASE}/project-types/get-categories?req_for=view&unique_id=ADM_PROJ_TYPES`, { headers: authHeaderObj() })
+    axios.get(`${API_BASE}/industry-types/list?unique_id=${MODULE_UID}&req_for=view&active_only=true`, { headers: authHeaderObj() })
+      .then((res) => {
+        if (res.data?.status === "success") setIndustries(res.data.data);
+      })
+      .catch((e) => console.error(e));
+  }, []);
+
+  // Load categories when industry changes
+  useEffect(() => {
+    if (!form.industry_type_id) {
+      setCategories([]);
+      setForm((prev) => ({ ...prev, category_id: "", subcategory_id: "", product_id: "", kit_id: "" }));
+      return;
+    }
+    axios.get(`${API_BASE}/project-types/get-categories?unique_id=${MODULE_UID}&req_for=view&industry_type_id=${form.industry_type_id}`, { headers: authHeaderObj() })
       .then((res) => {
         if (res.data?.status === "success") setCategories(res.data.data);
       })
       .catch((e) => console.error(e));
-  }, []);
+  }, [form.industry_type_id]);
 
-  // Load subcategories
+  // Load subcategories when category changes
   useEffect(() => {
-    axios.get(`${API_BASE}/project-types/get-subcategories?req_for=view&unique_id=ADM_PROJ_TYPES`, { headers: authHeaderObj() })
+    if (!form.category_id) {
+      setSubcategories([]);
+      setForm((prev) => ({ ...prev, subcategory_id: "", product_id: "", kit_id: "" }));
+      return;
+    }
+    axios.get(`${API_BASE}/project-types/get-subcategories?unique_id=${MODULE_UID}&req_for=view&category_id=${form.category_id}`, { headers: authHeaderObj() })
       .then((res) => {
         if (res.data?.status === "success") setSubcategories(res.data.data);
       })
       .catch((e) => console.error(e));
-  }, []);
+  }, [form.category_id]);
 
   // Load products when scope is product
   useEffect(() => {
@@ -87,6 +109,17 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
       axios.get(`${API_BASE}/products/get-products?req_for=view&unique_id=ADM_SKU`, { headers: authHeaderObj() })
         .then((res) => {
           if (res.data?.status === "success") setProducts(res.data.data);
+        })
+        .catch((e) => console.error(e));
+    }
+  }, [form.scope_type]);
+
+  // Load kits when scope is kit
+  useEffect(() => {
+    if (form.scope_type === "kit") {
+      axios.get(`${API_BASE}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`, { headers: authHeaderObj() })
+        .then((res) => {
+          if (res.data?.status === "success") setKits(res.data.data);
         })
         .catch((e) => console.error(e));
     }
@@ -106,6 +139,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
         kit_id:          form.scope_type === "kit" ? form.kit_id : undefined,
         is_authorized:   form.is_authorized,
         override_reason: form.override_reason.trim() || undefined,
+        allowed_industry_type_ids: form.industry_type_id ? [form.industry_type_id] : [],
       };
 
       const res = await apiFetch("post", `/assign/${form.reseller_id}?req_for=add&unique_id=${MODULE_UID}`, payload);
@@ -150,6 +184,22 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
             </select>
           </div>
 
+          {/* Select Industry Type */}
+          <div>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Industry Type <span className="text-danger">*</span></label>
+            <select
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              value={form.industry_type_id}
+              onChange={(e) => setForm({ ...form, industry_type_id: e.target.value })}
+              required
+            >
+              <option value="">Select Industry...</option>
+              {industries.map((ind) => (
+                <option key={ind.id} value={ind.id}>{ind.name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Authorization Type: Whitelist vs Blacklist */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">Rule Mode <span className="text-danger">*</span></label>
@@ -187,11 +237,12 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
               <option value="category">Category Scope</option>
               <option value="subcategory">Subcategory Scope</option>
               <option value="product">Specific Product (SKU) Scope</option>
+              <option value="kit">Combo Kit Scope</option>
             </select>
           </div>
 
           {/* Category Picker */}
-          {form.scope_type === "category" && (
+          {["category", "subcategory", "product", "kit"].includes(form.scope_type) && (
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">Project Category <span className="text-danger">*</span></label>
               <select
@@ -199,6 +250,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
                 value={form.category_id}
                 onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                 required
+                disabled={!form.industry_type_id}
               >
                 <option value="">Select Category...</option>
                 {categories.map((c) => (
@@ -209,7 +261,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
           )}
 
           {/* Subcategory Picker */}
-          {form.scope_type === "subcategory" && (
+          {["subcategory", "product", "kit"].includes(form.scope_type) && (
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">Project Subcategory <span className="text-danger">*</span></label>
               <select
@@ -217,6 +269,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
                 value={form.subcategory_id}
                 onChange={(e) => setForm({ ...form, subcategory_id: e.target.value })}
                 required
+                disabled={!form.category_id}
               >
                 <option value="">Select Subcategory...</option>
                 {subcategories.map((sc) => (
@@ -235,10 +288,30 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
                 value={form.product_id}
                 onChange={(e) => setForm({ ...form, product_id: e.target.value })}
                 required
+                disabled={!form.subcategory_id}
               >
                 <option value="">Select Product...</option>
                 {products.map((p) => (
                   <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Kit Picker */}
+          {form.scope_type === "kit" && (
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">Combo Kit <span className="text-danger">*</span></label>
+              <select
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                value={form.kit_id}
+                onChange={(e) => setForm({ ...form, kit_id: e.target.value })}
+                required
+                disabled={!form.subcategory_id}
+              >
+                <option value="">Select Combo Kit...</option>
+                {kits.map((k) => (
+                  <option key={k.id || k._id} value={k.id || k._id}>{k.kit_name}</option>
                 ))}
               </select>
             </div>
@@ -408,6 +481,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg">
+                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Industry</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">Scope Level</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">Target Entity</th>
                   <th className="text-center text-text-muted font-medium px-4 py-3.5">Authorization State</th>
@@ -421,8 +495,14 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                   {rules.map((r) => {
                     const ScopeIcon = SCOPE_ICONS[r.scope_type] || FiPackage;
                     const targetName = r.category?.name || r.subcategory?.name || r.product?.name || r.kit?.kit_name || "All Catalog Items";
+                    const industryName = r.allowed_industry_type_ids?.[0]?.name || "—";
                     return (
                       <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="hover:bg-surface-hover transition-colors">
+                        <td className="px-5 py-3.5">
+                          <span className="font-semibold text-text-primary">
+                            {industryName}
+                          </span>
+                        </td>
                         <td className="px-5 py-3.5">
                           <span className="font-semibold text-text-primary capitalize flex items-center gap-1.5">
                             <ScopeIcon size={14} className="text-primary" />

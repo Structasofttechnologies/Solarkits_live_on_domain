@@ -60,11 +60,9 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
     const { user } = useSelector((state) => state.user_slice);
 
     // Active product and country selection logic
-    const activeProduct = window.location.pathname.includes('/operations/company-saas-products')
-        ? null
-        : user?.allowed_panels
-            ?.flatMap(p => p.saas_products || [])
-            ?.find(prod => window.location.pathname.includes(prod.slug));
+    const activeProduct = user?.allowed_panels
+        ?.flatMap(p => p.saas_products || [])
+        ?.find(prod => window.location.pathname.includes(prod.slug));
 
     const getSelectedCountryFromPath = (pathname, productSlug) => {
         if (!productSlug) return null;

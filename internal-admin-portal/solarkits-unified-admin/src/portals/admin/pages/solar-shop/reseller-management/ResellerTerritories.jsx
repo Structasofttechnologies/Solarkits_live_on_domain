@@ -383,6 +383,7 @@ export default function ResellerTerritories({ moduleUniqueId }) {
           value={selectedResellerId}
           onChange={(e) => setSelectedResellerId(e.target.value)}
         >
+          <option value="all">🌐 All Resellers (View System-Wide Assignments)</option>
           {(resellers || []).map((r) => (
             <option key={r.id} value={r.id}>
               {r.business_name} ({r.email}) — Mode: {r.commercial_mode}
@@ -407,6 +408,7 @@ export default function ResellerTerritories({ moduleUniqueId }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg text-text-muted text-xs uppercase tracking-wider text-left">
+                  <th className="px-6 py-3.5 font-semibold">Reseller Partner</th>
                   <th className="px-6 py-3.5 font-semibold">Scope Level</th>
                   <th className="px-6 py-3.5 font-semibold">Location Name</th>
                   <th className="px-6 py-3.5 font-semibold">Precedence Source</th>
@@ -416,24 +418,36 @@ export default function ResellerTerritories({ moduleUniqueId }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {(territories || []).map((t) => (
-                  <tr key={t.id} className="hover:bg-surface-hover transition-colors">
-                    <td className="px-6 py-4 font-semibold text-text-primary capitalize">{t.scope_level}</td>
-                    <td className="px-6 py-4 font-bold text-primary">{t.location_name}</td>
-                    <td className="px-6 py-4"><SourceBadge source={t.precedence_source} /></td>
-                    <td className="px-6 py-4 text-text-secondary text-xs">{t.override_reason || "—"}</td>
-                    <td className="px-6 py-4 text-text-muted text-xs">{new Date(t.created_at).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => handleDeleteTerritory(t.id)}
-                        className="p-1.5 rounded-lg text-danger hover:bg-danger-soft transition-colors"
-                        title="Remove Territory Authorization"
-                      >
-                        <FiTrash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {(territories || []).map((t) => {
+                  const r = t.reseller || (resellers || []).find((res) => res.id === t.reseller_id);
+                  const scopeLevel = t.scope_level || t.territory_level || "district";
+                  return (
+                    <tr key={t.id} className="hover:bg-surface-hover transition-colors">
+                      <td className="px-6 py-4 font-bold text-text-primary">
+                        {r ? r.business_name : "General System"}
+                        <div className="text-xs font-normal text-text-muted">{r ? r.email : ""}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-bg border border-border text-xs font-bold uppercase tracking-wider text-text-secondary">
+                          {scopeLevel}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-bold text-primary">{t.location_name}</td>
+                      <td className="px-6 py-4"><SourceBadge source={t.precedence_source} /></td>
+                      <td className="px-6 py-4 text-text-secondary text-xs">{t.override_reason || "—"}</td>
+                      <td className="px-6 py-4 text-text-muted text-xs">{new Date(t.created_at).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => handleDeleteTerritory(t.id)}
+                          className="p-1.5 rounded-lg text-danger hover:bg-danger-soft transition-colors"
+                          title="Remove Territory Authorization"
+                        >
+                          <FiTrash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

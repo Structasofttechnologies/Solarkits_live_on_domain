@@ -897,10 +897,18 @@ export default function ViewWarehouses({ moduleUniqueId }) {
                                         {/* Geographic details */}
                                         <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium flex-wrap mb-4">
                                             <FiMapPin className="text-primary/70 shrink-0 w-3.5 h-3.5" />
-                                            <span>{w.district}, {w.state}</span>
+                                            <span>{w.district || "N/A"}, {w.state || "N/A"}</span>
                                             <span className="text-text-muted">•</span>
                                             <FiGlobe className="text-primary/70 shrink-0 w-3.5 h-3.5" />
-                                            <span>{w.country}</span>
+                                            <span>{w.country || "India"}</span>
+                                            {w.cluster && (
+                                                <>
+                                                    <span className="text-text-muted">•</span>
+                                                    <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-primary/20">
+                                                        {w.cluster}
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
 
                                         {/* Customer Types */}

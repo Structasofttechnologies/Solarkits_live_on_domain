@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
@@ -14,15 +14,17 @@ import {
   FiAlertCircle,
   FiLoader,
   FiExternalLink,
-  FiPlusCircle,
   FiMapPin,
   FiMail,
   FiPhone,
   FiZap,
-  FiShoppingBag,
   FiEye,
-  FiDownload,
   FiX,
+  FiBriefcase,
+  FiCreditCard,
+  FiTag,
+  FiCheck,
+  FiPlus,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -40,6 +42,23 @@ const DOC_TYPES = [
   { key: "address_proof",    name: "Address Proof",       required: false },
   { key: "cancelled_cheque", name: "Cancelled Cheque",    required: false },
 ];
+
+const SOURCE_BADGES = {
+  admin_override: { label: "Admin Override", bg: "bg-danger-soft text-danger", icon: FiShield },
+  admin_assigned: { label: "Admin Assigned", bg: "bg-info-soft text-primary", icon: FiUser },
+  plan:           { label: "Plan Default",   bg: "bg-success-soft text-success", icon: FiCheck },
+  gst_derived:    { label: "GST Address",    bg: "bg-warning-soft text-warning", icon: FiMapPin },
+};
+
+function SourceBadge({ source }) {
+  const cfg = SOURCE_BADGES[source] || SOURCE_BADGES.admin_assigned;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.bg} border border-current/20`}>
+      <Icon size={11} /> {cfg.label}
+    </span>
+  );
+}
 
 const getDocUrl = (storageKey) => {
   if (!storageKey) return "";
@@ -154,12 +173,11 @@ export default function ResellerDetail() {
   const [kyc, setKyc] = useState(null);
   const [activeSub, setActiveSub] = useState(null);
   const [auditHistory, setAuditHistory] = useState([]);
-  const [plans, setPlans] = useState([]);
+  const [territories, setTerritories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("kyc");
 
   const [kycModal, setKycModal] = useState(null); // 'verify' | 'reject' | 'resubmit'
-  const [planModal, setPlanModal] = useState(false);
   const [viewDoc, setViewDoc] = useState(null); // { name, url }
 
   const fetchDetail = useCallback(async () => {
@@ -173,6 +191,9 @@ export default function ResellerDetail() {
         setKyc(res.data.data.kyc);
         setActiveSub(res.data.data.active_subscription);
         setAuditHistory(res.data.data.audit_history || []);
+        if (res.data.data.territories) {
+          setTerritories(res.data.data.territories);
+        }
       }
     } catch {
       dispatch(setAlert({ type: "error", message: "Failed to load reseller details" }));
@@ -181,21 +202,9 @@ export default function ResellerDetail() {
     }
   }, [id, dispatch]);
 
-  const fetchPlans = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/resellers/plans/list?req_for=view&unique_id=RSL_PLAN&active_only=true`, {
-        headers: authHeaderObj(),
-      });
-      if (res.data?.status === "success") setPlans(res.data.data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
   useEffect(() => {
     fetchDetail();
-    fetchPlans();
-  }, [fetchDetail, fetchPlans]);
+  }, [fetchDetail]);
 
   const handleKycReview = async (decision, note) => {
     try {
@@ -231,16 +240,30 @@ export default function ResellerDetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-text-muted gap-3">
-        <FiLoader className="animate-spin text-primary" size={20} />
-        <span className="text-sm">Loading reseller details...</span>
+      <div className="p-6 space-y-6 animate-pulse">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-surface-hover" />
+            <div className="space-y-2">
+              <div className="w-48 h-6 rounded-lg bg-surface-hover" />
+              <div className="w-24 h-4 rounded-md bg-surface-hover" />
+            </div>
+          </div>
+          <div className="w-32 h-10 rounded-xl bg-surface-hover" />
+        </div>
+        <div className="flex gap-2 border-b border-border pb-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="w-32 h-10 rounded-t-xl bg-surface-hover" />
+          ))}
+        </div>
+        <div className="h-64 rounded-2xl bg-surface-hover border border-border" />
       </div>
     );
   }
 
   if (!reseller) {
     return (
-      <div className="text-center py-20 text-text-muted">Reseller not found</div>
+      <div className="text-center py-20 text-text-muted font-semibold">Reseller account not found</div>
     );
   }
 
@@ -249,17 +272,17 @@ export default function ResellerDetail() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-surface-hover text-text-muted transition-colors">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-surface-hover text-text-muted transition-colors cursor-pointer">
             <FiArrowLeft size={20} />
           </button>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-text-primary">{reseller.business_name}</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-info-soft text-primary uppercase">
-                {reseller.commercial_mode}
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-info-soft text-primary uppercase border border-primary/20">
+                {reseller.commercial_mode} Mode
               </span>
             </div>
-            <p className="text-xs text-text-muted mt-0.5">Partner ID: {reseller.id}</p>
+            <p className="text-xs text-text-muted mt-0.5 font-mono">Partner ID: {reseller.id}</p>
           </div>
         </div>
 
@@ -268,7 +291,7 @@ export default function ResellerDetail() {
           {reseller.activation_status === "active" ? (
             <button
               onClick={() => handleActivationChange("suspended")}
-              className="px-3.5 py-2 rounded-xl bg-danger-soft text-danger border border-danger/20 text-xs font-semibold hover:bg-danger hover:text-white transition-all shadow-sm"
+              className="px-4 py-2 rounded-xl bg-danger-soft text-danger border border-danger/20 text-xs font-bold hover:bg-danger hover:text-white transition-all shadow-xs cursor-pointer"
             >
               Suspend Reseller
             </button>
@@ -276,10 +299,10 @@ export default function ResellerDetail() {
             <button
               onClick={() => handleActivationChange("active")}
               disabled={reseller.kyc_status !== "verified"}
-              title={reseller.kyc_status !== "verified" ? "Verify KYC first to activate" : ""}
-              className="px-3.5 py-2 rounded-xl bg-success text-white text-xs font-semibold hover:bg-success-hover transition-all disabled:opacity-50 shadow-sm"
+              title={reseller.kyc_status !== "verified" ? "Verify KYC first to activate account" : ""}
+              className="px-4 py-2 rounded-xl bg-success text-white text-xs font-bold hover:bg-success-hover transition-all disabled:opacity-50 shadow-xs cursor-pointer"
             >
-              Activate Reseller
+              Activate Reseller Partner
             </button>
           )}
         </div>
@@ -299,8 +322,8 @@ export default function ResellerDetail() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
-                active ? "border-primary text-primary bg-info-soft/30 rounded-t-xl" : "border-transparent text-text-muted hover:text-text-primary"
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                active ? "border-primary text-primary bg-info-soft/40 rounded-t-xl" : "border-transparent text-text-muted hover:text-text-primary"
               }`}
             >
               <Icon size={16} />
@@ -310,14 +333,18 @@ export default function ResellerDetail() {
         })}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab Content Container */}
       <div className="bg-surface rounded-2xl border border-border p-6 shadow-sm">
-        {/* ── KYC TAB ── */}
+        {/* ════════════════════════════════════════════
+            1. KYC DOCUMENTS TAB
+        ════════════════════════════════════════════ */}
         {activeTab === "kyc" && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
               <div>
-                <h3 className="text-base font-semibold text-text-primary">KYC Document Verification</h3>
+                <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  <FiShield className="text-primary" /> KYC Document Verification
+                </h3>
                 <p className="text-xs text-text-muted mt-0.5">Review uploaded business identity documents before approval</p>
               </div>
 
@@ -337,7 +364,7 @@ export default function ResellerDetail() {
                 </button>
                 <button
                   onClick={() => setKycModal("verify")}
-                  className="px-4 py-2 rounded-xl bg-success text-white text-xs font-semibold hover:bg-success-hover transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-success text-white text-xs font-bold hover:bg-success-hover transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
                   <FiCheckCircle size={14} />
                   Verify & Approve
@@ -354,13 +381,13 @@ export default function ResellerDetail() {
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-sm font-semibold text-text-primary">{docDef.name}</p>
+                          <p className="text-sm font-bold text-text-primary">{docDef.name}</p>
                           <p className="text-[11px] text-text-muted mt-0.5">
-                            {docDef.required ? <span className="text-danger font-medium">Mandatory</span> : "Optional"}
+                            {docDef.required ? <span className="text-danger font-bold">Mandatory</span> : "Optional"}
                           </p>
                         </div>
                         {uploaded ? (
-                          <span className="text-success text-xs font-semibold flex items-center gap-1 bg-success-soft px-2 py-0.5 rounded-full">
+                          <span className="text-success text-xs font-bold flex items-center gap-1 bg-success-soft px-2 py-0.5 rounded-full border border-success/20">
                             <FiCheckCircle size={11} /> Uploaded
                           </span>
                         ) : (
@@ -388,7 +415,7 @@ export default function ResellerDetail() {
                             )}
 
                             <div className="text-xs text-text-secondary space-y-2 bg-surface p-2.5 rounded-lg border border-border">
-                              <p className="truncate font-mono text-[11px] font-semibold">{uploaded.original_name}</p>
+                              <p className="truncate font-mono text-[11px] font-bold">{uploaded.original_name}</p>
                               <p className="text-[10px] text-text-muted">
                                 {(uploaded.size_bytes / 1024).toFixed(1)} KB • {new Date(uploaded.uploaded_at).toLocaleDateString()}
                               </p>
@@ -422,9 +449,277 @@ export default function ResellerDetail() {
             </div>
           </div>
         )}
+
+        {/* ════════════════════════════════════════════
+            2. BUSINESS PROFILE TAB
+        ════════════════════════════════════════════ */}
+        {activeTab === "profile" && (
+          <div className="space-y-6">
+            <div className="border-b border-border pb-4">
+              <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                <FiUser className="text-primary" /> Reseller Business Profile
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">Complete business registration, tax identities, and contact information</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Business Identity */}
+              <div className="p-5 rounded-2xl border border-border bg-bg space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
+                  <FiBriefcase size={16} /> Business Identity
+                </div>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Company / Firm Name</span>
+                    <span className="font-extrabold text-text-primary text-sm">{reseller.business_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Reseller Category</span>
+                    <span className="font-bold text-text-secondary">{reseller.reseller_type?.name || "Standard Reseller"}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Commercial Operating Mode</span>
+                    <span className="font-extrabold text-primary capitalize">{reseller.commercial_mode} Mode</span>
+                  </div>
+                  <div className="pt-2 border-t border-border">
+                    <span className="text-text-muted block text-[11px] font-semibold">GSTIN Number</span>
+                    <span className="font-mono font-bold text-text-primary text-xs">{reseller.gst_number || "Not Provided"}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">PAN Number</span>
+                    <span className="font-mono font-bold text-text-primary text-xs">{reseller.pan_number || "Not Provided"}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Aadhaar (Masked)</span>
+                    <span className="font-mono font-bold text-text-primary text-xs">{reseller.aadhaar_masked || "Not Provided"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="p-5 rounded-2xl border border-border bg-bg space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
+                  <FiMail size={16} /> Contact & Communication
+                </div>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Contact Person</span>
+                    <span className="font-bold text-text-primary">{reseller.contact_person || reseller.business_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Business Email</span>
+                    <span className="font-bold text-text-primary flex items-center gap-1">
+                      <FiMail size={12} className="text-text-muted" /> {reseller.email}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Mobile / WhatsApp</span>
+                    <span className="font-bold text-text-primary flex items-center gap-1">
+                      <FiPhone size={12} className="text-text-muted" /> {reseller.mobile}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-border">
+                    <span className="text-text-muted block text-[11px] font-semibold">Registered GST State</span>
+                    <span className="font-bold text-primary bg-info-soft px-2.5 py-0.5 rounded-full inline-block mt-0.5">
+                      {reseller.address?.gst_state_name || reseller.address?.state || "Not Set"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">City / District</span>
+                    <span className="font-bold text-text-secondary">{reseller.address?.city || reseller.address?.district || "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Status & Timestamps */}
+              <div className="p-5 rounded-2xl border border-border bg-bg space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
+                  <FiShield size={16} /> Account Status & Compliance
+                </div>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Activation Status</span>
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold capitalize mt-0.5 ${
+                      reseller.activation_status === "active" ? "bg-success-soft text-success border border-success/20" : "bg-danger-soft text-danger border border-danger/20"
+                    }`}>
+                      {reseller.activation_status}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">KYC Verification</span>
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold capitalize mt-0.5 ${
+                      reseller.kyc_status === "verified" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                    }`}>
+                      KYC {reseller.kyc_status}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Agreement Status</span>
+                    <span className="font-bold text-text-secondary capitalize">{reseller.agreement_status || "Pending Agreement"}</span>
+                  </div>
+                  <div className="pt-2 border-t border-border">
+                    <span className="text-text-muted block text-[11px] font-semibold">Registration Timestamp</span>
+                    <span className="font-semibold text-text-secondary">{new Date(reseller.created_at).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════
+            3. PLAN & TERRITORY TAB
+        ════════════════════════════════════════════ */}
+        {activeTab === "subscription" && (
+          <div className="space-y-6">
+            {/* Active Subscription Plan */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  <FiFileText className="text-primary" /> Active Plan Subscription
+                </h3>
+                <Link
+                  to="/admin-panel/solar-shop/india/reseller-management/plans"
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  Manage Plans →
+                </Link>
+              </div>
+
+              {activeSub ? (
+                <div className="p-5 rounded-2xl border border-border bg-bg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-success-soft text-success border border-success/20">
+                      Active Plan
+                    </span>
+                    <h4 className="text-lg font-black text-text-primary">{activeSub.plan_id?.name || "Assigned Plan"}</h4>
+                    <p className="text-xs text-text-muted">
+                      Fee: <strong>₹{(activeSub.plan_id?.price_paise || 0) / 100}</strong> • Max Territories: <strong>{activeSub.plan_id?.allowed_territories_count || 1}</strong>
+                    </p>
+                  </div>
+                  <div className="text-right text-xs space-y-1">
+                    <div className="text-text-muted">Subscribed: <span className="font-bold text-text-primary">{new Date(activeSub.created_at).toLocaleDateString()}</span></div>
+                    <div className="text-text-muted">Expires: <span className="font-bold text-text-primary">{activeSub.expiry_date ? new Date(activeSub.expiry_date).toLocaleDateString() : "Never / Lifetime"}</span></div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl border border-dashed border-border bg-bg text-center space-y-2">
+                  <p className="text-sm font-semibold text-text-muted">No active plan subscription assigned to this reseller.</p>
+                  <p className="text-xs text-text-muted">Reseller uses system default plan tiers.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Active Territory Assignments */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                    <FiMapPin className="text-primary" /> Authorized Sales Territories ({territories.length})
+                  </h3>
+                  <p className="text-xs text-text-muted mt-0.5">Geographical boundary authorizations assigned to this reseller</p>
+                </div>
+                <Link
+                  to="/admin-panel/solar-shop/india/reseller-management/territories"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-hover transition-all shadow-xs"
+                >
+                  <FiPlus size={14} /> Assign Territory
+                </Link>
+              </div>
+
+              {territories.length === 0 ? (
+                <div className="p-6 rounded-2xl border border-dashed border-border bg-bg text-center text-xs text-text-muted font-medium">
+                  No explicit territory rules assigned. System defaults to registered GST state boundary ({reseller.address?.gst_state_name || "State"}).
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="border-b border-border bg-bg text-text-muted uppercase font-bold tracking-wider">
+                        <th className="px-4 py-3">Scope Level</th>
+                        <th className="px-4 py-3">Location Name</th>
+                        <th className="px-4 py-3">Precedence Source</th>
+                        <th className="px-4 py-3">Override Reason</th>
+                        <th className="px-4 py-3">Assigned Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border font-medium">
+                      {territories.map((t) => (
+                        <tr key={t.id || t._id} className="hover:bg-surface-hover">
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-bg border border-border text-[11px] font-bold uppercase tracking-wider text-text-primary">
+                              {t.scope_level || t.territory_level || "district"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-bold text-primary">{t.location_name}</td>
+                          <td className="px-4 py-3"><SourceBadge source={t.precedence_source || t.source} /></td>
+                          <td className="px-4 py-3 text-text-secondary">{t.override_reason || "—"}</td>
+                          <td className="px-4 py-3 text-text-muted">{new Date(t.created_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════
+            4. AUDIT TRAIL TAB
+        ════════════════════════════════════════════ */}
+        {activeTab === "audit" && (
+          <div className="space-y-4">
+            <div className="border-b border-border pb-3">
+              <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                <FiClock className="text-primary" /> Reseller Account Audit Trail ({auditHistory.length})
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">Chronological record of status changes, KYC reviews, and system activities</p>
+            </div>
+
+            {auditHistory.length === 0 ? (
+              <div className="py-12 text-center text-xs text-text-muted font-medium">
+                No audit trail logs recorded for this reseller yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-border bg-bg text-text-muted uppercase font-bold tracking-wider">
+                      <th className="px-4 py-3">Timestamp</th>
+                      <th className="px-4 py-3">Action Event</th>
+                      <th className="px-4 py-3">Actor Type</th>
+                      <th className="px-4 py-3">Snapshot / Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border font-medium">
+                    {auditHistory.map((log) => (
+                      <tr key={log.id || log._id} className="hover:bg-surface-hover">
+                        <td className="px-4 py-3 text-text-muted font-mono whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-text-primary">
+                          <span className="px-2 py-0.5 rounded-md bg-info-soft text-primary font-mono text-[11px] uppercase border border-primary/20">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 capitalize font-semibold text-text-secondary">
+                          {log.actor_type || "system"}
+                        </td>
+                        <td className="px-4 py-3 text-text-secondary max-w-md truncate font-mono text-[11px]">
+                          {log.snapshot ? JSON.stringify(log.snapshot) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Review Modal */}
+      {/* KYC Review Modal */}
       {kycModal && (
         <KycReviewModal
           decision={kycModal}
