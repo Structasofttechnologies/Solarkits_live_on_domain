@@ -541,6 +541,48 @@ const review_epc_transfer = async (req, res) => {
   }
 };
 
+const { getGatewayStatus } = require('../services/razorpay.service');
+const { processOrderRefund } = require('../services/refund.service');
+const { RazorpayWebhookLog } = require('../models/india_solarshop_db');
+
+const get_razorpay_status = async (req, res) => {
+  try {
+    const status = getGatewayStatus();
+    return res.json({ status: 'success', data: status });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+const process_order_refund_admin = async (req, res) => {
+  try {
+    const { order_type, order_id, amount_inr, reason } = req.body;
+    const result = await processOrderRefund({
+      orderType: order_type || 'epc',
+      orderId: order_id,
+      amountInr: amount_inr,
+      reason,
+      adminUserId: req.user?.id || null,
+    });
+    return res.json({ status: 'success', data: result });
+  } catch (error) {
+    console.error('[reseller.admin] process_order_refund_admin error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message || 'Refund failed' });
+  }
+};
+
+const list_webhook_logs = async (req, res) => {
+  try {
+    const logs = await RazorpayWebhookLog.find()
+      .sort({ created_at: -1 })
+      .limit(100)
+      .lean();
+    return res.json({ status: 'success', data: logs });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
   list_resellers,
   get_reseller_detail,
@@ -551,4 +593,7 @@ module.exports = {
   verify_gstin_admin,
   list_epc_conflicts,
   review_epc_transfer,
+  get_razorpay_status,
+  process_order_refund_admin,
+  list_webhook_logs,
 };

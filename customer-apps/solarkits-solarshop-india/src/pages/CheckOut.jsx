@@ -464,6 +464,19 @@ export default function CheckOut() {
     setAppliedCoupon(null);
   };
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        return resolve(true);
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleConfirmPurchase = async () => {
     // Re-verify GST status before checkout
     const stateId = selectedState?.id || selectedState?._id;
@@ -482,90 +495,74 @@ export default function CheckOut() {
 
     setPaying(true);
     try {
-      // 1. Create Razorpay order first
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error("Razorpay SDK failed to load. Please check your internet connection and try again.");
+      }
+
+      const itemsPayload = cart.map(item => ({
+        scope_type: item.is_custom ? 'product' : 'kit',
+        product_id: item.is_custom ? item.id : null,
+        kit_id: item.is_custom ? null : item.id,
+        quantity: item.qty || 1,
+        districtId: item.districtId,
+      }));
+
+      const addressData = Object.values(deliveryAddresses)[0] || {};
+
+      // 1. Create Razorpay order with server-validated pricing
       const rzpOrderRes = await axios.post(`${API_URL}/india/v1/shop/razorpay/create-order`, {
-        amount: calculatedDiscounts.finalTotal
+        items: itemsPayload,
+        delivery_address: addressData,
+        is_end_customer_sale: true,
       }, { withCredentials: true });
 
       if (!rzpOrderRes.data?.success) {
-        throw new Error("Failed to initialize Razorpay payment session.");
+        throw new Error(rzpOrderRes.data?.message || "Failed to initialize Razorpay payment session.");
       }
 
       const rzpOrderData = rzpOrderRes.data;
 
-      // 2. Fallback if Razorpay script is not loaded
-      if (typeof window.Razorpay === "undefined") {
-        console.warn("Razorpay script not loaded, using offline test simulation gateway.");
-        setTimeout(async () => {
-          try {
-            const itemsPayload = cart.map(item => ({
-              id: item.id,
-              qty: item.qty,
-              ourPrice: item.ourPrice,
-              is_custom: item.is_custom || false,
-              districtId: item.districtId
-            }));
-
-            const res = await axios.post(`${API_URL}/india/v1/shop/confirm-order`, {
-              items: itemsPayload,
-              discount_applied: calculatedDiscounts.discountAmount,
-              razorpay_payment_id: `pay_mock_${Math.random().toString(36).substring(2, 9)}`,
-              razorpay_order_id: rzpOrderData.id,
-              razorpay_signature: "mock_signature"
-            }, { withCredentials: true });
-
-            if (res.data?.success) {
-              setOrderId(rzpOrderData.id);
-              setOrderConfirmed(true);
-              dispatch(clearCart());
-            }
-          } catch (error) {
-            console.error("Simulated order confirmation failed:", error);
-            dispatch(setAlert({ type: "error", message: error.response?.data?.message || "Order processing failed." }));
-          } finally {
-            setPaying(false);
-          }
-        }, 1500);
-        return;
-      }
-
-      // 3. Open real Razorpay Popup
+      // 2. Open real Razorpay Popup
       const options = {
-        key: rzpOrderData.key || "rzp_test_5177TestKey", // Dynamic key from backend
+        key: rzpOrderData.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_T8B85UkbvoXBOQ",
         amount: rzpOrderData.amount,
-        currency: rzpOrderData.currency,
+        currency: rzpOrderData.currency || "INR",
         name: "SolarKits SolarShop",
-        description: "Solar Kit Purchase Payment",
+        description: `Order #${rzpOrderData.order_number || rzpOrderData.id}`,
         order_id: rzpOrderData.id,
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+          contact: user?.mobile || "",
+        },
         handler: async function (response) {
           try {
             setPaying(true);
-            const itemsPayload = cart.map(item => ({
-              id: item.id,
-              qty: item.qty,
-              ourPrice: item.ourPrice,
-              is_custom: item.is_custom || false,
-              districtId: item.districtId
-            }));
-
-            const confirmRes = await axios.post(`${API_URL}/india/v1/shop/confirm-order`, {
-              items: itemsPayload,
-              discount_applied: calculatedDiscounts.discountAmount,
+            const verifyRes = await axios.post(`${API_URL}/india/v1/shop/razorpay/verify-payment`, {
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature
+              razorpay_signature: response.razorpay_signature,
+              internal_order_id: rzpOrderData.internal_order_id,
             }, { withCredentials: true });
 
-            if (confirmRes.data?.success) {
-              setOrderId(response.razorpay_order_id);
+            if (verifyRes.data?.success) {
+              setOrderId(rzpOrderData.order_number || response.razorpay_order_id);
               setOrderConfirmed(true);
               dispatch(clearCart());
+              dispatch(setAlert({ type: "success", message: "Payment successful! Order confirmed." }));
             }
           } catch (error) {
-            console.error("Order confirmation failed:", error);
-            dispatch(setAlert({ type: "error", message: error.response?.data?.message || "Order confirmation failed." }));
+            console.error("Order payment verification failed:", error);
+            dispatch(setAlert({ type: "error", message: error.response?.data?.message || "Payment verification failed." }));
           } finally {
             setPaying(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setPaying(false);
+            dispatch(setAlert({ type: "info", message: "Payment cancelled." }));
           }
         },
         theme: {
@@ -578,7 +575,7 @@ export default function CheckOut() {
 
     } catch (error) {
       console.error("Order payment initialization failed:", error);
-      dispatch(setAlert({ type: "error", message: error.message || "Payment gateway connection failed. Please try again." }));
+      dispatch(setAlert({ type: "error", message: error.response?.data?.message || error.message || "Payment gateway connection failed. Please try again." }));
       setPaying(false);
     }
   };

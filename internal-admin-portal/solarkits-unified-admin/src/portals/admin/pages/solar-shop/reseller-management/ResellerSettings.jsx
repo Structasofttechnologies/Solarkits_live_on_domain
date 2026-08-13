@@ -67,6 +67,7 @@ function FieldRow({ label, hint, children }) {
 export default function ResellerSettings({ moduleUniqueId }) {
   const [settings, setSettings] = useState(null);
   const [original, setOriginal] = useState(null);
+  const [rzpStatus, setRzpStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState("");
@@ -80,12 +81,16 @@ export default function ResellerSettings({ moduleUniqueId }) {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/reseller-mgmt/settings`, {
-        headers: authHeaderObj(),
-      });
+      const [res, rzpRes] = await Promise.all([
+        axios.get(`${API_BASE}/reseller-mgmt/settings`, { headers: authHeaderObj() }),
+        axios.get(`${API_BASE}/reseller-mgmt/razorpay/status`, { headers: authHeaderObj() }).catch(() => null),
+      ]);
       if (res.data?.status === "success") {
         setSettings({ ...res.data.data });
         setOriginal({ ...res.data.data });
+      }
+      if (rzpRes?.data?.status === "success") {
+        setRzpStatus(rzpRes.data.data);
       }
     } catch (err) {
       showToast("error", err?.response?.data?.message || "Failed to load settings");
@@ -199,6 +204,37 @@ export default function ResellerSettings({ moduleUniqueId }) {
         >
           {toast.type === "success" ? <FiCheckCircle size={15} /> : <FiXCircle size={15} />}
           {toast.message}
+        </div>
+      )}
+
+      {/* ─── Razorpay Gateway Integration Status Card ──────────────────────── */}
+      {rzpStatus && (
+        <div className="bg-bg-card border border-border rounded-2xl p-5 shadow-sm">
+          <SectionHeader icon={FiShield} title="Razorpay Payment Gateway Status" subtitle="Gateway health & credential status (Key Secret is securely masked)" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
+            <div className="p-3.5 rounded-xl bg-bg border border-border">
+              <div className="text-[11px] font-semibold text-text-muted">Integration Status</div>
+              <div className="text-sm font-bold mt-1 flex items-center gap-1.5">
+                {rzpStatus.is_configured ? (
+                  <span className="text-success flex items-center gap-1"><FiCheckCircle size={15} /> Active & Configured</span>
+                ) : (
+                  <span className="text-danger flex items-center gap-1"><FiXCircle size={15} /> Missing Credentials</span>
+                )}
+              </div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-bg border border-border">
+              <div className="text-[11px] font-semibold text-text-muted">Gateway Mode</div>
+              <div className="text-sm font-bold text-text-primary mt-1 flex items-center gap-1.5">
+                <span className={`px-2 py-0.5 rounded-full text-xs uppercase font-extrabold ${rzpStatus.mode === 'test' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                  {rzpStatus.mode} mode
+                </span>
+              </div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-bg border border-border">
+              <div className="text-[11px] font-semibold text-text-muted">Public Key ID</div>
+              <div className="text-xs font-mono text-text-primary mt-1">{rzpStatus.key_id_masked}</div>
+            </div>
+          </div>
         </div>
       )}
 

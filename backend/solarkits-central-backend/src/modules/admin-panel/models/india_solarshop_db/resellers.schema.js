@@ -48,6 +48,11 @@ const schema = new mongoose.Schema({
     ref: 'reseller_plan_subscriptions',
     default: null,
   },
+  approved_industry_type_ids: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'sys_industry_types',
+    default: [],
+  }],
 
   // ── Existing KYC sub-process status (unchanged) ───────────────────────────
   kyc_status: {

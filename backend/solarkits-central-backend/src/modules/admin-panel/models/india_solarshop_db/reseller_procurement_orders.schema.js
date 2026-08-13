@@ -62,6 +62,11 @@ const schema = new mongoose.Schema({
     default: null,
     trim: true,
   },
+  razorpay_order_id: {
+    type: String,
+    default: null,
+    trim: true,
+  },
 
   dispatch_date: { type: Date, default: null },
   delivery_date: { type: Date, default: null },

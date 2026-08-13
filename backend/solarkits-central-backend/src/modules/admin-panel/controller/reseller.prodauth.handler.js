@@ -9,7 +9,7 @@
  */
 
 const mongoose = require('mongoose');
-const { Reseller, ResellerProductAuthorization, DistrictProductRule, WarehouseComboKit } = require('../models/india_solarshop_db');
+const { Reseller, ResellerProductAuthorization, DistrictProductRule, WarehouseComboKit, ResellerListing } = require('../models/india_solarshop_db');
 const { ProjectCategory, ProjectSubcategory, Product, IndustryType } = require('../models/core_db');
 const { CmsUser } = require('../models/user_db');
 const { evaluateResellerProductAuthorization } = require('../utils/product.authorization.service');
@@ -108,6 +108,60 @@ const assign_product_authorization = async (req, res) => {
     const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
     if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
 
+    // ── 1. Industry Eligibility Check ───────────────────────────────────────
+    let productObj = null;
+    let targetIndustryId = allowed_industry_type_ids?.[0] || null;
+
+    if (scope_type === 'product' && product_id) {
+      productObj = await Product.findById(product_id).lean();
+      if (!productObj) return res.status(404).json({ status: 'error', message: 'Product not found' });
+      if (productObj.industry_type_id) {
+        targetIndustryId = productObj.industry_type_id.toString();
+      }
+    }
+
+    if (reseller.approved_industry_type_ids && reseller.approved_industry_type_ids.length > 0 && targetIndustryId) {
+      const isApproved = reseller.approved_industry_type_ids.some(
+        (approvedId) => approvedId.toString() === targetIndustryId.toString()
+      );
+      if (!isApproved) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Product industry type does not match reseller's approved industry type. Target industry: ${targetIndustryId}`,
+        });
+      }
+    }
+
+    // ── 2. Duplicate Assignment Check ────────────────────────────────────────
+    if (scope_type === 'product' && product_id) {
+      const existingListing = await ResellerListing.findOne({
+        reseller_id: id,
+        item_type: 'product',
+        product_id,
+        assignment_status: { $ne: 'revoked' },
+      });
+      if (existingListing) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Product is already assigned to this reseller',
+        });
+      }
+    } else if (scope_type === 'kit' && kit_id) {
+      const existingListing = await ResellerListing.findOne({
+        reseller_id: id,
+        item_type: 'kit',
+        kit_id,
+        assignment_status: { $ne: 'revoked' },
+      });
+      if (existingListing) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Combo Kit is already assigned to this reseller',
+        });
+      }
+    }
+
+    // ── 3. Create Authorization Rule ─────────────────────────────────────────
     const rule = await ResellerProductAuthorization.create({
       reseller_id:              id,
       district_id:              district_id || null,
@@ -125,6 +179,51 @@ const assign_product_authorization = async (req, res) => {
       status:                  'active',
     });
 
+    // ── 4. Create/Upsert ResellerListing in 'assigned' status ────────────────
+    let listing = null;
+    if (scope_type === 'product' && productObj) {
+      const costPricePaise = productObj.base_price_paise || 100000;
+      const minMarginPaise = productObj.min_margin_paise || 0;
+      const maxMarginPaise = productObj.max_margin_paise || 5000000;
+      const taxRate = productObj.tax_rate_pct || 18;
+
+      listing = await ResellerListing.create({
+        reseller_id: id,
+        item_type: 'product',
+        product_id,
+        industry_type_id: productObj.industry_type_id || targetIndustryId || null,
+        category_id: productObj.category_id || category_id || null,
+        subcategory_id: productObj.subcategory_id || subcategory_id || null,
+        brand_id: productObj.brand_id || null,
+        title: productObj.name,
+        description: productObj.description,
+        image_url: productObj.image,
+        specifications: productObj.specifications || {},
+        stock_quantity: productObj.stock_quantity || 100,
+        cost_price_paise: costPricePaise,
+        map_price_paise: costPricePaise,
+        min_margin_paise: minMarginPaise,
+        max_margin_paise: maxMarginPaise,
+        reseller_margin_paise: 0,
+        reseller_margin_pct: 0,
+        tax_rate_pct: taxRate,
+        taxes_and_charges_paise: 0,
+        selling_price_paise: costPricePaise,
+        assignment_status: 'assigned',
+        assigned_by: req.user?.id || null,
+        assigned_at: new Date(),
+        audit_history: [
+          {
+            status: 'assigned',
+            actor_type: 'cms_user',
+            actor_id: req.user?.id || null,
+            notes: 'Product assigned to reseller by Super Admin',
+            timestamp: new Date(),
+          },
+        ],
+      });
+    }
+
     await logAudit({
       actor_type: 'cms_user',
       actor_id: req.user?.id,
@@ -137,8 +236,8 @@ const assign_product_authorization = async (req, res) => {
 
     return res.status(201).json({
       status: 'success',
-      message: 'Product authorization rule assigned',
-      data: rule,
+      message: 'Product authorization assigned and listing created in Assigned status',
+      data: { rule, listing },
     });
   } catch (error) {
     console.error('[reseller.prodauth] assign_product_authorization error:', error);

@@ -72,6 +72,15 @@ const schema = new mongoose.Schema({
     default: null,
     trim: true,
   },
+  razorpay_order_id: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  is_end_customer_sale: {
+    type: Boolean,
+    default: true,
+  },
   delivery_address: {
     line:        { type: String, default: null },
     state_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_1', default: null },

@@ -78,4 +78,8 @@ router.put(
   handler.review_epc_transfer
 );
 
+router.get('/razorpay/status', check_auth, handler.get_razorpay_status);
+router.post('/refunds/process', check_auth, handler.process_order_refund_admin);
+router.get('/webhook-logs', check_auth, handler.list_webhook_logs);
+
 module.exports = router;

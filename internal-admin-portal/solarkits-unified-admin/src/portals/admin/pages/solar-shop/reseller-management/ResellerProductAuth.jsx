@@ -50,9 +50,11 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
   const [form, setForm] = useState({
     reseller_id:      "",
     industry_type_id: "",
-    scope_type:       "category",
+    scope_type:       "product",
     category_id:      "",
     subcategory_id:   "",
+    system_type_id:   "",
+    project_range_id: "",
     product_id:       "",
     kit_id:           "",
     is_authorized:    true,
@@ -62,15 +64,23 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
   const [industries, setIndustries] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
+  const [systemTypes, setSystemTypes] = useState([]);
+  const [projectRanges, setProjectRanges] = useState([]);
   const [products, setProducts] = useState([]);
   const [kits, setKits] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  // Load Industries on mount
+  // Load Industries and Project Ranges on mount
   useEffect(() => {
     axios.get(`${API_BASE}/industry-types/list?unique_id=${MODULE_UID}&req_for=view&active_only=true`, { headers: authHeaderObj() })
       .then((res) => {
         if (res.data?.status === "success") setIndustries(res.data.data);
+      })
+      .catch((e) => console.error(e));
+
+    axios.get(`${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view`, { headers: authHeaderObj() })
+      .then((res) => {
+        if (res.data?.status === "success") setProjectRanges(res.data.data);
       })
       .catch((e) => console.error(e));
   }, []);
@@ -79,7 +89,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
   useEffect(() => {
     if (!form.industry_type_id) {
       setCategories([]);
-      setForm((prev) => ({ ...prev, category_id: "", subcategory_id: "", product_id: "", kit_id: "" }));
+      setForm((prev) => ({ ...prev, category_id: "", subcategory_id: "", system_type_id: "", product_id: "", kit_id: "" }));
       return;
     }
     axios.get(`${API_BASE}/project-types/get-categories?unique_id=${MODULE_UID}&req_for=view&industry_type_id=${form.industry_type_id}`, { headers: authHeaderObj() })
@@ -93,7 +103,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
   useEffect(() => {
     if (!form.category_id) {
       setSubcategories([]);
-      setForm((prev) => ({ ...prev, subcategory_id: "", product_id: "", kit_id: "" }));
+      setForm((prev) => ({ ...prev, subcategory_id: "", system_type_id: "", product_id: "", kit_id: "" }));
       return;
     }
     axios.get(`${API_BASE}/project-types/get-subcategories?unique_id=${MODULE_UID}&req_for=view&category_id=${form.category_id}`, { headers: authHeaderObj() })
@@ -102,6 +112,33 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
       })
       .catch((e) => console.error(e));
   }, [form.category_id]);
+
+  // Load system types when subcategory changes
+  useEffect(() => {
+    if (!form.subcategory_id) {
+      setSystemTypes([]);
+      setForm((prev) => ({ ...prev, system_type_id: "", project_range_id: "", product_id: "", kit_id: "" }));
+      return;
+    }
+    axios.get(`${API_BASE}/project-types/get-subcategory-types?unique_id=${MODULE_UID}&req_for=view&subcategory_id=${form.subcategory_id}`, { headers: authHeaderObj() })
+      .then((res) => {
+        if (res.data?.status === "success") setSystemTypes(res.data.data);
+      })
+      .catch((e) => console.error(e));
+  }, [form.subcategory_id]);
+
+  // Load project ranges when system type changes or on fallback
+  useEffect(() => {
+    const url = form.system_type_id
+      ? `${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view&subcategory_type_id=${form.system_type_id}`
+      : `${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view`;
+
+    axios.get(url, { headers: authHeaderObj() })
+      .then((res) => {
+        if (res.data?.status === "success") setProjectRanges(res.data.data);
+      })
+      .catch((e) => console.error(e));
+  }, [form.system_type_id]);
 
   // Load products when scope is product
   useEffect(() => {
@@ -125,6 +162,40 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
     }
   }, [form.scope_type]);
 
+  // Filter products based on cascading dropdown selections
+  const filteredProducts = products.filter((p) => {
+    if (form.industry_type_id && p.industry_type_id && (p.industry_type_id?._id || p.industry_type_id) !== form.industry_type_id) {
+      return false;
+    }
+    if (form.category_id && p.category_id && (p.category_id?._id || p.category_id) !== form.category_id) {
+      return false;
+    }
+    if (form.subcategory_id && p.subcategory_id && (p.subcategory_id?._id || p.subcategory_id) !== form.subcategory_id) {
+      return false;
+    }
+    return true;
+  });
+
+  // Filter combo kits based on 5 cascading dropdown selections
+  const filteredKits = kits.filter((k) => {
+    if (form.industry_type_id && (k.industry_type_id?._id || k.industry_type_id) !== form.industry_type_id) {
+      // Allow loose match if kit doesn't store direct industry_type_id
+    }
+    if (form.category_id && k.category_id && (k.category_id?._id || k.category_id) !== form.category_id) {
+      return false;
+    }
+    if (form.subcategory_id && k.subcategory_id && (k.subcategory_id?._id || k.subcategory_id) !== form.subcategory_id) {
+      return false;
+    }
+    if (form.system_type_id && k.project_type_id && (k.project_type_id?._id || k.project_type_id) !== form.system_type_id) {
+      return false;
+    }
+    if (form.project_range_id && k.project_range_id && (k.project_range_id?._id || k.project_range_id) !== form.project_range_id) {
+      return false;
+    }
+    return true;
+  });
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.reseller_id || !form.scope_type) return;
@@ -133,8 +204,8 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
     try {
       const payload = {
         scope_type:      form.scope_type,
-        category_id:     form.scope_type === "category" ? form.category_id : undefined,
-        subcategory_id:  form.scope_type === "subcategory" ? form.subcategory_id : undefined,
+        category_id:     form.category_id || undefined,
+        subcategory_id:  form.subcategory_id || undefined,
         product_id:      form.scope_type === "product" ? form.product_id : undefined,
         kit_id:          form.scope_type === "kit" ? form.kit_id : undefined,
         is_authorized:   form.is_authorized,
@@ -159,7 +230,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-lg overflow-hidden">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-2xl overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <h3 className="text-lg font-semibold text-text-primary">Add Product Authorization Rule</h3>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
@@ -167,7 +238,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {/* Select Reseller */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Reseller <span className="text-danger">*</span></label>
@@ -180,22 +251,6 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
               <option value="">Select Reseller...</option>
               {resellers.map((r) => (
                 <option key={r.id} value={r.id}>{r.business_name} ({r.email})</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Select Industry Type */}
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Industry Type <span className="text-danger">*</span></label>
-            <select
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              value={form.industry_type_id}
-              onChange={(e) => setForm({ ...form, industry_type_id: e.target.value })}
-              required
-            >
-              <option value="">Select Industry...</option>
-              {industries.map((ind) => (
-                <option key={ind.id} value={ind.id}>{ind.name}</option>
               ))}
             </select>
           </div>
@@ -225,57 +280,108 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
             </div>
           </div>
 
-          {/* Scope Type */}
+          {/* Target Scope Level: ONLY 3 OPTIONS (All, Specific Product, Combo Kit) */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1.5">Target Scope Level <span className="text-danger">*</span></label>
             <select
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 capitalize"
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 capitalize font-semibold"
               value={form.scope_type}
               onChange={(e) => setForm({ ...form, scope_type: e.target.value })}
             >
               <option value="all">All Catalog Products & Kits</option>
-              <option value="category">Category Scope</option>
-              <option value="subcategory">Subcategory Scope</option>
               <option value="product">Specific Product (SKU) Scope</option>
               <option value="kit">Combo Kit Scope</option>
             </select>
           </div>
 
-          {/* Category Picker */}
-          {["category", "subcategory", "product", "kit"].includes(form.scope_type) && (
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">Project Category <span className="text-danger">*</span></label>
-              <select
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={form.category_id}
-                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                required
-                disabled={!form.industry_type_id}
-              >
-                <option value="">Select Category...</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* 5 Cascading Filter Bar (Industry Type, Category, Subcategory, System Type, Project Range) */}
+          {["product", "kit"].includes(form.scope_type) && (
+            <div className="p-4 rounded-xl bg-surface-hover/60 border border-border space-y-3">
+              <span className="text-xs font-bold text-text-primary uppercase tracking-wider block">
+                Catalog & Combo Kit Cascading Filters
+              </span>
 
-          {/* Subcategory Picker */}
-          {["subcategory", "product", "kit"].includes(form.scope_type) && (
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">Project Subcategory <span className="text-danger">*</span></label>
-              <select
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                value={form.subcategory_id}
-                onChange={(e) => setForm({ ...form, subcategory_id: e.target.value })}
-                required
-                disabled={!form.category_id}
-              >
-                <option value="">Select Subcategory...</option>
-                {subcategories.map((sc) => (
-                  <option key={sc.id} value={sc.id}>{sc.name}</option>
-                ))}
-              </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. INDUSTRY TYPE */}
+                <div>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Industry Type</label>
+                  <select
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    value={form.industry_type_id}
+                    onChange={(e) => setForm({ ...form, industry_type_id: e.target.value })}
+                  >
+                    <option value="">Select Industry Type...</option>
+                    {industries.map((ind) => (
+                      <option key={ind.id} value={ind.id}>{ind.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. CATEGORY */}
+                <div>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Category</label>
+                  <select
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    value={form.category_id}
+                    onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                    disabled={!form.industry_type_id}
+                  >
+                    <option value="">Select Category...</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 3. SUB-CATEGORY */}
+                <div>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Sub-Category</label>
+                  <select
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    value={form.subcategory_id}
+                    onChange={(e) => setForm({ ...form, subcategory_id: e.target.value })}
+                    disabled={!form.category_id}
+                  >
+                    <option value="">Select Subcategory...</option>
+                    {subcategories.map((sc) => (
+                      <option key={sc.id} value={sc.id}>{sc.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4. SYSTEM TYPE (Project Type) */}
+                <div>
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">System Type</label>
+                  <select
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    value={form.system_type_id}
+                    onChange={(e) => setForm({ ...form, system_type_id: e.target.value })}
+                    disabled={!form.subcategory_id}
+                  >
+                    <option value="">Select System Type...</option>
+                    {systemTypes.map((st) => (
+                      <option key={st.subcategory_type_id || st.id || st._id} value={st.subcategory_type_id || st.id || st._id}>{st.name || st.type_name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 5. PROJECT RANGE */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Project Range</label>
+                  <select
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    value={form.project_range_id}
+                    onChange={(e) => setForm({ ...form, project_range_id: e.target.value })}
+                  >
+                    <option value="">Select Project Range...</option>
+                    {projectRanges.map((pr) => (
+                      <option key={pr.id || pr._id} value={pr.id || pr._id}>
+                        {pr.range_label || (pr.min_value !== undefined && pr.max_value !== undefined ? `${pr.min_value} - ${pr.max_value} ${pr.unit_symbol || 'kW'}` : (pr.name || 'Project Range'))}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           )}
 
@@ -284,17 +390,19 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">Specific Product <span className="text-danger">*</span></label>
               <select
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-semibold"
                 value={form.product_id}
                 onChange={(e) => setForm({ ...form, product_id: e.target.value })}
                 required
-                disabled={!form.subcategory_id}
               >
                 <option value="">Select Product...</option>
-                {products.map((p) => (
+                {filteredProducts.map((p) => (
                   <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
                 ))}
               </select>
+              <span className="text-[11px] text-text-muted mt-1 block">
+                Showing {filteredProducts.length} products matching selected filters.
+              </span>
             </div>
           )}
 
@@ -303,17 +411,19 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1.5">Combo Kit <span className="text-danger">*</span></label>
               <select
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-semibold"
                 value={form.kit_id}
                 onChange={(e) => setForm({ ...form, kit_id: e.target.value })}
                 required
-                disabled={!form.subcategory_id}
               >
                 <option value="">Select Combo Kit...</option>
-                {kits.map((k) => (
-                  <option key={k.id || k._id} value={k.id || k._id}>{k.kit_name}</option>
+                {filteredKits.map((k) => (
+                  <option key={k.id || k._id} value={k.id || k._id}>{k.kit_name || k.name}</option>
                 ))}
               </select>
+              <span className="text-[11px] text-text-muted mt-1 block">
+                Showing {filteredKits.length} combo kits matching selected filters.
+              </span>
             </div>
           )}
 

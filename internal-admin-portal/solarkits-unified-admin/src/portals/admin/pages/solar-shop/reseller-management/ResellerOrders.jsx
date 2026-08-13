@@ -12,7 +12,6 @@ import {
   FiZap,
   FiShoppingBag,
   FiDollarSign,
-  FiFileText,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -20,14 +19,12 @@ import { setAlert } from "../../../features/alert.slice";
 const API_BASE = import.meta.env.VITE_API_URL;
 const MODULE_UID = "RSL_MGMT";
 
-const apiFetch = (method, endpoint, data) =>
-  axios({ method, url: `${API_BASE}/reseller-mgmt/orders${endpoint}`, headers: authHeaderObj(), data });
-
 const STATUS_BADGES = {
   completed: { label: "Completed", bg: "bg-success-soft", text: "text-success", icon: FiCheckCircle },
   confirmed: { label: "Confirmed", bg: "bg-info-soft", text: "text-info", icon: FiCheckCircle },
   pending:   { label: "Pending", bg: "bg-warning-soft", text: "text-warning", icon: FiClock },
   cancelled: { label: "Cancelled", bg: "bg-danger-soft", text: "text-danger", icon: FiXCircle },
+  refunded:  { label: "Refunded", bg: "bg-purple-50", text: "text-purple-700", icon: FiXCircle },
 };
 
 function StatusBadge({ status }) {
@@ -48,6 +45,11 @@ export default function ResellerOrders({ moduleUniqueId }) {
   const [modeFilter, setModeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  const [refundModal, setRefundModal] = useState(null); // { order }
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundLoading, setRefundLoading] = useState(false);
+
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
@@ -66,6 +68,35 @@ export default function ResellerOrders({ moduleUniqueId }) {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  const handleProcessRefund = async (e) => {
+    e.preventDefault();
+    if (!refundModal?.order) return;
+    setRefundLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_BASE}/reseller-mgmt/refunds/process`,
+        {
+          order_type: "epc",
+          order_id: refundModal.order.id,
+          amount_inr: refundAmount ? parseFloat(refundAmount) : null,
+          reason: refundReason.trim(),
+        },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: `Refund processed! Credit Note #${res.data.data.credit_note?.credit_note_number}` }));
+        setRefundModal(null);
+        setRefundAmount("");
+        setRefundReason("");
+        fetchOrders();
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err?.response?.data?.message || "Refund processing failed" }));
+    } finally {
+      setRefundLoading(false);
+    }
+  };
 
   const filtered = orders.filter(
     (o) =>
@@ -122,6 +153,7 @@ export default function ResellerOrders({ moduleUniqueId }) {
           <option value="confirmed">Confirmed</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="refunded">Refunded</option>
         </select>
       </div>
 
@@ -150,6 +182,7 @@ export default function ResellerOrders({ moduleUniqueId }) {
                   <th className="text-right text-text-muted font-medium px-5 py-3.5">Order Amount</th>
                   <th className="text-right text-text-muted font-medium px-5 py-3.5">Commission / Dealer Margin</th>
                   <th className="text-center text-text-muted font-medium px-4 py-3.5">Status</th>
+                  <th className="text-center text-text-muted font-medium px-4 py-3.5">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -197,6 +230,14 @@ export default function ResellerOrders({ moduleUniqueId }) {
                       <td className="px-4 py-3.5 text-center">
                         <StatusBadge status={o.status} />
                       </td>
+                      <td className="px-4 py-3.5 text-center">
+                        <button
+                          onClick={() => setRefundModal({ order: o })}
+                          className="px-2.5 py-1 rounded-lg bg-danger-soft text-danger hover:bg-danger/20 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Issue Refund
+                        </button>
+                      </td>
                     </motion.tr>
                   ))}
                 </AnimatePresence>
@@ -205,6 +246,60 @@ export default function ResellerOrders({ moduleUniqueId }) {
           </div>
         )}
       </div>
+
+      {/* ── Refund Modal ────────────────────────────────────────────────── */}
+      {refundModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+              <FiDollarSign className="text-danger" size={20} />
+              Issue Full or Partial Refund
+            </h3>
+            <p className="text-xs text-text-muted">
+              Order #{refundModal.order.id} (Max refundable: ₹{(refundModal.order.selling_price_snapshot || 0).toLocaleString("en-IN")})
+            </p>
+            <form onSubmit={handleProcessRefund} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-text-primary block mb-1">Refund Amount (₹)</label>
+                <input
+                  type="number"
+                  placeholder="Leave empty for full refund"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-sm text-text-primary"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-text-primary block mb-1">Reason for Refund</label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Enter reason for customer refund & credit note generation..."
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-sm text-text-primary"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRefundModal(null)}
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-text-secondary hover:bg-bg-card-hover"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={refundLoading}
+                  className="px-4 py-2 rounded-xl bg-danger text-white text-xs font-bold hover:bg-danger-hover disabled:opacity-60"
+                >
+                  {refundLoading ? "Processing..." : "Confirm & Issue Refund"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

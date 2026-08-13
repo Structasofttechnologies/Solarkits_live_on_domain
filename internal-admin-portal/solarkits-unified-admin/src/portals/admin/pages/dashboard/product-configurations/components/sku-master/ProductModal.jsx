@@ -133,9 +133,12 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
     } catch (error) { }
   };
 
-  const fetchTemplateAttributes = async () => {
+  const fetchTemplateAttributes = async (overrideTmplId, overrideSubId) => {
+    const tmplId = overrideTmplId || (isEditMode ? (editingProduct?.template_id?._id || editingProduct?.template_id) : selectedTemplate);
+    const subId = overrideSubId || (isEditMode ? (editingProduct?.subtype_id?._id || editingProduct?.subtype_id) : selectedSubtype);
+    if (!tmplId || !subId) return [];
     try {
-      const res = await axios.get(`${API_URL}/product-templates/get-attributes${getBaseQuery("view")}&template_id=${selectedTemplate}&subtype_id=${selectedSubtype}`, { headers: authHeaderObj() });
+      const res = await axios.get(`${API_URL}/product-templates/get-attributes${getBaseQuery("view")}&template_id=${tmplId}&subtype_id=${subId}`, { headers: authHeaderObj() });
       if (res.data?.status === "success") {
         const attrs = res.data.data;
         // Already sorted by display_order from backend; preserve sort
@@ -198,10 +201,12 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
       product_len: editingProduct.sku_config?.product_len ?? 4,
       subtype_len: editingProduct.sku_config?.subtype_len ?? 4,
     });
-    setSelectedBrand(editingProduct.brand_id);
+    setSelectedBrand(editingProduct.brand_id?._id || editingProduct.brand_id);
     setSelectedScopes(editingProduct.scope_ids || []);
     loadProductAttributesForEdit(editingProduct);
-    fetchEditingProductSkus(editingProduct.id);
+    if (editingProduct.id || editingProduct._id) {
+      fetchEditingProductSkus(editingProduct.id || editingProduct._id);
+    }
   };
 
   const resetForm = () => {
@@ -246,12 +251,15 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
   }, [isOpen, isEditMode, isDataReady, selectedBrand, selectedScopes, productForm.name, productForm.description, productForm.features, skuConfig, nonVariantValues, nonVariantUnits]);
 
   useEffect(() => {
-    if (isOpen && selectedTemplate && selectedSubtype) {
+    if (isOpen) {
+      const tmplId = isEditMode ? (editingProduct?.template_id?._id || editingProduct?.template_id || selectedTemplate) : selectedTemplate;
+      const subId = isEditMode ? (editingProduct?.subtype_id?._id || editingProduct?.subtype_id || selectedSubtype) : selectedSubtype;
+
       if (!hasLoadedRef.current) {
         Promise.all([
-          fetchBrandsBySubtype(selectedSubtype),
-          fetchScopesBySubtype(selectedSubtype),
-          fetchTemplateAttributes()
+          subId ? fetchBrandsBySubtype(subId) : Promise.resolve(),
+          subId ? fetchScopesBySubtype(subId) : Promise.resolve(),
+          (tmplId && subId) ? fetchTemplateAttributes(tmplId, subId) : Promise.resolve([])
         ]).then(([, , nonVariantAttrs = []]) => {
           if (isEditMode) {
             loadEditingProductData();
@@ -274,17 +282,14 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
                 if (parsed.skuConfig) {
                   setSkuConfig(parsed.skuConfig);
                 }
-                // Merge draft values ON TOP of blank initial values so all attr fields exist
                 const initialValues = {};
                 nonVariantAttrs.forEach(attr => {
                   initialValues[attr.id] = attr.data_type === "multiselect" ? [] : "";
                 });
                 setNonVariantValues({ ...initialValues, ...(parsed.nonVariantValues || {}) });
                 if (parsed.nonVariantUnits) setNonVariantUnits(parsed.nonVariantUnits);
-                dispatch(setAlert({ type: "success", message: "Restored unsaved product draft!" }));
               } catch (e) {
                 console.error("Failed to restore product draft", e);
-                // Fall back to empty initial values
                 const initialValues = {};
                 nonVariantAttrs.forEach(attr => {
                   initialValues[attr.id] = attr.data_type === "multiselect" ? [] : "";
@@ -292,7 +297,6 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
                 setNonVariantValues(initialValues);
               }
             } else {
-              // No draft — seed empty values for all attrs
               const initialValues = {};
               nonVariantAttrs.forEach(attr => {
                 initialValues[attr.id] = attr.data_type === "multiselect" ? [] : "";
@@ -301,12 +305,12 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
             }
           }
           hasLoadedRef.current = true;
-          setIsDataReady(true);  // allow draft-save to begin
+          setIsDataReady(true);  // allow modal display!
         });
       }
     }
     if (!isOpen) resetForm();
-  }, [isOpen, selectedTemplate, selectedSubtype]);
+  }, [isOpen, selectedTemplate, selectedSubtype, editingProduct, isEditMode]);
 
   const handleAddFeature = () => {
     if (featureInput.trim() !== "") {
@@ -379,10 +383,13 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
   };
 
   const prepareFormData = () => {
+    const tmplId = isEditMode ? (editingProduct?.template_id?._id || editingProduct?.template_id || selectedTemplate) : selectedTemplate;
+    const subId = isEditMode ? (editingProduct?.subtype_id?._id || editingProduct?.subtype_id || selectedSubtype) : selectedSubtype;
+
     const formData = new FormData();
     formData.append("name", productForm.name);
-    formData.append("template_id", selectedTemplate);
-    formData.append("subtype_id", selectedSubtype);
+    formData.append("template_id", tmplId);
+    formData.append("subtype_id", subId);
     formData.append("brand_id", selectedBrand);
     formData.append("description", productForm.description || "");
     formData.append("features", JSON.stringify(productForm.features));
@@ -513,9 +520,12 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
                <div className="space-y-2">
                   <MultiSelectDropdownWithSearchInput
                     label="Operational Scopes"
-                    options={scopes.map(s => ({ value: s.subcategory_type_id, text: `${s.category_name} » ${s.subcategory_name} » ${s.type_name}` }))}
-                    values={selectedScopes}
-                    onChange={setSelectedScopes}
+                    options={scopes.map(s => ({
+                      value: String(s.subcategory_type_id || s.id || s._id),
+                      text: `${s.category_name || "General"} » ${s.subcategory_name || "Standard"} » ${s.type_name || "Operational Scope"}`
+                    }))}
+                    values={selectedScopes.map(v => String(v))}
+                    onChange={(vals) => { setSelectedScopes(vals); setStep1Error(""); }}
                     placeholder="Assign Scopes"
                     showSelectAll={true}
                   />

@@ -143,6 +143,40 @@ const slice = createSlice({
     addToCart: (state, action) => {
       const payload = action.payload;
 
+      // Handle direct catalogue items (e.g. EPC product catalogue)
+      if (payload && (payload.is_catalogue_item || payload.listing_id || payload.item_type === 'product')) {
+        const cartItemId = payload.listing_id || payload.id || `item_${Date.now()}`;
+        const exists = state.cart.find((c) => c.cartItemId === cartItemId || c.id === (payload.id || payload.listing_id));
+
+        if (exists) {
+          exists.qty += (payload.qty || 1);
+        } else {
+          state.cart.push({
+            id: payload.id || payload.listing_id,
+            cartItemId,
+            title: payload.title || payload.name,
+            kitName: payload.title || payload.name,
+            selling_price_inr: payload.selling_price_inr,
+            price_before_tax_inr: payload.price_before_tax_inr,
+            taxes_and_charges_inr: payload.taxes_and_charges_inr,
+            ourPrice: parseFloat(payload.selling_price_inr || 0),
+            marketPrice: parseFloat(payload.selling_price_inr || 0),
+            image_url: payload.image_url,
+            is_catalogue_item: true,
+            is_custom: true,
+            qty: payload.qty || 1,
+            availableStock: payload.stock_quantity || 99,
+            productTier: payload.sku_code || 'Standard',
+          });
+        }
+        state.alert = {
+          status: "success",
+          message: `${payload.title || payload.name} added to cart.`,
+          undoItem: null,
+        };
+        return;
+      }
+
       let kit;
       let variantIndex = 0;
 

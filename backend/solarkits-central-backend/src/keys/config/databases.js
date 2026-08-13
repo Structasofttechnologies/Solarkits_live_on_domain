@@ -24,6 +24,9 @@ mongoose.Connection.prototype.model = function (name, schema, collection) {
 // Set DNS servers to avoid querySrv ECONNREFUSED issues on local systems or VPNs
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
+// Configure Mongoose global options to eliminate deprecation warning logs
+mongoose.set('returnDocument', 'after');
+
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {

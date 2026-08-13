@@ -592,6 +592,26 @@ const login = async (req, res) => {
             };
         }
 
+        let resellerData = null;
+        const resId = account.onboarded_by_reseller_id || account.primary_reseller_id;
+        if (resId) {
+            try {
+                const { Reseller } = require('../../../admin-panel/models/india_solarshop_db');
+                const resDoc = await Reseller.findById(resId).select('business_name email mobile commercial_mode').lean();
+                if (resDoc) {
+                    resellerData = {
+                        id: resDoc._id,
+                        business_name: resDoc.business_name,
+                        commercial_mode: resDoc.commercial_mode,
+                        email: resDoc.email,
+                        mobile: resDoc.mobile
+                    };
+                }
+            } catch (rErr) {
+                console.error("Reseller populate error in login:", rErr.message);
+            }
+        }
+
         return res.json({
             success: true,
             message: "Login successful",
@@ -602,6 +622,8 @@ const login = async (req, res) => {
                 name: account.name,
                 email: account.email,
                 company_id: account.company_id,
+                onboarding_source: account.onboarding_source || 'direct',
+                reseller: resellerData,
                 primaryLocation
             }
         });

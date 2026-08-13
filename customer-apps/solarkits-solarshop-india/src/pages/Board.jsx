@@ -15,13 +15,14 @@ import BulkBuy from "./bulk-buy/BulkBuy";
 import BulkOrderCart from "./cart/BulkOrderCart";
 import CheckOut from "./CheckOut";
 import ProjectOrderStatus from "./dashboard/ProjectOrderStatus";
+import EpcCatalogue from "./dashboard/EpcCatalogue";
 import {
   MdDashboard,
   MdShoppingCart,
   MdListAlt,
   MdSettings,
 } from "react-icons/md";
-import { FaBoxes, FaSolarPanel } from "react-icons/fa";
+import { FaBoxes, FaSolarPanel, FaShoppingBag } from "react-icons/fa";
 
 const menuItems = [
   [
@@ -30,6 +31,10 @@ const menuItems = [
       icon: <MdDashboard />,
       path: "/dashboard",
     },
+  ],
+  [
+    // ── EPC Catalogue (reseller-onboarded products) ──
+    { name: "Product Catalogue", icon: <FaShoppingBag />, path: "/epc-catalogue", requiresAuth: true },
   ],
   [
     { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
@@ -104,6 +109,7 @@ export default function Board() {
         <main className="flex-1 p-4 overflow-y-auto scrollbar-hover">
           <Routes>
             <Route path="/dashboard/*" element={<Dashboard />} />
+            <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />
             <Route path="/preconfigured-combo-kit" element={<PreconfiguredComboKit />} />
             <Route path="/custom-combo-kit" element={<ProtectedRoute><CustomComboKit /></ProtectedRoute>} />
             <Route path="/bulk-buy" element={<ProtectedRoute><BulkBuy /></ProtectedRoute>} />

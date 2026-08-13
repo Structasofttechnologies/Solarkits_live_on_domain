@@ -21,6 +21,12 @@ async function autoSeedCustomerAccounts() {
         password: '1234',
         name: 'Sushil Piprotar (Demo)',
         whatsapp: '9876543211'
+      },
+      {
+        email: 'structasoft.epc@gmail.com',
+        password: '1234',
+        name: 'Structasoft EPC Innovations',
+        whatsapp: '9900000099'
       }
     ];
 

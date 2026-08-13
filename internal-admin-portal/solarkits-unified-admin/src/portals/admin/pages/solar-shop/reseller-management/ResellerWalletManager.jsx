@@ -199,6 +199,17 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
     }
   }, [dispatch, statusFilter]);
 
+  const [webhooks, setWebhooks] = useState([]);
+
+  const fetchWebhooks = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/reseller-mgmt/webhook-logs`, { headers: authHeaderObj() });
+      if (res.data?.status === "success") setWebhooks(res.data.data);
+    } catch {
+      console.error("Failed to load webhook logs");
+    }
+  }, []);
+
   useEffect(() => {
     fetchWallets();
     fetchPayouts();
@@ -276,10 +287,10 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border overflow-x-auto">
         <button
           onClick={() => setActiveTab("payouts")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === "payouts" ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-primary"
           }`}
         >
@@ -288,12 +299,24 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
         </button>
         <button
           onClick={() => setActiveTab("wallets")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 ${
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === "wallets" ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-primary"
           }`}
         >
           <FiFileText size={16} />
           Reseller Wallets Overview ({wallets.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("webhooks");
+            fetchWebhooks();
+          }}
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
+            activeTab === "webhooks" ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-primary"
+          }`}
+        >
+          <FiShield size={16} />
+          Razorpay Webhook Logs
         </button>
       </div>
 
@@ -434,6 +457,64 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Webhooks Tab */}
+      {activeTab === "webhooks" && (
+        <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden space-y-4 p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+              <FiShield className="text-primary" size={18} />
+              Razorpay Webhook Event Audit Logs
+            </h3>
+            <button
+              onClick={fetchWebhooks}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-xs font-semibold text-text-secondary hover:bg-bg-card-hover"
+            >
+              <FiRefreshCw size={12} /> Refresh Logs
+            </button>
+          </div>
+
+          {webhooks.length === 0 ? (
+            <div className="py-12 text-center text-text-muted text-xs">
+              No webhook events recorded yet. Webhooks will automatically log here as Razorpay payment events occur.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-bg text-text-muted">
+                    <th className="text-left px-4 py-3 font-semibold">Event ID & Timestamp</th>
+                    <th className="text-left px-4 py-3 font-semibold">Event Type</th>
+                    <th className="text-left px-4 py-3 font-semibold">Order / Payment Reference</th>
+                    <th className="text-center px-4 py-3 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {webhooks.map((wh) => (
+                    <tr key={wh._id || wh.event_id} className="hover:bg-surface-hover transition-colors font-mono">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-text-primary">{wh.event_id}</div>
+                        <div className="text-[10px] text-text-muted">{new Date(wh.created_at).toLocaleString()}</div>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-primary">{wh.event_type}</td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {wh.order_id || wh.payment_id || "N/A"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          wh.status === 'processed' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'
+                        }`}>
+                          {wh.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

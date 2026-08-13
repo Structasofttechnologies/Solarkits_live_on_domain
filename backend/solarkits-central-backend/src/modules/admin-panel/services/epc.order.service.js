@@ -9,6 +9,7 @@
  *   2. Server-side price verification (never trust client-supplied totals).
  *   3. Double-entry stock reservation hold in ResellerInventoryLedger (15-min TTL).
  *   4. Conversion from reservation hold to sales_out upon payment confirmation.
+ *   5. Conditional EPC Commission (earned only on sales to end-customers).
  */
 
 const mongoose = require('mongoose');
@@ -24,6 +25,8 @@ const { validateEpcResellerTerritoryMatch } = require('../utils/territory.valida
 const { calculateCheckoutPrice } = require('./reseller.pricing.service');
 const { calculateCurrentItemStock } = require('./reseller.procurement.service');
 const { logAudit } = require('../utils/audit.service');
+const { creditResellerMargin, creditEpcMargin } = require('./wallet.settlement.service');
+const { createRazorpayOrder } = require('./razorpay.service');
 
 /**
  * Generate a unique EPC buyer order number.
@@ -85,6 +88,7 @@ async function processEpcCheckout({
   items = [],
   delivery_address = {},
   payment_reference = null,
+  is_end_customer_sale = true,
   actor_id = null,
   req = null,
 }) {
@@ -121,7 +125,7 @@ async function processEpcCheckout({
     }
   }
 
-  // 4. Calculate reseller margins
+  // 4. Calculate reseller & EPC margins
   let totalResellerMarginPaise = 0;
   let totalPlatformCommissionPaise = 0;
 
@@ -152,7 +156,21 @@ async function processEpcCheckout({
 
   const orderNumber = generateEpcOrderNumber();
 
-  // 5. Create EpcOrder
+  // 5. Create Razorpay order if no payment reference yet
+  let razorpayOrderData = null;
+  if (!payment_reference && process.env.RAZORPAY_ID && process.env.RAZORPAY_KEY) {
+    try {
+      razorpayOrderData = await createRazorpayOrder({
+        amountPaise: totals.grand_total_paise,
+        receipt: orderNumber,
+        notes: { order_number: orderNumber, epc_id: epc_id.toString() },
+      });
+    } catch (rzpErr) {
+      console.warn('[processEpcCheckout] Razorpay order creation failed, fallback to pending order:', rzpErr.message);
+    }
+  }
+
+  // 6. Create EpcOrder
   const epcOrder = await EpcOrder.create({
     order_number: orderNumber,
     epc_id: epc_id,
@@ -168,11 +186,13 @@ async function processEpcCheckout({
     order_status: 'pending',
     payment_status: payment_reference ? 'captured' : 'pending',
     payment_reference: payment_reference || null,
+    razorpay_order_id: razorpayOrderData?.order_id || null,
+    is_end_customer_sale: Boolean(is_end_customer_sale),
     delivery_address,
     reservation_expires_at: expiresAt,
   });
 
-  // 6. Hold stock reservation in ResellerInventoryLedger if reseller assigned
+  // 7. Hold stock reservation in ResellerInventoryLedger if reseller assigned
   if (targetResellerId) {
     for (const item of processedItems) {
       const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
@@ -194,7 +214,7 @@ async function processEpcCheckout({
     }
   }
 
-  // 7. Write EpcCheckoutLog
+  // 8. Write EpcCheckoutLog
   await EpcCheckoutLog.create({
     epc_id,
     assigned_reseller_id: targetResellerId,
@@ -220,6 +240,12 @@ async function processEpcCheckout({
     order: epcOrder,
     reseller_id: targetResellerId,
     routing_source: route.routing_source,
+    razorpay_order: razorpayOrderData || {
+      order_id: epcOrder._id,
+      amount_paise: totals.grand_total_paise,
+      currency: 'INR',
+      key_id: process.env.RAZORPAY_ID,
+    },
   };
 }
 
@@ -254,6 +280,33 @@ async function confirmEpcOrderPayment(orderId, paymentReference, actor_id = null
         actor_id: actor_id,
       });
     }
+  }
+
+  // ── 3. Credit margins to wallets (idempotent) ───────────────────────────────
+  try {
+    // Reseller margin credit
+    if (order.reseller_id && order.reseller_total_margin_paise > 0) {
+      await creditResellerMargin({
+        resellerId: order.reseller_id,
+        orderId: order._id,
+        orderNumber: order.order_number,
+        marginPaise: order.reseller_total_margin_paise,
+      });
+    }
+
+    // EPC margin credit — ONLY IF order is flagged as an end-customer sale
+    // (An EPC purchasing for own use must NOT automatically receive a commission)
+    if (order.epc_id && order.is_end_customer_sale && order.platform_total_commission_paise > 0) {
+      await creditEpcMargin({
+        epcAccountId: order.epc_id,
+        orderId: order._id,
+        orderNumber: order.order_number,
+        marginPaise: order.platform_total_commission_paise,
+      });
+    }
+  } catch (walletErr) {
+    // Non-fatal: log but don't fail the order confirmation
+    console.error(`[epc.order.service] Wallet credit failed for order ${order.order_number}:`, walletErr.message);
   }
 
   await logAudit({

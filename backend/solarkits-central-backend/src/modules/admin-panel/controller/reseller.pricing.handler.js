@@ -1,24 +1,16 @@
-/**
- * reseller.pricing.handler.js
- *
- * Handler for Reseller Listings, MAP Pricing Rules & Commission Controls.
- * Phase R7 — Reseller Management System
- *
- * Pattern: { status: "success"|"error", data, message }
- */
-
 const mongoose = require('mongoose');
 const { ResellerListing, ResellerPricingRule, WarehouseComboKit } = require('../models/india_solarshop_db');
-const { Product } = require('../models/core_db');
+const { Product, ProjectCategory, ProjectSubcategory, Brand, IndustryType } = require('../models/core_db');
 const {
   calculateResellerItemPricing,
   createOrUpdateResellerListing,
 } = require('../services/reseller.pricing.service');
 const { logAudit } = require('../utils/audit.service');
 
-// ─── 1. LIST RESELLER LISTINGS ────────────────────────────────────────────────
+// ─── 1. LIST RESELLER LISTINGS (Enhanced search & filters) ─────────────────────
 /**
  * GET /api/india/v1/reseller/listings OR /admin-api/reseller-mgmt/listings/:id
+ * Query params: ?search=...&industry_type_id=...&category_id=...&subcategory_id=...&brand_id=...&assignment_status=...&stock_status=...&sort=...
  */
 const list_reseller_listings = async (req, res) => {
   try {
@@ -27,10 +19,56 @@ const list_reseller_listings = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
 
-    const rows = await ResellerListing.find({ reseller_id: resellerId })
-      .populate('product_id', 'name sku_code base_price')
-      .populate('kit_id', 'kit_name kit_code base_price')
-      .sort({ created_at: -1 })
+    const {
+      search,
+      industry_type_id,
+      category_id,
+      subcategory_id,
+      brand_id,
+      assignment_status,
+      stock_status,
+      sort,
+    } = req.query;
+
+    const filter = { reseller_id: resellerId };
+
+    if (assignment_status && assignment_status !== 'all') {
+      filter.assignment_status = assignment_status;
+    }
+
+    if (industry_type_id) filter.industry_type_id = industry_type_id;
+    if (category_id) filter.category_id = category_id;
+    if (subcategory_id) filter.subcategory_id = subcategory_id;
+    if (brand_id) filter.brand_id = brand_id;
+
+    if (stock_status === 'in_stock') {
+      filter.stock_quantity = { $gt: 0 };
+    } else if (stock_status === 'out_of_stock') {
+      filter.stock_quantity = 0;
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
+      ];
+    }
+
+    let sortOption = { created_at: -1 };
+    if (sort === 'price_asc') sortOption = { selling_price_paise: 1 };
+    else if (sort === 'price_desc') sortOption = { selling_price_paise: -1 };
+    else if (sort === 'title_asc') sortOption = { title: 1 };
+    else if (sort === 'title_desc') sortOption = { title: -1 };
+
+    const rows = await ResellerListing.find(filter)
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code description image base_price_paise min_margin_paise max_margin_paise specifications' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code base_price' })
+      .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
+      .populate({ path: 'brand_id', model: Brand, select: 'name logo' })
+      .populate({ path: 'industry_type_id', model: IndustryType, select: 'name slug' })
+      .sort(sortOption)
       .lean();
 
     return res.json({ status: 'success', data: rows });
@@ -40,11 +78,218 @@ const list_reseller_listings = async (req, res) => {
   }
 };
 
-// ─── 2. CREATE / UPDATE RESELLER LISTING ──────────────────────────────────────
+// ─── 2. RESELLER PURCHASE / ACCEPT ASSIGNED PRODUCT ─────────────────────────────
 /**
- * POST /api/india/v1/reseller/listings OR /admin-api/reseller-mgmt/listings
- * Body: { reseller_id?, item_type, product_id?, kit_id?, selling_price_paise, allow_map_override?, status? }
+ * POST /api/india/v1/reseller/listings/:id/purchase
  */
+const purchase_reseller_product = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id;
+    const { id } = req.params;
+
+    if (!resellerId || !mongoose.Types.ObjectId.isValid(resellerId)) {
+      return res.status(400).json({ status: 'error', message: 'Unauthorized reseller request' });
+    }
+
+    const listing = await ResellerListing.findOne({ _id: id, reseller_id: resellerId });
+    if (!listing) return res.status(404).json({ status: 'error', message: 'Product listing not found' });
+
+    if (['purchased', 'margin_pending', 'ready_to_publish', 'published'].includes(listing.assignment_status)) {
+      return res.json({ status: 'success', message: 'Product already purchased', data: listing });
+    }
+
+    listing.assignment_status = 'purchased';
+    listing.purchased_at = new Date();
+    listing.audit_history.push({
+      status: 'purchased',
+      actor_type: 'reseller',
+      actor_id: resellerId,
+      notes: 'Reseller accepted/purchased assigned product',
+      timestamp: new Date(),
+    });
+
+    await listing.save();
+
+    return res.json({
+      status: 'success',
+      message: 'Product successfully purchased/accepted. Now configure your selling margin.',
+      data: listing,
+    });
+  } catch (error) {
+    console.error('[reseller.pricing] purchase_reseller_product error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 3. UPDATE RESELLER PROFIT MARGIN ─────────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/listings/:id/margin
+ * Body: { reseller_margin_inr?, reseller_margin_pct? }
+ */
+const update_reseller_margin = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id;
+    const { id } = req.params;
+    const { reseller_margin_inr, reseller_margin_pct } = req.body;
+
+    if (!resellerId || !mongoose.Types.ObjectId.isValid(resellerId)) {
+      return res.status(400).json({ status: 'error', message: 'Unauthorized reseller request' });
+    }
+
+    const listing = await ResellerListing.findOne({ _id: id, reseller_id: resellerId });
+    if (!listing) return res.status(404).json({ status: 'error', message: 'Product listing not found' });
+
+    if (!['accepted', 'purchased', 'margin_pending', 'ready_to_publish', 'published'].includes(listing.assignment_status)) {
+      return res.status(400).json({ status: 'error', message: 'You must purchase/accept the product before setting a margin' });
+    }
+
+    let marginPaise = 0;
+    let marginPct = 0;
+
+    if (reseller_margin_inr != null) {
+      marginPaise = Math.round(Number(reseller_margin_inr) * 100);
+      marginPct = listing.cost_price_paise > 0 ? (marginPaise / listing.cost_price_paise) * 100 : 0;
+    } else if (reseller_margin_pct != null) {
+      marginPct = Number(reseller_margin_pct);
+      marginPaise = Math.round((listing.cost_price_paise * marginPct) / 100);
+    } else {
+      return res.status(400).json({ status: 'error', message: 'Reseller margin is required' });
+    }
+
+    if (marginPaise < listing.min_margin_paise || marginPaise > listing.max_margin_paise) {
+      const minInr = (listing.min_margin_paise / 100).toFixed(2);
+      const maxInr = (listing.max_margin_paise / 100).toFixed(2);
+      return res.status(400).json({
+        status: 'error',
+        message: `Margin violates Super Admin rules! Margin must be between ₹${minInr} and ₹${maxInr}`,
+        min_margin_inr: minInr,
+        max_margin_inr: maxInr,
+      });
+    }
+
+    const costPrice = listing.cost_price_paise;
+    const taxRate = listing.tax_rate_pct || 18;
+
+    const subtotalWithMargin = costPrice + marginPaise;
+    const taxesPaise = Math.round((subtotalWithMargin * taxRate) / 100);
+    const finalSellingPricePaise = subtotalWithMargin + taxesPaise;
+
+    listing.reseller_margin_paise = marginPaise;
+    listing.reseller_margin_pct = Number(marginPct.toFixed(2));
+    listing.taxes_and_charges_paise = taxesPaise;
+    listing.selling_price_paise = finalSellingPricePaise;
+
+    if (listing.assignment_status !== 'published') {
+      listing.assignment_status = 'ready_to_publish';
+    }
+
+    listing.audit_history.push({
+      status: listing.assignment_status,
+      actor_type: 'reseller',
+      actor_id: resellerId,
+      notes: `Reseller updated margin to ₹${(marginPaise / 100).toFixed(2)} (${marginPct.toFixed(1)}%). Final EPC Price: ₹${(finalSellingPricePaise / 100).toFixed(2)}`,
+      timestamp: new Date(),
+    });
+
+    await listing.save();
+
+    return res.json({
+      status: 'success',
+      message: 'Margin updated successfully. Ready to publish to storefront and EPC catalogue.',
+      data: listing,
+    });
+  } catch (error) {
+    console.error('[reseller.pricing] update_reseller_margin error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 4. PUBLISH RESELLER LISTING ──────────────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/listings/:id/publish
+ */
+const publish_reseller_listing = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id;
+    const { id } = req.params;
+
+    if (!resellerId || !mongoose.Types.ObjectId.isValid(resellerId)) {
+      return res.status(400).json({ status: 'error', message: 'Unauthorized reseller request' });
+    }
+
+    const listing = await ResellerListing.findOne({ _id: id, reseller_id: resellerId });
+    if (!listing) return res.status(404).json({ status: 'error', message: 'Product listing not found' });
+
+    if (!['ready_to_publish', 'published', 'purchased', 'accepted'].includes(listing.assignment_status)) {
+      return res.status(400).json({ status: 'error', message: 'Product must be purchased and priced before publishing' });
+    }
+
+    listing.assignment_status = 'published';
+    listing.published_at = new Date();
+    listing.status = 'active';
+
+    listing.audit_history.push({
+      status: 'published',
+      actor_type: 'reseller',
+      actor_id: resellerId,
+      notes: 'Reseller published product to storefront and EPC catalogue',
+      timestamp: new Date(),
+    });
+
+    await listing.save();
+
+    return res.json({
+      status: 'success',
+      message: 'Product successfully published to storefront and visible to onboarded EPC companies!',
+      data: listing,
+    });
+  } catch (error) {
+    console.error('[reseller.pricing] publish_reseller_listing error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 5. UNPUBLISH RESELLER LISTING ────────────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/listings/:id/unpublish
+ */
+const unpublish_reseller_listing = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id;
+    const { id } = req.params;
+
+    if (!resellerId || !mongoose.Types.ObjectId.isValid(resellerId)) {
+      return res.status(400).json({ status: 'error', message: 'Unauthorized reseller request' });
+    }
+
+    const listing = await ResellerListing.findOne({ _id: id, reseller_id: resellerId });
+    if (!listing) return res.status(404).json({ status: 'error', message: 'Product listing not found' });
+
+    listing.assignment_status = 'suspended';
+    listing.status = 'paused';
+
+    listing.audit_history.push({
+      status: 'suspended',
+      actor_type: 'reseller',
+      actor_id: resellerId,
+      notes: 'Reseller unpublished/suspended product listing from storefront',
+      timestamp: new Date(),
+    });
+
+    await listing.save();
+
+    return res.json({
+      status: 'success',
+      message: 'Product unpublished from storefront and EPC catalogue',
+      data: listing,
+    });
+  } catch (error) {
+    console.error('[reseller.pricing] unpublish_reseller_listing error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 6. CREATE / UPDATE RESELLER LISTING (Legacy compatibility) ───────────────
 const upsert_reseller_listing = async (req, res) => {
   try {
     const resellerId = req.reseller?._id || req.body.reseller_id;
@@ -90,10 +335,7 @@ const upsert_reseller_listing = async (req, res) => {
   }
 };
 
-// ─── 3. LIST PRICING RULES (Admin) ────────────────────────────────────────────
-/**
- * GET /admin-api/reseller-mgmt/pricing-rules
- */
+// ─── 7. LIST PRICING RULES (Admin) ────────────────────────────────────────────
 const list_pricing_rules = async (req, res) => {
   try {
     const rules = await ResellerPricingRule.find({ status: 'active' })
@@ -110,11 +352,7 @@ const list_pricing_rules = async (req, res) => {
   }
 };
 
-// ─── 4. CREATE PRICING RULE (Admin) ───────────────────────────────────────────
-/**
- * POST /admin-api/reseller-mgmt/pricing-rules
- * Body: { scope_type, reseller_type_id?, reseller_id?, category_id?, product_id?, kit_id?, min_margin_pct?, max_markup_pct?, default_commission_pct?, map_price_paise? }
- */
+// ─── 8. CREATE PRICING RULE (Admin) ───────────────────────────────────────────
 const create_pricing_rule = async (req, res) => {
   try {
     const {
@@ -166,10 +404,7 @@ const create_pricing_rule = async (req, res) => {
   }
 };
 
-// ─── 5. DELETE PRICING RULE (Admin) ───────────────────────────────────────────
-/**
- * DELETE /admin-api/reseller-mgmt/pricing-rules/:id
- */
+// ─── 9. DELETE PRICING RULE (Admin) ───────────────────────────────────────────
 const delete_pricing_rule = async (req, res) => {
   try {
     const { id } = req.params;
@@ -199,6 +434,10 @@ const delete_pricing_rule = async (req, res) => {
 
 module.exports = {
   list_reseller_listings,
+  purchase_reseller_product,
+  update_reseller_margin,
+  publish_reseller_listing,
+  unpublish_reseller_listing,
   upsert_reseller_listing,
   list_pricing_rules,
   create_pricing_rule,

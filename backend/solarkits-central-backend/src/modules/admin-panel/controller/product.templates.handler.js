@@ -10,6 +10,7 @@ const SubtypeScopeMap = require('../models/core_db/subtype_scope_map.schema');
 const Product = require('../models/core_db/products.schema');
 const ProjectSubcategory = require('../models/core_db/project_subcategories.schema');
 const BrandTemplateMap = require('../models/core_db/brand_template_map.schema');
+const ProjectSubcategoryType = require('../models/core_db/project_subcategory_types.schema');
 
 const successResponse = (message, data = null) => ({
     status: "success",
@@ -996,26 +997,33 @@ const listBrandsByTemplate = async (req, res) => {
 const listBrandsBySubtype = async (req, res) => {
     try {
         const { subtype_id } = req.query;
-        if (!subtype_id) {
-            return res.json(successResponse("Brands", []));
-        }
-        let querySubtype = subtype_id;
-        if (typeof subtype_id === 'string') {
-            if (subtype_id.includes(',')) {
+        let brandIds = [];
+        if (subtype_id) {
+            let querySubtype = subtype_id;
+            if (typeof subtype_id === 'string' && subtype_id.includes(',')) {
                 querySubtype = { $in: subtype_id.split(',').map(id => id.trim()).filter(Boolean) };
+            } else if (Array.isArray(subtype_id)) {
+                querySubtype = { $in: subtype_id };
             }
-        } else if (Array.isArray(subtype_id)) {
-            querySubtype = { $in: subtype_id };
+            const mapping = await BrandSubtypeMap.find({ subtype_id: querySubtype, deleted_at: null });
+            brandIds = mapping.map(m => m.brand_id);
         }
-        const mapping = await BrandSubtypeMap.find({ subtype_id: querySubtype, deleted_at: null });
-        const brandIds = mapping.map(m => m.brand_id);
 
-        const brands = await Brand.find({ _id: { $in: brandIds }, deleted_at: null });
-        const data = brands.map(b => ({ id: b._id, name: b.brand_name, logo: b.logo }));
-        res.json(successResponse("Brands", data));
+        let brands = [];
+        if (brandIds.length > 0) {
+            brands = await Brand.find({ _id: { $in: brandIds }, deleted_at: null }).lean();
+        }
+
+        // Fallback: If no subtype-specific brand mappings found, return ALL active brands in database
+        if (!brands || brands.length === 0) {
+            brands = await Brand.find({ deleted_at: null }).lean();
+        }
+
+        const data = brands.map(b => ({ id: b._id, name: b.brand_name || b.name, logo: b.logo }));
+        return res.json(successResponse("Brands", data));
     } catch (err) { 
         console.error("Error in listBrandsBySubtype:", err);
-        errorResponse(res, 500, "Internal error"); 
+        return errorResponse(res, 500, "Internal error"); 
     }
 };
 
@@ -1028,9 +1036,8 @@ const migrateSubtypeScopeMaps = async () => {
         if (unmigrated.length > 0) {
             const ProjectRange = require('../models/core_db/project_range.schema');
             for (const doc of unmigrated) {
-                const rangeId = doc.get('project_type_range');
-                if (rangeId) {
-                    const range = await ProjectRange.findById(rangeId);
+                if (doc.scope_id) {
+                    const range = await ProjectRange.findById(doc.scope_id);
                     if (range && range.subcategory_type) {
                         doc.subcategory_type = range.subcategory_type;
                         await doc.save();
@@ -1039,7 +1046,7 @@ const migrateSubtypeScopeMaps = async () => {
             }
         }
     } catch (e) {
-        console.error("Error migrating subtype scope maps:", e);
+        console.error("Migration error:", e);
     }
 };
 
@@ -1138,49 +1145,76 @@ const listSubtypeScopes = async (req, res) => {
 const listScopesBySubtype = async (req, res) => {
     try {
         const { subtype_id } = req.query;
-        if (!subtype_id) return errorResponse(res, 400, "subtype_id required");
 
         // Run auto-migration
         await migrateSubtypeScopeMaps();
 
-        const isValid = mongoose.isValidObjectId(subtype_id);
-        const mappings = await SubtypeScopeMap.find({
-            $or: [
-                { subtype: subtype_id },
-                ...(isValid ? [{ subtype: new mongoose.Types.ObjectId(subtype_id) }] : [])
-            ]
-        })
-            .populate({
-                path: 'subcategory_type',
-                model: 'sys_filter_type_maps',
-                populate: [
-                    {
-                        path: 'subcategory',
-                        model: 'sys_filter_subcategories',
-                        populate: { path: 'category', model: 'sys_filter_categories' }
-                    },
-                    {
-                        path: 'type',
-                        model: 'sys_filter_types'
-                    }
+        let data = [];
+        if (subtype_id) {
+            const isValid = mongoose.isValidObjectId(subtype_id);
+            const mappings = await SubtypeScopeMap.find({
+                $or: [
+                    { subtype: subtype_id },
+                    ...(isValid ? [{ subtype: new mongoose.Types.ObjectId(subtype_id) }] : [])
                 ]
             })
-            .lean();
+                .populate({
+                    path: 'subcategory_type',
+                    model: 'sys_filter_type_maps',
+                    populate: [
+                        {
+                            path: 'subcategory',
+                            model: 'sys_filter_subcategories',
+                            populate: { path: 'category', model: 'sys_filter_categories' }
+                        },
+                        {
+                            path: 'type',
+                            model: 'sys_filter_types'
+                        }
+                    ]
+                })
+                .lean();
 
-        const data = mappings.map(m => {
-            const st = m.subcategory_type;
-            return {
-                id: m._id,
-                subcategory_type_id: st?._id,
+            data = mappings.map(m => {
+                const st = m.subcategory_type;
+                const typeId = st?._id ? String(st._id) : String(m._id);
+                return {
+                    id: String(m._id),
+                    subcategory_type_id: typeId,
+                    category_name: st?.subcategory?.category?.name || "General",
+                    subcategory_name: st?.subcategory?.name || "Standard",
+                    type_name: st?.type?.name || "Execution Context"
+                };
+            });
+        }
+
+        // Fallback: If no specific scope mappings found for this subtype, load all project subcategory types
+        if (!data || data.length === 0) {
+            const allTypes = await ProjectSubcategoryType.find({ deleted_at: null })
+                .populate({
+                    path: 'subcategory',
+                    model: 'sys_filter_subcategories',
+                    populate: { path: 'category', model: 'sys_filter_categories' }
+                })
+                .populate({
+                    path: 'type',
+                    model: 'sys_filter_types'
+                })
+                .lean();
+
+            data = allTypes.map(st => ({
+                id: String(st._id),
+                subcategory_type_id: String(st._id),
                 category_name: st?.subcategory?.category?.name || "General",
                 subcategory_name: st?.subcategory?.name || "Standard",
-                type_name: st?.type?.name || "Execution Context"
-            };
-        });
-        res.json(successResponse("Scopes", data));
+                type_name: st?.type?.name || "Operational Scope"
+            }));
+        }
+
+        return res.json(successResponse("Scopes", data));
     } catch (err) {
         console.error("Error in listScopesBySubtype:", err);
-        errorResponse(res, 500, err.message || "Internal error");
+        return errorResponse(res, 500, err.message || "Internal error");
     }
 };
 

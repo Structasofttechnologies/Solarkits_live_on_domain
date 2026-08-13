@@ -50,6 +50,11 @@ const ResellerWallet = require('./reseller_wallets.schema');
 const ResellerWalletLedger = require('./reseller_wallet_ledgers.schema');
 const ResellerPayoutRequest = require('./reseller_payout_requests.schema');
 
+// --- Phase 8: EPC Wallet & Ledger ---
+const EpcWallet = require('./epc_wallets.schema');
+const EpcWalletLedger = require('./epc_wallet_ledgers.schema');
+const RazorpayWebhookLog = require('./razorpay_webhook_logs.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
@@ -94,6 +99,10 @@ module.exports = {
   ResellerWallet,
   ResellerWalletLedger,
   ResellerPayoutRequest,
+  // --- Phase 8: EPC Wallet & Ledger ---
+  EpcWallet,
+  EpcWalletLedger,
+  RazorpayWebhookLog,
 };
 
 

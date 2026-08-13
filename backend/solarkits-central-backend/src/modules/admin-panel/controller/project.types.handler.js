@@ -189,6 +189,7 @@ const get_subcategory_types = async (req, res) => {
             .lean();
 
         const data = rows.filter(r => r.type).map(r => ({
+            id: r._id,
             subcategory_type_id: r._id,
             type_id: r.type._id,
             name: r.type.name
@@ -231,7 +232,11 @@ const add_project_range = async (req, res) => {
 const get_project_ranges = async (req, res) => {
     try {
         const { subcategory_type_id } = req.query;
-        const rows = await ProjectRange.find({ subcategory_type: subcategory_type_id, deleted_at: null })
+        const query = { deleted_at: null };
+        if (subcategory_type_id) {
+            query.subcategory_type = subcategory_type_id;
+        }
+        const rows = await ProjectRange.find(query)
             .populate('unit_id')
             .lean();
         const data = rows.map(r => ({
@@ -241,7 +246,8 @@ const get_project_ranges = async (req, res) => {
             max_value: r.max_value,
             unit_id: r.unit_id?._id,
             unit_symbol: r.unit_id?.symbol,
-            conversion_factor: r.unit_id?.conversion_factor
+            conversion_factor: r.unit_id?.conversion_factor,
+            range_label: `${r.min_value} - ${r.max_value} ${r.unit_id?.symbol || 'kW'}`
         }));
         return res.json({ status: "success", data });
     } catch (err) {

@@ -16,12 +16,18 @@ const {
   get_orders,
   update_order_address,
   create_razorpay_order,
+  verify_razorpay_payment,
   get_bos_custom_catalog,
   save_bos_custom_catalog
 } = require("../../controller/v1.handlers/shop.handler");
+const { handleRazorpayWebhook } = require("../../controller/v1.handlers/razorpay.webhook.handler");
 const { verify_auth } = require("../../middlewares/auth");
 
+const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
+
 router.get("/combo-kits", get_combo_kits_by_district);
+router.get("/epc-catalogue", verify_auth, get_epc_catalogue);
+router.get("/epc-catalogue/status", verify_auth, require("../../controller/epc.catalogue.handler").get_epc_catalogue_status);
 router.get("/bos-custom-catalog", get_bos_custom_catalog);
 router.post("/bos-custom-catalog", save_bos_custom_catalog);
 router.get("/inventory-status", get_inventory_status);
@@ -38,5 +44,7 @@ router.post("/cart", verify_auth, update_cart);
 router.get("/orders", verify_auth, get_orders);
 router.put("/orders/:id/address", verify_auth, update_order_address);
 router.post("/razorpay/create-order", verify_auth, create_razorpay_order);
+router.post("/razorpay/verify-payment", verify_auth, verify_razorpay_payment);
+router.post("/razorpay/webhook", express.json({ type: '*/*' }), handleRazorpayWebhook);
 
 module.exports = router;

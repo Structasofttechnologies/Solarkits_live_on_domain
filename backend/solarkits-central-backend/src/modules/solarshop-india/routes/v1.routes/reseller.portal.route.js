@@ -49,17 +49,28 @@ router.get('/wallet/payouts', verify_reseller_auth, walletPortalHandler.get_my_p
 // Procurement & Stock Inventory Routes
 const procurementHandler = require('../../../admin-panel/controller/reseller.procurement.handler');
 router.post('/procurement/create', verify_reseller_auth, procurementHandler.create_order);
+router.post('/procurement/confirm-payment', verify_reseller_auth, procurementHandler.confirm_procurement_payment);
 router.get('/procurement/list', verify_reseller_auth, procurementHandler.list_procurement_orders);
 router.get('/inventory', verify_reseller_auth, procurementHandler.get_inventory_balance);
 
-// Storefront Listings Routes
+// Storefront Listings Routes & Lifecycle Actions
 const pricingHandler = require('../../../admin-panel/controller/reseller.pricing.handler');
 const checkoutHandler = require('../../../admin-panel/controller/reseller.checkout.handler');
 router.get('/listings', verify_reseller_auth, pricingHandler.list_reseller_listings);
 router.post('/listings', verify_reseller_auth, pricingHandler.upsert_reseller_listing);
+router.post('/listings/:id/purchase', verify_reseller_auth, pricingHandler.purchase_reseller_product);
+router.post('/listings/:id/margin', verify_reseller_auth, pricingHandler.update_reseller_margin);
+router.post('/listings/:id/publish', verify_reseller_auth, pricingHandler.publish_reseller_listing);
+router.post('/listings/:id/unpublish', verify_reseller_auth, pricingHandler.unpublish_reseller_listing);
 
 // EPC Buyer Checkout Routes
 router.post('/epc-checkout/create', checkoutHandler.create_epc_order);
 router.post('/epc-checkout/confirm', checkoutHandler.confirm_epc_payment);
+
+// EPC Wallet Routes (authenticated via verify_auth)
+const { verify_auth } = require('../../middlewares/auth');
+const epcWalletHandler = require('../../../admin-panel/controller/epc.wallet.handler');
+router.get('/epc/wallet/me', verify_auth, epcWalletHandler.get_my_wallet);
+router.get('/epc/wallet/ledger', verify_auth, epcWalletHandler.get_my_ledger);
 
 module.exports = router;

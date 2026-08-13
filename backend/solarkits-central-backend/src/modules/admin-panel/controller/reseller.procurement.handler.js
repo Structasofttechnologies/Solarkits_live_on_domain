@@ -189,10 +189,78 @@ const adjust_inventory = async (req, res) => {
   }
 };
 
+const { verifyPaymentSignature } = require('../services/razorpay.service');
+const { ResellerListing, ResellerProductAuthorization } = require('../models/india_solarshop_db');
+
+// ─── 6. CONFIRM PROCUREMENT PAYMENT (Razorpay Callback) ─────────────────────
+/**
+ * POST /api/india/v1/reseller/procurement/confirm-payment
+ * Body: { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature }
+ */
+const confirm_procurement_payment = async (req, res) => {
+  try {
+    const { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+    if (!order_id || !mongoose.Types.ObjectId.isValid(order_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid order_id is required' });
+    }
+
+    const order = await ResellerProcurementOrder.findById(order_id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Procurement order not found' });
+    }
+
+    // Verify signature if provided
+    if (razorpay_order_id && razorpay_payment_id && razorpay_signature) {
+      const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
+      if (!isValid) {
+        return res.status(400).json({ status: 'error', message: 'Invalid payment signature' });
+      }
+    }
+
+    order.payment_status = 'captured';
+    order.order_status = 'paid';
+    order.payment_reference = razorpay_payment_id || order.payment_reference;
+    order.razorpay_order_id = razorpay_order_id || order.razorpay_order_id;
+    await order.save();
+
+    // Auto-create/activate resale listings & authorizations for purchased items
+    for (const item of order.items) {
+      if (item.product_id) {
+        await ResellerProductAuthorization.findOneAndUpdate(
+          { reseller_id: order.reseller_id, product_id: item.product_id },
+          { $set: { authorization_status: 'authorized', approved_at: new Date() } },
+          { upsert: true }
+        );
+
+        await ResellerListing.findOneAndUpdate(
+          { reseller_id: order.reseller_id, product_id: item.product_id },
+          {
+            $set: {
+              is_published: true, // Activated for publishing
+              base_cost_paise: item.unit_price_paise,
+            },
+          },
+          { upsert: true }
+        );
+      }
+    }
+
+    return res.json({
+      status: 'success',
+      message: `Procurement order ${order.procurement_order_number} payment confirmed and resale rights activated`,
+      data: order,
+    });
+  } catch (error) {
+    console.error('[reseller.procurement] confirm_procurement_payment error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
 module.exports = {
   list_procurement_orders,
   create_order,
   update_order_status,
   get_inventory_balance,
   adjust_inventory,
+  confirm_procurement_payment,
 };

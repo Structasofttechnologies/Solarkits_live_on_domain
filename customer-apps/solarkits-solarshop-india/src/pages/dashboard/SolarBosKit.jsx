@@ -174,10 +174,6 @@ export default function SolarBosKit() {
     
     // Filter rawKits from API to ONLY include items explicitly categorized as BOS Kits
     const apiBosKits = apiKits
-      .filter((k) => {
-        const cat = (k.category || "").toLowerCase();
-        return cat.includes("bos") || cat.includes("protection") || cat.includes("wiring") || cat.includes("cable");
-      })
       .map((apiKit) => ({
         ...apiKit,
         id: apiKit.id || apiKit._id,

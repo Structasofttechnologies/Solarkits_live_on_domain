@@ -19,6 +19,7 @@ const schema = new mongoose.Schema({
     type: String,
     enum: ['product', 'kit'],
     required: true,
+    default: 'product',
   },
   product_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -31,7 +32,53 @@ const schema = new mongoose.Schema({
     default: null,
   },
 
-  // ── Integer Paise Financial Fields ──────────────────────────────────────
+  // ── Classification & Metadata ──────────────────────────────────────────────
+  industry_type_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'sys_industry_types',
+    default: null,
+  },
+  category_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'project_categories',
+    default: null,
+  },
+  subcategory_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'project_subcategories',
+    default: null,
+  },
+  brand_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'brands',
+    default: null,
+  },
+  title: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  description: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  image_url: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  specifications: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
+  stock_quantity: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
+  // ── Integer Paise Financial Fields & Margin Bounds ───────────────────────
   cost_price_paise: {
     type: Number,
     required: true,
@@ -39,12 +86,42 @@ const schema = new mongoose.Schema({
   },
   map_price_paise: {
     type: Number,
-    required: true,
+    default: 0,
     min: 0,
   },
   max_price_paise: {
     type: Number,
     default: null,
+  },
+  min_margin_paise: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  max_margin_paise: {
+    type: Number,
+    default: 100000000, // Default max limit
+    min: 0,
+  },
+  reseller_margin_paise: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  reseller_margin_pct: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  tax_rate_pct: {
+    type: Number,
+    default: 18,
+    min: 0,
+  },
+  taxes_and_charges_paise: {
+    type: Number,
+    default: 0,
+    min: 0,
   },
   selling_price_paise: {
     type: Number,
@@ -58,6 +135,25 @@ const schema = new mongoose.Schema({
     max: 100,
   },
 
+  // ── Lifecycle Status Machine ─────────────────────────────────────────────
+  // Enforcing statuses: draft, active, assigned, accepted, purchased, margin_pending, ready_to_publish, published, suspended, revoked
+  assignment_status: {
+    type: String,
+    enum: [
+      'draft',
+      'active',
+      'assigned',
+      'accepted',
+      'purchased',
+      'margin_pending',
+      'ready_to_publish',
+      'published',
+      'suspended',
+      'revoked',
+    ],
+    default: 'assigned',
+  },
+
   is_map_compliant: {
     type: Boolean,
     required: true,
@@ -68,6 +164,35 @@ const schema = new mongoose.Schema({
     enum: ['active', 'paused', 'delisted'],
     default: 'active',
   },
+
+  assigned_by: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'cms_users',
+    default: null,
+  },
+  assigned_at: {
+    type: Date,
+    default: Date.now,
+  },
+  purchased_at: {
+    type: Date,
+    default: null,
+  },
+  published_at: {
+    type: Date,
+    default: null,
+  },
+
+  audit_history: [
+    {
+      status: { type: String, required: true },
+      actor_type: { type: String, default: 'system' },
+      actor_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+      notes: { type: String, default: null },
+      timestamp: { type: Date, default: Date.now },
+    },
+  ],
+
   created_by: {
     type: mongoose.Schema.Types.ObjectId,
     default: null,
@@ -83,7 +208,7 @@ const schema = new mongoose.Schema({
   toObject: { virtuals: true },
 });
 
-schema.index({ reseller_id: 1, status: 1 });
+schema.index({ reseller_id: 1, assignment_status: 1, status: 1 });
 schema.index({ reseller_id: 1, item_type: 1, product_id: 1, kit_id: 1 }, { unique: true });
 schema.index({ is_map_compliant: 1 });
 

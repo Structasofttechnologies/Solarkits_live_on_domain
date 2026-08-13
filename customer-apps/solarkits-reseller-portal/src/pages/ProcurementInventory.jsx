@@ -58,6 +58,17 @@ export default function ProcurementInventory() {
     fetchData();
   }, []);
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleCreateProcurementOrder = async (e) => {
     e.preventDefault();
     setActionLoading(true);
@@ -72,8 +83,12 @@ export default function ProcurementInventory() {
       if (isNaN(qty) || qty <= 0) throw new Error("Quantity must be a positive number");
       if (isNaN(priceInr) || priceInr <= 0) throw new Error("Unit price must be a valid amount");
 
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) throw new Error("Failed to load Razorpay SDK. Please check your network.");
+
       const itemObj = catalogItems.find(c => c._id === selectedItem || c.id === selectedItem);
 
+      // 1. Create B2B Procurement Order on Backend
       const res = await api.post("/india/v1/reseller/procurement/create", {
         items: [
           {
@@ -89,17 +104,60 @@ export default function ProcurementInventory() {
       });
 
       if (res.data?.status === "success") {
-        setMessage(`Order ${res.data.data.procurement_order_number} submitted successfully!`);
-        setSelectedItem("");
-        setQuantity(1);
-        setUnitPrice("");
-        setPaymentRef("");
-        fetchData();
-        setActiveTab("orders");
+        const orderData = res.data.data.order;
+        const rzpData = res.data.data.razorpay_order;
+
+        // 2. Open Razorpay Checkout modal
+        const options = {
+          key: rzpData.key_id || "rzp_test_T8B85UkbvoXBOQ",
+          amount: rzpData.amount_paise,
+          currency: rzpData.currency || "INR",
+          name: "SolarKits Procurement",
+          description: `Procurement #${orderData.procurement_order_number}`,
+          order_id: rzpData.order_id,
+          handler: async function (response) {
+            try {
+              setActionLoading(true);
+              const confirmRes = await api.post("/india/v1/reseller/procurement/confirm-payment", {
+                order_id: orderData._id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature,
+              });
+
+              if (confirmRes.data?.status === "success") {
+                setMessage(`Payment confirmed for Order ${orderData.procurement_order_number}! Resale rights & inventory activated.`);
+                setSelectedItem("");
+                setQuantity(1);
+                setUnitPrice("");
+                setPaymentRef("");
+                fetchData();
+                setActiveTab("orders");
+              }
+            } catch (err) {
+              console.error("Procurement payment confirmation failed:", err);
+              setError("Payment verification failed. Please contact support.");
+            } finally {
+              setActionLoading(false);
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              setActionLoading(false);
+              setMessage(`Order ${orderData.procurement_order_number} created in pending payment status.`);
+              fetchData();
+              setActiveTab("orders");
+            }
+          },
+          theme: { color: "#2563EB" }
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Failed to create order");
-    } finally {
+      console.error("Procurement order error:", err);
+      setError(err.response?.data?.message || err.message || "Failed to submit procurement order.");
       setActionLoading(false);
     }
   };

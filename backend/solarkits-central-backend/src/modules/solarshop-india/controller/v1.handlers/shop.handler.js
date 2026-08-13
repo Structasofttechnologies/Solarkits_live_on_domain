@@ -1,11 +1,6 @@
 const mongoose = require("mongoose");
-const Razorpay = require("razorpay");
-
-// Initialize Razorpay client
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_ID,
-  key_secret: process.env.RAZORPAY_KEY,
-});
+const { createRazorpayOrder, verifyPaymentSignature, getGatewayStatus } = require("../../../admin-panel/services/razorpay.service");
+const { processEpcCheckout, confirmEpcOrderPayment } = require("../../../admin-panel/services/epc.order.service");
 
 const CompanyWarehouse = require("../../models/india_core_db/company_warehouses.schema");
 const WarehouseKitActivation = require("../../models/india_core_db/warehouse_kit_activations.schema");
@@ -240,35 +235,44 @@ const get_combo_kits_by_district = async (req, res) => {
       deleted_at: null
     }).lean();
 
-    // Fall back to master warehouse if no sub warehouses exist in the selected district and cluster is set
-    if (warehouses.length === 0 && clusterId) {
-      const clusterDistricts = await GeoLevel2.find({ cluster: clusterId, deleted_at: null }).select('_id').lean();
-      const clusterDistrictIds = clusterDistricts.map(d => d._id);
+    // Fall back to master warehouse or any active warehouse if no sub warehouses exist in the selected district
+    if (warehouses.length === 0) {
+      if (clusterId) {
+        const clusterDistricts = await GeoLevel2.find({ cluster: clusterId, deleted_at: null }).select('_id').lean();
+        const clusterDistrictIds = clusterDistricts.map(d => d._id);
 
-      const masterWarehouse = await CompanyWarehouse.findOne({
-        level_2: { $in: clusterDistrictIds },
-        warehouse_type: 'master',
-        is_active: true,
-        deleted_at: null
-      }).lean();
+        const masterWarehouse = await CompanyWarehouse.findOne({
+          level_2: { $in: clusterDistrictIds },
+          warehouse_type: 'master',
+          is_active: true,
+          deleted_at: null
+        }).lean();
 
-      if (masterWarehouse) {
-        warehouses = [masterWarehouse];
+        if (masterWarehouse) {
+          warehouses = [masterWarehouse];
+        }
+      }
+
+      if (warehouses.length === 0) {
+        const fallbackWarehouses = await CompanyWarehouse.find({
+          is_active: true,
+          deleted_at: null
+        }).lean();
+        warehouses = fallbackWarehouses;
       }
     }
 
     let warehouseIds = warehouses.map(w => w._id);
 
     // Fetch warehouse kit activations for resolved warehouses (or all active if no district specified)
-    let activations;
-    if (district_id) {
-      activations = await WarehouseKitActivation.find({
-        warehouse_id: { $in: warehouseIds },
-        is_combokit_active: true,
-        is_active: true,
-        deleted_at: null
-      }).lean();
-    } else {
+    let activations = await WarehouseKitActivation.find({
+      warehouse_id: { $in: warehouseIds },
+      is_combokit_active: true,
+      is_active: true,
+      deleted_at: null
+    }).lean();
+
+    if (!activations || activations.length === 0) {
       activations = await WarehouseKitActivation.find({
         is_combokit_active: true,
         is_active: true,
@@ -278,23 +282,21 @@ const get_combo_kits_by_district = async (req, res) => {
       warehouseIds = allActiveWarehouses.map(w => w._id);
     }
 
-    if (!activations || activations.length === 0) {
-      return res.status(200).json({ success: true, source: "db", data: [] });
-    }
-
     // Build set of kit IDs
-    const kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
-    if (kitIds.length === 0) {
-      return res.status(200).json({ success: true, source: "db", data: [] });
-    }
+    let kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
 
     // Fetch combo kits
-    let kits = await ComboKit.find({
-      _id: { $in: kitIds },
-      deleted_at: null
-    }).lean();
+    let kits = [];
+    if (kitIds.length > 0) {
+      kits = await ComboKit.find({
+        _id: { $in: kitIds },
+        is_active: true,
+        deleted_at: null
+      }).lean();
+    }
 
-    if ((!kits || kits.length === 0) && !district_id) {
+    // If still no kits found via activations, fetch all active combo kits in the system
+    if (!kits || kits.length === 0) {
       kits = await ComboKit.find({
         is_active: true,
         deleted_at: null
@@ -310,7 +312,7 @@ const get_combo_kits_by_district = async (req, res) => {
     const subcategoryIds = solarKits.map(sk => sk.subcategory_id).filter(Boolean);
     const typeMapIds = solarKits.map(sk => sk.type_id).filter(Boolean);
 
-    const core_db = require('../../config/databases').core_db;
+    const core_db = (require('../../../../config/databases').core_db?.connection || mongoose.connection);
 
     const [categories, subcategories, typeMaps, projectRanges] = await Promise.all([
       ProjectCategory.find({ _id: { $in: categoryIds } }).lean(),
@@ -467,9 +469,7 @@ const get_combo_kits_by_district = async (req, res) => {
     const processedKits = [];
     for (const kit of kits) {
       const activation = activations.find(a => a.combo_kit_id?.toString() === kit._id.toString());
-      if (!activation) continue;
-
-      const warehouseId = activation.warehouse_id;
+      const warehouseId = activation?.warehouse_id || warehouseIds[0];
 
       // Gather unique SKU IDs for this kit
       const uniqueSkuIds = [];
@@ -1638,7 +1638,10 @@ const confirm_order = async (req, res) => {
 
 const get_cart = async (req, res) => {
   try {
-    const account_id = req.user.account_id;
+    const account_id = req.user.account_id || req.user.id || req.user._id;
+    if (!account_id) {
+      return res.status(400).json({ success: false, message: "Account ID missing from request token" });
+    }
     let cartDoc = await Cart.findOne({ account_id });
     if (!cartDoc) {
       return res.status(200).json({ success: true, cart: [], expiry_time: null });
@@ -1666,7 +1669,10 @@ const get_cart = async (req, res) => {
 
 const update_cart = async (req, res) => {
   try {
-    const account_id = req.user.account_id;
+    const account_id = req.user.account_id || req.user.id || req.user._id;
+    if (!account_id) {
+      return res.status(400).json({ success: false, message: "Account ID missing from request token" });
+    }
     const { cart } = req.body;
 
     // 1. Fetch settings
@@ -1677,7 +1683,8 @@ const update_cart = async (req, res) => {
     const expiryTime = new Date(Date.now() + durationMin * 60 * 1000);
 
     // 2. Fetch all product templates that are Solar Panels
-    const solarPanelTemplates = await core_db.collection('pc_product_templates').find({ name: /solar panel/i }).toArray();
+    const { ProductTemplate } = require("../../../admin-panel/models/core_db");
+    const solarPanelTemplates = await ProductTemplate.find({ name: /solar panel/i }).lean();
     const solarPanelTemplateIds = solarPanelTemplates.map(t => t._id.toString());
 
     // 3. Compute incoming cart's Solar Panel SKU requirements
@@ -1685,9 +1692,10 @@ const update_cart = async (req, res) => {
     const warehouseIds = [];
     if (cart && Array.isArray(cart)) {
       for (const item of cart) {
-        if (item.is_custom) continue;
+        if (item.is_custom || item.is_catalogue_item) continue;
+        if (!item.id || !mongoose.Types.ObjectId.isValid(item.id)) continue;
         const kit = await ComboKit.findById(item.id).lean();
-        if (!kit) throw new Error(`Combo kit not found: ${item.id}`);
+        if (!kit) continue; // Standalone product or reseller listing item: skip combo-kit component decomposition
         if (kit.warehouse_id) {
           warehouseIds.push(kit.warehouse_id.toString());
         }
@@ -2327,38 +2335,65 @@ const update_order_address = async (req, res) => {
 
 const create_razorpay_order = async (req, res) => {
   try {
-    const { amount } = req.body;
-    if (!amount) {
-      return res.status(400).json({ success: false, message: "Amount is required." });
+    const { items, delivery_address, is_end_customer_sale } = req.body;
+    const epcId = req.user?.id || req.user?._id;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, message: "Cart items are required." });
     }
 
-    if (!process.env.RAZORPAY_ID || !process.env.RAZORPAY_KEY) {
-      return res.status(500).json({
-        success: false,
-        message: "Razorpay credentials are not configured on the server."
-      });
-    }
-
-    const amountInPaisa = Math.round(Number(amount) * 100);
-
-    const options = {
-      amount: amountInPaisa,
-      currency: "INR",
-      receipt: `receipt_order_${Date.now()}`
-    };
-
-    const order = await razorpay.orders.create(options);
+    const result = await processEpcCheckout({
+      epc_id: epcId,
+      items,
+      delivery_address: delivery_address || {},
+      is_end_customer_sale: is_end_customer_sale !== false,
+      actor_id: epcId,
+      req,
+    });
 
     return res.status(200).json({
       success: true,
-      id: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      key: process.env.RAZORPAY_ID
+      id: result.razorpay_order.order_id,
+      amount: result.razorpay_order.amount_paise,
+      currency: result.razorpay_order.currency || "INR",
+      key: process.env.RAZORPAY_ID,
+      internal_order_id: result.order._id,
+      order_number: result.order.order_number,
     });
   } catch (error) {
     console.error('create_razorpay_order error:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message || "Failed to create payment order." });
+  }
+};
+
+const verify_razorpay_payment = async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, internal_order_id } = req.body;
+
+    if (!razorpay_payment_id) {
+      return res.status(400).json({ success: false, message: "razorpay_payment_id is required." });
+    }
+
+    // Signature check
+    if (razorpay_order_id && razorpay_signature) {
+      const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: "Payment signature verification failed." });
+      }
+    }
+
+    if (internal_order_id) {
+      await confirmEpcOrderPayment(internal_order_id, razorpay_payment_id, req.user?.id, req);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment verified successfully.",
+      razorpay_payment_id,
+    });
+  } catch (error) {
+    console.error('verify_razorpay_payment error:', error);
+    return res.status(500).json({ success: false, message: error.message || "Payment verification failed." });
   }
 };
 
@@ -2405,6 +2440,7 @@ module.exports = {
   get_orders,
   update_order_address,
   create_razorpay_order,
+  verify_razorpay_payment,
   get_bos_custom_catalog,
   save_bos_custom_catalog
 };

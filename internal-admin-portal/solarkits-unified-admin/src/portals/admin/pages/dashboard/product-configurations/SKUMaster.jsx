@@ -58,51 +58,10 @@ export default function SKUMaster({ moduleUniqueId }) {
   }, [products]);
 
   // ==================== FETCH FUNCTIONS ====================
-  const fetchTemplates = useCallback(async () => {
+  const fetchProducts = useCallback(async (templateId = null, subtypeId = null) => {
     setLoading(true);
     try {
-      const res = await productTemplateApi.getTemplates(moduleUniqueId);
-      if (res.status === "success") {
-        setTemplates(res.data || []);
-        if (res.data?.length > 0 && !selectedTemplate) {
-          const firstId = res.data[0].id;
-          setSelectedTemplate(firstId);
-          fetchSubtypes(firstId);
-        }
-      }
-    } catch (error) { console.error(error); }
-    finally { setLoading(false); }
-  }, [moduleUniqueId, selectedTemplate]);
-
-  const fetchSubtypes = useCallback(async (templateId) => {
-    if (!templateId) return;
-    try {
-      const res = await productTemplateApi.getSubtypes(templateId, moduleUniqueId);
-      if (res.status === "success") {
-        setSubtypes(res.data || []);
-        if (res.data?.length > 0 && !selectedSubtype) {
-          const firstId = res.data[0].id;
-          setSelectedSubtype(firstId);
-          fetchBrands(firstId);
-          fetchProducts(templateId, firstId);
-        }
-      }
-    } catch (error) { console.error(error); }
-  }, [moduleUniqueId, selectedSubtype]);
-
-  const fetchBrands = useCallback(async (subtypeId) => {
-    if (!subtypeId) return;
-    try {
-      const res = await productTemplateApi.getBrandsBySubtype(subtypeId, moduleUniqueId);
-      if (res.status === "success") setBrands(res.data || []);
-    } catch (error) { console.error(error); }
-  }, [moduleUniqueId]);
-
-  const fetchProducts = useCallback(async (templateId, subtypeId) => {
-    if (!templateId || !subtypeId) return;
-    setLoading(true);
-    try {
-      const res = await skuMasterApi.getProducts(templateId, subtypeId, moduleUniqueId);
+      const res = await skuMasterApi.getProducts(templateId || undefined, subtypeId || undefined, moduleUniqueId);
       if (res.status === "success") {
         setProducts(res.data || []);
         setSelectedProduct(null);
@@ -112,30 +71,62 @@ export default function SKUMaster({ moduleUniqueId }) {
     finally { setLoading(false); }
   }, [moduleUniqueId]);
 
-  const fetchSkusForProduct = async (productId) => {
-    if (!productId) return;
-    setLoadingSkus(true);
+  const fetchBrands = useCallback(async (subtypeId) => {
     try {
-      const res = await skuMasterApi.getSkusByProduct(productId, moduleUniqueId);
-      if (res.status === "success") setProductSkus(res.data || []);
+      const res = await productTemplateApi.getBrandsBySubtype(subtypeId || undefined, moduleUniqueId);
+      if (res.status === "success") setBrands(res.data || []);
     } catch (error) { console.error(error); }
-    finally { setLoadingSkus(false); }
-  };
+  }, [moduleUniqueId]);
+
+  const fetchSubtypes = useCallback(async (templateId) => {
+    if (!templateId) {
+      setSubtypes([]);
+      return;
+    }
+    try {
+      const res = await productTemplateApi.getSubtypes(templateId, moduleUniqueId);
+      if (res.status === "success") {
+        setSubtypes(res.data || []);
+      }
+    } catch (error) { console.error(error); }
+  }, [moduleUniqueId]);
+
+  const fetchTemplates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await productTemplateApi.getTemplates(moduleUniqueId);
+      if (res.status === "success") {
+        setTemplates(res.data || []);
+      }
+      // Fetch all products initially so the page is never blank
+      fetchProducts(null, null);
+    } catch (error) { console.error(error); }
+    finally { setLoading(false); }
+  }, [moduleUniqueId, fetchProducts]);
 
   // ==================== HANDLERS ====================
   const handleTemplateChange = (id) => {
     setSelectedTemplate(id);
     setSelectedSubtype(null);
     setSelectedBrand(null);
-    setProducts([]);
-    fetchSubtypes(id);
+    if (id) {
+      fetchSubtypes(id);
+      fetchProducts(id, null);
+    } else {
+      setSubtypes([]);
+      fetchProducts(null, null);
+    }
   };
 
   const handleSubtypeChange = (id) => {
     setSelectedSubtype(id);
     setSelectedBrand(null);
-    fetchBrands(id);
-    fetchProducts(selectedTemplate, id);
+    if (id) {
+      fetchBrands(id);
+      fetchProducts(selectedTemplate, id);
+    } else {
+      fetchProducts(selectedTemplate, null);
+    }
   };
 
   const handleProductSelect = (product) => {
@@ -192,9 +183,22 @@ export default function SKUMaster({ moduleUniqueId }) {
           <Button 
             variant="primary" 
             size="md"
-            onClick={() => { setEditingProduct(null); setShowProductModal(true); }} 
+            onClick={async () => { 
+              setEditingProduct(null); 
+              if (!selectedTemplate && templates.length > 0) {
+                const firstTmpl = templates[0].id;
+                setSelectedTemplate(firstTmpl);
+                try {
+                  const res = await productTemplateApi.getSubtypes(firstTmpl, moduleUniqueId);
+                  if (res.status === "success" && res.data?.length > 0) {
+                    setSubtypes(res.data);
+                    setSelectedSubtype(res.data[0].id);
+                  }
+                } catch (e) {}
+              }
+              setShowProductModal(true); 
+            }} 
             leftIcon={<FaPlus />} 
-            disabled={!selectedSubtype}
           >
             Register Product
           </Button>
@@ -218,7 +222,7 @@ export default function SKUMaster({ moduleUniqueId }) {
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Template</label>
             <DropdownWithSearchInput 
-              options={templates.map(t => ({ value: t.id, text: t.name }))} 
+              options={[{ value: "", text: "All Templates View" }, ...templates.map(t => ({ value: t.id, text: t.name }))]} 
               value={selectedTemplate || ""} 
               onChange={handleTemplateChange} 
               placeholder="Select Template" 
@@ -227,11 +231,10 @@ export default function SKUMaster({ moduleUniqueId }) {
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Subtype</label>
             <DropdownWithSearchInput 
-              options={subtypes.map(s => ({ value: s.id, text: s.name }))} 
+              options={[{ value: "", text: "All Subtypes View" }, ...subtypes.map(s => ({ value: s.id, text: s.name }))]} 
               value={selectedSubtype || ""} 
               onChange={handleSubtypeChange} 
               placeholder="Select Subtype" 
-              disabled={!selectedTemplate} 
             />
           </div>
           <div className="space-y-2">
@@ -258,7 +261,6 @@ export default function SKUMaster({ moduleUniqueId }) {
               value={selectedBrand || ""} 
               onChange={setSelectedBrand} 
               placeholder="Filter Brand" 
-              disabled={!selectedSubtype} 
             />
           </div>
           <div className="relative group">
@@ -278,71 +280,59 @@ export default function SKUMaster({ moduleUniqueId }) {
       </div>
 
       {/* CONTENT AREA */}
-      {selectedTemplate && selectedSubtype ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Models Table Section */}
-          <div className="lg:col-span-7">
-            <div className="bg-surface rounded-2xl border-2 border-border h-full overflow-hidden flex flex-col shadow-sm">
-              <div className="px-6 py-4 border-b border-border bg-surface-hover flex items-center justify-between">
-                <h2 className="text-xs font-black text-text-primary flex items-center gap-3 uppercase tracking-widest">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary border border-primary/10 shadow-inner">
-                    <FaBoxOpen size={14} />
-                  </div>
-                  Product Catalog
-                </h2>
-              </div>
-              <div className="flex-1 max-h-[600px] overflow-y-auto">
-                <ProductsTable
-                  products={filteredProducts}
-                  loading={loading}
-                  selectedProduct={selectedProduct}
-                  onProductSelect={handleProductSelect}
-                  onEditProduct={(p) => { setEditingProduct(p); setShowProductModal(true); }}
-                  onViewProduct={(p) => { setViewingProduct(p); setShowProductViewModal(true); }}
-                  onDeleteProduct={wrapAction((p) => skuMasterApi.deleteProduct({ product_id: p.id }, moduleUniqueId), "Product purged from master.")}
-                />
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Models Table Section */}
+        <div className="lg:col-span-7">
+          <div className="bg-surface rounded-2xl border-2 border-border h-full overflow-hidden flex flex-col shadow-sm">
+            <div className="px-6 py-4 border-b border-border bg-surface-hover flex items-center justify-between">
+              <h2 className="text-xs font-black text-text-primary flex items-center gap-3 uppercase tracking-widest">
+                <div className="p-2 bg-primary/10 rounded-lg text-primary border border-primary/10 shadow-inner">
+                  <FaBoxOpen size={14} />
+                </div>
+                Product Catalog ({filteredProducts.length} Models)
+              </h2>
+            </div>
+            <div className="flex-1 max-h-[600px] overflow-y-auto">
+              <ProductsTable
+                products={filteredProducts}
+                loading={loading}
+                selectedProduct={selectedProduct}
+                onProductSelect={handleProductSelect}
+                onEditProduct={(p) => { setEditingProduct(p); setShowProductModal(true); }}
+                onViewProduct={(p) => { setViewingProduct(p); setShowProductViewModal(true); }}
+                onDeleteProduct={wrapAction((p) => skuMasterApi.deleteProduct({ product_id: p.id }, moduleUniqueId), "Product purged from master.")}
+              />
             </div>
           </div>
+        </div>
 
-          {/* SKU Variants Section */}
-          <div className="lg:col-span-5">
-            <div className="bg-surface rounded-2xl border-2 border-border h-full overflow-hidden flex flex-col shadow-sm">
-              <div className="px-6 py-4 border-b border-border bg-surface-hover/30 flex items-center justify-between">
-                <h2 className="text-xs font-black text-text-primary flex items-center gap-3 uppercase tracking-[0.2em]">
-                  <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/10 shadow-inner">
-                    <FaTags size={14} />
-                  </div>
-                  SKU Variants
-                </h2>
-              </div>
-              <div className="flex-1 max-h-[600px] overflow-y-auto">
-                <SkusTable
-                  skus={productSkus.filter(s => s.sku_code?.toLowerCase().includes(skuSearchTerm.toLowerCase()))}
-                  loading={loadingSkus}
-                  selectedProduct={selectedProduct}
-                  searchTerm={skuSearchTerm}
-                  onSearchChange={setSkuSearchTerm}
-                  onAddSku={() => { setEditingSku(null); setShowSkuModal(true); }}
-                  onEditSku={(s) => { setEditingSku(s); setShowSkuModal(true); }}
-                  onViewSku={(s) => { setViewingSku(s); setShowSkuViewModal(true); }}
-                  onDeleteSku={wrapAction((s) => skuMasterApi.deleteSku({ sku_id: s.id }, moduleUniqueId), "SKU variant deleted.")}
-                />
-              </div>
+        {/* SKU Variants Section */}
+        <div className="lg:col-span-5">
+          <div className="bg-surface rounded-2xl border-2 border-border h-full overflow-hidden flex flex-col shadow-sm">
+            <div className="px-6 py-4 border-b border-border bg-surface-hover/30 flex items-center justify-between">
+              <h2 className="text-xs font-black text-text-primary flex items-center gap-3 uppercase tracking-[0.2em]">
+                <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/10 shadow-inner">
+                  <FaTags size={14} />
+                </div>
+                SKU Variants
+              </h2>
+            </div>
+            <div className="flex-1 max-h-[600px] overflow-y-auto">
+              <SkusTable
+                skus={productSkus.filter(s => s.sku_code?.toLowerCase().includes(skuSearchTerm.toLowerCase()))}
+                loading={loadingSkus}
+                selectedProduct={selectedProduct}
+                searchTerm={skuSearchTerm}
+                onSearchChange={setSkuSearchTerm}
+                onAddSku={() => { setEditingSku(null); setShowSkuModal(true); }}
+                onEditSku={(s) => { setEditingSku(s); setShowSkuModal(true); }}
+                onViewSku={(s) => { setViewingSku(s); setShowSkuViewModal(true); }}
+                onDeleteSku={wrapAction((s) => skuMasterApi.deleteSku({ sku_id: s.id }, moduleUniqueId), "SKU variant deleted.")}
+              />
             </div>
           </div>
         </div>
-      ) : (
-        <div className="bg-surface rounded-2xl border-2 border-border border-dashed p-20 text-center shadow-inner">
-          <div className="max-w-md mx-auto space-y-4">
-            <div className="w-16 h-16 bg-surface-hover rounded-xl border-2 border-border shadow-sm flex items-center justify-center mx-auto text-text-secondary opacity-30">
-              <FaLayerGroup size={32} />
-            </div>
-            <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Baseline Configuration Required</h3>
-            <p className="text-text-secondary text-sm">Please select a template and subtype to view and manage products.</p>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* MODALS */}
       <ProductModal moduleUniqueId={moduleUniqueId} isOpen={showProductModal} onClose={() => setShowProductModal(false)} editingProduct={editingProduct} selectedTemplate={selectedTemplate} selectedSubtype={selectedSubtype} onSuccess={() => fetchProducts(selectedTemplate, selectedSubtype)} />
