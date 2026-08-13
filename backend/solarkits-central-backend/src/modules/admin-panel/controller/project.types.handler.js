@@ -1,21 +1,22 @@
 const {
-    ProjectCategory, ProjectSubcategory, ProjectType,
+    IndustryType, ProjectCategory, ProjectSubcategory, ProjectType,
     ProjectSubcategoryType, ProjectRange, Unit
 } = require("../models/core_db");
 
 // ================= CATEGORY =================
 const add_project_category = async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, industry_type_id } = req.body;
         if (!name) return res.status(400).json({ status: "error", message: "Name is required" });
 
         const result = await ProjectCategory.create({
-            name: name.trim()
+            name: name.trim(),
+            industry_type_id: industry_type_id || null
         });
 
         return res.json({
             status: "success",
-            data: { id: result._id, name: result.name }
+            data: { id: result._id, name: result.name, industry_type_id: result.industry_type_id }
         });
     } catch (error) {
         console.error(error);
@@ -25,8 +26,13 @@ const add_project_category = async (req, res) => {
 
 const get_project_categories = async (req, res) => {
     try {
-        const rows = await ProjectCategory.find({ deleted_at: null }).sort({ _id: 1 }).lean();
-        const data = rows.map(r => ({ id: r._id, name: r.name }));
+        const { industry_type_id } = req.query;
+        const query = { deleted_at: null };
+        if (industry_type_id) {
+            query.industry_type_id = industry_type_id;
+        }
+        const rows = await ProjectCategory.find(query).sort({ sort_order: 1, _id: 1 }).lean();
+        const data = rows.map(r => ({ id: r._id, name: r.name, industry_type_id: r.industry_type_id }));
         return res.json({ status: "success", data });
     } catch (error) {
         return res.status(500).json({ status: "error" });
@@ -246,17 +252,19 @@ const get_project_ranges = async (req, res) => {
 // ================= FULL HIERARCHY =================
 const get_all_project_hierarchy = async (req, res) => {
     try {
+        const industryTypes = await IndustryType.find({ deleted_at: null, is_active: true }).sort({ sort_order: 1, name: 1 }).lean();
         const categories = await ProjectCategory.find({ deleted_at: null }).lean();
         const subcategories = await ProjectSubcategory.find({ deleted_at: null }).lean();
         const types = await ProjectType.find({ deleted_at: null }).lean();
         const maps = await ProjectSubcategoryType.find({ deleted_at: null }).lean();
         const ranges = await ProjectRange.find({ deleted_at: null }).populate('unit_id').lean();
 
-        const hierarchy = categories.map(cat => {
+        const buildCategoryTree = (cat) => {
             const catSubs = subcategories.filter(sc => String(sc.category || '') === String(cat._id));
             return {
                 id: cat._id,
                 name: cat.name || "Unnamed Category",
+                industry_type_id: cat.industry_type_id || null,
                 subcategories: catSubs.map(sc => {
                     const subMaps = maps.filter(m => String(m.subcategory || '') === String(sc._id));
                     return {
@@ -284,7 +292,28 @@ const get_all_project_hierarchy = async (req, res) => {
                     };
                 })
             };
+        };
+
+        const hierarchy = industryTypes.map(ind => {
+            const indCats = categories.filter(cat => String(cat.industry_type_id || '') === String(ind._id));
+            return {
+                id: ind._id,
+                name: ind.name || "Unnamed Industry",
+                slug: ind.slug,
+                categories: indCats.map(buildCategoryTree)
+            };
         });
+
+        // Unassigned categories
+        const unassignedCats = categories.filter(cat => !cat.industry_type_id || !industryTypes.some(ind => String(ind._id) === String(cat.industry_type_id)));
+        if (unassignedCats.length > 0) {
+            hierarchy.push({
+                id: "unassigned",
+                name: "All Industry Types",
+                slug: "unassigned",
+                categories: unassignedCats.map(buildCategoryTree)
+            });
+        }
 
         return res.json({ status: "success", data: hierarchy });
     } catch (err) {
@@ -295,19 +324,24 @@ const get_all_project_hierarchy = async (req, res) => {
 
 const update_project_category = async (req, res) => {
     try {
-        const { id, name } = req.body;
+        const { id, name, industry_type_id } = req.body;
         if (!id || !name) return res.status(400).json({ status: "error", message: "Missing id or name" });
+
+        const updateData = { name: name.trim() };
+        if (industry_type_id !== undefined) {
+            updateData.industry_type_id = industry_type_id || null;
+        }
 
         const result = await ProjectCategory.findByIdAndUpdate(
             id,
-            { $set: { name: name.trim() } },
+            { $set: updateData },
             { new: true }
         );
         if (!result) return res.status(404).json({ status: "error", message: "Category not found" });
 
         return res.json({
             status: "success",
-            data: { id: result._id, name: result.name }
+            data: { id: result._id, name: result.name, industry_type_id: result.industry_type_id }
         });
     } catch (error) {
         console.error(error);

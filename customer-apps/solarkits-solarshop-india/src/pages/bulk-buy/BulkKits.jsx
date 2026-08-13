@@ -37,6 +37,7 @@ export default function BulkKits() {
     const [selectedKitTypes, setSelectedKitTypes] = useState([]);
 
     const [filters, setFilters] = useState({
+        industryType:"all",
         category:"all",
         subCategory:"all",
         systemType:"all",
@@ -95,13 +96,25 @@ export default function BulkKits() {
         ];
     }, [bulkKits, filters.category, filters.subCategory, filters.systemType, filters.projectRange]);
 
+    const industryTypeOptions = useMemo(() => {
+        const industries = [...new Set(bulkKits.map(kit => kit.industryType || kit.industry_type_name).filter(Boolean))];
+        return [
+            { value:"all", text:"All Industry Types" },
+            ...industries.map(ind => ({ value: ind.toLowerCase(), text: ind }))
+        ];
+    }, [bulkKits]);
+
     const categoryOptions = useMemo(() => {
-        const cats = [...new Set(bulkKits.map(kit => kit.category).filter(Boolean))];
+        let filteredKits = bulkKits;
+        if (filters.industryType && filters.industryType !== "all") {
+            filteredKits = filteredKits.filter(kit => (kit.industryType || kit.industry_type_name)?.toLowerCase() === filters.industryType.toLowerCase());
+        }
+        const cats = [...new Set(filteredKits.map(kit => kit.category).filter(Boolean))];
         return [
             { value:"all", text:"All Categories" },
             ...cats.map(cat => ({ value: cat.toLowerCase(), text: cat }))
         ];
-    }, [bulkKits]);
+    }, [bulkKits, filters.industryType]);
 
     const subCategoryOptions = useMemo(() => {
         if (filters.category ==="all") return [{ value:"all", text:"All Sub-Categories" }];
@@ -307,6 +320,9 @@ export default function BulkKits() {
                     case"projectRange": {
                         return k.projectRange?.id === value;
                     }
+
+                    case "industryType":
+                        return (k.industryType || k.industry_type_name)?.toLowerCase() === value.toLowerCase();
 
                     case"category":
                         return k.category?.toLowerCase() === value.toLowerCase();
@@ -567,6 +583,20 @@ export default function BulkKits() {
                                     </Button>
                                 </div>
                                 <div className="grid gap-3">
+                                    <Dropdown
+                                        label="Industry Type"
+                                        options={industryTypeOptions}
+                                        value={filters.industryType}
+                                        onChange={(val) => setFilters((prev) => ({
+                                            ...prev,
+                                            industryType: val,
+                                            category: "all",
+                                            subCategory: "all",
+                                            systemType: "all",
+                                            projectRange: "all"
+                                        }))}
+                                        className="w-full"
+                                    />
                                     <Dropdown
                                         label="Category"
                                         options={categoryOptions}

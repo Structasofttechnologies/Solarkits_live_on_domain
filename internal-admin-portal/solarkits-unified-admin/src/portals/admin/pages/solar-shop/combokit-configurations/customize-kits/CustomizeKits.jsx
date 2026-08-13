@@ -33,7 +33,7 @@ const getCleanId = (val) => {
   return String(val);
 };
 
-export default function CustomizeKits({ moduleUniqueId }) {
+export default function CustomizeKits({ moduleUniqueId = "ADM_CUSTOMIZE_KITS" }) {
   const { countryName } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -52,12 +52,14 @@ export default function CustomizeKits({ moduleUniqueId }) {
   const [subtypeBrandsMap, setSubtypeBrandsMap] = useState({}); // subtypeId(s) -> [{ value, text }]
 
   // List Filter States
+  const [selectedIndustryType, setSelectedIndustryType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedProjectRange, setSelectedProjectRange] = useState("");
 
   // List Filter Option Lists
+  const [industryTypes, setIndustryTypes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [systemTypes, setSystemTypes] = useState([]);
@@ -122,12 +124,30 @@ export default function CustomizeKits({ moduleUniqueId }) {
 
   // ─── Filter Hierarchy Fetchers ───────────────────────────────────────────────
 
-  const fetchCategories = async () => {
+  const fetchIndustryTypes = async () => {
     try {
       const res = await axios.get(
-        `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view`,
+        `${API_URL}/industry-types/list?unique_id=${moduleUniqueId}&req_for=view&active_only=true`,
         { headers: authHeaderObj() }
       );
+      if (res.data?.status === "success") {
+        setIndustryTypes(
+          res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetching industry types:", e);
+    }
+  };
+
+  const fetchCategories = async (industryTypeId = null) => {
+    setCategories([]);
+    setSubcategories([]);
+    setSystemTypes([]);
+    setProjectRanges([]);
+    try {
+      const url = `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view${industryTypeId ? `&industry_type_id=${industryTypeId}` : ''}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
       if (res.data?.status === "success") {
         setCategories(
           res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
@@ -222,6 +242,15 @@ export default function CustomizeKits({ moduleUniqueId }) {
     }
   };
 
+  const handleIndustryTypeChange = (val) => {
+    setSelectedIndustryType(val);
+    setSelectedCategory("");
+    setSelectedSubcategory("");
+    setSelectedType("");
+    setSelectedProjectRange("");
+    fetchCategories(val);
+  };
+
   const handleCategoryChange = (val) => {
     setSelectedCategory(val);
     setSelectedSubcategory("");
@@ -248,10 +277,12 @@ export default function CustomizeKits({ moduleUniqueId }) {
   };
 
   const clearFilters = () => {
+    setSelectedIndustryType("");
     setSelectedCategory("");
     setSelectedSubcategory("");
     setSelectedType("");
     setSelectedProjectRange("");
+    setCategories([]);
     setSubcategories([]);
     setSystemTypes([]);
     setProjectRanges([]);
@@ -260,6 +291,7 @@ export default function CustomizeKits({ moduleUniqueId }) {
   // Fetch initial filters
   useEffect(() => {
     if (moduleUniqueId) {
+      fetchIndustryTypes();
       fetchCategories();
     }
   }, [moduleUniqueId]);
@@ -673,6 +705,9 @@ export default function CustomizeKits({ moduleUniqueId }) {
 
   const filteredCustomKits = useMemo(() => {
     return configuredKits.filter((k) => {
+      const kitInd = k.solar_kit_id?.category_id?.industry_type_id?._id || k.solar_kit_id?.category_id?.industry_type_id || "";
+      const matchInd = !selectedIndustryType || String(kitInd) === selectedIndustryType;
+
       const matchCat = !selectedCategory ||
         String(getCleanId(k.solar_kit_id?.category_id)) === selectedCategory;
 
@@ -685,9 +720,9 @@ export default function CustomizeKits({ moduleUniqueId }) {
       const matchRange = !selectedProjectRange ||
         String(getCleanId(k.project_range_id)) === selectedProjectRange;
 
-      return matchCat && matchSub && matchType && matchRange;
+      return matchInd && matchCat && matchSub && matchType && matchRange;
     });
-  }, [configuredKits, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
+  }, [configuredKits, selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
 
   return (
     <div className="min-h-screen space-y-6 pb-24 animate-in fade-in duration-500">
@@ -707,6 +742,15 @@ export default function CustomizeKits({ moduleUniqueId }) {
 
       {/* FILTER CONTROLS */}
       <div className="bg-surface rounded-3xl border-2 border-border p-6 shadow-sm flex flex-col md:flex-row items-center gap-4">
+        <div className="flex-1 w-full">
+          <Dropdown
+            label="Industry Type"
+            value={selectedIndustryType}
+            onChange={handleIndustryTypeChange}
+            placeholder="All Industry Types"
+            options={industryTypes}
+          />
+        </div>
         <div className="flex-1 w-full">
           <Dropdown
             label="Category"

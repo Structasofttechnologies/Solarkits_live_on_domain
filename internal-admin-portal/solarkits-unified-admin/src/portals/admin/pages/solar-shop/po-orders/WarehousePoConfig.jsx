@@ -61,10 +61,13 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
   });
 
   // Top Bar Filter States
+  const [filterIndustryType, setFilterIndustryType] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterSubcategory, setFilterSubcategory] = useState("");
   const [filterSystemType, setFilterSystemType] = useState("");
   const [filterProjectRange, setFilterProjectRange] = useState("");
+  const [filterIndustryTypes, setFilterIndustryTypes] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [filterSubcategories, setFilterSubcategories] = useState([]);
   const [filterSystemTypes, setFilterSystemTypes] = useState([]);
   const [filterProjectRanges, setFilterProjectRanges] = useState([]);
@@ -136,6 +139,36 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
     return [];
   };
 
+  const fetchFilterIndustryTypes = async () => {
+    try {
+      const res = await axios.get(
+        `${API_URL}/industry-types/list?unique_id=${moduleUniqueId}&req_for=view&active_only=true`,
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        setFilterIndustryTypes(
+          res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetching filter industry types:", e);
+    }
+  };
+
+  const fetchFilterCategories = async (industryTypeId = null) => {
+    try {
+      const url = `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view${industryTypeId ? `&industry_type_id=${industryTypeId}` : ''}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
+      if (res.data?.status === "success") {
+        setCategories(
+          res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetching categories:", e);
+    }
+  };
+
   const fetchFilterHierarchyOptions = async (levelId, parentId = null) => {
     let url = "";
     const baseQuery = `?unique_id=${moduleUniqueId}&req_for=view`;
@@ -164,6 +197,18 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
       console.error(`Error fetching filter hierarchy ${levelId}:`, e);
     }
     return [];
+  };
+
+  const handleFilterIndustryTypeChange = (val) => {
+    setFilterIndustryType(val);
+    setFilterCategory("");
+    setFilterSubcategory("");
+    setFilterSystemType("");
+    setFilterProjectRange("");
+    setFilterSubcategories([]);
+    setFilterSystemTypes([]);
+    setFilterProjectRanges([]);
+    fetchFilterCategories(val);
   };
 
   const handleFilterCategoryChange = (val) => {
@@ -277,8 +322,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
         setComboKits(dedup(comboRes.data?.data));
         setCustomizeKits(dedup(customizeRes.data?.data));
 
-        // Fetch categories on load
-        fetchHierarchyOptions("category");
+        // Fetch industry types and categories on load
+        fetchFilterIndustryTypes();
+        fetchFilterCategories();
       }
     } catch (error) {
       console.error("Error fetching warehouse PO configuration data:", error);
@@ -832,7 +878,15 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
 
       {/* Filtering Section */}
       <div className="bg-surface rounded-2xl border-2 border-border p-6 shadow-sm flex flex-col md:flex-row items-end gap-4 animate-in fade-in duration-500">
-        <div className="flex-grow grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+        <div className="flex-grow grid grid-cols-1 md:grid-cols-5 gap-4 w-full">
+          <Dropdown
+            label="Filter by Industry Type"
+            value={filterIndustryType}
+            onChange={handleFilterIndustryTypeChange}
+            placeholder="All Industry Types"
+            options={filterIndustryTypes}
+            className="w-full"
+          />
           <Dropdown
             label="Filter by Category"
             value={filterCategory}

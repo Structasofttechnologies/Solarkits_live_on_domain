@@ -10,6 +10,7 @@ export default function CustomComboKit() {
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
   const [formData, setFormData] = useState({
+    industryType: 'all',
     category: 'all',
     subCategory: 'all',
     projectType: 'all',
@@ -117,6 +118,19 @@ export default function CustomComboKit() {
                   Basic Configuration
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Dropdown
+                    label="Industry Type"
+                    className="w-full"
+                    options={[
+                      { text:"All Industry Types", value: 'all' },
+                      { text:"Residential", value: 'residential' },
+                      { text:"Commercial", value: 'commercial' },
+                      { text:"Industrial", value: 'industrial' },
+                      { text:"Agricultural", value: 'agricultural' }
+                    ]}
+                    value={formData.industryType}
+                    onChange={(val) => handleChange('industryType', val)}
+                  />
                   <Dropdown
                     label="Category"
                     className="w-full"

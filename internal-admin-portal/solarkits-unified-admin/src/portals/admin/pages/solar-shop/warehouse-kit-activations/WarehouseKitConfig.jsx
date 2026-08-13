@@ -192,6 +192,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
   useEffect(() => {
     if (moduleUniqueId && token && warehouseId) {
       fetchData();
+      fetchFilterIndustryTypes();
       fetchFilterCategories();
     }
   }, [moduleUniqueId, token, warehouseId, countryName]);
@@ -312,23 +313,43 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
   };
 
   // ─── Filter States (API-driven, cascading) ───────────────────────────────────
+  const [selectedIndustryType, setSelectedIndustryType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedProjectRange, setSelectedProjectRange] = useState("");
 
   // API-driven filter option lists
+  const [filterIndustryTypes, setFilterIndustryTypes] = useState([]);
   const [filterCategories, setFilterCategories] = useState([]);
   const [filterSubcategories, setFilterSubcategories] = useState([]);
   const [filterSystemTypes, setFilterSystemTypes] = useState([]);
   const [filterProjectRanges, setFilterProjectRanges] = useState([]);
 
-  const fetchFilterCategories = async () => {
+  const fetchFilterIndustryTypes = async () => {
     try {
       const res = await axios.get(
-        `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view`,
+        `${API_URL}/industry-types/list?unique_id=${moduleUniqueId}&req_for=view&active_only=true`,
         { headers: authHeaderObj() }
       );
+      if (res.data?.status === "success") {
+        setFilterIndustryTypes(
+          res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetching filter industry types:", e);
+    }
+  };
+
+  const fetchFilterCategories = async (industryTypeId = null) => {
+    setFilterCategories([]);
+    setFilterSubcategories([]);
+    setFilterSystemTypes([]);
+    setFilterProjectRanges([]);
+    try {
+      const url = `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view${industryTypeId ? `&industry_type_id=${industryTypeId}` : ''}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
       if (res.data?.status === "success") {
         setFilterCategories(
           res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
@@ -405,6 +426,8 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
       const matchSearch =
         k.name?.toLowerCase().includes(comboSearch.toLowerCase()) ||
         k.solar_kit_id?.name?.toLowerCase().includes(comboSearch.toLowerCase());
+      const kitInd = k.solar_kit_id?.category_id?.industry_type_id?._id || k.solar_kit_id?.category_id?.industry_type_id || "";
+      const matchInd = !selectedIndustryType || String(kitInd) === selectedIndustryType;
       const matchCat = !selectedCategory ||
         String(k.solar_kit_id?.category_id?._id || k.solar_kit_id?.category_id?.id || "") === selectedCategory;
       const matchSub = !selectedSubcategory ||
@@ -414,15 +437,17 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
         (k.solar_kit_id?.type_id?.type?.name || k.solar_kit_id?.type_id?.name) === selectedType;
       const matchRange = !selectedProjectRange ||
         String(k.project_range_id?._id || k.project_range_id?.id || k.project_range_id || "") === selectedProjectRange;
-      return matchSearch && matchCat && matchSub && matchType && matchRange;
+      return matchSearch && matchInd && matchCat && matchSub && matchType && matchRange;
     });
-  }, [comboKits, comboSearch, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
+  }, [comboKits, comboSearch, selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
 
   const filteredCustomizeKits = useMemo(() => {
     return customizeKits.filter((k) => {
       const matchSearch =
         k.name?.toLowerCase().includes(customizeSearch.toLowerCase()) ||
         k.solar_kit_id?.name?.toLowerCase().includes(customizeSearch.toLowerCase());
+      const kitInd = k.solar_kit_id?.category_id?.industry_type_id?._id || k.solar_kit_id?.category_id?.industry_type_id || "";
+      const matchInd = !selectedIndustryType || String(kitInd) === selectedIndustryType;
       const matchCat = !selectedCategory ||
         String(k.solar_kit_id?.category_id?._id || k.solar_kit_id?.category_id?.id || "") === selectedCategory;
       const matchSub = !selectedSubcategory ||
@@ -432,9 +457,9 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
         (k.solar_kit_id?.type_id?.type?.name || k.solar_kit_id?.type_id?.name) === selectedType;
       const matchRange = !selectedProjectRange ||
         String(k.project_range_id?._id || k.project_range_id?.id || k.project_range_id || "") === selectedProjectRange;
-      return matchSearch && matchCat && matchSub && matchType && matchRange;
+      return matchSearch && matchInd && matchCat && matchSub && matchType && matchRange;
     });
-  }, [customizeKits, customizeSearch, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
+  }, [customizeKits, customizeSearch, selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
 
   // ─── Loading / Not Found ──────────────────────────────────────────────────────
 
@@ -473,7 +498,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
 
       <div className="p-6 space-y-5">
         {/* Filters and Search Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           {/* Search */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Search</label>
@@ -489,6 +514,24 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
                 className="w-full h-10 pl-9 pr-4 bg-surface border-2 border-border focus:border-primary rounded-xl text-xs font-bold text-text-primary placeholder:text-text-muted outline-none transition-colors"
               />
             </div>
+          </div>
+
+          {/* Industry Type */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Industry Type</label>
+            <DropdownWithSearchInput
+              options={filterIndustryTypes}
+              value={selectedIndustryType}
+              onChange={(val) => {
+                setSelectedIndustryType(val);
+                setSelectedCategory("");
+                setSelectedSubcategory("");
+                setSelectedType("");
+                setSelectedProjectRange("");
+                fetchFilterCategories(val);
+              }}
+              placeholder="All Industry Types"
+            />
           </div>
 
           {/* Category */}

@@ -19,6 +19,7 @@ const schema = new mongoose.Schema({
   country_ids:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_0' }],
   state_ids:          [{ type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_1' }],
   // ------------------------------------------------
+  industry_type_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'sys_industry_types', default: null },
   is_active:  { type: Boolean, default: true },
   deleted_at: { type: Date, default: null },
 }, {

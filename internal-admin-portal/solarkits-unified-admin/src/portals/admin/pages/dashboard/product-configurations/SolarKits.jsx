@@ -34,8 +34,8 @@ export default function SolarKits({ moduleUniqueId }) {
   const [kits, setKits] = useState([]);
   const [allTemplates, setAllTemplates] = useState([]);
   const [scopedTemplateIds, setScopedTemplateIds] = useState(null); // null = no filter active
-  const [options, setOptions] = useState({ category: [], subcategory: [], type: [] });
-  const [filters, setFilters] = useState({ category: "", subcategory: "", type: "" });
+  const [options, setOptions] = useState({ industryType: [], category: [], subcategory: [], type: [] });
+  const [filters, setFilters] = useState({ industryType: "", category: "", subcategory: "", type: "" });
   const [searchTerm, setSearchTerm] = useState("");
 
   // Drawer & Form State
@@ -47,6 +47,7 @@ export default function SolarKits({ moduleUniqueId }) {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+    industry_type_id: "",
     category_id: "",
     subcategory_id: "",
     type_id: "",
@@ -179,11 +180,12 @@ export default function SolarKits({ moduleUniqueId }) {
   const fetchHierarchyOptions = async (levelId, parentId = null) => {
     let url = "";
     const baseQuery = `?unique_id=${moduleUniqueId}&req_for=view`;
-    if (levelId === "category") url = `${API_URL}/project-types/get-categories${baseQuery}`;
+    if (levelId === "industryType") url = `${API_URL}/industry-types/list${baseQuery}&active_only=true`;
+    else if (levelId === "category") url = `${API_URL}/project-types/get-categories${baseQuery}${parentId ? `&industry_type_id=${parentId}` : ''}`;
     else if (levelId === "subcategory") url = `${API_URL}/project-types/get-subcategories${baseQuery}&category_id=${parentId}`;
     else if (levelId === "type") url = `${API_URL}/project-types/get-subcategory-types${baseQuery}&subcategory_id=${parentId}`;
 
-    if (!url || (levelId !== "category" && !parentId)) return [];
+    if (!url || (levelId !== "industryType" && levelId !== "category" && !parentId)) return [];
 
     try {
       const res = await axios.get(url, { headers: authHeaderObj() });
@@ -221,12 +223,19 @@ export default function SolarKits({ moduleUniqueId }) {
     fetchKits();
     fetchTemplates();
     fetchBrands();
+    fetchHierarchyOptions("industryType");
     fetchHierarchyOptions("category");
   }, [fetchKits, fetchTemplates, fetchBrands, moduleUniqueId]);
 
   // ==================== HANDLERS ====================
   const handleFilterChange = (level, val) => {
     const next = { ...filters, [level]: val };
+    if (level === "industryType") {
+      next.category = "";
+      next.subcategory = "";
+      next.type = "";
+      fetchHierarchyOptions("category", val);
+    }
     if (level === "category") {
       next.subcategory = "";
       next.type = "";
@@ -241,6 +250,13 @@ export default function SolarKits({ moduleUniqueId }) {
 
   const handleFormChange = (field, val) => {
     const next = { ...formData, [field]: val };
+    if (field === "industry_type_id") {
+      next.category_id = "";
+      next.subcategory_id = "";
+      next.type_id = "";
+      setScopedTemplateIds(null);
+      fetchHierarchyOptions("category", val);
+    }
     if (field === "category_id") {
       next.subcategory_id = "";
       next.type_id = "";
@@ -406,7 +422,7 @@ export default function SolarKits({ moduleUniqueId }) {
     setScopedTemplateIds(null);
     setFormData({
       name: "", description: "",
-      category_id: "", subcategory_id: "", type_id: "",
+      industry_type_id: "", category_id: "", subcategory_id: "", type_id: "",
       base_template_ids: [], base_components: [], bos_template_ids: [],
       bos_kits: [],
       image: ""
@@ -468,9 +484,12 @@ export default function SolarKits({ moduleUniqueId }) {
       }
     }) || [];
 
+    const indTypeId = kit.category_id?.industry_type_id?._id || kit.category_id?.industry_type_id || "";
+
     setFormData({
       name: kit.name,
       description: kit.description,
+      industry_type_id: indTypeId,
       category_id: kit.category_id?._id,
       subcategory_id: kit.subcategory_id?._id,
       type_id: kit.type_id?._id,
@@ -485,6 +504,7 @@ export default function SolarKits({ moduleUniqueId }) {
 
     try {
       await Promise.all([
+        indTypeId ? fetchHierarchyOptions("category", indTypeId) : Promise.resolve(),
         fetchHierarchyOptions("subcategory", kit.category_id?._id),
         fetchHierarchyOptions("type", kit.subcategory_id?._id)
       ]);
@@ -710,10 +730,11 @@ export default function SolarKits({ moduleUniqueId }) {
   const filteredKits = useMemo(() => {
     return kits.filter(k => {
       const matchSearch = k.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchInd = !filters.industryType || (k.category_id?.industry_type_id?._id || k.category_id?.industry_type_id) === filters.industryType;
       const matchCat = !filters.category || k.category_id?._id === filters.category;
       const matchSub = !filters.subcategory || k.subcategory_id?._id === filters.subcategory;
       const matchType = !filters.type || k.type_id?._id === filters.type;
-      return matchSearch && matchCat && matchSub && matchType;
+      return matchSearch && matchInd && matchCat && matchSub && matchType;
     });
   }, [kits, searchTerm, filters]);
 
@@ -795,7 +816,11 @@ export default function SolarKits({ moduleUniqueId }) {
 
       {/* FILTERS */}
       <div className="bg-surface rounded-2xl border-2 border-border p-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Industry Type</label>
+            <DropdownWithSearchInput options={options.industryType} value={filters.industryType} onChange={(val) => handleFilterChange("industryType", val)} placeholder="All Industry Types" />
+          </div>
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Category</label>
             <DropdownWithSearchInput options={options.category} value={filters.category} onChange={(val) => handleFilterChange("category", val)} placeholder="All Categories" />
@@ -858,7 +883,11 @@ export default function SolarKits({ moduleUniqueId }) {
             </div>
 
             {/* Hierarchy */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Industry Type</label>
+                <DropdownWithSearchInput options={options.industryType} value={formData.industry_type_id} onChange={(val) => handleFormChange("industry_type_id", val)} placeholder="Select" />
+              </div>
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-text-secondary uppercase tracking-wider ml-1">Category</label>
                 <DropdownWithSearchInput options={options.category} value={formData.category_id} onChange={(val) => handleFormChange("category_id", val)} placeholder="Select" />

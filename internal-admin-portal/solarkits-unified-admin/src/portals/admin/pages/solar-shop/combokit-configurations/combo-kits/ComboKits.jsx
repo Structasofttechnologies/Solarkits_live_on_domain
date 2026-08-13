@@ -78,12 +78,14 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
 
   // Kits Search & Filter states
   const [kitsSearch, setKitsSearch] = useState("");
+  const [selectedIndustryType, setSelectedIndustryType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedProjectRange, setSelectedProjectRange] = useState("");
 
   // API-driven filter option lists
+  const [filterIndustryTypes, setFilterIndustryTypes] = useState([]);
   const [filterCategories, setFilterCategories] = useState([]);
   const [filterSubcategories, setFilterSubcategories] = useState([]);
   const [filterSystemTypes, setFilterSystemTypes] = useState([]);
@@ -475,12 +477,30 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
 
   // ─── Filter Hierarchy Fetchers ───────────────────────────────────────────────
 
-  const fetchFilterCategories = async () => {
+  const fetchFilterIndustryTypes = async () => {
     try {
       const res = await axios.get(
-        `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view`,
+        `${API_URL}/industry-types/list?unique_id=${moduleUniqueId}&req_for=view&active_only=true`,
         { headers: authHeaderObj() }
       );
+      if (res.data?.status === "success") {
+        setFilterIndustryTypes(
+          res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetching industry types:", e);
+    }
+  };
+
+  const fetchFilterCategories = async (industryTypeId = null) => {
+    setFilterCategories([]);
+    setFilterSubcategories([]);
+    setFilterSystemTypes([]);
+    setFilterProjectRanges([]);
+    try {
+      const url = `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view${industryTypeId ? `&industry_type_id=${industryTypeId}` : ''}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
       if (res.data?.status === "success") {
         setFilterCategories(
           res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
@@ -614,7 +634,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         // Fetch Master Solar Kits
         await fetchMasterKits();
 
-        // Fetch Filter Categories
+        // Fetch Filter Industry Types & Categories
+        fetchFilterIndustryTypes();
         fetchFilterCategories();
 
       } catch (error) {
@@ -1899,7 +1920,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
 
       {/* FILTERS */}
       <div className="bg-surface rounded-2xl border-2 border-border/60 p-6 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
           {/* Search */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Search</label>
@@ -1915,6 +1936,24 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
                 className="w-full h-10 pl-9 pr-4 bg-surface border-2 border-border focus:border-primary rounded-xl text-xs font-bold text-text-primary placeholder:text-text-muted outline-none transition-colors"
               />
             </div>
+          </div>
+
+          {/* Industry Type */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Industry Type</label>
+            <DropdownWithSearchInput
+              options={filterIndustryTypes}
+              value={selectedIndustryType}
+              onChange={(val) => {
+                setSelectedIndustryType(val);
+                setSelectedCategory("");
+                setSelectedSubcategory("");
+                setSelectedType("");
+                setSelectedProjectRange("");
+                fetchFilterCategories(val);
+              }}
+              placeholder="All Industry Types"
+            />
           </div>
 
           {/* Category */}

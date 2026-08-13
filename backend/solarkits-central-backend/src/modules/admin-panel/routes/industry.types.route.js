@@ -18,38 +18,77 @@ const handler = require('../controller/industry.types.handler');
 
 // ─── Industry Type CRUD ────────────────────────────────────────────────────────
 
+const ALLOWED_VIEW_MODULES = [
+  { unique_code: 'ADM_INDUSTRY_TYPES',    permissions: ['view'] },
+  { unique_code: 'ADM_PROJ_TYPES',        permissions: ['view'] },
+  { unique_code: 'ADM_SOLAR_KITS',        permissions: ['view'] },
+  { unique_code: 'ADM_COMBO_KITS',        permissions: ['view'] },
+  { unique_code: 'ADM_COMBO_KIT_VARIANTS',permissions: ['view'] },
+  { unique_code: 'ADM_CUSTOMIZE_KITS',    permissions: ['view'] },
+  { unique_code: 'ADM_PO_ORDERS',         permissions: ['view'] },
+  { unique_code: 'ADM_BULK_COMBO',        permissions: ['view'] },
+  { unique_code: 'ADM_WH_KIT_ACT',        permissions: ['view'] },
+  { unique_code: 'ADM_WH_BULK_CONFIG',    permissions: ['view'] },
+  { unique_code: 'ADM_WH_KIT_CONFIG',     permissions: ['view'] },
+  { unique_code: 'ADM_WH_PO_CONFIG',      permissions: ['view'] },
+  { unique_code: 'RSL_MGMT',              permissions: ['view'] },
+  { unique_code: 'RSL_PROD_AUTH',         permissions: ['view'] },
+  { unique_code: 'RSL_PRODAUTH',          permissions: ['view'] },
+];
+
+const ALLOWED_ADD_MODULES = [
+  { unique_code: 'ADM_INDUSTRY_TYPES',    permissions: ['add'] },
+  { unique_code: 'ADM_PROJ_TYPES',        permissions: ['add'] },
+  { unique_code: 'ADM_SOLAR_KITS',        permissions: ['add'] },
+  { unique_code: 'ADM_COMBO_KITS',        permissions: ['add'] },
+];
+
+const ALLOWED_EDIT_MODULES = [
+  { unique_code: 'ADM_INDUSTRY_TYPES',    permissions: ['edit'] },
+  { unique_code: 'ADM_PROJ_TYPES',        permissions: ['edit'] },
+  { unique_code: 'ADM_SOLAR_KITS',        permissions: ['edit'] },
+  { unique_code: 'ADM_COMBO_KITS',        permissions: ['edit'] },
+];
+
+const ALLOWED_DELETE_MODULES = [
+  { unique_code: 'ADM_INDUSTRY_TYPES',    permissions: ['delete'] },
+  { unique_code: 'ADM_PROJ_TYPES',        permissions: ['delete'] },
+  { unique_code: 'ADM_SOLAR_KITS',        permissions: ['delete'] },
+  { unique_code: 'ADM_COMBO_KITS',        permissions: ['delete'] },
+];
+
 router.get(
   '/list',
   check_auth,
-  check_permissions([{ unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['view'] }]),
+  check_permissions(ALLOWED_VIEW_MODULES),
   handler.list_industry_types
 );
 
 router.post(
   '/add',
   check_auth,
-  check_permissions([{ unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['add'] }]),
+  check_permissions(ALLOWED_ADD_MODULES),
   handler.add_industry_type
 );
 
 router.put(
   '/update',
   check_auth,
-  check_permissions([{ unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['edit'] }]),
+  check_permissions(ALLOWED_EDIT_MODULES),
   handler.update_industry_type
 );
 
 router.put(
   '/toggle-status',
   check_auth,
-  check_permissions([{ unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['edit'] }]),
+  check_permissions(ALLOWED_EDIT_MODULES),
   handler.toggle_industry_type_status
 );
 
 router.delete(
   '/delete',
   check_auth,
-  check_permissions([{ unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['delete'] }]),
+  check_permissions(ALLOWED_DELETE_MODULES),
   handler.delete_industry_type
 );
 

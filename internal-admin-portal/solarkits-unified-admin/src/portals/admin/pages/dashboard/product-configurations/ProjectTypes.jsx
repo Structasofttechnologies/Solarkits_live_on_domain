@@ -12,12 +12,13 @@ import {
   FaPlus, FaCheckCircle, FaChevronRight,
   FaLayerGroup, FaStar, FaProjectDiagram,
   FaHistory, FaSlidersH, FaBoxOpen,
-  FaImage, FaEdit
+  FaImage, FaEdit, FaBuilding
 } from "react-icons/fa";
 import CustomFilePicker from "@/components/CustomFilePicker";
 
 const CONFIG_LEVELS = [
-  { id: "category", label: "Project Category", icon: <FaBoxOpen />, parentId: null },
+  { id: "industryType", label: "Industry Type", icon: <FaBuilding />, parentId: null },
+  { id: "category", label: "Project Category", icon: <FaBoxOpen />, parentId: "industryType" },
   { id: "subcategory", label: "Sub-Category", icon: <FaLayerGroup />, parentId: "category" },
   { id: "type", label: "System Type", icon: <FaProjectDiagram />, parentId: "subcategory" },
   { id: "projectRange", label: "Capacity Range", icon: <FaSlidersH />, parentId: "type" },
@@ -30,6 +31,7 @@ export default function ProjectTypes({ moduleUniqueId }) {
 
   // Store selectable options for each level
   const [options, setOptions] = useState({
+    industryType: [],
     category: [],
     subcategory: [],
     type: [],
@@ -37,6 +39,7 @@ export default function ProjectTypes({ moduleUniqueId }) {
   });
 
   const [selectedValues, setSelectedValues] = useState({
+    industryType: "",
     category: "",
     subcategory: "",
     type: "",
@@ -89,8 +92,10 @@ export default function ProjectTypes({ moduleUniqueId }) {
     let mapFn = (item) => ({ value: item.id, text: item.name });
     const baseQuery = `?unique_id=${moduleUniqueId}&req_for=view`;
 
-    if (levelId === "category") {
-      url = `${API_URL}/project-types/get-categories${baseQuery}`;
+    if (levelId === "industryType") {
+      url = `${API_URL}/industry-types/list${baseQuery}&active_only=true`;
+    } else if (levelId === "category") {
+      url = `${API_URL}/project-types/get-categories${baseQuery}${parentIdVal ? `&industry_type_id=${parentIdVal}` : ''}`;
     } else if (levelId === "subcategory") {
       if (!parentIdVal) return;
       url = `${API_URL}/project-types/get-subcategories${baseQuery}&category_id=${parentIdVal}`;
@@ -150,6 +155,7 @@ export default function ProjectTypes({ moduleUniqueId }) {
   };
 
   useEffect(() => {
+    fetchLevelOptions("industryType");
     fetchLevelOptions("category");
     fetchHierarchy();
     fetchPowerUnits();
@@ -313,13 +319,20 @@ export default function ProjectTypes({ moduleUniqueId }) {
       } else {
         let url = "";
         let payload = {};
-        if (activeLevel === "category") {
+        if (activeLevel === "industryType") {
+          url = isEdit
+            ? `${API_URL}/industry-types/update${baseQuery}`
+            : `${API_URL}/industry-types/add${baseQuery}`;
+          payload = isEdit
+            ? { id: editingOptionId, name: newOptionText }
+            : { name: newOptionText };
+        } else if (activeLevel === "category") {
           url = isEdit
             ? `${API_URL}/project-types/update-category${baseQuery}`
             : `${API_URL}/project-types/add-category${baseQuery}`;
           payload = isEdit
-            ? { id: editingOptionId, name: newOptionText }
-            : { name: newOptionText };
+            ? { id: editingOptionId, name: newOptionText, industry_type_id: selectedValues.industryType || null }
+            : { name: newOptionText, industry_type_id: selectedValues.industryType || null };
         } else if (activeLevel === "type") {
           url = `${API_URL}/project-types/update-type${baseQuery}`;
           payload = { id: editingOptionId, name: newOptionText };
@@ -424,7 +437,7 @@ export default function ProjectTypes({ moduleUniqueId }) {
       </div>
 
       {/* --- DROPDOWN LIST UNDER THE ABOVE CARD --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4">
         {CONFIG_LEVELS.map((level, index) => {
           const prevLevelId = index > 0 ? CONFIG_LEVELS[index - 1].id : null;
           const isDisabled = prevLevelId ? !selectedValues[prevLevelId] : false;
@@ -495,32 +508,45 @@ export default function ProjectTypes({ moduleUniqueId }) {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-            {hierarchy.map(cat => (
-              <div key={cat.id} className="bg-surface rounded-3xl border-2 border-border overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 group/card">
+            {hierarchy.map(ind => (
+              <div key={ind.id} className="bg-surface rounded-3xl border-2 border-border overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 group/card">
               <div className="p-6 bg-surface-hover border-b border-border flex justify-between items-center">
-                <h4 className="font-black text-text-primary tracking-tight">{cat.name}</h4>
-                <div className="p-2 bg-surface rounded-xl border border-border shadow-xs"><FaBoxOpen className="text-primary" size={14} /></div>
+                <h4 className="font-black text-text-primary tracking-tight flex items-center gap-2">
+                  <FaBuilding className="text-primary" size={14} />
+                  {ind.name}
+                </h4>
+                <div className="p-2 bg-surface rounded-xl border border-border shadow-xs">
+                  <span className="text-[10px] font-bold text-text-secondary">{ind.categories?.length || 0} Categories</span>
+                </div>
               </div>
               <div className="p-6 space-y-6">
-                {cat.subcategories?.map(sub => (
-                  <div key={sub.id} className="space-y-4">
+                {ind.categories?.map(cat => (
+                  <div key={cat.id} className="space-y-4">
                     <div className="flex items-center gap-2 text-xs font-black text-text-primary uppercase tracking-tighter">
-                      <div className="w-1.5 h-1.5 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]" />
-                      {sub.name}
+                      <FaBoxOpen className="text-primary/70" size={12} />
+                      {cat.name}
                     </div>
-                    <div className="pl-4 space-y-4 border-l border-border/60 ml-0.5">
-                      {sub.mappedTypes?.map(type => (
-                        <div key={type.subcategory_type_id} className="space-y-2 group/type">
-                          <div className="text-[11px] font-bold text-text-secondary flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-default">
-                              <FaChevronRight size={7} className="text-primary/50" />
-                              {type.type?.name || type.name}
-                            </span>
+                    <div className="pl-4 space-y-4 border-l border-border/60 ml-1.5">
+                      {cat.subcategories?.map(sub => (
+                        <div key={sub.id} className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-text-secondary">
+                            <span className="w-1.5 h-1.5 bg-primary/60 rounded-full" />
+                            {sub.name}
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {type.ranges?.map(rng => (
-                              <div key={rng.id} className="px-3 py-1.5 text-[10px] font-black rounded-lg bg-surface-hover border-2 border-border text-text-primary shadow-xs">
-                                {rng.min_value}-{rng.max_value} <span className="text-primary opacity-80">{rng.unit_symbol}</span>
+                          <div className="pl-3 space-y-2">
+                            {sub.mappedTypes?.map(type => (
+                              <div key={type.subcategory_type_id} className="space-y-1">
+                                <span className="text-[10px] font-bold text-text-secondary flex items-center gap-1">
+                                  <FaChevronRight size={6} className="text-primary/50" />
+                                  {type.type?.name || type.name}
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {type.ranges?.map(rng => (
+                                    <div key={rng.id} className="px-2 py-1 text-[9px] font-black rounded-lg bg-surface-hover border border-border text-text-primary">
+                                      {rng.min_value}-{rng.max_value} <span className="text-primary opacity-80">{rng.unit_symbol}</span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             ))}
                           </div>

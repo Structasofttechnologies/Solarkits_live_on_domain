@@ -53,12 +53,14 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
   const [kitsSearch, setKitsSearch] = useState("");
 
   // Selected filter states
+  const [selectedIndustryType, setSelectedIndustryType] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubcategory, setSelectedSubcategory] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [selectedProjectRange, setSelectedProjectRange] = useState("");
 
   // API-driven filter option lists
+  const [industryTypes, setIndustryTypes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [systemTypes, setSystemTypes] = useState([]);
@@ -215,12 +217,30 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
 
   // ─── Filter Hierarchy Fetchers ───────────────────────────────────────────────
 
-  const fetchCategories = async () => {
+  const fetchIndustryTypes = async () => {
     try {
       const res = await axios.get(
-        `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view`,
+        `${API_URL}/industry-types/list?unique_id=${moduleUniqueId}&req_for=view&active_only=true`,
         { headers: authHeaderObj() }
       );
+      if (res.data?.status === "success") {
+        setIndustryTypes(
+          res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetching industry types:", e);
+    }
+  };
+
+  const fetchCategories = async (industryTypeId = null) => {
+    setCategories([]);
+    setSubcategories([]);
+    setSystemTypes([]);
+    setProjectRanges([]);
+    try {
+      const url = `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view${industryTypeId ? `&industry_type_id=${industryTypeId}` : ''}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
       if (res.data?.status === "success") {
         setCategories(
           res.data.data.map((item) => ({ value: String(item.id), text: item.name }))
@@ -294,6 +314,7 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
   useEffect(() => {
     if (moduleUniqueId && token && warehouseId) {
       fetchData();
+      fetchIndustryTypes();
       fetchCategories();
     }
   }, [moduleUniqueId, token, warehouseId, countryName]);
@@ -590,7 +611,7 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
             </div>
 
             {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 items-end">
               {/* Search */}
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Search</label>
@@ -606,6 +627,24 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
                     className="w-full h-10 pl-9 pr-4 bg-surface border-2 border-border focus:border-primary rounded-xl text-xs font-bold text-text-primary placeholder:text-text-muted outline-none transition-colors"
                   />
                 </div>
+              </div>
+
+              {/* Industry Type */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Industry Type</label>
+                <DropdownWithSearchInput
+                  options={industryTypes}
+                  value={selectedIndustryType}
+                  onChange={(val) => {
+                    setSelectedIndustryType(val);
+                    setSelectedCategory("");
+                    setSelectedSubcategory("");
+                    setSelectedType("");
+                    setSelectedProjectRange("");
+                    fetchCategories(val);
+                  }}
+                  placeholder="All Industry Types"
+                />
               </div>
 
               {/* Category */}

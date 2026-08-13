@@ -22,7 +22,7 @@ mongoose.Connection.prototype.model = function (name, schema, collection) {
 };
 
 // Set DNS servers to avoid querySrv ECONNREFUSED issues on local systems or VPNs
-dns.setServers(['1.1.1.1', '8.8.8.8']);
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 const MONGODB_URI = process.env.MONGODB_URI;
 

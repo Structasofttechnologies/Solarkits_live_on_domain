@@ -84,6 +84,7 @@ export default function SolarBosKit() {
 
   // Filter Bar Dropdowns State
   const [filters, setFilters] = useState({
+    industryType: "all",
     category: "all",
     subCategory: "all",
     systemType: "all",
@@ -213,13 +214,25 @@ export default function SolarBosKit() {
   }, [rawKits, adminBosKits]);
 
   // Dynamic Quick Filter Options derived from available kit data
+  const industryTypeOptions = useMemo(() => {
+    const industries = [...new Set(availableKits.map((kit) => kit.industryType || kit.industry_type_name).filter(Boolean))];
+    return [
+      { value: "all", text: "All Industry Types" },
+      ...industries.map((ind) => ({ value: ind, text: ind })),
+    ];
+  }, [availableKits]);
+
   const categoryOptions = useMemo(() => {
-    const cats = [...new Set(availableKits.map((kit) => kit.category).filter(Boolean))];
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter((kit) => (kit.industryType || kit.industry_type_name)?.toLowerCase() === filters.industryType.toLowerCase());
+    }
+    const cats = [...new Set(filteredKits.map((kit) => kit.category).filter(Boolean))];
     return [
       { value: "all", text: "All Categories" },
       ...cats.map((cat) => ({ value: cat, text: cat })),
     ];
-  }, [availableKits]);
+  }, [availableKits, filters.industryType]);
 
   const subCategoryOptions = useMemo(() => {
     if (filters.category === "all") return [{ value: "all", text: "All Sub-Categories" }];
@@ -364,6 +377,11 @@ export default function SolarBosKit() {
   // Filter Pre-configured Kits
   const filteredKits = useMemo(() => {
     return availableKits.filter((kit) => {
+      // Industry Type
+      if (filters.industryType !== "all") {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        if (ind !== filters.industryType.toLowerCase()) return false;
+      }
       // Category
       if (filters.category !== "all" && kit.category?.toLowerCase() !== filters.category.toLowerCase()) {
         return false;
@@ -695,7 +713,23 @@ export default function SolarBosKit() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            <Dropdown
+              label="Industry Type"
+              value={filters.industryType}
+              onChange={(val) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  industryType: val,
+                  category: "all",
+                  subCategory: "all",
+                  systemType: "all",
+                  projectRange: "all",
+                }))
+              }
+              options={industryTypeOptions}
+              className="w-full"
+            />
             <Dropdown
               label="Category"
               value={filters.category}

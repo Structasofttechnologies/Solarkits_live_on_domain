@@ -62,9 +62,11 @@ export default function ComboKitVariants({ moduleUniqueId = "ADM_COMBO_KIT_VARIA
   const [loadingComboKits, setLoadingComboKits] = useState(false);
 
   // Filter lists for main table and form
+  const [industryTypes, setIndustryTypes] = useState([]);
   const [categories, setCategories] = useState([]);
 
   // Main Table Filters
+  const [tableIndustryType, setTableIndustryType] = useState("");
   const [tableCategory, setTableCategory] = useState("");
   const [tableSubcategory, setTableSubcategory] = useState("");
   const [tableType, setTableType] = useState("");
@@ -187,11 +189,20 @@ export default function ComboKitVariants({ moduleUniqueId = "ADM_COMBO_KIT_VARIA
           return;
         }
 
-        // 2. Fetch all categories
-        const catRes = await axios.get(
-          `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view`,
-          { headers: authHeaderObj() }
-        );
+        // 2. Fetch industry types and categories
+        const [indRes, catRes] = await Promise.all([
+          axios.get(
+            `${API_URL}/industry-types/list?unique_id=${moduleUniqueId}&req_for=view&active_only=true`,
+            { headers: authHeaderObj() }
+          ),
+          axios.get(
+            `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view`,
+            { headers: authHeaderObj() }
+          )
+        ]);
+        if (indRes.data?.status === "success") {
+          setIndustryTypes(indRes.data.data || []);
+        }
         if (catRes.data?.status === "success") {
           setCategories(catRes.data.data || []);
         }
@@ -230,7 +241,27 @@ export default function ComboKitVariants({ moduleUniqueId = "ADM_COMBO_KIT_VARIA
     }
   };
 
+  const handleTableIndustryTypeChange = async (indId) => {
+    setTableIndustryType(indId);
+    setTableCategory("");
+    setTableSubcategory("");
+    setTableType("");
+    setTableRange("");
+    setCategories([]);
+    setTableSubcategoriesOptions([]);
+    setTableTypesOptions([]);
+    setTableRangesOptions([]);
 
+    try {
+      const url = `${API_URL}/project-types/get-categories?unique_id=${moduleUniqueId}&req_for=view${indId ? `&industry_type_id=${indId}` : ''}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
+      if (res.data?.status === "success") {
+        setCategories(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Error loading categories for industry:", err);
+    }
+  };
 
   // Form metadata selectors loader helpers
   const handleTableCategoryChange = async (catId) => {
@@ -672,6 +703,15 @@ export default function ComboKitVariants({ moduleUniqueId = "ADM_COMBO_KIT_VARIA
           <div className="bg-surface rounded-2xl border-2 border-border p-6 shadow-sm flex flex-wrap md:flex-nowrap items-end gap-4">
             <div className="flex-1 min-w-[200px]">
               <Dropdown
+                label="Industry Type"
+                value={tableIndustryType}
+                onChange={handleTableIndustryTypeChange}
+                placeholder="All Industry Types"
+                options={industryTypes.map((i) => ({ value: String(i.id || i._id), text: i.name }))}
+              />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <Dropdown
                 label="Category"
                 value={tableCategory}
                 onChange={handleTableCategoryChange}
@@ -712,10 +752,11 @@ export default function ComboKitVariants({ moduleUniqueId = "ADM_COMBO_KIT_VARIA
                 disabled={!tableType}
               />
             </div>
-            {(tableCategory || tableSubcategory || tableType || tableRange) && (
+            {(tableIndustryType || tableCategory || tableSubcategory || tableType || tableRange) && (
               <Button
                 variant="secondary"
                 onClick={() => {
+                  setTableIndustryType("");
                   setTableCategory("");
                   setTableSubcategory("");
                   setTableType("");

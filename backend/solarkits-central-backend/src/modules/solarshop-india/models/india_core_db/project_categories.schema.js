@@ -3,6 +3,7 @@ const { core_db: db } = require('../../config/databases');
 
 const schema = new mongoose.Schema({
   name:       { type: String, required: true, trim: true },
+  industry_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'sys_industry_types', default: null },
   is_active:  { type: Boolean, default: true },
   deleted_at: { type: Date, default: null },
 }, { 

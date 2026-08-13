@@ -84,121 +84,113 @@ const deactivation_otp = async (req, res) => {
 
 /**
  * Fetches all countries with counts of active states, districts, clusters, and zones.
+ * Optimized with parallel Promise.all execution and lean field projections.
  */
 const get_countries = async (req, res) => {
   try {
-    const countries_raw = await GeoLevel0.aggregate([
-      { $match: { $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] } },
-      {
-        $lookup: {
-          from: 'geolocation_level_1',
-          let: { countryId: '$_id' },
-          pipeline: [
-            { 
-              $match: { 
-                $expr: { 
-                  $and: [ 
-                    { $eq: ['$level_0', '$$countryId'] }, 
-                    { $eq: ['$is_active', true] }, 
-                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
-                  ] 
-                } 
-              } 
-            }
-          ],
-          as: 'active_states'
-        }
-      },
-      {
-        $lookup: {
-          from: 'geolocation_level_2',
-          let: { stateIds: { $ifNull: ['$active_states._id', []] } },
-          pipeline: [
-            { 
-              $match: { 
-                $expr: { 
-                  $and: [ 
-                    { $in: ['$level_1', '$$stateIds'] }, 
-                    { $eq: ['$is_active', true] }, 
-                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
-                  ] 
-                } 
-              } 
-            }
-          ],
-          as: 'active_districts'
-        }
-      },
-      {
-        $lookup: {
-          from: 'clusters',
-          let: { stateIds: { $ifNull: ['$active_states._id', []] } },
-          pipeline: [
-            { 
-              $match: { 
-                $expr: { 
-                  $and: [ 
-                    { $in: ['$level_1', '$$stateIds'] }, 
-                    { $eq: ['$is_active', true] }, 
-                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
-                  ] 
-                } 
-              } 
-            }
-          ],
-          as: 'active_clusters'
-        }
-      },
-      {
-        $lookup: {
-          from: 'zones',
-          let: { clusterIds: { $ifNull: ['$active_clusters._id', []] } },
-          pipeline: [
-            { 
-              $match: { 
-                $expr: { 
-                  $and: [ 
-                    { $in: ['$cluster', '$$clusterIds'] }, 
-                    { $or: [{ $eq: ['$deleted_at', null] }, { $not: ['$deleted_at'] }] } 
-                  ] 
-                } 
-              } 
-            }
-          ],
-          as: 'active_zones'
-        }
-      },
-      {
-        $project: {
-          id: { $toString: '$_id' },
-          name: 1,
-          iso2: 1,
-          is_active: 1,
-          active_states_count: { $size: { $ifNull: ['$active_states', []] } },
-          active_districts_count: { $size: { $ifNull: ['$active_districts', []] } },
-          active_clusters_count: { $size: { $ifNull: ['$active_clusters', []] } },
-          active_zones_count: { $size: { $ifNull: ['$active_zones', []] } }
-        }
-      },
-      { $sort: { name: 1 } }
+    // ── 1. Fetch countries & boundary metadata in parallel ─────────────────────
+    const [countries_raw, boundaries] = await Promise.all([
+      GeoLevel0.find(
+        { $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] },
+        'name iso2 phone_code min_phone_length max_phone_length currency_name currency_code is_active'
+      ).lean(),
+      BoundaryLevel0.find({}, 'iso2 lat lng geometry_type').lean()
     ]);
 
-    // Merge boundary data from separate DB
-    const boundaries = await BoundaryLevel0.find({}).select('iso2 lat lng geometry_type').lean();
+    if (!countries_raw.length) {
+      return res.status(200).json({ message: "Fetched all countries successfully.", status: "success", countries: [], data: [] });
+    }
+
+    const countryIds = countries_raw.map(c => c._id);
+
+    // ── 2. Active states per country ──────────────────────────────────────────
+    const stateGroups = await GeoLevel1.aggregate([
+      { $match: { level_0: { $in: countryIds }, is_active: true, $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] } },
+      { $project: { level_0: 1 } },
+      { $group: { _id: '$level_0', stateIds: { $push: '$_id' }, count: { $sum: 1 } } }
+    ]);
+    const stateMap = {};
+    const allStateIds = [];
+    for (const sg of stateGroups) {
+      stateMap[sg._id.toString()] = { count: sg.count, stateIds: sg.stateIds };
+      allStateIds.push(...sg.stateIds);
+    }
+
+    // ── 3. Active districts & clusters in parallel ────────────────────────────
+    const [districtGroups, clusterGroups] = await Promise.all([
+      allStateIds.length > 0 
+        ? GeoLevel2.aggregate([
+            { $match: { level_1: { $in: allStateIds }, is_active: true, $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] } },
+            { $project: { level_1: 1 } },
+            { $group: { _id: '$level_1', count: { $sum: 1 } } }
+          ])
+        : Promise.resolve([]),
+      allStateIds.length > 0
+        ? Cluster.aggregate([
+            { $match: { level_1: { $in: allStateIds }, is_active: true, $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] } },
+            { $project: { level_1: 1 } },
+            { $group: { _id: '$level_1', clusterIds: { $push: '$_id' }, count: { $sum: 1 } } }
+          ])
+        : Promise.resolve([])
+    ]);
+
+    const districtByState = {};
+    for (const d of districtGroups) districtByState[d._id.toString()] = d.count;
+
+    const clusterByState = {};
+    const allClusterIds = [];
+    for (const cg of clusterGroups) {
+      clusterByState[cg._id.toString()] = { count: cg.count, clusterIds: cg.clusterIds };
+      allClusterIds.push(...cg.clusterIds);
+    }
+
+    // ── 4. Zone counts per cluster ────────────────────────────────────────────
+    const zoneByCluster = {};
+    if (allClusterIds.length > 0) {
+      const zoneGroups = await Zone.aggregate([
+        { $match: { cluster: { $in: allClusterIds }, $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] } },
+        { $project: { cluster: 1 } },
+        { $group: { _id: '$cluster', count: { $sum: 1 } } }
+      ]);
+      for (const z of zoneGroups) zoneByCluster[z._id.toString()] = z.count;
+    }
+
+    // ── 5. Build final response ───────────────────────────────────────────────
     const bMap = boundaries.reduce((acc, b) => { acc[b.iso2] = b; return acc; }, {});
-    const countries = countries_raw.map(c => {
-      const b = bMap[c.iso2] || {};
+
+    const countries = countries_raw.map(country => {
+      const cId = country._id.toString();
+      const sg = stateMap[cId] || { count: 0, stateIds: [] };
+      let districtCount = 0, clusterCount = 0, zoneCount = 0;
+      for (const sId of sg.stateIds) {
+        const sIdStr = sId.toString();
+        districtCount += districtByState[sIdStr] || 0;
+        const cg = clusterByState[sIdStr] || { count: 0, clusterIds: [] };
+        clusterCount += cg.count;
+        for (const clId of (cg.clusterIds || [])) {
+          zoneCount += zoneByCluster[clId.toString()] || 0;
+        }
+      }
+      const b = bMap[country.iso2] || {};
       return {
-        ...c,
+        id: cId,
+        _id: country._id,
+        name: country.name,
+        iso2: country.iso2,
+        phone_code: country.phone_code,
+        currency_name: country.currency_name,
+        currency_code: country.currency_code,
+        is_active: country.is_active,
+        active_states_count: sg.count,
+        active_districts_count: districtCount,
+        active_clusters_count: clusterCount,
+        active_zones_count: zoneCount,
         lat: b.lat || 0,
         lng: b.lng || 0,
-        geometry: {
-          type: b.geometry_type || 'Point',
-          coordinates: []
-        },
+        geometry: { type: b.geometry_type || 'Point', coordinates: [] },
         boundary: []
       };
-    });
+    }).sort((a, b) => a.name.localeCompare(b.name));
 
     return res.status(200).json({
       message: "Fetched all countries successfully.",
@@ -1539,7 +1531,7 @@ const get_clusters = async (req, res) => {
     const uniqueId = req.query.unique_id;
     let clusters = allClusters;
 
-    if (uniqueId !== 'ADM_CLUSTER_SETUP' && uniqueId !== 'ADM_WAREHOUSES') {
+    if (uniqueId !== 'ADM_CLUSTER_SETUP' && uniqueId !== 'ADM_WAREHOUSES' && uniqueId !== 'ADM_BETCHMARK_PRICE_MASTER' && uniqueId !== 'ADM_BENCHMARK_PRICE_MASTER') {
       // Fetch active warehouse kit activations
       const { WarehouseKitActivation } = require('../models/core_db');
       const activations = await WarehouseKitActivation.find({
