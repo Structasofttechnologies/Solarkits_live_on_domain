@@ -105,11 +105,62 @@ async function processEpcCheckout({
   if (targetResellerId) {
     totals = await calculateCheckoutPrice(targetResellerId, items);
   } else {
-    // Direct fallback pricing calculation
-    totals = await calculateCheckoutPrice(null, items).catch(() => ({
-      items: items.map(i => ({ ...i, unit_price_paise: 1000, tax_paise: 138, total_price_paise: 1138, cost_price_paise: 900, platform_commission_pct: 0 })),
-      subtotal_paise: 1000, tax_total_paise: 138, grand_total_paise: 1138,
-    }));
+    // Direct fallback: no reseller. Compute real amounts using item prices
+    // and the platform GST rate. NEVER use hardcoded placeholder paise.
+    const { SolarShopSettings } = require('../models/india_solarshop_db');
+    const settings = await SolarShopSettings.findOne().lean();
+    const gstRate = settings?.gst_rate || 13.8;
+
+    let subtotalPaise = 0;
+    let taxTotalPaise = 0;
+    const directItems = [];
+
+    for (const item of items) {
+      const qty = parseInt(item.quantity, 10) || parseInt(item.qty, 10) || 1;
+
+      // ourPrice is the frontend-displayed price in INR (rupees, not paise).
+      // Convert to integer paise. We do NOT trust the value for final charging
+      // but use it as the base when no reseller listing exists.
+      // TODO: Replace with a direct CompanyMargin lookup for production parity.
+      const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 0);
+      if (ourPriceRupees <= 0) {
+        throw new Error(
+          `Cannot determine price for item "${item.id || item.kit_id || item.product_id}". ` +
+          `No reseller listing found and ourPrice is missing or zero.`
+        );
+      }
+
+      // Round to integer paise (1 INR = 100 Paise).
+      const unitPricePaise = Math.round(ourPriceRupees * 100);
+      const itemSubtotal = qty * unitPricePaise;
+      const itemTax = Math.round(itemSubtotal * (gstRate / 100));
+
+      subtotalPaise += itemSubtotal;
+      taxTotalPaise += itemTax;
+
+      directItems.push({
+        item_type: item.item_type || (item.kit_id ? 'kit' : 'product'),
+        product_id: item.product_id || null,
+        kit_id: item.kit_id || item.id || null,
+        item_name: item.kitName || item.title || item.name || 'Solar Kit',
+        quantity: qty,
+        unit_price_paise: unitPricePaise,
+        cost_price_paise: Math.round(unitPricePaise * 0.85), // estimate until CompanyMargin lookup added
+        tax_paise: itemTax,
+        total_price_paise: itemSubtotal + itemTax,
+        platform_commission_pct: 0, // no commission on direct-fallback orders
+      });
+    }
+
+    const grandTotalPaise = subtotalPaise + taxTotalPaise;
+    totals = {
+      items: directItems,
+      subtotal_paise: subtotalPaise,
+      tax_total_paise: taxTotalPaise,
+      shipping_fee_paise: 0,
+      grand_total_paise: grandTotalPaise,
+      gst_rate: gstRate,
+    };
   }
 
   // 3. Stock Availability & Reservation Hold

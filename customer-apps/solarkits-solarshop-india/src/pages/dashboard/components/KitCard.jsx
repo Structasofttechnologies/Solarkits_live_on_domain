@@ -18,6 +18,19 @@ import {
 import Button from "@/components/Button";
 import IconButton from "@/components/IconButton";
 
+const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+
+const resolveImageUrl = (url) => {
+  if (!url) return DEFAULT_KIT_IMAGE;
+  if (url.includes("localhost:3001")) {
+    return url.replace("localhost:3001", "localhost:5000");
+  }
+  if (url.startsWith("/")) {
+    return `http://localhost:5000${url}`;
+  }
+  return url;
+};
+
 const ComponentImage = ({ src, type }) => {
   const [error, setError] = useState(!src);
 
@@ -373,9 +386,10 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
         >
           {kit.usageTypeImage && (
             <img
-              src={kit.usageTypeImage.startsWith("http") ? kit.usageTypeImage :`http://localhost:3001${kit.usageTypeImage}`}
+              src={resolveImageUrl(kit.usageTypeImage)}
               alt=""
               className="w-5 h-5 object-contain rounded-full shrink-0"
+              onError={(e) => { e.target.style.display = "none"; }}
             />
           )}
           <span>{kit.usageType}</span>
@@ -408,10 +422,14 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
           )}
         </div>
         <img
-          src={kit?.kitImage}
-          alt={kit?.kitName}
+          src={resolveImageUrl(kit?.kitImage)}
+          alt={kit?.kitName || "Solar Kit"}
           className="w-full h-full p-2 object-contain transition-transform duration-500 group-hover:scale-110"
           loading="lazy"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = DEFAULT_KIT_IMAGE;
+          }}
         />
         {/* Decorative background circle */}
         <div className="absolute -z-10 w-40 h-40 bg-primary/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
@@ -713,10 +731,14 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
             )}
           </div>
           <img
-            src={kit?.kitImage}
-            alt={kit?.kitName}
+            src={resolveImageUrl(kit?.kitImage)}
+            alt={kit?.kitName || "Solar Kit"}
             className="w-full h-full p-2.5 object-contain transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = DEFAULT_KIT_IMAGE;
+            }}
           />
         </div>
 
@@ -760,9 +782,10 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                 >
                   {kit.usageTypeImage && (
                     <img
-                      src={kit.usageTypeImage.startsWith("http") ? kit.usageTypeImage :`http://localhost:3001${kit.usageTypeImage}`}
+                      src={resolveImageUrl(kit.usageTypeImage)}
                       alt=""
                       className="w-5 h-5 object-contain rounded-full shrink-0"
+                      onError={(e) => { e.target.style.display = "none"; }}
                     />
                   )}
                   <span>{kit.usageType}</span>

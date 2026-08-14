@@ -910,7 +910,15 @@ export default function CustomizeKits({ moduleUniqueId = "ADM_CUSTOMIZE_KITS" })
                     ) : formData.kit_image ? (
                       <div className="space-y-2">
                         <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Current Cover Image:</p>
-                        <img src={formData.kit_image} alt="Current Kit Cover" className="h-16 w-auto rounded-lg border border-border object-cover" />
+                        <img
+                          src={formData.kit_image.includes('localhost:3001') ? formData.kit_image.replace('localhost:3001', 'localhost:5000') : (formData.kit_image.startsWith('http://') || formData.kit_image.startsWith('https://')) ? formData.kit_image : `http://localhost:5000/${formData.kit_image.startsWith('/') ? formData.kit_image.slice(1) : formData.kit_image}`}
+                          alt="Current Kit Cover"
+                          className="h-16 w-auto rounded-lg border border-border object-cover"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+                          }}
+                        />
                       </div>
                     ) : (
                       <p className="text-[10px] text-text-muted italic">No cover image uploaded for this combo configuration.</p>
@@ -1021,7 +1029,15 @@ export default function CustomizeKits({ moduleUniqueId = "ADM_CUSTOMIZE_KITS" })
             <div className="flex items-center gap-4 bg-surface-hover/20 p-5 rounded-2xl border border-border">
               <div className="w-20 h-16 rounded-xl border border-border overflow-hidden bg-surface flex items-center justify-center shrink-0">
                 {viewingKit.kit_image ? (
-                  <img src={viewingKit.kit_image} alt="Kit" className="w-full h-full object-cover" />
+                  <img
+                    src={viewingKit.kit_image.includes('localhost:3001') ? viewingKit.kit_image.replace('localhost:3001', 'localhost:5000') : (viewingKit.kit_image.startsWith('http://') || viewingKit.kit_image.startsWith('https://')) ? viewingKit.kit_image : `http://localhost:5000/${viewingKit.kit_image.startsWith('/') ? viewingKit.kit_image.slice(1) : viewingKit.kit_image}`}
+                    alt="Kit"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+                    }}
+                  />
                 ) : (
                   <FaImage className="text-text-muted/40" size={24} />
                 )}

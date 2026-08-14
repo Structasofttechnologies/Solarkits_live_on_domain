@@ -35,7 +35,14 @@ export default function ComboKitDetailsModal({
                         <div className="space-y-6 lg:col-span-5">
                             <div className="rounded-2xl border border-border bg-surface p-5 space-y-4">
                                 <div className="flex h-40 w-full items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-hover">
-                                    {!failedImages['kit_image'] && viewingKit.kit_image ? <img src={viewingKit.kit_image} alt="Kit" className="h-full w-full object-cover" onError={() => handleImageError('kit_image')} /> : <FaImage className="text-text-muted/30" size={48} />}
+                                    {!failedImages['kit_image'] && viewingKit.kit_image ? (
+                                        <img
+                                            src={viewingKit.kit_image.includes('localhost:3001') ? viewingKit.kit_image.replace('localhost:3001', 'localhost:5000') : (viewingKit.kit_image.startsWith('http://') || viewingKit.kit_image.startsWith('https://')) ? viewingKit.kit_image : `http://localhost:5000/${viewingKit.kit_image.startsWith('/') ? viewingKit.kit_image.slice(1) : viewingKit.kit_image}`}
+                                            alt="Kit"
+                                            className="h-full w-full object-cover"
+                                            onError={() => handleImageError('kit_image')}
+                                        />
+                                    ) : <FaImage className="text-text-muted/30" size={48} />}
                                 </div>
                                 <div>
                                     <h4 className="text-base font-black uppercase tracking-wide text-text-primary">{viewingKit.name}</h4>

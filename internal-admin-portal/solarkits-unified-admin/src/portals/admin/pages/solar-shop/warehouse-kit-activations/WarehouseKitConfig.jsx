@@ -121,66 +121,48 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Active countries
-      const countriesRes = await axios.get(
-        `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId}&req_for=view`,
-        { headers: authHeaderObj() }
-      );
+      const isIndia = countryName?.toLowerCase() === "india";
+
+      // 1. Parallel fetch countries, warehouses, activations, and kits
+      const [countriesRes, warehousesRes, comboRes, customizeRes] = await Promise.all([
+        axios.get(`${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }),
+        axios.get(`${API_URL}/warehouses?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }),
+        axios.get(`${API_URL}/combo-kits${isIndia ? "/india" : ""}/get-kits?unique_id=${moduleUniqueId}&req_for=view&is_custom=false`, { headers: authHeaderObj() }),
+        axios.get(`${API_URL}/combo-kits${isIndia ? "/india" : ""}/get-kits?unique_id=${moduleUniqueId}&req_for=view&is_custom=true`, { headers: authHeaderObj() }),
+        fetchActivations()
+      ]);
+
       const activeCountries = countriesRes.data?.countries || [];
-      const foundCountry = activeCountries.find(
-        (c) => c.name.toLowerCase() === countryName?.toLowerCase()
-      );
+      const foundCountry = activeCountries.find((c) => c.name.toLowerCase() === countryName?.toLowerCase());
       setCountryObj(foundCountry);
 
-      // 2. Warehouse details
-      const warehousesRes = await axios.get(
-        `${API_URL}/warehouses?unique_id=${moduleUniqueId}&req_for=view`,
-        { headers: authHeaderObj() }
-      );
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const wh = allWarehouses.find((w) => w.id === warehouseId);
       setWarehouse(wh);
 
-      if (wh && foundCountry) {
-        const isIndia = foundCountry.iso2?.toLowerCase() === "in";
-
-        // 3. Fetch combo kits (non-custom)
-        const comboRes = await axios.get(
-          `${API_URL}/combo-kits${isIndia ? "/india" : ""}/get-kits?unique_id=${moduleUniqueId}&req_for=view&is_custom=false&country_id=${foundCountry.id}`,
-          { headers: authHeaderObj() }
-        );
-        const fetchedCombos = comboRes.data?.data || [];
-        const uniqueCombos = [];
-        const seenComboIds = new Set();
-        for (const kit of fetchedCombos) {
-          const kId = kit.id || kit._id;
-          if (kId && !seenComboIds.has(kId)) {
-            uniqueCombos.push(kit);
-            seenComboIds.add(kId);
-          }
+      const fetchedCombos = comboRes.data?.data || [];
+      const uniqueCombos = [];
+      const seenComboIds = new Set();
+      for (const kit of fetchedCombos) {
+        const kId = kit.id || kit._id;
+        if (kId && !seenComboIds.has(kId)) {
+          uniqueCombos.push(kit);
+          seenComboIds.add(kId);
         }
-        setComboKits(uniqueCombos);
-
-        // 4. Fetch customize kits (custom)
-        const customizeRes = await axios.get(
-          `${API_URL}/combo-kits${isIndia ? "/india" : ""}/get-kits?unique_id=${moduleUniqueId}&req_for=view&is_custom=true&country_id=${foundCountry.id}`,
-          { headers: authHeaderObj() }
-        );
-        const fetchedCustomizes = customizeRes.data?.data || [];
-        const uniqueCustomizes = [];
-        const seenCustomizeIds = new Set();
-        for (const kit of fetchedCustomizes) {
-          const kId = kit.id || kit._id;
-          if (kId && !seenCustomizeIds.has(kId)) {
-            uniqueCustomizes.push(kit);
-            seenCustomizeIds.add(kId);
-          }
-        }
-        setCustomizeKits(uniqueCustomizes);
-
-        // 5. Fetch existing activations
-        await fetchActivations();
       }
+      setComboKits(uniqueCombos);
+
+      const fetchedCustomizes = customizeRes.data?.data || [];
+      const uniqueCustomizes = [];
+      const seenCustomizeIds = new Set();
+      for (const kit of fetchedCustomizes) {
+        const kId = kit.id || kit._id;
+        if (kId && !seenCustomizeIds.has(kId)) {
+          uniqueCustomizes.push(kit);
+          seenCustomizeIds.add(kId);
+        }
+      }
+      setCustomizeKits(uniqueCustomizes);
     } catch (error) {
       console.error("Error loading warehouse kit config:", error);
       dispatch(setAlert({ type: "error", message: "Failed to load warehouse kit configuration" }));
@@ -692,18 +674,22 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
                             </span>
                             <div className="flex flex-wrap gap-1.5">
                               {priceInfo.missingSkuDetails.map((sku) => (
-                                <a
+                                <button
                                   key={sku.sku_id}
-                                  href={`/admin-panel/product-configurations/price-master?sku_id=${sku.sku_id}&cluster_id=${warehouse.cluster_id || warehouse.cluster}&state_id=${warehouse.state_id}&country_id=${warehouse.country_id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-danger/10 text-danger hover:bg-danger/20 hover:scale-[1.02] border border-danger/20 rounded-md text-[9px] font-bold transition-all no-underline"
+                                  type="button"
+                                  onClick={() => {
+                                    const cId = warehouse.country_id || warehouse.level_0 || "";
+                                    const sId = warehouse.state_id || warehouse.level_1 || "";
+                                    const clId = warehouse.cluster_id || warehouse.cluster?.id || warehouse.cluster || "";
+                                    navigate(`/admin-panel/product-configurations/price-master?sku_id=${sku.sku_id}&cluster_id=${clId}&state_id=${sId}&country_id=${cId}`);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-danger/10 text-danger hover:bg-danger/20 hover:scale-[1.02] border border-danger/20 rounded-md text-[9px] font-bold transition-all cursor-pointer"
                                 >
                                   <span className="underline">{sku.sku_code}</span>
                                   <span className="text-[8px] text-text-muted font-normal">
                                     ({sku.product_name || "Unknown Product"})
                                   </span>
-                                </a>
+                                </button>
                               ))}
                             </div>
                           </div>
@@ -734,17 +720,16 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
                               Company margin not set (for warehouse: {warehouse.warehouse_code || "N/A"}) — click to set:
                             </span>
                             <div className="flex flex-wrap gap-1.5">
-                              <a
-                                href={`/admin-panel/solar-shop/${countryName}/company-margin/${warehouseId}?combo_kit_id=${kitId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-danger/10 text-danger hover:bg-danger/20 hover:scale-[1.02] border border-danger/20 rounded-md text-[9px] font-bold transition-all no-underline"
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/admin-panel/solar-shop/${countryName}/company-margin/${warehouseId}?combo_kit_id=${kitId}`)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-danger/10 text-danger hover:bg-danger/20 hover:scale-[1.02] border border-danger/20 rounded-md text-[9px] font-bold transition-all cursor-pointer"
                               >
                                 <span className="underline">Configure Margin</span>
                                 <span className="text-[8px] text-text-muted font-normal">
                                   ({kit.name || "This Kit"})
                                 </span>
-                              </a>
+                              </button>
                             </div>
                           </div>
                         )}

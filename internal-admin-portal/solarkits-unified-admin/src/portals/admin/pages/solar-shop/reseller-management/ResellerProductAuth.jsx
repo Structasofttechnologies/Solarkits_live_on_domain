@@ -15,6 +15,7 @@ import {
   FiLayers,
   FiBox,
   FiZap,
+  FiEdit3,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -45,10 +46,10 @@ function AuthStatusBadge({ isAuthorized }) {
   );
 }
 
-function AssignAuthModal({ resellers, onClose, onAssigned }) {
+function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) {
   const dispatch = useDispatch();
   const [form, setForm] = useState({
-    reseller_id:      "",
+    reseller_id:      defaultResellerId || (resellers[0]?.id || ""),
     industry_type_id: "",
     scope_type:       "product",
     category_id:      "",
@@ -216,7 +217,7 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
       const res = await apiFetch("post", `/assign/${form.reseller_id}?req_for=add&unique_id=${MODULE_UID}`, payload);
       if (res.data?.status === "success") {
         dispatch(setAlert({ type: "success", message: "Product authorization rule saved!" }));
-        onAssigned();
+        onAssigned(form.reseller_id);
         onClose();
       } else {
         dispatch(setAlert({ type: "error", message: res.data?.message || "Operation failed" }));
@@ -457,6 +458,84 @@ function AssignAuthModal({ resellers, onClose, onAssigned }) {
   );
 }
 
+function EditStockModal({ rule, resellerId, onClose, onUpdated }) {
+  const dispatch = useDispatch();
+  const [stockQty, setStockQty] = useState(rule?.stock_quantity ?? 100);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await apiFetch("put", `/stock/${rule.id}?req_for=edit&unique_id=${MODULE_UID}`, {
+        stock_quantity: Number(stockQty),
+        reseller_id: resellerId || rule.reseller_id,
+        product_id: rule.product?._id || rule.product,
+      });
+
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: res.data.message || "Stock updated successfully!" }));
+        onUpdated();
+        onClose();
+      } else {
+        dispatch(setAlert({ type: "error", message: res.data?.message || "Failed to update stock" }));
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to update stock" }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
+          <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+            <FiBox className="text-primary" size={20} /> Edit / Refill Product Stock
+          </h3>
+          <button onClick={onClose} className="p-1 rounded-lg text-text-muted hover:text-text-primary">
+            <FiXCircle size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Product</label>
+            <div className="p-3 bg-bg border border-border rounded-xl font-semibold text-text-primary text-sm">
+              {rule.product?.name || rule.product?.sku_code || "Product Scope"}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Stock Quantity (Units)</label>
+            <input
+              type="number"
+              min="0"
+              required
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:ring-2 focus:ring-primary/30"
+              value={stockQty}
+              onChange={(e) => setStockQty(e.target.value)}
+              placeholder="e.g. 100, 200..."
+            />
+            <p className="text-xs text-text-muted mt-1">Set available inventory count. Stock turns Out of Stock when quantity reaches 0.</p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-border">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-semibold border border-border text-text-secondary hover:bg-surface-hover">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary-hover shadow-md">
+              {saving ? <FiLoader className="animate-spin" size={16} /> : <FiCheckCircle size={16} />}
+              Update Stock Quantity
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function ResellerProductAuth({ moduleUniqueId }) {
   const dispatch = useDispatch();
   const [resellers, setResellers] = useState([]);
@@ -465,6 +544,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
   const [loading, setLoading] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [modal, setModal] = useState(false);
+  const [stockModalRule, setStockModalRule] = useState(null);
 
   // Load Resellers
   useEffect(() => {
@@ -494,6 +574,14 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
   useEffect(() => {
     fetchRules();
   }, [fetchRules]);
+
+  const handleAssigned = (assignedResellerId) => {
+    if (assignedResellerId && assignedResellerId !== selectedResellerId) {
+      setSelectedResellerId(assignedResellerId);
+    } else {
+      fetchRules();
+    }
+  };
 
   const handleRevoke = async (ruleId) => {
     try {
@@ -595,6 +683,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">Scope Level</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">Target Entity</th>
                   <th className="text-center text-text-muted font-medium px-4 py-3.5">Authorization State</th>
+                  <th className="text-center text-text-muted font-medium px-4 py-3.5">Stock Quantity</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5 hidden md:table-cell">Reason / Notes</th>
                   <th className="text-center text-text-muted font-medium px-4 py-3.5">Status</th>
                   <th className="text-right text-text-muted font-medium px-5 py-3.5">Actions</th>
@@ -604,8 +693,20 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                 <AnimatePresence>
                   {rules.map((r) => {
                     const ScopeIcon = SCOPE_ICONS[r.scope_type] || FiPackage;
-                    const targetName = r.category?.name || r.subcategory?.name || r.product?.name || r.kit?.kit_name || "All Catalog Items";
+                    let targetName = "All Catalog Items";
+                    if (r.scope_type === "product") {
+                      targetName = r.product?.name || (r.product?.sku_code ? `SKU: ${r.product.sku_code}` : "Product Scope");
+                    } else if (r.scope_type === "kit") {
+                      targetName = r.kit?.kit_name || (r.kit?.kit_code ? `Kit: ${r.kit.kit_code}` : "Combo Kit Scope");
+                    } else if (r.scope_type === "subcategory") {
+                      targetName = r.subcategory?.name || "Subcategory Scope";
+                    } else if (r.scope_type === "category") {
+                      targetName = r.category?.name || "Category Scope";
+                    }
+
                     const industryName = r.allowed_industry_type_ids?.[0]?.name || "—";
+                    const stockQty = r.stock_quantity ?? 100;
+
                     return (
                       <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="hover:bg-surface-hover transition-colors">
                         <td className="px-5 py-3.5">
@@ -625,6 +726,21 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                         <td className="px-4 py-3.5 text-center">
                           <AuthStatusBadge isAuthorized={r.is_authorized} />
                         </td>
+                        <td className="px-4 py-3.5 text-center font-medium">
+                          {r.scope_type === "product" ? (
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              stockQty > 10
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : stockQty > 0
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}>
+                              {stockQty > 0 ? `In Stock (${stockQty} units)` : "Out of Stock (0)"}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-text-muted italic">—</span>
+                          )}
+                        </td>
                         <td className="px-5 py-3.5 hidden md:table-cell text-text-secondary text-xs max-w-xs truncate">
                           {r.override_reason || <span className="text-text-muted italic">—</span>}
                         </td>
@@ -636,15 +752,26 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          {r.status === 'active' && (
-                            <button
-                              onClick={() => handleRevoke(r.id)}
-                              className="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                              title="Revoke Rule"
-                            >
-                              <FiTrash2 size={16} />
-                            </button>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {r.scope_type === "product" && r.status === "active" && (
+                              <button
+                                onClick={() => setStockModalRule(r)}
+                                className="p-2 rounded-lg text-primary hover:text-primary-hover hover:bg-primary-soft transition-colors"
+                                title="Edit / Refill Stock Quantity"
+                              >
+                                <FiEdit3 size={16} />
+                              </button>
+                            )}
+                            {r.status === 'active' && (
+                              <button
+                                onClick={() => handleRevoke(r.id)}
+                                className="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger-soft transition-colors"
+                                title="Revoke Rule"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </motion.tr>
                     );
@@ -660,8 +787,17 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
         {modal && (
           <AssignAuthModal
             resellers={resellers}
+            defaultResellerId={selectedResellerId}
             onClose={() => setModal(false)}
-            onAssigned={fetchRules}
+            onAssigned={handleAssigned}
+          />
+        )}
+        {stockModalRule && (
+          <EditStockModal
+            rule={stockModalRule}
+            resellerId={selectedResellerId}
+            onClose={() => setStockModalRule(null)}
+            onUpdated={fetchRules}
           />
         )}
       </AnimatePresence>

@@ -1,9 +1,8 @@
-// pages/Cart.jsx
 import { useSelector, useDispatch } from "react-redux";
 import { useEffect, useState, useRef, useCallback } from "react";
 import PreConfiguredKitOrderCart from "./PreConfiguredKitOrderCart";
 import { FiShoppingCart, FiClock, FiAlertTriangle, FiX } from "react-icons/fi";
-import { selectCartTotalItems, selectCartExpiryTime, clearCart, fetchCart, fetchLiveInventory } from "@/features/slice";
+import { selectCartTotalItems, selectCartExpiryTime, clearCart, fetchCart } from "@/features/slice";
 
 // ── Compact helper: format seconds → MM:SS ────────────────────────
 const formatCountdown = (seconds) => {
@@ -17,22 +16,18 @@ export default function Cart() {
   const dispatch = useDispatch();
   const totalItems = useSelector(selectCartTotalItems);
   const cartExpiryTime = useSelector(selectCartExpiryTime);
-  const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
 
   const [secondsLeft, setSecondsLeft] = useState(null);
   const [expiredToast, setExpiredToast] = useState(false);
   const intervalRef = useRef(null);
 
-  // Fetch the latest cart and live inventory on mount to automatically handle stock level adjustments
+  // Fetch the latest cart from backend on mount.
+  // fetchLiveInventory is intentionally NOT dispatched here — doing so used
+  // to appear in the middleware cartActions list and caused a sync storm
+  // (an extra POST /cart fired on every page load, racing with fetchCart).
   useEffect(() => {
     dispatch(fetchCart());
-    const districtId = selectedDistrict?.id || selectedDistrict?._id;
-    if (districtId) {
-      dispatch(fetchLiveInventory({ districtId }));
-    } else {
-      dispatch(fetchLiveInventory({}));
-    }
-  }, [dispatch, selectedDistrict]);
+  }, [dispatch]);
 
   // Compute seconds left whenever expiry changes
   const computeSeconds = useCallback(() => {

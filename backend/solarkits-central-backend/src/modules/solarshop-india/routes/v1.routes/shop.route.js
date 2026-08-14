@@ -45,6 +45,13 @@ router.get("/orders", verify_auth, get_orders);
 router.put("/orders/:id/address", verify_auth, update_order_address);
 router.post("/razorpay/create-order", verify_auth, create_razorpay_order);
 router.post("/razorpay/verify-payment", verify_auth, verify_razorpay_payment);
-router.post("/razorpay/webhook", express.json({ type: '*/*' }), handleRazorpayWebhook);
+// Razorpay webhook MUST use express.raw() — NOT express.json().
+// Razorpay signs the raw request body bytes. If we parse the body with
+// express.json() first and then re-serialize it for HMAC verification,
+// the resulting string can differ from the original bytes (key ordering,
+// encoding) and the signature check will fail in production.
+// express.raw() preserves the original Buffer so we can verify HMAC
+// against exact bytes before parsing the JSON payload.
+router.post("/razorpay/webhook", express.raw({ type: '*/*' }), handleRazorpayWebhook);
 
 module.exports = router;

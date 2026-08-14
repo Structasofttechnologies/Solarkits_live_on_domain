@@ -100,6 +100,14 @@ function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorp
 /**
  * Verify Razorpay webhook signature.
  * Formula: HMAC-SHA256(rawBody, webhookSecret) === x-razorpay-signature
+ *
+ * IMPORTANT: rawBody must be the original request body bytes (Buffer or string),
+ * NOT a parsed/re-serialized JavaScript object. Re-serializing a parsed object
+ * via JSON.stringify can produce a different byte sequence than the original
+ * raw body (key ordering, whitespace, unicode encoding), causing a valid
+ * signature to appear invalid.
+ *
+ * Call this with express.raw() on the route so req.body is a Buffer.
  */
 function verifyWebhookSignature(rawBody, signature) {
   if (!rawBody || !signature) return false;
@@ -107,9 +115,22 @@ function verifyWebhookSignature(rawBody, signature) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY;
   if (!secret) return false;
 
+  // Accept Buffer (from express.raw()), string, or object (legacy fallback).
+  let bodyForHmac;
+  if (Buffer.isBuffer(rawBody)) {
+    // Preferred path: raw bytes preserved by express.raw()
+    bodyForHmac = rawBody;
+  } else if (typeof rawBody === 'string') {
+    bodyForHmac = rawBody;
+  } else {
+    // Last-resort: object was already parsed — re-serialize.
+    // This path should not be hit in production after switching to express.raw().
+    bodyForHmac = JSON.stringify(rawBody);
+  }
+
   const generatedSignature = crypto
     .createHmac('sha256', secret)
-    .update(typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody))
+    .update(bodyForHmac)
     .digest('hex');
 
   return generatedSignature === signature;

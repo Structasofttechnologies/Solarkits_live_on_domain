@@ -19,6 +19,21 @@ import {
 import SkuSpecsLink from "./SkuSpecsLink";
 import PopupDataLoader from "@/components/PopupDataLoader";
 
+const DEFAULT_KIT_COVER_FALLBACK = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+
+const resolveKitCoverUrl = (url, apiUrl) => {
+    if (!url) return DEFAULT_KIT_COVER_FALLBACK;
+    if (url.includes("localhost:3001")) {
+        return url.replace("localhost:3001", "localhost:5000");
+    }
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+        return url;
+    }
+    const base = (apiUrl || "http://localhost:5000").replace(/\/admin-api|\/api/g, "");
+    const cleanPath = url.startsWith("/") ? url : `/${url}`;
+    return `${base}${cleanPath}`;
+};
+
 export default function ComboKitFormDrawer({
     variantConfigs = [],
     currencySymbol = "₹",
@@ -747,9 +762,13 @@ export default function ComboKitFormDrawer({
                                             ) : formData.kit_image ? (
                                                 <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3">
                                                     <img
-                                                        src={formData.kit_image.startsWith('http') ? formData.kit_image : `${API_URL}/${formData.kit_image}`}
+                                                        src={resolveKitCoverUrl(formData.kit_image, API_URL)}
                                                         alt="Current Kit Cover"
                                                         className="h-14 w-14 rounded-lg object-cover border border-border shrink-0"
+                                                        onError={(e) => {
+                                                            e.target.onerror = null;
+                                                            e.target.src = DEFAULT_KIT_COVER_FALLBACK;
+                                                        }}
                                                     />
                                                     <div className="min-w-0">
                                                         <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">Current Cover Image</p>

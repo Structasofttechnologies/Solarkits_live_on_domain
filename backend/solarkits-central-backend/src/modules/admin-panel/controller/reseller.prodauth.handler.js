@@ -29,32 +29,46 @@ const list_product_authorizations = async (req, res) => {
     const rows = await ResellerProductAuthorization.find({ reseller_id: id })
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
-      .populate({ path: 'product_id', model: Product, select: 'name sku_code' })
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code stock_quantity' })
       .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
       .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name' })
       .populate({ path: 'assigned_by', model: CmsUser, select: 'name email' })
       .sort({ created_at: -1 })
       .lean();
 
-    const data = rows.map((r) => ({
-      id:                       r._id,
-      reseller_id:              r.reseller_id,
-      district_id:             r.district_id,
-      scope_type:               r.scope_type,
-      category:                 r.category_id,
-      subcategory:              r.subcategory_id,
-      product:                  r.product_id,
-      kit:                      r.kit_id,
-      allowed_project_type_ids: r.allowed_project_type_ids,
-      allowed_industry_type_ids:r.allowed_industry_type_ids,
-      is_authorized:            r.is_authorized,
-      source:                   r.source,
-      override_reason:          r.override_reason,
-      assigned_by:              r.assigned_by,
-      effective_date:           r.effective_date,
-      status:                   r.status,
-      created_at:               r.created_at,
-    }));
+    const listings = await ResellerListing.find({ reseller_id: id }).lean();
+    const listingStockMap = {};
+    listings.forEach((l) => {
+      if (l.product_id) listingStockMap[l.product_id.toString()] = l.stock_quantity;
+    });
+
+    const data = rows.map((r) => {
+      const pId = r.product_id?._id ? r.product_id._id.toString() : (r.product_id ? r.product_id.toString() : null);
+      const stockQty = pId && listingStockMap[pId] !== undefined
+        ? listingStockMap[pId]
+        : (r.product_id?.stock_quantity !== undefined ? r.product_id.stock_quantity : 100);
+
+      return {
+        id:                       r._id,
+        reseller_id:              r.reseller_id,
+        district_id:             r.district_id,
+        scope_type:               r.scope_type,
+        category:                 r.category_id,
+        subcategory:              r.subcategory_id,
+        product:                  r.product_id,
+        kit:                      r.kit_id,
+        stock_quantity:           stockQty,
+        allowed_project_type_ids: r.allowed_project_type_ids,
+        allowed_industry_type_ids:r.allowed_industry_type_ids,
+        is_authorized:            r.is_authorized,
+        source:                   r.source,
+        override_reason:          r.override_reason,
+        assigned_by:              r.assigned_by,
+        effective_date:           r.effective_date,
+        status:                   r.status,
+        created_at:               r.created_at,
+      };
+    });
 
     return res.json({ status: 'success', data });
   } catch (error) {
@@ -116,34 +130,120 @@ const assign_product_authorization = async (req, res) => {
       productObj = await Product.findById(product_id).lean();
       if (!productObj) return res.status(404).json({ status: 'error', message: 'Product not found' });
       if (productObj.industry_type_id) {
-        targetIndustryId = productObj.industry_type_id.toString();
+        targetIndustryId = (productObj.industry_type_id._id || productObj.industry_type_id).toString();
       }
     }
 
     if (reseller.approved_industry_type_ids && reseller.approved_industry_type_ids.length > 0 && targetIndustryId) {
       const isApproved = reseller.approved_industry_type_ids.some(
-        (approvedId) => approvedId.toString() === targetIndustryId.toString()
+        (approvedId) => (approvedId._id || approvedId).toString() === targetIndustryId.toString()
       );
       if (!isApproved) {
         return res.status(400).json({
           status: 'error',
-          message: `Product industry type does not match reseller's approved industry type. Target industry: ${targetIndustryId}`,
+          message: `Product industry type does not match reseller's approved industry type.`,
         });
       }
     }
 
-    // ── 2. Duplicate Assignment Check ────────────────────────────────────────
+    // ── 2. Create or Update Authorization Rule ──────────────────────────────
+    const filter = {
+      reseller_id: id,
+      scope_type,
+      status: 'active',
+    };
+    if (scope_type === 'category') filter.category_id = category_id;
+    if (scope_type === 'subcategory') filter.subcategory_id = subcategory_id;
+    if (scope_type === 'product') filter.product_id = product_id;
+    if (scope_type === 'kit') filter.kit_id = kit_id;
+
+    let rule = await ResellerProductAuthorization.findOne(filter);
+
+    if (rule) {
+      rule.is_authorized = is_authorized !== undefined ? Boolean(is_authorized) : true;
+      if (override_reason !== undefined) rule.override_reason = override_reason ? override_reason.trim() : null;
+      if (allowed_industry_type_ids) rule.allowed_industry_type_ids = allowed_industry_type_ids;
+      if (allowed_project_type_ids) rule.allowed_project_type_ids = allowed_project_type_ids;
+      if (category_id && scope_type !== 'category') rule.category_id = category_id;
+      if (subcategory_id && scope_type !== 'subcategory') rule.subcategory_id = subcategory_id;
+      rule.assigned_by = req.user?.id || rule.assigned_by;
+      await rule.save();
+    } else {
+      rule = await ResellerProductAuthorization.create({
+        reseller_id:              id,
+        district_id:              district_id || null,
+        scope_type,
+        category_id:             category_id || null,
+        subcategory_id:          subcategory_id || null,
+        product_id:              product_id || null,
+        kit_id:                  kit_id || null,
+        allowed_project_type_ids: allowed_project_type_ids || [],
+        allowed_industry_type_ids:allowed_industry_type_ids || [],
+        is_authorized:           is_authorized !== undefined ? Boolean(is_authorized) : true,
+        source:                  'admin_override',
+        assigned_by:             req.user?.id || null,
+        override_reason:         override_reason ? override_reason.trim() : null,
+        status:                  'active',
+      });
+    }
+
+    // ── 3. Upsert ResellerListing ───────────────────────────────────────────
+    let listing = null;
+    const targetIsAuthorized = is_authorized !== undefined ? Boolean(is_authorized) : true;
+
     if (scope_type === 'product' && product_id) {
+      if (!productObj) productObj = await Product.findById(product_id).lean();
+      
       const existingListing = await ResellerListing.findOne({
         reseller_id: id,
         item_type: 'product',
         product_id,
-        assignment_status: { $ne: 'revoked' },
       });
+
       if (existingListing) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Product is already assigned to this reseller',
+        existingListing.assignment_status = targetIsAuthorized ? 'assigned' : 'revoked';
+        await existingListing.save();
+        listing = existingListing;
+      } else if (targetIsAuthorized && productObj) {
+        const costPricePaise = productObj.base_price_paise || 100000;
+        const minMarginPaise = productObj.min_margin_paise || 0;
+        const maxMarginPaise = productObj.max_margin_paise || 5000000;
+        const taxRate = productObj.tax_rate_pct || 18;
+
+        listing = await ResellerListing.create({
+          reseller_id: id,
+          item_type: 'product',
+          product_id,
+          industry_type_id: productObj.industry_type_id || targetIndustryId || null,
+          category_id: productObj.category_id || category_id || null,
+          subcategory_id: productObj.subcategory_id || subcategory_id || null,
+          brand_id: productObj.brand_id || null,
+          title: productObj.name,
+          description: productObj.description,
+          image_url: productObj.image,
+          specifications: productObj.specifications || {},
+          stock_quantity: productObj.stock_quantity || 100,
+          cost_price_paise: costPricePaise,
+          map_price_paise: costPricePaise,
+          min_margin_paise: minMarginPaise,
+          max_margin_paise: maxMarginPaise,
+          reseller_margin_paise: 0,
+          reseller_margin_pct: 0,
+          tax_rate_pct: taxRate,
+          taxes_and_charges_paise: 0,
+          selling_price_paise: costPricePaise,
+          assignment_status: 'assigned',
+          assigned_by: req.user?.id || null,
+          assigned_at: new Date(),
+          audit_history: [
+            {
+              status: 'assigned',
+              actor_type: 'cms_user',
+              actor_id: req.user?.id || null,
+              notes: 'Product assigned to reseller by Super Admin',
+              timestamp: new Date(),
+            },
+          ],
         });
       }
     } else if (scope_type === 'kit' && kit_id) {
@@ -151,77 +251,13 @@ const assign_product_authorization = async (req, res) => {
         reseller_id: id,
         item_type: 'kit',
         kit_id,
-        assignment_status: { $ne: 'revoked' },
       });
+
       if (existingListing) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Combo Kit is already assigned to this reseller',
-        });
+        existingListing.assignment_status = targetIsAuthorized ? 'assigned' : 'revoked';
+        await existingListing.save();
+        listing = existingListing;
       }
-    }
-
-    // ── 3. Create Authorization Rule ─────────────────────────────────────────
-    const rule = await ResellerProductAuthorization.create({
-      reseller_id:              id,
-      district_id:              district_id || null,
-      scope_type,
-      category_id:             category_id || null,
-      subcategory_id:          subcategory_id || null,
-      product_id:              product_id || null,
-      kit_id:                  kit_id || null,
-      allowed_project_type_ids: allowed_project_type_ids || [],
-      allowed_industry_type_ids:allowed_industry_type_ids || [],
-      is_authorized:           is_authorized !== undefined ? Boolean(is_authorized) : true,
-      source:                  'admin_override',
-      assigned_by:             req.user?.id || null,
-      override_reason:         override_reason ? override_reason.trim() : null,
-      status:                  'active',
-    });
-
-    // ── 4. Create/Upsert ResellerListing in 'assigned' status ────────────────
-    let listing = null;
-    if (scope_type === 'product' && productObj) {
-      const costPricePaise = productObj.base_price_paise || 100000;
-      const minMarginPaise = productObj.min_margin_paise || 0;
-      const maxMarginPaise = productObj.max_margin_paise || 5000000;
-      const taxRate = productObj.tax_rate_pct || 18;
-
-      listing = await ResellerListing.create({
-        reseller_id: id,
-        item_type: 'product',
-        product_id,
-        industry_type_id: productObj.industry_type_id || targetIndustryId || null,
-        category_id: productObj.category_id || category_id || null,
-        subcategory_id: productObj.subcategory_id || subcategory_id || null,
-        brand_id: productObj.brand_id || null,
-        title: productObj.name,
-        description: productObj.description,
-        image_url: productObj.image,
-        specifications: productObj.specifications || {},
-        stock_quantity: productObj.stock_quantity || 100,
-        cost_price_paise: costPricePaise,
-        map_price_paise: costPricePaise,
-        min_margin_paise: minMarginPaise,
-        max_margin_paise: maxMarginPaise,
-        reseller_margin_paise: 0,
-        reseller_margin_pct: 0,
-        tax_rate_pct: taxRate,
-        taxes_and_charges_paise: 0,
-        selling_price_paise: costPricePaise,
-        assignment_status: 'assigned',
-        assigned_by: req.user?.id || null,
-        assigned_at: new Date(),
-        audit_history: [
-          {
-            status: 'assigned',
-            actor_type: 'cms_user',
-            actor_id: req.user?.id || null,
-            notes: 'Product assigned to reseller by Super Admin',
-            timestamp: new Date(),
-          },
-        ],
-      });
     }
 
     await logAudit({
@@ -234,9 +270,9 @@ const assign_product_authorization = async (req, res) => {
       req,
     });
 
-    return res.status(201).json({
+    return res.status(200).json({
       status: 'success',
-      message: 'Product authorization assigned and listing created in Assigned status',
+      message: 'Product authorization saved successfully',
       data: { rule, listing },
     });
   } catch (error) {
@@ -429,13 +465,170 @@ const delete_district_product_rule = async (req, res) => {
 
 // ─── 8. SEED DUMMY RULES ──────────────────────────────────────────────────────
 const seed_dummy_rules = async (req, res) => {
-  return res.json({ status: 'success', message: 'Dummy authorization rules seeded successfully' });
+  try {
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
+    if (!reseller) return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+
+    const products = await Product.find({ deleted_at: null }).limit(3).lean();
+    const categories = await ProjectCategory.find({ deleted_at: null }).limit(2).lean();
+    const kits = await WarehouseComboKit.find({ deleted_at: null }).limit(2).lean();
+
+    let count = 0;
+
+    // 1. Seed 'all' scope rule
+    await ResellerProductAuthorization.findOneAndUpdate(
+      { reseller_id: id, scope_type: 'all', status: 'active' },
+      {
+        reseller_id: id,
+        scope_type: 'all',
+        is_authorized: true,
+        source: 'admin_override',
+        override_reason: 'Full catalog access seed rule',
+        status: 'active',
+      },
+      { upsert: true, new: true }
+    );
+    count++;
+
+    // 2. Seed Category rules
+    for (const cat of categories) {
+      await ResellerProductAuthorization.findOneAndUpdate(
+        { reseller_id: id, scope_type: 'category', category_id: cat._id, status: 'active' },
+        {
+          reseller_id: id,
+          scope_type: 'category',
+          category_id: cat._id,
+          is_authorized: true,
+          source: 'admin_override',
+          override_reason: `Category access whitelist: ${cat.name}`,
+          status: 'active',
+        },
+        { upsert: true, new: true }
+      );
+      count++;
+    }
+
+    // 3. Seed Product rules
+    for (const prod of products) {
+      await ResellerProductAuthorization.findOneAndUpdate(
+        { reseller_id: id, scope_type: 'product', product_id: prod._id, status: 'active' },
+        {
+          reseller_id: id,
+          scope_type: 'product',
+          product_id: prod._id,
+          category_id: prod.category_id || null,
+          subcategory_id: prod.subcategory_id || null,
+          is_authorized: true,
+          source: 'admin_override',
+          override_reason: `Product authorization: ${prod.name}`,
+          status: 'active',
+        },
+        { upsert: true, new: true }
+      );
+      count++;
+
+      // Upsert listing
+      await ResellerListing.findOneAndUpdate(
+        { reseller_id: id, item_type: 'product', product_id: prod._id },
+        {
+          reseller_id: id,
+          item_type: 'product',
+          product_id: prod._id,
+          category_id: prod.category_id || null,
+          subcategory_id: prod.subcategory_id || null,
+          title: prod.name,
+          description: prod.description,
+          image_url: prod.image,
+          stock_quantity: prod.stock_quantity || 100,
+          cost_price_paise: prod.base_price_paise || 100000,
+          map_price_paise: prod.base_price_paise || 100000,
+          selling_price_paise: prod.base_price_paise || 100000,
+          assignment_status: 'assigned',
+          assigned_at: new Date(),
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 4. Seed Kit rules
+    for (const k of kits) {
+      await ResellerProductAuthorization.findOneAndUpdate(
+        { reseller_id: id, scope_type: 'kit', kit_id: k._id, status: 'active' },
+        {
+          reseller_id: id,
+          scope_type: 'kit',
+          kit_id: k._id,
+          category_id: k.category_id || null,
+          subcategory_id: k.subcategory_id || null,
+          is_authorized: true,
+          source: 'admin_override',
+          override_reason: `Combo kit whitelist: ${k.kit_name}`,
+          status: 'active',
+        },
+        { upsert: true, new: true }
+      );
+      count++;
+    }
+
+    return res.json({
+      status: 'success',
+      message: `${count} dummy product authorization rules seeded successfully!`,
+    });
+  } catch (err) {
+    console.error('[reseller.prodauth] seed_dummy_rules error:', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to seed dummy product authorization rules' });
+  }
+};
+
+/**
+ * PUT /admin-api/reseller-mgmt/product-auth/stock/:id
+ */
+const update_product_auth_stock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stock_quantity, reseller_id, product_id } = req.body;
+    const newStock = Math.max(0, parseInt(stock_quantity, 10) || 0);
+
+    const rule = await ResellerProductAuthorization.findById(id).lean();
+    const targetResellerId = reseller_id || rule?.reseller_id;
+    const targetProductId = product_id || rule?.product_id;
+
+    if (targetResellerId && targetProductId) {
+      await ResellerListing.findOneAndUpdate(
+        { reseller_id: targetResellerId, item_type: 'product', product_id: targetProductId },
+        { $set: { stock_quantity: newStock } },
+        { upsert: true }
+      );
+      await Product.findByIdAndUpdate(targetProductId, { $set: { stock_quantity: newStock } });
+    }
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id || null,
+      action: 'RESELLER_PRODUCT_AUTH_STOCK_UPDATE',
+      entity_type: 'reseller_product_authorizations',
+      entity_id: id,
+      after_snapshot: { stock_quantity: newStock, reseller_id: targetResellerId, product_id: targetProductId },
+      req,
+    });
+
+    return res.json({ status: 'success', message: `Stock updated to ${newStock} units successfully!`, stock_quantity: newStock });
+  } catch (err) {
+    console.error('[reseller.prodauth] update_product_auth_stock error:', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to update stock quantity' });
+  }
 };
 
 module.exports = {
   list_product_authorizations,
   assign_product_authorization,
   revoke_product_authorization,
+  update_product_auth_stock,
   check_product_auth,
   seed_dummy_rules,
   list_district_product_rules,

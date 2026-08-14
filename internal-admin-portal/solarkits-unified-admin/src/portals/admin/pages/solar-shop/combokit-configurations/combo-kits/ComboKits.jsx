@@ -1841,7 +1841,15 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       render: (val) => (
         <div className="w-16 h-12 rounded-lg border border-border bg-surface-hover overflow-hidden flex items-center justify-center">
           {val ? (
-            <img src={val.startsWith('http') ? val : `${API_URL}/${val}`} alt="Kit Cover" className="w-full h-full object-cover" />
+            <img
+              src={val.includes('localhost:3001') ? val.replace('localhost:3001', 'localhost:5000') : (val.startsWith('http://') || val.startsWith('https://')) ? val : `${API_URL.replace(/\/admin-api|\/api/g, "")}/${val.startsWith('/') ? val.slice(1) : val}`}
+              alt="Kit Cover"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+              }}
+            />
           ) : (
             <FaImage className="text-text-muted/40" size={16} />
           )}

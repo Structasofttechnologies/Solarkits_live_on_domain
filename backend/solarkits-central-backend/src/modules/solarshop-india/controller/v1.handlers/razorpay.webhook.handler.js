@@ -21,16 +21,27 @@ const { logAudit } = require('../../../admin-panel/utils/audit.service');
 const handleRazorpayWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
+    // req.body is a raw Buffer (from express.raw() on the route).
+    // We verify the HMAC against the raw bytes BEFORE parsing, so the
+    // signature check uses the exact same bytes Razorpay signed.
     const rawBody = req.body;
 
-    // Verify HMAC-SHA256 signature
+    // Verify HMAC-SHA256 signature against the raw body buffer
     const isValid = verifyWebhookSignature(rawBody, signature);
     if (!isValid) {
       console.warn('[Razorpay Webhook] Invalid webhook signature detected');
       return res.status(400).json({ status: 'error', message: 'Invalid signature' });
     }
 
-    const payload = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
+    // Parse the verified payload
+    let payload;
+    try {
+      payload = JSON.parse(Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody);
+    } catch (parseErr) {
+      console.warn('[Razorpay Webhook] Failed to parse webhook payload:', parseErr.message);
+      return res.status(400).json({ status: 'error', message: 'Invalid JSON payload' });
+    }
+
     const eventId = payload.event_id || payload.id || `evt_${Date.now()}_${Math.random()}`;
     const eventType = payload.event;
     const entity = payload.payload?.payment?.entity || payload.payload?.order?.entity || {};

@@ -317,6 +317,13 @@ const get_warehouse_activations = async (req, res) => {
         const countryObj = await GeoLevel0.findOne({ _id: countryId, deleted_at: null }).lean();
         const isIndia = countryObj && countryObj.name?.toLowerCase() === 'india';
 
+        // Resolve clusterId
+        let clusterId = null;
+        if (warehouse.level_2) {
+            const district = await GeoLevel2.findById(warehouse.level_2).lean();
+            if (district) clusterId = district.cluster;
+        }
+
         // Fetch all combo/custom kits for this country from core DB ComboKit
         const kits = await WarehouseComboKit.find({
             country_id: countryId,
@@ -324,43 +331,80 @@ const get_warehouse_activations = async (req, res) => {
             is_active: true
         }).lean();
 
-        // Populate solar_kit_id details for all kits
-        for (const kit of kits) {
-            if (kit.solar_kit_id) {
-                const solarKit = await SolarKit.findById(kit.solar_kit_id)
-                    .populate('category_id')
-                    .populate('subcategory_id')
-                    .populate({
-                        path: 'type_id',
-                        populate: {
-                            path: 'type',
-                            model: 'sys_filter_types'
-                        }
-                    })
-                    .lean();
-                kit.solar_kit_id = solarKit;
-            }
-        }
+        // Collect all unique solar_kit_ids & SKU ids
+        const solarKitIds = [...new Set(kits.map(k => k.solar_kit_id?.toString()).filter(Boolean))].map(id => new mongoose.Types.ObjectId(id));
+        const allSkuIdStrings = [];
+        kits.forEach(k => {
+            getKitSkuIds(k).forEach(id => allSkuIdStrings.push(id));
+        });
+        const uniqueSkuIds = [...new Set(allSkuIdStrings)].map(id => new mongoose.Types.ObjectId(id));
 
-        // Fetch existing activations
-        const activations = await WarehouseKitActivation.find({
-            warehouse_id: warehouseObjectId,
-            deleted_at: null,
-        }).lean();
+        const MarginModel = isIndia ? CompanyMarginIndia : CompanyMarginCore;
+
+        // Parallel batch fetch all dependent collections
+        const [solarKitDocs, pricedSkuDocs, allSkuDocs, marginDocs, activations] = await Promise.all([
+            solarKitIds.length > 0 ? SolarKit.find({ _id: { $in: solarKitIds } })
+                .populate('category_id')
+                .populate('subcategory_id')
+                .populate({
+                    path: 'type_id',
+                    populate: { path: 'type', model: 'sys_filter_types' }
+                }).lean() : [],
+            (clusterId && uniqueSkuIds.length > 0) ? ProductSkuPrice.find({ sku_id: { $in: uniqueSkuIds }, cluster_id: clusterId }).lean() : [],
+            uniqueSkuIds.length > 0 ? ProductSku.find({ _id: { $in: uniqueSkuIds } })
+                .populate({
+                    path: 'product_id',
+                    select: 'name image template_id subtype_id',
+                    populate: [
+                        { path: 'template_id', select: 'name' },
+                        { path: 'subtype_id', select: 'name' }
+                    ]
+                }).lean() : [],
+            MarginModel.find({ warehouse_id: warehouseObjectId, is_active: true, deleted_at: null }).lean(),
+            WarehouseKitActivation.find({ warehouse_id: warehouseObjectId, deleted_at: null }).lean()
+        ]);
+
+        // Build lookup maps
+        const solarKitsMap = {};
+        solarKitDocs.forEach(sk => { solarKitsMap[sk._id.toString()] = sk; });
+
+        const pricedSkuIds = new Set(pricedSkuDocs.map(p => p.sku_id.toString()));
+
+        const skuDetailsMap = {};
+        allSkuDocs.forEach(sku => {
+            skuDetailsMap[sku._id.toString()] = {
+                sku_code: sku.sku_code,
+                product_name: sku.product_id?.name || 'Unknown',
+                product_image: sku.product_id?.image || null,
+                template_name: sku.product_id?.template_id?.name || null,
+                subtype_name: sku.product_id?.subtype_id?.name || null,
+            };
+        });
+
+        const marginsMap = {};
+        marginDocs.forEach(m => {
+            const kitId = m.combo_kit_id?.toString();
+            if (kitId) marginsMap[kitId] = m;
+        });
 
         const activationsMap = {};
         activations.forEach(a => {
             const kitId = a.combo_kit_id?.toString();
-            if (kitId) {
-                activationsMap[kitId] = a;
-            }
+            if (kitId) activationsMap[kitId] = a;
         });
 
-        // Enrich all kits with their activation info and SKU price details
+        // Enrich all kits with high-performance memory lookups
         const enrichedComboKits = [];
         const enrichedCustomizeKits = [];
 
         for (const kit of kits) {
+            if (kit.solar_kit_id) {
+                const sIdStr = kit.solar_kit_id.toString();
+                if (solarKitsMap[sIdStr]) {
+                    kit.solar_kit_id = solarKitsMap[sIdStr];
+                }
+            }
+
             const kitId = kit._id.toString();
             const activation = activationsMap[kitId] || {
                 warehouse_id: warehouseObjectId,
@@ -370,9 +414,26 @@ const get_warehouse_activations = async (req, res) => {
                 is_active: false
             };
 
-            const skuPriceInfo = await checkAllSkusHavePrices(kit, warehouseId);
-            const isMarginConfigured = await checkCompanyMarginIsSet(kitId, warehouseId);
-            const gstConfig = await getCompanyMarginGstConfig(kitId, warehouseId);
+            const kitSkuIds = getKitSkuIds(kit);
+            const missingSkuDetails = kitSkuIds
+                .filter(id => !pricedSkuIds.has(id))
+                .map(id => ({
+                    sku_id: id,
+                    ...(skuDetailsMap[id] || { sku_code: 'Unknown' })
+                }));
+
+            const skuPriceInfo = {
+                allPriced: kitSkuIds.length === 0 || kitSkuIds.every(id => pricedSkuIds.has(id)),
+                missingSkuIds: missingSkuDetails.map(s => s.sku_id),
+                missingSkuDetails,
+                totalSkus: kitSkuIds.length,
+                pricedCount: kitSkuIds.filter(id => pricedSkuIds.has(id)).length
+            };
+
+            const marginDoc = marginsMap[kitId];
+            const isMarginConfigured = !!marginDoc;
+            const gstRate = marginDoc?.gst_rate;
+            const isGstConfigured = gstRate !== undefined && gstRate !== null && !isNaN(Number(gstRate)) && Number(gstRate) > 0;
 
             const enrichedItem = {
                 ...activation,
@@ -380,8 +441,8 @@ const get_warehouse_activations = async (req, res) => {
                 combo_kit_id: kit,
                 sku_price_info: skuPriceInfo,
                 is_margin_configured: isMarginConfigured,
-                is_gst_configured: gstConfig.isConfigured,
-                gst_rate: gstConfig.gst_rate,
+                is_gst_configured: isGstConfigured,
+                gst_rate: isGstConfigured ? Number(gstRate) : null,
             };
 
             if (kit.is_custom) {

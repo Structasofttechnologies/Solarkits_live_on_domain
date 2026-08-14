@@ -36,6 +36,13 @@ router.put(
   handler.revoke_product_authorization
 );
 
+router.put(
+  '/stock/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_PROD_AUTH', permissions: ['edit'] }]),
+  handler.update_product_auth_stock
+);
+
 router.get(
   '/check-auth/:id',
   check_auth,

@@ -123,6 +123,9 @@ const slice = createSlice({
     alert: { status: "", message: "", undoItem: null },
     status: 'idle',
     error: null,
+    // Timestamp (ms) of the last successful cart SAVE to backend.
+    // Used by fetchCart to decide whether to trust local or backend state.
+    lastSyncedAt: 0,
     selectedState: (() => {
       try {
         return JSON.parse(localStorage.getItem("selectedState")) || null;
@@ -181,10 +184,10 @@ const slice = createSlice({
       let variantIndex = 0;
 
       if (typeof payload === 'number' || typeof payload === 'string') {
-        kit = state.availableKits.find((i) => i.id === Number(payload));
+        kit = state.availableKits.find((i) => String(i.id) === String(payload));
         variantIndex = 0;
       } else {
-        kit = state.availableKits.find((i) => i.id === payload.id);
+        kit = state.availableKits.find((i) => String(i.id) === String(payload?.id));
         variantIndex = payload.variantIndex || 0;
       }
 
@@ -558,12 +561,29 @@ const slice = createSlice({
         state.error = action.error.message;
       })
       .addCase(fetchCart.fulfilled, (state, action) => {
-        state.cart = action.payload.cart || [];
-        state.cartExpiryTime = action.payload.expiry_time || null;
-        // If cart is empty, clear expiry
+        const backendCart = action.payload.cart || [];
+        const backendExpiry = action.payload.expiry_time || null;
+
+        if (backendCart.length > 0) {
+          // If backend returns items, merge them with local cart (preserving locally added items)
+          const localIds = new Set(state.cart.map(c => c.cartItemId));
+          backendCart.forEach(backendItem => {
+            if (!localIds.has(backendItem.cartItemId)) {
+              state.cart.push(backendItem);
+            }
+          });
+        } else if (state.cart.length === 0) {
+          // Only clear cart if local cart was already empty
+          state.cart = [];
+        }
+        // If state.cart has items locally and backend returned [], keep local items!
+
+        state.cartExpiryTime = backendExpiry;
         if (!state.cart.length) state.cartExpiryTime = null;
       })
       .addCase(syncCartWithBackend.fulfilled, (state, action) => {
+        // Record when we last successfully saved — used by fetchCart merge
+        state.lastSyncedAt = Date.now();
         if (action.payload?.expiry_time !== undefined) {
           state.cartExpiryTime = action.payload.expiry_time || null;
         }

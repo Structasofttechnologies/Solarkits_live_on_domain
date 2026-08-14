@@ -505,7 +505,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
           >
             {kit?.usageTypeImage && (
               <img
-                src={kit.usageTypeImage.startsWith("http") ? kit.usageTypeImage : `http://localhost:3001${kit.usageTypeImage}`}
+                src={kit.usageTypeImage.startsWith("http") ? kit.usageTypeImage : `http://localhost:5000${kit.usageTypeImage}`}
                 alt=""
                 className="w-5 h-5 object-contain rounded-full shrink-0"
               />

@@ -65,30 +65,36 @@ const get_epc_catalogue = async (req, res) => {
 
     // 2. Check EPC approval status
     if (epcAccount.status === 'pending') {
-      return res.status(403).json({
-        status: 'error',
+      return res.status(200).json({
+        status: 'success',
         code: 'EPC_PENDING_APPROVAL',
         message: 'Your EPC account is awaiting admin approval. Products will be visible once approved.',
         contact_support: true,
+        data: [],
+        total_items: 0
       });
     }
     if (epcAccount.status === 'rejected') {
-      return res.status(403).json({
-        status: 'error',
+      return res.status(200).json({
+        status: 'success',
         code: 'EPC_REJECTED',
         message: 'Your EPC account has been rejected. Please contact your reseller or admin.',
         contact_support: true,
+        data: [],
+        total_items: 0
       });
     }
 
     // 3. Resolve reseller
     const resellerId = await resolveResellerId(epcAccount);
     if (!resellerId) {
-      return res.status(400).json({
-        status: 'error',
+      return res.status(200).json({
+        status: 'success',
         code: 'NO_RESELLER_ASSIGNED',
         message: 'No reseller has been assigned to your EPC account. Please contact your channel partner.',
         contact_support: true,
+        data: [],
+        total_items: 0
       });
     }
 
@@ -101,11 +107,13 @@ const get_epc_catalogue = async (req, res) => {
     }).lean();
 
     if (!reseller) {
-      return res.status(403).json({
-        status: 'error',
+      return res.status(200).json({
+        status: 'success',
         code: 'RESELLER_INACTIVE',
         message: 'Your assigned reseller account is currently inactive. Please contact your channel partner.',
         contact_support: true,
+        data: [],
+        total_items: 0
       });
     }
 

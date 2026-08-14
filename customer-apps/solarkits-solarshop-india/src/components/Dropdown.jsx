@@ -99,7 +99,7 @@ export default function Dropdown({
                 <span className={`truncate flex items-center ${selectedOption ? 'text-text-primary' : 'text-text-secondary'}`}>
                   {selectedOption?.image && (
                     <img
-                      src={selectedOption.image.startsWith("http") ? selectedOption.image : `http://localhost:3001${selectedOption.image}`}
+                      src={selectedOption.image.startsWith("http") ? selectedOption.image : `http://localhost:5000${selectedOption.image}`}
                       alt=""
                       className="w-4 h-4 rounded-full object-contain mr-2 shrink-0"
                     />
@@ -144,7 +144,7 @@ export default function Dropdown({
                                 <span className="flex items-center truncate">
                                   {opt.image && (
                                     <img
-                                      src={opt.image.startsWith("http") ? opt.image : `http://localhost:3001${opt.image}`}
+                                      src={opt.image.startsWith("http") ? opt.image : `http://localhost:5000${opt.image}`}
                                       alt=""
                                       className="w-5 h-5 rounded-full object-contain mr-2 shrink-0"
                                     />

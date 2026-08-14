@@ -701,31 +701,71 @@ const get_reseller_my_territories = async (req, res) => {
  */
 const get_reseller_authorized_products = async (req, res) => {
   try {
-    const { ResellerProductAuthorization, WarehouseComboKit } = require('../../admin-panel/models/india_solarshop_db');
+    const { ResellerProductAuthorization, WarehouseComboKit, ResellerListing } = require('../../admin-panel/models/india_solarshop_db');
     const { ProjectCategory, ProjectSubcategory, Product } = require('../../admin-panel/models/core_db');
 
     const rules = await ResellerProductAuthorization.find({
       reseller_id: req.reseller._id,
       status: 'active',
+      is_authorized: true,
     })
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
-      .populate({ path: 'product_id', model: Product, select: 'name sku_code' })
-      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code base_price base_price_paise price' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code base_price price' })
       .lean();
+
+    const listings = await ResellerListing.find({ reseller_id: req.reseller._id }).lean();
+    const listingMap = {};
+    listings.forEach(l => {
+      if (l.product_id) listingMap[l.product_id.toString()] = l;
+      if (l.kit_id) listingMap[l.kit_id.toString()] = l;
+    });
+
+    const items = [];
+    rules.forEach((r) => {
+      if (r.scope_type === 'product' && r.product_id) {
+        const p = r.product_id;
+        const listing = listingMap[p._id.toString()];
+        const priceInr = listing?.cost_price_paise
+          ? listing.cost_price_paise / 100
+          : (p.base_price || p.price || 1000);
+        items.push({
+          _id: p._id,
+          id: p._id,
+          scope_type: 'product',
+          is_kit: false,
+          name: p.name,
+          sku_code: p.sku_code || 'PROD-SKU',
+          base_price: priceInr,
+          price: priceInr,
+          reseller_cost_inr: priceInr,
+        });
+      } else if (r.scope_type === 'kit' && r.kit_id) {
+        const k = r.kit_id;
+        const listing = listingMap[k._id.toString()];
+        const priceInr = listing?.cost_price_paise
+          ? listing.cost_price_paise / 100
+          : (k.base_price || k.price || 5000);
+        items.push({
+          _id: k._id,
+          id: k._id,
+          scope_type: 'kit',
+          is_kit: true,
+          name: k.kit_name,
+          kit_name: k.kit_name,
+          sku_code: k.kit_code || 'KIT-SKU',
+          kit_code: k.kit_code || 'KIT-SKU',
+          base_price: priceInr,
+          price: priceInr,
+          reseller_cost_inr: priceInr,
+        });
+      }
+    });
 
     return res.json({
       status: 'success',
-      data: rules.map((r) => ({
-        id:            r._id,
-        scope_type:    r.scope_type,
-        category:      r.category_id,
-        subcategory:   r.subcategory_id,
-        product:       r.product_id,
-        kit:           r.kit_id,
-        is_authorized: r.is_authorized,
-        source:        r.source,
-      })),
+      data: items,
     });
   } catch (error) {
     console.error('[reseller.portal] get_reseller_authorized_products error:', error);

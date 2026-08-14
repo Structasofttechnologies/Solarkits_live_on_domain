@@ -18,21 +18,30 @@ const handler = require('../controller/reseller.procurement.handler');
 router.get(
   '/list',
   check_auth,
-  check_permissions([{ unique_code: 'RSL_PROCUREMENT', permissions: ['view'] }]),
+  check_permissions([
+    { unique_code: 'RSL_PROCUREMENT', permissions: ['view'] },
+    { unique_code: 'RSL_MGMT', permissions: ['view'] },
+  ]),
   handler.list_procurement_orders
 );
 
 router.post(
   '/create',
   check_auth,
-  check_permissions([{ unique_code: 'RSL_PROCUREMENT', permissions: ['add'] }]),
+  check_permissions([
+    { unique_code: 'RSL_PROCUREMENT', permissions: ['add'] },
+    { unique_code: 'RSL_MGMT', permissions: ['add'] },
+  ]),
   handler.create_order
 );
 
 router.put(
   '/status/:id',
   check_auth,
-  check_permissions([{ unique_code: 'RSL_PROCUREMENT', permissions: ['edit'] }]),
+  check_permissions([
+    { unique_code: 'RSL_PROCUREMENT', permissions: ['edit'] },
+    { unique_code: 'RSL_MGMT', permissions: ['edit'] },
+  ]),
   handler.update_order_status
 );
 

@@ -215,22 +215,24 @@ export default function PreconfiguredComboKit() {
 
   const getDropdownOptions = (key) => {
     switch (key) {
-      case"comboKitType":
+      case "industryType":
+        return industryTypeOptions;
+      case "comboKitType":
         return comboKitTypeOptions;
-      case"category":
+      case "category":
         return categoryOptions;
-      case"subCategory":
+      case "subCategory":
         return subCategoryOptions;
-      case"systemType":
+      case "systemType":
         return systemTypeOptions;
-      case"projectRange":
+      case "projectRange":
         return projectRangeOptions;
       default:
         return options[key] || [];
     }
   };
 
-  const mainFilterKeys = ["category","subCategory","systemType","projectRange"];
+  const mainFilterKeys = ["industryType", "category", "subCategory", "systemType", "projectRange"];
   const subFilterKeys = ["comboKitType","pricePerKw"];
 
   const clearAllFilters = () => {
@@ -1019,7 +1021,21 @@ export default function PreconfiguredComboKit() {
                   Clear Main
                 </Button>
               </div>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-5 gap-4">
+                <Dropdown
+                  label="Industry Type"
+                  options={industryTypeOptions}
+                  value={filters.industryType}
+                  onChange={(val) => setFilters((prev) => ({
+                    ...prev,
+                    industryType: val,
+                    category: "all",
+                    subCategory: "all",
+                    systemType: "all",
+                    projectRange: "all"
+                  }))}
+                  className="w-full"
+                />
                 <Dropdown
                   label="Category"
                   options={categoryOptions}
