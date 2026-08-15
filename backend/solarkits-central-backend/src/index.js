@@ -81,6 +81,9 @@ adminRouter.use('/reseller-mgmt/pricing-rules', require('./modules/admin-panel/r
 adminRouter.use('/reseller-mgmt/analytics', require('./modules/admin-panel/routes/reseller.analytics.route'));
 // Phase R1: Platform-wide settings (exclusivity policy, settlement config, activation requirements)
 adminRouter.use('/reseller-mgmt/settings', require('./modules/admin-panel/routes/reseller.settings.route'));
+// Industry Content Management System
+adminRouter.use('/industry-content', require('./modules/admin-panel/routes/industry.content.route'));
+adminRouter.use('/industry-themes', require('./modules/admin-panel/routes/industry.theme.route'));
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/amc-plans', require('./modules/AMC-panel/routes/amc.routes'));

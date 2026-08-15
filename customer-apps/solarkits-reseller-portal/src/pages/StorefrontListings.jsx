@@ -170,47 +170,46 @@ export default function StorefrontListings() {
   return (
     <div className="space-y-6 pb-12">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 p-6 md:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-blue-700 p-6 md:p-8 rounded-3xl text-white shadow-md relative overflow-hidden">
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-xs font-bold uppercase tracking-wider mb-2">
               <FiShield /> Reseller Product Storefront Engine
             </div>
             <h1 className="text-3xl font-black text-white tracking-tight">
               Product Catalogue & EPC Storefront
             </h1>
-            <p className="text-slate-300 text-sm mt-1.5 max-w-2xl font-medium">
+            <p className="text-blue-100 text-sm mt-1.5 max-w-2xl font-medium">
               Manage product acceptance, configure authorized profit margins within Super Admin limits, and publish products to your channel storefront and onboarded EPC buyers.
             </p>
           </div>
 
           <button
             onClick={fetchData}
-            className="self-start md:self-auto px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/15 shadow-sm"
+            className="self-start md:self-auto px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/20 shadow-sm"
           >
             <FiRefreshCw className={loading ? "animate-spin" : ""} size={16} /> Refresh Storefront
           </button>
         </div>
 
         {/* Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/10">
-          <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Assigned to You</span>
-            <div className="text-2xl font-black text-amber-400 mt-1">{totalAssigned}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/15">
+          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
+            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Assigned to You</span>
+            <div className="text-2xl font-black text-white mt-1">{totalAssigned}</div>
           </div>
-          <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Purchased / Accepted</span>
-            <div className="text-2xl font-black text-blue-400 mt-1">{totalPurchased}</div>
+          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
+            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Purchased / Accepted</span>
+            <div className="text-2xl font-black text-white mt-1">{totalPurchased}</div>
           </div>
-          <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Ready to Publish</span>
-            <div className="text-2xl font-black text-indigo-400 mt-1">{totalReady}</div>
+          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
+            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Ready to Publish</span>
+            <div className="text-2xl font-black text-white mt-1">{totalReady}</div>
           </div>
-          <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Published & Live</span>
-            <div className="text-2xl font-black text-emerald-400 mt-1">{totalPublished}</div>
+          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
+            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Published & Live</span>
+            <div className="text-2xl font-black text-white mt-1">{totalPublished}</div>
           </div>
         </div>
       </div>

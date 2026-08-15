@@ -51,7 +51,11 @@ app.use('/reseller-mgmt/wallet',       require('./routes/reseller.wallet.route')
 app.use('/reseller-mgmt',              require('./routes/reseller.admin.route'));
 app.use('/resellers/plans',            require('./routes/reseller.plans.route'));
 
+// ─── Industry Content Management System ──────────────────────────────────────
+app.use('/industry-content',  require('./routes/industry.content.route'));
+app.use('/industry-themes',   require('./routes/industry.theme.route'));
+
 // Force nodemon reload: variant config subdocument ID preservation
 app.listen(port, () =>
   console.log(`Server started on ${ipv4}:${port}`)
-);
+);

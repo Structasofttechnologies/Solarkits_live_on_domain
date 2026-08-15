@@ -1,30 +1,251 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --bg: #f8fafc;
-    --surface: #ffffff;
-    --surface-hover: #f1f5f9;
-    --border: #e2e8f0;
-    --text-primary: #0f172a;
-    --text-secondary: #334155;
-    --text-muted: #64748b;
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --primary-soft: #dbeafe;
-    --success: #16a34a;
-    --success-soft: #dcfce7;
-    --warning: #d97706;
-    --warning-soft: #fef3c7;
-    --danger: #dc2626;
-    --danger-soft: #fee2e2;
-    --info: #0284c7;
-    --info-soft: #e0f2fe;
-  }
+@custom-variant dark (&:where(.dark, .dark *));
 
-  body {
-    background-color: var(--bg);
-    color: var(--text-primary);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  }
+@theme {
+  --color-primary: #1a3b8b;
+  --color-primary-end: #2d55bd;
+  --color-primary-hover: #122961;
+
+  --color-secondary: #f8c21a;
+  --color-secondary-hover: #e0ac10;
+
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f9fafb;
+
+  --color-border: #e5e7eb;
+  --color-ring: #26388040;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  --color-success: #16a34a;
+  --color-success-hover: #15803d;
+  --color-success-soft: #f0fdf4;
+
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-soft: #fffbeb;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-soft: #fef2f2;
+
+  --color-info: #0ea5e9;
+  --color-info-hover: #0284c7;
+  --color-info-soft: #f0f9ff;
+
+  --shadow-xs: 0 2px 4px #0000001f;
+  --shadow-sm: 0 4px 8px #0000001c;
+  --shadow-md: 0 6px 16px #00000022;
+  --shadow-lg: 0 8px 24px #00000033;
+
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-end) 100%
+  );
+
+  --gradient-primary-soft: linear-gradient(
+    135deg,
+    #3a56c950 0%,
+    #26388050 100%
+  );
+
+  --gradient-danger: linear-gradient(
+    135deg,
+    var(--color-danger),
+    var(--color-danger-hover)
+  );
+
+  --gradient-danger-soft: linear-gradient(
+    135deg,
+    #dc262650 0%,
+    #dc262650 100%
+  );
+
+  --gradient-warning: linear-gradient(
+    135deg,
+    var(--color-warning),
+    var(--color-warning-hover)
+  );
+
+  --gradient-warning-soft: linear-gradient(
+    135deg,
+    #f59e0b50 0%,
+    #d9770650 100%
+  );
+
+  --gradient-success: linear-gradient(
+    135deg,
+    var(--color-success),
+    var(--color-success-hover)
+  );
+
+  --gradient-success-soft: linear-gradient(
+    135deg,
+    #16a34a50 0%,
+    #15803d50 100%
+  );
+
+  --gradient-info: linear-gradient(
+    135deg,
+    var(--color-info),
+    var(--color-info-hover)
+  );
+
+  --gradient-info-soft: linear-gradient(
+    135deg,
+    #0ea5e950 0%,
+    #0284c750 100%
+  );
+
+  --gradient-secondary: linear-gradient(
+    135deg,
+    var(--color-secondary) 0%,
+    #ffdf5e 100%
+  );
+
+  --gradient-bg-subtle: linear-gradient(
+    135deg,
+    #f8fafc 0%,
+    #eef2f7 100%
+  );
+
+  --gradient-glass: linear-gradient(
+    135deg,
+    #ffffff33 0%,
+    #ffffff1a 100%
+  );
+
+  --gradient-card-glass: linear-gradient(
+    135deg,
+    #ffffffeb 0%,
+    #ffffffd9 100%
+  );
+
+  --color-button-primary: var(--color-primary);
+  --color-button-primary-hover: var(--color-primary-hover);
+  --color-button-disabled: #cbd5e1;
+  --color-button-disabled-text: #64748b;
+  --color-glass-border: #ffffff33;
+  --color-card-glass-border: #ffffff4d;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 280px;
+  overflow-x: hidden;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: 'Inter', 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* === Scrollbar === */
+.scrollbar-hover {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.scrollbar-hover::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-hover:hover {
+  scrollbar-width: thin;
+}
+
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+/* === Card === */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* === Gradient utilities === */
+.gradient-primary {
+  background: var(--gradient-primary);
+}
+
+.gradient-primary-soft {
+  background: var(--gradient-primary-soft);
+}
+
+.gradient-danger { background: var(--gradient-danger); }
+.gradient-warning { background: var(--gradient-warning); }
+.gradient-warning-soft { background: var(--gradient-warning-soft); }
+.gradient-success { background: var(--gradient-success); }
+.gradient-success-soft { background: var(--gradient-success-soft); }
+.gradient-info { background: var(--gradient-info); }
+.gradient-info-soft { background: var(--gradient-info-soft); }
+.gradient-secondary { background: var(--gradient-secondary); }
+.gradient-bg-subtle { background: var(--gradient-bg-subtle); }
+.gradient-glass { background: var(--gradient-glass); }
+.gradient-card-glass { background: var(--gradient-card-glass); }
+
+/* === Button classes === */
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.btn-primary:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-danger {
+  background: var(--gradient-danger);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.btn-danger:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-warning {
+  background: var(--gradient-warning);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.btn-success {
+  background: var(--gradient-success);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+
+.gradient-text-primary {
+  background: var(--gradient-primary);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }

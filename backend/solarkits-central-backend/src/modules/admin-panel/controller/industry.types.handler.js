@@ -1,17 +1,15 @@
-/**
+﻿/**
  * industry.types.handler.js
  *
  * Admin CRUD for industry types (sys_industry_types).
- * Phase 1 — Reseller Management System
- *
- * All handlers follow the existing project.types.handler.js pattern:
- *   { status: "success"|"error", data, message }
+ * Phase 1 â€” Reseller Management System
+ * Phase 2 â€” Industry Content Management (user assignments, extended fields)
  */
 
 const mongoose = require('mongoose');
-const { IndustryType, ProjectTypeIndustryMap, ProjectSubcategory } = require('../models/core_db');
+const { IndustryType, ProjectTypeIndustryMap, ProjectSubcategory, UserIndustryMap } = require('../models/core_db');
 
-// ─── Helper: generate slug from name ─────────────────────────────────────────
+// â”€â”€â”€ Helper: generate slug from name â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const slugify = (str) =>
   str
     .toLowerCase()
@@ -20,27 +18,31 @@ const slugify = (str) =>
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-// ─── 1. LIST ──────────────────────────────────────────────────────────────────
-/**
- * GET /admin-api/industry-types/list
- * Returns all non-deleted industry types. Supports optional ?active_only=true filter.
- */
+// â”€â”€â”€ 1. LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const list_industry_types = async (req, res) => {
   try {
-    const { active_only } = req.query;
+    const { active_only, for_resellers, for_epc } = req.query;
     const query = { deleted_at: null };
     if (active_only === 'true') query.is_active = true;
+    if (for_resellers === 'true') query.for_resellers = true;
+    if (for_epc === 'true') query.for_epc = true;
 
     const rows = await IndustryType.find(query).sort({ sort_order: 1, name: 1 }).lean();
 
     const data = rows.map((r) => ({
-      id:          r._id,
-      name:        r.name,
-      slug:        r.slug,
-      description: r.description,
-      sort_order:  r.sort_order,
-      is_active:   r.is_active,
-      created_at:  r.created_at,
+      id:            r._id,
+      name:          r.name,
+      code:          r.code,
+      slug:          r.slug,
+      description:   r.description,
+      icon:          r.icon,
+      cover_image:   r.cover_image,
+      thumbnail:     r.thumbnail,
+      sort_order:    r.sort_order,
+      is_active:     r.is_active,
+      for_resellers: r.for_resellers,
+      for_epc:       r.for_epc,
+      created_at:    r.created_at,
     }));
 
     return res.json({ status: 'success', data });
@@ -50,14 +52,30 @@ const list_industry_types = async (req, res) => {
   }
 };
 
-// ─── 2. ADD ───────────────────────────────────────────────────────────────────
-/**
- * POST /admin-api/industry-types/add
- * Body: { name, description?, sort_order? }
- */
+// â”€â”€â”€ PUBLIC LIST (no auth â€” for reseller/EPC frontend) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const list_industry_types_public = async (req, res) => {
+  try {
+    const { audience } = req.query; // 'reseller' | 'epc'
+    const query = { deleted_at: null, is_active: true };
+    if (audience === 'reseller') query.for_resellers = true;
+    if (audience === 'epc')      query.for_epc = true;
+
+    const rows = await IndustryType.find(query)
+      .select('name code slug description icon thumbnail sort_order')
+      .sort({ sort_order: 1, name: 1 })
+      .lean();
+
+    return res.json({ status: 'success', data: rows.map(r => ({ ...r, id: r._id })) });
+  } catch (error) {
+    console.error('[industry.types] list_industry_types_public error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// â”€â”€â”€ 2. ADD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const add_industry_type = async (req, res) => {
   try {
-    const { name, description, sort_order } = req.body;
+    const { name, code, description, sort_order, icon, cover_image, thumbnail, for_resellers, for_epc } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ status: 'error', message: 'name is required' });
@@ -65,57 +83,54 @@ const add_industry_type = async (req, res) => {
 
     const slug = slugify(name);
 
-    // Check for duplicate name (case-insensitive) or slug
-    const existing = await IndustryType.findOne({
-      $or: [
-        { slug },
-        { name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } },
-      ],
-      deleted_at: null,
-    });
+    // Check for duplicate
+    const orFilters = [
+      { slug },
+      { name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } },
+    ];
+    if (code && code.trim()) {
+      orFilters.push({ code: code.trim().toUpperCase() });
+    }
+
+    const existing = await IndustryType.findOne({ $or: orFilters, deleted_at: null });
     if (existing) {
       return res.status(409).json({
         status: 'error',
-        message: `An industry type with this name already exists: "${existing.name}"`,
+        message: `An industry type with this name/code already exists: "${existing.name}"`,
       });
     }
 
     const doc = await IndustryType.create({
-      name:        name.trim(),
+      name:          name.trim(),
+      code:          code ? code.trim().toUpperCase() : null,
       slug,
-      description: description ? description.trim() : null,
-      sort_order:  sort_order != null ? Number(sort_order) : 0,
-      created_by:  req.user?.id || null,
+      description:   description ? description.trim() : null,
+      icon:          icon || null,
+      cover_image:   cover_image || null,
+      thumbnail:     thumbnail || null,
+      sort_order:    sort_order != null ? Number(sort_order) : 0,
+      for_resellers: for_resellers !== false,
+      for_epc:       for_epc !== false,
+      created_by:    req.user?.id || null,
     });
 
     return res.status(201).json({
       status: 'success',
-      data: {
-        id:          doc._id,
-        name:        doc.name,
-        slug:        doc.slug,
-        description: doc.description,
-        sort_order:  doc.sort_order,
-        is_active:   doc.is_active,
-      },
+      data: { id: doc._id, name: doc.name, code: doc.code, slug: doc.slug, description: doc.description, sort_order: doc.sort_order, is_active: doc.is_active, for_resellers: doc.for_resellers, for_epc: doc.for_epc },
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(409).json({ status: 'error', message: 'Industry type name or slug already exists' });
+      return res.status(409).json({ status: 'error', message: 'Industry type name, code, or slug already exists' });
     }
     console.error('[industry.types] add_industry_type error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
 
-// ─── 3. UPDATE ────────────────────────────────────────────────────────────────
-/**
- * PUT /admin-api/industry-types/update
- * Body: { id, name?, description?, sort_order?, display_visibility? }
- */
+// â”€â”€â”€ 3. UPDATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const update_industry_type = async (req, res) => {
   try {
-    const { id, name, description, sort_order } = req.body;
+    const { id, name, code, description, sort_order, icon, cover_image, thumbnail, for_resellers, for_epc } = req.body;
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ status: 'error', message: 'Valid id is required' });
@@ -130,61 +145,45 @@ const update_industry_type = async (req, res) => {
 
     if (name && name.trim()) {
       const newSlug = slugify(name.trim());
+      const orFilters = [
+        { slug: newSlug },
+        { name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } },
+      ];
+      if (code && code.trim()) orFilters.push({ code: code.trim().toUpperCase() });
 
-      // Check for name/slug conflict (exclude self)
-      const conflict = await IndustryType.findOne({
-        _id: { $ne: id },
-        $or: [
-          { slug: newSlug },
-          { name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } },
-        ],
-        deleted_at: null,
-      });
+      const conflict = await IndustryType.findOne({ _id: { $ne: id }, $or: orFilters, deleted_at: null });
       if (conflict) {
-        return res.status(409).json({
-          status: 'error',
-          message: `Another industry type already has this name: "${conflict.name}"`,
-        });
+        return res.status(409).json({ status: 'error', message: `Another industry type already has this name: "${conflict.name}"` });
       }
-
       updateData.name = name.trim();
       updateData.slug = newSlug;
     }
 
-    if (description !== undefined) updateData.description = description ? description.trim() : null;
-    if (sort_order != null) updateData.sort_order = Number(sort_order);
+    if (code !== undefined)         updateData.code          = code ? code.trim().toUpperCase() : null;
+    if (description !== undefined)  updateData.description   = description ? description.trim() : null;
+    if (sort_order != null)         updateData.sort_order    = Number(sort_order);
+    if (icon !== undefined)         updateData.icon          = icon || null;
+    if (cover_image !== undefined)  updateData.cover_image   = cover_image || null;
+    if (thumbnail !== undefined)    updateData.thumbnail     = thumbnail || null;
+    if (for_resellers !== undefined) updateData.for_resellers = !!for_resellers;
+    if (for_epc !== undefined)      updateData.for_epc       = !!for_epc;
 
-    const result = await IndustryType.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true }
-    ).lean();
+    const result = await IndustryType.findByIdAndUpdate(id, { $set: updateData }, { new: true }).lean();
 
     return res.json({
       status: 'success',
-      data: {
-        id:          result._id,
-        name:        result.name,
-        slug:        result.slug,
-        description: result.description,
-        sort_order:  result.sort_order,
-        is_active:   result.is_active,
-      },
+      data: { id: result._id, name: result.name, code: result.code, slug: result.slug, description: result.description, sort_order: result.sort_order, is_active: result.is_active, for_resellers: result.for_resellers, for_epc: result.for_epc },
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(409).json({ status: 'error', message: 'Industry type name or slug already exists' });
+      return res.status(409).json({ status: 'error', message: 'Industry type name, code, or slug already exists' });
     }
     console.error('[industry.types] update_industry_type error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
 
-// ─── 4. ACTIVATE / DEACTIVATE ─────────────────────────────────────────────────
-/**
- * PUT /admin-api/industry-types/toggle-status
- * Body: { id, is_active: Boolean }
- */
+// â”€â”€â”€ 4. ACTIVATE / DEACTIVATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const toggle_industry_type_status = async (req, res) => {
   try {
     const { id, is_active } = req.body;
@@ -215,18 +214,10 @@ const toggle_industry_type_status = async (req, res) => {
   }
 };
 
-// ─── 5. SOFT DELETE ───────────────────────────────────────────────────────────
-/**
- * DELETE /admin-api/industry-types/delete
- * Body: { id }
- *
- * Safety rule: An industry type already used in a project_type_industry_map
- * (even if soft-deleted) is BLOCKED from deletion to preserve audit trail.
- * If only inactive mappings exist, admin can force with { force: true }.
- */
+// â”€â”€â”€ 5. SOFT DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const delete_industry_type = async (req, res) => {
   try {
-    const { id, force } = req.body;
+    const { id } = req.body;
 
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ status: 'error', message: 'Valid id is required' });
@@ -251,7 +242,20 @@ const delete_industry_type = async (req, res) => {
       });
     }
 
-    // Soft delete
+    // Block if active user assignments exist
+    const userAssignCount = await UserIndustryMap.countDocuments({
+      industry_type_id: id,
+      approval_status: 'APPROVED',
+      deleted_at: null,
+    });
+
+    if (userAssignCount > 0) {
+      return res.status(409).json({
+        status:  'error',
+        message: `Cannot delete: "${doc.name}" has ${userAssignCount} active user assignment(s). Revoke them first.`,
+      });
+    }
+
     doc.deleted_at = new Date();
     doc.is_active  = false;
     await doc.save();
@@ -266,11 +270,7 @@ const delete_industry_type = async (req, res) => {
   }
 };
 
-// ─── 6. MAP: Link a project subcategory → industry type ──────────────────────
-/**
- * POST /admin-api/industry-types/map-to-subcategory
- * Body: { project_subcategory_id, industry_type_id }
- */
+// â”€â”€â”€ 6. MAP: Link a project subcategory â†’ industry type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const map_industry_to_subcategory = async (req, res) => {
   try {
     const { project_subcategory_id, industry_type_id } = req.body;
@@ -279,7 +279,6 @@ const map_industry_to_subcategory = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'project_subcategory_id and industry_type_id are required' });
     }
 
-    // Validate both exist
     const [subcat, industryType] = await Promise.all([
       ProjectSubcategory.findOne({ _id: project_subcategory_id, deleted_at: null }).lean(),
       IndustryType.findOne({ _id: industry_type_id, deleted_at: null, is_active: true }).lean(),
@@ -288,28 +287,16 @@ const map_industry_to_subcategory = async (req, res) => {
     if (!subcat) return res.status(404).json({ status: 'error', message: 'Project subcategory not found' });
     if (!industryType) return res.status(404).json({ status: 'error', message: 'Industry type not found or inactive' });
 
-    // Check for existing active mapping
-    const existing = await ProjectTypeIndustryMap.findOne({
-      project_subcategory_id,
-      industry_type_id,
-      deleted_at: null,
-    });
+    const existing = await ProjectTypeIndustryMap.findOne({ project_subcategory_id, industry_type_id, deleted_at: null });
     if (existing) {
       return res.status(409).json({ status: 'error', message: 'This mapping already exists' });
     }
 
-    const map = await ProjectTypeIndustryMap.create({
-      project_subcategory_id,
-      industry_type_id,
-    });
+    const map = await ProjectTypeIndustryMap.create({ project_subcategory_id, industry_type_id });
 
     return res.status(201).json({
       status: 'success',
-      data:   {
-        map_id:                 map._id,
-        project_subcategory_id: map.project_subcategory_id,
-        industry_type_id:       map.industry_type_id,
-      },
+      data:   { map_id: map._id, project_subcategory_id: map.project_subcategory_id, industry_type_id: map.industry_type_id },
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -320,11 +307,7 @@ const map_industry_to_subcategory = async (req, res) => {
   }
 };
 
-// ─── 7. UNMAP: Remove a specific mapping ─────────────────────────────────────
-/**
- * DELETE /admin-api/industry-types/unmap
- * Body: { map_id }
- */
+// â”€â”€â”€ 7. UNMAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const unmap_industry_from_subcategory = async (req, res) => {
   try {
     const { map_id } = req.body;
@@ -347,10 +330,7 @@ const unmap_industry_from_subcategory = async (req, res) => {
   }
 };
 
-// ─── 8. GET MAPPINGS for a subcategory ───────────────────────────────────────
-/**
- * GET /admin-api/industry-types/mappings?project_subcategory_id=...
- */
+// â”€â”€â”€ 8. GET MAPPINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const get_industry_mappings_for_subcategory = async (req, res) => {
   try {
     const { project_subcategory_id } = req.query;
@@ -359,10 +339,7 @@ const get_industry_mappings_for_subcategory = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'project_subcategory_id is required' });
     }
 
-    const maps = await ProjectTypeIndustryMap.find({
-      project_subcategory_id,
-      deleted_at: null,
-    })
+    const maps = await ProjectTypeIndustryMap.find({ project_subcategory_id, deleted_at: null })
       .populate('industry_type_id', 'name slug description is_active')
       .lean();
 
@@ -387,8 +364,103 @@ const get_industry_mappings_for_subcategory = async (req, res) => {
   }
 };
 
+// â”€â”€â”€ 9. ASSIGN USER â†’ INDUSTRY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const assign_user_to_industry = async (req, res) => {
+  try {
+    const { user_type, user_id, industry_type_id, approval_status = 'APPROVED' } = req.body;
+
+    if (!user_type || !user_id || !industry_type_id) {
+      return res.status(400).json({ status: 'error', message: 'user_type, user_id, industry_type_id are required' });
+    }
+    if (!['RESELLER','EPC'].includes(user_type)) {
+      return res.status(400).json({ status: 'error', message: 'user_type must be RESELLER or EPC' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(user_id) || !mongoose.Types.ObjectId.isValid(industry_type_id)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid user_id or industry_type_id' });
+    }
+
+    const industry = await IndustryType.findOne({ _id: industry_type_id, deleted_at: null, is_active: true }).lean();
+    if (!industry) return res.status(404).json({ status: 'error', message: 'Industry type not found or inactive' });
+
+    const map = await UserIndustryMap.findOneAndUpdate(
+      { user_type, user_id, industry_type_id },
+      {
+        $set: {
+          approval_status,
+          assigned_by:   req.user?.id,
+          assigned_date: new Date(),
+          deleted_at:    null,
+          revoked_by:    null,
+          revoked_at:    null,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.status(201).json({
+      status: 'success',
+      message: `User assigned to industry "${industry.name}"`,
+      data: { id: map._id, user_type, user_id, industry_type_id, approval_status: map.approval_status },
+    });
+  } catch (error) {
+    console.error('[industry.types] assign_user_to_industry error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// â”€â”€â”€ 10. REVOKE USER â†’ INDUSTRY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const revoke_user_from_industry = async (req, res) => {
+  try {
+    const { user_type, user_id, industry_type_id } = req.body;
+
+    if (!user_type || !user_id || !industry_type_id) {
+      return res.status(400).json({ status: 'error', message: 'user_type, user_id, industry_type_id are required' });
+    }
+
+    const map = await UserIndustryMap.findOne({ user_type, user_id, industry_type_id, deleted_at: null });
+    if (!map) return res.status(404).json({ status: 'error', message: 'Assignment not found' });
+
+    map.approval_status = 'REVOKED';
+    map.revoked_by      = req.user?.id;
+    map.revoked_at      = new Date();
+    await map.save();
+
+    return res.json({ status: 'success', message: 'User industry assignment revoked' });
+  } catch (error) {
+    console.error('[industry.types] revoke_user_from_industry error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// â”€â”€â”€ 11. LIST USER INDUSTRY ASSIGNMENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const list_user_industry_assignments = async (req, res) => {
+  try {
+    const { user_type, user_id, industry_type_id, approval_status } = req.query;
+
+    const filter = { deleted_at: null };
+    if (user_type)         filter.user_type = user_type;
+    if (user_id && mongoose.Types.ObjectId.isValid(user_id)) filter.user_id = user_id;
+    if (industry_type_id && mongoose.Types.ObjectId.isValid(industry_type_id)) filter.industry_type_id = industry_type_id;
+    if (approval_status)   filter.approval_status = approval_status;
+
+    const maps = await UserIndustryMap.find(filter)
+      .populate('industry_type_id', 'name slug icon is_active')
+      .sort({ assigned_date: -1 })
+      .lean();
+
+    return res.json({
+      status: 'success',
+      data: maps.map(m => ({ ...m, id: m._id })),
+    });
+  } catch (error) {
+    console.error('[industry.types] list_user_industry_assignments error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   list_industry_types,
+  list_industry_types_public,
   add_industry_type,
   update_industry_type,
   toggle_industry_type_status,
@@ -396,4 +468,8 @@ module.exports = {
   map_industry_to_subcategory,
   unmap_industry_from_subcategory,
   get_industry_mappings_for_subcategory,
+  assign_user_to_industry,
+  revoke_user_from_industry,
+  list_user_industry_assignments,
 };
+

@@ -119,4 +119,38 @@ router.get(
   handler.get_industry_mappings_for_subcategory
 );
 
+// ─── Public list (no auth — for reseller/EPC frontend industry selectors) ─────
+router.get('/public/list', handler.list_industry_types_public);
+
+// ─── User-Industry Assignment (admin only) ────────────────────────────────────
+const USER_ASSIGN_MODULES = [
+  { unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['add', 'edit'] },
+  { unique_code: 'RSL_MGMT',           permissions: ['add', 'edit'] },
+];
+
+router.post(
+  '/user-assign',
+  check_auth,
+  check_permissions(USER_ASSIGN_MODULES),
+  handler.assign_user_to_industry
+);
+
+router.post(
+  '/user-revoke',
+  check_auth,
+  check_permissions(USER_ASSIGN_MODULES),
+  handler.revoke_user_from_industry
+);
+
+router.get(
+  '/user-assignments',
+  check_auth,
+  check_permissions([
+    { unique_code: 'ADM_INDUSTRY_TYPES', permissions: ['view'] },
+    { unique_code: 'RSL_MGMT',           permissions: ['view'] },
+  ]),
+  handler.list_user_industry_assignments
+);
+
 module.exports = router;
+

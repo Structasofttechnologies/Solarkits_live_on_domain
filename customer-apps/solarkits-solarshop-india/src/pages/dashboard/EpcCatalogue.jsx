@@ -23,6 +23,7 @@ import {
   FiCheckCircle,
 } from "react-icons/fi";
 import { MdSolarPower, MdOutlineInventory2 } from "react-icons/md";
+import IndustryDashboardBanner from "@/components/IndustryDashboardBanner";
 
 /* ─── Stock badge ─────────────────────────────────────────────────────────── */
 function StockBadge({ label }) {
@@ -384,7 +385,7 @@ export default function EpcCatalogue() {
   return (
     <div className="space-y-6">
       {/* ── Bright Header Banner ────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 rounded-2xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
+      <div className="bg-blue-700 rounded-2xl p-6 md:p-8 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold backdrop-blur-md mb-2">
@@ -414,6 +415,9 @@ export default function EpcCatalogue() {
           </div>
         </div>
       </div>
+
+      {/* ── Industry Solutions & Media Banners ───────────────────────────── */}
+      <IndustryDashboardBanner />
 
       {/* ── Search & Filter Controls (Clean Light Mode) ──────────────────── */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">

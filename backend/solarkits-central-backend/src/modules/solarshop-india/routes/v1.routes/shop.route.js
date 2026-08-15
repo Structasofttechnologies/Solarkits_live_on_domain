@@ -45,13 +45,16 @@ router.get("/orders", verify_auth, get_orders);
 router.put("/orders/:id/address", verify_auth, update_order_address);
 router.post("/razorpay/create-order", verify_auth, create_razorpay_order);
 router.post("/razorpay/verify-payment", verify_auth, verify_razorpay_payment);
-// Razorpay webhook MUST use express.raw() — NOT express.json().
-// Razorpay signs the raw request body bytes. If we parse the body with
-// express.json() first and then re-serialize it for HMAC verification,
-// the resulting string can differ from the original bytes (key ordering,
-// encoding) and the signature check will fail in production.
-// express.raw() preserves the original Buffer so we can verify HMAC
-// against exact bytes before parsing the JSON payload.
+// Razorpay webhook MUST use express.raw() — NOT express.json()
 router.post("/razorpay/webhook", express.raw({ type: '*/*' }), handleRazorpayWebhook);
 
+// ── EPC Industry Content Dashboard Routes ─────────────────────────────────────
+// These routes serve industry-aware content to authenticated EPC buyers.
+// All requests validated: JWT + approved UserIndustryMap.
+const epcIndustryHandler = require("../../controller/epc.industry.dashboard.handler");
+router.get("/industry/my-industries",    verify_auth, epcIndustryHandler.get_my_industries);
+router.get("/industry/dashboard-content",verify_auth, epcIndustryHandler.get_dashboard_content);
+router.get("/industry/theme",            verify_auth, epcIndustryHandler.get_industry_theme);
+
 module.exports = router;
+

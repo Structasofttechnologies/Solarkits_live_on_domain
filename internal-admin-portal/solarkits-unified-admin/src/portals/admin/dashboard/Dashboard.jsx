@@ -40,6 +40,9 @@ const CreateUsers = lazy(() => import("../pages/CreateUsers"));
 const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-configuration/WebsiteConfiguration"));
 const AmcPlans = lazy(() => import("../pages/solar-amc-management/AmcPlans"));
 const EpcPlans = lazy(() => import("../pages/epc-plans/EpcPlans"));
+const IndustryContentManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryContentManagement"));
+const IndustryTypeManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryTypeManagement"));
+const IndustryThemeConfig = lazy(() => import("../pages/dashboard/industry-content/IndustryThemeConfig"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 /* ===================== MENU CONFIG ===================== */
@@ -538,12 +541,40 @@ const menus = [
         }
       ]
     },
+    {
+      name: "Industry CMS",
+      icon: <FaIndustry />,
+      path: "/admin-panel/industry-content/cms",
+      unique_id: "ADM_INDUSTRY_CONTENT",
+      subMenu: [
+        {
+          name: "Content Management",
+          icon: <HiSparkles />,
+          path: "/admin-panel/industry-content/cms",
+          unique_id: "ADM_INDUSTRY_CONTENT",
+        },
+        {
+          name: "Theme Configuration",
+          icon: <MdTune />,
+          path: "/admin-panel/industry-content/themes",
+          unique_id: "ADM_INDUSTRY_THEMES",
+        },
+      ],
+    },
   ],
 ];
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
-  return allowedUniqueIds.includes(menu.unique_id) || menu.unique_id === "ADM_WEBSITE_CFG" || menu.unique_id.startsWith("ADM_WEBSITE") || menu.unique_id === "ADM_PLANS" || menu.unique_id === "ADM_AMC_PLANS" || menu.unique_id === "ADM_EPC_PLANS";
+  return (
+    allowedUniqueIds.includes(menu.unique_id) ||
+    menu.unique_id === "ADM_WEBSITE_CFG" ||
+    menu.unique_id.startsWith("ADM_WEBSITE") ||
+    menu.unique_id === "ADM_PLANS" ||
+    menu.unique_id === "ADM_AMC_PLANS" ||
+    menu.unique_id === "ADM_EPC_PLANS" ||
+    menu.unique_id.startsWith("ADM_INDUSTRY")
+  );
 };
 
 // Filter menu tree recursively
@@ -738,6 +769,27 @@ export default function Dashboard() {
                     element={
                       <Suspense fallback={<Loader text="Loading website configuration..." />}>
                         <WebsiteConfiguration />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/industry-content/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading Industry CMS..." />}>
+                        <Routes>
+                          <Route path="/cms" element={<IndustryContentManagement />} />
+                          <Route path="/types" element={<IndustryTypeManagement />} />
+                          <Route path="/themes" element={<IndustryThemeConfig />} />
+                          <Route path="*" element={<IndustryContentManagement />} />
+                        </Routes>
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/website-configuration/industry-theme"
+                    element={
+                      <Suspense fallback={<Loader text="Loading Theme Configuration..." />}>
+                        <IndustryThemeConfig />
                       </Suspense>
                     }
                   />

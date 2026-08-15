@@ -30,7 +30,7 @@ module.exports = {
   PurchaseOrder: require('./purchase_order.schema'),
   OrderSetting: require('./order_settings.schema'),
   BenchmarkPriceRequest: require('./BenchmarkPriceRequest.schema'),
-  
+
   // Rule Engine Models
   ComponentConnection: require('./component_connections.schema'),
   CompatibilityRule: require('./compatibility_rules.schema'),
@@ -46,7 +46,12 @@ module.exports = {
   // --- Phase 1: Reseller Management Masters ---
   IndustryType: require('./industry_types.schema'),
   ProjectTypeIndustryMap: require('./project_type_industry_maps.schema'),
+
+  // --- Industry Content Management System ---
+  IndustryContent: require('./industry_content.schema'),
+  IndustryContentIndustryMap: require('./industry_content_industry_map.schema'),
+  IndustryContentMedia: require('./industry_content_media.schema'),
+  IndustryTheme: require('./industry_theme.schema'),
+  UserIndustryMap: require('./user_industry_map.schema'),
+  IndustryContentAnalytics: require('./industry_content_analytics.schema'),
 };
-
-
-

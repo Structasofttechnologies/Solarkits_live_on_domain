@@ -73,4 +73,15 @@ const epcWalletHandler = require('../../../admin-panel/controller/epc.wallet.han
 router.get('/epc/wallet/me', verify_auth, epcWalletHandler.get_my_wallet);
 router.get('/epc/wallet/ledger', verify_auth, epcWalletHandler.get_my_ledger);
 
+// ── Industry Content Dashboard Routes ─────────────────────────────────────────
+// These routes serve industry-aware content to the authenticated reseller's dashboard.
+// All requests are double-validated: JWT + approved UserIndustryMap.
+const industryDashboardHandler = require('../../controller/industry.dashboard.handler');
+router.get('/industry/my-industries',   verify_reseller_auth, industryDashboardHandler.get_my_industries);
+router.post('/industry/select',         verify_reseller_auth, industryDashboardHandler.select_industry);
+router.get('/industry/dashboard-content', verify_reseller_auth, industryDashboardHandler.get_dashboard_content);
+router.get('/industry/related-products',  verify_reseller_auth, industryDashboardHandler.get_related_products);
+router.get('/industry/theme',             verify_reseller_auth, industryDashboardHandler.get_industry_theme);
+
 module.exports = router;
+

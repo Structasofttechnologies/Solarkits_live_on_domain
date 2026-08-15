@@ -1,0 +1,671 @@
+/**
+ * industry.content.handler.js
+ *
+ * Admin CRUD + lifecycle management for Industry Content items.
+ * Industry Content Management System — Phase 1
+ *
+ * Supports: create, update, media upload, industry assignment, publish,
+ * unpublish, schedule, archive, preview, reorder, and analytics tracking.
+ */
+
+const mongoose = require('mongoose');
+const NodeCache = require('node-cache');
+const {
+  IndustryContent,
+  IndustryContentIndustryMap,
+  IndustryContentMedia,
+  IndustryType,
+  IndustryContentAnalytics,
+} = require('../models/core_db');
+const { delete_uploaded_files } = require('../utils/upload.files');
+
+// ── In-process cache (5 min TTL) ─────────────────────────────────────────────
+const contentCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
+
+const CACHE_KEY = (industry_id, audience, placement) =>
+  `ic:${industry_id}:${audience}:${placement}`;
+
+function invalidate_industry_cache(industry_id) {
+  const keys = contentCache.keys().filter(k => k.startsWith(`ic:${industry_id}:`));
+  if (keys.length) contentCache.del(keys);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function sanitize_html(str) {
+  if (!str) return null;
+  return str.replace(/<[^>]*>/g, '').trim();
+}
+
+function sanitize_url(url) {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (/^(https?:\/\/|\/)/.test(trimmed)) return trimmed;
+  return null;  // Reject unsafe CTA URLs
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. LIST CONTENT (Admin paginated)
+// GET /admin-api/industry-content/list
+// ─────────────────────────────────────────────────────────────────────────────
+const list_content = async (req, res) => {
+  try {
+    const {
+      page = 1, limit = 20,
+      status, content_type, industry_type_id, placement, search,
+    } = req.query;
+
+    const filter = { deleted_at: null };
+    if (status)         filter.status = status;
+    if (content_type)   filter.content_type = content_type;
+    if (placement)      filter.placement = placement;
+    if (search)         filter.title = { $regex: search, $options: 'i' };
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    let contentIds = null;
+    if (industry_type_id && mongoose.Types.ObjectId.isValid(industry_type_id)) {
+      const maps = await IndustryContentIndustryMap.find({
+        industry_type_id,
+        deleted_at: null,
+      }).select('content_id').lean();
+      contentIds = maps.map(m => m.content_id);
+      filter._id = { $in: contentIds };
+    }
+
+    const [items, total] = await Promise.all([
+      IndustryContent.find(filter)
+        .sort({ display_order: 1, priority: -1, created_at: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      IndustryContent.countDocuments(filter),
+    ]);
+
+    // Enrich with industry assignments
+    const ids = items.map(i => i._id);
+    const maps = await IndustryContentIndustryMap.find({
+      content_id: { $in: ids },
+      deleted_at: null,
+    }).populate('industry_type_id', 'name slug icon').lean();
+
+    const mapByContent = {};
+    maps.forEach(m => {
+      const cid = m.content_id.toString();
+      if (!mapByContent[cid]) mapByContent[cid] = [];
+      if (m.industry_type_id) mapByContent[cid].push(m.industry_type_id);
+    });
+
+    const data = items.map(item => ({
+      ...item,
+      id: item._id,
+      industries: mapByContent[item._id.toString()] || [],
+    }));
+
+    return res.json({
+      status: 'success',
+      data,
+      pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error('[industry.content] list_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. GET CONTENT DETAIL
+// GET /admin-api/industry-content/detail/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const get_content_detail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const [content, media, maps] = await Promise.all([
+      IndustryContent.findOne({ _id: id, deleted_at: null }).lean(),
+      IndustryContentMedia.find({ content_id: id, deleted_at: null }).sort({ device_type: 1, media_type: 1 }).lean(),
+      IndustryContentIndustryMap.find({ content_id: id, deleted_at: null })
+        .populate('industry_type_id', 'name slug icon is_active')
+        .lean(),
+    ]);
+
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    return res.json({
+      status: 'success',
+      data: {
+        ...content,
+        id: content._id,
+        media: media.map(m => ({ ...m, id: m._id })),
+        industries: maps.filter(m => m.industry_type_id).map(m => ({
+          map_id: m._id,
+          ...m.industry_type_id,
+        })),
+      },
+    });
+  } catch (err) {
+    console.error('[industry.content] get_content_detail:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. CREATE CONTENT (Draft)
+// POST /admin-api/industry-content/create
+// ─────────────────────────────────────────────────────────────────────────────
+const create_content = async (req, res) => {
+  try {
+    const {
+      title, internal_name, content_type, target_audience, placement,
+      heading, short_description, cta_label, cta_url,
+      priority, display_order, start_at, end_at,
+      autoplay, show_controls, muted, loop,
+      industry_ids,  // array of industry_type_id strings
+    } = req.body;
+
+    if (!title || !internal_name || !content_type || !target_audience || !placement) {
+      return res.status(400).json({ status: 'error', message: 'title, internal_name, content_type, target_audience, placement are required' });
+    }
+
+    // Sanitize user-visible fields
+    const safe_heading = sanitize_html(heading);
+    const safe_desc    = sanitize_html(short_description);
+    const safe_cta_url = sanitize_url(cta_url);
+
+    const content = await IndustryContent.create({
+      title: title.trim(),
+      internal_name: internal_name.trim(),
+      content_type,
+      target_audience,
+      placement,
+      heading:           safe_heading,
+      short_description: safe_desc,
+      cta_label:         cta_label ? cta_label.trim().substring(0, 100) : null,
+      cta_url:           safe_cta_url,
+      priority:          priority != null ? Number(priority) : 0,
+      display_order:     display_order != null ? Number(display_order) : 0,
+      start_at:          start_at ? new Date(start_at) : null,
+      end_at:            end_at ? new Date(end_at) : null,
+      autoplay:          !!autoplay,
+      show_controls:     show_controls !== false,
+      muted:             muted !== false,
+      loop:              !!loop,
+      status:            'DRAFT',
+      created_by:        req.user?.id,
+    });
+
+    // Assign industries if provided
+    if (industry_ids && Array.isArray(industry_ids) && industry_ids.length > 0) {
+      const valid_ids = industry_ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+      if (valid_ids.length) {
+        const maps = valid_ids.map(iid => ({
+          content_id: content._id,
+          industry_type_id: iid,
+        }));
+        await IndustryContentIndustryMap.insertMany(maps, { ordered: false }).catch(() => {});
+      }
+    }
+
+    return res.status(201).json({ status: 'success', data: { id: content._id, ...content.toObject() } });
+  } catch (err) {
+    console.error('[industry.content] create_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. UPDATE CONTENT
+// PUT /admin-api/industry-content/update/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const update_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    const allowed = ['title','internal_name','content_type','target_audience','placement',
+      'heading','short_description','cta_label','cta_url','priority','display_order',
+      'start_at','end_at','autoplay','show_controls','muted','loop'];
+
+    const update = {};
+    for (const field of allowed) {
+      if (req.body[field] !== undefined) {
+        if (field === 'heading' || field === 'short_description') {
+          update[field] = sanitize_html(req.body[field]);
+        } else if (field === 'cta_url') {
+          update[field] = sanitize_url(req.body[field]);
+        } else if (['start_at','end_at'].includes(field)) {
+          update[field] = req.body[field] ? new Date(req.body[field]) : null;
+        } else {
+          update[field] = req.body[field];
+        }
+      }
+    }
+    update.updated_by = req.user?.id;
+
+    const updated = await IndustryContent.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
+
+    // Invalidate cache if status-affecting fields changed
+    if (update.status || update.start_at || update.end_at || update.target_audience) {
+      const maps = await IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean();
+      maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
+    }
+
+    return res.json({ status: 'success', data: { ...updated, id: updated._id } });
+  } catch (err) {
+    console.error('[industry.content] update_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. UPLOAD MEDIA (files already processed by industry_media_upload middleware)
+// POST /admin-api/industry-content/upload-media/:id
+// Body fields: device_type, media_type, alt_text, is_primary
+// ─────────────────────────────────────────────────────────────────────────────
+const upload_content_media = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    if (!req.files || req.files.length === 0) {
+      // Check for external URL upload
+      const { external_url, media_type, device_type, alt_text, is_primary } = req.body;
+      if (!external_url) return res.status(400).json({ status: 'error', message: 'No file or external_url provided' });
+
+      const safe_url = sanitize_url(external_url);
+      if (!safe_url) return res.status(400).json({ status: 'error', message: 'Invalid external URL' });
+
+      const media = await IndustryContentMedia.create({
+        content_id: id,
+        media_type:  media_type || 'VIDEO',
+        device_type: device_type || 'ALL',
+        url:         safe_url,
+        is_external: true,
+        alt_text:    sanitize_html(alt_text),
+        is_primary:  !!is_primary,
+      });
+
+      return res.status(201).json({ status: 'success', data: { ...media.toObject(), id: media._id } });
+    }
+
+    const { device_type = 'ALL', media_type, alt_text, is_primary } = req.body;
+
+    const created = [];
+    for (const file of req.files) {
+      const is_video  = file.mimetype?.startsWith('video/');
+      const auto_type = is_video ? 'VIDEO' : 'IMAGE';
+
+      const media = await IndustryContentMedia.create({
+        content_id:        id,
+        media_type:        media_type || auto_type,
+        device_type,
+        url:               file.path,
+        storage_key:       file.filename,
+        is_external:       false,
+        mime_type:         file.mimetype,
+        file_size:         file.cloudinary?.bytes || file.size,
+        width:             file.cloudinary?.width || null,
+        height:            file.cloudinary?.height || null,
+        duration_sec:      file.cloudinary?.duration || null,
+        processing_status: 'READY',
+        alt_text:          sanitize_html(alt_text),
+        is_primary:        !!is_primary,
+      });
+
+      created.push({ ...media.toObject(), id: media._id });
+    }
+
+    return res.status(201).json({ status: 'success', data: created });
+  } catch (err) {
+    console.error('[industry.content] upload_content_media:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. DELETE MEDIA ITEM
+// DELETE /admin-api/industry-content/delete-media/:media_id
+// ─────────────────────────────────────────────────────────────────────────────
+const delete_content_media = async (req, res) => {
+  try {
+    const { media_id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(media_id))
+      return res.status(400).json({ status: 'error', message: 'Invalid media_id' });
+
+    const media = await IndustryContentMedia.findOne({ _id: media_id, deleted_at: null });
+    if (!media) return res.status(404).json({ status: 'error', message: 'Media not found' });
+
+    // Delete from Cloudinary if not external
+    if (!media.is_external && media.storage_key) {
+      await delete_uploaded_files([{ path: media.url, filename: media.storage_key }]).catch(() => {});
+    }
+
+    media.deleted_at = new Date();
+    await media.save();
+
+    return res.json({ status: 'success', message: 'Media deleted' });
+  } catch (err) {
+    console.error('[industry.content] delete_content_media:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. SET INDUSTRY ASSIGNMENTS
+// POST /admin-api/industry-content/set-industries/:id
+// Body: { industry_ids: [...] }
+// ─────────────────────────────────────────────────────────────────────────────
+const set_industry_assignments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { industry_ids = [] } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    // Validate all industry ids
+    const valid_ids = industry_ids.filter(iid => mongoose.Types.ObjectId.isValid(iid));
+
+    // Soft-delete existing maps not in new list
+    await IndustryContentIndustryMap.updateMany(
+      { content_id: id, industry_type_id: { $nin: valid_ids }, deleted_at: null },
+      { $set: { deleted_at: new Date(), is_active: false } }
+    );
+
+    // Upsert new mappings
+    for (const iid of valid_ids) {
+      await IndustryContentIndustryMap.findOneAndUpdate(
+        { content_id: id, industry_type_id: iid },
+        { $set: { deleted_at: null, is_active: true } },
+        { upsert: true, new: true }
+      );
+      invalidate_industry_cache(iid.toString());
+    }
+
+    return res.json({ status: 'success', message: 'Industry assignments updated' });
+  } catch (err) {
+    console.error('[industry.content] set_industry_assignments:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. PUBLISH CONTENT
+// PUT /admin-api/industry-content/publish/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const publish_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    if (['ARCHIVED'].includes(content.status))
+      return res.status(409).json({ status: 'error', message: `Cannot publish content with status "${content.status}"` });
+
+    // Verify at least one industry is assigned
+    const mapCount = await IndustryContentIndustryMap.countDocuments({ content_id: id, deleted_at: null });
+    if (mapCount === 0)
+      return res.status(409).json({ status: 'error', message: 'Assign at least one industry before publishing' });
+
+    content.status       = 'PUBLISHED';
+    content.published_at = new Date();
+    content.approved_by  = req.user?.id;
+    content.updated_by   = req.user?.id;
+    await content.save();
+
+    // Invalidate cache for all assigned industries
+    const maps = await IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean();
+    maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
+
+    return res.json({ status: 'success', message: 'Content published successfully', data: { id: content._id, status: content.status } });
+  } catch (err) {
+    console.error('[industry.content] publish_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. UNPUBLISH / PAUSE CONTENT
+// PUT /admin-api/industry-content/unpublish/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const unpublish_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    content.status     = 'PAUSED';
+    content.updated_by = req.user?.id;
+    await content.save();
+
+    const maps = await IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean();
+    maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
+
+    return res.json({ status: 'success', message: 'Content paused/unpublished', data: { id: content._id, status: content.status } });
+  } catch (err) {
+    console.error('[industry.content] unpublish_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. SCHEDULE CONTENT
+// PUT /admin-api/industry-content/schedule/:id
+// Body: { start_at, end_at }
+// ─────────────────────────────────────────────────────────────────────────────
+const schedule_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { start_at, end_at } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    if (!start_at) return res.status(400).json({ status: 'error', message: 'start_at is required for scheduling' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    // Verify at least one industry is assigned
+    const mapCount = await IndustryContentIndustryMap.countDocuments({ content_id: id, deleted_at: null });
+    if (mapCount === 0)
+      return res.status(409).json({ status: 'error', message: 'Assign at least one industry before scheduling' });
+
+    content.status     = 'SCHEDULED';
+    content.start_at   = new Date(start_at);
+    content.end_at     = end_at ? new Date(end_at) : null;
+    content.updated_by = req.user?.id;
+    await content.save();
+
+    return res.json({ status: 'success', message: 'Content scheduled', data: { id: content._id, status: content.status, start_at: content.start_at, end_at: content.end_at } });
+  } catch (err) {
+    console.error('[industry.content] schedule_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 11. ARCHIVE CONTENT
+// PUT /admin-api/industry-content/archive/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const archive_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    content.status     = 'ARCHIVED';
+    content.updated_by = req.user?.id;
+    await content.save();
+
+    const maps = await IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean();
+    maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
+
+    return res.json({ status: 'success', message: 'Content archived', data: { id: content._id, status: content.status } });
+  } catch (err) {
+    console.error('[industry.content] archive_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. PREVIEW CONTENT (formatted for frontend preview)
+// GET /admin-api/industry-content/preview/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const preview_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const [content, media] = await Promise.all([
+      IndustryContent.findOne({ _id: id, deleted_at: null }).lean(),
+      IndustryContentMedia.find({ content_id: id, deleted_at: null }).lean(),
+    ]);
+
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    const grouped_media = {};
+    for (const m of media) {
+      const key = m.device_type;
+      if (!grouped_media[key]) grouped_media[key] = [];
+      grouped_media[key].push({ ...m, id: m._id });
+    }
+
+    return res.json({
+      status: 'success',
+      data: { ...content, id: content._id, media: grouped_media },
+    });
+  } catch (err) {
+    console.error('[industry.content] preview_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. REORDER CONTENT
+// PUT /admin-api/industry-content/reorder
+// Body: { items: [{ id, display_order }] }
+// ─────────────────────────────────────────────────────────────────────────────
+const reorder_content = async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0)
+      return res.status(400).json({ status: 'error', message: 'items array is required' });
+
+    const ops = items.map(item => ({
+      updateOne: {
+        filter: { _id: item.id, deleted_at: null },
+        update: { $set: { display_order: Number(item.display_order), updated_by: req.user?.id } },
+      },
+    }));
+
+    await IndustryContent.bulkWrite(ops);
+
+    return res.json({ status: 'success', message: 'Content reordered' });
+  } catch (err) {
+    console.error('[industry.content] reorder_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. TRACK ANALYTICS EVENT
+// POST /admin-api/industry-content/analytics
+// Body: { content_id, industry_type_id, event_type, user_type, user_id, placement, device_type }
+// ─────────────────────────────────────────────────────────────────────────────
+const track_analytics = async (req, res) => {
+  try {
+    const { content_id, industry_type_id, event_type, user_type, user_id, placement, device_type } = req.body;
+
+    if (!content_id || !event_type)
+      return res.status(400).json({ status: 'error', message: 'content_id and event_type are required' });
+
+    await IndustryContentAnalytics.create({
+      content_id,
+      industry_type_id: industry_type_id || null,
+      event_type,
+      user_type: user_type || 'ANONYMOUS',
+      user_id:   user_id && mongoose.Types.ObjectId.isValid(user_id) ? user_id : null,
+      placement:   placement || null,
+      device_type: device_type || null,
+      recorded_at: new Date(),
+    });
+
+    return res.json({ status: 'success' });
+  } catch (err) {
+    // Non-critical — do not surface errors to client
+    console.error('[industry.content] track_analytics:', err.message);
+    return res.json({ status: 'success' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 15. GET ANALYTICS SUMMARY
+// GET /admin-api/industry-content/analytics/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const get_analytics = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const pipeline = [
+      { $match: { content_id: new mongoose.Types.ObjectId(id) } },
+      { $group: { _id: '$event_type', count: { $sum: 1 } } },
+    ];
+
+    const results = await IndustryContentAnalytics.aggregate(pipeline);
+    const summary = {};
+    results.forEach(r => { summary[r._id] = r.count; });
+
+    return res.json({ status: 'success', data: summary });
+  } catch (err) {
+    console.error('[industry.content] get_analytics:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── Export cache for use by dashboard handler ─────────────────────────────
+module.exports = {
+  list_content,
+  get_content_detail,
+  create_content,
+  update_content,
+  upload_content_media,
+  delete_content_media,
+  set_industry_assignments,
+  publish_content,
+  unpublish_content,
+  schedule_content,
+  archive_content,
+  preview_content,
+  reorder_content,
+  track_analytics,
+  get_analytics,
+  // Expose cache invalidation for scheduler
+  invalidate_industry_cache,
+  contentCache,
+  CACHE_KEY,
+};
