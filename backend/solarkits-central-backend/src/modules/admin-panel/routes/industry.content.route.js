@@ -75,12 +75,15 @@ router.delete('/delete-media/:media_id', check_auth, check_permissions(CAN_DELET
 // ── Industry assignment ───────────────────────────────────────────────────────
 router.post('/set-industries/:id', check_auth, check_permissions(CAN_EDIT), handler.set_industry_assignments);
 
-// ── Lifecycle ────────────────────────────────────────────────────────────────
-router.put('/publish/:id',   check_auth, check_permissions(CAN_EDIT), handler.publish_content);
-router.put('/unpublish/:id', check_auth, check_permissions(CAN_EDIT), handler.unpublish_content);
-router.put('/schedule/:id',  check_auth, check_permissions(CAN_EDIT), handler.schedule_content);
-router.put('/archive/:id',   check_auth, check_permissions(CAN_EDIT), handler.archive_content);
-router.put('/reorder',       check_auth, check_permissions(CAN_EDIT), handler.reorder_content);
+// ── Lifecycle & Operations ───────────────────────────────────────────────────
+router.put('/publish/:id',        check_auth, check_permissions(CAN_EDIT), handler.publish_content);
+router.put('/unpublish/:id',      check_auth, check_permissions(CAN_EDIT), handler.unpublish_content);
+router.put('/schedule/:id',       check_auth, check_permissions(CAN_EDIT), handler.schedule_content);
+router.put('/archive/:id',        check_auth, check_permissions(CAN_EDIT), handler.archive_content);
+router.put('/toggle-active/:id',  check_auth, check_permissions(CAN_EDIT), handler.toggle_active);
+router.put('/reorder',            check_auth, check_permissions(CAN_EDIT), handler.reorder_content);
+router.post('/duplicate/:id',     check_auth, check_permissions(CAN_ADD),  handler.duplicate_content);
+router.post('/bulk-action',       check_auth, check_permissions(CAN_EDIT), handler.bulk_action);
 
 // ── Preview ───────────────────────────────────────────────────────────────────
 router.get('/preview/:id', check_auth, check_permissions(CAN_VIEW), handler.preview_content);

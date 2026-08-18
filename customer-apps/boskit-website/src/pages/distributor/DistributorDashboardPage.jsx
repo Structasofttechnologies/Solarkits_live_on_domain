@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import IndustryMediaShowcase from '../../components/industry/IndustryMediaShowcase';
 import {
   FiUsers,
   FiFileText,
@@ -65,7 +66,7 @@ export default function DistributorDashboardPage() {
     <div className="space-y-8 max-w-7xl mx-auto">
       
       {/* ── Exact Royal Blue Header Banner (Matching Screenshot) ───────────── */}
-      <div className="bg-[#185ADB] rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
+      <div className="bg-[#185ADB] rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -101,19 +102,26 @@ export default function DistributorDashboardPage() {
                 setShowInviteModal(true);
                 setInviteResult(null);
               }}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-[#185ADB] hover:bg-blue-50 shadow-sm flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+              className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-white text-[#185ADB] hover:bg-blue-50 shadow-sm flex items-center gap-2 cursor-pointer transition-all active:scale-95"
             >
               <FiPlusCircle size={15} /> Invite Sub-Dealer
             </button>
             <Link
               to="/distributor/portal/procure"
-              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/15 hover:bg-white/25 text-white border border-white/20 shadow-xs flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 rounded-2xl text-xs font-bold bg-white/15 hover:bg-white/25 text-white border border-white/20 shadow-xs flex items-center gap-2 transition-all active:scale-95"
             >
               <FiShoppingCart size={15} /> Product Catalogue
             </Link>
           </div>
         </div>
       </div>
+
+      {/* ── Industry Media Showcase (Selector -> Hero -> FilterBar -> Gallery -> Lightbox) ── */}
+      <IndustryMediaShowcase
+        role="DISTRIBUTOR"
+        user={distributor || user}
+        storageKey="distributor_selected_industry_id"
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">

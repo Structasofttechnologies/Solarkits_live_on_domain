@@ -50,15 +50,17 @@ function sanitize_url(url) {
 const list_content = async (req, res) => {
   try {
     const {
-      page = 1, limit = 20,
-      status, content_type, industry_type_id, placement, search,
+      page = 1, limit = 50,
+      status, content_type, target_audience, industry_type_id, placement, is_featured, search,
     } = req.query;
 
     const filter = { deleted_at: null };
-    if (status)         filter.status = status;
-    if (content_type)   filter.content_type = content_type;
-    if (placement)      filter.placement = placement;
-    if (search)         filter.title = { $regex: search, $options: 'i' };
+    if (status)           filter.status = status;
+    if (content_type)     filter.content_type = content_type;
+    if (target_audience)  filter.target_audience = { $in: [target_audience, 'BOTH'] };
+    if (placement)        filter.placement = placement;
+    if (is_featured !== undefined && is_featured !== '') filter.is_featured = is_featured === 'true' || is_featured === true;
+    if (search)           filter.title = { $regex: search, $options: 'i' };
 
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -81,12 +83,18 @@ const list_content = async (req, res) => {
       IndustryContent.countDocuments(filter),
     ]);
 
-    // Enrich with industry assignments
+    // Enrich with industry assignments and media items
     const ids = items.map(i => i._id);
-    const maps = await IndustryContentIndustryMap.find({
-      content_id: { $in: ids },
-      deleted_at: null,
-    }).populate('industry_type_id', 'name slug icon').lean();
+    const [maps, mediaList] = await Promise.all([
+      IndustryContentIndustryMap.find({
+        content_id: { $in: ids },
+        deleted_at: null,
+      }).populate('industry_type_id', 'name slug icon is_active').lean(),
+      IndustryContentMedia.find({
+        content_id: { $in: ids },
+        deleted_at: null,
+      }).sort({ is_primary: -1, sort_order: 1, created_at: 1 }).lean(),
+    ]);
 
     const mapByContent = {};
     maps.forEach(m => {
@@ -95,11 +103,27 @@ const list_content = async (req, res) => {
       if (m.industry_type_id) mapByContent[cid].push(m.industry_type_id);
     });
 
-    const data = items.map(item => ({
-      ...item,
-      id: item._id,
-      industries: mapByContent[item._id.toString()] || [],
-    }));
+    const mediaByContent = {};
+    mediaList.forEach(m => {
+      const cid = m.content_id.toString();
+      if (!mediaByContent[cid]) mediaByContent[cid] = [];
+      mediaByContent[cid].push({ ...m, id: m._id });
+    });
+
+    const data = items.map(item => {
+      const contentMedia = mediaByContent[item._id.toString()] || [];
+      const primaryMedia = contentMedia.find(m => m.is_primary) || contentMedia[0] || null;
+      const thumbnail = primaryMedia?.thumbnail_url || primaryMedia?.poster_url || primaryMedia?.url || null;
+
+      return {
+        ...item,
+        id: item._id,
+        industries: mapByContent[item._id.toString()] || [],
+        media: contentMedia,
+        thumbnail,
+        media_count: contentMedia.length,
+      };
+    });
 
     return res.json({
       status: 'success',
@@ -124,7 +148,7 @@ const get_content_detail = async (req, res) => {
 
     const [content, media, maps] = await Promise.all([
       IndustryContent.findOne({ _id: id, deleted_at: null }).lean(),
-      IndustryContentMedia.find({ content_id: id, deleted_at: null }).sort({ device_type: 1, media_type: 1 }).lean(),
+      IndustryContentMedia.find({ content_id: id, deleted_at: null }).sort({ is_primary: -1, sort_order: 1, device_type: 1 }).lean(),
       IndustryContentIndustryMap.find({ content_id: id, deleted_at: null })
         .populate('industry_type_id', 'name slug icon is_active')
         .lean(),
@@ -151,7 +175,7 @@ const get_content_detail = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. CREATE CONTENT (Draft)
+// 3. CREATE CONTENT (Draft / Published)
 // POST /admin-api/industry-content/create
 // ─────────────────────────────────────────────────────────────────────────────
 const create_content = async (req, res) => {
@@ -159,13 +183,15 @@ const create_content = async (req, res) => {
     const {
       title, internal_name, content_type, target_audience, placement,
       heading, short_description, cta_label, cta_url,
-      priority, display_order, start_at, end_at,
-      autoplay, show_controls, muted, loop,
+      reseller_cta_label, reseller_cta_url, distributor_cta_label, distributor_cta_url,
+      is_featured, priority, display_order, start_at, end_at, status, is_active,
+      autoplay, show_controls, muted, loop, allow_download, allow_share, allow_fullscreen,
+      focal_position, related_kit_ids,
       industry_ids,  // array of industry_type_id strings
     } = req.body;
 
-    if (!title || !internal_name || !content_type || !target_audience || !placement) {
-      return res.status(400).json({ status: 'error', message: 'title, internal_name, content_type, target_audience, placement are required' });
+    if (!title || !internal_name || !content_type || !target_audience) {
+      return res.status(400).json({ status: 'error', message: 'title, internal_name, content_type, and target_audience are required' });
     }
 
     // Sanitize user-visible fields
@@ -178,11 +204,16 @@ const create_content = async (req, res) => {
       internal_name: internal_name.trim(),
       content_type,
       target_audience,
-      placement,
+      placement: placement || 'GALLERY',
       heading:           safe_heading,
       short_description: safe_desc,
       cta_label:         cta_label ? cta_label.trim().substring(0, 100) : null,
       cta_url:           safe_cta_url,
+      reseller_cta_label:    reseller_cta_label ? reseller_cta_label.trim().substring(0, 100) : null,
+      reseller_cta_url:      sanitize_url(reseller_cta_url),
+      distributor_cta_label: distributor_cta_label ? distributor_cta_label.trim().substring(0, 100) : null,
+      distributor_cta_url:   sanitize_url(distributor_cta_url),
+      is_featured:       !!is_featured,
       priority:          priority != null ? Number(priority) : 0,
       display_order:     display_order != null ? Number(display_order) : 0,
       start_at:          start_at ? new Date(start_at) : null,
@@ -191,7 +222,13 @@ const create_content = async (req, res) => {
       show_controls:     show_controls !== false,
       muted:             muted !== false,
       loop:              !!loop,
-      status:            'DRAFT',
+      allow_download:    allow_download !== false,
+      allow_share:       allow_share !== false,
+      allow_fullscreen:  allow_fullscreen !== false,
+      focal_position:    focal_position || 'center',
+      related_kit_ids:   Array.isArray(related_kit_ids) ? related_kit_ids : [],
+      status:            status || 'DRAFT',
+      is_active:         is_active !== undefined ? !!is_active : true,
       created_by:        req.user?.id,
     });
 
@@ -227,18 +264,23 @@ const update_content = async (req, res) => {
     const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
     if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
 
-    const allowed = ['title','internal_name','content_type','target_audience','placement',
-      'heading','short_description','cta_label','cta_url','priority','display_order',
-      'start_at','end_at','autoplay','show_controls','muted','loop'];
+    const allowed = [
+      'title', 'internal_name', 'content_type', 'target_audience', 'placement',
+      'heading', 'short_description', 'cta_label', 'cta_url',
+      'reseller_cta_label', 'reseller_cta_url', 'distributor_cta_label', 'distributor_cta_url',
+      'is_featured', 'priority', 'display_order', 'status', 'is_active',
+      'start_at', 'end_at', 'autoplay', 'show_controls', 'muted', 'loop',
+      'allow_download', 'allow_share', 'allow_fullscreen', 'focal_position', 'related_kit_ids'
+    ];
 
     const update = {};
     for (const field of allowed) {
       if (req.body[field] !== undefined) {
         if (field === 'heading' || field === 'short_description') {
           update[field] = sanitize_html(req.body[field]);
-        } else if (field === 'cta_url') {
+        } else if (['cta_url', 'reseller_cta_url', 'distributor_cta_url'].includes(field)) {
           update[field] = sanitize_url(req.body[field]);
-        } else if (['start_at','end_at'].includes(field)) {
+        } else if (['start_at', 'end_at'].includes(field)) {
           update[field] = req.body[field] ? new Date(req.body[field]) : null;
         } else {
           update[field] = req.body[field];
@@ -250,7 +292,7 @@ const update_content = async (req, res) => {
     const updated = await IndustryContent.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
 
     // Invalidate cache if status-affecting fields changed
-    if (update.status || update.start_at || update.end_at || update.target_audience) {
+    if (update.status || update.start_at || update.end_at || update.target_audience || update.is_active !== undefined) {
       const maps = await IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean();
       maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
     }
@@ -278,7 +320,7 @@ const upload_content_media = async (req, res) => {
 
     if (!req.files || req.files.length === 0) {
       // Check for external URL upload
-      const { external_url, media_type, device_type, alt_text, is_primary } = req.body;
+      const { external_url, media_type, device_type, alt_text, is_primary, thumbnail_url, poster_url, caption, focal_point, sort_order } = req.body;
       if (!external_url) return res.status(400).json({ status: 'error', message: 'No file or external_url provided' });
 
       const safe_url = sanitize_url(external_url);
@@ -286,18 +328,23 @@ const upload_content_media = async (req, res) => {
 
       const media = await IndustryContentMedia.create({
         content_id: id,
-        media_type:  media_type || 'VIDEO',
-        device_type: device_type || 'ALL',
-        url:         safe_url,
-        is_external: true,
-        alt_text:    sanitize_html(alt_text),
-        is_primary:  !!is_primary,
+        media_type:    media_type || 'VIDEO',
+        device_type:   device_type || 'ALL',
+        url:           safe_url,
+        thumbnail_url: thumbnail_url ? sanitize_url(thumbnail_url) : null,
+        poster_url:    poster_url ? sanitize_url(poster_url) : null,
+        is_external:   true,
+        alt_text:      sanitize_html(alt_text),
+        caption:       sanitize_html(caption),
+        focal_point:   focal_point || 'center',
+        sort_order:    sort_order != null ? Number(sort_order) : 0,
+        is_primary:    !!is_primary,
       });
 
       return res.status(201).json({ status: 'success', data: { ...media.toObject(), id: media._id } });
     }
 
-    const { device_type = 'ALL', media_type, alt_text, is_primary } = req.body;
+    const { device_type = 'ALL', media_type, alt_text, is_primary, thumbnail_url, poster_url, caption, focal_point, sort_order } = req.body;
 
     const created = [];
     for (const file of req.files) {
@@ -309,6 +356,8 @@ const upload_content_media = async (req, res) => {
         media_type:        media_type || auto_type,
         device_type,
         url:               file.path,
+        thumbnail_url:     thumbnail_url ? sanitize_url(thumbnail_url) : null,
+        poster_url:        poster_url ? sanitize_url(poster_url) : null,
         storage_key:       file.filename,
         is_external:       false,
         mime_type:         file.mimetype,
@@ -318,6 +367,9 @@ const upload_content_media = async (req, res) => {
         duration_sec:      file.cloudinary?.duration || null,
         processing_status: 'READY',
         alt_text:          sanitize_html(alt_text),
+        caption:           sanitize_html(caption),
+        focal_point:       focal_point || 'center',
+        sort_order:        sort_order != null ? Number(sort_order) : 0,
         is_primary:        !!is_primary,
       });
 
@@ -647,6 +699,151 @@ const get_analytics = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 16. DUPLICATE CONTENT
+// POST /admin-api/industry-content/duplicate/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const duplicate_content = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const original = await IndustryContent.findOne({ _id: id, deleted_at: null }).lean();
+    if (!original) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    const [originalMedia, originalMaps] = await Promise.all([
+      IndustryContentMedia.find({ content_id: id, deleted_at: null }).lean(),
+      IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean(),
+    ]);
+
+    // Create cloned content record
+    const { _id, id: _tempId, created_at, updated_at, ...cleanObj } = original;
+    const cloned = await IndustryContent.create({
+      ...cleanObj,
+      title: `${cleanObj.title} (Copy)`,
+      internal_name: `${cleanObj.internal_name}_COPY_${Date.now().toString().slice(-4)}`,
+      status: 'DRAFT',
+      created_by: req.user?.id,
+      published_at: null,
+      view_count: 0,
+      likes_count: 0,
+    });
+
+    // Clone industry maps
+    if (originalMaps.length > 0) {
+      const mapsToInsert = originalMaps.map(m => ({
+        content_id: cloned._id,
+        industry_type_id: m.industry_type_id,
+        is_active: m.is_active,
+      }));
+      await IndustryContentIndustryMap.insertMany(mapsToInsert, { ordered: false }).catch(() => {});
+    }
+
+    // Clone media
+    if (originalMedia.length > 0) {
+      const mediaToInsert = originalMedia.map(m => {
+        const { _id: _mId, id: _mTempId, content_id, created_at: _ca, updated_at: _ua, ...cleanMedia } = m;
+        return {
+          ...cleanMedia,
+          content_id: cloned._id,
+        };
+      });
+      await IndustryContentMedia.insertMany(mediaToInsert, { ordered: false }).catch(() => {});
+    }
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Content duplicated successfully',
+      data: { id: cloned._id, ...cloned.toObject() },
+    });
+  } catch (err) {
+    console.error('[industry.content] duplicate_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 17. BULK ACTION
+// POST /admin-api/industry-content/bulk-action
+// Body: { ids: [...], action: 'publish' | 'pause' | 'archive' | 'delete' | 'activate' | 'deactivate' }
+// ─────────────────────────────────────────────────────────────────────────────
+const bulk_action = async (req, res) => {
+  try {
+    const { ids, action } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0 || !action) {
+      return res.status(400).json({ status: 'error', message: 'ids array and action are required' });
+    }
+
+    const validIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+    if (validIds.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No valid ids provided' });
+    }
+
+    let update = {};
+    if (action === 'publish') {
+      update = { status: 'PUBLISHED', is_active: true, published_at: new Date(), updated_by: req.user?.id };
+    } else if (action === 'pause') {
+      update = { status: 'PAUSED', updated_by: req.user?.id };
+    } else if (action === 'archive') {
+      update = { status: 'ARCHIVED', is_active: false, updated_by: req.user?.id };
+    } else if (action === 'delete') {
+      update = { deleted_at: new Date(), updated_by: req.user?.id };
+    } else if (action === 'activate') {
+      update = { is_active: true, updated_by: req.user?.id };
+    } else if (action === 'deactivate') {
+      update = { is_active: false, updated_by: req.user?.id };
+    } else {
+      return res.status(400).json({ status: 'error', message: `Unknown action: ${action}` });
+    }
+
+    await IndustryContent.updateMany(
+      { _id: { $in: validIds }, deleted_at: null },
+      { $set: update }
+    );
+
+    // Invalidate affected industry caches
+    const maps = await IndustryContentIndustryMap.find({ content_id: { $in: validIds }, deleted_at: null }).lean();
+    maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
+
+    return res.json({ status: 'success', message: `Bulk ${action} completed for ${validIds.length} items` });
+  } catch (err) {
+    console.error('[industry.content] bulk_action:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 18. QUICK TOGGLE ACTIVE
+// PUT /admin-api/industry-content/toggle-active/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const toggle_active = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    content.is_active = !content.is_active;
+    content.updated_by = req.user?.id;
+    await content.save();
+
+    const maps = await IndustryContentIndustryMap.find({ content_id: id, deleted_at: null }).lean();
+    maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
+
+    return res.json({
+      status: 'success',
+      message: `Content ${content.is_active ? 'activated' : 'deactivated'}`,
+      data: { id: content._id, is_active: content.is_active },
+    });
+  } catch (err) {
+    console.error('[industry.content] toggle_active:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 // ─── Export cache for use by dashboard handler ─────────────────────────────
 module.exports = {
   list_content,
@@ -662,6 +859,9 @@ module.exports = {
   archive_content,
   preview_content,
   reorder_content,
+  duplicate_content,
+  bulk_action,
+  toggle_active,
   track_analytics,
   get_analytics,
   // Expose cache invalidation for scheduler

@@ -74,9 +74,18 @@ const get_my_industries = async (req, res) => {
       select: 'name code slug description icon thumbnail sort_order',
     }).lean();
 
-    const industries = maps
+    let industries = maps
       .filter(m => m.industry_type_id)
       .map(m => ({ ...m.industry_type_id, id: m.industry_type_id._id }));
+
+    // If no explicit per-user mapping is recorded, serve all active industries configured for resellers
+    if (!industries.length) {
+      const allActive = await IndustryType.find({ is_active: true, deleted_at: null, for_resellers: true })
+        .sort({ sort_order: 1 })
+        .select('name code slug description icon thumbnail sort_order')
+        .lean();
+      industries = allActive.map(i => ({ ...i, id: i._id }));
+    }
 
     return res.json({ status: 'success', data: industries });
   } catch (err) {
@@ -98,21 +107,6 @@ const select_industry = async (req, res) => {
     if (!industry_type_id || !mongoose.Types.ObjectId.isValid(industry_type_id))
       return res.status(400).json({ status: 'error', message: 'Valid industry_type_id is required' });
 
-    // Security: verify reseller is approved for this industry
-    const map = await UserIndustryMap.findOne({
-      user_type: 'RESELLER',
-      user_id:   reseller_id,
-      industry_type_id,
-      approval_status: 'APPROVED',
-      deleted_at: null,
-    }).lean();
-
-    if (!map) {
-      return res.status(403).json({ status: 'error', message: 'You are not authorized to access this industry' });
-    }
-
-    // Could persist to a user preferences collection; for now return success
-    // (frontend persists to localStorage)
     return res.json({ status: 'success', data: { industry_type_id } });
   } catch (err) {
     console.error('[industry.dashboard] select_industry:', err);
@@ -143,7 +137,11 @@ const get_dashboard_content = async (req, res) => {
     }).lean();
 
     if (!access_map) {
-      return res.status(403).json({ status: 'error', message: 'You are not authorized to access content for this industry' });
+      // Verify the industry type exists and is active for resellers
+      const ind = await IndustryType.findOne({ _id: industry_type_id, is_active: true, deleted_at: null, for_resellers: true });
+      if (!ind) {
+        return res.status(403).json({ status: 'error', message: 'You are not authorized to access content for this industry' });
+      }
     }
 
     // ── Try cache ──────────────────────────────────────────────────────────

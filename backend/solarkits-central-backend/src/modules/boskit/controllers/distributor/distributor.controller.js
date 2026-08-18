@@ -933,6 +933,199 @@ const create_distributor_procurement_order = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. Distributor Industry Showcase APIs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 12.1 Get Active Industries for Distributor Portal
+ */
+const get_distributor_industries = async (req, res) => {
+  try {
+    const { IndustryType } = require('../../../admin-panel/models/core_db');
+    const industries = await IndustryType.find({
+      is_active: true,
+      deleted_at: null,
+      for_epc: true,
+    })
+      .sort({ sort_order: 1 })
+      .select('name code slug description icon thumbnail sort_order')
+      .lean();
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: industries.map(i => ({ ...i, id: i._id })),
+    });
+  } catch (error) {
+    console.error('[get_distributor_industries Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Failed to fetch industries: ' + error.message,
+    });
+  }
+};
+
+/**
+ * 12.2 Get Distributor Industry Dashboard Content (Visual Gallery & Hero)
+ */
+const get_distributor_dashboard_content = async (req, res) => {
+  try {
+    const { industry_type_id, placement } = req.query;
+    if (!industry_type_id || !mongoose.Types.ObjectId.isValid(industry_type_id)) {
+      return res.status(400).json({ status: 'error', success: false, message: 'Valid industry_type_id is required' });
+    }
+
+    const {
+      IndustryContent,
+      IndustryContentIndustryMap,
+      IndustryContentMedia,
+    } = require('../../../admin-panel/models/core_db');
+
+    const now = new Date();
+
+    // Find content IDs mapped to this industry
+    const maps = await IndustryContentIndustryMap.find({
+      industry_type_id,
+      deleted_at: null,
+    }).select('content_id').lean();
+
+    const content_ids = maps.map(m => m.content_id);
+    if (!content_ids.length) {
+      return res.status(200).json({ status: 'success', success: true, data: [] });
+    }
+
+    const filter = {
+      _id: { $in: content_ids },
+      status: 'PUBLISHED',
+      is_active: true,
+      target_audience: { $in: ['DISTRIBUTOR', 'EPC', 'BOTH'] },
+      deleted_at: null,
+      $or: [
+        { start_at: null },
+        { start_at: { $lte: now } },
+      ],
+      $and: [
+        {
+          $or: [
+            { end_at: null },
+            { end_at: { $gte: now } },
+          ],
+        },
+      ],
+    };
+
+    if (placement) filter.placement = placement;
+
+    const contents = await IndustryContent.find(filter)
+      .sort({ priority: -1, display_order: 1, published_at: -1 })
+      .lean();
+
+    // Fetch media
+    const cids = contents.map(c => c._id);
+    const mediaList = await IndustryContentMedia.find({
+      content_id: { $in: cids },
+      deleted_at: null,
+      processing_status: { $ne: 'FAILED' },
+    }).sort({ is_primary: -1, sort_order: 1, created_at: 1 }).lean();
+
+    const mediaMap = {};
+    for (const m of mediaList) {
+      const cid = m.content_id.toString();
+      if (!mediaMap[cid]) mediaMap[cid] = [];
+      mediaMap[cid].push({ ...m, id: m._id });
+    }
+
+    const data = contents.map(c => ({
+      ...c,
+      id: c._id,
+      // Distribute per-role CTAs if available
+      cta_label: c.distributor_cta_label || c.cta_label || 'View BOS Kit',
+      cta_url: c.distributor_cta_url || c.cta_url || '/distributor/portal/procure',
+      media: mediaMap[c._id.toString()] || [],
+    }));
+
+    return res.status(200).json({ status: 'success', success: true, data });
+  } catch (error) {
+    console.error('[get_distributor_dashboard_content Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Failed to fetch dashboard content: ' + error.message,
+    });
+  }
+};
+
+/**
+ * 12.3 Get Industry Theme Configuration
+ */
+const get_distributor_industry_theme = async (req, res) => {
+  try {
+    const { industry_type_id } = req.query;
+    if (!industry_type_id || !mongoose.Types.ObjectId.isValid(industry_type_id)) {
+      return res.status(400).json({ status: 'error', success: false, message: 'Valid industry_type_id is required' });
+    }
+
+    const { IndustryTheme } = require('../../../admin-panel/models/core_db');
+    const theme = await IndustryTheme.findOne({
+      industry_type_id,
+      is_active: true,
+      deleted_at: null,
+    }).lean();
+
+    return res.status(200).json({ status: 'success', success: true, data: theme ? { ...theme, id: theme._id } : null });
+  } catch (error) {
+    console.error('[get_distributor_industry_theme Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Failed to fetch theme: ' + error.message,
+    });
+  }
+};
+
+/**
+ * 12.4 Get Related Products for Industry
+ */
+const get_distributor_industry_related_products = async (req, res) => {
+  try {
+    const { industry_type_id, limit = 8 } = req.query;
+    const BoskitProduct = mongoose.model('boskit_products');
+
+    const filter = { status: 'active', deleted_at: null };
+    if (industry_type_id && mongoose.Types.ObjectId.isValid(industry_type_id)) {
+      filter.industry_type_id = industry_type_id;
+    }
+
+    const products = await BoskitProduct.find(filter)
+      .limit(Number(limit))
+      .lean();
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: products.map(p => ({
+        id: p._id,
+        name: p.name,
+        sku: p.sku,
+        category: p.category,
+        brand: p.brand_name || 'SolarKits BOS',
+        thumbnail_url: p.primary_image || p.thumbnail_url,
+        mrp_inr: p.mrp_inr || (p.mrp_paise ? Math.round(p.mrp_paise / 100) : 0),
+        b2b_price_inr: p.b2b_base_price_inr || (p.b2b_base_price_paise ? Math.round(p.b2b_base_price_paise / 100) : 0),
+      })),
+    });
+  } catch (error) {
+    console.error('[get_distributor_industry_related_products Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Failed to fetch products: ' + error.message,
+    });
+  }
+};
+
 module.exports = {
   get_distributor_entitlements,
   get_distributor_dashboard_stats,
@@ -945,4 +1138,8 @@ module.exports = {
   get_distributor_catalogue,
   set_distributor_product_margin,
   create_distributor_procurement_order,
+  get_distributor_industries,
+  get_distributor_dashboard_content,
+  get_distributor_industry_theme,
+  get_distributor_industry_related_products,
 };

@@ -16,14 +16,17 @@ const schema = new mongoose.Schema({
   content_type: {
     type: String,
     required: true,
-    enum: ['HERO_BANNER', 'IMAGE_SLIDER', 'VIDEO_SLIDER', 'EXPLAINER_VIDEO', 'PROMOTIONAL_CARD', 'ANNOUNCEMENT', 'INDUSTRY_THEME'],
+    enum: [
+      'PHOTO', 'POSTER', 'VIDEO', 'GALLERY',
+      'HERO_BANNER', 'IMAGE_SLIDER', 'VIDEO_SLIDER', 'EXPLAINER_VIDEO', 'PROMOTIONAL_CARD', 'ANNOUNCEMENT', 'INDUSTRY_THEME'
+    ],
   },
 
-  // Target audience
+  // Target audience (SolarKits Reseller, BOS Kits Distributor, EPC, or Both)
   target_audience: {
     type: String,
     required: true,
-    enum: ['RESELLER', 'EPC', 'BOTH'],
+    enum: ['RESELLER', 'DISTRIBUTOR', 'EPC', 'BOTH'],
     default: 'BOTH',
   },
 
@@ -31,15 +34,29 @@ const schema = new mongoose.Schema({
   placement: {
     type: String,
     required: true,
-    enum: ['DASHBOARD_TOP', 'DASHBOARD_MIDDLE', 'DASHBOARD_BOTTOM', 'STOREFRONT_TOP', 'PRODUCT_LISTING', 'PRODUCT_DETAILS', 'CHECKOUT_INFORMATION'],
-    default: 'DASHBOARD_TOP',
+    enum: [
+      'HERO', 'GALLERY', 'POSTER_HIGHLIGHT', 'VIDEO_HIGHLIGHT',
+      'DASHBOARD_TOP', 'DASHBOARD_MIDDLE', 'DASHBOARD_BOTTOM', 'STOREFRONT_TOP', 'PRODUCT_LISTING', 'PRODUCT_DETAILS', 'CHECKOUT_INFORMATION'
+    ],
+    default: 'GALLERY',
   },
 
   // Visible content
   heading:           { type: String, default: null, trim: true, maxlength: 500 },
   short_description: { type: String, default: null, trim: true, maxlength: 2000 },
+  
+  // Universal CTA
   cta_label:         { type: String, default: null, trim: true, maxlength: 100 },
   cta_url:           { type: String, default: null, trim: true, maxlength: 1000 },
+
+  // Role-specific CTA overrides (when target_audience is BOTH)
+  reseller_cta_label:    { type: String, default: null, trim: true, maxlength: 100 },
+  reseller_cta_url:      { type: String, default: null, trim: true, maxlength: 1000 },
+  distributor_cta_label: { type: String, default: null, trim: true, maxlength: 100 },
+  distributor_cta_url:   { type: String, default: null, trim: true, maxlength: 1000 },
+
+  // Highlight & Feature flags
+  is_featured:       { type: Boolean, default: false },
 
   // Status lifecycle
   status: {
@@ -56,17 +73,30 @@ const schema = new mongoose.Schema({
   start_at: { type: Date, default: null },
   end_at:   { type: Date, default: null },
 
-  // Video playback config
-  autoplay:      { type: Boolean, default: false },
-  show_controls: { type: Boolean, default: true },
-  muted:         { type: Boolean, default: true },
-  loop:          { type: Boolean, default: false },
+  // Media interaction & playback permissions
+  autoplay:         { type: Boolean, default: false },
+  show_controls:    { type: Boolean, default: true },
+  muted:            { type: Boolean, default: true },
+  loop:             { type: Boolean, default: false },
+  allow_download:   { type: Boolean, default: true },
+  allow_share:      { type: Boolean, default: true },
+  allow_fullscreen: { type: Boolean, default: true },
+
+  // Focal position for responsive cropping: 'center', 'top', 'bottom', 'left', 'right'
+  focal_position:   { type: String, default: 'center', trim: true },
+
+  // Analytics
+  view_count:       { type: Number, default: 0 },
+  likes_count:      { type: Number, default: 0 },
+
+  // Optional Product / Kit associations
+  related_kit_ids:  [{ type: String, trim: true }],
 
   // Audit
-  created_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-  approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-  published_at:{ type: Date, default: null },
-  updated_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+  created_by:   { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+  approved_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+  published_at: { type: Date, default: null },
+  updated_by:   { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
 
   is_active:  { type: Boolean, default: true },
   deleted_at: { type: Date, default: null },
@@ -82,6 +112,7 @@ schema.index({ status: 1, start_at: 1, end_at: 1, deleted_at: 1 });
 schema.index({ target_audience: 1, placement: 1, status: 1 });
 schema.index({ content_type: 1, status: 1 });
 schema.index({ priority: -1, display_order: 1, published_at: -1 });
+schema.index({ is_featured: 1 });
 schema.index({ created_by: 1 });
 
 schema.virtual('id').get(function () { return this._id; });

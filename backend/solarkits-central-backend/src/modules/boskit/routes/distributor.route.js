@@ -32,4 +32,10 @@ router.get('/catalogue',                        distributorController.get_distri
 router.post('/pricing/margin',                  distributorController.set_distributor_product_margin);
 router.post('/procure/order',                   distributorController.create_distributor_procurement_order);
 
+// ── Industry Media Showcase Endpoints ──
+router.get('/industry/my-industries',           distributorController.get_distributor_industries);
+router.get('/industry/dashboard-content',       distributorController.get_distributor_dashboard_content);
+router.get('/industry/theme',                   distributorController.get_distributor_industry_theme);
+router.get('/industry/related-products',        distributorController.get_distributor_industry_related_products);
+
 module.exports = router;

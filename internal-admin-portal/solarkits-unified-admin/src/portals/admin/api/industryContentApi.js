@@ -151,6 +151,27 @@ export const archiveContent = async (id, moduleUniqueId = "ADM_INDUSTRY_CONTENT"
   return res.data;
 };
 
+export const toggleActiveIndustryContent = async (id, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
+  const res = await axios.put(buildUrl(`/industry-content/toggle-active/${id}`, moduleUniqueId, "edit"), {}, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const duplicateIndustryContent = async (id, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
+  const res = await axios.post(buildUrl(`/industry-content/duplicate/${id}`, moduleUniqueId, "add"), {}, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const bulkActionIndustryContent = async (data, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
+  const res = await axios.post(buildUrl("/industry-content/bulk-action", moduleUniqueId, "edit"), data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 export const previewContent = async (id, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
   const res = await axios.get(buildUrl(`/industry-content/preview/${id}`, moduleUniqueId, "view"), {
     headers: authHeaderObj(),

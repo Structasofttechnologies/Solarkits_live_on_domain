@@ -18,307 +18,416 @@ const {
 
 const SEED_INDUSTRIES = [
   {
-    name: "Residential Solar",
-    code: "RESI",
-    slug: "residential-solar",
-    icon: "🏡",
-    description: "Rooftop solar systems, on-grid inverters, battery storage, and smart home energy kits for homeowners.",
+    name: "Commercial & Industrial (C&I)",
+    code: "CI",
+    slug: "commercial-industrial",
+    icon: "🏭",
+    description: "High-capacity rooftop solar, bifacial modules, HT string inverters, and zero export devices for factories and warehouses.",
     sort_order: 1,
     for_resellers: true,
     for_epc: true,
     is_active: true,
     theme: {
-      primary_color: "#1a3b8b",
-      secondary_color: "#f8c21a",
-      accent_color: "#38bdf8",
-      bg_color: "#f8fafc",
-      text_color: "#0f172a",
-      section_bg: "#ffffff",
+      primary_color: "#185ADB",
+      secondary_color: "#0575B8",
+      accent_color: "#F8C21A",
+      bg_color: "#F8FAFC",
+      text_color: "#0F172A",
+      section_bg: "#FFFFFF",
+      button_style: "SOLID",
+    },
+    contents: [
+      {
+        title: "Industrial & Factory Solar Power Systems",
+        internal_name: "HERO_CI_FACTORY_4K",
+        content_type: "VIDEO",
+        target_audience: "BOTH",
+        placement: "HERO",
+        heading: "Industrial & Factory Solar Power Systems",
+        short_description: "High-yield commercial bifacial panels engineered for factory rooftops with zero-export grid synchronization.",
+        cta_label: "View Commercial Kits →",
+        cta_url: "/catalog",
+        reseller_cta_label: "View Commercial Kits →",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "View BOS Hardware Specs →",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 100,
+        display_order: 1,
+        status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        autoplay: true,
+        view_count: 1420,
+        media: [
+          {
+            url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+            poster_url: "https://images.unsplash.com/photo-1545208942-e1c9c916524b?w=1800&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1545208942-e1c9c916524b?w=800&auto=format&fit=crop&q=80",
+            media_type: "VIDEO",
+            device_type: "ALL",
+            is_primary: true,
+            duration_sec: 145,
+            alt_text: "Factory Rooftop Solar Array 4K Showcase",
+          }
+        ]
+      },
+      {
+        title: "Commercial Bifacial Mono-PERC Poster",
+        internal_name: "POSTER_CI_BIFACIAL",
+        content_type: "POSTER",
+        target_audience: "BOTH",
+        placement: "GALLERY",
+        heading: "580W+ Dual-Glass Bifacial Spec Poster",
+        short_description: "IEC 61215 certified dual-glass N-Type TOPCon modules with 30-year linear power warranty for C&I installations.",
+        cta_label: "Download Poster PDF",
+        cta_url: "/catalog",
+        reseller_cta_label: "Download Poster",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "Procure Pallets",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 90,
+        display_order: 2,
+        status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "top",
+        allow_download: true,
+        allow_share: true,
+        view_count: 890,
+        media: [
+          {
+            url: "https://images.unsplash.com/photo-1508873696983-2df5293cb32b?w=1200&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1508873696983-2df5293cb32b?w=800&auto=format&fit=crop&q=80",
+            poster_url: "https://images.unsplash.com/photo-1508873696983-2df5293cb32b?w=1200&auto=format&fit=crop&q=80",
+            media_type: "POSTER",
+            device_type: "ALL",
+            is_primary: true,
+            alt_text: "Bifacial Module Poster Spec",
+          }
+        ]
+      },
+      {
+        title: "100kW+ Three-Phase Commercial String Inverter",
+        internal_name: "PHOTO_CI_INVERTER_ARRAY",
+        content_type: "PHOTO",
+        target_audience: "BOTH",
+        placement: "GALLERY",
+        heading: "100kW - 250kW HT Inverter Wall Installation",
+        short_description: "Multi-MPPT grid-tied string inverters with built-in AFCI 2.0 arc fault protection and smart I-V curve diagnostics.",
+        cta_label: "View Inverter Specs",
+        cta_url: "/catalog",
+        reseller_cta_label: "View Inverters",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "View Wholesale Rates",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 85,
+        display_order: 3,
+        status: "PUBLISHED",
+        is_featured: false,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        view_count: 620,
+        media: [
+          {
+            url: "https://images.unsplash.com/photo-1559302504-64aae6ca6b6d?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1559302504-64aae6ca6b6d?w=800&auto=format&fit=crop&q=80",
+            media_type: "PHOTO",
+            device_type: "ALL",
+            is_primary: true,
+            alt_text: "Industrial String Inverters Array",
+          }
+        ]
+      },
+      {
+        title: "Industrial Walkway & Anodized Railing Album",
+        internal_name: "GALLERY_CI_WALKWAY",
+        content_type: "GALLERY",
+        target_audience: "DISTRIBUTOR",
+        placement: "GALLERY",
+        heading: "Heavy-Duty FRP Walkways & Clamping Hardware",
+        short_description: "Non-penetrating metal sheet roof clamps, anodized AL6005-T5 rails, and OSHA-compliant fiberglass walkways.",
+        cta_label: "View Hardware Kit",
+        cta_url: "/distributor/portal/procure",
+        distributor_cta_label: "Procure BOS Kits",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 80,
+        display_order: 4,
+        status: "PUBLISHED",
+        is_featured: false,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        view_count: 510,
+        media: [
+          {
+            url: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=800&auto=format&fit=crop&q=80",
+            media_type: "PHOTO",
+            device_type: "ALL",
+            is_primary: true,
+            alt_text: "FRP Walkway and Mounting Rails",
+          },
+          {
+            url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=800&auto=format&fit=crop&q=80",
+            media_type: "PHOTO",
+            device_type: "ALL",
+            is_primary: false,
+            alt_text: "Mounting Clamps Detail",
+          }
+        ]
+      },
+      {
+        title: "Zero-Export Power Control Demonstration",
+        internal_name: "VIDEO_CI_ZERO_EXPORT",
+        content_type: "VIDEO",
+        target_audience: "BOTH",
+        placement: "GALLERY",
+        heading: "Rapid Zero Export Grid Limiter Integration",
+        short_description: "Watch how smart energy meters throttle inverter output within 200 milliseconds to prevent reverse feeding into the grid.",
+        cta_label: "Watch Technical Demo",
+        cta_url: "/catalog",
+        reseller_cta_label: "Watch Demo",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "View Limiter Device",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 75,
+        display_order: 5,
+        status: "PUBLISHED",
+        is_featured: false,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        view_count: 730,
+        media: [
+          {
+            url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            poster_url: "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=80",
+            media_type: "VIDEO",
+            device_type: "ALL",
+            is_primary: true,
+            duration_sec: 90,
+            alt_text: "Zero Export Demo Video",
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: "Residential Solar",
+    code: "RESI",
+    slug: "residential-solar",
+    icon: "🏡",
+    description: "Rooftop solar systems, on-grid inverters, battery storage, and smart home energy kits for homeowners.",
+    sort_order: 2,
+    for_resellers: true,
+    for_epc: true,
+    is_active: true,
+    theme: {
+      primary_color: "#1A3B8B",
+      secondary_color: "#F8C21A",
+      accent_color: "#38BDF8",
+      bg_color: "#F8FAFC",
+      text_color: "#0F172A",
+      section_bg: "#FFFFFF",
       button_style: "SOLID",
     },
     contents: [
       {
         title: "Residential Solar Rooftop Kits (3kW - 10kW)",
         internal_name: "HERO_RESI_MAIN_2026",
-        content_type: "HERO_BANNER",
+        content_type: "VIDEO",
         target_audience: "BOTH",
-        placement: "DASHBOARD_TOP",
+        placement: "HERO",
         heading: "Next-Gen Residential Solar Rooftop Packages",
         short_description: "Pre-engineered on-grid & hybrid solar kits with bifacial monocrystalline panels and 25-year performance warranty.",
-        cta_label: "Explore Rooftop Kits",
+        cta_label: "Explore Rooftop Kits →",
         cta_url: "/catalog",
-        priority: 10,
+        reseller_cta_label: "Explore Rooftop Kits →",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "View Distribution Packages →",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 100,
         display_order: 1,
         status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        autoplay: true,
+        view_count: 2150,
         media: [
           {
-            url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=1600&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "DESKTOP",
+            url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+            poster_url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=1800&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=800&auto=format&fit=crop&q=80",
+            media_type: "VIDEO",
+            device_type: "ALL",
             is_primary: true,
-            alt_text: "Residential Solar Rooftop",
-          },
-          {
-            url: "https://images.unsplash.com/photo-1508873696983-2df5293cb32b?w=800&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "MOBILE",
-            is_primary: false,
-            alt_text: "Mobile Rooftop View",
+            duration_sec: 120,
+            alt_text: "Residential Solar Rooftop Video",
           }
         ]
       },
       {
-        title: "Smart Hybrid Inverters with Lithium Storage",
-        internal_name: "SLIDER_RESI_HYBRID",
-        content_type: "IMAGE_SLIDER",
-        target_audience: "RESELLER",
-        placement: "DASHBOARD_MIDDLE",
-        heading: "Zero Grid Outages with Smart Lithium ESS",
-        short_description: "Compact wall-mount home batteries integrated with MPPT hybrid solar inverters. High surge tolerance for air conditioners.",
-        cta_label: "View Inverters",
+        title: "Smart Hybrid Inverters with Lithium Storage Poster",
+        internal_name: "POSTER_RESI_HYBRID",
+        content_type: "POSTER",
+        target_audience: "BOTH",
+        placement: "GALLERY",
+        heading: "Zero Grid Outages with Home Lithium ESS",
+        short_description: "Compact wall-mount home batteries integrated with MPPT hybrid solar inverters with 10ms seamless UPS transfer.",
+        cta_label: "Download Specs",
         cta_url: "/catalog",
-        priority: 8,
+        reseller_cta_label: "Download Poster",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "Procure Batteries",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 88,
         display_order: 2,
         status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "top",
+        allow_download: true,
+        allow_share: true,
+        view_count: 1120,
         media: [
           {
             url: "https://images.unsplash.com/photo-1559302504-64aae6ca6b6d?w=1600&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
+            thumbnail_url: "https://images.unsplash.com/photo-1559302504-64aae6ca6b6d?w=800&auto=format&fit=crop&q=80",
+            poster_url: "https://images.unsplash.com/photo-1559302504-64aae6ca6b6d?w=1600&auto=format&fit=crop&q=80",
+            media_type: "POSTER",
             device_type: "ALL",
             is_primary: true,
-            alt_text: "Hybrid Solar Inverter Battery Kit",
+            alt_text: "Hybrid Solar Inverter Battery Kit Poster",
           }
         ]
       },
       {
-        title: "How to Size and Quote Residential Solar Rooftops",
-        internal_name: "VIDEO_RESI_SIZING",
-        content_type: "EXPLAINER_VIDEO",
+        title: "5kW Residential Premium Villa Installation Photo",
+        internal_name: "PHOTO_RESI_VILLA",
+        content_type: "PHOTO",
         target_audience: "BOTH",
-        placement: "DASHBOARD_MIDDLE",
-        heading: "Mastering Residential Solar Sizing & ROI",
-        short_description: "Step-by-step masterclass explaining shadow analysis, string sizing calculations, and net metering payback schedules for homeowners.",
-        cta_label: "Watch Masterclass",
-        cta_url: "https://www.youtube.com/watch?v=1KfZ7k-b738",
-        priority: 7,
+        placement: "GALLERY",
+        heading: "All-Black Aesthetics Villa Solar Array",
+        short_description: "Sleek all-black residential panels with hidden micro-inverters for high-end architectural villa roofs.",
+        cta_label: "View Gallery",
+        cta_url: "/catalog",
+        reseller_cta_label: "View Villa Kits",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "View Micro Inverters",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 80,
         display_order: 3,
         status: "PUBLISHED",
+        is_featured: false,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        view_count: 940,
         media: [
           {
-            url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=800&auto=format&fit=crop&q=80",
-            media_type: "THUMBNAIL",
+            url: "https://images.unsplash.com/photo-1508873696983-2df5293cb32b?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1508873696983-2df5293cb32b?w=800&auto=format&fit=crop&q=80",
+            media_type: "PHOTO",
             device_type: "ALL",
             is_primary: true,
-            duration_sec: 645,
-            alt_text: "Residential Solar Training Video",
-          },
-          {
-            url: "https://www.youtube.com/watch?v=1KfZ7k-b738",
-            media_type: "VIDEO",
-            device_type: "ALL",
-            is_external: true,
-            is_primary: false,
-            alt_text: "Solar Sizing Video Stream",
-          }
-        ]
-      },
-      {
-        title: "High-Margin Monsoon Subsidy Kit Bundles",
-        internal_name: "CARD_RESI_PROMO",
-        content_type: "PROMOTIONAL_CARD",
-        target_audience: "RESELLER",
-        placement: "DASHBOARD_BOTTOM",
-        heading: "Special Monsoon Subsidy Bundles",
-        short_description: "Pre-approved ALMM listed mono PERC panels bundled with high-efficiency string inverters ready for MNRE subsidy claims.",
-        cta_label: "Claim Special Pricing",
-        cta_url: "/catalog",
-        priority: 6,
-        display_order: 4,
-        status: "PUBLISHED",
-        media: [
-          {
-            url: "https://images.unsplash.com/photo-1613665813446-82a78c468a1d?w=1000&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "ALL",
-            is_primary: true,
-            alt_text: "Subsidy Solar Promo",
+            alt_text: "Villa Rooftop Installation",
           }
         ]
       }
     ]
   },
   {
-    name: "Commercial & Industrial (C&I)",
-    code: "COMM",
-    slug: "commercial-and-industrial",
-    icon: "🏭",
-    description: "Heavy-duty commercial rooftop and industrial carports, string & central inverters, HT net metering kits for factories and warehouses.",
-    sort_order: 2,
-    for_resellers: true,
-    for_epc: true,
-    is_active: true,
-    theme: {
-      primary_color: "#0f766e",
-      secondary_color: "#f59e0b",
-      accent_color: "#14b8a6",
-      bg_color: "#f8fafc",
-      text_color: "#0f172a",
-      section_bg: "#ffffff",
-      button_style: "SOLID",
-    },
-    contents: [
-      {
-        title: "Commercial Factory Rooftop Kits (50kW - 500kW)",
-        internal_name: "HERO_COMM_FACTORY_2026",
-        content_type: "HERO_BANNER",
-        target_audience: "BOTH",
-        placement: "DASHBOARD_TOP",
-        heading: "Industrial & Factory Solar Power Systems",
-        short_description: "Engineered for maximum peak shaving and heavy tariff reduction. Includes aluminum non-penetrating clamps and high-capacity string inverters.",
-        cta_label: "View Commercial Kits",
-        cta_url: "/catalog",
-        priority: 10,
-        display_order: 1,
-        status: "PUBLISHED",
-        media: [
-          {
-            url: "https://images.unsplash.com/photo-1545208942-e1c9c916524b?w=1600&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "DESKTOP",
-            is_primary: true,
-            alt_text: "Industrial Solar Rooftop",
-          }
-        ]
-      },
-      {
-        title: "Walkthrough: 100kW Factory Roof Installation",
-        internal_name: "VIDEO_COMM_100KW",
-        content_type: "EXPLAINER_VIDEO",
-        target_audience: "BOTH",
-        placement: "DASHBOARD_MIDDLE",
-        heading: "Engineering a 100kW Industrial Rooftop System",
-        short_description: "Step-by-step installation guide: strut channel mounting on tin roofs, AC/DC cable tray management, and LT panel sync.",
-        cta_label: "Watch Installation Guide",
-        cta_url: "https://www.youtube.com/watch?v=x9p4CqVzT9I",
-        priority: 8,
-        display_order: 2,
-        status: "PUBLISHED",
-        media: [
-          {
-            url: "https://images.unsplash.com/photo-1545208942-e1c9c916524b?w=800&auto=format&fit=crop&q=80",
-            media_type: "THUMBNAIL",
-            device_type: "ALL",
-            is_primary: true,
-            duration_sec: 890,
-            alt_text: "Industrial Video Thumbnail",
-          },
-          {
-            url: "https://www.youtube.com/watch?v=x9p4CqVzT9I",
-            media_type: "VIDEO",
-            device_type: "ALL",
-            is_external: true,
-            is_primary: false,
-            alt_text: "Industrial Video Stream",
-          }
-        ]
-      },
-      {
-        title: "Solar Carport & Canopies for Corporate Campuses",
-        internal_name: "SLIDER_COMM_CARPORT",
-        content_type: "IMAGE_SLIDER",
-        target_audience: "BOTH",
-        placement: "DASHBOARD_MIDDLE",
-        heading: "EV-Ready Solar Carport Structures",
-        short_description: "Dual-purpose waterproof solar carports providing vehicle shading and on-site EV fast-charging capability.",
-        cta_label: "Explore Carports",
-        cta_url: "/catalog",
-        priority: 7,
-        display_order: 3,
-        status: "PUBLISHED",
-        media: [
-          {
-            url: "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=1600&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "ALL",
-            is_primary: true,
-            alt_text: "Solar Carport Kit",
-          }
-        ]
-      }
-    ]
-  },
-  {
-    name: "Agriculture & Solar Water Pumps",
+    name: "Agriculture & Solar Pumps",
     code: "AGRI",
-    slug: "agriculture-and-solar-water-pumps",
+    slug: "agriculture-solar-pumps",
     icon: "🌾",
-    description: "PM-KUSUM compliant solar water pump controllers, submersible & monoblock pumps, solar flour mills, and cold storage power systems.",
+    description: "PM-KUSUM compliant solar water pump controllers, submersible AC/DC pumps, and off-grid agricultural solar systems.",
     sort_order: 3,
     for_resellers: true,
     for_epc: true,
     is_active: true,
     theme: {
-      primary_color: "#15803d",
-      secondary_color: "#eab308",
-      accent_color: "#4ade80",
-      bg_color: "#f8fafc",
-      text_color: "#0f172a",
-      section_bg: "#ffffff",
+      primary_color: "#166534",
+      secondary_color: "#EAB308",
+      accent_color: "#4ADE80",
+      bg_color: "#F0FDF4",
+      text_color: "#14532D",
+      section_bg: "#FFFFFF",
       button_style: "SOLID",
     },
     contents: [
       {
-        title: "PM-KUSUM Solar Water Pump Packages (3HP - 10HP)",
-        internal_name: "HERO_AGRI_PUMPS_2026",
-        content_type: "HERO_BANNER",
+        title: "PM-KUSUM Solar Water Pump Controllers (3HP - 10HP)",
+        internal_name: "HERO_AGRI_PUMPS_4K",
+        content_type: "VIDEO",
         target_audience: "BOTH",
-        placement: "DASHBOARD_TOP",
-        heading: "High-Discharge Solar Water Pumping Solutions",
-        short_description: "VFD pump controllers with MPPT tracking, remote monitoring (RMS), and dual-axis manual tracking mounting structures.",
-        cta_label: "View Agri Kits",
+        placement: "HERO",
+        heading: "High-Efficiency Solar Water Pumping Solutions",
+        short_description: "MNRE approved MPPT pump VFD drives with built-in remote telemetry, dry-run protection, and AC/DC dual power input.",
+        cta_label: "View Agri Pump Kits →",
         cta_url: "/catalog",
-        priority: 10,
+        reseller_cta_label: "View Agri Pump Kits →",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "Procure Pump VFDs →",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 100,
         display_order: 1,
         status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        autoplay: true,
+        view_count: 1780,
         media: [
           {
-            url: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "DESKTOP",
+            url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+            poster_url: "https://images.unsplash.com/photo-1592833159155-c62df1b65634?w=1800&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1592833159155-c62df1b65634?w=800&auto=format&fit=crop&q=80",
+            media_type: "VIDEO",
+            device_type: "ALL",
             is_primary: true,
-            alt_text: "Solar Farm & Water Pump",
+            duration_sec: 110,
+            alt_text: "Solar Water Pumping in Farm Video",
           }
         ]
       },
       {
-        title: "Solar Pump Controller Setup & RMS Configuration",
-        internal_name: "VIDEO_AGRI_PUMP_SETUP",
-        content_type: "EXPLAINER_VIDEO",
+        title: "5HP Solar Submersible Pump Spec Poster",
+        internal_name: "POSTER_AGRI_PUMP_SPEC",
+        content_type: "POSTER",
         target_audience: "BOTH",
-        placement: "DASHBOARD_MIDDLE",
-        heading: "Solar Pump Drive Programming & Borewell Sizing",
-        short_description: "Comprehensive tutorial on head vs flow rate calculations, VFD frequency tuning, and dry-run sensor wiring.",
-        cta_label: "Watch Agri Tutorial",
-        cta_url: "https://www.youtube.com/watch?v=1KfZ7k-b738",
-        priority: 8,
+        placement: "GALLERY",
+        heading: "5HP Brushless DC Submersible Pump Poster",
+        short_description: "Stainless steel grade 304 construction with 180-meter head capability and 15,000 liters per hour water discharge.",
+        cta_label: "Download Poster",
+        cta_url: "/catalog",
+        reseller_cta_label: "Download Poster",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "Procure Pumps",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 85,
         display_order: 2,
         status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "top",
+        allow_download: true,
+        allow_share: true,
+        view_count: 810,
         media: [
           {
-            url: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=80",
-            media_type: "THUMBNAIL",
+            url: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&auto=format&fit=crop&q=80",
+            poster_url: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=1600&auto=format&fit=crop&q=80",
+            media_type: "POSTER",
             device_type: "ALL",
             is_primary: true,
-            duration_sec: 720,
-            alt_text: "Solar Pump Tutorial",
-          },
-          {
-            url: "https://www.youtube.com/watch?v=1KfZ7k-b738",
-            media_type: "VIDEO",
-            device_type: "ALL",
-            is_external: true,
-            is_primary: false,
-            alt_text: "Solar Pump Video Stream",
+            alt_text: "5HP Pump Poster",
           }
         ]
       }
@@ -327,75 +436,90 @@ const SEED_INDUSTRIES = [
   {
     name: "Utility Scale & Ground Mount",
     code: "UTIL",
-    slug: "utility-scale-and-ground-mount",
+    slug: "utility-scale-ground-mount",
     icon: "⚡",
-    description: "Multi-megawatt open access projects, ramming pile structures, central inverter stations, string combiner boxes, and HT transmission kits.",
+    description: "MW-scale solar parks, single-axis trackers, central inverters, string combiners, and high-voltage substation switchgear.",
     sort_order: 4,
     for_resellers: true,
     for_epc: true,
     is_active: true,
     theme: {
-      primary_color: "#b45309",
-      secondary_color: "#3b82f6",
-      accent_color: "#f59e0b",
-      bg_color: "#f8fafc",
-      text_color: "#0f172a",
-      section_bg: "#ffffff",
+      primary_color: "#0F172A",
+      secondary_color: "#F59E0B",
+      accent_color: "#06B6D4",
+      bg_color: "#F8FAFC",
+      text_color: "#0F172A",
+      section_bg: "#FFFFFF",
       button_style: "SOLID",
     },
     contents: [
       {
-        title: "Megawatt Ground-Mount Turnkey B2B Bundles",
-        internal_name: "HERO_UTIL_MW_2026",
-        content_type: "HERO_BANNER",
+        title: "Utility Scale 1MW+ Ground Mount Solar Parks",
+        internal_name: "HERO_UTIL_PARK_4K",
+        content_type: "VIDEO",
         target_audience: "BOTH",
-        placement: "DASHBOARD_TOP",
-        heading: "Utility-Scale Solar Power Plants & Ground-Mounts",
-        short_description: "Bulk wholesale procurement for 1MW+ utility solar parks. High-voltage 1500V DC system architecture and galvanized piling structures.",
-        cta_label: "Request Project Quotation",
+        placement: "HERO",
+        heading: "MegaWatt Scale Solar Infrastructure & Trackers",
+        short_description: "Turnkey MW-scale engineering with single-axis astronomical trackers, 1500V DC architecture, and SCADA monitoring.",
+        cta_label: "Explore Utility Solutions →",
         cta_url: "/catalog",
-        priority: 10,
+        reseller_cta_label: "Explore Utility Solutions →",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "Procure Tracker Hardware →",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 100,
         display_order: 1,
         status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "center",
+        allow_download: true,
+        allow_share: true,
+        autoplay: true,
+        view_count: 2400,
         media: [
           {
-            url: "https://images.unsplash.com/photo-1497440001374-f26997328c1b?w=1600&auto=format&fit=crop&q=80",
-            media_type: "IMAGE",
-            device_type: "DESKTOP",
+            url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+            poster_url: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=1800&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=800&auto=format&fit=crop&q=80",
+            media_type: "VIDEO",
+            device_type: "ALL",
             is_primary: true,
-            alt_text: "Utility Scale Solar Farm",
+            duration_sec: 180,
+            alt_text: "Utility Scale Solar Farm Drone Video",
           }
         ]
       },
       {
-        title: "1500V String Inverter Architecture & Substation Design",
-        internal_name: "VIDEO_UTIL_SUBSTATION",
-        content_type: "EXPLAINER_VIDEO",
+        title: "Single Axis Astronomical Tracker Poster",
+        internal_name: "POSTER_UTIL_TRACKER",
+        content_type: "POSTER",
         target_audience: "BOTH",
-        placement: "DASHBOARD_MIDDLE",
-        heading: "Utility Ground-Mount Engineering & SCADA Integration",
-        short_description: "Deep dive into 1500V DC cable sizing, tracker motor controls, lightning protection grids, and 33kV step-up transformer synchronization.",
-        cta_label: "Watch Technical Breakdown",
-        cta_url: "https://www.youtube.com/watch?v=nwtZ_h7mZg0",
-        priority: 8,
+        placement: "GALLERY",
+        heading: "Smart AI Single-Axis Solar Tracker Spec Poster",
+        short_description: "Up to 24% additional energy generation with intelligent backtracking algorithms and 160 km/h wind stow protection.",
+        cta_label: "Download Poster",
+        cta_url: "/catalog",
+        reseller_cta_label: "Download Poster",
+        reseller_cta_url: "/catalog",
+        distributor_cta_label: "Procure Tracker Actuators",
+        distributor_cta_url: "/distributor/portal/procure",
+        priority: 90,
         display_order: 2,
         status: "PUBLISHED",
+        is_featured: true,
+        focal_position: "top",
+        allow_download: true,
+        allow_share: true,
+        view_count: 1350,
         media: [
           {
-            url: "https://images.unsplash.com/photo-1497440001374-f26997328c1b?w=800&auto=format&fit=crop&q=80",
-            media_type: "THUMBNAIL",
+            url: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=1600&auto=format&fit=crop&q=80",
+            thumbnail_url: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=800&auto=format&fit=crop&q=80",
+            poster_url: "https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=1600&auto=format&fit=crop&q=80",
+            media_type: "POSTER",
             device_type: "ALL",
             is_primary: true,
-            duration_sec: 980,
-            alt_text: "Utility Scale Video",
-          },
-          {
-            url: "https://www.youtube.com/watch?v=nwtZ_h7mZg0",
-            media_type: "VIDEO",
-            device_type: "ALL",
-            is_external: true,
-            is_primary: false,
-            alt_text: "Utility Scale Video Stream",
+            alt_text: "Solar Tracker Poster",
           }
         ]
       }
@@ -403,137 +527,94 @@ const SEED_INDUSTRIES = [
   }
 ];
 
-async function runSeed() {
-  console.log("🚀 Waiting for MongoDB connection...");
-  
-  if (mongoose.connection.readyState !== 1) {
-    await new Promise((resolve) => {
-      mongoose.connection.once('open', resolve);
-    });
-  }
-
-  console.log("✅ MongoDB Connected! Starting Industry Content & Theme Seeding...");
-
+async function seed() {
   try {
-    const [resellers, epcs] = await Promise.all([
-      Reseller.find({ is_deleted: { $ne: true } }).select('_id business_name email').lean().catch(() => []),
-      EpcAccount.find({ is_deleted: { $ne: true } }).select('_id name email').lean().catch(() => []),
-    ]);
+    console.log('🚀 Starting Industry Media Showcase seed...');
 
+    // 1. Clear existing industry CMS collections
+    await IndustryContentMedia.deleteMany({});
+    await IndustryContentIndustryMap.deleteMany({});
+    await IndustryContent.deleteMany({});
+    await IndustryTheme.deleteMany({});
+    await IndustryType.deleteMany({});
+
+    console.log('🧹 Cleared old industry content tables.');
+
+    // 2. Loop through industries
     for (const indData of SEED_INDUSTRIES) {
-      console.log(`\n📌 Processing Industry: ${indData.name} (${indData.code})...`);
+      const { theme, contents, ...typeFields } = indData;
 
-      const industry = await IndustryType.findOneAndUpdate(
-        { slug: indData.slug },
-        {
-          $set: {
-            name: indData.name,
-            code: indData.code,
-            icon: indData.icon,
-            description: indData.description,
-            sort_order: indData.sort_order,
-            for_resellers: indData.for_resellers,
-            for_epc: indData.for_epc,
-            is_active: true,
-            deleted_at: null,
-          }
-        },
-        { upsert: true, new: true }
-      );
+      const industry = await IndustryType.create({
+        ...typeFields,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
 
-      const industryId = industry._id;
+      console.log(`✅ Created Industry: ${industry.name} (${industry.code})`);
 
-      await IndustryTheme.findOneAndUpdate(
-        { industry_type_id: industryId },
-        {
-          $set: {
-            ...indData.theme,
-            industry_type_id: industryId,
-            deleted_at: null,
-          }
-        },
-        { upsert: true, new: true }
-      );
-
-      for (const r of resellers) {
-        await UserIndustryMap.findOneAndUpdate(
-          { user_type: 'RESELLER', user_id: r._id, industry_type_id: industryId },
-          {
-            $set: {
-              approval_status: 'APPROVED',
-              assigned_date: new Date(),
-              deleted_at: null,
-            }
-          },
-          { upsert: true }
-        );
+      // Create theme
+      if (theme) {
+        await IndustryTheme.create({
+          industry_type_id: industry._id,
+          ...theme,
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
       }
 
-      for (const e of epcs) {
-        await UserIndustryMap.findOneAndUpdate(
-          { user_type: 'EPC', user_id: e._id, industry_type_id: industryId },
-          {
-            $set: {
-              approval_status: 'APPROVED',
-              assigned_date: new Date(),
-              deleted_at: null,
-            }
-          },
-          { upsert: true }
-        );
-      }
+      // Create contents
+      if (contents && contents.length > 0) {
+        for (const contentData of contents) {
+          const { media, ...cFields } = contentData;
 
-      for (const contentData of indData.contents) {
-        const { media, ...itemDetails } = contentData;
-
-        const contentDoc = await IndustryContent.findOneAndUpdate(
-          { internal_name: itemDetails.internal_name },
-          {
-            $set: {
-              ...itemDetails,
-              is_active: true,
-              published_at: new Date(),
-              deleted_at: null,
-            }
-          },
-          { upsert: true, new: true }
-        );
-
-        const contentId = contentDoc._id;
-
-        await IndustryContentIndustryMap.findOneAndUpdate(
-          { content_id: contentId, industry_type_id: industryId },
-          { $set: { deleted_at: null } },
-          { upsert: true }
-        );
-
-        await IndustryContentMedia.deleteMany({ content_id: contentId });
-
-        for (const m of media) {
-          await IndustryContentMedia.create({
-            content_id: contentId,
-            url: m.url,
-            media_type: m.media_type,
-            device_type: m.device_type,
-            is_primary: !!m.is_primary,
-            is_external: !!m.is_external,
-            duration_sec: m.duration_sec || null,
-            alt_text: m.alt_text,
-            processing_status: 'READY',
-            deleted_at: null,
+          const content = await IndustryContent.create({
+            ...cFields,
+            published_at: new Date(),
+            created_at: new Date(),
+            updated_at: new Date(),
           });
-        }
 
-        console.log(`   📝 Seeded [${itemDetails.content_type}] "${itemDetails.title}" with ${media.length} media item(s).`);
+          // Map to this industry
+          await IndustryContentIndustryMap.create({
+            content_id: content._id,
+            industry_type_id: industry._id,
+            created_at: new Date(),
+          });
+
+          // Insert media records
+          if (media && media.length > 0) {
+            for (let i = 0; i < media.length; i++) {
+              const m = media[i];
+              await IndustryContentMedia.create({
+                content_id: content._id,
+                url: m.url,
+                poster_url: m.poster_url || m.url,
+                thumbnail_url: m.thumbnail_url || m.url,
+                media_type: m.media_type || 'IMAGE',
+                device_type: m.device_type || 'ALL',
+                is_primary: m.is_primary !== undefined ? m.is_primary : i === 0,
+                sort_order: i,
+                duration_sec: m.duration_sec || null,
+                alt_text: m.alt_text || content.title,
+                processing_status: 'READY',
+                created_at: new Date(),
+                updated_at: new Date(),
+              });
+            }
+          }
+
+          console.log(`   └─ [${content.content_type}] ${content.title} (Media: ${media?.length || 0})`);
+        }
       }
     }
 
-    console.log("\n🎉 ALL INDUSTRY CONTENTS, MEDIA ASSETS, THEMES, AND USER ACCESS SEEDED SUCCESSFULLY!\n");
+    console.log('\n🎉 Industry Media Showcase seed completed successfully!');
     process.exit(0);
-  } catch (error) {
-    console.error("❌ Seeding failed:", error);
+  } catch (err) {
+    console.error('❌ Seeding failed:', err);
     process.exit(1);
   }
 }
 
-runSeed();
+seed();

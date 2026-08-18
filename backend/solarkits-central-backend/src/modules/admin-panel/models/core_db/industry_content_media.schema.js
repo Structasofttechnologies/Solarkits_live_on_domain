@@ -13,7 +13,7 @@ const schema = new mongoose.Schema({
   // Media classification
   media_type: {
     type: String,
-    enum: ['IMAGE', 'VIDEO', 'THUMBNAIL', 'POSTER'],
+    enum: ['IMAGE', 'VIDEO', 'THUMBNAIL', 'POSTER', 'PHOTO', 'ALBUM_ITEM'],
     required: true,
   },
 
@@ -26,15 +26,17 @@ const schema = new mongoose.Schema({
 
   // Storage info
   url:           { type: String, required: true, trim: true, maxlength: 1000 },  // Cloudinary secure_url OR external URL
+  thumbnail_url: { type: String, default: null, trim: true, maxlength: 1000 },  // Custom video or poster thumbnail
+  poster_url:    { type: String, default: null, trim: true, maxlength: 1000 },  // Poster image link
   storage_key:   { type: String, default: null, trim: true, maxlength: 500 },    // Cloudinary public_id
   is_external:   { type: Boolean, default: false },  // true if streaming URL (YouTube, Vimeo, etc.)
 
   // Media metadata
-  mime_type:   { type: String, default: null, trim: true, maxlength: 100 },
-  file_size:   { type: Number, default: null },  // bytes
-  width:       { type: Number, default: null },
-  height:      { type: Number, default: null },
-  duration_sec:{ type: Number, default: null },  // for videos
+  mime_type:    { type: String, default: null, trim: true, maxlength: 100 },
+  file_size:    { type: Number, default: null },  // bytes
+  width:        { type: Number, default: null },
+  height:       { type: Number, default: null },
+  duration_sec: { type: Number, default: null },  // for videos
 
   // Processing state
   processing_status: {
@@ -43,9 +45,12 @@ const schema = new mongoose.Schema({
     default: 'READY',
   },
 
-  // Accessibility & display
-  alt_text:   { type: String, default: null, trim: true, maxlength: 300 },
-  is_primary: { type: Boolean, default: false },  // Primary media for this device type
+  // Accessibility, display & positioning
+  alt_text:    { type: String, default: null, trim: true, maxlength: 300 },
+  caption:     { type: String, default: null, trim: true, maxlength: 500 },
+  focal_point: { type: String, default: 'center', trim: true },
+  sort_order:  { type: Number, default: 0 },
+  is_primary:  { type: Boolean, default: false },  // Primary media for this device type
 
   deleted_at: { type: Date, default: null },
 }, {

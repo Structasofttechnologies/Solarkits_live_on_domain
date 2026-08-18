@@ -1,7 +1,7 @@
 /**
  * IndustryContentSkeleton.jsx
  *
- * Polished skeleton placeholders matching the visual-first media layout.
+ * Polished skeleton placeholders for BOS Kits Distributor.
  */
 
 import React from 'react';
