@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: '/api/boskit/v1',
+  baseURL: `${API_BASE_URL}/boskit/v1`,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -22,7 +25,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url.includes('/auth/')) {
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/')) {
       originalRequest._retry = true;
       try {
         await api.post('/auth/distributor/refresh-token');

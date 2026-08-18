@@ -58,7 +58,8 @@ export default function DistributorCustomBosKitPage() {
       // Try direct solarshop india endpoint first, fallback to public endpoint
       let groups = [];
       try {
-        const res = await axios.get('http://localhost:5000/api/india/v1/shop/bos-custom-catalog');
+        const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+        const res = await axios.get(`${apiBase}/india/v1/shop/bos-custom-catalog`);
         if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
           groups = res.data.data;
         }

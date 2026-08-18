@@ -78,7 +78,8 @@ export default function DistributorComboKitsStorePage() {
       setLoading(true);
       let items = [];
       try {
-        const res = await axios.get('http://localhost:5000/api/india/v1/shop/bos-kits');
+        const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+        const res = await axios.get(`${apiBase}/india/v1/shop/bos-kits`);
         if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
           items = res.data.data;
         }

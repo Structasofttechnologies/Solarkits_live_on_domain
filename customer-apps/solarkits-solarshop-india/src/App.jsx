@@ -24,7 +24,14 @@ function AppContent() {
   const { isAuthenticated, loading } = useSelector(state => state.auth_slice);
 
   useEffect(() => {
-    dispatch(checkAuth());
+    const hasToken =
+      localStorage.getItem("access_token") ||
+      sessionStorage.getItem("access_token") ||
+      localStorage.getItem("user") ||
+      sessionStorage.getItem("user");
+    if (hasToken) {
+      dispatch(checkAuth());
+    }
   }, [dispatch]);
 
   useEffect(() => {
