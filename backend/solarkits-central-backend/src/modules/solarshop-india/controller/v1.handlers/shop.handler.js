@@ -2561,6 +2561,33 @@ const toggle_bos_kit_stock = async (req, res) => {
   }
 };
 
+// ─── Custom BOS Catalog Handlers ──────────────────────────────────────────────
+
+const get_bos_custom_catalog = async (req, res) => {
+  try {
+    const catalog = await CustomBosCatalog.find({}).lean();
+    return res.status(200).json({ success: true, data: catalog });
+  } catch (error) {
+    console.error("get_bos_custom_catalog error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const save_bos_custom_catalog = async (req, res) => {
+  try {
+    const { catalog } = req.body;
+    if (Array.isArray(catalog)) {
+      await CustomBosCatalog.deleteMany({});
+      const inserted = await CustomBosCatalog.insertMany(catalog);
+      return res.status(200).json({ success: true, data: inserted });
+    }
+    return res.status(400).json({ success: false, message: "Catalog array required" });
+  } catch (error) {
+    console.error("save_bos_custom_catalog error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ─── Store Locator Handlers ───────────────────────────────────────────────────
 
 const CURATED_PAN_INDIA_STORES = [
