@@ -3,18 +3,33 @@ const { GeoLevel0 } = require('../models/geolocation_db');
 const bcrypt = require('bcrypt');
 const { sendOTP } = require('../utils/nodemailer');
 
+let companyProductsCache = null;
+let companyProductsCacheTime = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+const invalidateProductsCache = () => {
+    companyProductsCache = null;
+    companyProductsCacheTime = 0;
+};
+
 /**
  * Get all SaaS Products and active countries with mapping status
  */
 const get_company_saas_products = async (req, res) => {
     try {
-        const products = await SaaSProduct.find({ is_deleted: false }).lean();
-        const countries = await GeoLevel0.find({ 
-            is_active: true, 
-            $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
-        }).sort({ name: 1 }).lean();
+        const now = Date.now();
+        if (companyProductsCache && (now - companyProductsCacheTime < CACHE_TTL_MS)) {
+            return res.status(200).json(companyProductsCache);
+        }
 
-        const mappings = await CountrySaaSProduct.find().lean();
+        const [products, countries, mappings] = await Promise.all([
+            SaaSProduct.find({ is_deleted: false }).select('_id name slug description is_active').lean(),
+            GeoLevel0.find({ 
+                is_active: true, 
+                $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+            }).select('_id name iso2 is_active').sort({ name: 1 }).lean(),
+            CountrySaaSProduct.find().select('saas_product_id country_id is_active').lean()
+        ]);
 
         const formattedProducts = products.map(prod => {
             const productMappings = mappings.filter(m => m.saas_product_id.toString() === prod._id.toString());
@@ -39,7 +54,7 @@ const get_company_saas_products = async (req, res) => {
             };
         });
 
-        res.status(200).json({
+        const responsePayload = {
             status: 'success',
             message: 'Company SaaS Products fetched successfully',
             data: {
@@ -50,7 +65,12 @@ const get_company_saas_products = async (req, res) => {
                     iso2: c.iso2
                 }))
             }
-        });
+        };
+
+        companyProductsCache = responsePayload;
+        companyProductsCacheTime = Date.now();
+
+        return res.status(200).json(responsePayload);
     } catch (error) {
         console.error('get_company_saas_products error:', error);
         res.status(500).json({
@@ -191,6 +211,8 @@ const toggle_country_saas_product = async (req, res) => {
                 layout_config: {}
             });
         }
+
+        invalidateProductsCache();
 
         res.status(200).json({
             status: 'success',

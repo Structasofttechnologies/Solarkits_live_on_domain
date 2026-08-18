@@ -23,6 +23,9 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
     let normalizedCurrent = currentPath;
     const slugs = [
         "solar-shop",
+        "solar-shop-solarkits",
+        "solar-shop-bos-kits",
+        "solar-shop-boskits",
         "diy-solar-projects",
         "epc-project-management-erp",
         "solar-amc-management",
@@ -126,6 +129,9 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
     let targetPath = path;
     const slugs = [
         "solar-shop",
+        "solar-shop-solarkits",
+        "solar-shop-bos-kits",
+        "solar-shop-boskits",
         "diy-solar-projects",
         "epc-project-management-erp",
         "solar-amc-management",

@@ -118,6 +118,13 @@ app.use('/account-api', accountRouter);
 // 7. Solarshop India routes
 app.use('/api/india/v1', require('./modules/solarshop-india/routes/v1.routes'));
 
+// 10. BOSKIT Platform routes (Phase 2+)
+// All BOSKIT collections are registered when this module is required.
+// Accessible from both public (/api/boskit/v1) and admin portal (/admin-api/boskit/v1)
+const boskitModule = require('./modules/boskit/index');
+app.use('/api/boskit/v1', boskitModule);
+app.use('/admin-api/boskit/v1', boskitModule);
+
 // 8. Supplier Panel routes
 const supplierRouter = express.Router();
 supplierRouter.use('/auth', require('./modules/supplier-panel/routes/auth.route'));

@@ -12,7 +12,7 @@ import { PermissionGuard } from "../components/PermissionGuard";
 import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
-import ComboKitConfigurations from "../pages/solar-shop/combokit-configurations/ComboKitConfigurations";
+const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
 import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage } from "react-icons/fi";
 
 // Phase 1: Reseller Management
@@ -37,7 +37,7 @@ const menus = [
     [
         { name: "Approve New EPC", icon: <FaUserCheck />, path: "/admin-panel/solar-shop/approve-new-epc", unique_id: "ADM_APPROVE_EPC" },
         {
-            name: "Combokit Configurations",
+            name: "Solar Kit Configurations",
             icon: <FaLayerGroup />,
             path: "/admin-panel/solar-shop/combokit-configurations",
             unique_id: "ADM_COMBO_CFG",
@@ -46,12 +46,6 @@ const menus = [
                     name: "Combo Kits",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/combokit-configurations/combo-kits",
-                    unique_id: "ADM_COMBO_KITS"
-                },
-                {
-                    name: "BOS Kits Manager",
-                    icon: <HiCube />,
-                    path: "/admin-panel/solar-shop/combokit-configurations/bos-kits",
                     unique_id: "ADM_COMBO_KITS"
                 },
                 {
@@ -206,9 +200,19 @@ export default function SolarShopDashboard() {
 
     const [isOpen, setIsOpen] = useState(true);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-    const [loadingCountries, setLoadingCountries] = useState(true);
     const allowedUniqueIds = useSelector((state) => selectAllowedUniqueIds(state, location.pathname));
     const token = useSelector((state) => state.auth.token);
+
+    // Instant non-blocking route normalization
+    useEffect(() => {
+        const path = location.pathname;
+        const parts = path.split('/').filter(Boolean);
+        // If path is exactly /admin-panel/solar-shop or /admin-panel/solar-shop-solarkits
+        if (parts.length === 2 && (parts[1] === 'solar-shop' || parts[1] === 'solar-shop-solarkits')) {
+            const storedCountry = localStorage.getItem('selected_country_admin') || 'india';
+            navigate(`/admin-panel/${parts[1]}/${storedCountry}/home`, { replace: true });
+        }
+    }, [location.pathname, navigate]);
 
     useEffect(() => {
         if (!token) return;
@@ -221,30 +225,24 @@ export default function SolarShopDashboard() {
                 );
                 if (res.data?.status === "success") {
                     const allProducts = res.data.data.products || [];
-                    const foundProduct = allProducts.find(p => p.slug === "solar-shop");
+                    const foundProduct = allProducts.find(p => p.slug === "solar-shop" || p.slug === "solar-shop-solarkits");
                     const activeOnes = (foundProduct?.countries || []).filter(c => c.is_active);
 
-                    if (activeOnes.length === 0) {
+                    if (foundProduct && activeOnes.length === 0) {
                         dispatch(setAlert({ type: "warning", message: "This product is not active in any country" }));
                         navigate('/admin-panel/home', { replace: true });
                         return;
                     }
 
-                    // Check if URL has a country (use window.location.pathname to get mount-time path)
                     const parts = window.location.pathname.split('/');
-                    const slugIndex = parts.indexOf("solar-shop");
-                    if (slugIndex !== -1) {
+                    const slugIndex = parts.findIndex(p => p === "solar-shop" || p === "solar-shop-solarkits");
+                    if (slugIndex !== -1 && activeOnes.length > 0) {
                         const nextSegment = parts[slugIndex + 1];
                         const activeCountriesNames = activeOnes.map(c => c.name.toLowerCase());
                         const hasCountry = nextSegment && activeCountriesNames.includes(nextSegment.toLowerCase());
 
                         if (hasCountry) {
                             localStorage.setItem('selected_country_admin', nextSegment.toLowerCase());
-                            const subPathParts = parts.slice(slugIndex + 2);
-                            const subPath = subPathParts.filter(Boolean).join('/');
-                            if (!subPath) {
-                                navigate(`/admin-panel/solar-shop/${nextSegment.toLowerCase()}/home`, { replace: true });
-                            }
                         } else {
                             const storedCountry = localStorage.getItem('selected_country_admin');
                             const defaultCountry = (storedCountry && activeCountriesNames.includes(storedCountry.toLowerCase()))
@@ -256,14 +254,12 @@ export default function SolarShopDashboard() {
                             if (!subPath || subPath === 'home') {
                                 subPath = 'home';
                             }
-                            navigate(`/admin-panel/solar-shop/${defaultCountry}/${subPath}`, { replace: true });
+                            navigate(`/admin-panel/${parts[slugIndex]}/${defaultCountry}/${subPath}`, { replace: true });
                         }
                     }
-                    setLoadingCountries(false);
                 }
             } catch (error) {
-                console.error("Error fetching product countries in dashboard wrapper:", error);
-                setLoadingCountries(false);
+                console.error("Error checking product markets in SolarshopDashboard:", error);
             }
         };
         checkProductMarket();
@@ -285,10 +281,6 @@ export default function SolarShopDashboard() {
     const filteredMenus = filterMenusByPermission(menus, allowedUniqueIds);
 
     /* ===================== RENDER ===================== */
-
-    if (loadingCountries) {
-        return <Loader text="Verifying active markets..." />;
-    }
 
     return (
         <div className="flex h-screen bg-bg w-screen theme-transition">

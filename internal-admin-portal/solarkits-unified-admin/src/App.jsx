@@ -29,12 +29,16 @@ const AccountsPortalApp = lazy(() => import("./portals/accounts/App.jsx"));
 const OperationsPortalApp = lazy(() => import("./portals/operations/App.jsx"));
 const WarehousePortalApp = lazy(() => import("./portals/warehouse/App.jsx"));
 const DeveloperPortalApp = lazy(() => import("./portals/developer/App.jsx"));
+const BoskitAdminPortalApp = lazy(() => import("./portals/boskit/App.jsx"));
 
 export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<FullPageLoader />}>
         <Routes>
+          {/* BOSKIT B2B Admin Platform */}
+          <Route path="/boskit-admin/*" element={<BoskitAdminPortalApp />} />
+
           {/* Admin Panel */}
           <Route path="/admin-panel/*" element={<AdminPortalApp />} />
 

@@ -19,7 +19,8 @@ const { india_solarshop_db } = require('../../config/databases');
 const schema = new mongoose.Schema({
   entity_type: {
     type: String,
-    enum: ['reseller', 'epc_buyer'],
+    // Phase BOSKIT: Added 'boskit_distributor' and 'boskit_dealer' — backward-compatible addition
+    enum: ['reseller', 'epc_buyer', 'boskit_distributor', 'boskit_dealer'],
     required: true,
   },
   entity_id: {

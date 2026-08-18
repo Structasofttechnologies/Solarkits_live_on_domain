@@ -12,6 +12,7 @@ import { ms_conversion } from "./utils/msConversion.jsx";
 
 const Dashboard = lazy(() => import("./dashboard/Dashboard"));
 const SolarShopDashboard = lazy(() => import("./dashboard/SolarshopDashboard"));
+const SolarShopBosKitDashboard = lazy(() => import("./dashboard/SolarShopBosKitDashboard"));
 const EpcProjectManagementErpDashboard = lazy(() => import("./dashboard/EpcProjectManagementErpDashboard"));
 const DiySolarProjectsDashboard = lazy(() => import("./dashboard/DiySolarProjectsDashboard"));
 const SolarAmcManagementDashboard = lazy(() => import("./dashboard/SolarAmcManagementDashboard"));
@@ -38,6 +39,9 @@ function AdminPortalInner() {
           <Route path='epc-project-management-erp/*' element={<Suspense fallback={<Loader />}><EpcProjectManagementErpDashboard /></Suspense>} />
           <Route path='diy-solar-projects/*' element={<Suspense fallback={<Loader />}><DiySolarProjectsDashboard /></Suspense>} />
           <Route path='solar-shop/*' element={<Suspense fallback={<Loader />}><SolarShopDashboard /></Suspense>} />
+          <Route path='solar-shop-solarkits/*' element={<Suspense fallback={<Loader />}><SolarShopDashboard /></Suspense>} />
+          <Route path='solar-shop-bos-kits/*' element={<Suspense fallback={<Loader />}><SolarShopBosKitDashboard /></Suspense>} />
+          <Route path='solar-shop-boskits/*' element={<Suspense fallback={<Loader />}><SolarShopBosKitDashboard /></Suspense>} />
           <Route path='solar-amc-management/*' element={<Suspense fallback={<Loader />}><SolarAmcManagementDashboard /></Suspense>} />
           <Route path='solar-installer-marketplace/*' element={<Suspense fallback={<Loader />}><SolarInstallerMarketplaceDashboard /></Suspense>} />
           <Route path='solar-mega-watt-projects/*' element={<Suspense fallback={<Loader />}><SolarMegaWattProjectsDashboard /></Suspense>} />

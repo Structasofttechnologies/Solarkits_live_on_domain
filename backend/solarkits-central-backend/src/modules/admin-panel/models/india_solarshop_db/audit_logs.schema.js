@@ -20,7 +20,8 @@ const schema = new mongoose.Schema({
   actor_type: {
     type: String,
     // Phase R1: 'epc_buyer' was already in enum; keeping all four values.
-    enum: ['cms_user', 'reseller', 'epc_buyer', 'system'],
+    // Phase BOSKIT: Added 'boskit_distributor' and 'boskit_dealer' — backward-compatible.
+    enum: ['cms_user', 'reseller', 'epc_buyer', 'system', 'boskit_distributor', 'boskit_dealer'],
     required: true,
   },
   actor_id: {

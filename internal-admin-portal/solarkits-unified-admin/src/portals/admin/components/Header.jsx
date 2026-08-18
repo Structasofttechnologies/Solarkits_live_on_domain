@@ -59,9 +59,11 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
 
     const { user } = useSelector((state) => state.user_slice);
 
-    // Active product and country selection logic
+    // Active product and country selection logic (sort by length descending to match specific slugs like solar-shop-bos-kits before solar-shop)
     const activeProduct = user?.allowed_panels
         ?.flatMap(p => p.saas_products || [])
+        ?.slice()
+        ?.sort((a, b) => (b.slug?.length || 0) - (a.slug?.length || 0))
         ?.find(prod => window.location.pathname.includes(prod.slug));
 
     const getSelectedCountryFromPath = (pathname, productSlug) => {
@@ -79,7 +81,13 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
 
     const pathCountry = getSelectedCountryFromPath(window.location.pathname, activeProduct?.slug);
 
-    const [activeCountries, setActiveCountries] = useState([]);
+    const [activeCountries, setActiveCountries] = useState(() => {
+        const stored = localStorage.getItem('selected_country_admin');
+        if (stored) {
+            return [{ name: stored, iso2: stored === 'india' ? 'IN' : stored === 'australia' ? 'AU' : 'IN', is_active: true }];
+        }
+        return [{ name: 'india', iso2: 'IN', is_active: true }];
+    });
 
     useEffect(() => {
         if (!activeProduct) {
@@ -98,7 +106,9 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
                     const foundProduct = allProducts.find(p => String(p.slug) === String(activeProduct.slug));
                     if (foundProduct) {
                         const activeOnes = (foundProduct.countries || []).filter(c => c.is_active);
-                        setActiveCountries(activeOnes);
+                        if (activeOnes.length > 0) {
+                            setActiveCountries(activeOnes);
+                        }
                     }
                 }
             } catch (error) {

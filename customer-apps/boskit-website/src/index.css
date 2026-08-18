@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-heading: 'Outfit', sans-serif;
+    --font-body: 'Plus Jakarta Sans', sans-serif;
+
+    /* Solar Energy Design Tokens */
+    --color-solar-bg: #FFFFFF;
+    --color-solar-alt: #F7FAF8;
+    --color-solar-soft: #ECF8F1;
+    --color-solar-green: #1F8F4E;
+    --color-solar-green-hover: #18733E;
+    --color-solar-green-dark: #145E33;
+    --color-solar-yellow: #F5B700;
+    --color-solar-yellow-hover: #DEAB00;
+    --color-solar-text: #17211B;
+    --color-solar-muted: #5F6F65;
+    --color-solar-border: #DDE8E1;
+  }
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-heading);
+}
+
+/* Custom Solar Light Card & Panel Effects */
+.glass-panel {
+  background: #FFFFFF;
+  border: 1px solid #DDE8E1;
+  box-shadow: 0 4px 20px -2px rgba(23, 33, 27, 0.04);
+}
+
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid #DDE8E1;
+  box-shadow: 0 1px 3px rgba(23, 33, 27, 0.04), 0 1px 2px rgba(23, 33, 27, 0.02);
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-card:hover {
+  border-color: #B8D4C3;
+  box-shadow: 0 10px 25px -5px rgba(31, 143, 78, 0.08), 0 8px 10px -6px rgba(23, 33, 27, 0.04);
+}
+
+.card-soft-green {
+  background: #ECF8F1;
+  border: 1px solid #DDE8E1;
+}
+
+.card-alt {
+  background: #F7FAF8;
+  border: 1px solid #DDE8E1;
+}
+
+/* Solar Badges and Accents */
+.badge-green {
+  background: #ECF8F1;
+  color: #1F8F4E;
+  border: 1px solid #DDE8E1;
+}
+
+.badge-yellow {
+  background: #FEF9E7;
+  color: #9A7300;
+  border: 1px solid #F5B70040;
+}
+
+/* Primary and Accent Button Styles */
+.btn-primary {
+  background-color: #1F8F4E;
+  color: #FFFFFF;
+  font-weight: 700;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 8px rgba(31, 143, 78, 0.2);
+}
+
+.btn-primary:hover {
+  background-color: #18733E;
+  box-shadow: 0 4px 14px rgba(31, 143, 78, 0.3);
+}
+
+.btn-accent {
+  background-color: #F5B700;
+  color: #17211B;
+  font-weight: 700;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 8px rgba(245, 183, 0, 0.25);
+}
+
+.btn-accent:hover {
+  background-color: #DEAB00;
+  box-shadow: 0 4px 14px rgba(245, 183, 0, 0.35);
+}
+
+.btn-outline-green {
+  background-color: #FFFFFF;
+  color: #1F8F4E;
+  border: 1.5px solid #1F8F4E;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-outline-green:hover {
+  background-color: #ECF8F1;
+  border-color: #18733E;
+  color: #18733E;
+}
+
+/* Text Gradients */
+.text-gradient-green {
+  background: linear-gradient(135deg, #1F8F4E 0%, #145E33 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-solar {
+  background: linear-gradient(135deg, #1F8F4E 0%, #17211B 60%, #F5B700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F7FAF8;
+}
+::-webkit-scrollbar-thumb {
+  background: #DDE8E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B8D4C3;
+}
