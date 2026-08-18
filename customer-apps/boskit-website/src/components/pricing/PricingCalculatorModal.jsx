@@ -62,27 +62,27 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
   const summary = calcResult?.summary || {};
 
   return (
-    <div className="fixed inset-0 bg-[#17211B]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div className="bg-[#FFFFFF] border border-[#DDE8E1] rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6 shadow-2xl">
+    <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-6 shadow-2xl">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#DDE8E1] pb-4">
+        <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#ECF8F1] border border-[#DDE8E1] text-[#1F8F4E] flex items-center justify-center font-black shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-[#EFF8FF] border border-[#E2E8F0] text-[#0575B8] flex items-center justify-center font-black shadow-xs">
               <FiZap size={20} />
             </div>
             <div>
-              <h2 className="font-heading font-black text-xl text-[#17211B]">
+              <h2 className="font-heading font-black text-xl text-[#0F172A]">
                 B2B Pricing & GST Tax Calculator
               </h2>
-              <p className="text-xs text-[#5F6F65]">
+              <p className="text-xs text-[#475569]">
                 Live simulation of wholesale margins, bulk volume tiers, and CGST/SGST/IGST tax splits.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-[#5F6F65] hover:text-[#17211B] hover:bg-[#F7FAF8] transition-colors"
+            className="p-2 rounded-xl text-[#475569] hover:text-[#0F172A] hover:bg-[#F8FAFC] transition-colors"
           >
             <FiX size={20} />
           </button>
@@ -91,7 +91,7 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
         {/* Control Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold text-[#17211B] block mb-1">Select Channel Role *</label>
+            <label className="text-xs font-semibold text-[#0F172A] block mb-1">Select Channel Role *</label>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { id: 'distributor', name: 'Distributor (-25%)' },
@@ -104,8 +104,8 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
                   onClick={() => setBuyerType(role.id)}
                   className={`py-2 px-2 text-center rounded-xl text-[11px] font-bold border transition-all ${
                     buyerType === role.id
-                      ? 'bg-[#1F8F4E] text-white border-[#1F8F4E] shadow-xs'
-                      : 'bg-[#F7FAF8] text-[#5F6F65] border-[#DDE8E1] hover:border-[#1F8F4E]/40'
+                      ? 'bg-[#0575B8] text-white border-[#0575B8] shadow-xs'
+                      : 'bg-[#F8FAFC] text-[#475569] border-[#E2E8F0] hover:border-[#0575B8]/40'
                   }`}
                 >
                   {role.name}
@@ -115,11 +115,11 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-[#17211B] block mb-1">Destination Shipping State *</label>
+            <label className="text-xs font-semibold text-[#0F172A] block mb-1">Destination Shipping State *</label>
             <select
               value={destState}
               onChange={(e) => setDestState(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+              className="w-full px-3 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#0F172A] focus:outline-none focus:border-[#0575B8] focus:bg-[#FFFFFF]"
             >
               {STATES.map((s) => (
                 <option key={s.code} value={s.code}>
@@ -132,7 +132,7 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
 
         {/* Items List */}
         <div className="space-y-3">
-          <div className="text-xs font-bold text-[#5F6F65] uppercase tracking-wider">
+          <div className="text-xs font-bold text-[#475569] uppercase tracking-wider">
             Simulated Equipment Lot
           </div>
           <div className="space-y-2">
@@ -142,32 +142,32 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
               return (
                 <div
                   key={prod.id}
-                  className="p-3.5 rounded-2xl bg-[#F7FAF8] border border-[#DDE8E1] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  className="p-3.5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                 >
                   <div>
-                    <div className="font-bold text-[#17211B] text-sm">{prod.name}</div>
-                    <div className="text-[#5F6F65] text-[11px]">Retail MRP: ₹{prod.mrp.toLocaleString('en-IN')} / unit</div>
+                    <div className="font-bold text-[#0F172A] text-sm">{prod.name}</div>
+                    <div className="text-[#475569] text-[11px]">Retail MRP: ₹{prod.mrp.toLocaleString('en-IN')} / unit</div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className="text-[#5F6F65]">Quantity:</span>
+                    <span className="text-[#475569]">Quantity:</span>
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => {
                           const newQty = Math.max(0, currentQty - 5);
                           setItems(items.map((i) => (i.product_id === prod.id ? { ...i, quantity: newQty } : i)));
                         }}
-                        className="w-7 h-7 rounded-lg bg-[#FFFFFF] border border-[#DDE8E1] text-[#17211B] font-bold hover:bg-[#ECF8F1] shadow-xs"
+                        className="w-7 h-7 rounded-lg bg-[#FFFFFF] border border-[#E2E8F0] text-[#0F172A] font-bold hover:bg-[#EFF8FF] shadow-xs"
                       >
                         -
                       </button>
-                      <span className="w-10 text-center font-bold text-[#1F8F4E]">{currentQty}</span>
+                      <span className="w-10 text-center font-bold text-[#0575B8]">{currentQty}</span>
                       <button
                         onClick={() => {
                           const newQty = currentQty + 5;
                           setItems(items.map((i) => (i.product_id === prod.id ? { ...i, quantity: newQty } : i)));
                         }}
-                        className="w-7 h-7 rounded-lg bg-[#FFFFFF] border border-[#DDE8E1] text-[#17211B] font-bold hover:bg-[#ECF8F1] shadow-xs"
+                        className="w-7 h-7 rounded-lg bg-[#FFFFFF] border border-[#E2E8F0] text-[#0F172A] font-bold hover:bg-[#EFF8FF] shadow-xs"
                       >
                         +
                       </button>
@@ -180,63 +180,63 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
         </div>
 
         {/* Dynamic Price Breakdown Summary */}
-        <div className="p-6 rounded-3xl bg-[#F7FAF8] border border-[#DDE8E1] space-y-4">
-          <div className="flex items-center justify-between border-b border-[#DDE8E1] pb-3">
-            <span className="font-heading font-bold text-sm text-[#17211B]">Commercial Quote Breakdown</span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+        <div className="p-6 rounded-3xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+            <span className="font-heading font-bold text-sm text-[#0F172A]">Commercial Quote Breakdown</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0]">
               {summary.is_interstate ? 'Inter-State (IGST 12%)' : 'Intra-State (CGST 6% + SGST 6%)'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div className="space-y-2">
-              <div className="flex justify-between text-[#5F6F65]">
+              <div className="flex justify-between text-[#475569]">
                 <span>Catalogue Subtotal (MRP):</span>
-                <span className="text-[#17211B] font-semibold">₹{(summary.subtotal_inr || 0).toLocaleString('en-IN')}</span>
+                <span className="text-[#0F172A] font-semibold">₹{(summary.subtotal_inr || 0).toLocaleString('en-IN')}</span>
               </div>
-              <div className="flex justify-between text-[#1F8F4E]">
+              <div className="flex justify-between text-[#0575B8]">
                 <span>Channel Margin Discount:</span>
                 <span className="font-bold">- ₹{(summary.total_discount_inr || 0).toLocaleString('en-IN')}</span>
               </div>
-              <div className="flex justify-between text-[#5F6F65]">
+              <div className="flex justify-between text-[#475569]">
                 <span>Net Taxable Value:</span>
-                <span className="text-[#17211B] font-bold">₹{(summary.net_taxable_inr || 0).toLocaleString('en-IN')}</span>
+                <span className="text-[#0F172A] font-bold">₹{(summary.net_taxable_inr || 0).toLocaleString('en-IN')}</span>
               </div>
             </div>
 
-            <div className="space-y-2 sm:border-l sm:border-[#DDE8E1] sm:pl-4">
+            <div className="space-y-2 sm:border-l sm:border-[#E2E8F0] sm:pl-4">
               {summary.is_interstate ? (
-                <div className="flex justify-between text-[#5F6F65]">
+                <div className="flex justify-between text-[#475569]">
                   <span>Integrated GST (IGST 12%):</span>
-                  <span className="text-[#1F8F4E] font-semibold">₹{(summary.igst_inr || 0).toLocaleString('en-IN')}</span>
+                  <span className="text-[#0575B8] font-semibold">₹{(summary.igst_inr || 0).toLocaleString('en-IN')}</span>
                 </div>
               ) : (
                 <>
-                  <div className="flex justify-between text-[#5F6F65]">
+                  <div className="flex justify-between text-[#475569]">
                     <span>Central GST (CGST 6%):</span>
-                    <span className="text-[#1F8F4E] font-semibold">₹{(summary.cgst_inr || 0).toLocaleString('en-IN')}</span>
+                    <span className="text-[#0575B8] font-semibold">₹{(summary.cgst_inr || 0).toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between text-[#5F6F65]">
+                  <div className="flex justify-between text-[#475569]">
                     <span>State GST (SGST 6%):</span>
-                    <span className="text-[#1F8F4E] font-semibold">₹{(summary.sgst_inr || 0).toLocaleString('en-IN')}</span>
+                    <span className="text-[#0575B8] font-semibold">₹{(summary.sgst_inr || 0).toLocaleString('en-IN')}</span>
                   </div>
                 </>
               )}
-              <div className="flex justify-between text-[#5F6F65]">
+              <div className="flex justify-between text-[#475569]">
                 <span>Commercial Freight:</span>
-                <span className="text-[#1F8F4E] font-semibold">
+                <span className="text-[#0575B8] font-semibold">
                   {summary.shipping_inr === 0 ? 'FREE Freight' : `₹${summary.shipping_inr?.toLocaleString('en-IN')}`}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#DDE8E1] flex items-baseline justify-between">
+          <div className="pt-3 border-t border-[#E2E8F0] flex items-baseline justify-between">
             <div>
-              <span className="text-xs text-[#5F6F65] block font-medium">Total Payable Value (incl. GST)</span>
-              <span className="text-[10px] text-[#1F8F4E] font-bold">100% Tax Invoice with Input Tax Credit (ITC)</span>
+              <span className="text-xs text-[#475569] block font-medium">Total Payable Value (incl. GST)</span>
+              <span className="text-[10px] text-[#0575B8] font-bold">100% Tax Invoice with Input Tax Credit (ITC)</span>
             </div>
-            <div className="font-heading font-black text-3xl text-[#1F8F4E]">
+            <div className="font-heading font-black text-3xl text-[#0575B8]">
               ₹{(summary.grand_total_inr || 0).toLocaleString('en-IN')}
             </div>
           </div>
@@ -246,7 +246,7 @@ export default function PricingCalculatorModal({ isOpen, onClose }) {
         <div className="flex justify-end pt-2">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] transition-colors shadow-xs"
+            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93] transition-colors shadow-xs"
           >
             Close Calculator
           </button>

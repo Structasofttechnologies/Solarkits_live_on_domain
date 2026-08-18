@@ -47,7 +47,7 @@ import DealerDistributorHubPage from './pages/dealer/DealerDistributorHubPage';
 
 function PublicLayout() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#17211B]">
+    <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#0F172A]">
       <Navbar />
       <main className="flex-grow">
         <Outlet />

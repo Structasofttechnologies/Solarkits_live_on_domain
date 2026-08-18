@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiPhone, FiMail, FiMapPin, FiShield, FiZap, FiCheckCircle } from 'react-icons/fi';
+import logoImg from '../../assets/images/logo.png';
 
 const FOOTER_LINKS = {
   products: {
@@ -54,74 +55,71 @@ const TRUST_BADGES = [
 
 export default function Footer() {
   return (
-    <footer className="bg-[#F7FAF8] border-t border-[#DDE8E1] text-[#5F6F65]">
+    <footer className="bg-[#F8FAFC] border-t border-[#E2E8F0] text-[#475569]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Top section */}
-        <div className="pt-14 pb-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 border-b border-[#DDE8E1]">
+        <div className="pt-14 pb-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 border-b border-[#E2E8F0]">
 
           {/* Brand Column */}
           <div className="lg:col-span-2 space-y-5">
             <Link to="/" className="inline-flex items-center gap-2.5 group">
-              <div className="w-10 h-10 rounded-xl bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E] group-hover:bg-[#1F8F4E] group-hover:text-white transition-all shadow-xs">
-                <FiZap className="w-5 h-5 transition-transform group-hover:scale-110" />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-heading font-black text-xl text-[#17211B] tracking-tight">
-                  Solar<span className="text-[#1F8F4E]">Kits</span>
-                </span>
-                <span className="px-2 py-0.5 text-[11px] font-bold tracking-wide uppercase bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] rounded-md">
-                  BOS
-                </span>
-              </div>
+              <img
+                src={logoImg}
+                alt="SolarKits BOS"
+                className="h-8 sm:h-9 w-auto object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+              />
+              <span className="px-2 py-0.5 text-[10px] font-black tracking-wider uppercase bg-[#EFF8FF] text-[#0575B8] border border-[#BAE6FD] rounded-md shadow-2xs">
+                BOS
+              </span>
             </Link>
 
-            <p className="text-sm text-[#5F6F65] leading-relaxed max-w-sm">
+            <p className="text-sm text-[#475569] leading-relaxed max-w-sm">
               India's trusted solar equipment store. Factory-gate pricing on Tier-1 inverters, TOPCon modules, mounting structures, and complete BOS kits — delivered across India.
             </p>
 
             {/* Contact details */}
             <div className="space-y-2 text-xs">
               <div className="flex items-center gap-2.5">
-                <FiMapPin className="w-4 h-4 text-[#1F8F4E] shrink-0" />
+                <FiMapPin className="w-4 h-4 text-[#0575B8] shrink-0" />
                 <span>National Hub: Ahmedabad, Gujarat, India</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <FiPhone className="w-4 h-4 text-[#1F8F4E] shrink-0" />
-                <span className="font-semibold text-[#17211B]">+91 (079) 4000-BOSKIT</span>
+                <FiPhone className="w-4 h-4 text-[#0575B8] shrink-0" />
+                <span className="font-semibold text-[#0F172A]">+91 (079) 4000-BOSKIT</span>
               </div>
               <div className="flex items-center gap-2.5">
-                <FiMail className="w-4 h-4 text-[#1F8F4E] shrink-0" />
+                <FiMail className="w-4 h-4 text-[#0575B8] shrink-0" />
                 <span>support@solarkits.in</span>
               </div>
             </div>
 
             {/* Trust badges */}
             <div className="flex flex-wrap gap-2 pt-1">
-              {TRUST_BADGES.map((badge) => (
+              {TRUST_BADGES.map((b) => (
                 <span
-                  key={badge}
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1F8F4E] bg-[#ECF8F1] border border-[#DDE8E1] px-2 py-1 rounded-full"
+                  key={b}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#EFF8FF] border border-[#BAE6FD] text-[#0575B8]"
                 >
-                  <FiCheckCircle className="w-3 h-3" />
-                  {badge}
+                  <FiCheckCircle className="w-3 h-3 text-[#0575B8]" />
+                  {b}
                 </span>
               ))}
             </div>
           </div>
 
-          {/* Link Columns */}
-          {Object.entries(FOOTER_LINKS).map(([key, section]) => (
-            <div key={key}>
-              <h4 className="font-heading text-sm font-bold text-[#17211B] uppercase tracking-wider mb-5">
-                {section.title}
-              </h4>
-              <ul className="space-y-3 text-sm">
-                {section.links.map((link) => (
-                  <li key={link.path}>
+          {/* Nav columns */}
+          {Object.entries(FOOTER_LINKS).map(([key, group]) => (
+            <div key={key} className="space-y-4">
+              <p className="font-heading font-bold text-sm text-[#0F172A] uppercase tracking-wider">
+                {group.title}
+              </p>
+              <ul className="space-y-2 text-xs">
+                {group.links.map((link) => (
+                  <li key={link.name}>
                     <Link
                       to={link.path}
-                      className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium"
+                      className="text-[#475569] hover:text-[#0575B8] transition-colors font-medium hover:underline inline-block py-0.5"
                     >
                       {link.name}
                     </Link>
@@ -130,21 +128,20 @@ export default function Footer() {
               </ul>
             </div>
           ))}
+
         </div>
 
         {/* Bottom Bar */}
-        <div className="py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#5F6F65]">
-          <p>© {new Date().getFullYear()} SolarKits Technologies Pvt. Ltd. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1 text-[#1F8F4E] font-semibold">
-              <FiShield className="w-3.5 h-3.5" />
-              GST Verified Entity
-            </span>
-            <span className="text-[#DDE8E1]">|</span>
-            <Link to="/privacy-policy" className="hover:text-[#17211B] transition-colors">Privacy</Link>
-            <Link to="/terms-of-service" className="hover:text-[#17211B] transition-colors">Terms</Link>
+        <div className="py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748B]">
+          <p>© {new Date().getFullYear()} SOLARKITS. All rights reserved. Solar equipment wholesale marketplace.</p>
+          <div className="flex items-center gap-6">
+            <Link to="/privacy-policy" className="hover:text-[#0575B8] transition-colors">Privacy</Link>
+            <Link to="/terms-of-service" className="hover:text-[#0575B8] transition-colors">Terms</Link>
+            <Link to="/refund-policy" className="hover:text-[#0575B8] transition-colors">Refunds</Link>
+            <Link to="/shipping-policy" className="hover:text-[#0575B8] transition-colors">Shipping</Link>
           </div>
         </div>
+
       </div>
     </footer>
   );

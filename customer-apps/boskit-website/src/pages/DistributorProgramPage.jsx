@@ -59,25 +59,25 @@ export default function DistributorProgramPage() {
       
       {/* Hero */}
       <div className="text-center max-w-3xl mx-auto space-y-4">
-        <span className="px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] inline-block shadow-xs">
+        <span className="px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0] inline-block shadow-xs">
           B2B Regional Distributor Partnership
         </span>
-        <h1 className="font-heading font-black text-4xl sm:text-5xl text-[#17211B] tracking-tight">
+        <h1 className="font-heading font-black text-4xl sm:text-5xl text-[#0F172A] tracking-tight">
           SolarKits BOS Authorized Distributor Program
         </h1>
-        <p className="text-base text-[#5F6F65] leading-relaxed max-w-2xl mx-auto">
+        <p className="text-base text-[#475569] leading-relaxed max-w-2xl mx-auto">
           Scale your commercial solar supply business with guaranteed district-level territorial exclusivity, wholesale pricing slabs, and sub-dealer network management rights.
         </p>
         <div className="pt-2 flex justify-center gap-4">
           <Link
             to="/distributor/onboarding"
-            className="px-8 py-4 rounded-xl text-sm font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] shadow-sm flex items-center gap-2 transition-all"
+            className="px-8 py-4 rounded-xl text-sm font-bold bg-[#0575B8] text-white hover:bg-[#045D93] shadow-sm flex items-center gap-2 transition-all"
           >
-            Apply for Exclusive Territory <FiArrowRight className="text-[#F5B700]" />
+            Apply for Exclusive Territory <FiArrowRight className="text-[#F49222]" />
           </Link>
           <Link
             to="/plans"
-            className="px-6 py-4 rounded-xl text-sm font-bold bg-[#FFFFFF] text-[#1F8F4E] border border-[#DDE8E1] hover:bg-[#ECF8F1] shadow-xs transition-all"
+            className="px-6 py-4 rounded-xl text-sm font-bold bg-[#FFFFFF] text-[#0575B8] border border-[#E2E8F0] hover:bg-[#EFF8FF] shadow-xs transition-all"
           >
             View Distributor Tiers
           </Link>
@@ -86,57 +86,57 @@ export default function DistributorProgramPage() {
 
       {/* 6 Key Benefits */}
       <div className="space-y-6">
-        <h2 className="font-heading font-bold text-2xl text-[#17211B] text-center">
+        <h2 className="font-heading font-bold text-2xl text-[#0F172A] text-center">
           Distributor Partner Privileges
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {benefits.map((b, idx) => (
-            <div key={idx} className="bg-[#FFFFFF] border border-[#DDE8E1] p-6 rounded-2xl space-y-3 shadow-xs hover:shadow-md hover:border-[#1F8F4E]/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E]">
+            <div key={idx} className="bg-[#FFFFFF] border border-[#E2E8F0] p-6 rounded-2xl space-y-3 shadow-xs hover:shadow-md hover:border-[#0575B8]/40 transition-all">
+              <div className="w-10 h-10 rounded-xl bg-[#EFF8FF] border border-[#E2E8F0] flex items-center justify-center text-[#0575B8]">
                 <b.icon className="w-5 h-5" />
               </div>
-              <h3 className="font-heading font-bold text-lg text-[#17211B]">{b.title}</h3>
-              <p className="text-xs text-[#5F6F65] leading-relaxed">{b.desc}</p>
+              <h3 className="font-heading font-bold text-lg text-[#0F172A]">{b.title}</h3>
+              <p className="text-xs text-[#475569] leading-relaxed">{b.desc}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Onboarding Roadmap */}
-      <div className="bg-[#FFFFFF] border border-[#DDE8E1] p-8 sm:p-12 rounded-3xl space-y-8 shadow-xs">
+      <div className="bg-[#FFFFFF] border border-[#E2E8F0] p-8 sm:p-12 rounded-3xl space-y-8 shadow-xs">
         <div className="text-center max-w-2xl mx-auto space-y-2">
-          <h2 className="font-heading font-bold text-2xl text-[#17211B]">
+          <h2 className="font-heading font-bold text-2xl text-[#0F172A]">
             5-Stage Rapid Distributor Onboarding
           </h2>
-          <p className="text-xs text-[#5F6F65]">
+          <p className="text-xs text-[#475569]">
             Our fully digital onboarding engine lets you verify your GST, choose your territory, and submit KYC in under 10 minutes.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {steps.map((s, idx) => (
-            <div key={idx} className="p-5 rounded-2xl bg-[#F7FAF8] border border-[#DDE8E1] space-y-2 hover:border-[#1F8F4E]/40 transition-colors">
-              <span className="font-heading font-black text-2xl text-[#1F8F4E]">{s.num}</span>
-              <h4 className="font-heading font-bold text-sm text-[#17211B]">{s.title}</h4>
-              <p className="text-[11px] text-[#5F6F65] leading-relaxed">{s.desc}</p>
+            <div key={idx} className="p-5 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-2 hover:border-[#0575B8]/40 transition-colors">
+              <span className="font-heading font-black text-2xl text-[#0575B8]">{s.num}</span>
+              <h4 className="font-heading font-bold text-sm text-[#0F172A]">{s.title}</h4>
+              <p className="text-[11px] text-[#475569] leading-relaxed">{s.desc}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Bottom CTA */}
-      <div className="text-center bg-[#ECF8F1] border border-[#DDE8E1] p-10 rounded-3xl space-y-4 shadow-xs">
-        <h2 className="font-heading font-bold text-2xl text-[#17211B]">
+      <div className="text-center bg-[#EFF8FF] border border-[#E2E8F0] p-10 rounded-3xl space-y-4 shadow-xs">
+        <h2 className="font-heading font-bold text-2xl text-[#0F172A]">
           Secure Your Territory Before It Is Awarded
         </h2>
-        <p className="text-xs text-[#5F6F65] max-w-lg mx-auto">
+        <p className="text-xs text-[#475569] max-w-lg mx-auto">
           Distributor territories are awarded on a strict first-come, first-evaluated basis. Check district availability and start your application today.
         </p>
         <Link
           to="/auth/register"
-          className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] shadow-sm transition-all"
+          className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold bg-[#0575B8] text-white hover:bg-[#045D93] shadow-sm transition-all"
         >
-          Begin Distributor Application <FiArrowRight className="text-[#F5B700]" />
+          Begin Distributor Application <FiArrowRight className="text-[#F49222]" />
         </Link>
       </div>
 

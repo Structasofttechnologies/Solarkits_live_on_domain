@@ -9,9 +9,9 @@ const CATEGORIES = [
     name: 'Solar Inverters',
     description: 'String, hybrid & micro inverters',
     icon: FiZap,
-    color: '#1F8F4E',
-    bg: '#ECF8F1',
-    border: '#DDE8E1',
+    color: '#0575B8',
+    bg: '#EFF8FF',
+    border: '#BAE6FD',
     path: '/products?cat=inverters',
   },
   {
@@ -19,9 +19,9 @@ const CATEGORIES = [
     name: 'Solar Panels',
     description: 'TOPCon, PERC & bifacial modules',
     icon: MdSolarPower,
-    color: '#1F8F4E',
-    bg: '#ECF8F1',
-    border: '#DDE8E1',
+    color: '#0575B8',
+    bg: '#EFF8FF',
+    border: '#BAE6FD',
     path: '/products?cat=panels',
   },
   {
@@ -29,9 +29,9 @@ const CATEGORIES = [
     name: 'Mounting Structures',
     description: 'Rooftop & ground mount systems',
     icon: FiGrid,
-    color: '#1F8F4E',
-    bg: '#ECF8F1',
-    border: '#DDE8E1',
+    color: '#0575B8',
+    bg: '#EFF8FF',
+    border: '#BAE6FD',
     path: '/products?cat=structures',
   },
   {
@@ -39,9 +39,9 @@ const CATEGORIES = [
     name: 'DCDB & ACDB',
     description: 'Protection & switchgear boxes',
     icon: FiBox,
-    color: '#1F8F4E',
-    bg: '#ECF8F1',
-    border: '#DDE8E1',
+    color: '#0575B8',
+    bg: '#EFF8FF',
+    border: '#BAE6FD',
     path: '/products?cat=dcdb',
   },
   {
@@ -49,9 +49,9 @@ const CATEGORIES = [
     name: 'DC Cables & Connectors',
     description: 'MC4, DC wire & string cables',
     icon: FiRadio,
-    color: '#1F8F4E',
-    bg: '#ECF8F1',
-    border: '#DDE8E1',
+    color: '#0575B8',
+    bg: '#EFF8FF',
+    border: '#BAE6FD',
     path: '/products?cat=cables',
   },
   {
@@ -59,9 +59,9 @@ const CATEGORIES = [
     name: 'BOS Combo Kits',
     description: 'Pre-engineered balance-of-system kits',
     icon: FiLayers,
-    color: '#F5B700',
-    bg: '#FEF9E7',
-    border: '#F5B70040',
+    color: '#F49222',
+    bg: '#FFF7ED',
+    border: '#FED7AA',
     path: '/products?cat=bos-kits',
   },
 ];
@@ -72,17 +72,17 @@ export default function CategoryGrid({ title = 'Shop by Category', subtitle = nu
       {/* Section Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
-          <span className="text-xs font-bold text-[#1F8F4E] uppercase tracking-widest bg-[#ECF8F1] px-3 py-1 rounded-full border border-[#DDE8E1]">
+          <span className="text-xs font-bold text-[#0575B8] uppercase tracking-widest bg-[#EFF8FF] px-3 py-1 rounded-full border border-[#BAE6FD]">
             Browse
           </span>
-          <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#17211B] tracking-tight mt-2">
+          <h2 className="font-heading font-bold text-2xl sm:text-3xl text-[#0F172A] tracking-tight mt-2">
             {title}
           </h2>
-          {subtitle && <p className="text-sm text-[#5F6F65] mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-sm text-[#475569] mt-1">{subtitle}</p>}
         </div>
         <Link
           to="/products"
-          className="inline-flex items-center gap-2 text-sm font-bold text-[#1F8F4E] hover:text-[#18733E] group shrink-0"
+          className="inline-flex items-center gap-2 text-sm font-bold text-[#0575B8] hover:text-[#045D93] group shrink-0"
         >
           View All Equipment <FiArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </Link>
@@ -96,20 +96,20 @@ export default function CategoryGrid({ title = 'Shop by Category', subtitle = nu
             <Link
               key={cat.id}
               to={cat.path}
-              className="group flex flex-col items-center gap-3 p-4 sm:p-5 rounded-2xl border bg-white hover:shadow-md transition-all duration-200 text-center"
+              className="group flex flex-col items-center gap-3 p-4 sm:p-5 rounded-2xl border bg-white hover:shadow-lg hover:border-[#0575B8]/40 transition-all duration-200 text-center"
               style={{ borderColor: cat.border }}
             >
               <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center transition-all group-hover:scale-110"
+                className="w-12 h-12 rounded-xl flex items-center justify-center transition-all group-hover:scale-110 shadow-2xs"
                 style={{ background: cat.bg, color: cat.color }}
               >
                 <Icon className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-xs sm:text-sm font-bold text-[#17211B] leading-snug group-hover:text-[#1F8F4E] transition-colors">
+                <p className="text-xs sm:text-sm font-bold text-[#0F172A] leading-snug group-hover:text-[#0575B8] transition-colors">
                   {cat.name}
                 </p>
-                <p className="text-[10px] text-[#5F6F65] mt-0.5 hidden sm:block leading-tight">
+                <p className="text-[10px] text-[#64748B] mt-0.5 hidden sm:block leading-tight">
                   {cat.description}
                 </p>
               </div>

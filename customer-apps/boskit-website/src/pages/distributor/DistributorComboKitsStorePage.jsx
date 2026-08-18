@@ -255,14 +255,14 @@ export default function DistributorComboKitsStorePage() {
       )}
 
       {/* Hero Banner — E-Commerce Store Style */}
-      <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg">
+      <div className="bg-gradient-to-r from-[#0575B8] via-[#1965B0] to-[#224089] rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg">
         <div className="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
           <MdSolarPower size={280} />
         </div>
 
         <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-white/15 backdrop-blur-md text-amber-300 border border-white/10">
-            <FiZap className="text-amber-400" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-white/15 backdrop-blur-md text-[#F49222] border border-white/10">
+            <FiZap className="text-[#F49222]" />
             B2B FACTORY WHOLESALE STORE
           </div>
 
@@ -276,23 +276,23 @@ export default function DistributorComboKitsStorePage() {
 
           <div className="flex flex-wrap gap-4 pt-3 text-xs font-bold text-slate-200">
             <span className="flex items-center gap-1.5"><MdVerified className="text-emerald-400 text-sm" /> 100% Factory Pre-Wired & Tested</span>
-            <span className="flex items-center gap-1.5"><FiShield className="text-amber-300 text-sm" /> 5 Years Replacement Warranty</span>
+            <span className="flex items-center gap-1.5"><FiShield className="text-[#F49222] text-sm" /> 5 Years Replacement Warranty</span>
             <span className="flex items-center gap-1.5"><FiTag className="text-sky-300 text-sm" /> 18% GST Input Tax Credit (ITC) Eligible</span>
           </div>
         </div>
       </div>
 
       {/* Reseller Margin Manager Quick Banner */}
-      <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+      <div className="p-4 rounded-2xl bg-[#EFF8FF] border border-[#BAE6FD] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-md shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[#0575B8] text-white flex items-center justify-center font-black shadow-md shrink-0">
             <FiSliders size={20} />
           </div>
           <div>
-            <h3 className="font-heading font-black text-sm text-emerald-950">
+            <h3 className="font-heading font-black text-sm text-[#0F172A]">
               Dealer Reselling & Profit Margin Control Hub
             </h3>
-            <p className="text-xs text-emerald-800">
+            <p className="text-xs text-[#475569]">
               Set custom selling prices and profit margins for every kit so your onboarded territory dealers buy from you at your desired markup.
             </p>
           </div>
@@ -300,7 +300,7 @@ export default function DistributorComboKitsStorePage() {
 
         <Link
           to="/distributor/portal/dealer-margins"
-          className="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black shadow-sm flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer active:scale-95"
+          className="px-5 py-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-xs font-black shadow-sm flex items-center gap-2 whitespace-nowrap shrink-0 transition-all cursor-pointer active:scale-95"
         >
           <span>Set All Dealer Margins</span> <FiArrowRight size={14} />
         </Link>

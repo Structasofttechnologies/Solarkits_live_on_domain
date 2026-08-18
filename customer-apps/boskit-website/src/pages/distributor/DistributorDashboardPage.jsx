@@ -54,7 +54,7 @@ export default function DistributorDashboardPage() {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-[#5F6F65]">Loading Distributor Console...</div>;
+    return <div className="p-8 text-center text-[#475569]">Loading Distributor Console...</div>;
   }
 
   const metrics = data?.metrics || {};
@@ -119,54 +119,54 @@ export default function DistributorDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         
         {/* Active Dealers */}
-        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs flex flex-col justify-between">
+        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#5F6F65]">Active Sub-Dealers</span>
-            <div className="p-2.5 rounded-2xl bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+            <span className="text-xs font-semibold text-[#475569]">Active Sub-Dealers</span>
+            <div className="p-2.5 rounded-2xl bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0]">
               <FiUsers size={18} />
             </div>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
-            <span className="font-heading font-black text-3xl text-[#17211B]">
-              {metrics.active_dealers_count || 1} <span className="text-xs text-[#5F6F65] font-normal">/ {metrics.max_dealers_limit || 15}</span>
+            <span className="font-heading font-black text-3xl text-[#0F172A]">
+              {metrics.active_dealers_count || 1} <span className="text-xs text-[#475569] font-normal">/ {metrics.max_dealers_limit || 15}</span>
             </span>
-            <span className="text-[10px] font-bold text-[#1F8F4E] bg-[#ECF8F1] border border-[#DDE8E1] px-2 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-[#0575B8] bg-[#EFF8FF] border border-[#E2E8F0] px-2 py-0.5 rounded">
               {metrics.remaining_dealer_seats || 14} Seats Left
             </span>
           </div>
         </div>
 
         {/* Monthly Target Volume */}
-        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs flex flex-col justify-between">
+        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#5F6F65]">Monthly Sizing Target</span>
-            <div className="p-2.5 rounded-2xl bg-[#FEF9E7] text-[#9A7300] border border-[#F5B70040]">
+            <span className="text-xs font-semibold text-[#475569]">Monthly Sizing Target</span>
+            <div className="p-2.5 rounded-2xl bg-[#FFF7ED] text-[#9A7300] border border-[#F4922240]">
               <FiTrendingUp size={18} />
             </div>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
-            <span className="font-heading font-black text-3xl text-[#17211B]">
-              {metrics.current_month_kw || 68.5} <span className="text-xs text-[#5F6F65] font-normal">kW</span>
+            <span className="font-heading font-black text-3xl text-[#0F172A]">
+              {metrics.current_month_kw || 68.5} <span className="text-xs text-[#475569] font-normal">kW</span>
             </span>
-            <span className="text-[10px] font-bold text-[#9A7300] bg-[#FEF9E7] border border-[#F5B70040] px-2 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-[#9A7300] bg-[#FFF7ED] border border-[#F4922240] px-2 py-0.5 rounded">
               Goal: {metrics.monthly_target_kw || 100} kW
             </span>
           </div>
         </div>
 
         {/* Total Sales Volume */}
-        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs flex flex-col justify-between">
+        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#5F6F65]">Total B2B Volume</span>
-            <div className="p-2.5 rounded-2xl bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+            <span className="text-xs font-semibold text-[#475569]">Total B2B Volume</span>
+            <div className="p-2.5 rounded-2xl bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0]">
               <FiZap size={18} />
             </div>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
-            <span className="font-heading font-black text-3xl text-[#1F8F4E]">
+            <span className="font-heading font-black text-3xl text-[#0575B8]">
               ₹{(metrics.total_revenue_inr || 1250000).toLocaleString('en-IN')}
             </span>
-            <span className="text-[10px] font-bold text-[#1F8F4E] bg-[#ECF8F1] border border-[#DDE8E1] px-2 py-0.5 rounded">
+            <span className="text-[10px] font-bold text-[#0575B8] bg-[#EFF8FF] border border-[#E2E8F0] px-2 py-0.5 rounded">
               Verified
             </span>
           </div>
@@ -194,20 +194,20 @@ export default function DistributorDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Left 2 Columns: Recent Orders */}
-        <div className="lg:col-span-2 p-6 sm:p-8 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs space-y-6">
+        <div className="lg:col-span-2 p-6 sm:p-8 rounded-3xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-heading font-bold text-lg text-[#17211B]">Recent Equipment Orders</h3>
-              <p className="text-xs text-[#5F6F65]">Direct factory warehouse orders and sub-dealer pickups.</p>
+              <h3 className="font-heading font-bold text-lg text-[#0F172A]">Recent Equipment Orders</h3>
+              <p className="text-xs text-[#475569]">Direct factory warehouse orders and sub-dealer pickups.</p>
             </div>
-            <Link to="/distributor/portal/procure" className="text-xs font-bold text-[#1F8F4E] hover:text-[#18733E] flex items-center gap-1">
+            <Link to="/distributor/portal/procure" className="text-xs font-bold text-[#0575B8] hover:text-[#045D93] flex items-center gap-1">
               Procure Equipment <FiArrowRight />
             </Link>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[#17211B]">
-              <thead className="bg-[#F7FAF8] text-[#5F6F65] font-bold uppercase text-[10px] border-b border-[#DDE8E1]">
+            <table className="w-full text-left text-xs text-[#0F172A]">
+              <thead className="bg-[#F8FAFC] text-[#475569] font-bold uppercase text-[10px] border-b border-[#E2E8F0]">
                 <tr>
                   <th className="p-3.5">Order Number</th>
                   <th className="p-3.5">Procurement Total</th>
@@ -215,24 +215,24 @@ export default function DistributorDashboardPage() {
                   <th className="p-3.5">Order Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DDE8E1]">
+              <tbody className="divide-y divide-[#E2E8F0]">
                 {recentOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-[#5F6F65]">
+                    <td colSpan={4} className="p-8 text-center text-[#475569]">
                       No orders placed yet. Browse the equipment catalogue to place your first distributor stock order.
                     </td>
                   </tr>
                 ) : (
                   recentOrders.map((o) => (
-                    <tr key={o.id} className="hover:bg-[#F7FAF8] transition-colors">
-                      <td className="p-3.5 font-bold font-mono text-[#17211B]">{o.order_number}</td>
-                      <td className="p-3.5 font-bold text-[#1F8F4E]">₹{o.grand_total_inr.toLocaleString('en-IN')}</td>
+                    <tr key={o.id} className="hover:bg-[#F8FAFC] transition-colors">
+                      <td className="p-3.5 font-bold font-mono text-[#0F172A]">{o.order_number}</td>
+                      <td className="p-3.5 font-bold text-[#0575B8]">₹{o.grand_total_inr.toLocaleString('en-IN')}</td>
                       <td className="p-3.5">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0]">
                           {o.status}
                         </span>
                       </td>
-                      <td className="p-3.5 text-[#5F6F65]">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
+                      <td className="p-3.5 text-[#475569]">{new Date(o.created_at).toLocaleDateString('en-IN')}</td>
                     </tr>
                   ))
                 )}
@@ -245,39 +245,39 @@ export default function DistributorDashboardPage() {
         <div className="space-y-6">
           
           {/* Active Plan Card */}
-          <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs space-y-4">
+          <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#E2E8F0] shadow-xs space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-heading font-bold text-sm text-[#17211B] flex items-center gap-2">
-                <FiLayers className="text-[#1F8F4E]" /> Active Distributor Plan
+              <h4 className="font-heading font-bold text-sm text-[#0F172A] flex items-center gap-2">
+                <FiLayers className="text-[#0575B8]" /> Active Distributor Plan
               </h4>
-              <span className="text-[10px] font-bold bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] px-2 py-0.5 rounded">
+              <span className="text-[10px] font-bold bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0] px-2 py-0.5 rounded">
                 Active
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#F7FAF8] border border-[#DDE8E1] space-y-2 text-xs">
-              <div className="font-bold text-[#17211B] text-sm">{plan.name}</div>
-              <div className="text-[#5F6F65] text-[11px]">Exclusive territory wholesale procurement and dealer management rights.</div>
-              <div className="pt-2 flex justify-between text-[#17211B]">
+            <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-2 text-xs">
+              <div className="font-bold text-[#0F172A] text-sm">{plan.name}</div>
+              <div className="text-[#475569] text-[11px]">Exclusive territory wholesale procurement and dealer management rights.</div>
+              <div className="pt-2 flex justify-between text-[#0F172A]">
                 <span>Dealer Allowance:</span>
-                <strong className="text-[#1F8F4E]">{metrics.active_dealers_count || 1} / {metrics.max_dealers_limit || 15} Seats</strong>
+                <strong className="text-[#0575B8]">{metrics.active_dealers_count || 1} / {metrics.max_dealers_limit || 15} Seats</strong>
               </div>
             </div>
 
             <Link
               to="/distributor/portal/plan"
-              className="block w-full py-2.5 rounded-xl text-xs font-bold text-center bg-[#F7FAF8] hover:bg-[#ECF8F1] text-[#17211B] border border-[#DDE8E1] transition-colors"
+              className="block w-full py-2.5 rounded-xl text-xs font-bold text-center bg-[#F8FAFC] hover:bg-[#EFF8FF] text-[#0F172A] border border-[#E2E8F0] transition-colors"
             >
               Manage Distributor Plan
             </Link>
           </div>
 
           {/* Quick Dealer Invite Box */}
-          <div className="p-6 rounded-3xl bg-[#ECF8F1] border border-[#DDE8E1] shadow-xs space-y-3">
-            <h4 className="font-heading font-bold text-sm text-[#17211B] flex items-center gap-2">
-              <FiUsers className="text-[#1F8F4E]" /> Expand Your Dealer Network
+          <div className="p-6 rounded-3xl bg-[#EFF8FF] border border-[#E2E8F0] shadow-xs space-y-3">
+            <h4 className="font-heading font-bold text-sm text-[#0F172A] flex items-center gap-2">
+              <FiUsers className="text-[#0575B8]" /> Expand Your Dealer Network
             </h4>
-            <p className="text-xs text-[#5F6F65] leading-relaxed">
+            <p className="text-xs text-[#475569] leading-relaxed">
               Onboard local solar installers, EPC contractors, and electrical dealers under your district umbrella.
             </p>
             <button
@@ -285,7 +285,7 @@ export default function DistributorDashboardPage() {
                 setShowInviteModal(true);
                 setInviteResult(null);
               }}
-              className="w-full py-2.5 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] shadow-xs flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93] shadow-xs flex items-center justify-center gap-2"
             >
               <FiPlusCircle /> Invite New Solar Dealer
             </button>
@@ -297,27 +297,27 @@ export default function DistributorDashboardPage() {
 
       {/* ── INVITE DEALER MODAL ──────────────────────────────────────────────── */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-[#17211B]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-[#FFFFFF] border border-[#DDE8E1] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="font-heading font-bold text-lg text-[#17211B]">Invite Sub-Dealer to Network</h3>
-            <p className="text-xs text-[#5F6F65]">
+        <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="font-heading font-bold text-lg text-[#0F172A]">Invite Sub-Dealer to Network</h3>
+            <p className="text-xs text-[#475569]">
               Generate an exclusive registration invitation for a local installer in your territory.
             </p>
 
             {inviteResult ? (
               <div className="space-y-4 pt-2">
-                <div className="p-4 rounded-2xl bg-[#ECF8F1] border border-[#DDE8E1] text-xs text-[#1F8F4E] space-y-2">
+                <div className="p-4 rounded-2xl bg-[#EFF8FF] border border-[#E2E8F0] text-xs text-[#0575B8] space-y-2">
                   <div className="font-bold flex items-center gap-1.5">
-                    <FiCheckCircle className="text-[#1F8F4E]" /> Invitation Dispatched!
+                    <FiCheckCircle className="text-[#0575B8]" /> Invitation Dispatched!
                   </div>
                   <div>An official invitation link was emailed to the dealer.</div>
-                  <div className="p-2 rounded bg-[#FFFFFF] font-mono text-[11px] text-[#1F8F4E] border border-[#DDE8E1] break-all select-all">
+                  <div className="p-2 rounded bg-[#FFFFFF] font-mono text-[11px] text-[#0575B8] border border-[#E2E8F0] break-all select-all">
                     {inviteResult.invite_link}
                   </div>
                 </div>
                 <button
                   onClick={() => setShowInviteModal(false)}
-                  className="w-full py-2.5 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E]"
+                  className="w-full py-2.5 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93]"
                 >
                   Close
                 </button>
@@ -325,36 +325,36 @@ export default function DistributorDashboardPage() {
             ) : (
               <form onSubmit={handleSendInvite} className="space-y-3 pt-2">
                 <div>
-                  <label className="text-xs font-semibold text-[#17211B] block mb-1">Dealer Business Name *</label>
+                  <label className="text-xs font-semibold text-[#0F172A] block mb-1">Dealer Business Name *</label>
                   <input
                     type="text"
                     required
                     value={inviteForm.business_name}
                     onChange={(e) => setInviteForm({ ...inviteForm, business_name: e.target.value })}
                     placeholder="e.g. Apex Solar Solutions"
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#0F172A] focus:outline-none focus:border-[#0575B8] focus:bg-[#FFFFFF]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[#17211B] block mb-1">Dealer Email *</label>
+                  <label className="text-xs font-semibold text-[#0F172A] block mb-1">Dealer Email *</label>
                   <input
                     type="email"
                     required
                     value={inviteForm.email}
                     onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
                     placeholder="dealer@solartech.com"
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#0F172A] focus:outline-none focus:border-[#0575B8] focus:bg-[#FFFFFF]"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-[#17211B] block mb-1">Dealer Mobile Number *</label>
+                  <label className="text-xs font-semibold text-[#0F172A] block mb-1">Dealer Mobile Number *</label>
                   <input
                     type="tel"
                     required
                     value={inviteForm.mobile}
                     onChange={(e) => setInviteForm({ ...inviteForm, mobile: e.target.value })}
                     placeholder="9876543210"
-                    className="w-full px-3 py-2.5 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                    className="w-full px-3 py-2.5 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#0F172A] focus:outline-none focus:border-[#0575B8] focus:bg-[#FFFFFF]"
                   />
                 </div>
 
@@ -362,14 +362,14 @@ export default function DistributorDashboardPage() {
                   <button
                     type="button"
                     onClick={() => setShowInviteModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#F7FAF8] text-[#5F6F65] border border-[#DDE8E1] hover:bg-[#ECF8F1] hover:text-[#17211B]"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] hover:bg-[#EFF8FF] hover:text-[#0F172A]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={inviting}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E]"
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93]"
                   >
                     {inviting ? 'Dispatching...' : 'Send Dealer Invitation'}
                   </button>

@@ -71,25 +71,25 @@ export default function ProductsPage() {
   const hasActiveFilters = search || selectedCategory !== 'all';
 
   return (
-    <div className="min-h-screen bg-[#F7FAF8]">
+    <div className="min-h-screen bg-[#F8FAFC]">
       {/* Page Header */}
-      <div className="bg-[#FFFFFF] border-b border-[#DDE8E1]">
+      <div className="bg-[#FFFFFF] border-b border-[#E2E8F0]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Breadcrumb */}
-          <nav className="text-xs text-[#5F6F65] mb-3 flex items-center gap-1.5">
-            <Link to="/" className="hover:text-[#1F8F4E]">Home</Link>
+          <nav className="text-xs text-[#475569] mb-3 flex items-center gap-1.5">
+            <Link to="/" className="hover:text-[#0575B8]">Home</Link>
             <span>›</span>
-            <span className="text-[#17211B] font-medium">
+            <span className="text-[#0F172A] font-medium">
               {CATEGORIES.find((c) => c.id === selectedCategory)?.name || 'All Products'}
             </span>
           </nav>
 
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <h1 className="font-heading font-black text-3xl sm:text-4xl text-[#17211B] tracking-tight">
+              <h1 className="font-heading font-black text-3xl sm:text-4xl text-[#0F172A] tracking-tight">
                 {selectedCategory === 'all' ? 'Solar Equipment Catalogue' : CATEGORIES.find((c) => c.id === selectedCategory)?.name}
               </h1>
-              <p className="text-sm text-[#5F6F65] mt-1">
+              <p className="text-sm text-[#475569] mt-1">
                 {loading ? 'Loading...' : `${products.length} product${products.length !== 1 ? 's' : ''} found`}
                 {' '}— GST invoice on every order
               </p>
@@ -99,7 +99,7 @@ export default function ProductsPage() {
             {role === 'distributor' && (
               <Link
                 to="/distributor/portal/procure"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] shadow-xs whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93] shadow-xs whitespace-nowrap"
               >
                 <FiSliders className="w-3.5 h-3.5" /> Open Distributor Console
               </Link>
@@ -112,11 +112,11 @@ export default function ProductsPage() {
         <div className="flex gap-8">
           {/* Sidebar Filters — Desktop */}
           <aside className="hidden lg:block w-60 shrink-0">
-            <div className="bg-[#FFFFFF] border border-[#DDE8E1] rounded-2xl p-5 shadow-xs sticky top-24 space-y-6">
+            <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl p-5 shadow-xs sticky top-24 space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="font-heading font-bold text-sm text-[#17211B]">Filters</h3>
+                <h3 className="font-heading font-bold text-sm text-[#0F172A]">Filters</h3>
                 {hasActiveFilters && (
-                  <button onClick={clearFilters} className="text-xs font-bold text-[#1F8F4E] hover:text-[#18733E]">
+                  <button onClick={clearFilters} className="text-xs font-bold text-[#0575B8] hover:text-[#045D93]">
                     Clear All
                   </button>
                 )}
@@ -124,7 +124,7 @@ export default function ProductsPage() {
 
               {/* Category */}
               <div>
-                <p className="text-xs font-bold text-[#5F6F65] uppercase tracking-widest mb-3">Category</p>
+                <p className="text-xs font-bold text-[#475569] uppercase tracking-widest mb-3">Category</p>
                 <div className="space-y-1">
                   {CATEGORIES.map((cat) => (
                     <button
@@ -132,8 +132,8 @@ export default function ProductsPage() {
                       onClick={() => setSelectedCategory(cat.id)}
                       className={`w-full text-left px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                         selectedCategory === cat.id
-                          ? 'bg-[#ECF8F1] text-[#1F8F4E] font-bold border border-[#DDE8E1]'
-                          : 'text-[#5F6F65] hover:bg-[#F7FAF8] hover:text-[#17211B]'
+                          ? 'bg-[#EFF8FF] text-[#0575B8] font-bold border border-[#BAE6FD]'
+                          : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
                       }`}
                     >
                       {cat.name}
@@ -143,13 +143,13 @@ export default function ProductsPage() {
               </div>
 
               {/* Bulk quote CTA */}
-              <div className="bg-[#ECF8F1] border border-[#DDE8E1] rounded-xl p-4 space-y-2">
-                <FiShield className="w-5 h-5 text-[#1F8F4E]" />
-                <p className="text-xs font-bold text-[#17211B]">Need a Bulk Quote?</p>
-                <p className="text-[11px] text-[#5F6F65]">Our team provides custom pricing for large orders.</p>
+              <div className="bg-[#EFF8FF] border border-[#BAE6FD] rounded-xl p-4 space-y-2">
+                <FiShield className="w-5 h-5 text-[#0575B8]" />
+                <p className="text-xs font-bold text-[#0F172A]">Need a Bulk Quote?</p>
+                <p className="text-[11px] text-[#475569]">Our team provides custom pricing for large orders.</p>
                 <Link
                   to="/contact"
-                  className="text-xs font-bold text-[#1F8F4E] hover:text-[#18733E] flex items-center gap-1"
+                  className="text-xs font-bold text-[#0575B8] hover:text-[#045D93] flex items-center gap-1"
                 >
                   Contact Us <FiArrowRight className="w-3 h-3" />
                 </Link>
@@ -163,16 +163,16 @@ export default function ProductsPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               {/* Search */}
               <div className="relative flex-1">
-                <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5F6F65] w-4 h-4" />
+                <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#475569] w-4 h-4" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search products, brands, SKUs..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#DDE8E1] text-sm text-[#17211B] placeholder-[#5F6F65] focus:outline-none focus:border-[#1F8F4E] transition-colors shadow-xs"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-sm text-[#0F172A] placeholder-[#475569] focus:outline-none focus:border-[#0575B8] transition-colors shadow-xs"
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5F6F65]">
+                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#475569]">
                     <FiX className="w-4 h-4" />
                   </button>
                 )}
@@ -183,22 +183,22 @@ export default function ProductsPage() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#DDE8E1] text-sm text-[#17211B] focus:outline-none focus:border-[#1F8F4E] shadow-xs cursor-pointer font-medium"
+                  className="appearance-none pl-3 pr-8 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-sm text-[#0F172A] focus:outline-none focus:border-[#0575B8] shadow-xs cursor-pointer font-medium"
                 >
                   {SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
-                <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#5F6F65] pointer-events-none" />
+                <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#475569] pointer-events-none" />
               </div>
 
               {/* Mobile Filters */}
               <button
                 onClick={() => setShowMobileFilters(true)}
-                className="lg:hidden flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#DDE8E1] text-sm font-medium text-[#17211B] shadow-xs"
+                className="lg:hidden flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FFFFFF] border border-[#E2E8F0] text-sm font-medium text-[#0F172A] shadow-xs"
               >
-                <FiFilter className="w-4 h-4 text-[#1F8F4E]" /> Filters
-                {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-[#1F8F4E]" />}
+                <FiFilter className="w-4 h-4 text-[#0575B8]" /> Filters
+                {hasActiveFilters && <span className="w-2 h-2 rounded-full bg-[#0575B8]" />}
               </button>
             </div>
 
@@ -210,8 +210,8 @@ export default function ProductsPage() {
                   onClick={() => setSelectedCategory(cat.id)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
                     selectedCategory === cat.id
-                      ? 'bg-[#1F8F4E] text-white'
-                      : 'bg-[#FFFFFF] text-[#5F6F65] border border-[#DDE8E1]'
+                      ? 'bg-[#0575B8] text-white'
+                      : 'bg-[#FFFFFF] text-[#475569] border border-[#E2E8F0]'
                   }`}
                 >
                   {cat.name}
@@ -223,18 +223,18 @@ export default function ProductsPage() {
             {hasActiveFilters && (
               <div className="flex flex-wrap gap-2">
                 {search && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#EFF8FF] text-[#0575B8] border border-[#BAE6FD]">
                     Search: "{search}"
                     <button onClick={() => setSearch('')}><FiX className="w-3 h-3" /></button>
                   </span>
                 )}
                 {selectedCategory !== 'all' && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#EFF8FF] text-[#0575B8] border border-[#BAE6FD]">
                     {CATEGORIES.find((c) => c.id === selectedCategory)?.name}
                     <button onClick={() => setSelectedCategory('all')}><FiX className="w-3 h-3" /></button>
                   </span>
                 )}
-                <button onClick={clearFilters} className="text-xs font-bold text-[#5F6F65] hover:text-red-500 underline">
+                <button onClick={clearFilters} className="text-xs font-bold text-[#475569] hover:text-red-500 underline">
                   Clear All
                 </button>
               </div>
@@ -244,17 +244,17 @@ export default function ProductsPage() {
             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                 {[1, 2, 3, 4, 5, 6].map((n) => (
-                  <div key={n} className="bg-[#FFFFFF] border border-[#DDE8E1] h-80 rounded-2xl animate-pulse" />
+                  <div key={n} className="bg-[#FFFFFF] border border-[#E2E8F0] h-80 rounded-2xl animate-pulse" />
                 ))}
               </div>
             ) : products.length === 0 ? (
-              <div className="text-center py-20 bg-[#FFFFFF] border border-[#DDE8E1] rounded-2xl shadow-xs space-y-4">
-                <FiBox className="w-12 h-12 text-[#DDE8E1] mx-auto" />
-                <h3 className="font-heading font-bold text-lg text-[#17211B]">No Products Found</h3>
-                <p className="text-sm text-[#5F6F65]">Try adjusting your search or selecting a different category.</p>
+              <div className="text-center py-20 bg-[#FFFFFF] border border-[#E2E8F0] rounded-2xl shadow-xs space-y-4">
+                <FiBox className="w-12 h-12 text-[#E2E8F0] mx-auto" />
+                <h3 className="font-heading font-bold text-lg text-[#0F172A]">No Products Found</h3>
+                <p className="text-sm text-[#475569]">Try adjusting your search or selecting a different category.</p>
                 <button
                   onClick={clearFilters}
-                  className="px-5 py-2.5 rounded-xl text-sm font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E]"
+                  className="px-5 py-2.5 rounded-xl text-sm font-bold bg-[#0575B8] text-white hover:bg-[#045D93]"
                 >
                   Clear Filters
                 </button>
@@ -273,17 +273,17 @@ export default function ProductsPage() {
             )}
 
             {/* Bottom info bar */}
-            <div className="bg-[#ECF8F1] rounded-2xl p-5 border border-[#DDE8E1] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+            <div className="bg-[#EFF8FF] rounded-2xl p-5 border border-[#BAE6FD] flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
               <div className="flex items-center gap-3">
-                <FiShield className="w-7 h-7 text-[#1F8F4E] shrink-0" />
+                <FiShield className="w-7 h-7 text-[#0575B8] shrink-0" />
                 <div>
-                  <p className="text-sm font-bold text-[#17211B]">Need a Custom Order or Project Quote?</p>
-                  <p className="text-xs text-[#5F6F65]">Container loads, project BOMs, custom configurations — contact our commercial team.</p>
+                  <p className="text-sm font-bold text-[#0F172A]">Need a Custom Order or Project Quote?</p>
+                  <p className="text-xs text-[#475569]">Container loads, project BOMs, custom configurations — contact our commercial team.</p>
                 </div>
               </div>
               <Link
                 to="/contact"
-                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] whitespace-nowrap shadow-xs"
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93] whitespace-nowrap shadow-xs"
               >
                 Get in Touch
               </Link>
@@ -298,21 +298,21 @@ export default function ProductsPage() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileFilters(false)} />
           <div className="absolute right-0 top-0 bottom-0 w-72 bg-[#FFFFFF] shadow-xl p-6 overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-heading font-bold text-lg text-[#17211B]">Filters</h3>
+              <h3 className="font-heading font-bold text-lg text-[#0F172A]">Filters</h3>
               <button onClick={() => setShowMobileFilters(false)}>
-                <FiX className="w-5 h-5 text-[#5F6F65]" />
+                <FiX className="w-5 h-5 text-[#475569]" />
               </button>
             </div>
             <div className="space-y-4">
-              <p className="text-xs font-bold text-[#5F6F65] uppercase tracking-widest">Category</p>
+              <p className="text-xs font-bold text-[#475569] uppercase tracking-widest">Category</p>
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => { setSelectedCategory(cat.id); setShowMobileFilters(false); }}
                   className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                     selectedCategory === cat.id
-                      ? 'bg-[#ECF8F1] text-[#1F8F4E] font-bold'
-                      : 'text-[#5F6F65] hover:bg-[#F7FAF8]'
+                      ? 'bg-[#EFF8FF] text-[#0575B8] font-bold'
+                      : 'text-[#475569] hover:bg-[#F8FAFC]'
                   }`}
                 >
                   {cat.name}

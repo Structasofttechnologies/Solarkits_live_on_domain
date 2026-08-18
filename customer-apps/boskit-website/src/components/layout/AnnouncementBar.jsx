@@ -15,7 +15,7 @@ export default function AnnouncementBar() {
   if (dismissed) return null;
 
   return (
-    <div className="bg-[#1F8F4E] text-white text-xs font-medium relative overflow-hidden">
+    <div className="bg-gradient-to-r from-[#0575B8] via-[#1965B0] to-[#224089] text-white text-xs font-medium relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-9 gap-4">
           {/* Desktop: show multiple */}
@@ -24,7 +24,7 @@ export default function AnnouncementBar() {
               const Icon = item.icon;
               return (
                 <span key={i} className="flex items-center gap-1.5 whitespace-nowrap opacity-95">
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <Icon className="w-3.5 h-3.5 shrink-0 text-[#F49222]" />
                   {item.text}
                 </span>
               );
@@ -36,7 +36,7 @@ export default function AnnouncementBar() {
               const Icon = ANNOUNCEMENTS[current].icon;
               return (
                 <>
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <Icon className="w-3.5 h-3.5 shrink-0 text-[#F49222]" />
                   <span>{ANNOUNCEMENTS[current].text}</span>
                 </>
               );
@@ -45,7 +45,7 @@ export default function AnnouncementBar() {
 
           <button
             onClick={() => setDismissed(true)}
-            className="shrink-0 opacity-70 hover:opacity-100 transition-opacity p-1 rounded"
+            className="shrink-0 opacity-70 hover:opacity-100 transition-opacity p-1 rounded cursor-pointer"
             aria-label="Dismiss announcement"
           >
             <FiX className="w-3.5 h-3.5" />

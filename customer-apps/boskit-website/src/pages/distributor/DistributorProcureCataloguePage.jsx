@@ -428,7 +428,7 @@ export default function DistributorProcureCataloguePage() {
           ) : (
             <button
               onClick={fetchCatalogue}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#17211B] hover:bg-slate-800 text-white shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#0F172A] hover:bg-slate-800 text-white shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
             >
               <FiRefreshCw size={14} /> Refresh Equipment List
             </button>

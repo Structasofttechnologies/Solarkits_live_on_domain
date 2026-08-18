@@ -40,25 +40,25 @@ export default function DealerProgramPage() {
       
       {/* Hero */}
       <div className="text-center max-w-3xl mx-auto space-y-4">
-        <span className="px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] inline-block shadow-xs">
+        <span className="px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0] inline-block shadow-xs">
           Local Installer & Retail Partner Network
         </span>
-        <h1 className="font-heading font-black text-4xl sm:text-5xl text-[#17211B] tracking-tight">
+        <h1 className="font-heading font-black text-4xl sm:text-5xl text-[#0F172A] tracking-tight">
           SolarKits BOS Authorized Dealer Network
         </h1>
-        <p className="text-base text-[#5F6F65] leading-relaxed max-w-2xl mx-auto">
+        <p className="text-base text-[#475569] leading-relaxed max-w-2xl mx-auto">
           Are you a local solar system installer, EPC contractor, or electrical retailer? Connect directly with your district distributor for wholesale equipment access with zero MOQ barriers.
         </p>
         <div className="pt-2 flex justify-center gap-4">
           <Link
             to="/contact?inquiry=dealer"
-            className="px-8 py-4 rounded-xl text-sm font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] shadow-sm flex items-center gap-2 transition-all"
+            className="px-8 py-4 rounded-xl text-sm font-bold bg-[#0575B8] text-white hover:bg-[#045D93] shadow-sm flex items-center gap-2 transition-all"
           >
-            Connect With District Distributor <FiArrowRight className="text-[#F5B700]" />
+            Connect With District Distributor <FiArrowRight className="text-[#F49222]" />
           </Link>
           <Link
             to="/auth/login"
-            className="px-6 py-4 rounded-xl text-sm font-bold bg-[#FFFFFF] text-[#1F8F4E] border border-[#DDE8E1] hover:bg-[#ECF8F1] shadow-xs transition-all"
+            className="px-6 py-4 rounded-xl text-sm font-bold bg-[#FFFFFF] text-[#0575B8] border border-[#E2E8F0] hover:bg-[#EFF8FF] shadow-xs transition-all"
           >
             Dealer Portal Sign In
           </Link>
@@ -68,50 +68,50 @@ export default function DealerProgramPage() {
       {/* 4 Pillars */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {dealerPerks.map((perk, i) => (
-          <div key={i} className="bg-[#FFFFFF] border border-[#DDE8E1] p-6 rounded-2xl space-y-3 shadow-xs hover:shadow-md hover:border-[#1F8F4E]/40 transition-all">
-            <div className="w-10 h-10 rounded-xl bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E]">
+          <div key={i} className="bg-[#FFFFFF] border border-[#E2E8F0] p-6 rounded-2xl space-y-3 shadow-xs hover:shadow-md hover:border-[#0575B8]/40 transition-all">
+            <div className="w-10 h-10 rounded-xl bg-[#EFF8FF] border border-[#E2E8F0] flex items-center justify-center text-[#0575B8]">
               <perk.icon className="w-5 h-5" />
             </div>
-            <h3 className="font-heading font-bold text-lg text-[#17211B]">{perk.title}</h3>
-            <p className="text-xs text-[#5F6F65] leading-relaxed">{perk.desc}</p>
+            <h3 className="font-heading font-bold text-lg text-[#0F172A]">{perk.title}</h3>
+            <p className="text-xs text-[#475569] leading-relaxed">{perk.desc}</p>
           </div>
         ))}
       </div>
 
       {/* Dealer vs Distributor Comparison */}
-      <div className="bg-[#FFFFFF] border border-[#DDE8E1] p-8 sm:p-10 rounded-3xl shadow-xs space-y-6">
-        <h2 className="font-heading font-bold text-2xl text-[#17211B] text-center">
+      <div className="bg-[#FFFFFF] border border-[#E2E8F0] p-8 sm:p-10 rounded-3xl shadow-xs space-y-6">
+        <h2 className="font-heading font-bold text-2xl text-[#0F172A] text-center">
           Choosing Your Partnership Tier
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-6 rounded-2xl bg-[#ECF8F1] border border-[#DDE8E1] space-y-4">
+          <div className="p-6 rounded-2xl bg-[#EFF8FF] border border-[#E2E8F0] space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-heading font-bold text-xl text-[#17211B]">Authorized Distributor</h3>
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#FFFFFF] text-[#1F8F4E] border border-[#DDE8E1]">Territory Master</span>
+              <h3 className="font-heading font-bold text-xl text-[#0F172A]">Authorized Distributor</h3>
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#FFFFFF] text-[#0575B8] border border-[#E2E8F0]">Territory Master</span>
             </div>
-            <ul className="space-y-2 text-xs text-[#17211B]">
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Exclusive District / State Territorial Rights</li>
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Highest Margin Slabs (8% - 25%)</li>
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Sub-Dealer Network Onboarding Privileges</li>
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Direct Container Factory Dispatches</li>
+            <ul className="space-y-2 text-xs text-[#0F172A]">
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Exclusive District / State Territorial Rights</li>
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Highest Margin Slabs (8% - 25%)</li>
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Sub-Dealer Network Onboarding Privileges</li>
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Direct Container Factory Dispatches</li>
             </ul>
-            <Link to="/distributor" className="block text-center py-2.5 rounded-xl text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] transition-colors shadow-xs">
+            <Link to="/distributor" className="block text-center py-2.5 rounded-xl text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93] transition-colors shadow-xs">
               Explore Distributor Model
             </Link>
           </div>
 
-          <div className="p-6 rounded-2xl bg-[#F7FAF8] border border-[#DDE8E1] space-y-4">
+          <div className="p-6 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-heading font-bold text-xl text-[#17211B]">Authorized Dealer</h3>
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#FFFFFF] text-[#17211B] border border-[#DDE8E1]">Local Installer</span>
+              <h3 className="font-heading font-bold text-xl text-[#0F172A]">Authorized Dealer</h3>
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#FFFFFF] text-[#0F172A] border border-[#E2E8F0]">Local Installer</span>
             </div>
-            <ul className="space-y-2 text-xs text-[#5F6F65]">
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Zero Upfront Distributor / Joining Fees</li>
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Single-Unit MOQ Availability on Inverters & Kits</li>
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Fast Pickup from Local District Distributor</li>
-              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#1F8F4E] w-4 h-4" /> Dedicated Dealer Web & Mobile Dashboard</li>
+            <ul className="space-y-2 text-xs text-[#475569]">
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Zero Upfront Distributor / Joining Fees</li>
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Single-Unit MOQ Availability on Inverters & Kits</li>
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Fast Pickup from Local District Distributor</li>
+              <li className="flex items-center gap-2"><FiCheckCircle className="text-[#0575B8] w-4 h-4" /> Dedicated Dealer Web & Mobile Dashboard</li>
             </ul>
-            <Link to="/contact?inquiry=dealer" className="block text-center py-2.5 rounded-xl text-xs font-bold bg-[#17211B] text-white hover:bg-[#1F8F4E] transition-colors shadow-xs">
+            <Link to="/contact?inquiry=dealer" className="block text-center py-2.5 rounded-xl text-xs font-bold bg-[#0F172A] text-white hover:bg-[#0575B8] transition-colors shadow-xs">
               Request Dealer Account
             </Link>
           </div>

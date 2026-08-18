@@ -77,11 +77,11 @@ export default function ProductCard({ product }) {
   const distBuyRate = Math.round(rawMrp * 0.85);
 
   return (
-    <div className="group bg-white border border-[#DDE8E1] rounded-2xl overflow-hidden shadow-xs hover:shadow-md hover:border-[#1F8F4E]/50 transition-all duration-200 flex flex-col justify-between">
+    <div className="group bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden shadow-xs hover:shadow-xl hover:border-[#0575B8]/50 transition-all duration-300 flex flex-col justify-between">
       
       {/* Product Image Showcase */}
       <div>
-        <Link to={`/products/${productId}`} className="block relative aspect-[4/3] bg-[#F7FAF8] overflow-hidden border-b border-[#DDE8E1]">
+        <Link to={`/products/${productId}`} className="block relative aspect-[4/3] bg-[#F8FAFC] overflow-hidden border-b border-[#E2E8F0]">
           <img
             src={hasImgError ? fallbackImg : imgSrc}
             alt={name}
@@ -98,17 +98,17 @@ export default function ProductCard({ product }) {
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
             {badge ? (
-              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#F5B700] text-[#17211B] shadow-xs">
+              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-[#F49222] text-white shadow-xs">
                 {badge}
               </span>
             ) : (
-              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-[#1F8F4E] text-white shadow-xs">
+              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-[#0575B8] text-white shadow-xs">
                 Tier-1 Certified
               </span>
             )}
           </div>
 
-          <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#5F6F65] border border-[#DDE8E1] shadow-xs z-10">
+          <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/95 text-[#475569] border border-[#E2E8F0] shadow-xs z-10">
             MOQ: {moq || 1} {moq > 1 ? 'Units' : 'Unit'}
           </span>
         </Link>
@@ -116,23 +116,23 @@ export default function ProductCard({ product }) {
         {/* Content */}
         <div className="p-5 space-y-2.5">
           {/* Brand + SKU */}
-          <div className="flex items-center justify-between text-xs text-[#5F6F65]">
-            <span className="font-bold text-[#1F8F4E] bg-[#ECF8F1] px-2 py-0.5 rounded border border-[#DDE8E1]">
+          <div className="flex items-center justify-between text-xs text-[#475569]">
+            <span className="font-bold text-[#0575B8] bg-[#EFF8FF] px-2 py-0.5 rounded border border-[#BAE6FD]">
               {brand || 'SolarKits Pro'}
             </span>
-            {sku && <span className="font-mono text-[11px]">SKU: {sku}</span>}
+            {sku && <span className="font-mono text-[11px] text-[#64748B]">SKU: {sku}</span>}
           </div>
 
           {/* Title */}
           <Link to={`/products/${productId}`}>
-            <h3 className="font-heading font-bold text-base text-[#17211B] leading-snug group-hover:text-[#1F8F4E] transition-colors line-clamp-2">
+            <h3 className="font-heading font-bold text-base text-[#0F172A] leading-snug group-hover:text-[#0575B8] transition-colors line-clamp-2">
               {name}
             </h3>
           </Link>
 
           {/* Specifications Preview */}
           {specSnippet && (
-            <p className="text-xs text-[#5F6F65] line-clamp-2 leading-relaxed">
+            <p className="text-xs text-[#475569] line-clamp-2 leading-relaxed">
               {specSnippet}
             </p>
           )}
@@ -142,21 +142,21 @@ export default function ProductCard({ product }) {
       {/* Footer / Partner Access CTA */}
       <div className="p-5 pt-0 space-y-3">
         {/* Pricing Info */}
-        <div className="p-3 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] flex items-center justify-between text-xs">
+        <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-between text-xs">
           {role === 'distributor' ? (
             <div>
-              <span className="text-[10px] text-[#5F6F65] line-through block">
+              <span className="text-[10px] text-[#64748B] line-through block">
                 MRP: ₹{rawMrp.toLocaleString('en-IN')}
               </span>
-              <span className="text-sm font-extrabold text-[#1F8F4E] font-heading">
+              <span className="text-sm font-extrabold text-[#0575B8] font-heading">
                 ₹{distBuyRate.toLocaleString('en-IN')}
               </span>
-              <span className="text-[9px] text-[#5F6F65] font-semibold block">Factory Buy Rate</span>
+              <span className="text-[9px] text-[#64748B] font-semibold block">Factory Buy Rate</span>
             </div>
           ) : (
             <div>
-              <span className="text-[10px] text-[#5F6F65] uppercase tracking-wider block font-medium">Standard MRP</span>
-              <span className="text-sm font-bold text-[#17211B]">
+              <span className="text-[10px] text-[#64748B] uppercase tracking-wider block font-medium">Standard MRP</span>
+              <span className="text-sm font-bold text-[#0F172A]">
                 ₹{rawMrp.toLocaleString('en-IN')}
               </span>
             </div>
@@ -164,12 +164,12 @@ export default function ProductCard({ product }) {
 
           <div className="text-right">
             {role === 'distributor' ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1F8F4E] bg-[#ECF8F1] px-2 py-1 rounded-md border border-[#DDE8E1]">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0575B8] bg-[#EFF8FF] px-2 py-1 rounded-md border border-[#BAE6FD]">
                 <FiSliders className="w-3 h-3" /> Partner Rate
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1F8F4E] bg-[#ECF8F1] px-2 py-1 rounded-md border border-[#DDE8E1]">
-                <FiLock className="w-3 h-3 text-[#F5B700]" /> Wholesale Rate
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0575B8] bg-[#EFF8FF] px-2 py-1 rounded-md border border-[#BAE6FD]">
+                <FiLock className="w-3 h-3 text-[#F49222]" /> Wholesale Rate
               </span>
             )}
           </div>
@@ -179,14 +179,14 @@ export default function ProductCard({ product }) {
         {role === 'distributor' ? (
           <Link
             to="/distributor/portal/procure"
-            className="w-full py-2.5 rounded-xl text-center text-xs font-bold bg-[#1F8F4E] text-white hover:bg-[#18733E] shadow-xs flex items-center justify-center gap-1.5 transition-all"
+            className="w-full py-2.5 rounded-xl text-center text-xs font-bold bg-[#0575B8] text-white hover:bg-[#045D93] shadow-sm flex items-center justify-center gap-1.5 transition-all"
           >
             <FiSliders className="w-3.5 h-3.5" /> Procure in Partner Console
           </Link>
         ) : (
           <Link
             to={`/products/${productId}`}
-            className="w-full py-2.5 rounded-xl text-center text-xs font-bold bg-[#FFFFFF] hover:bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] hover:border-[#1F8F4E]/50 flex items-center justify-center gap-1.5 transition-all shadow-xs"
+            className="w-full py-2.5 rounded-xl text-center text-xs font-bold bg-[#FFFFFF] hover:bg-[#EFF8FF] text-[#0575B8] border border-[#E2E8F0] hover:border-[#0575B8]/50 flex items-center justify-center gap-1.5 transition-all shadow-xs"
           >
             <FiEye className="w-3.5 h-3.5" /> View Specifications & Access
           </Link>
