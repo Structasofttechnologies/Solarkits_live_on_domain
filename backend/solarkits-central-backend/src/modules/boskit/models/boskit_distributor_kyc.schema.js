@@ -17,6 +17,7 @@ const kycDocSchema = new mongoose.Schema({
   original_name:  { type: String, required: true },
   mime_type:      { type: String, required: true },
   size_bytes:     { type: Number, required: true },
+  file_url:       { type: String, default: null },   // Data URL or signed Cloudinary URL for preview
   doc_status: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],

@@ -33,6 +33,8 @@ import DistributorDealersPage from './pages/distributor/DistributorDealersPage';
 import DistributorDealerApplicationsPage from './pages/distributor/DistributorDealerApplicationsPage';
 import DistributorTerritoryPage from './pages/distributor/DistributorTerritoryPage';
 import DistributorPlanPage from './pages/distributor/DistributorPlanPage';
+import DistributorProcureCataloguePage from './pages/distributor/DistributorProcureCataloguePage';
+import DistributorCartPage from './pages/distributor/DistributorCartPage';
 
 // Dealer Portal
 import DealerLayout from './components/dealer/DealerLayout';
@@ -63,10 +65,19 @@ export default function App() {
             <Route path="/distributor/portal" element={<DistributorLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<DistributorDashboardPage />} />
+              <Route path="procure" element={<DistributorProcureCataloguePage />} />
+              <Route path="catalogue" element={<DistributorProcureCataloguePage />} />
+              <Route path="combo-kits" element={<DistributorProcureCataloguePage />} />
+              <Route path="custom-kits" element={<DistributorProcureCataloguePage />} />
+              <Route path="bos-kits" element={<DistributorProcureCataloguePage />} />
+              <Route path="cart" element={<DistributorCartPage />} />
               <Route path="dealers" element={<DistributorDealersPage />} />
               <Route path="dealer-applications" element={<DistributorDealerApplicationsPage />} />
               <Route path="territory" element={<DistributorTerritoryPage />} />
               <Route path="plan" element={<DistributorPlanPage />} />
+              <Route path="kyc" element={<DistributorOnboardingPage />} />
+              <Route path="onboarding" element={<DistributorOnboardingPage />} />
+              <Route path="settings" element={<DistributorPlanPage />} />
             </Route>
 
             {/* Dealer Authenticated Portal */}

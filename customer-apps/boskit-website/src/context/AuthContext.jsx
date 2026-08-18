@@ -11,28 +11,43 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       setLoading(true);
-      // Try distributor first
-      try {
-        const res = await api.get('/auth/distributor/me');
-        if (res.data?.success && res.data?.distributor) {
-          setUser(res.data.distributor);
-          setRole('distributor');
-          return;
+      const savedRole = localStorage.getItem('boskit_role');
+      
+      if (savedRole === 'dealer') {
+        try {
+          const res = await api.get('/auth/dealer/me');
+          if (res.data?.success && res.data?.dealer) {
+            setUser(res.data.dealer);
+            setRole('dealer');
+            return;
+          }
+        } catch (e) {
+          // Ignore
         }
-      } catch (e) {
-        // Ignore 401
+      } else {
+        try {
+          const res = await api.get('/auth/distributor/me');
+          if (res.data?.success && res.data?.distributor) {
+            setUser(res.data.distributor);
+            setRole('distributor');
+            return;
+          }
+        } catch (e) {
+          // Ignore
+        }
       }
 
-      // Try dealer
-      try {
-        const res = await api.get('/auth/dealer/me');
-        if (res.data?.success && res.data?.dealer) {
-          setUser(res.data.dealer);
-          setRole('dealer');
-          return;
-        }
-      } catch (e) {
-        // Ignore 401
+      // If specified role failed, try other
+      if (!savedRole || savedRole === 'dealer') {
+        try {
+          const res = await api.get('/auth/distributor/me');
+          if (res.data?.success && res.data?.distributor) {
+            setUser(res.data.distributor);
+            setRole('distributor');
+            localStorage.setItem('boskit_role', 'distributor');
+            return;
+          }
+        } catch (e) {}
       }
 
       setUser(null);
@@ -52,6 +67,10 @@ export const AuthProvider = ({ children }) => {
   const loginDistributor = async (identifier, password) => {
     const res = await api.post('/auth/distributor/login', { identifier, password });
     if (res.data?.success) {
+      if (res.data.tokens?.accessToken) {
+        localStorage.setItem('boskit_access_token', res.data.tokens.accessToken);
+        localStorage.setItem('boskit_role', 'distributor');
+      }
       setUser(res.data.distributor);
       setRole('distributor');
       return res.data;
@@ -62,6 +81,10 @@ export const AuthProvider = ({ children }) => {
   const loginDealer = async (identifier, password) => {
     const res = await api.post('/auth/dealer/login', { identifier, password });
     if (res.data?.success) {
+      if (res.data.tokens?.accessToken) {
+        localStorage.setItem('boskit_access_token', res.data.tokens.accessToken);
+        localStorage.setItem('boskit_role', 'dealer');
+      }
       setUser(res.data.dealer);
       setRole('dealer');
       return res.data;
@@ -79,6 +102,8 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
+      localStorage.removeItem('boskit_access_token');
+      localStorage.removeItem('boskit_role');
       setUser(null);
       setRole(null);
     }

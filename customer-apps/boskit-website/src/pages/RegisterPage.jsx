@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FiBriefcase,
@@ -10,258 +10,562 @@ import {
   FiAlertCircle,
   FiShield,
   FiZap,
+  FiSearch,
+  FiRefreshCw,
+  FiCheck,
+  FiMapPin,
+  FiUser,
 } from 'react-icons/fi';
 import api from '../services/api';
+import logoImg from '../assets/images/logo.png';
+
+// GST State Code Map
+const GST_STATE_MAP = {
+  '01': 'Jammu & Kashmir',
+  '02': 'Himachal Pradesh',
+  '03': 'Punjab',
+  '04': 'Chandigarh',
+  '05': 'Uttarakhand',
+  '06': 'Haryana',
+  '07': 'Delhi',
+  '08': 'Rajasthan',
+  '09': 'Uttar Pradesh',
+  '10': 'Bihar',
+  '11': 'Sikkim',
+  '12': 'Arunachal Pradesh',
+  '13': 'Nagaland',
+  '14': 'Manipur',
+  '15': 'Mizoram',
+  '16': 'Tripura',
+  '17': 'Meghalaya',
+  '18': 'Assam',
+  '19': 'West Bengal',
+  '20': 'Jharkhand',
+  '21': 'Odisha',
+  '22': 'Chhattisgarh',
+  '23': 'Madhya Pradesh',
+  '24': 'Gujarat',
+  '25': 'Daman & Diu',
+  '26': 'Dadra & Nagar Haveli',
+  '27': 'Maharashtra',
+  '28': 'Andhra Pradesh',
+  '29': 'Karnataka',
+  '30': 'Goa',
+  '31': 'Lakshadweep',
+  '32': 'Kerala',
+  '33': 'Tamil Nadu',
+  '34': 'Puducherry',
+  '35': 'Andaman & Nicobar Islands',
+  '36': 'Telangana',
+  '37': 'Andhra Pradesh (New)',
+  '38': 'Ladakh',
+  '97': 'Other Territory',
+  '99': 'Centre Jurisdiction',
+};
+
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const preselectedPlan = searchParams.get('plan') || '';
-  
+  const navigate = useNavigate();
+  const gstInputRef = useRef(null);
+
+  // Stepper: 1 = GST Verify, 2 = Business Details & Password
+  const [step, setStep] = useState(1);
+
+  // Step 1: GST state
+  const [gstInput, setGstInput] = useState('');
+  const [gstVerifying, setGstVerifying] = useState(false);
+  const [gstError, setGstError] = useState('');
+  const [gstResult, setGstResult] = useState(null);
+
+  // Step 2: Form state
   const [formData, setFormData] = useState({
     business_name: '',
+    contact_person: '',
     email: '',
     mobile: '',
     password: '',
+    confirm_password: '',
     agreeTerms: true,
   });
-  
-  // Step in component: 1 = Register Info, 2 = Verify OTP
-  const [step, setStep] = useState(1);
-  const [otp, setOtp] = useState('');
-  const [distributorData, setDistributorData] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [devOtp, setDevOtp] = useState('');
-  const navigate = useNavigate();
+  const [success, setSuccess] = useState(false);
 
-  const handleInitSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.business_name || !formData.email || !formData.mobile || !formData.password) {
-      setError('Please fill in all required registration fields.');
+  // Derived state name from 2-digit GST prefix
+  const gstStateName =
+    gstInput.length >= 2
+      ? GST_STATE_MAP[gstInput.substring(0, 2).toUpperCase()] || 'Gujarat'
+      : null;
+
+  // ── Step 1: Real-Time QuickKYC GSTIN Verification ───────────────────────────
+  const handleVerifyGst = async (e) => {
+    if (e) e.preventDefault();
+    const gstin = gstInput.trim().toUpperCase();
+    setGstError('');
+
+    if (!gstin) {
+      setGstError('Please enter your 15-digit GSTIN number.');
+      return;
+    }
+
+    if (!GSTIN_REGEX.test(gstin)) {
+      setGstError('Invalid GSTIN format. Example: 24AABCU9603R1ZM');
       return;
     }
 
     try {
-      setLoading(true);
-      setError('');
+      setGstVerifying(true);
+      const res = await api.post('/auth/distributor/gst/verify', { gstin });
 
-      const res = await api.post('/auth/distributor/register/init', {
-        business_name: formData.business_name,
-        email: formData.email,
-        mobile: formData.mobile,
-        password: formData.password,
-      });
-
-      if (res.data?.success) {
-        setDistributorData(res.data.distributor);
-        // Request OTP
-        const otpRes = await api.post('/auth/distributor/otp/send', {
-          target: formData.email,
-          channel: 'email',
-          purpose: 'distributor_signup',
-        });
-        if (otpRes.data?.dev_otp) setDevOtp(otpRes.data.dev_otp);
-        setStep(2);
+      if (res.data?.success && res.data.data) {
+        const d = res.data.data;
+        setGstResult(d);
+        const bizName = d.trade_name || d.legal_name || '';
+        setFormData((f) => ({
+          ...f,
+          business_name: bizName,
+        }));
       } else {
-        setError(res.data?.message || 'Registration initiation failed.');
+        setGstError(res.data?.message || 'GSTIN verification failed. Please check the number.');
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Registration failed. Check your connection.');
+      setGstError(
+        err.response?.data?.message || 'Could not verify GSTIN right now. Please try again.'
+      );
     } finally {
-      setLoading(false);
+      setGstVerifying(false);
     }
   };
 
-  const handleOtpVerify = async (e) => {
+  const handleProceedToForm = () => {
+    if (!gstResult) return;
+    setStep(2);
+  };
+
+  const handleResetGst = () => {
+    setGstResult(null);
+    setGstError('');
+    setGstInput('');
+    setStep(1);
+    setTimeout(() => gstInputRef.current?.focus(), 100);
+  };
+
+  // ── Step 2: Submit Registration & Create Account ────────────────────────────
+  const handleFinalSubmit = async (e) => {
     e.preventDefault();
-    if (!otp.trim()) {
-      setError('Please enter the 6-digit verification code.');
+    setError('');
+
+    if (formData.password !== formData.confirm_password) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
+      const payload = {
+        business_name: formData.business_name || gstResult?.legal_name,
+        contact_person: formData.contact_person,
+        email: formData.email,
+        mobile: formData.mobile,
+        password: formData.password,
+        gst_number: gstResult?.gstin || gstInput.toUpperCase(),
+        gst_legal_name: gstResult?.legal_name,
+        gst_trade_name: gstResult?.trade_name,
+        gst_address: gstResult?.principal_address?.addr || `${gstStateName}, India`,
+        pan_number: gstResult?.pan_number,
+      };
 
-      const res = await api.post('/auth/distributor/otp/verify', {
-        target: formData.email,
-        otp: otp.trim(),
-        purpose: 'distributor_signup',
-      });
+      const res = await api.post('/auth/distributor/register/init', payload);
 
       if (res.data?.success) {
-        // Successful signup & OTP verification -> Redirect to Phase 5 wizard or confirmation
-        navigate(`/distributor/onboarding?step=2${preselectedPlan ? `&plan=${preselectedPlan}` : ''}`);
+        setSuccess(true);
+        // Automatic navigation to distributor portal
+        setTimeout(() => {
+          navigate('/distributor/portal/dashboard');
+        }, 1500);
       } else {
-        setError(res.data?.message || 'Invalid OTP code.');
+        setError(res.data?.message || 'Registration failed.');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'OTP verification failed.');
+      setError(
+        err.response?.data?.message || 'Registration failed. An account may already exist with this email or mobile.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-[#FFFFFF]">
-      <div className="w-full max-w-lg space-y-8">
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 bg-gradient-to-b from-[#F0F5FF]/60 via-[#FFFFFF] to-[#FFFFFF]">
+      <div className="w-full max-w-xl space-y-6">
         
-        {/* Header */}
+        {/* ── Brand Header (Matching Screenshot) ────────────────────────────── */}
         <div className="text-center space-y-2">
-          <Link to="/" className="inline-flex items-center justify-center gap-2 group">
-            <div className="w-10 h-10 rounded-xl bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E] shadow-xs">
-              <FiZap className="w-5 h-5" />
-            </div>
-            <span className="font-heading font-black text-2xl text-[#17211B] tracking-tight">
-              Solar<span className="text-[#1F8F4E]">Kits</span> <span className="text-xs font-bold px-2 py-0.5 rounded bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">BOS</span>
-            </span>
-          </Link>
-          <h1 className="font-heading font-bold text-2xl sm:text-3xl text-[#17211B] tracking-tight">
-            Apply for Distributor Dealership
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 shadow-sm mx-auto">
+            <FiZap className="w-6 h-6" />
+          </div>
+          <h1 className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
+            Become a Solar Distributor Partner
           </h1>
-          <p className="text-xs text-[#5F6F65]">
-            Stage 1 of 5: Create your account & verify business contact details.
+          <p className="text-xs sm:text-sm text-slate-500">
+            Register your business account for exclusive wholesale pricing & territory rights
           </p>
+
+          {/* Stepper Pills */}
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <div
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                step === 1
+                  ? 'bg-[#185ADB] text-white shadow-sm'
+                  : 'bg-blue-50 text-blue-700 border border-blue-200'
+              }`}
+            >
+              <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
+                1
+              </span>
+              <span>1. GST VERIFY</span>
+            </div>
+
+            <div className="w-8 h-0.5 bg-slate-200" />
+
+            <div
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+                step === 2
+                  ? 'bg-[#185ADB] text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-500 border border-slate-200'
+              }`}
+            >
+              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[10px]">
+                2
+              </span>
+              <span>2. BUSINESS DETAILS</span>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-[#FFFFFF] p-8 rounded-3xl border border-[#DDE8E1] shadow-xs space-y-6">
+        {/* ── Main Registration Card ────────────────────────────────────────── */}
+        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6">
           
+          {/* Error Message */}
           {error && (
-            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-              <FiAlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-2.5">
+              <FiAlertCircle className="w-5 h-5 text-red-500 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {step === 1 ? (
-            <form onSubmit={handleInitSubmit} className="space-y-4">
+          {/* Success Message */}
+          {success && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2.5 animate-bounce">
+              <FiCheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>Account created successfully! Redirecting to Distributor Dashboard...</span>
+            </div>
+          )}
+
+          {/* ════ STEP 1: GSTIN VERIFY (Matching Screenshot) ══════════════════ */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <div className="flex items-start gap-2.5">
+                <FiShield className="text-blue-600 shrink-0 mt-0.5" size={20} />
+                <div>
+                  <h3 className="font-heading font-black text-lg text-slate-900">
+                    Verify Your GSTIN
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                    Enter your 15-digit GST number. Your legal business details and territory location will be verified automatically.
+                  </p>
+                </div>
+              </div>
+
+              {gstError && (
+                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                  <FiAlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                  <span>{gstError}</span>
+                </div>
+              )}
+
+              {/* GSTIN Input with Button */}
               <div>
-                <label className="text-xs font-semibold text-[#17211B] block mb-1.5">Company / Business Name *</label>
+                <label className="text-xs font-bold text-slate-800 block mb-1.5 uppercase tracking-wider">
+                  GSTIN NUMBER *
+                </label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    ref={gstInputRef}
+                    type="text"
+                    maxLength={15}
+                    value={gstInput}
+                    onChange={(e) => {
+                      setGstInput(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''));
+                      setGstResult(null);
+                      setGstError('');
+                    }}
+                    placeholder="27ABCDE1234F1Z5"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-sm tracking-wider text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white transition-all"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={gstVerifying || gstInput.length < 15}
+                    onClick={handleVerifyGst}
+                    className="px-6 py-3 rounded-xl text-xs font-bold bg-[#185ADB] hover:bg-blue-700 text-white shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 shrink-0"
+                  >
+                    {gstVerifying ? (
+                      <>
+                        <FiRefreshCw className="animate-spin" size={14} /> Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <FiShield size={14} /> Verify GST
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Verified GST Card */}
+              {gstResult && (
+                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3 animate-in fade-in duration-200 text-xs">
+                  <div className="flex items-center justify-between border-b border-emerald-200 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <FiCheckCircle className="text-emerald-600" size={16} />
+                      <span className="font-bold text-emerald-900">
+                        QuickKYC Government Record Found
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-600 text-white">
+                      ACTIVE
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-slate-500 block">Legal Entity:</span>
+                      <strong className="text-slate-900 font-bold">{gstResult.legal_name}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Trade Name:</span>
+                      <strong className="text-slate-900 font-bold">{gstResult.trade_name}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Operating State:</span>
+                      <strong className="text-blue-700 font-bold">
+                        {gstStateName} ({gstResult.state_code})
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">PAN Number:</span>
+                      <strong className="text-slate-900 font-mono font-bold">
+                        {gstResult.pan_number}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetGst}
+                    className="text-[11px] text-slate-500 hover:text-slate-800 underline block pt-1"
+                  >
+                    Change GSTIN
+                  </button>
+                </div>
+              )}
+
+              {/* Proceed Button */}
+              <button
+                type="button"
+                disabled={!gstResult}
+                onClick={handleProceedToForm}
+                className="w-full py-3.5 rounded-xl text-xs sm:text-sm font-bold bg-[#185ADB] hover:bg-blue-700 text-white shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 disabled:bg-slate-300 disabled:cursor-not-allowed"
+              >
+                <span>Proceed to Registration</span>
+                <FiArrowRight size={16} />
+              </button>
+
+              <div className="text-center text-[11px] text-slate-400">
+                State & location rules will automatically map to your verified GST state code
+              </div>
+            </div>
+          )}
+
+          {/* ════ STEP 2: BUSINESS DETAILS & PASSWORD SETTING ═════════════════ */}
+          {step === 2 && (
+            <form onSubmit={handleFinalSubmit} className="space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="font-heading font-black text-base text-slate-900">
+                    Business Account Details
+                  </h3>
+                  <span className="text-[11px] text-slate-500">
+                    Verified GSTIN: <strong className="text-blue-700">{gstResult?.gstin}</strong> ({gstStateName})
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-xs text-blue-700 font-bold hover:underline cursor-pointer"
+                >
+                  Edit GST
+                </button>
+              </div>
+
+              {/* Pre-filled Company Name */}
+              <div>
+                <label className="font-bold text-slate-800 block mb-1">
+                  Company / Legal Business Name *
+                </label>
                 <div className="relative">
-                  <FiBriefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5F6F65] w-4 h-4" />
+                  <FiBriefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     required
                     value={formData.business_name}
                     onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
-                    placeholder="e.g. Surya Power Distribution Pvt Ltd"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] placeholder-[#5F6F65] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Contact Person & Mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-[#17211B] block mb-1.5">Official Email *</label>
+                  <label className="font-bold text-slate-800 block mb-1">
+                    Contact Person Name *
+                  </label>
                   <div className="relative">
-                    <FiMail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5F6F65] w-4 h-4" />
+                    <FiUser className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
-                      type="email"
+                      type="text"
                       required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="name@company.com"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] placeholder-[#5F6F65] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                      value={formData.contact_person}
+                      onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                      placeholder="e.g. Rajesh Sharma"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-[#17211B] block mb-1.5">Mobile Number *</label>
+                  <label className="font-bold text-slate-800 block mb-1">
+                    Mobile Number *
+                  </label>
                   <div className="relative">
-                    <FiPhone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5F6F65] w-4 h-4" />
+                    <FiPhone className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="tel"
                       required
                       value={formData.mobile}
                       onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                       placeholder="9876543210"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] placeholder-[#5F6F65] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Official Email */}
               <div>
-                <label className="text-xs font-semibold text-[#17211B] block mb-1.5">Create Secure Password *</label>
+                <label className="font-bold text-slate-800 block mb-1">
+                  Official Email Address *
+                </label>
                 <div className="relative">
-                  <FiLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5F6F65] w-4 h-4" />
+                  <FiMail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    type="password"
+                    type="email"
                     required
-                    minLength={6}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="At least 6 characters"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-xs text-[#17211B] placeholder-[#5F6F65] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="partner@company.com"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div className="pt-2">
+              {/* Password Setting */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-800 block mb-1">
+                    Create Secure Password *
+                  </label>
+                  <div className="relative">
+                    <FiLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="At least 6 chars"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-800 block mb-1">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <FiLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={formData.confirm_password}
+                      onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
+                      placeholder="Re-enter password"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 cursor-pointer"
+                >
+                  Back
+                </button>
+
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-[#1F8F4E] hover:bg-[#18733E] text-white shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  className="flex-1 py-3 rounded-xl text-xs font-bold bg-[#185ADB] hover:bg-blue-700 text-white shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
                 >
-                  {loading ? 'Initializing Registration...' : 'Continue to Verification'} <FiArrowRight className="w-4 h-4 text-[#F5B700]" />
+                  {loading ? (
+                    <>
+                      <FiRefreshCw className="animate-spin" size={14} /> Creating Account...
+                    </>
+                  ) : (
+                    <>
+                      <FiCheckCircle size={15} /> Complete Registration & Proceed
+                    </>
+                  )}
                 </button>
               </div>
             </form>
-          ) : (
-            <form onSubmit={handleOtpVerify} className="space-y-5">
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-full bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E] mx-auto">
-                  <FiMail className="w-6 h-6" />
-                </div>
-                <h3 className="font-heading font-bold text-lg text-[#17211B]">Verify Your Email</h3>
-                <p className="text-xs text-[#5F6F65]">
-                  We've sent a 6-digit verification code to <strong className="text-[#17211B]">{formData.email}</strong>.
-                </p>
-                {devOtp && (
-                  <p className="text-[11px] font-mono text-[#1F8F4E] bg-[#ECF8F1] p-1.5 rounded border border-[#DDE8E1] mt-2">
-                    Test Mode OTP: <strong>{devOtp}</strong>
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-[#17211B] block mb-1.5">Enter 6-Digit Code *</label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  required
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  placeholder="123456"
-                  className="w-full text-center tracking-[8px] font-mono font-bold text-lg py-3 rounded-xl bg-[#F7FAF8] border border-[#DDE8E1] text-[#17211B] placeholder-[#5F6F65] focus:outline-none focus:border-[#1F8F4E] focus:bg-[#FFFFFF]"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 rounded-xl text-sm font-bold bg-[#1F8F4E] hover:bg-[#18733E] text-white shadow-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                {loading ? 'Verifying...' : 'Verify & Proceed to GST Auto-Fetch'} <FiArrowRight className="w-4 h-4 text-[#F5B700]" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="w-full text-center text-xs text-[#5F6F65] hover:text-[#17211B]"
-              >
-                ← Back to Edit Details
-              </button>
-            </form>
           )}
 
-          <div className="pt-2 text-center text-xs text-[#5F6F65]">
-            Already have an account?{' '}
-            <Link to="/auth/login" className="text-[#1F8F4E] font-bold hover:underline">
-              Sign In
-            </Link>
-          </div>
+        </div>
+
+        {/* ── Footer Link ───────────────────────────────────────────────────── */}
+        <div className="text-center text-xs text-slate-500">
+          Already have a distributor account?{' '}
+          <Link to="/auth/login" className="font-bold text-blue-700 hover:underline">
+            Sign In
+          </Link>
         </div>
 
       </div>

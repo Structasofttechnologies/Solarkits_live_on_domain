@@ -12,6 +12,7 @@ import {
   FiShoppingCart,
   FiTrendingUp,
   FiCheckCircle,
+  FiLayers,
 } from 'react-icons/fi';
 import api from '../../services/api';
 
@@ -63,36 +64,54 @@ export default function DistributorDashboardPage() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       
-      {/* Top Welcome Banner */}
-      <div className="p-6 sm:p-8 rounded-3xl bg-[#ECF8F1] border border-[#DDE8E1] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-[#1F8F4E] uppercase tracking-widest">
-            <FiShield /> Authorized Distributor Partner
-          </div>
-          <h1 className="font-heading font-black text-2xl sm:text-3xl text-[#17211B] mt-1">
-            {distributor?.business_name || user?.business_name || 'SolarKits Regional Hub'}
-          </h1>
-          <p className="text-xs sm:text-sm text-[#5F6F65] mt-1 max-w-2xl">
-            Distributor control dashboard for regional inventory orders, dealer onboarding quotas, and revenue settlement.
-          </p>
-        </div>
+      {/* ── Exact Royal Blue Header Banner (Matching Screenshot) ───────────── */}
+      <div className="bg-[#185ADB] rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-md">
+                <FiShield size={14} />
+                <span>Distributor Console</span>
+              </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => {
-              setShowInviteModal(true);
-              setInviteResult(null);
-            }}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#1F8F4E] hover:bg-[#18733E] text-white shadow-xs flex items-center gap-2 transition-all"
-          >
-            <FiPlusCircle size={16} /> Invite Sub-Dealer
-          </button>
-          <Link
-            to="/products"
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#FFFFFF] hover:bg-[#F7FAF8] text-[#17211B] border border-[#DDE8E1] shadow-xs flex items-center gap-2"
-          >
-            <FiShoppingCart size={16} /> Procure Stock
-          </Link>
+              {/* KYC Status Badge */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/90 text-white text-xs font-bold shadow-xs backdrop-blur-md">
+                <FiCheckCircle size={13} />
+                <span>KYC COMPLETE & VERIFIED</span>
+              </div>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-heading">
+              Distributor Dashboard
+            </h1>
+            <p className="mt-1 text-blue-100 text-xs sm:text-sm">
+              Published by <span className="font-bold text-white">Partner Reseller</span> · Account:{' '}
+              <span className="font-medium text-white">{distributor?.business_name || user?.business_name || 'Customer Account'}</span>
+              {distributor?.gst_number && (
+                <span className="ml-2 font-mono text-white/90">
+                  (GSTIN: {distributor.gst_number})
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setShowInviteModal(true);
+                setInviteResult(null);
+              }}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-[#185ADB] hover:bg-blue-50 shadow-sm flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            >
+              <FiPlusCircle size={15} /> Invite Sub-Dealer
+            </button>
+            <Link
+              to="/distributor/portal/procure"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/15 hover:bg-white/25 text-white border border-white/20 shadow-xs flex items-center gap-2 transition-all"
+            >
+              <FiShoppingCart size={15} /> Product Catalogue
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -153,18 +172,18 @@ export default function DistributorDashboardPage() {
           </div>
         </div>
 
-        {/* Territory Status */}
-        <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs flex flex-col justify-between">
+        {/* Territory & QuickKYC Status */}
+        <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#5F6F65]">Territorial Exclusivity</span>
-            <div className="p-2.5 rounded-2xl bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1]">
+            <span className="text-xs font-semibold text-slate-500">Territorial Exclusivity</span>
+            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200">
               <FiMapPin size={18} />
             </div>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
-            <span className="font-heading font-black text-xl text-[#17211B]">Ahmedabad</span>
-            <span className="text-[10px] font-bold text-[#1F8F4E] bg-[#ECF8F1] border border-[#DDE8E1] px-2 py-0.5 rounded">
-              Locked
+            <span className="font-heading font-black text-xl text-slate-900">Ahmedabad</span>
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1">
+              <FiCheckCircle size={10} /> QuickKYC Locked
             </span>
           </div>
         </div>
@@ -181,7 +200,7 @@ export default function DistributorDashboardPage() {
               <h3 className="font-heading font-bold text-lg text-[#17211B]">Recent Equipment Orders</h3>
               <p className="text-xs text-[#5F6F65]">Direct factory warehouse orders and sub-dealer pickups.</p>
             </div>
-            <Link to="/products" className="text-xs font-bold text-[#1F8F4E] hover:text-[#18733E] flex items-center gap-1">
+            <Link to="/distributor/portal/procure" className="text-xs font-bold text-[#1F8F4E] hover:text-[#18733E] flex items-center gap-1">
               Procure Equipment <FiArrowRight />
             </Link>
           </div>
@@ -229,7 +248,7 @@ export default function DistributorDashboardPage() {
           <div className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#DDE8E1] shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-heading font-bold text-sm text-[#17211B] flex items-center gap-2">
-                <FiLayers className="text-[#1F8F4E]" /> Active Franchise Tier
+                <FiLayers className="text-[#1F8F4E]" /> Active Distributor Plan
               </h4>
               <span className="text-[10px] font-bold bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] px-2 py-0.5 rounded">
                 Active
@@ -238,7 +257,7 @@ export default function DistributorDashboardPage() {
 
             <div className="p-4 rounded-2xl bg-[#F7FAF8] border border-[#DDE8E1] space-y-2 text-xs">
               <div className="font-bold text-[#17211B] text-sm">{plan.name}</div>
-              <div className="text-[#5F6F65] text-[11px]">Single-district master inventory and dealer management rights.</div>
+              <div className="text-[#5F6F65] text-[11px]">Exclusive territory wholesale procurement and dealer management rights.</div>
               <div className="pt-2 flex justify-between text-[#17211B]">
                 <span>Dealer Allowance:</span>
                 <strong className="text-[#1F8F4E]">{metrics.active_dealers_count || 1} / {metrics.max_dealers_limit || 15} Seats</strong>
@@ -249,7 +268,7 @@ export default function DistributorDashboardPage() {
               to="/distributor/portal/plan"
               className="block w-full py-2.5 rounded-xl text-xs font-bold text-center bg-[#F7FAF8] hover:bg-[#ECF8F1] text-[#17211B] border border-[#DDE8E1] transition-colors"
             >
-              Manage Franchise Subscription
+              Manage Distributor Plan
             </Link>
           </div>
 

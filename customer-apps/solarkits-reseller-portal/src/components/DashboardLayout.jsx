@@ -27,9 +27,6 @@ import logoImg from "@/assets/images/logo.png";
 
 const NAV_ITEMS = [
   { name: "Overview", icon: FiHome, path: "/dashboard" },
-  { name: "KYC & Compliance", icon: FiShield, path: "/kyc" },
-  { name: "Subscription Plans", icon: FiZap, path: "/plans" },
-  { name: "My Territories", icon: FiMapPin, path: "/territories" },
   { name: "Authorized Catalog", icon: FiPackage, path: "/catalog" },
   { name: "B2B Stock & Procurement", icon: FiBox, path: "/procurement-inventory" },
   { name: "Storefront Pricing (MAP)", icon: FiTag, path: "/storefront-listings" },
@@ -514,21 +511,83 @@ export default function DashboardLayout() {
                 {/* User Dropdown */}
                 <AnimatePresence>
                   {showUserMenu && (
-                    <motion.ul
+                    <motion.div
                       initial={{ opacity: 0, y: -8, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -8, scale: 0.95 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-[calc(100%+10px)] rounded-xl shadow-xl py-2 z-50 w-52"
+                      className="absolute right-0 top-[calc(100%+10px)] rounded-2xl shadow-2xl py-2 z-50 w-64"
                       style={{
                         background: "var(--color-surface)",
                         border: "1px solid var(--color-border)",
                       }}
                     >
-                      <li>
+                      {/* Header Profile Info */}
+                      <div className="px-4 py-3 border-b" style={{ borderColor: "var(--color-border)" }}>
+                        <div className="font-bold text-xs" style={{ color: "var(--color-text-primary)" }}>
+                          {reseller.business_name}
+                        </div>
+                        <div className="text-[11px] truncate" style={{ color: "var(--color-text-secondary)" }}>
+                          {reseller.email}
+                        </div>
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <span
+                            className="px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1"
+                            style={{
+                              background: reseller.kyc_status === "verified" ? "#dcfce7" : "#fef3c7",
+                              color: reseller.kyc_status === "verified" ? "#166534" : "#92400e",
+                            }}
+                          >
+                            <FiCheckCircle size={10} />
+                            KYC {reseller.kyc_status === "verified" ? "Verified" : "Pending"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Shifted Account Links */}
+                      <div className="py-1">
+                        <Link
+                          to="/plans"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors"
+                          style={{ color: "var(--color-text-primary)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <FiZap size={15} className="text-blue-600" />
+                          <span>Subscription Plans</span>
+                        </Link>
+
+                        <Link
+                          to="/territories"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors"
+                          style={{ color: "var(--color-text-primary)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <FiMapPin size={15} className="text-blue-600" />
+                          <span>My Territories</span>
+                        </Link>
+
+                        <Link
+                          to="/kyc"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors"
+                          style={{ color: "var(--color-text-primary)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <FiShield size={15} className="text-blue-600" />
+                          <span>KYC & Compliance</span>
+                        </Link>
+                      </div>
+
+                      {/* Logout */}
+                      <div className="pt-1 border-t" style={{ borderColor: "var(--color-border)" }}>
                         <button
                           onClick={handleLogout}
-                          className="flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors cursor-pointer"
+                          className="flex items-center gap-3 w-full px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer"
                           style={{ color: "var(--color-danger)" }}
                           onMouseEnter={(e) =>
                             (e.currentTarget.style.background = "var(--color-surface-hover)")
@@ -537,11 +596,11 @@ export default function DashboardLayout() {
                             (e.currentTarget.style.background = "transparent")
                           }
                         >
-                          <FiLogOut size={16} />
-                          <span className="font-semibold">Logout</span>
+                          <FiLogOut size={15} />
+                          <span>Logout</span>
                         </button>
-                      </li>
-                    </motion.ul>
+                      </div>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>

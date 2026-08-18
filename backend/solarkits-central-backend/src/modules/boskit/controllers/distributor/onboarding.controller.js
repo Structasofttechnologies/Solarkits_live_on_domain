@@ -307,7 +307,7 @@ const verify_gst_live = async (req, res) => {
 const upload_kyc_document = async (req, res) => {
   try {
     const distributorId = req.user.id;
-    const { doc_type, original_name, mime_type, size_bytes, storage_key } = req.body;
+    const { doc_type, original_name, mime_type, size_bytes, storage_key, file_url, file_data } = req.body;
 
     const validDocs = [
       'gst_certificate',
@@ -346,6 +346,7 @@ const upload_kyc_document = async (req, res) => {
       original_name: original_name || `${doc_type}.pdf`,
       mime_type: mime_type || 'application/pdf',
       size_bytes: size_bytes || 102400,
+      file_url: file_url || file_data || null,
       doc_status: 'pending',
       uploaded_at: new Date(),
     };

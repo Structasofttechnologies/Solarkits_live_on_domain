@@ -17,6 +17,7 @@ const distributorAuth = require('../controllers/auth/distributor.auth.controller
 const dealerAuth = require('../controllers/auth/dealer.auth.controller');
 
 // ── 1. Distributor Authentication Routes ──────────────────────────────────────
+router.post('/distributor/gst/verify',                authRateLimiter, distributorAuth.verify_gst_public);
 router.post('/distributor/register/init',             authRateLimiter, distributorAuth.register_init);
 router.post('/distributor/otp/send',                 otpRateLimiter,  distributorAuth.send_registration_otp);
 router.post('/distributor/otp/verify',               otpRateLimiter,  distributorAuth.verify_registration_otp);

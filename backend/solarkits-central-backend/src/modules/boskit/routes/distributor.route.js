@@ -27,5 +27,8 @@ router.get('/dealer-applications',              distributorController.get_distri
 router.post('/dealer-applications/:id/review',  distributorController.review_dealer_application);
 router.get('/territory',                        distributorController.get_distributor_territory);
 router.get('/plan',                             distributorController.get_distributor_plan);
+router.get('/catalogue',                        distributorController.get_distributor_catalogue);
+router.post('/pricing/margin',                  distributorController.set_distributor_product_margin);
+router.post('/procure/order',                   distributorController.create_distributor_procurement_order);
 
 module.exports = router;

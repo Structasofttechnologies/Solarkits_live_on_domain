@@ -561,6 +561,389 @@ const get_distributor_plan = async (req, res) => {
   }
 };
 
+/**
+ * 9. Get Distributor Wholesale Catalogue & Dealer Pricing Slabs
+ */
+const get_distributor_catalogue = async (req, res) => {
+  try {
+    const distributorId = req.user.id;
+    const { category, search } = req.query;
+
+    const BoskitDistributorPlanAssignment = mongoose.model('boskit_distributor_plan_assignments');
+    const BoskitPriceRule = mongoose.model('boskit_price_rules');
+    const Product = mongoose.model('products');
+
+    // 1. Get distributor's active plan discount slab
+    const assignment = await BoskitDistributorPlanAssignment.findOne({
+      distributor_id: distributorId,
+      status: 'active',
+    }).lean();
+
+    const planSnapshot = assignment?.plan_snapshot || {};
+    const baseDiscountPercent = planSnapshot.discount_percentage || 15;
+    const defaultMarginMin = planSnapshot.distributor_margin_slab_min || 8;
+    const defaultMarginMax = planSnapshot.distributor_margin_slab_max || 14;
+    const defaultDealerMargin = Math.round((defaultMarginMin + defaultMarginMax) / 2) || 10;
+
+    // 2. Fetch custom margin overrides set by this distributor
+    const customRules = await BoskitPriceRule.find({
+      scope: 'user_override',
+      distributor_id: distributorId,
+    }).lean();
+
+    const ruleMap = {};
+    customRules.forEach((r) => {
+      if (r.product_id) {
+        ruleMap[r.product_id.toString()] = r;
+      }
+    });
+
+    // 3. Fetch products from DB
+    let dbQuery = { is_active: { $ne: false }, deleted_at: null };
+    if (search) {
+      dbQuery.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { sku: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    let products = await Product.find(dbQuery)
+      .populate('brand_id', 'name logo_url')
+      .sort({ is_featured: -1, created_at: -1 })
+      .lean();
+
+    // If DB has fewer than 4 products, provide rich catalogue items
+    if (!products || products.length === 0) {
+      const MOCK_PRODUCTS = [
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156001'),
+          name: 'Mono PERC 550W Bifacial Solar Panel (TOPCon Glass-to-Glass)',
+          sku: 'BK-MOD-550W-TOPCON',
+          category: 'panels',
+          brand_name: 'SolarKits Apex Modules',
+          mrp: 19500,
+          moq: 30,
+          image_url: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+          specifications: { wattage: '550W', efficiency: '22.4%', warranty: '25 Years Performance' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156002'),
+          name: 'SolarKits 5kW 3-Phase On-Grid Inverter (Dual MPPT, IP65)',
+          sku: 'BK-INV-5KW-3P',
+          category: 'inverters',
+          brand_name: 'SolarKits PowerCore',
+          mrp: 48000,
+          moq: 1,
+          image_url: 'https://images.unsplash.com/photo-1548611716-ad022c4f6990?auto=format&fit=crop&w=800&q=80',
+          specifications: { capacity: '5kW', phase: '3-Phase', mppt_trackers: 'Dual MPPT', warranty: '10 Years' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156003'),
+          name: 'SolarKits 10kW Hybrid Energy Storage Inverter (WiFi/4G IoT)',
+          sku: 'BK-INV-10KW-HYBRID',
+          category: 'inverters',
+          brand_name: 'SolarKits PowerCore',
+          mrp: 85000,
+          moq: 1,
+          image_url: 'https://images.unsplash.com/photo-1558441719-f266205886d3?auto=format&fit=crop&w=800&q=80',
+          specifications: { capacity: '10kW', backup_switching: '<10ms UPS', battery_compat: '48V / LFP', warranty: '10 Years' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156004'),
+          name: 'Exide 10.24kWh Wall-Mount LFP Battery Pack (6000 Cycles)',
+          sku: 'BK-BAT-10KWH-LFP',
+          category: 'batteries',
+          brand_name: 'Exide PowerPro',
+          mrp: 165000,
+          moq: 1,
+          image_url: 'https://images.unsplash.com/photo-1620714223084-8fcacc6dfd8d?auto=format&fit=crop&w=800&q=80',
+          specifications: { capacity: '10.24kWh', chemistry: 'LiFePO4', dod: '95%', cycles: '6000+ Cycles' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156005'),
+          name: 'Pre-Galvanized HDG Ground Mount Structure Kit (4-Panel Unit)',
+          sku: 'BK-STR-4P-HDG',
+          category: 'structures',
+          brand_name: 'SolarKits StrongHold',
+          mrp: 12000,
+          moq: 5,
+          image_url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
+          specifications: { material: 'Hot Dip Galvanized Steel 80um', wind_rating: '180 km/h', tilt: '15-30 deg' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156006'),
+          name: '4-In-1-Out 1000V DCDB Box (Surge Protection Type-II)',
+          sku: 'BK-DCDB-4IN-1OUT',
+          category: 'dcdb',
+          brand_name: 'SolarKits SafeGuard',
+          mrp: 8500,
+          moq: 2,
+          image_url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
+          specifications: { voltage: '1000V DC', fuse: '15A/1000V gPV', spd: 'Type-II 40kA', ip_rating: 'IP65' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156007'),
+          name: 'Solar DC Cable 4 Sq mm 100m Drum (TUV Certified XLPO)',
+          sku: 'BK-CAB-4SQMM-100M',
+          category: 'cables',
+          brand_name: 'Polycab SolarMax',
+          mrp: 5800,
+          moq: 4,
+          image_url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',
+          specifications: { conductor: 'Tinned Copper', insulation: 'Electron Beam Crosslinked XLPO', rating: '1.5kV DC' },
+        },
+        {
+          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156008'),
+          name: 'BOS Commercial Kit Combo — 10kW Turnkey Electrical Pack',
+          sku: 'BK-COMBO-10KW-BOS',
+          category: 'boskit',
+          brand_name: 'SolarKits ProBundle',
+          mrp: 38000,
+          moq: 1,
+          image_url: 'https://images.unsplash.com/photo-1497440001374-f26997328c1b?auto=format&fit=crop&w=800&q=80',
+          specifications: { includes: 'DCDB, ACDB, Earthing Rods, Lightning Arrester, 4sqmm DC Cables, Conduit Kit' },
+        },
+      ];
+      products = MOCK_PRODUCTS;
+    }
+
+    // Filter by category if requested
+    if (category && category !== 'all') {
+      products = products.filter((p) => p.category === category || p.category_id === category);
+    }
+
+    const items = products.map((p) => {
+      const prodId = p._id.toString();
+      const mrp = p.mrp || (p.mrp_paise ? Math.round(p.mrp_paise / 100) : 10000);
+
+      // Distributor buy price = Factory MRP minus Plan Wholesale Discount
+      const distributorBuyPrice = Math.round(mrp * (1 - baseDiscountPercent / 100));
+
+      // Check if distributor set custom margin for this product
+      const customRule = ruleMap[prodId];
+      let dealerMarginPercent = defaultDealerMargin;
+      let isWhitelisted = true;
+
+      if (customRule) {
+        if (customRule.margin_percent !== undefined) {
+          dealerMarginPercent = customRule.margin_percent;
+        }
+        if (customRule.is_active !== undefined) {
+          isWhitelisted = customRule.is_active;
+        }
+      }
+
+      // Dealer selling price = Distributor buy price + Margin %
+      const marginAmount = Math.round(distributorBuyPrice * (dealerMarginPercent / 100));
+      const dealerSellPrice = distributorBuyPrice + marginAmount;
+
+      return {
+        id: prodId,
+        name: p.name,
+        sku: p.sku || `BK-${prodId.slice(-6).toUpperCase()}`,
+        category: p.category || 'inverters',
+        brand: p.brand_name || p.brand_id?.name || 'SolarKits Premium',
+        brand_logo: p.brand_id?.logo_url || null,
+        mrp_inr: mrp,
+        distributor_buy_price_inr: distributorBuyPrice,
+        distributor_discount_percent: baseDiscountPercent,
+        dealer_margin_percent: dealerMarginPercent,
+        dealer_sell_price_inr: dealerSellPrice,
+        distributor_profit_per_unit_inr: marginAmount,
+        is_whitelisted_for_dealers: isWhitelisted,
+        moq: p.moq || p.min_order_qty || 1,
+        image_url: p.image_url || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+        specifications: p.specifications || {},
+        in_stock: true,
+        warranty_years: p.specifications?.warranty || '10 Years Factory Warranty',
+      };
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      plan_name: planSnapshot.name || 'District Distributor Tier',
+      plan_discount_percent: baseDiscountPercent,
+      default_margin_slab: `${defaultMarginMin}% – ${defaultMarginMax}%`,
+      total_products: items.length,
+      products: items,
+    });
+  } catch (error) {
+    console.error('[get_distributor_catalogue Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Failed to load distributor wholesale catalogue: ' + error.message,
+    });
+  }
+};
+
+/**
+ * 10. Set / Update Distributor Dealer Margin for a Product
+ */
+const set_distributor_product_margin = async (req, res) => {
+  try {
+    const distributorId = req.user.id;
+    const { product_id, margin_percent, dealer_sell_price_inr, is_whitelisted } = req.body;
+
+    if (!product_id) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        message: 'Product ID is required.',
+      });
+    }
+
+    const BoskitPriceRule = mongoose.model('boskit_price_rules');
+    const ruleCode = `OVR-DIST-${distributorId.toString().slice(-4)}-${product_id.toString().slice(-4)}`.toUpperCase();
+
+    const validProductId = mongoose.Types.ObjectId.isValid(product_id) ? product_id : null;
+
+    const ruleData = {
+      rule_name: `Distributor Custom Dealer Margin Rule [${ruleCode}]`,
+      rule_code: ruleCode,
+      scope: 'user_override',
+      distributor_id: distributorId,
+      product_id: validProductId,
+      rule_type: 'fixed_dealer_rate',
+      discount_percentage: margin_percent !== undefined ? parseFloat(margin_percent) : 10,
+      dealer_rate_paise: dealer_sell_price_inr ? Math.round(dealer_sell_price_inr * 100) : null,
+      status: is_whitelisted !== false ? 'active' : 'inactive',
+    };
+
+    const updatedRule = await BoskitPriceRule.findOneAndUpdate(
+      { rule_code: ruleCode },
+      { $set: ruleData },
+      { upsert: true, new: true }
+    );
+
+    logBoskitAudit({
+      actor_type: 'boskit_distributor',
+      actor_id: distributorId,
+      action: 'SET_PRODUCT_DEALER_MARGIN',
+      entity_type: 'boskit_price_rules',
+      entity_id: updatedRule._id,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      message: 'Dealer selling price and margin slab updated successfully!',
+      rule: updatedRule,
+    });
+  } catch (error) {
+    console.error('[set_distributor_product_margin Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Failed to update dealer margin: ' + error.message,
+    });
+  }
+};
+
+/**
+ * 11. Create Distributor Wholesale Procurement Order
+ */
+const create_distributor_procurement_order = async (req, res) => {
+  try {
+    const distributorId = req.user.id;
+    const { items, shipping_address, payment_mode = 'advance_bank_transfer', notes } = req.body;
+
+    if (!items || !items.length) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        message: 'Order items are required.',
+      });
+    }
+
+    const BoskitOrder = mongoose.model('boskit_orders');
+    const year = new Date().getFullYear();
+    const orderNumber = `BK-${year}-${Date.now().toString().slice(-6)}`;
+
+    let subtotalPaise = 0;
+    const orderItems = items.map((item) => {
+      const unitBuyInr = item.distributor_buy_price_inr || 10000;
+      const qty = item.quantity || 1;
+      const lineTotalInr = unitBuyInr * qty;
+      const lineTotalPaise = lineTotalInr * 100;
+      subtotalPaise += lineTotalPaise;
+
+      const unitBuyPaise = unitBuyInr * 100;
+      const gstPct = 18;
+      const gstAmountPaise = Math.round(unitBuyPaise * 0.18);
+
+      return {
+        scope_type: 'product',
+        product_id: mongoose.Types.ObjectId.isValid(item.product_id) ? item.product_id : null,
+        item_name: item.name || 'Wholesale Solar Equipment',
+        item_sku: item.sku || 'BK-PROD',
+        quantity: qty,
+        price_snapshot: {
+          base_mrp_paise: Math.round(unitBuyPaise * 1.25),
+          price_before_gst_paise: unitBuyPaise,
+          gst_pct: gstPct,
+          gst_amount_paise: gstAmountPaise,
+          unit_price_paise: unitBuyPaise + gstAmountPaise,
+          moq: 1,
+          moq_met: true,
+          pricing_explanation: 'Distributor Factory Wholesale Rate',
+        },
+        line_total_paise: lineTotalPaise,
+      };
+    });
+
+    const taxTotalPaise = Math.round(subtotalPaise * 0.18);
+    const grandTotalPaise = subtotalPaise + taxTotalPaise;
+
+    const order = await BoskitOrder.create({
+      order_number: orderNumber,
+      buyer_type: 'distributor',
+      buyer_id: distributorId,
+      distributor_id: null,
+      items: orderItems,
+      subtotal_paise: subtotalPaise,
+      tax_total_paise: taxTotalPaise,
+      grand_total_paise: grandTotalPaise,
+      order_status: 'confirmed',
+      payment_status: 'pending',
+      delivery_address: {
+        line: shipping_address?.line || 'Distributor Central Depot',
+        city: shipping_address?.city || 'Ahmedabad',
+        pincode: shipping_address?.pincode || '380001',
+      },
+      status_history: [
+        {
+          status: 'confirmed',
+          actor_type: 'boskit_distributor',
+          actor_id: distributorId,
+          comment: notes || 'Wholesale procurement order initiated.',
+        },
+      ],
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      success: true,
+      message: `Wholesale procurement order ${orderNumber} placed successfully! Dispatch scheduled from central warehouse.`,
+      order: {
+        id: order._id,
+        order_number: order.order_number,
+        grand_total_inr: Math.round(grandTotalPaise / 100),
+        status: order.order_status,
+      },
+    });
+  } catch (error) {
+    console.error('[create_distributor_procurement_order Error]:', error);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'Procurement order failed: ' + error.message,
+    });
+  }
+};
+
 module.exports = {
   get_distributor_entitlements,
   get_distributor_dashboard_stats,
@@ -570,4 +953,7 @@ module.exports = {
   review_dealer_application,
   get_distributor_territory,
   get_distributor_plan,
+  get_distributor_catalogue,
+  set_distributor_product_margin,
+  create_distributor_procurement_order,
 };

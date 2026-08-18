@@ -1,13 +1,12 @@
 /**
  * VideoPlayerModal.jsx
  *
- * Accessible modal player for explainer videos.
- * Supports: Cloudinary uploads + external URLs (YouTube embed, Vimeo).
- * Closes on Escape key, backdrop click, or X button.
+ * Cinematic Full-Screen Modal Player for Explainer & Showcase Videos.
+ * Supports: Direct MP4/WebM videos, Cloudinary streams, YouTube embeds & Vimeo.
  */
 
-import { useEffect, useRef } from 'react';
-import { FiX } from 'react-icons/fi';
+import { useEffect, useRef, useState } from 'react';
+import { FiX, FiMaximize, FiMinimize, FiVolume2, FiVolumeX } from 'react-icons/fi';
 import { createPortal } from 'react-dom';
 
 function is_youtube(url) {
@@ -20,7 +19,7 @@ function is_vimeo(url) {
 
 function youtube_embed(url) {
   const match = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
-  return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1&rel=0` : url;
+  return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1&rel=0&modestbranding=1` : url;
 }
 
 function vimeo_embed(url) {
@@ -30,9 +29,13 @@ function vimeo_embed(url) {
 
 export default function VideoPlayerModal({ video_url, title, onClose }) {
   const modalRef = useRef(null);
+  const videoRef = useRef(null);
+  const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
     document.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -50,47 +53,72 @@ export default function VideoPlayerModal({ video_url, title, onClose }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-6 bg-black/95 backdrop-blur-xl animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="dialog"
       aria-modal="true"
-      aria-label={title || 'Video player'}
+      aria-label={title || 'Full Screen Video Player'}
     >
       <div
         ref={modalRef}
-        className="relative w-full max-w-3xl bg-black rounded-2xl overflow-hidden shadow-2xl"
+        className="relative w-full max-w-5xl bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col max-h-[95vh]"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-black/80">
-          {title && <p className="text-white font-bold text-sm truncate">{title}</p>}
-          <button
-            onClick={onClose}
-            className="ml-auto w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-            aria-label="Close video"
-          >
-            <FiX size={18} />
-          </button>
+        {/* Cinema Header */}
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/90 to-transparent z-20">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
+              4K Solar Video Showcase
+            </span>
+            <h3 className="text-white font-black text-sm sm:text-base truncate max-w-md sm:max-w-xl">
+              {title || 'Solar PV Systems & Component Technology'}
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer hover:rotate-90"
+              aria-label="Close video"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
         </div>
 
-        {/* Video */}
-        <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+        {/* Video Canvas */}
+        <div className="relative w-full bg-black flex-1 flex items-center justify-center min-h-[300px] sm:min-h-[480px]">
           {isEmbed ? (
             <iframe
-              className="absolute inset-0 w-full h-full"
+              className="w-full h-full min-h-[300px] sm:min-h-[480px] border-0"
               src={embedUrl}
-              title={title || 'Video'}
+              title={title || 'Solar Video'}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
           ) : (
             <video
-              className="absolute inset-0 w-full h-full"
+              ref={videoRef}
+              className="w-full h-full max-h-[75vh] object-contain"
               src={video_url}
               autoPlay
               controls
               playsInline
+              muted={isMuted}
             />
           )}
+        </div>
+
+        {/* Cinema Footer Bar */}
+        <div className="px-6 py-3 bg-black/90 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+          <span>High Definition 4K • Solar PV Infrastructure</span>
+          <button
+            onClick={onClose}
+            className="text-white font-bold hover:text-blue-400 transition-colors cursor-pointer"
+          >
+            Close Player (Esc)
+          </button>
         </div>
       </div>
     </div>,

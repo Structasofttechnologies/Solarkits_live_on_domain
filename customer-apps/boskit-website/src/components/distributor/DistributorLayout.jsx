@@ -1,20 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
-  FiHome,
-  FiUsers,
-  FiFileText,
+  MdDashboard,
+  MdShoppingCart,
+  MdListAlt,
+  MdSettings,
+  MdMenu,
+  MdSolarPower,
+} from 'react-icons/md';
+import {
+  FaBoxes,
+  FaSolarPanel,
+  FaShoppingBag,
+  FaLock,
+} from 'react-icons/fa';
+import {
   FiMapPin,
-  FiLayers,
-  FiPackage,
+  FiMoon,
+  FiSun,
+  FiShoppingCart,
   FiLogOut,
   FiShield,
-  FiArrowUpRight,
-  FiDollarSign,
-  FiZap,
+  FiChevronDown,
+  FiChevronRight,
+  FiSearch,
+  FiUser,
+  FiLayers,
+  FiUsers,
+  FiFileText,
+  FiBox,
 } from 'react-icons/fi';
 import api from '../../services/api';
+import logoImg from '../../assets/images/logo.png';
 
 export default function DistributorLayout() {
   const location = useLocation();
@@ -22,6 +40,36 @@ export default function DistributorLayout() {
   const { user, distributor, logout } = useAuth();
   const [stats, setStats] = useState(null);
   const [entitlements, setEntitlements] = useState(null);
+
+  const activeDistributor = distributor || user || {};
+  const isKycVerified =
+    activeDistributor.kyc_status === 'verified' ||
+    activeDistributor.kyc_status === 'approved' ||
+    activeDistributor.lifecycle_status === 'active';
+
+  // Top header state
+  const [isDark, setIsDark] = useState(false);
+  const [cartCount, setCartCount] = useState(2);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
+  const userMenuRef = useRef(null);
+
+  // Catalog Dropdown State (Open by default if currently on a catalog page)
+  const isCatalogActive =
+    location.pathname.includes('/portal/procure') ||
+    location.pathname.includes('/portal/combo-kits') ||
+    location.pathname.includes('/portal/custom-kits') ||
+    location.pathname.includes('/portal/bos-kits') ||
+    location.pathname.includes('/portal/catalogue');
+
+  const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(true);
+
+  useEffect(() => {
+    if (isCatalogActive) {
+      setCatalogDropdownOpen(true);
+    }
+  }, [location.pathname, isCatalogActive]);
 
   useEffect(() => {
     // Load dashboard stats & plan entitlements
@@ -40,141 +88,405 @@ export default function DistributorLayout() {
       .catch((err) => console.warn('Entitlements fetch warning:', err.message));
   }, [location.pathname]);
 
+  // Handle outside click for user menu
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleLogout = async () => {
     await logout();
     navigate('/auth/login');
   };
 
-  const modules = entitlements?.dashboard_modules || stats?.plan?.dashboard_modules || {};
-  const canOnboardDealers = entitlements?.can_onboard_dealers ?? (stats?.plan?.can_onboard_dealers !== false);
+  // Sub-items under "My Catalog"
+  const catalogSubItems = [
+    {
+      name: 'Combo BOS Kit',
+      path: '/distributor/portal/combo-kits',
+      icon: <FaSolarPanel size={14} />,
+    },
+    {
+      name: 'Customer BOS Kit',
+      path: '/distributor/portal/custom-kits',
+      icon: <MdSettings size={15} />,
+    },
+    {
+      name: 'Wholesale Products',
+      path: '/distributor/portal/procure',
+      icon: <FaShoppingBag size={14} />,
+    },
+  ];
 
-  const navItems = [
-    { name: 'Portal Dashboard', icon: FiHome, path: '/distributor/portal/dashboard', show: modules.overview !== false },
-    { name: 'Sub-Dealer Network', icon: FiUsers, path: '/distributor/portal/dealers', show: modules.dealers !== false && canOnboardDealers },
-    { name: 'Dealer Applications', icon: FiFileText, path: '/distributor/portal/dealer-applications', show: modules.dealer_onboarding !== false && canOnboardDealers },
-    { name: 'Territory Exclusivity', icon: FiMapPin, path: '/distributor/portal/territory', show: modules.territories !== false },
-    { name: 'Distributor Plan', icon: FiLayers, path: '/distributor/portal/plan', show: modules.subscriptions !== false },
-    { name: 'Procure Equipment', icon: FiPackage, path: '/products', show: modules.catalogue !== false },
-  ].filter(item => item.show);
+  const businessName = distributor?.business_name || user?.business_name || 'Customer Account';
+  const userEmail = distributor?.email || user?.email || 'customer@solarkits.com';
+  const initials = businessName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() || 'CA';
 
   return (
-    <div className="min-h-screen bg-[#F7FAF8] flex text-[#17211B] font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans text-slate-800 antialiased">
       
-      {/* Sidebar */}
-      <aside className="w-64 bg-[#FFFFFF] border-r border-[#DDE8E1] flex flex-col justify-between hidden md:flex shrink-0 shadow-xs">
-        <div>
-          {/* Brand Header */}
-          <div className="p-5 border-b border-[#DDE8E1] flex items-center gap-3">
-            <Link to="/" className="inline-flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E] shadow-xs">
-                <FiZap className="w-4 h-4" />
+      {/* ── Top Global Navbar ──────────────────────────────────────────────── */}
+      <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between z-30 sticky top-0 shadow-xs">
+        
+        {/* Left Side: Brand Logo */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 md:hidden cursor-pointer"
+          >
+            <MdMenu size={22} />
+          </button>
+
+          <Link to="/distributor/portal/dashboard" className="flex items-center">
+            <img
+              src={logoImg}
+              alt="SolarKits"
+              className="h-8 sm:h-9 object-contain"
+            />
+          </Link>
+        </div>
+
+        {/* Right Side: Theme, In-Dashboard Cart, User Account */}
+        <div className="flex items-center space-x-4">
+          
+          {/* Dark / Light Mode Toggle */}
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+            title="Toggle theme"
+          >
+            {isDark ? <FiSun size={17} className="text-amber-500" /> : <FiMoon size={17} />}
+          </button>
+
+          {/* In-Dashboard Shopping Cart Icon with Badge */}
+          <Link
+            to="/distributor/portal/cart"
+            className="relative p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded-full transition-colors"
+            title="Procurement Cart"
+          >
+            <FiShoppingCart size={19} />
+            {cartCount > 0 && (
+              <span className="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-xs">
+                {cartCount}
+              </span>
+            )}
+          </Link>
+
+          {/* User Profile Pill */}
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2.5 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#1E3A8A] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                {initials}
               </div>
-              <span className="font-heading font-black text-lg text-[#17211B] tracking-tight">
-                Solar<span className="text-[#1F8F4E]">Kits</span>
-              </span>
-            </Link>
-            <div>
-              <span className="text-[10px] bg-[#ECF8F1] text-[#1F8F4E] border border-[#DDE8E1] font-bold px-1.5 py-0.5 rounded block text-center">
-                DISTRIBUTOR
-              </span>
-            </div>
+              <div className="hidden lg:block leading-tight">
+                <div className="text-xs font-bold text-slate-900 truncate max-w-[130px]">
+                  {businessName}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate max-w-[130px]">
+                  {userEmail}
+                </div>
+              </div>
+              <FiChevronDown size={14} className="text-slate-400 hidden lg:block" />
+            </button>
+
+            {/* Dropdown Menu */}
+            {showUserMenu && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-4 py-3 border-b border-slate-100">
+                  <div className="font-bold text-xs text-slate-900">{businessName}</div>
+                  <div className="text-[11px] text-slate-500 truncate">{userEmail}</div>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      <FiShield size={10} /> KYC Verified
+                    </span>
+                  </div>
+                </div>
+
+                {/* Shifted Account Settings Links */}
+                <div className="py-1">
+                  <Link
+                    to="/distributor/portal/plan"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold transition-colors"
+                  >
+                    <FiShield size={15} className="text-blue-600" />
+                    <span>Subscription Plans</span>
+                  </Link>
+                  <Link
+                    to="/distributor/portal/territory"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold transition-colors"
+                  >
+                    <FiMapPin size={15} className="text-blue-600" />
+                    <span>My Territories</span>
+                  </Link>
+                  <Link
+                    to="/distributor/portal/onboarding?stage=4"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold transition-colors"
+                  >
+                    <FiFileText size={15} className="text-blue-600" />
+                    <span>KYC & Compliance Dossier</span>
+                  </Link>
+                  <Link
+                    to="/"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold transition-colors"
+                  >
+                    <MdSolarPower size={16} className="text-amber-600" />
+                    <span>Public Marketplace</span>
+                  </Link>
+                </div>
+
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <FiLogOut size={14} /> Logout
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Navigation Links */}
-          <nav className="p-3 space-y-1">
-            <div className="px-3 py-2 text-[10px] font-bold text-[#5F6F65] uppercase tracking-widest">
-              Distributor Console
-            </div>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
+        </div>
+      </header>
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-[#1F8F4E] text-white font-bold shadow-xs'
-                      : 'text-[#5F6F65] hover:bg-[#ECF8F1] hover:text-[#17211B]'
+      {/* ── Main Layout (Sidebar + Content) ─────────────────────────────────── */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* Left Sidebar */}
+        <aside
+          className={`w-60 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 shadow-xs transition-all duration-200 z-20 ${
+            sidebarOpen ? 'block' : 'hidden md:flex'
+          }`}
+        >
+          <div className="py-4 overflow-y-auto">
+            <nav className="px-2 space-y-1">
+              
+              {/* 1. Dashboard Link */}
+              <Link
+                to="/distributor/portal/dashboard"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname === '/distributor/portal/dashboard'
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname === '/distributor/portal/dashboard' ? 'text-white' : 'text-blue-700'}>
+                    <MdDashboard size={18} />
+                  </span>
+                  <span>Dashboard</span>
+                </div>
+              </Link>
+
+              {/* 2. My Catalog (Collapsible Dropdown containing Combo BOS Kit & Customer BOS Kit) */}
+              <div className="space-y-1 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setCatalogDropdownOpen(!catalogDropdownOpen)}
+                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    isCatalogActive && !catalogDropdownOpen
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 font-bold'
+                      : 'text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <Icon size={16} />
-                    <span>{item.name}</span>
-                  </div>
-                  {item.path === '/distributor/portal/dealers' && stats?.metrics?.active_dealers_count !== undefined && (
-                    <span className="text-[10px] bg-[#FFFFFF] text-[#1F8F4E] px-1.5 py-0.5 rounded font-bold border border-[#DDE8E1]">
-                      {stats.metrics.active_dealers_count}
+                  <div className="flex items-center gap-3">
+                    <span className="text-blue-700">
+                      <FaShoppingBag size={16} />
                     </span>
-                  )}
-                </Link>
-              );
-            })}
+                    <span>My Catalog</span>
+                  </div>
+                  <span className="text-slate-400">
+                    {catalogDropdownOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                  </span>
+                </button>
 
-            <div className="pt-4 px-3 py-2 text-[10px] font-bold text-[#5F6F65] uppercase tracking-widest">
-              Quick Shortcuts
-            </div>
-            <Link
-              to="/"
-              className="flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium text-[#5F6F65] hover:bg-[#ECF8F1] hover:text-[#17211B]"
-            >
-              <span>Public Website</span>
-              <FiArrowUpRight size={14} />
-            </Link>
-          </nav>
-        </div>
+                {/* Submenu Dropdown List */}
+                {catalogDropdownOpen && (
+                  <div className="pl-4 pr-1 py-1 space-y-1 border-l-2 border-blue-100 ml-4 animate-in fade-in duration-150">
+                    {catalogSubItems.map((sub) => {
+                      const isSubActive =
+                        location.pathname === sub.path ||
+                        (sub.path === '/distributor/portal/procure' &&
+                          (location.pathname === '/distributor/portal/catalogue' ||
+                            location.pathname === '/products'));
 
-        {/* User Footer & Logout */}
-        <div className="p-4 border-t border-[#DDE8E1] bg-[#F7FAF8]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 truncate">
-              <div className="w-8 h-8 rounded-full bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center font-bold text-xs text-[#1F8F4E] shrink-0">
-                {(distributor?.business_name || user?.business_name || 'DI').substring(0, 2).toUpperCase()}
+                      return (
+                        <Link
+                          key={sub.path}
+                          to={sub.path}
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                            isSubActive
+                              ? 'bg-[#185ADB] text-white font-bold shadow-xs'
+                              : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+                          }`}
+                        >
+                          <span className={isSubActive ? 'text-white' : 'text-blue-600'}>
+                            {sub.icon}
+                          </span>
+                          <span>{sub.name}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <div className="truncate">
-                <div className="text-xs font-bold text-[#17211B] truncate">
-                  {distributor?.business_name || user?.business_name || 'Distributor'}
+
+              {/* 3. Sub-Dealer Network */}
+              <Link
+                to="/distributor/portal/dealers"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname === '/distributor/portal/dealers'
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname === '/distributor/portal/dealers' ? 'text-white' : 'text-blue-700'}>
+                    <FaBoxes size={17} />
+                  </span>
+                  <span>Sub-Dealer Network</span>
                 </div>
-                <div className="text-[10px] text-[#1F8F4E] font-medium">Authorized Distributor</div>
-              </div>
-            </div>
+              </Link>
+
+              {/* 4. Dealer Applications */}
+              <Link
+                to="/distributor/portal/dealer-applications"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname === '/distributor/portal/dealer-applications'
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname === '/distributor/portal/dealer-applications' ? 'text-white' : 'text-blue-700'}>
+                    <MdListAlt size={19} />
+                  </span>
+                  <span>Dealer Applications</span>
+                </div>
+              </Link>
+
+              {/* 5. Wholesale Cart */}
+              <Link
+                to="/distributor/portal/cart"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname === '/distributor/portal/cart'
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname === '/distributor/portal/cart' ? 'text-white' : 'text-blue-700'}>
+                    <MdShoppingCart size={18} />
+                  </span>
+                  <span>Wholesale Cart</span>
+                </div>
+                {cartCount > 0 && (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      location.pathname === '/distributor/portal/cart'
+                        ? 'bg-white text-blue-800'
+                        : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+
+              {/* 6. KYC Verification Dossier */}
+              <Link
+                to="/distributor/portal/kyc"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname.includes('/portal/kyc') || location.pathname.includes('/portal/onboarding')
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : isKycVerified
+                    ? 'text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100/80'
+                    : 'text-amber-800 bg-amber-50 hover:bg-amber-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname.includes('/portal/kyc') ? 'text-white' : isKycVerified ? 'text-emerald-600' : 'text-amber-600'}>
+                    <FiShield size={17} />
+                  </span>
+                  <span>KYC Verification</span>
+                </div>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    isKycVerified
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-200 text-amber-900 animate-pulse'
+                  }`}
+                >
+                  {isKycVerified ? 'Complete' : 'Pending'}
+                </span>
+              </Link>
+
+              {/* 7. Settings */}
+              <Link
+                to="/distributor/portal/settings"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname === '/distributor/portal/settings'
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname === '/distributor/portal/settings' ? 'text-white' : 'text-blue-700'}>
+                    <MdSettings size={18} />
+                  </span>
+                  <span>Settings</span>
+                </div>
+              </Link>
+
+            </nav>
+          </div>
+
+          {/* Sidebar Footer Logout */}
+          <div className="p-3 border-t border-slate-200">
             <button
               onClick={handleLogout}
-              title="Logout"
-              className="p-2 text-[#5F6F65] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
-              <FiLogOut size={16} />
+              <FiLogOut size={15} />
+              <span>Sign Out</span>
             </button>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="h-16 bg-[#FFFFFF] border-b border-[#DDE8E1] px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-[#1F8F4E] bg-[#ECF8F1] px-2.5 py-1 rounded-lg border border-[#DDE8E1] flex items-center gap-1.5">
-              <FiShield className="text-[#1F8F4E]" />
-              {entitlements?.plan_name || stats?.plan?.name || 'Authorized Distributor Hub'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs text-[#5F6F65]">
-              <span className="text-[#5F6F65]">Territory:</span>
-              <span className="font-bold text-[#17211B]">
-                {entitlements?.assigned_district || stats?.territory?.district || 'Ahmedabad'}, {entitlements?.assigned_state || stats?.territory?.state || 'Gujarat'}
-              </span>
+        {/* Right Content Viewport */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[#F8FAFC]">
+          {!isKycVerified && !location.pathname.includes('/portal/kyc') && !location.pathname.includes('/portal/onboarding') && (
+            <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <FiShield className="text-amber-600 shrink-0" size={18} />
+                <div>
+                  <strong className="block font-bold text-amber-950">1-Time KYC Document Verification Required</strong>
+                  <span>Please upload your business registration documents to activate your full dealer network and wholesale cart.</span>
+                </div>
+              </div>
+              <Link
+                to="/distributor/portal/kyc"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#185ADB] text-white hover:bg-blue-700 shadow-sm shrink-0 text-center"
+              >
+                Complete KYC Now ➔
+              </Link>
             </div>
-          </div>
-        </header>
-
-        {/* Dynamic Page Content */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 bg-[#F7FAF8]">
+          )}
           <Outlet />
         </main>
+
       </div>
 
     </div>

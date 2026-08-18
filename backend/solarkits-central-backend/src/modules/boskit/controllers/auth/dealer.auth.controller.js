@@ -40,10 +40,14 @@ const login = async (req, res) => {
       'demo.dealer@boskit.in',
     ];
     if (isEmail && demoEmails.includes(loginId.toLowerCase())) {
+      const demoEmail = loginId.toLowerCase();
+      const defaultDealerMobile = '9876500002';
+      const password_hash = await bcrypt.hash(password || 'demo1234', 10);
+
       // Find or create a default distributor first
       const BoskitDistributor = mongoose.model('boskit_distributors');
       let parentDistributor = await BoskitDistributor.findOne({
-        email: { $in: ['distributor@solarkits.in', 'distributor@boskit.in'] },
+        $or: [{ email: 'distributor@solarkits.in' }, { mobile: '9876500001' }],
       });
       if (!parentDistributor) {
         parentDistributor = await BoskitDistributor.create({
@@ -57,12 +61,15 @@ const login = async (req, res) => {
         });
       }
 
+      dealer = await BoskitDealer.findOne({
+        $or: [{ email: demoEmail }, { mobile: defaultDealerMobile }],
+      });
+
       if (!dealer) {
-        const password_hash = await bcrypt.hash(password || 'demo1234', 10);
         dealer = await BoskitDealer.create({
           business_name: 'SolarKits Certified Solar Installer',
-          email: loginId.toLowerCase(),
-          mobile: '9876500002',
+          email: demoEmail,
+          mobile: defaultDealerMobile,
           password_hash,
           distributor_id: parentDistributor._id,
           lifecycle_status: 'active',
@@ -73,16 +80,18 @@ const login = async (req, res) => {
           can_place_orders: true,
         });
       } else {
-        // Ensure password matches demo1234 if using demo password
-        if (password === 'demo1234') {
-          const isMatch = await bcrypt.compare(password, dealer.password_hash);
-          if (!isMatch) {
-            dealer.password_hash = await bcrypt.hash('demo1234', 10);
-            dealer.activation_status = 'active';
-            dealer.is_active = true;
-            await dealer.save();
-          }
-        }
+        dealer.email = demoEmail;
+        dealer.mobile = defaultDealerMobile;
+        dealer.password_hash = password_hash;
+        dealer.distributor_id = parentDistributor._id;
+        dealer.lifecycle_status = 'active';
+        dealer.activation_status = 'active';
+        dealer.kyc_status = 'verified';
+        dealer.is_active = true;
+        dealer.can_see_mrp = true;
+        dealer.can_place_orders = true;
+        dealer.deleted_at = null;
+        await dealer.save();
       }
     }
 

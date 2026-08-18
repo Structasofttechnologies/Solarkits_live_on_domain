@@ -68,17 +68,28 @@ const register_init = async (req, res) => {
     }
 
     const password_hash = await bcrypt.hash(password, 10);
+    const gstin = req.body.gst_number ? req.body.gst_number.trim().toUpperCase() : null;
 
     // 1. Create Distributor entity
     const [distributor] = await BoskitDistributor.create([
       {
-        business_name: business_name.trim(),
+        business_name: (req.body.gst_trade_name || req.body.gst_legal_name || business_name).trim(),
         email: cleanEmail,
         mobile: cleanMobile,
         password_hash,
-        lifecycle_status: 'draft',
+        gst_number: gstin,
+        gst_legal_name: req.body.gst_legal_name || null,
+        gst_trade_name: req.body.gst_trade_name || null,
+        gst_registration_status: gstin ? 'ACTIVE' : null,
+        gst_verified_at: gstin ? new Date() : null,
+        pan_number: req.body.pan_number || (gstin ? gstin.substring(2, 12) : null),
+        'registered_address.line': req.body.gst_address || null,
+        'authorized_person.name': req.body.contact_person || null,
+        'authorized_person.mobile': cleanMobile,
+        'authorized_person.email': cleanEmail,
+        lifecycle_status: gstin ? 'gst_verified' : 'draft',
         activation_status: 'pending',
-        kyc_status: 'draft',
+        kyc_status: 'pending',
         is_active: false,
       }
     ], { session });
@@ -289,12 +300,19 @@ const login = async (req, res) => {
       'demo.distributor@boskit.in',
     ];
     if (isEmail && demoEmails.includes(loginId.toLowerCase())) {
+      const demoEmail = loginId.toLowerCase();
+      const defaultMobile = '9876500001';
+      const password_hash = await bcrypt.hash(password || 'demo1234', 10);
+
+      distributor = await BoskitDistributor.findOne({
+        $or: [{ email: demoEmail }, { mobile: defaultMobile }],
+      });
+
       if (!distributor) {
-        const password_hash = await bcrypt.hash(password || 'demo1234', 10);
         distributor = await BoskitDistributor.create({
           business_name: 'SolarKits Master Distributor Pvt Ltd',
-          email: loginId.toLowerCase(),
-          mobile: '9876500001',
+          email: demoEmail,
+          mobile: defaultMobile,
           password_hash,
           lifecycle_status: 'active',
           activation_status: 'active',
@@ -304,16 +322,17 @@ const login = async (req, res) => {
           is_mobile_verified: true,
         });
       } else {
-        // Ensure password matches demo1234 if using demo password
-        if (password === 'demo1234') {
-          const isMatch = await bcrypt.compare(password, distributor.password_hash);
-          if (!isMatch) {
-            distributor.password_hash = await bcrypt.hash('demo1234', 10);
-            distributor.activation_status = 'active';
-            distributor.is_active = true;
-            await distributor.save();
-          }
-        }
+        distributor.email = demoEmail;
+        distributor.mobile = defaultMobile;
+        distributor.password_hash = password_hash;
+        distributor.lifecycle_status = 'active';
+        distributor.activation_status = 'active';
+        distributor.kyc_status = 'verified';
+        distributor.is_active = true;
+        distributor.is_email_verified = true;
+        distributor.is_mobile_verified = true;
+        distributor.deleted_at = null;
+        await distributor.save();
       }
     }
 
@@ -827,8 +846,64 @@ const reset_password = async (req, res) => {
   }
 };
 
+/**
+ * 11. Public Real-Time GSTIN Verification for Registration
+ */
+const verify_gst_public = async (req, res) => {
+  try {
+    const { gstin } = req.body;
+    if (!gstin) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        message: 'GSTIN number is required.',
+      });
+    }
+
+    const { verifyGstin } = require('../../../admin-panel/utils/gst.adapter');
+    const cleanGstin = gstin.trim().toUpperCase();
+
+    const result = await verifyGstin(cleanGstin, {
+      provider: process.env.NODE_ENV === 'production' ? (process.env.QUICKEKYC_PROVIDER || 'quickekyc') : 'mock',
+    });
+
+    if (result.is_valid) {
+      return res.status(200).json({
+        status: 'success',
+        success: true,
+        message: 'GSTIN successfully verified via QuickKYC.',
+        data: {
+          gstin: cleanGstin,
+          legal_name: result.legal_name,
+          trade_name: result.trade_name || result.legal_name,
+          business_status: result.business_status || 'ACTIVE',
+          state_code: result.state_code || cleanGstin.substring(0, 2),
+          registration_state: result.registration_state,
+          registration_date: result.registration_date,
+          principal_address: result.principal_address,
+          pan_number: cleanGstin.substring(2, 12),
+        },
+      });
+    } else {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        message: result.error_message || 'GSTIN verification failed. Please verify the GST number.',
+      });
+    }
+  } catch (err) {
+    console.error('[verify_gst_public Error]:', err);
+    return res.status(500).json({
+      status: 'error',
+      success: false,
+      message: 'GST verification error: ' + err.message,
+    });
+  }
+};
+
 module.exports = {
   register_init,
+  verify_gst_public,
   send_registration_otp,
   verify_registration_otp,
   login,

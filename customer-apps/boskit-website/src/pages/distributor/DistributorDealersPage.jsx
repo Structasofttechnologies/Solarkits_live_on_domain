@@ -57,7 +57,7 @@ export default function DistributorDealersPage() {
             Sub-Dealer & Installer Network
           </h1>
           <p className="text-xs sm:text-sm text-[#5F6F65] mt-0.5">
-            Manage local solar installers and EPC buyers procuring solar equipment under your district franchise.
+            Manage local solar installers and EPC buyers procuring solar equipment under your district distributor network.
           </p>
         </div>
 
