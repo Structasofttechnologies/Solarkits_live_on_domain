@@ -23,13 +23,15 @@ const {
   delete_bos_kit,
   toggle_bos_kit_stock,
   get_bos_custom_catalog,
-  save_bos_custom_catalog
+  save_bos_custom_catalog,
+  get_nearby_stores,
 } = require("../../controller/v1.handlers/shop.handler");
 const { handleRazorpayWebhook } = require("../../controller/v1.handlers/razorpay.webhook.handler");
 const { verify_auth } = require("../../middlewares/auth");
 
 const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
 
+router.get("/stores", get_nearby_stores);
 router.get("/combo-kits", get_combo_kits_by_district);
 router.get("/epc-catalogue", verify_auth, get_epc_catalogue);
 router.get("/epc-catalogue/status", verify_auth, require("../../controller/epc.catalogue.handler").get_epc_catalogue_status);

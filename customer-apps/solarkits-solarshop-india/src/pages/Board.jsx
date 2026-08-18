@@ -11,7 +11,8 @@ import {
   FiSliders,
   FiLayers,
   FiTruck,
-  FiHelpCircle
+  FiHelpCircle,
+  FiMapPin
 } from "react-icons/fi";
 
 import AnnouncementBar from "@/components/storefront/AnnouncementBar";
@@ -32,11 +33,13 @@ import BulkBuy from "./bulk-buy/BulkBuy";
 import BulkOrderCart from "./cart/BulkOrderCart";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import KitFinderWizard from "@/components/storefront/KitFinderWizard";
+import StoreLocatorPage from "./store-locator/StoreLocatorPage";
 
 import { getAvailableKitData, fetchLiveInventory, getBulkKitBuyData } from "@/features/slice";
 
 export const SHOP_NAV = [
   { name: "All Solar Kits", path: "/shop", icon: FiGrid },
+  { name: "Find Nearby Store", path: "/store-locator", icon: FiMapPin },
   { name: "On-Grid Kits", path: "/shop?type=on-grid", icon: FiSun },
   { name: "Off-Grid Kits", path: "/shop?type=off-grid", icon: FiBatteryCharging },
   { name: "Hybrid Kits", path: "/shop?type=hybrid", icon: FiZap },
@@ -134,6 +137,11 @@ export default function Board() {
           {/* Shop / Product Listing */}
           <Route path="/shop" element={<PreconfiguredComboKit />} />
           <Route path="/preconfigured-combo-kit" element={<PreconfiguredComboKit />} />
+
+          {/* Store Locator Routes */}
+          <Route path="/store-locator" element={<StoreLocatorPage />} />
+          <Route path="/find-store" element={<StoreLocatorPage />} />
+          <Route path="/stores" element={<StoreLocatorPage />} />
 
           {/* Interactive Guided Sizing Assistant */}
           <Route

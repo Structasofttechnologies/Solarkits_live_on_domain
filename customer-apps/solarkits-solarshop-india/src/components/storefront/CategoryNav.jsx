@@ -10,18 +10,20 @@ import {
   FiHelpCircle,
   FiLayers,
   FiSliders,
-  FiBarChart2
+  FiBarChart2,
+  FiMapPin
 } from "react-icons/fi";
 
 export const CATEGORY_LINKS = [
   { name: "All Solar Kits", path: "/shop", icon: FiGrid },
+  { name: "Find Nearby Store", path: "/store-locator", icon: FiMapPin, highlight: true },
   { name: "On-Grid Kits", path: "/shop?type=on-grid", icon: FiSun },
   { name: "Off-Grid Kits", path: "/shop?type=off-grid", icon: FiBatteryCharging },
   { name: "Hybrid Kits", path: "/shop?type=hybrid", icon: FiZap },
   { name: "Residential", path: "/shop?application=residential", icon: FiHome },
   { name: "Commercial", path: "/shop?application=commercial", icon: FiBriefcase },
   { name: "Shop by Capacity", path: "/shop?view=capacity", icon: FiBarChart2 },
-  { name: "Find Your Solar Kit", path: "/kit-finder", icon: FiSliders, highlight: true },
+  { name: "Find Your Solar Kit", path: "/kit-finder", icon: FiSliders },
   { name: "Compare Kits", path: "/compare", icon: FiLayers },
   { name: "Kit Buying Guide", path: "/guide", icon: FiHelpCircle },
 ];

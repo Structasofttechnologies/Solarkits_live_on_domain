@@ -141,28 +141,8 @@ export default function StoreFooter() {
             </h4>
             <ul className="space-y-2 text-xs text-slate-600">
               <li>
-                <Link to="/track-status" className="hover:text-primary transition-colors font-medium">
-                  Track Your Order
-                </Link>
-              </li>
-              <li>
-                <Link to="/kit-finder" className="hover:text-primary transition-colors font-medium">
-                  Find Your Solar Kit
-                </Link>
-              </li>
-              <li>
-                <Link to="/compare" className="hover:text-primary transition-colors font-medium">
-                  Compare Solar Kits
-                </Link>
-              </li>
-              <li>
-                <Link to="/shipping-policy" className="hover:text-primary transition-colors font-medium">
-                  Shipping & Delivery
-                </Link>
-              </li>
-              <li>
-                <Link to="/refund-policy" className="hover:text-primary transition-colors font-medium">
-                  Returns & Cancellations
+                <Link to="/store-locator" className="hover:text-primary transition-colors font-bold text-primary flex items-center gap-1">
+                  <span>📍 Find Nearby Store</span>
                 </Link>
               </li>
             </ul>

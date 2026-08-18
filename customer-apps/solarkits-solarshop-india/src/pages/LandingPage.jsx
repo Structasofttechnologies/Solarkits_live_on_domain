@@ -34,6 +34,7 @@ import KitFinderWizard from "@/components/storefront/KitFinderWizard";
 import KitComparisonDrawer from "@/components/storefront/KitComparisonDrawer";
 import ExpertHelpModal from "@/components/storefront/ExpertHelpModal";
 import StoreFooter from "@/components/storefront/StoreFooter";
+import StoreLocatorSection from "@/components/storefront/StoreLocatorSection";
 import Drawer from "@/components/Drawer";
 import Button from "@/components/Button";
 
@@ -731,6 +732,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ─── 12B. FIND NEARBY SOLARKITS STORE LOCATOR ──────────────────── */}
+      <StoreLocatorSection onOpenExpertHelp={handleOpenExpertHelp} />
 
       {/* ─── 13. REAL PROJECT SHOWCASE ───────────────────────────────────── */}
       <section className="py-12 md:py-16 max-w-7xl mx-auto px-4 sm:px-6 w-full">

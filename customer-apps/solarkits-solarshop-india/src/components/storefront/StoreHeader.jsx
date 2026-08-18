@@ -14,7 +14,8 @@ import {
   FiMoon,
   FiPackage,
   FiShield,
-  FiHelpCircle
+  FiHelpCircle,
+  FiMapPin
 } from "react-icons/fi";
 import { MdLogin, MdLogout, MdSettings, MdShoppingBag } from "react-icons/md";
 import { logout } from "@/features/auth.slice";
@@ -228,6 +229,16 @@ export default function StoreHeader({
           {/* Right Actions: Compare, Wishlist/Guide, Cart, Theme, Account */}
           <div className="flex items-center gap-1.5 sm:gap-2.5">
             
+            {/* Find Nearby Store Trigger */}
+            <Link
+              to="/store-locator"
+              className="relative hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-text-secondary hover:text-primary hover:bg-primary-soft transition-colors"
+              title="Find Nearby SolarKit Store"
+            >
+              <FiMapPin size={17} className="text-secondary" />
+              <span className="hidden lg:inline">Find Store</span>
+            </Link>
+
             {/* Compare Kits trigger */}
             {onOpenCompare && (
               <button
