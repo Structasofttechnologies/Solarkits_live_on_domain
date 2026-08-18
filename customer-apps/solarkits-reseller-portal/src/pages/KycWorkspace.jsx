@@ -171,7 +171,7 @@ export default function KycWorkspace() {
           <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">Current Account KYC Status</div>
           <div className="text-xl font-black text-slate-900 capitalize mt-1 flex items-center gap-2">
             {reseller?.kyc_status === 'verified' ? (
-              <span className="text-emerald-600 flex items-center gap-2"><FiCheckCircle size={22} /> Verified Reseller Partner</span>
+              <span className="text-emerald-600 flex items-center gap-2"><FiCheckCircle size={22} /> Verified Franchisee Partner</span>
             ) : reseller?.kyc_status === 'submitted' || reseller?.kyc_status === 'pending' ? (
               <span className="text-amber-600 flex items-center gap-2"><FiClock size={22} /> Submitted — Pending Admin Review</span>
             ) : (

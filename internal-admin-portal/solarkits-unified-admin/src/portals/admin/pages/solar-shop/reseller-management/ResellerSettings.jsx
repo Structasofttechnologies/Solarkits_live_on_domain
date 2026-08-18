@@ -167,10 +167,10 @@ export default function ResellerSettings({ moduleUniqueId }) {
         <div>
           <h1 className="text-xl font-black text-text-primary flex items-center gap-2">
             <FiSettings className="text-primary" size={22} />
-            Reseller Platform Settings
+            Franchisee Platform Settings
           </h1>
           <p className="text-xs text-text-muted mt-1">
-            Platform-wide configuration for Solarshop reseller operations.
+            Platform-wide configuration for Solarshop franchisee operations.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export default function ResellerSettings({ moduleUniqueId }) {
         <SectionHeader icon={FiMapPin} title="Territory & Settlement Policy" subtitle="Exclusivity rules and payout triggers" />
         <FieldRow
           label="Territory Exclusivity Mode"
-          hint="⚠️ Policy-sensitive. 'Strict' = one reseller per territory. 'Open' = shared territories."
+          hint="⚠️ Policy-sensitive. 'Strict' = one franchisee per territory. 'Open' = shared territories."
         >
           <select
             value={settings.territory_exclusivity_mode ?? "strict"}
@@ -331,7 +331,7 @@ export default function ResellerSettings({ moduleUniqueId }) {
         </FieldRow>
         <FieldRow
           label="Settlement Trigger"
-          hint="⚠️ Policy-sensitive. When reseller wallet gets credited after an order."
+          hint="⚠️ Policy-sensitive. When franchisee wallet gets credited after an order."
         >
           <select
             value={settings.settlement_trigger ?? "delivery_plus_window"}
@@ -383,18 +383,18 @@ export default function ResellerSettings({ moduleUniqueId }) {
         )}
       </div>
 
-      {/* ─── 5. Reseller Activation Requirements ────────────────────────────── */}
+      {/* ─── 5. Franchisee Activation Requirements ────────────────────────────── */}
       <div className="bg-bg-card border border-border rounded-2xl p-5">
         <SectionHeader
           icon={FiCheckCircle}
-          title="Reseller Activation Requirements"
-          subtitle="Which conditions must be met before a reseller can go active"
+          title="Franchisee Activation Requirements"
+          subtitle="Which conditions must be met before a franchisee can go active"
         />
         {[
-          { key: "activation_require_gst_verified", label: "Require GST Verified", hint: "Reseller must have a verified GST number." },
-          { key: "activation_require_kyc_approved", label: "Require KYC Approved", hint: "Reseller KYC documents must be approved by admin." },
-          { key: "activation_require_signed_agreement", label: "Require Signed Agreement", hint: "⚠️ Policy-sensitive: reseller must sign the agreement." },
-          { key: "activation_require_active_plan", label: "Require Active Plan", hint: "⚠️ Policy-sensitive: reseller must have a paid active subscription." },
+          { key: "activation_require_gst_verified", label: "Require GST Verified", hint: "Franchisee must have a verified GST number." },
+          { key: "activation_require_kyc_approved", label: "Require KYC Approved", hint: "Franchisee KYC documents must be approved by admin." },
+          { key: "activation_require_signed_agreement", label: "Require Signed Agreement", hint: "⚠️ Policy-sensitive: franchisee must sign the agreement." },
+          { key: "activation_require_active_plan", label: "Require Active Plan", hint: "⚠️ Policy-sensitive: franchisee must have a paid active subscription." },
           { key: "activation_require_territory_assigned", label: "Require Territory Assigned", hint: "At least one territory must be assigned." },
           { key: "activation_require_product_auth", label: "Require Product Authorization", hint: "At least one product category must be authorized." },
         ].map(({ key, label, hint }) => (

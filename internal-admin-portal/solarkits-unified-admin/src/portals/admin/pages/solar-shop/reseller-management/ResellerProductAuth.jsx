@@ -623,7 +623,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             Product Authorization Matrix
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Manage product catalog whitelists, category access permissions, and SKU blacklists per reseller
+            Manage product catalog whitelists, category access permissions, and SKU blacklists per franchisee
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -646,9 +646,9 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
         </div>
       </div>
 
-      {/* Reseller Selector Bar */}
+      {/* Franchisee Selector Bar */}
       <div className="bg-surface p-4 rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row items-center gap-4">
-        <label className="text-sm font-semibold text-text-secondary flex-shrink-0">Select Reseller Account:</label>
+        <label className="text-sm font-semibold text-text-secondary flex-shrink-0">Select Franchisee Account:</label>
         <select
           className="w-full sm:w-80 px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           value={selectedResellerId}
@@ -672,7 +672,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             <div className="w-14 h-14 rounded-full bg-surface-hover flex items-center justify-center">
               <FiPackage size={24} className="text-text-muted" />
             </div>
-            <p className="text-sm text-text-muted">No explicit product authorization rules configured for this reseller</p>
+            <p className="text-sm text-text-muted">No explicit product authorization rules configured for this franchisee</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

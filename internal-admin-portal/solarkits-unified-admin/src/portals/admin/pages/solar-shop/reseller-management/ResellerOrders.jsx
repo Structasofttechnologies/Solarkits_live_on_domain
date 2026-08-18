@@ -141,10 +141,10 @@ export default function ResellerOrders({ moduleUniqueId }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <FiShoppingCart className="text-primary" size={24} />
-            Reseller Orders Workspace
+            Franchisee Orders Workspace
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Manage reseller B2B procurement stock orders & EPC customer sales attribution
+            Manage franchisee B2B procurement stock orders & EPC customer sales attribution
           </p>
         </div>
       </div>
@@ -179,7 +179,7 @@ export default function ResellerOrders({ moduleUniqueId }) {
           <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
           <input
             type="text"
-            placeholder={activeTab === "b2b_procurement" ? "Search by order number or reseller name..." : "Search by order ID, reseller name, or invoice number..."}
+            placeholder={activeTab === "b2b_procurement" ? "Search by order number or franchisee name..." : "Search by order ID, franchisee name, or invoice number..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"

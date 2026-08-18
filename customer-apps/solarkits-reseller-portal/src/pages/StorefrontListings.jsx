@@ -71,7 +71,7 @@ export default function StorefrontListings() {
       }
     } catch (err) {
       console.error("Listings fetch error:", err);
-      setError("Failed to load reseller storefront product catalogue.");
+      setError("Failed to load franchisee storefront product catalogue.");
     } finally {
       setLoading(false);
     }
@@ -175,7 +175,7 @@ export default function StorefrontListings() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-xs font-bold uppercase tracking-wider mb-2">
-              <FiShield /> Reseller Product Storefront Engine
+              <FiShield /> Franchisee Product Storefront Engine
             </div>
             <h1 className="text-3xl font-black text-white tracking-tight">
               Product Catalogue & EPC Storefront
@@ -286,7 +286,7 @@ export default function StorefrontListings() {
       {loading ? (
         <div className="bg-white p-16 rounded-3xl border border-slate-200 text-center space-y-3 shadow-xs">
           <FiRefreshCw className="animate-spin text-blue-600 mx-auto" size={32} />
-          <p className="text-slate-600 font-bold text-sm">Loading reseller product catalogue...</p>
+          <p className="text-slate-600 font-bold text-sm">Loading franchisee product catalogue...</p>
         </div>
       ) : listings.length === 0 ? (
         <div className="bg-white p-16 rounded-3xl border border-slate-200 text-center space-y-4 shadow-xs">
@@ -296,7 +296,7 @@ export default function StorefrontListings() {
           <div>
             <h3 className="text-lg font-black text-slate-900">No Storefront Listings Found</h3>
             <p className="text-slate-500 text-sm mt-1 max-w-md mx-auto">
-              No products match your filter criteria or have been assigned to your reseller account by the Super Admin yet.
+              No products match your filter criteria or have been assigned to your franchisee account by the Super Admin yet.
             </p>
           </div>
         </div>
@@ -403,16 +403,16 @@ export default function StorefrontListings() {
                   </div>
 
                   <p className="text-xs text-slate-600 font-medium line-clamp-2">
-                    {item.description || p?.description || "High efficiency solar equipment configured for wholesale reseller distribution."}
+                    {item.description || p?.description || "High efficiency solar equipment configured for wholesale franchisee distribution."}
                   </p>
                 </div>
 
                 {/* Pricing & Actions Column */}
                 <div className="lg:col-span-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-                  {/* Authorized Reseller Purchase Price */}
+                  {/* Authorized Franchisee Purchase Price */}
                   <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-200/80">
                     <span className="text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                      <FiTag className="text-slate-400" /> Reseller Cost Price:
+                      <FiTag className="text-slate-400" /> Franchisee Cost Price:
                     </span>
                     <span className="font-extrabold text-slate-900 font-mono text-sm">
                       ₹{costInr}

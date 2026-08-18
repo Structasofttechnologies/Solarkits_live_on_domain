@@ -218,13 +218,13 @@ function EmptyState({ code, resellerName, onRefresh }) {
   const states = {
     NO_RESELLER_ASSIGNED: {
       icon: <FiAlertTriangle className="text-amber-500" size={40} />,
-      title: "No Reseller Partner Assigned",
-      message: "Your EPC account is not linked to a reseller partner yet. Please contact your administrator.",
+      title: "No Franchisee Partner Assigned",
+      message: "Your EPC account is not linked to a franchisee partner yet. Please contact your administrator.",
     },
     RESELLER_INACTIVE: {
       icon: <FiAlertTriangle className="text-amber-500" size={40} />,
-      title: "Reseller Partner Inactive",
-      message: `Your channel partner (${resellerName || "assigned reseller"}) is currently inactive. Please contact them directly.`,
+      title: "Franchisee Partner Inactive",
+      message: `Your channel partner (${resellerName || "assigned franchisee"}) is currently inactive. Please contact them directly.`,
     },
     EPC_PENDING_APPROVAL: {
       icon: <FiInfo className="text-blue-500" size={40} />,
@@ -234,12 +234,12 @@ function EmptyState({ code, resellerName, onRefresh }) {
     EPC_REJECTED: {
       icon: <FiAlertTriangle className="text-red-500" size={40} />,
       title: "Account Application Rejected",
-      message: "Your EPC account has been rejected. Please contact support or your reseller.",
+      message: "Your EPC account has been rejected. Please contact support or your franchisee.",
     },
     NO_PUBLISHED_PRODUCTS: {
       icon: <MdSolarPower className="text-slate-400" size={48} />,
       title: "No Products Published Yet",
-      message: `${resellerName || "Your reseller partner"} has not published any products to your catalogue yet.`,
+      message: `${resellerName || "Your franchisee partner"} has not published any products to your catalogue yet.`,
     },
     default: {
       icon: <FiPackage className="text-slate-400" size={40} />,
@@ -390,13 +390,13 @@ export default function EpcCatalogue() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold backdrop-blur-md mb-2">
               <MdSolarPower size={15} />
-              <span>Reseller Catalogue</span>
+              <span>Franchisee Catalogue</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
               Product Catalogue
             </h1>
             <p className="mt-1 text-blue-100 text-sm">
-              Published by <span className="font-bold text-white">{resellerName || "Partner Reseller"}</span>
+              Published by <span className="font-bold text-white">{resellerName || "Partner Franchisee"}</span>
               {user?.name && <> · Account: <span className="font-medium text-white">{user.name}</span></>}
             </p>
           </div>

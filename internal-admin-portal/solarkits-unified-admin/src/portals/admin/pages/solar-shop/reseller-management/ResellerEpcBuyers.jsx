@@ -54,7 +54,7 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
       const res = await axios.get(url, { headers: authHeaderObj() });
       if (res.data?.status === "success") setBuyers(res.data.data);
     } catch {
-      dispatch(setAlert({ type: "error", message: "Failed to load reseller EPC buyers" }));
+      dispatch(setAlert({ type: "error", message: "Failed to load franchisee EPC buyers" }));
     } finally {
       setLoading(false);
     }
@@ -90,10 +90,10 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <FiUserCheck className="text-primary" size={24} />
-            Reseller EPC Buyers
+            Franchisee EPC Buyers
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Review and approve EPC Buyer sub-accounts onboarded by active Resellers
+            Review and approve EPC Buyer sub-accounts onboarded by active Franchisees
           </p>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
           <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
           <input
             type="text"
-            placeholder="Search EPC buyer name, email, or parent reseller..."
+            placeholder="Search EPC buyer name, email, or parent franchisee..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -128,14 +128,14 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-text-muted gap-3">
             <FiLoader className="animate-spin" size={20} />
-            <span className="text-sm">Loading reseller EPC buyers...</span>
+            <span className="text-sm">Loading franchisee EPC buyers...</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-14 h-14 rounded-full bg-surface-hover flex items-center justify-center">
               <FiUsers size={24} className="text-text-muted" />
             </div>
-            <p className="text-sm text-text-muted">No reseller-onboarded EPC buyers found</p>
+            <p className="text-sm text-text-muted">No franchisee-onboarded EPC buyers found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -143,7 +143,7 @@ export default function ResellerEpcBuyers({ moduleUniqueId }) {
               <thead>
                 <tr className="border-b border-border bg-bg">
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">EPC Buyer Name</th>
-                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Attributed Reseller</th>
+                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Attributed Franchisee</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5 hidden md:table-cell">Contact</th>
                   <th className="text-center text-text-muted font-medium px-4 py-3.5">Approval Status</th>
                   <th className="text-right text-text-muted font-medium px-5 py-3.5">Actions</th>

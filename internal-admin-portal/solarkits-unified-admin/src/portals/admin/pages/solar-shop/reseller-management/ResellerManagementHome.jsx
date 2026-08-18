@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 const QUICK_LINKS = [
   {
-    label: "Reseller Types",
+    label: "Franchisee Types",
     description: "Commission and Dealer mode configurations",
     icon: FiTag,
     path: "/admin-panel/solar-shop/reseller-management/types",
@@ -12,8 +12,8 @@ const QUICK_LINKS = [
     bg: "bg-info-soft",
   },
   {
-    label: "Reseller List",
-    description: "View and manage all resellers",
+    label: "Franchisee List",
+    description: "View and manage all franchisees",
     icon: FiUsers,
     path: "/admin-panel/solar-shop/reseller-management/resellers",
     color: "text-success",
@@ -21,7 +21,7 @@ const QUICK_LINKS = [
     comingSoon: true,
   },
   {
-    label: "Reseller Plans",
+    label: "Franchisee Plans",
     description: "Plan subscriptions and pricing",
     icon: FiFileText,
     path: "/admin-panel/solar-shop/reseller-management/plans",
@@ -49,7 +49,7 @@ const QUICK_LINKS = [
   },
   {
     label: "Product Authorization",
-    description: "Reseller-product access matrix",
+    description: "Franchisee-product access matrix",
     icon: FiPackage,
     path: "/admin-panel/solar-shop/reseller-management/product-auth",
     color: "text-success",
@@ -67,10 +67,10 @@ export default function ResellerManagementHome() {
       <div>
         <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
           <FiUsers className="text-primary" size={24} />
-          Reseller Management
+          Franchisee Management
         </h1>
         <p className="text-sm text-text-muted mt-1">
-          Manage resellers, commission structures, territories, and product authorizations
+          Manage franchisees, commission structures, territories, and product authorizations
         </p>
       </div>
 
@@ -82,7 +82,7 @@ export default function ResellerManagementHome() {
         <div>
           <p className="text-sm font-semibold text-text-primary">Phase 1 Complete</p>
           <p className="text-xs text-text-secondary mt-0.5">
-            Roles, permissions, and configuration masters are live. Reseller registration, KYC,
+            Roles, permissions, and configuration masters are live. Franchisee registration, KYC,
             commission engine, and territory management are coming in Phases 2–8.
           </p>
         </div>

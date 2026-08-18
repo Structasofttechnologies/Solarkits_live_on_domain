@@ -300,8 +300,64 @@ const authenticateBoskitUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Optional Authenticate BOSKIT Distributor
+ * Attaches req.distributor and req.user if a valid token is provided,
+ * but allows unauthenticated / guest requests to proceed.
+ */
+const optionalBoskitDistributorAuth = async (req, res, next) => {
+  try {
+    const token = extractToken(req, [
+      'boskit_distributor_access_token',
+      'boskit_access_token',
+      'boskit_token',
+    ]);
+
+    if (!token) {
+      return next();
+    }
+
+    let decoded;
+    try {
+      decoded = decode_token(token);
+    } catch (err) {
+      return next();
+    }
+
+    if (!decoded || !decoded.id || decoded.role !== 'boskit_distributor') {
+      return next();
+    }
+
+    const BoskitDistributor = mongoose.model('boskit_distributors');
+    const distributor = await BoskitDistributor.findOne({
+      _id: decoded.id,
+      deleted_at: null,
+    }).lean();
+
+    if (distributor && distributor.activation_status !== 'suspended' && distributor.activation_status !== 'terminated') {
+      req.distributor = distributor;
+      req.user = {
+        id: distributor._id,
+        _id: distributor._id,
+        email: distributor.email,
+        mobile: distributor.mobile,
+        business_name: distributor.business_name,
+        lifecycle_status: distributor.lifecycle_status,
+        activation_status: distributor.activation_status,
+        kyc_status: distributor.kyc_status,
+        role: 'boskit_distributor',
+      };
+    }
+
+    return next();
+  } catch (error) {
+    return next();
+  }
+};
+
 module.exports = {
   authenticateBoskitDistributor,
   authenticateBoskitDealer,
   authenticateBoskitUser,
+  optionalBoskitDistributorAuth,
 };

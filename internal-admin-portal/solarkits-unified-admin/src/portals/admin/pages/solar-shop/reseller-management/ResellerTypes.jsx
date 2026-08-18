@@ -30,7 +30,7 @@ const COMMERCIAL_MODES = [
   {
     value: "commission",
     label: "Commission",
-    description: "Reseller earns commission on eligible EPC buyer orders",
+    description: "Franchisee earns commission on eligible EPC buyer orders",
     icon: FiZap,
     color: "text-primary",
     bg: "bg-info-soft",
@@ -38,7 +38,7 @@ const COMMERCIAL_MODES = [
   {
     value: "dealer",
     label: "Dealer",
-    description: "Reseller purchases at configured dealer pricing (margin discount)",
+    description: "Franchisee purchases at configured dealer pricing (margin discount)",
     icon: FiShoppingBag,
     color: "text-warning",
     bg: "bg-warning-soft",
@@ -97,7 +97,7 @@ function FormModal({ mode, initial, onClose, onSaved }) {
       };
       const res = await apiFetch(isEdit ? "put" : "post", endpoint, payload);
       if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: `Reseller type ${isEdit ? "updated" : "created"}` }));
+        dispatch(setAlert({ type: "success", message: `Franchisee type ${isEdit ? "updated" : "created"}` }));
         onSaved(res.data.data);
         onClose();
       } else {
@@ -265,10 +265,10 @@ function DeleteConfirmModal({ type, onClose, onConfirmed }) {
             <FiAlertCircle size={28} className="text-danger" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-1">Delete Reseller Type?</h3>
+            <h3 className="text-lg font-semibold text-text-primary mb-1">Delete Franchisee Type?</h3>
             <p className="text-sm text-text-secondary">
               Permanently removing <strong className="text-text-primary">"{type.name}"</strong> ({type.commercial_mode} mode).
-              Active resellers using this type will need to be reassigned first.
+              Active franchisees using this type will need to be reassigned first.
             </p>
           </div>
           <div className="flex gap-3 w-full">
@@ -308,7 +308,7 @@ export default function ResellerTypes({ moduleUniqueId }) {
       );
       if (res.data?.status === "success") setTypes(res.data.data);
     } catch {
-      dispatch(setAlert({ type: "error", message: "Failed to load reseller types" }));
+      dispatch(setAlert({ type: "error", message: "Failed to load franchisee types" }));
     } finally {
       setLoading(false);
     }
@@ -340,10 +340,10 @@ export default function ResellerTypes({ moduleUniqueId }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <FiTag className="text-primary" size={24} />
-            Reseller Types
+            Franchisee Types
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Define reseller categories and their commercial modes (Commission or Dealer)
+            Define franchisee categories and their commercial modes (Commission or Dealer)
           </p>
         </div>
         <button
@@ -351,7 +351,7 @@ export default function ResellerTypes({ moduleUniqueId }) {
           className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 hover:-translate-y-0.5"
         >
           <FiPlus size={16} />
-          Add Reseller Type
+          Add Franchisee Type
         </button>
       </div>
 
@@ -361,7 +361,7 @@ export default function ResellerTypes({ moduleUniqueId }) {
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
           <input
             type="text"
-            placeholder="Search reseller types..."
+            placeholder="Search franchisee types..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
@@ -389,7 +389,7 @@ export default function ResellerTypes({ moduleUniqueId }) {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-text-muted gap-3">
             <FiLoader className="animate-spin" size={20} />
-            <span className="text-sm">Loading reseller types...</span>
+            <span className="text-sm">Loading franchisee types...</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -397,7 +397,7 @@ export default function ResellerTypes({ moduleUniqueId }) {
               <FiTag size={24} className="text-text-muted" />
             </div>
             <p className="text-sm text-text-muted">
-              {search || filterMode !== "all" ? "No reseller types match your filters" : "No reseller types yet. Add one to get started."}
+              {search || filterMode !== "all" ? "No franchisee types match your filters" : "No franchisee types yet. Add one to get started."}
             </p>
           </div>
         ) : (

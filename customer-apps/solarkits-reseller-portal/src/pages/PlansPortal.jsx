@@ -32,7 +32,7 @@ export default function PlansPortal() {
       <div>
         <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5">
           <FiZap className="text-blue-600" size={28} />
-          Reseller Subscription Plans
+          Franchisee Subscription Plans
         </h1>
         <p className="text-sm font-medium text-slate-600 mt-1">
           Explore partner pricing tiers, commission margins, and geographic territory limits

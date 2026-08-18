@@ -68,7 +68,7 @@ export default function CtaBanner() {
             letterSpacing: "-0.02em",
           }}
         >
-          Become Reseller Register Now{" "}
+          Become Franchisee — Register Now{" "}
           <span style={{
             background: "linear-gradient(135deg, #f8c21a, #fde68a)",
             backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent",

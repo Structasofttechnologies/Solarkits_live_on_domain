@@ -89,7 +89,7 @@ function KycReviewModal({ decision, resellerName, onClose, onConfirm }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-md p-6 space-y-4">
         <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
-        <p className="text-xs text-text-muted">Target Reseller: <strong className="text-text-primary">{resellerName}</strong></p>
+        <p className="text-xs text-text-muted">Target Franchisee: <strong className="text-text-primary">{resellerName}</strong></p>
 
         {!isVerify && (
           <div>
@@ -263,7 +263,7 @@ export default function ResellerDetail() {
 
   if (!reseller) {
     return (
-      <div className="text-center py-20 text-text-muted font-semibold">Reseller account not found</div>
+      <div className="text-center py-20 text-text-muted font-semibold">Franchisee account not found</div>
     );
   }
 
@@ -293,7 +293,7 @@ export default function ResellerDetail() {
               onClick={() => handleActivationChange("suspended")}
               className="px-4 py-2 rounded-xl bg-danger-soft text-danger border border-danger/20 text-xs font-bold hover:bg-danger hover:text-white transition-all shadow-xs cursor-pointer"
             >
-              Suspend Reseller
+              Suspend Franchisee
             </button>
           ) : (
             <button
@@ -302,7 +302,7 @@ export default function ResellerDetail() {
               title={reseller.kyc_status !== "verified" ? "Verify KYC first to activate account" : ""}
               className="px-4 py-2 rounded-xl bg-success text-white text-xs font-bold hover:bg-success-hover transition-all disabled:opacity-50 shadow-xs cursor-pointer"
             >
-              Activate Reseller Partner
+              Activate Franchisee Partner
             </button>
           )}
         </div>

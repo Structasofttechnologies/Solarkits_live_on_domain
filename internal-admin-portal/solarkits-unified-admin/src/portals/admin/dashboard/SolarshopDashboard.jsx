@@ -99,27 +99,27 @@ const menus = [
         },
     ],
     [
-        // ── Phase 1: Reseller Management ─────────────────────────────
+        // ── Phase 1: Franchisee Management ─────────────────────────────
         {
-            name: "Reseller Management",
+            name: "Franchisee Management",
             icon: <FiUsers />,
             path: "/admin-panel/solar-shop/reseller-management",
             unique_id: "RSL_MGMT",
             subMenu: [
                 {
-                    name: "Reseller Accounts",
+                    name: "Franchisee Accounts",
                     icon: <FiUsers />,
                     path: "/admin-panel/solar-shop/reseller-management/resellers",
                     unique_id: "RSL_MGMT"
                 },
                 {
-                    name: "Reseller Types",
+                    name: "Franchisee Types",
                     icon: <FiTag />,
                     path: "/admin-panel/solar-shop/reseller-management/types",
                     unique_id: "RSL_TYPES"
                 },
                 {
-                    name: "Reseller Plans",
+                    name: "Franchisee Plans",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/reseller-management/plans",
                     unique_id: "RSL_PLAN"
@@ -137,13 +137,13 @@ const menus = [
                     unique_id: "RSL_PROD_AUTH"
                 },
                 {
-                    name: "Reseller EPC Buyers",
+                    name: "Franchisee EPC Buyers",
                     icon: <FaUserCheck />,
                     path: "/admin-panel/solar-shop/reseller-management/epc-buyers",
                     unique_id: "RSL_EPC_BUYERS"
                 },
                 {
-                    name: "Reseller Orders",
+                    name: "Franchisee Orders",
                     icon: <FaFileInvoiceDollar />,
                     path: "/admin-panel/solar-shop/reseller-management/orders",
                     unique_id: "RSL_MGMT"
@@ -155,7 +155,7 @@ const menus = [
                     unique_id: "RSL_WALLET"
                 },
                 {
-                    name: "Reseller Settings",
+                    name: "Franchisee Settings",
                     icon: <FiSettings />,
                     path: "/admin-panel/solar-shop/reseller-management/settings",
                     unique_id: "RSL_SETTINGS"
@@ -535,12 +535,12 @@ export default function SolarShopDashboard() {
                                         }
                                     />
 
-                                    {/* ── Phase 1: Reseller Management ─────────────────────── */}
+                                    {/* ── Phase 1: Franchisee Management ─────────────────────── */}
                                     <Route
                                         path="/reseller-management/*"
                                         element={
                                             <PermissionGuard requiredUniqueId="RSL_MGMT">
-                                                <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
+                                                <Suspense fallback={<Loader text="Loading Franchisee Management..." />}>
                                                     <ResellerManagement />
                                                 </Suspense>
                                             </PermissionGuard>
@@ -550,7 +550,7 @@ export default function SolarShopDashboard() {
                                         path="/:countryName/reseller-management/*"
                                         element={
                                             <PermissionGuard requiredUniqueId="RSL_MGMT">
-                                                <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
+                                                <Suspense fallback={<Loader text="Loading Franchisee Management..." />}>
                                                     <ResellerManagement />
                                                 </Suspense>
                                             </PermissionGuard>
@@ -560,7 +560,7 @@ export default function SolarShopDashboard() {
                                         path="/reseller-management/settings"
                                         element={
                                             <PermissionGuard requiredUniqueId="RSL_SETTINGS">
-                                                <Suspense fallback={<Loader text="Loading Reseller Settings..." />}>
+                                                <Suspense fallback={<Loader text="Loading Franchisee Settings..." />}>
                                                     <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
                                                 </Suspense>
                                             </PermissionGuard>
@@ -570,7 +570,7 @@ export default function SolarShopDashboard() {
                                         path="/:countryName/reseller-management/settings"
                                         element={
                                             <PermissionGuard requiredUniqueId="RSL_SETTINGS">
-                                                <Suspense fallback={<Loader text="Loading Reseller Settings..." />}>
+                                                <Suspense fallback={<Loader text="Loading Franchisee Settings..." />}>
                                                     <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
                                                 </Suspense>
                                             </PermissionGuard>

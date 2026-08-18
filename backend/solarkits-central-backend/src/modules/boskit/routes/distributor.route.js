@@ -3,12 +3,13 @@
 const express = require('express');
 const router = express.Router();
 
-const { authenticateBoskitDistributor } = require('../middlewares/auth.middleware');
+const { authenticateBoskitDistributor, optionalBoskitDistributorAuth } = require('../middlewares/auth.middleware');
 const { gstRateLimiter } = require('../../admin-panel/middlewares/rate.limit');
 const onboardingController = require('../controllers/distributor/onboarding.controller');
 const distributorController = require('../controllers/distributor/distributor.controller');
 
-// ── Onboarding Wizard Routes (Accessible to prospective distributors) ──────────
+// ── Onboarding Wizard Routes (Accessible to prospective / authenticated distributors) ──
+router.use('/onboarding', optionalBoskitDistributorAuth);
 router.get('/onboarding/state',          onboardingController.get_onboarding_state);
 router.post('/onboarding/save-step',     onboardingController.save_onboarding_step);
 router.post('/onboarding/gst-verify',    gstRateLimiter, onboardingController.verify_gst_live);

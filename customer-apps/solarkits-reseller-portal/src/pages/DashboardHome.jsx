@@ -265,7 +265,7 @@ export default function DashboardHome() {
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 rounded-3xl p-8 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
           <div className="space-y-2 relative z-10">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold backdrop-blur-md">
-              <FiZap size={14} /> Reseller Dashboard {selectedIndustry ? `• ${selectedIndustry.name}` : ''}
+              <FiZap size={14} /> Franchisee Dashboard {selectedIndustry ? `• ${selectedIndustry.name}` : ''}
             </div>
             <h1 className="text-3xl font-black tracking-tight text-white">
               Welcome, {reseller?.business_name || "Partner"}!

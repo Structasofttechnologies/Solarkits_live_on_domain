@@ -139,7 +139,7 @@ export default function Register() {
       return;
     }
     if (!form.reseller_type_id) {
-      setFormError("Please select a Reseller Type.");
+      setFormError("Please select a Franchisee Type.");
       return;
     }
 
@@ -188,7 +188,7 @@ export default function Register() {
           </div>
           <h2 className="text-2xl font-extrabold text-slate-900">Application Submitted!</h2>
           <p className="text-sm text-slate-600">
-            Your reseller partner application has been submitted successfully. Our admin team will verify and activate your account.
+            Your franchisee partner application has been submitted successfully. Our admin team will verify and activate your account.
           </p>
           <div className="pt-2 flex items-center justify-center gap-2 text-xs font-semibold text-blue-600">
             <FiLoader className="animate-spin" size={16} /> Redirecting to login portal...
@@ -211,7 +211,7 @@ export default function Register() {
             <FiZap size={28} />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-            Become a Solar Reseller Partner
+            Become a Solar Franchisee Partner
           </h1>
           <p className="text-sm font-medium text-slate-600">
             Register your business account for wholesale margins & commissions
@@ -526,10 +526,10 @@ export default function Register() {
                     </div>
                   </div>
 
-                  {/* Reseller Type */}
+                  {/* Franchisee Type */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Reseller Type *
+                      Franchisee Type *
                     </label>
                     <div className="relative">
                       <FiPackage className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -540,7 +540,7 @@ export default function Register() {
                         onChange={(e) => handleTypeChange(e.target.value)}
                         className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="">Select Reseller Category...</option>
+                        <option value="">Select Franchisee Category...</option>
                         {types.map((t) => (
                           <option key={t.id || t._id} value={t.id || t._id}>
                             {t.name}{t.commercial_mode ? ` (${t.commercial_mode})` : ""}
@@ -644,7 +644,7 @@ export default function Register() {
                       </>
                     ) : (
                       <>
-                        <FiCheckCircle size={18} /> Submit Reseller Application
+                        <FiCheckCircle size={18} /> Submit Franchisee Application
                       </>
                     )}
                   </button>
@@ -656,7 +656,7 @@ export default function Register() {
 
         {/* Footer Link */}
         <div className="text-center text-xs text-slate-600 font-medium mt-6">
-          Already have a reseller account?{" "}
+          Already have a franchisee account?{" "}
           <Link to="/login" id="go-to-login-link" className="text-blue-600 font-extrabold hover:underline underline-offset-2">
             Sign In
           </Link>

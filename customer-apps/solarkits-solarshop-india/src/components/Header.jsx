@@ -218,11 +218,11 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
         />
       </div>
 
-      {/* Reseller Partner Badge */}
+      {/* Franchisee Partner Badge */}
       {user?.reseller?.business_name && (
         <div
           className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold shadow-xs"
-          title={`Attributed Reseller Partner: ${user.reseller.business_name} (${user.reseller.commercial_mode || 'Partner'} Mode)`}
+          title={`Attributed Franchisee Partner: ${user.reseller.business_name} (${user.reseller.commercial_mode || 'Partner'} Mode)`}
         >
           <FiUsers className="text-emerald-500" size={13} />
           <span>Partner Network: <strong className="text-emerald-700 dark:text-emerald-300">{user.reseller.business_name}</strong></span>

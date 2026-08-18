@@ -87,7 +87,7 @@ export default function Login() {
           </div>
           <div>
             <h1 className="text-2xl font-extrabold" style={{ color: "#0f172a" }}>
-              Reseller Business Portal
+              Franchisee Business Portal
             </h1>
             <p className="text-sm mt-1" style={{ color: "#64748b" }}>
               Sign in to manage your solar business, EPC sub-accounts &amp; wallet
@@ -109,7 +109,7 @@ export default function Login() {
               style={{ color: "#1d4ed8" }}
             >
               <FiKey size={13} style={{ color: "#3b82f6" }} />
-              Demo Reseller Credentials
+              Demo Franchisee Credentials
             </span>
             <span
               className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase"
@@ -176,7 +176,7 @@ export default function Login() {
               <input
                 type="text"
                 required
-                placeholder="reseller@example.com or mobile"
+                placeholder="franchisee@example.com or mobile"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm transition-all outline-none"
@@ -260,7 +260,7 @@ export default function Login() {
         </form>
 
         <div className="text-center pt-1 text-xs font-medium" style={{ color: "#64748b" }}>
-          Don't have a Reseller Business Account?{" "}
+          Don't have a Franchisee Business Account?{" "}
           <Link
             to="/register"
             className="font-bold hover:underline underline-offset-2"

@@ -86,7 +86,7 @@ export default function ResellerList({ moduleUniqueId }) {
         if (res.data.pagination) setPagination(res.data.pagination);
       }
     } catch {
-      dispatch(setAlert({ type: "error", message: "Failed to load resellers" }));
+      dispatch(setAlert({ type: "error", message: "Failed to load franchisees" }));
     } finally {
       setLoading(false);
     }
@@ -103,10 +103,10 @@ export default function ResellerList({ moduleUniqueId }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <FiUsers className="text-primary" size={24} />
-            Reseller Accounts
+            Franchisee Accounts
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Manage reseller profiles, KYC verification queue, and account activation statuses
+            Manage franchisee profiles, KYC verification queue, and account activation statuses
           </p>
         </div>
       </div>
@@ -158,21 +158,21 @@ export default function ResellerList({ moduleUniqueId }) {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-text-muted gap-3">
             <FiLoader className="animate-spin" size={20} />
-            <span className="text-sm">Loading reseller accounts...</span>
+            <span className="text-sm">Loading franchisee accounts...</span>
           </div>
         ) : resellers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-14 h-14 rounded-full bg-surface-hover flex items-center justify-center">
               <FiUsers size={24} className="text-text-muted" />
             </div>
-            <p className="text-sm text-text-muted">No resellers match your search criteria</p>
+            <p className="text-sm text-text-muted">No franchisees match your search criteria</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg">
-                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Business / Reseller</th>
+                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Business / Franchisee</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">Mode</th>
                   <th className="text-left text-text-muted font-medium px-5 py-3.5 hidden md:table-cell">Contact</th>
                   <th className="text-center text-text-muted font-medium px-4 py-3.5">KYC Status</th>
@@ -240,7 +240,7 @@ export default function ResellerList({ moduleUniqueId }) {
         {!loading && pagination.pages > 1 && (
           <div className="flex items-center justify-between px-5 py-3.5 border-t border-border bg-bg text-xs">
             <span className="text-text-muted">
-              Page {pagination.page} of {pagination.pages} ({pagination.total} resellers)
+              Page {pagination.page} of {pagination.pages} ({pagination.total} franchisees)
             </span>
             <div className="flex items-center gap-2">
               <button

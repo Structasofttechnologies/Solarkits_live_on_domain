@@ -178,7 +178,7 @@ export default function DashboardLayout() {
               <img src={logoImg} alt="SolarKits Logo" className="w-28 h-auto" />
             </div>
 
-            {/* Reseller badge in sidebar */}
+            {/* Franchisee badge in sidebar */}
             {reseller && (
               <div className="px-3 py-2" style={{ borderBottom: "1px solid var(--color-border)" }}>
                 <div
@@ -189,7 +189,7 @@ export default function DashboardLayout() {
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
                     style={{ background: "var(--gradient-primary)" }}
                   >
-                    {reseller.business_name?.charAt(0)?.toUpperCase() || "R"}
+                    {reseller.business_name?.charAt(0)?.toUpperCase() || "F"}
                   </div>
                   <div className="min-w-0">
                     <div
@@ -284,7 +284,7 @@ export default function DashboardLayout() {
                 }}
               >
                 <FiLogOut size={15} />
-                Logout Partner
+                Logout Franchisee
               </button>
             </div>
           </motion.aside>
@@ -326,7 +326,7 @@ export default function DashboardLayout() {
                 className="font-bold text-sm hidden sm:block"
                 style={{ color: "var(--color-text-secondary)" }}
               >
-                Reseller Business Portal
+                Franchisee Business Portal
               </span>
             </div>
           </div>

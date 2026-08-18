@@ -91,14 +91,14 @@ function FormModal({ mode, initial, onClose, onSaved }) {
       };
       const res = await apiFetch(isEdit ? "put" : "post", endpoint, payload);
       if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: `Reseller plan ${isEdit ? "updated" : "created"}` }));
+        dispatch(setAlert({ type: "success", message: `Franchisee plan ${isEdit ? "updated" : "created"}` }));
         onSaved(res.data.data);
         onClose();
       } else {
         dispatch(setAlert({ type: "error", message: res.data?.message || "Operation failed" }));
       }
     } catch (err) {
-      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "An error occurred" }));
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Save failed" }));
     } finally {
       setSaving(false);
     }
@@ -107,14 +107,14 @@ function FormModal({ mode, initial, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-lg overflow-hidden"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto scrollbar-hover"
       >
-        <div className="flex items-center justify-between p-6 border-b border-border">
+        <div className="flex items-center justify-between pb-4 border-b border-border mb-5">
           <h3 className="text-lg font-semibold text-text-primary">
-            {mode === "edit" ? "Edit Reseller Plan" : "Create Reseller Plan"}
+            {mode === "edit" ? "Edit Franchisee Plan" : "Create Franchisee Plan"}
           </h3>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
             <FiX size={18} />
@@ -275,7 +275,7 @@ function DeleteConfirmModal({ plan, onClose, onConfirmed }) {
             <FiAlertCircle size={28} className="text-danger" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-text-primary mb-1">Delete Reseller Plan?</h3>
+            <h3 className="text-lg font-semibold text-text-primary mb-1">Delete Franchisee Plan?</h3>
             <p className="text-sm text-text-secondary">
               Permanently deleting <strong className="text-text-primary">"{plan.name}"</strong>. Active subscriptions must be reassigned first.
             </p>
@@ -313,7 +313,7 @@ export default function ResellerPlans({ moduleUniqueId }) {
       );
       if (res.data?.status === "success") setPlans(res.data.data);
     } catch {
-      dispatch(setAlert({ type: "error", message: "Failed to load reseller plans" }));
+      dispatch(setAlert({ type: "error", message: "Failed to load franchisee plans" }));
     } finally {
       setLoading(false);
     }
@@ -345,7 +345,7 @@ export default function ResellerPlans({ moduleUniqueId }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <FiFileText className="text-primary" size={24} />
-            Reseller Plans
+            Franchisee Plans
           </h1>
           <p className="text-sm text-text-muted mt-1">
             Configure territory subscription plans, fee structures, and validity periods

@@ -10,18 +10,42 @@ const { sendOTP } = require('../../../solarshop-india/utils/nodemailer');
  */
 const get_onboarding_state = async (req, res) => {
   try {
-    const distributorId = req.user.id;
+    const distributorId = req.user?.id || req.user?._id || req.distributor?._id || req.query?.distributor_id;
+
+    const BoskitDistributorPlan = mongoose.model('boskit_distributor_plans');
+    const plans = await BoskitDistributorPlan.find({
+      $or: [{ status: 'published' }, { is_active: true }],
+      deleted_at: null,
+    }).sort({ sort_order: 1 }).lean();
+
+    if (!distributorId) {
+      // Unauthenticated / prospective visitor: return available plans and empty state
+      return res.status(200).json({
+        status: 'success',
+        success: true,
+        distributor: null,
+        application: null,
+        kyc: null,
+        available_plans: plans || [],
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(distributorId)) {
+      return res.status(400).json({
+        status: 'error',
+        success: false,
+        message: 'Invalid distributor ID.',
+      });
+    }
 
     const BoskitDistributor = mongoose.model('boskit_distributors');
     const BoskitDistributorApplication = mongoose.model('boskit_distributor_applications');
     const BoskitDistributorKyc = mongoose.model('boskit_distributor_kyc');
-    const BoskitDistributorPlan = mongoose.model('boskit_distributor_plans');
 
-    let [distributor, application, kyc, plans] = await Promise.all([
+    let [distributor, application, kyc] = await Promise.all([
       BoskitDistributor.findById(distributorId).lean(),
       BoskitDistributorApplication.findOne({ distributor_id: distributorId }).lean(),
       BoskitDistributorKyc.findOne({ distributor_id: distributorId }).lean(),
-      BoskitDistributorPlan.find({ $or: [{ status: 'published' }, { is_active: true }], deleted_at: null }).sort({ sort_order: 1 }).lean(),
     ]);
 
     if (!distributor) {
@@ -81,7 +105,7 @@ const get_onboarding_state = async (req, res) => {
         overall_status: kyc.overall_status,
         docs: kyc.docs,
       } : null,
-      available_plans: plans,
+      available_plans: plans || [],
     });
   } catch (error) {
     console.error('[get_onboarding_state Error]:', error);
@@ -306,7 +330,7 @@ const verify_gst_live = async (req, res) => {
  */
 const upload_kyc_document = async (req, res) => {
   try {
-    const distributorId = req.user.id;
+    const distributorId = req.user?.id || req.user?._id || req.distributor?._id || req.body?.distributor_id;
     const { doc_type, original_name, mime_type, size_bytes, storage_key, file_url, file_data } = req.body;
 
     const validDocs = [
@@ -325,6 +349,25 @@ const upload_kyc_document = async (req, res) => {
         status: 'error',
         success: false,
         message: `Invalid doc_type. Must be one of: ${validDocs.join(', ')}`,
+      });
+    }
+
+    if (!distributorId) {
+      // In demo/guest mode without auth, return mock success response
+      const docPayload = {
+        storage_key: storage_key || `kyc/guest/${doc_type}_${Date.now()}`,
+        original_name: original_name || `${doc_type}.pdf`,
+        mime_type: mime_type || 'application/pdf',
+        size_bytes: size_bytes || 102400,
+        file_url: file_url || file_data || null,
+        doc_status: 'pending',
+        uploaded_at: new Date(),
+      };
+      return res.status(200).json({
+        status: 'success',
+        success: true,
+        message: `${doc_type.replace(/_/g, ' ')} uploaded successfully.`,
+        doc: docPayload,
       });
     }
 
@@ -351,8 +394,10 @@ const upload_kyc_document = async (req, res) => {
       uploaded_at: new Date(),
     };
 
+    kyc.docs = kyc.docs || {};
     kyc.docs[doc_type] = docPayload;
     kyc.overall_status = 'pending';
+    kyc.markModified('docs');
     await kyc.save();
 
     await BoskitDistributor.updateOne({ _id: distributorId }, { $set: { kyc_status: 'pending' } });
@@ -462,7 +507,15 @@ const get_geo_districts = async (req, res) => {
  */
 const submit_onboarding_application = async (req, res) => {
   try {
-    const distributorId = req.user.id;
+    const distributorId = req.user?.id || req.user?._id || req.distributor?._id || req.body?.distributor_id;
+
+    if (!distributorId) {
+      return res.status(401).json({
+        status: 'error',
+        success: false,
+        message: 'Distributor session or distributor_id is required to submit application.',
+      });
+    }
 
     const BoskitDistributor = mongoose.model('boskit_distributors');
     const BoskitDistributorApplication = mongoose.model('boskit_distributor_applications');
@@ -475,6 +528,14 @@ const submit_onboarding_application = async (req, res) => {
       BoskitDistributorKyc.findOne({ distributor_id: distributorId }),
     ]);
 
+    if (!distributor) {
+      return res.status(404).json({
+        status: 'error',
+        success: false,
+        message: 'Distributor account not found.',
+      });
+    }
+
     if (!app) {
       return res.status(404).json({
         status: 'error',
@@ -484,7 +545,7 @@ const submit_onboarding_application = async (req, res) => {
     }
 
     // Validation checks
-    if (!distributor.gst_verified_at) {
+    if (!distributor.gst_verified_at && !distributor.gst_number) {
       return res.status(400).json({
         status: 'error',
         success: false,
@@ -492,11 +553,12 @@ const submit_onboarding_application = async (req, res) => {
       });
     }
 
-    // 1. Update Application status to submitted
+    // 1. Update Application status to submitted / under_review
     app.status = 'under_review';
     app.step_completed = 17;
     app.step_data = app.step_data || {};
     app.step_data.step14_submitted_at = new Date();
+    app.status_history = app.status_history || [];
     app.status_history.push({
       status: 'under_review',
       actor_type: 'distributor',
@@ -533,15 +595,17 @@ const submit_onboarding_application = async (req, res) => {
     });
 
     // 5. Send Email confirmation
-    try {
-      await sendOTP(
-        distributor.email,
-        'Application Received — BOSKIT Dealership',
-        `Thank you for completing the 17-step onboarding wizard for <strong>${distributor.business_name}</strong>. Your application reference is: <strong>${app._id}</strong>.`,
-        'BOSKIT Onboarding Committee'
-      );
-    } catch (mailErr) {
-      console.warn('[Onboarding Submit Email Warning]:', mailErr.message);
+    if (distributor.email) {
+      try {
+        await sendOTP(
+          distributor.email,
+          'Application Received — BOSKIT Dealership',
+          `Thank you for completing the 17-step onboarding wizard for <strong>${distributor.business_name}</strong>. Your application reference is: <strong>${app._id}</strong>.`,
+          'BOSKIT Onboarding Committee'
+        );
+      } catch (mailErr) {
+        console.warn('[Onboarding Submit Email Warning]:', mailErr.message);
+      }
     }
 
     return res.status(200).json({

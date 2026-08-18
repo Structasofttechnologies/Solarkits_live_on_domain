@@ -648,7 +648,7 @@ export default function CheckOut() {
         </div>
       )}
 
-      {/* Reseller Order Attribution Notice */}
+      {/* Franchisee Order Attribution Notice */}
       {user?.reseller?.business_name && (
         <div className="bg-emerald-500/10 border border-emerald-500/25 p-4 rounded-2xl flex items-center gap-3 text-emerald-700 dark:text-emerald-300 shadow-sm">
           <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400">
@@ -659,7 +659,7 @@ export default function CheckOut() {
               Partner Network Attribution: {user.reseller.business_name}
             </p>
             <p className="mt-0.5 opacity-90">
-              This order will be processed and assigned under your authorized Reseller Partner (<strong>{user.reseller.business_name}</strong>).
+              This order will be processed and assigned under your authorized Franchisee Partner (<strong>{user.reseller.business_name}</strong>).
             </p>
           </div>
         </div>
