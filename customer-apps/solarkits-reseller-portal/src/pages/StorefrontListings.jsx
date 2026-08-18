@@ -169,50 +169,49 @@ export default function StorefrontListings() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header Banner */}
-      <div className="bg-blue-700 p-6 md:p-8 rounded-3xl text-white shadow-md relative overflow-hidden">
+      {/* Page Header — clean e-commerce style */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "var(--color-primary)", background: "var(--color-primary)15", padding: "2px 10px", borderRadius: "999px" }}>
+            My Store
+          </span>
+          <h1 className="font-heading font-black text-2xl sm:text-3xl mt-2" style={{ color: "var(--color-text-primary)" }}>
+            My Product Listings
+          </h1>
+          <p className="text-sm mt-1" style={{ color: "var(--color-text-secondary)" }}>
+            Manage your assigned products, set margins, and publish to your buyer network.
+          </p>
+        </div>
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-white text-xs font-bold uppercase tracking-wider mb-2">
-              <FiShield /> Franchisee Product Storefront Engine
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Compact stat chips */}
+          {[
+            { label: "Assigned", value: totalAssigned, color: "#6366f1" },
+            { label: "Purchased", value: totalPurchased, color: "#0ea5e9" },
+            { label: "Ready", value: totalReady, color: "#f59e0b" },
+            { label: "Published", value: totalPublished, color: "#10b981" },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border"
+              style={{ color: stat.color, borderColor: `${stat.color}30`, background: `${stat.color}10` }}
+            >
+              <span className="text-base font-extrabold">{stat.value}</span>
+              <span className="font-medium opacity-80">{stat.label}</span>
             </div>
-            <h1 className="text-3xl font-black text-white tracking-tight">
-              Product Catalogue & EPC Storefront
-            </h1>
-            <p className="text-blue-100 text-sm mt-1.5 max-w-2xl font-medium">
-              Manage product acceptance, configure authorized profit margins within Super Admin limits, and publish products to your channel storefront and onboarded EPC buyers.
-            </p>
-          </div>
+          ))}
 
           <button
             onClick={fetchData}
-            className="self-start md:self-auto px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer border border-white/20 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+            style={{ color: "var(--color-text-secondary)", borderColor: "var(--color-border)", background: "var(--color-surface)" }}
           >
-            <FiRefreshCw className={loading ? "animate-spin" : ""} size={16} /> Refresh Storefront
+            <FiRefreshCw className={loading ? "animate-spin" : ""} size={13} />
+            Refresh
           </button>
         </div>
-
-        {/* Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/15">
-          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
-            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Assigned to You</span>
-            <div className="text-2xl font-black text-white mt-1">{totalAssigned}</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
-            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Purchased / Accepted</span>
-            <div className="text-2xl font-black text-white mt-1">{totalPurchased}</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
-            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Ready to Publish</span>
-            <div className="text-2xl font-black text-white mt-1">{totalReady}</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/20">
-            <span className="text-xs text-blue-100 font-bold uppercase tracking-wider">Published & Live</span>
-            <div className="text-2xl font-black text-white mt-1">{totalPublished}</div>
-          </div>
-        </div>
       </div>
+
 
       {/* Notifications */}
       {message && (

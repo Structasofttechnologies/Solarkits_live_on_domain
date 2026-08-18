@@ -1,6 +1,8 @@
 'use strict';
 
 const mongoose = require('mongoose');
+require('../../models'); // Ensure all boskit schemas are registered
+const PricingEngine = require('../../services/pricing_engine');
 const { logBoskitAudit } = require('../../utils/audit_logger');
 const { sendOTP } = require('../../../solarshop-india/utils/nodemailer');
 
@@ -571,7 +573,7 @@ const get_distributor_catalogue = async (req, res) => {
 
     const BoskitDistributorPlanAssignment = mongoose.model('boskit_distributor_plan_assignments');
     const BoskitPriceRule = mongoose.model('boskit_price_rules');
-    const Product = mongoose.model('products');
+    const { Product } = require('../../../admin-panel/models/core_db');
 
     // 1. Get distributor's active plan discount slab
     const assignment = await BoskitDistributorPlanAssignment.findOne({
@@ -598,126 +600,99 @@ const get_distributor_catalogue = async (req, res) => {
       }
     });
 
-    // 3. Fetch products from DB
+    // 3. Fetch products and BOS kits from DB
     let dbQuery = { is_active: { $ne: false }, deleted_at: null };
     if (search) {
       dbQuery.$or = [
         { name: { $regex: search, $options: 'i' } },
+        { sku_code: { $regex: search, $options: 'i' } },
         { sku: { $regex: search, $options: 'i' } },
       ];
     }
 
-    let products = await Product.find(dbQuery)
-      .populate('brand_id', 'name logo_url')
-      .sort({ is_featured: -1, created_at: -1 })
-      .lean();
-
-    // If DB has fewer than 4 products, provide rich catalogue items
-    if (!products || products.length === 0) {
-      const MOCK_PRODUCTS = [
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156001'),
-          name: 'Mono PERC 550W Bifacial Solar Panel (TOPCon Glass-to-Glass)',
-          sku: 'BK-MOD-550W-TOPCON',
-          category: 'panels',
-          brand_name: 'SolarKits Apex Modules',
-          mrp: 19500,
-          moq: 30,
-          image_url: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-          specifications: { wattage: '550W', efficiency: '22.4%', warranty: '25 Years Performance' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156002'),
-          name: 'SolarKits 5kW 3-Phase On-Grid Inverter (Dual MPPT, IP65)',
-          sku: 'BK-INV-5KW-3P',
-          category: 'inverters',
-          brand_name: 'SolarKits PowerCore',
-          mrp: 48000,
-          moq: 1,
-          image_url: 'https://images.unsplash.com/photo-1548611716-ad022c4f6990?auto=format&fit=crop&w=800&q=80',
-          specifications: { capacity: '5kW', phase: '3-Phase', mppt_trackers: 'Dual MPPT', warranty: '10 Years' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156003'),
-          name: 'SolarKits 10kW Hybrid Energy Storage Inverter (WiFi/4G IoT)',
-          sku: 'BK-INV-10KW-HYBRID',
-          category: 'inverters',
-          brand_name: 'SolarKits PowerCore',
-          mrp: 85000,
-          moq: 1,
-          image_url: 'https://images.unsplash.com/photo-1558441719-f266205886d3?auto=format&fit=crop&w=800&q=80',
-          specifications: { capacity: '10kW', backup_switching: '<10ms UPS', battery_compat: '48V / LFP', warranty: '10 Years' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156004'),
-          name: 'Exide 10.24kWh Wall-Mount LFP Battery Pack (6000 Cycles)',
-          sku: 'BK-BAT-10KWH-LFP',
-          category: 'batteries',
-          brand_name: 'Exide PowerPro',
-          mrp: 165000,
-          moq: 1,
-          image_url: 'https://images.unsplash.com/photo-1620714223084-8fcacc6dfd8d?auto=format&fit=crop&w=800&q=80',
-          specifications: { capacity: '10.24kWh', chemistry: 'LiFePO4', dod: '95%', cycles: '6000+ Cycles' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156005'),
-          name: 'Pre-Galvanized HDG Ground Mount Structure Kit (4-Panel Unit)',
-          sku: 'BK-STR-4P-HDG',
-          category: 'structures',
-          brand_name: 'SolarKits StrongHold',
-          mrp: 12000,
-          moq: 5,
-          image_url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
-          specifications: { material: 'Hot Dip Galvanized Steel 80um', wind_rating: '180 km/h', tilt: '15-30 deg' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156006'),
-          name: '4-In-1-Out 1000V DCDB Box (Surge Protection Type-II)',
-          sku: 'BK-DCDB-4IN-1OUT',
-          category: 'dcdb',
-          brand_name: 'SolarKits SafeGuard',
-          mrp: 8500,
-          moq: 2,
-          image_url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80',
-          specifications: { voltage: '1000V DC', fuse: '15A/1000V gPV', spd: 'Type-II 40kA', ip_rating: 'IP65' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156007'),
-          name: 'Solar DC Cable 4 Sq mm 100m Drum (TUV Certified XLPO)',
-          sku: 'BK-CAB-4SQMM-100M',
-          category: 'cables',
-          brand_name: 'Polycab SolarMax',
-          mrp: 5800,
-          moq: 4,
-          image_url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80',
-          specifications: { conductor: 'Tinned Copper', insulation: 'Electron Beam Crosslinked XLPO', rating: '1.5kV DC' },
-        },
-        {
-          _id: new mongoose.Types.ObjectId('6a828f0049bc69149b156008'),
-          name: 'BOS Commercial Kit Combo — 10kW Turnkey Electrical Pack',
-          sku: 'BK-COMBO-10KW-BOS',
-          category: 'boskit',
-          brand_name: 'SolarKits ProBundle',
-          mrp: 38000,
-          moq: 1,
-          image_url: 'https://images.unsplash.com/photo-1497440001374-f26997328c1b?auto=format&fit=crop&w=800&q=80',
-          specifications: { includes: 'DCDB, ACDB, Earthing Rods, Lightning Arrester, 4sqmm DC Cables, Conduit Kit' },
-        },
-      ];
-      products = MOCK_PRODUCTS;
+    let BosKitModel;
+    try {
+      BosKitModel = mongoose.model('bos_kits');
+    } catch {
+      BosKitModel = require('../../../solarshop-india/models/india_solarshop_db/bos_kits.schema');
     }
+
+    const [productsFromDb, bosKitsFromDb] = await Promise.all([
+      Product.find(dbQuery)
+        .populate('brand_id', 'name logo_url')
+        .sort({ is_featured: -1, created_at: -1 })
+        .lean(),
+      BosKitModel.find({ deleted_at: null, is_active: { $ne: false } })
+        .sort({ createdAt: -1 })
+        .lean()
+    ]);
+
+    let products = productsFromDb || [];
+
+    // Map BOS kits into unified product shape for wholesale catalogue
+    const mappedBosKits = (bosKitsFromDb || []).map((bk) => ({
+      _id: bk._id,
+      name: bk.name,
+      sku: `BK-KIT-${bk._id.toString().slice(-6).toUpperCase()}`,
+      category: 'boskit',
+      brand_name: 'SolarKits ProBOS',
+      brand_id: null,
+      mrp: bk.marketPrice || Math.round((bk.ourPrice || 10000) * 1.35),
+      distributor_price: bk.ourPrice,
+      moq: 1,
+      image_url: bk.imageUrl || bk.image || 'https://images.unsplash.com/photo-1592833159057-651427788523?w=800&auto=format&fit=crop&q=80',
+      specifications: {
+        category: bk.category,
+        subCategory: bk.subCategory,
+        systemType: bk.systemType,
+        projectRange: bk.projectRange,
+        warranty: bk.warranty || '5 Years Replacement',
+        components: (bk.components || []).join(', ')
+      }
+    }));
+
+    products = [...mappedBosKits, ...products];
 
     // Filter by category if requested
     if (category && category !== 'all') {
-      products = products.filter((p) => p.category === category || p.category_id === category);
+      products = products.filter((p) => (p.category || '').toLowerCase() === category.toLowerCase() || (p.category_id === category));
     }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      products = products.filter((p) => 
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.sku || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q)
+      );
+    }
+
+    const BoskitOrder = mongoose.model('boskit_orders');
+    const distributorOrders = await BoskitOrder.find({
+      $or: [
+        { buyer_id: distributorId, buyer_type: 'distributor' },
+        { distributor_id: distributorId },
+      ],
+      order_status: { $nin: ['cancelled'] },
+    }).lean();
+
+    const purchasedStockMap = {};
+    (distributorOrders || []).forEach((ord) => {
+      (ord.items || []).forEach((item) => {
+        const prodKey = (item.product_id || item.kit_id || item._id)?.toString();
+        if (prodKey) {
+          purchasedStockMap[prodKey] = (purchasedStockMap[prodKey] || 0) + (item.quantity || 1);
+        }
+      });
+    });
 
     const items = products.map((p) => {
       const prodId = p._id.toString();
-      const mrp = p.mrp || (p.mrp_paise ? Math.round(p.mrp_paise / 100) : 10000);
+      const rawCostInr = p.base_price_paise ? Math.round(p.base_price_paise / 100) : null;
+      const mrp = p.mrp || (p.mrp_paise ? Math.round(p.mrp_paise / 100) : (rawCostInr ? Math.round(rawCostInr * 1.25) : 10000));
 
-      // Distributor buy price = Factory MRP minus Plan Wholesale Discount
-      const distributorBuyPrice = Math.round(mrp * (1 - baseDiscountPercent / 100));
+      // Distributor buy price = direct distributor_price / ourPrice or raw cost or discounted MRP
+      const distributorBuyPrice = p.distributor_price || rawCostInr || Math.round(mrp * (1 - baseDiscountPercent / 100));
 
       // Check if distributor set custom margin for this product
       const customRule = ruleMap[prodId];
@@ -737,12 +712,18 @@ const get_distributor_catalogue = async (req, res) => {
       const marginAmount = Math.round(distributorBuyPrice * (dealerMarginPercent / 100));
       const dealerSellPrice = distributorBuyPrice + marginAmount;
 
+      const specObj = p.specifications || {};
+      const warrantyStr = p.warranty || specObj.Warranty || specObj.warranty || '10 Years Factory Warranty';
+
+      const purchasedQty = purchasedStockMap[prodId] || 0;
+      const hasPurchased = purchasedQty > 0;
+
       return {
         id: prodId,
         name: p.name,
-        sku: p.sku || `BK-${prodId.slice(-6).toUpperCase()}`,
-        category: p.category || 'inverters',
-        brand: p.brand_name || p.brand_id?.name || 'SolarKits Premium',
+        sku: p.sku || p.sku_code || `BK-${prodId.slice(-6).toUpperCase()}`,
+        category: p.category || (p.name.toLowerCase().includes('panel') || p.name.toLowerCase().includes('module') ? 'panels' : p.name.toLowerCase().includes('inverter') ? 'inverters' : p.name.toLowerCase().includes('battery') ? 'batteries' : 'boskit'),
+        brand: p.brand_name || p.brand || p.brand_id?.name || 'SolarKits Premium',
         brand_logo: p.brand_id?.logo_url || null,
         mrp_inr: mrp,
         distributor_buy_price_inr: distributorBuyPrice,
@@ -750,14 +731,18 @@ const get_distributor_catalogue = async (req, res) => {
         dealer_margin_percent: dealerMarginPercent,
         dealer_sell_price_inr: dealerSellPrice,
         distributor_profit_per_unit_inr: marginAmount,
-        is_whitelisted_for_dealers: isWhitelisted,
+        purchased_stock_qty: purchasedQty,
+        has_purchased: hasPurchased,
+        is_whitelisted_for_dealers: customRule ? (customRule.is_active !== false) : true,
         moq: p.moq || p.min_order_qty || 1,
-        image_url: p.image_url || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-        specifications: p.specifications || {},
+        image_url: p.image_url || p.image || p.imageUrl || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+        specifications: specObj,
         in_stock: true,
-        warranty_years: p.specifications?.warranty || '10 Years Factory Warranty',
+        warranty_years: warrantyStr,
       };
     });
+
+    const totalPurchasedStock = Object.values(purchasedStockMap).reduce((a, b) => a + b, 0);
 
     return res.status(200).json({
       status: 'success',
@@ -766,6 +751,7 @@ const get_distributor_catalogue = async (req, res) => {
       plan_discount_percent: baseDiscountPercent,
       default_margin_slab: `${defaultMarginMin}% – ${defaultMarginMax}%`,
       total_products: items.length,
+      total_purchased_stock_units: totalPurchasedStock,
       products: items,
     });
   } catch (error) {
@@ -858,70 +844,73 @@ const create_distributor_procurement_order = async (req, res) => {
       });
     }
 
+    const pricing = await PricingEngine.calculate({
+      items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity || 1 })),
+      buyer_type: 'distributor',
+      buyer_id: distributorId,
+      origin_state_code: 'GJ',
+      destination_state_code: shipping_address?.state_code || 'GJ',
+    });
+
     const BoskitOrder = mongoose.model('boskit_orders');
     const year = new Date().getFullYear();
     const orderNumber = `BK-${year}-${Date.now().toString().slice(-6)}`;
 
-    let subtotalPaise = 0;
-    const orderItems = items.map((item) => {
-      const unitBuyInr = item.distributor_buy_price_inr || 10000;
-      const qty = item.quantity || 1;
-      const lineTotalInr = unitBuyInr * qty;
-      const lineTotalPaise = lineTotalInr * 100;
-      subtotalPaise += lineTotalPaise;
-
-      const unitBuyPaise = unitBuyInr * 100;
-      const gstPct = 18;
-      const gstAmountPaise = Math.round(unitBuyPaise * 0.18);
-
-      return {
-        scope_type: 'product',
-        product_id: mongoose.Types.ObjectId.isValid(item.product_id) ? item.product_id : null,
-        item_name: item.name || 'Wholesale Solar Equipment',
-        item_sku: item.sku || 'BK-PROD',
-        quantity: qty,
-        price_snapshot: {
-          base_mrp_paise: Math.round(unitBuyPaise * 1.25),
-          price_before_gst_paise: unitBuyPaise,
-          gst_pct: gstPct,
-          gst_amount_paise: gstAmountPaise,
-          unit_price_paise: unitBuyPaise + gstAmountPaise,
-          moq: 1,
-          moq_met: true,
-          pricing_explanation: 'Distributor Factory Wholesale Rate',
-        },
-        line_total_paise: lineTotalPaise,
-      };
-    });
-
-    const taxTotalPaise = Math.round(subtotalPaise * 0.18);
-    const grandTotalPaise = subtotalPaise + taxTotalPaise;
-
-    const order = await BoskitOrder.create({
-      order_number: orderNumber,
-      buyer_type: 'distributor',
-      buyer_id: distributorId,
-      distributor_id: null,
-      items: orderItems,
-      subtotal_paise: subtotalPaise,
-      tax_total_paise: taxTotalPaise,
-      grand_total_paise: grandTotalPaise,
-      order_status: 'confirmed',
-      payment_status: 'pending',
-      delivery_address: {
-        line: shipping_address?.line || 'Distributor Central Depot',
-        city: shipping_address?.city || 'Ahmedabad',
-        pincode: shipping_address?.pincode || '380001',
+    const orderItems = pricing.items.map((i) => ({
+      scope_type: 'product',
+      product_id: mongoose.Types.ObjectId.isValid(i.product_id) ? i.product_id : null,
+      item_name: i.product_name || 'Wholesale Solar Equipment',
+      item_sku: i.sku || 'BK-PROD',
+      quantity: i.quantity,
+      price_snapshot: {
+        base_mrp_paise: i.unit_mrp_paise,
+        rule_id: i.applied_rule_id ? new mongoose.Types.ObjectId(i.applied_rule_id) : null,
+        rule_scope: i.applied_rule_scope || 'distributor_plan',
+        discount_type: i.discount_type || 'percentage',
+        discount_value: i.discount_value || 0,
+        price_before_gst_paise: i.unit_base_price_paise,
+        gst_pct: i.gst_rate_percent,
+        gst_amount_paise: Math.round(i.total_tax_paise / (i.quantity || 1)),
+        unit_price_paise: i.unit_base_price_paise,
+        moq: i.moq,
+        moq_met: i.moq_met,
+        pricing_explanation: `Distributor Wholesale Rate (Rule: ${i.applied_rule_name})`,
       },
-      status_history: [
-        {
-          status: 'confirmed',
-          actor_type: 'boskit_distributor',
-          actor_id: distributorId,
-          comment: notes || 'Wholesale procurement order initiated.',
+      line_total_paise: i.line_grand_total_paise,
+    }));
+
+    const [order] = await BoskitOrder.create([
+      {
+        order_number: orderNumber,
+        buyer_type: 'distributor',
+        buyer_id: distributorId,
+        distributor_id: null,
+        items: orderItems,
+        subtotal_paise: pricing.summary.subtotal_paise,
+        tax_total_paise: pricing.summary.total_tax_paise,
+        shipping_fee_paise: pricing.summary.shipping_paise,
+        discount_total_paise: pricing.summary.total_discount_paise,
+        grand_total_paise: pricing.summary.grand_total_paise,
+        order_status: 'confirmed',
+        payment_status: 'pending',
+        delivery_address: {
+          line: shipping_address?.line || 'Distributor Central Depot',
+          city: shipping_address?.city || 'Ahmedabad',
+          pincode: shipping_address?.pincode || '380001',
+          contact_name: shipping_address?.contact_person || 'Warehouse Incharge',
+          contact_phone: shipping_address?.contact_phone || '9876500001',
         },
-      ],
-    });
+        billing_name: shipping_address?.contact_person || 'Authorized Distributor',
+        status_history: [
+          {
+            status: 'confirmed',
+            actor_type: 'boskit_distributor',
+            actor_id: distributorId,
+            comment: notes || 'Wholesale procurement order initiated.',
+          },
+        ],
+      },
+    ]);
 
     return res.status(201).json({
       status: 'success',
@@ -930,7 +919,7 @@ const create_distributor_procurement_order = async (req, res) => {
       order: {
         id: order._id,
         order_number: order.order_number,
-        grand_total_inr: Math.round(grandTotalPaise / 100),
+        grand_total_inr: Math.round(pricing.summary.grand_total_paise / 100),
         status: order.order_status,
       },
     });

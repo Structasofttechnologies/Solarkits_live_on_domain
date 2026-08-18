@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FiPackage,
   FiSearch,
@@ -29,6 +30,7 @@ export default function DistributorProcureCataloguePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [inventoryFilter, setInventoryFilter] = useState('purchased');
   const [showFilters, setShowFilters] = useState(false);
   const [planInfo, setPlanInfo] = useState(null);
 
@@ -99,6 +101,17 @@ export default function DistributorProcureCataloguePage() {
   useEffect(() => {
     fetchCatalogue();
   }, [selectedCategory, search]);
+
+  const displayedProducts = catalogue.filter((p) => {
+    if (inventoryFilter === 'purchased') {
+      const hasAnyPurchased = catalogue.some((x) => (x.purchased_stock_qty || 0) > 0);
+      if (hasAnyPurchased) {
+        return (p.purchased_stock_qty || 0) > 0;
+      }
+      return true; // If no items purchased yet, show all so distributor can pre-configure margins
+    }
+    return true;
+  });
 
   // Handle margin slider / input change
   const handleMarginChange = (productId, buyPrice, newMarginPercent) => {
@@ -253,31 +266,36 @@ export default function DistributorProcureCataloguePage() {
         </div>
       )}
 
-      {/* ── Exact Royal Blue Header Banner (Matching Screenshot) ───────────── */}
-      <div className="bg-[#185ADB] rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
+      {/* ── Header Banner ─────────────────────────────────────────────────── */}
+      <div className="bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 rounded-2xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold backdrop-blur-md mb-2">
-              <MdSolarPower size={15} />
-              <span>Reseller Catalogue</span>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 text-xs font-bold backdrop-blur-md mb-2">
+              <FiSliders size={14} />
+              <span>Dealer Reselling & Margin Control</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight font-heading">
-              Product Catalogue
+              Purchased Stock & Dealer Margin Manager
             </h1>
             <p className="mt-1 text-blue-100 text-xs sm:text-sm">
-              Published by <span className="font-bold text-white">Partner Reseller</span> · Account:{' '}
-              <span className="font-medium text-white">{accountName}</span>
+              Set custom selling prices and profit margins for equipment you have purchased. Only published items are visible to your onboarded territory dealers.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-2.5 rounded-xl text-right">
-              <div className="text-2xl sm:text-3xl font-black">{catalogue.length}</div>
-              <div className="text-[11px] text-blue-100 font-medium">Products Available</div>
-            </div>
+            <Link
+              to="/dealer/portal/catalogue"
+              target="_blank"
+              className="px-4 py-2.5 rounded-xl bg-white text-blue-800 hover:bg-blue-50 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+              title="Open Dealer Catalogue in a new tab"
+            >
+              <span>View As Dealer</span>
+              <FiArrowRight size={14} />
+            </Link>
+
             <button
               onClick={fetchCatalogue}
-              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all border border-white/20 cursor-pointer active:scale-95 shadow-xs"
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all border border-white/20 cursor-pointer active:scale-95 shadow-xs"
               title="Refresh catalogue"
             >
               <FiRefreshCw className={loading ? 'animate-spin' : ''} size={18} />
@@ -286,10 +304,54 @@ export default function DistributorProcureCataloguePage() {
         </div>
       </div>
 
-      {/* ── Search & Filter Controls Bar (Matching Screenshot) ─────────────── */}
+      {/* ── Inventory Stock Tabs & Search Filter Toolbar ──────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+        {/* Inventory Scope Switcher */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setInventoryFilter('purchased')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                inventoryFilter === 'purchased'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <FiPackage size={14} />
+              <span>My Purchased Stock</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                inventoryFilter === 'purchased' ? 'bg-white text-emerald-800' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {catalogue.filter(p => (p.purchased_stock_qty || 0) > 0).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setInventoryFilter('all')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                inventoryFilter === 'all'
+                  ? 'bg-[#185ADB] text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <FiLayers size={14} />
+              <span>All Factory Equipment</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                inventoryFilter === 'all' ? 'bg-white text-blue-800' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {catalogue.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium hidden sm:block">
+            Showing <strong className="text-slate-800">{displayedProducts.length}</strong> items ready for dealer margin configuration
+          </div>
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-3">
-          
           {/* Search Input */}
           <div className="relative flex-1">
             <FiSearch
@@ -312,19 +374,6 @@ export default function DistributorProcureCataloguePage() {
               </button>
             )}
           </div>
-
-          {/* Filter & Sort Toggle */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-              showFilters
-                ? 'bg-blue-50 border-blue-300 text-blue-700'
-                : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-            }`}
-          >
-            <FiFilter size={15} />
-            <span>Filter & Sort</span>
-          </button>
         </div>
 
         {/* Category Pills */}
@@ -352,34 +401,45 @@ export default function DistributorProcureCataloguePage() {
             <div key={n} className="h-80 rounded-2xl bg-white border border-slate-200 animate-pulse" />
           ))}
         </div>
-      ) : catalogue.length === 0 ? (
+      ) : displayedProducts.length === 0 ? (
         
-        /* Empty State Matching Screenshot */
+        /* Empty State */
         <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center shadow-xs space-y-4 my-8">
-          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto shadow-inner">
-            <MdSolarPower size={36} />
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+            <FiPackage size={36} />
           </div>
           <div className="space-y-1">
             <h3 className="font-heading font-black text-xl text-slate-900">
-              No Products Published Yet
+              {inventoryFilter === 'purchased' ? 'No Purchased Stock Found' : 'No Products Available'}
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-              Your reseller partner has not published any products to your catalogue yet.
+              {inventoryFilter === 'purchased'
+                ? 'You have not procured stock for this category yet. Buy combo kits or components from the store to add them to your reselling inventory.'
+                : 'No equipment matches your search or filter criteria.'}
             </p>
           </div>
-          <button
-            onClick={fetchCatalogue}
-            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#17211B] hover:bg-slate-800 text-white shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
-          >
-            <FiRefreshCw size={14} /> Refresh Catalogue
-          </button>
+          {inventoryFilter === 'purchased' ? (
+            <Link
+              to="/distributor/portal/combo-kits"
+              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#185ADB] hover:bg-blue-700 text-white shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            >
+              <FiShoppingBag size={14} /> Buy Combo Kits for Stock
+            </Link>
+          ) : (
+            <button
+              onClick={fetchCatalogue}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#17211B] hover:bg-slate-800 text-white shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+            >
+              <FiRefreshCw size={14} /> Refresh Equipment List
+            </button>
+          )}
         </div>
 
       ) : (
 
         /* Products Grid */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          {catalogue.map((product) => {
+          {displayedProducts.map((product) => {
             const currentData = editedMargins[product.id] || {
               margin_percent: product.dealer_margin_percent,
               dealer_sell_price_inr: product.dealer_sell_price_inr,
@@ -390,13 +450,15 @@ export default function DistributorProcureCataloguePage() {
               (currentData.dealer_sell_price_inr || product.dealer_sell_price_inr) -
               product.distributor_buy_price_inr;
 
+            const purchasedStock = product.purchased_stock_qty || 0;
+
             return (
               <div
                 key={product.id}
                 className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col justify-between space-y-5 hover:border-blue-500/40 hover:shadow-md transition-all"
               >
                 <div className="space-y-4">
-                  {/* Top Brand & Category Header */}
+                  {/* Top Brand, Stock & Category Header */}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3">
                       <img
@@ -418,9 +480,16 @@ export default function DistributorProcureCataloguePage() {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        In Stock • MOQ: {product.moq}
-                      </span>
+                      {purchasedStock > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl border border-emerald-300 shadow-xs animate-in fade-in">
+                          <FiPackage size={13} />
+                          <span>Stock: {purchasedStock} Units</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                          Factory Catalog
+                        </span>
+                      )}
                     </div>
                   </div>
 

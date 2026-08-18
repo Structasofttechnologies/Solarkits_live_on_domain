@@ -115,22 +115,34 @@ export default function SolarBosKit() {
   // Customizer System Capacity State (Default: 5 kW)
   const [customSystemKw, setCustomSystemKw] = useState(5);
 
-  // Fetch live custom catalog from MongoDB Database API
+  // Fetch live BOS Kits and custom catalog from MongoDB Database API
   const fetchCatalogFromApi = async () => {
     try {
+      // 1. Fetch Pre-Configured BOS Kits
+      const resKits = await axios.get("http://localhost:5000/api/india/v1/shop/bos-kits");
+      if (resKits.data?.data && Array.isArray(resKits.data.data) && resKits.data.data.length > 0) {
+        setAdminBosKits(resKits.data.data);
+        localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(resKits.data.data));
+      }
+    } catch (err) {
+      console.warn("Failed to fetch live BOS kits from DB API:", err.message);
+    }
+
+    try {
+      // 2. Fetch Custom Catalog
       const res = await axios.get("http://localhost:5000/api/india/v1/shop/bos-custom-catalog");
       if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
         setAdminCustomCatalog(res.data.data);
         localStorage.setItem("solar_custom_bos_catalog_admin_store", JSON.stringify(res.data.data));
       }
     } catch (err) {
-      console.error("Failed to fetch live custom catalog from DB API:", err);
+      console.warn("Failed to fetch live custom catalog from DB API:", err.message);
     }
   };
 
   useEffect(() => {
     fetchCatalogFromApi();
-    const interval = setInterval(fetchCatalogFromApi, 3000);
+    const interval = setInterval(fetchCatalogFromApi, 5000);
     window.addEventListener("focus", fetchCatalogFromApi);
     return () => {
       clearInterval(interval);
@@ -617,7 +629,7 @@ export default function SolarBosKit() {
             }`}
           >
             <FiPackage className="text-base" />
-            <span>Pre-configured BOS Kits</span>
+            <span>Combo BOS Kit</span>
           </button>
 
           <button
@@ -630,13 +642,13 @@ export default function SolarBosKit() {
             }`}
           >
             <FiTool className="text-base text-amber-400" />
-            <span>Customize BOS Kit</span>
+            <span>Customization BOS Kit</span>
           </button>
         </div>
 
         <div className="text-xs text-text-secondary font-medium px-2">
           {activeTab === "preconfigured" ? (
-            <span className="text-primary font-semibold">Showing Pre-Packaged BOS Combos</span>
+            <span className="text-primary font-semibold">Showing Pre-Packaged Combo BOS Kits</span>
           ) : (
             <span className="text-amber-600 font-semibold">Custom Component Selector Active</span>
           )}
@@ -1111,6 +1123,37 @@ export default function SolarBosKit() {
                                   <FiPlus size={14} />
                                 </button>
                               </div>
+
+                              {qty > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const districtId = selectedDistrict?.id || selectedDistrict?._id || "dist_default";
+                                    const districtName = selectedDistrict?.name || "Pan India Supply";
+                                    const cartPayload = {
+                                      id: `${item.id}_${Date.now()}`,
+                                      name: `${item.name} (${qty} ${item.unit}s)`,
+                                      category: "Custom BOS Item",
+                                      ourPrice: item.unitPrice * qty,
+                                      marketPrice: Math.round(item.unitPrice * qty * 1.25),
+                                      productTier: "BOS Hardware",
+                                      inStock: true,
+                                      availableStock: 99,
+                                      districtId,
+                                      districtName,
+                                      qty: 1,
+                                      image: item.image || item.imageUrl || "⚡",
+                                    };
+                                    dispatch(addToCart(cartPayload));
+                                    dispatch(syncCartWithBackend());
+                                    dispatch(setAlert({ type: "success", message: `Added ${qty} ${item.unit}s of ${item.name} to Cart!` }));
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold text-xs transition cursor-pointer flex items-center gap-1 shrink-0"
+                                  title="Add only this item to cart"
+                                >
+                                  <FiShoppingCart size={12} /> Add Item
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

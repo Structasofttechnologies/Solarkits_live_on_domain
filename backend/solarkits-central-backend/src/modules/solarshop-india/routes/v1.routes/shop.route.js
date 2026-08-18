@@ -17,6 +17,11 @@ const {
   update_order_address,
   create_razorpay_order,
   verify_razorpay_payment,
+  get_bos_kits,
+  save_bos_kits,
+  create_or_update_bos_kit,
+  delete_bos_kit,
+  toggle_bos_kit_stock,
   get_bos_custom_catalog,
   save_bos_custom_catalog
 } = require("../../controller/v1.handlers/shop.handler");
@@ -28,6 +33,13 @@ const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
 router.get("/combo-kits", get_combo_kits_by_district);
 router.get("/epc-catalogue", verify_auth, get_epc_catalogue);
 router.get("/epc-catalogue/status", verify_auth, require("../../controller/epc.catalogue.handler").get_epc_catalogue_status);
+router.get("/bos-kits", get_bos_kits);
+router.post("/bos-kits", save_bos_kits);
+router.post("/bos-kits/save-single", create_or_update_bos_kit);
+router.delete("/bos-kits/:id", delete_bos_kit);
+router.post("/bos-kits/delete", delete_bos_kit);
+router.patch("/bos-kits/:id/stock", toggle_bos_kit_stock);
+router.post("/bos-kits/toggle-stock", toggle_bos_kit_stock);
 router.get("/bos-custom-catalog", get_bos_custom_catalog);
 router.post("/bos-custom-catalog", save_bos_custom_catalog);
 router.get("/inventory-status", get_inventory_status);

@@ -30,6 +30,43 @@ router.post('/plans/:id/duplicate',                     adminController.duplicat
 router.patch('/plans/:id/status',                       adminController.set_plan_status);
 router.get('/plans/:id/versions',                       adminController.get_plan_versions);
 
+// ── Channel Settings Master Endpoints ─────────────────────────────────────────
+router.get('/channel-settings',                         adminController.get_channel_settings);
+router.post('/channel-settings',                        adminController.create_channel_setting);
+router.put('/channel-settings/:id',                     adminController.update_channel_setting);
+router.post('/channel-settings/:id/duplicate',          adminController.duplicate_channel_setting);
+router.delete('/channel-settings/:id',                  adminController.delete_channel_setting);
+
+// ── Products, Categories & Pricing Masters ────────────────────────────────────
+router.get('/products',                                 adminController.get_admin_products);
+router.put('/products/:id/pricing',                     adminController.update_product_pricing);
+router.get('/categories',                               adminController.get_admin_categories);
+
+// ── MOQ Rules Master Endpoints ────────────────────────────────────────────────
+router.get('/moq-rules',                                adminController.get_moq_rules);
+router.post('/moq-rules',                               adminController.create_moq_rule);
+router.put('/moq-rules/:id',                            adminController.update_moq_rule);
+router.delete('/moq-rules/:id',                         adminController.delete_moq_rule);
+
+// ── GST / Tax Rules Master Endpoints ──────────────────────────────────────────
+router.get('/tax-rules',                                adminController.get_tax_rules);
+router.post('/tax-rules',                               adminController.create_tax_rule);
+router.put('/tax-rules/:id',                            adminController.update_tax_rule);
+router.delete('/tax-rules/:id',                         adminController.delete_tax_rule);
+
+// ── Territory Master Endpoints ────────────────────────────────────────────────
+router.get('/territories',                              adminController.get_admin_territories);
+router.post('/territories/assign',                      adminController.assign_territory);
+
+// ── Orders Master Endpoints ───────────────────────────────────────────────────
+router.get('/orders',                                   adminController.get_admin_orders);
+router.get('/orders/:id',                               adminController.get_admin_order_detail);
+router.post('/orders/:id/status',                       adminController.update_order_status);
+router.put('/orders/:id/status',                        adminController.update_order_status);
+
+// ── Payments Master Endpoints ─────────────────────────────────────────────────
+router.get('/payments',                                 adminController.get_admin_payments);
+
 // ── Content Management CMS Endpoints ──────────────────────────────────────────
 router.get('/content',                                  contentController.get_admin_content);
 router.post('/content',                                 contentController.create_admin_content);
@@ -45,3 +82,4 @@ router.get('/reports/territory-coverage',               reportsController.get_te
 router.get('/audit-logs',                               auditController.get_audit_logs);
 
 module.exports = router;
+

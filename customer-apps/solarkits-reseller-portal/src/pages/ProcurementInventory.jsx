@@ -173,10 +173,10 @@ export default function ProcurementInventory() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-            <FiBox className="text-blue-600" /> B2B Stock & Procurement Workspace
+            <FiBox className="text-blue-600" /> Order Stock
           </h1>
           <p className="text-slate-600 text-sm mt-1">
-            Order wholesale inventory directly from Solarkits warehouses & track double-entry stock balances.
+            Order wholesale inventory from SolarKits warehouses and track your stock balance.
           </p>
         </div>
 
@@ -185,13 +185,13 @@ export default function ProcurementInventory() {
             onClick={fetchData}
             className="p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <FiRefreshCw className={loading ? "animate-spin" : ""} size={14} /> Refresh Data
+            <FiRefreshCw className={loading ? "animate-spin" : ""} size={14} /> Refresh
           </button>
           <button
             onClick={() => setActiveTab("new_order")}
             className="px-4 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/30 flex items-center gap-2 transition-all cursor-pointer"
           >
-            <FiPlusCircle size={16} /> Place Procurement Order
+            <FiPlusCircle size={16} /> Place New Order
           </button>
         </div>
       </div>

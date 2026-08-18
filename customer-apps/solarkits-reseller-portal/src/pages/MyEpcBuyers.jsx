@@ -167,10 +167,10 @@ export default function MyEpcBuyers() {
         <div>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5">
             <FiUsers className="text-blue-600" size={28} />
-            My Onboarded EPC Buyers
+            My Buyers
           </h1>
           <p className="text-sm font-medium text-slate-600 mt-1">
-            Register & manage EPC buyer sub-accounts within your authorized territory boundary
+            Register and manage wholesale buyer accounts in your authorized territory.
           </p>
         </div>
 
@@ -179,7 +179,7 @@ export default function MyEpcBuyers() {
           style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
           className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-md shadow-blue-500/30 cursor-pointer"
         >
-          <FiPlus size={18} /> Register New EPC Buyer
+          <FiPlus size={18} /> Register New Buyer
         </button>
       </div>
 

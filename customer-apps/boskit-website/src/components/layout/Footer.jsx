@@ -1,15 +1,67 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiPhone, FiMail, FiMapPin, FiShield, FiExternalLink, FiZap } from 'react-icons/fi';
+import { FiPhone, FiMail, FiMapPin, FiShield, FiZap, FiCheckCircle } from 'react-icons/fi';
+
+const FOOTER_LINKS = {
+  products: {
+    title: 'Products',
+    links: [
+      { name: 'Solar Inverters', path: '/products?cat=inverters' },
+      { name: 'Solar Panels (TOPCon)', path: '/products?cat=panels' },
+      { name: 'Mounting Structures', path: '/products?cat=structures' },
+      { name: 'DCDB & ACDB Boxes', path: '/products?cat=dcdb' },
+      { name: 'DC Cables & MC4', path: '/products?cat=cables' },
+      { name: 'BOS Combo Kits', path: '/products?cat=bos-kits' },
+    ],
+  },
+  company: {
+    title: 'Company',
+    links: [
+      { name: 'About SolarKits BOS', path: '/about' },
+      { name: 'Distributor Program', path: '/distributor' },
+      { name: 'Dealer Network', path: '/dealer' },
+      { name: 'Distributor Plans', path: '/plans' },
+      { name: 'Contact Us', path: '/contact' },
+    ],
+  },
+  support: {
+    title: 'Customer Service',
+    links: [
+      { name: 'Track Application', path: '/application/status' },
+      { name: 'View Cart', path: '/cart' },
+      { name: 'Request Bulk Quote', path: '/cart' },
+      { name: 'Partner Login', path: '/auth/login' },
+      { name: 'Register as Distributor', path: '/auth/register' },
+    ],
+  },
+  policies: {
+    title: 'Policies',
+    links: [
+      { name: 'Privacy Policy', path: '/privacy-policy' },
+      { name: 'Terms of Service', path: '/terms-of-service' },
+      { name: 'Refund & Returns', path: '/refund-policy' },
+      { name: 'Shipping Policy', path: '/shipping-policy' },
+    ],
+  },
+};
+
+const TRUST_BADGES = [
+  'GST-Registered Entity',
+  'Tier-1 Brands Only',
+  'Pan-India Delivery',
+  '100% ITC Eligible',
+];
 
 export default function Footer() {
   return (
     <footer className="bg-[#F7FAF8] border-t border-[#DDE8E1] text-[#5F6F65]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-[#DDE8E1]">
-          
-          {/* Col 1: Brand Info */}
-          <div className="lg:col-span-2 space-y-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        {/* Top section */}
+        <div className="pt-14 pb-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 border-b border-[#DDE8E1]">
+
+          {/* Brand Column */}
+          <div className="lg:col-span-2 space-y-5">
             <Link to="/" className="inline-flex items-center gap-2.5 group">
               <div className="w-10 h-10 rounded-xl bg-[#ECF8F1] border border-[#DDE8E1] flex items-center justify-center text-[#1F8F4E] group-hover:bg-[#1F8F4E] group-hover:text-white transition-all shadow-xs">
                 <FiZap className="w-5 h-5 transition-transform group-hover:scale-110" />
@@ -23,75 +75,74 @@ export default function Footer() {
                 </span>
               </div>
             </Link>
+
             <p className="text-sm text-[#5F6F65] leading-relaxed max-w-sm">
-              India's premier digital B2B solar equipment distribution platform by SolarKits. Empowering regional distributors and authorized dealers with direct factory-gate pricing, verified inventory, and territorial protection.
+              India's trusted solar equipment store. Factory-gate pricing on Tier-1 inverters, TOPCon modules, mounting structures, and complete BOS kits — delivered across India.
             </p>
-            <div className="pt-2 flex items-center gap-2 text-xs text-[#1F8F4E] font-semibold">
-              <FiShield className="w-4 h-4 text-[#1F8F4E]" />
-              <span>Official B2B Platform of SOLARKITS Ecosystem</span>
-            </div>
-          </div>
 
-          {/* Col 2: Distribution Programs */}
-          <div>
-            <h4 className="font-heading text-sm font-bold text-[#17211B] uppercase tracking-wider mb-4">Partner Network</h4>
-            <ul className="space-y-2.5 text-sm">
-              <li><Link to="/distributor" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Distributor Benefits</Link></li>
-              <li><Link to="/plans" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Territorial Distributor Plans</Link></li>
-              <li><Link to="/dealer" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Dealer Network Program</Link></li>
-              <li><Link to="/auth/register" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Apply for Dealership</Link></li>
-              <li><Link to="/application/status" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Track Onboarding Status</Link></li>
-            </ul>
-          </div>
-
-          {/* Col 3: Solar Equipment */}
-          <div>
-            <h4 className="font-heading text-sm font-bold text-[#17211B] uppercase tracking-wider mb-4">Equipment Catalogue</h4>
-            <ul className="space-y-2.5 text-sm">
-              <li><Link to="/products?cat=inverters" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Grid-Tied & Hybrid Inverters</Link></li>
-              <li><Link to="/products?cat=panels" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">TOPCon & Bifacial Modules</Link></li>
-              <li><Link to="/products?cat=structures" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">Aluminium Rooftop Mounting</Link></li>
-              <li><Link to="/products?cat=dcdb" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">IP66 DCDB & ACDB Boxes</Link></li>
-              <li><Link to="/products?cat=cables" className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium">TUV Solar DC Cables</Link></li>
-            </ul>
-          </div>
-
-          {/* Col 4: Corporate & Support */}
-          <div>
-            <h4 className="font-heading text-sm font-bold text-[#17211B] uppercase tracking-wider mb-4">Support & Hubs</h4>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-start gap-2.5">
-                <FiMapPin className="w-4 h-4 text-[#1F8F4E] shrink-0 mt-1" />
-                <span className="text-xs text-[#5F6F65]">National Logistics Hub: Ahmedabad, Gujarat, India</span>
+            {/* Contact details */}
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2.5">
+                <FiMapPin className="w-4 h-4 text-[#1F8F4E] shrink-0" />
+                <span>National Hub: Ahmedabad, Gujarat, India</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <FiPhone className="w-4 h-4 text-[#1F8F4E] shrink-0" />
-                <span className="text-xs text-[#5F6F65] font-semibold">+91 (079) 4000-BOSKIT</span>
+                <span className="font-semibold text-[#17211B]">+91 (079) 4000-BOSKIT</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <FiMail className="w-4 h-4 text-[#1F8F4E] shrink-0" />
-                <span className="text-xs text-[#5F6F65]">distributors@solarkits.in</span>
-              </div>
-              <div className="pt-2">
-                <Link
-                  to="/auth/login"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1F8F4E] hover:text-[#18733E]"
-                >
-                  Partner Portal Login <FiExternalLink className="w-3 h-3" />
-                </Link>
+                <span>support@solarkits.in</span>
               </div>
             </div>
+
+            {/* Trust badges */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {TRUST_BADGES.map((badge) => (
+                <span
+                  key={badge}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#1F8F4E] bg-[#ECF8F1] border border-[#DDE8E1] px-2 py-1 rounded-full"
+                >
+                  <FiCheckCircle className="w-3 h-3" />
+                  {badge}
+                </span>
+              ))}
+            </div>
           </div>
+
+          {/* Link Columns */}
+          {Object.entries(FOOTER_LINKS).map(([key, section]) => (
+            <div key={key}>
+              <h4 className="font-heading text-sm font-bold text-[#17211B] uppercase tracking-wider mb-5">
+                {section.title}
+              </h4>
+              <ul className="space-y-3 text-sm">
+                {section.links.map((link) => (
+                  <li key={link.path}>
+                    <Link
+                      to={link.path}
+                      className="text-[#5F6F65] hover:text-[#1F8F4E] transition-colors font-medium"
+                    >
+                      {link.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#5F6F65]">
-          <p>&copy; {new Date().getFullYear()} SolarKits Technologies Pvt. Ltd. All rights reserved. Registered GST B2B Entity.</p>
-          <div className="flex items-center gap-6">
-            <Link to="/about" className="hover:text-[#17211B] transition-colors">About Us</Link>
-            <Link to="/contact" className="hover:text-[#17211B] transition-colors">Contact Support</Link>
+        <div className="py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#5F6F65]">
+          <p>© {new Date().getFullYear()} SolarKits Technologies Pvt. Ltd. All rights reserved.</p>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1 text-[#1F8F4E] font-semibold">
+              <FiShield className="w-3.5 h-3.5" />
+              GST Verified Entity
+            </span>
             <span className="text-[#DDE8E1]">|</span>
-            <span className="text-[#1F8F4E] font-medium">GST Compliance Verified</span>
+            <Link to="/privacy-policy" className="hover:text-[#17211B] transition-colors">Privacy</Link>
+            <Link to="/terms-of-service" className="hover:text-[#17211B] transition-colors">Terms</Link>
           </div>
         </div>
       </div>

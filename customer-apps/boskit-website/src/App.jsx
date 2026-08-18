@@ -34,6 +34,8 @@ import DistributorDealerApplicationsPage from './pages/distributor/DistributorDe
 import DistributorTerritoryPage from './pages/distributor/DistributorTerritoryPage';
 import DistributorPlanPage from './pages/distributor/DistributorPlanPage';
 import DistributorProcureCataloguePage from './pages/distributor/DistributorProcureCataloguePage';
+import DistributorComboKitsStorePage from './pages/distributor/DistributorComboKitsStorePage';
+import DistributorCustomBosKitPage from './pages/distributor/DistributorCustomBosKitPage';
 import DistributorCartPage from './pages/distributor/DistributorCartPage';
 
 // Dealer Portal
@@ -67,11 +69,15 @@ export default function App() {
               <Route path="dashboard" element={<DistributorDashboardPage />} />
               <Route path="procure" element={<DistributorProcureCataloguePage />} />
               <Route path="catalogue" element={<DistributorProcureCataloguePage />} />
-              <Route path="combo-kits" element={<DistributorProcureCataloguePage />} />
-              <Route path="custom-kits" element={<DistributorProcureCataloguePage />} />
-              <Route path="bos-kits" element={<DistributorProcureCataloguePage />} />
+              <Route path="combo-kits" element={<DistributorComboKitsStorePage />} />
+              <Route path="bos-kits" element={<DistributorComboKitsStorePage />} />
+              <Route path="custom-kits" element={<DistributorCustomBosKitPage />} />
+              <Route path="customization-bos-kit" element={<DistributorCustomBosKitPage />} />
               <Route path="cart" element={<DistributorCartPage />} />
               <Route path="dealers" element={<DistributorDealersPage />} />
+              <Route path="dealer-margins" element={<DistributorProcureCataloguePage />} />
+              <Route path="dealer-pricing" element={<DistributorProcureCataloguePage />} />
+              <Route path="reselling-margins" element={<DistributorProcureCataloguePage />} />
               <Route path="dealer-applications" element={<DistributorDealerApplicationsPage />} />
               <Route path="territory" element={<DistributorTerritoryPage />} />
               <Route path="plan" element={<DistributorPlanPage />} />

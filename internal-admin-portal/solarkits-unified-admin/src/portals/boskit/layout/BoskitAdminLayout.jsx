@@ -24,15 +24,46 @@ import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const NAV_ITEMS = [
-  { name: "BOSKIT Overview", icon: FiHome, path: "/boskit-admin/dashboard" },
-  { name: "Distributor Applications", icon: FiFileText, path: "/boskit-admin/applications", badge: "Live" },
-  { name: "Authorized Distributors", icon: FiShield, path: "/boskit-admin/distributors" },
-  { name: "Distributor Plans", icon: FiLayers, path: "/boskit-admin/plans" },
-  { name: "Dealer Network", icon: FiUsers, path: "/boskit-admin/dealers" },
-  { name: "CMS & Marketing", icon: FiSettings, path: "/boskit-admin/content" },
-  { name: "Executive Reports", icon: FiPieChart, path: "/boskit-admin/reports" },
-  { name: "Audit Trail", icon: FiActivity, path: "/boskit-admin/audit-logs" },
+const NAV_GROUPS = [
+  {
+    title: "Operations & Sales",
+    items: [
+      { name: "Overview Dashboard", icon: FiHome, path: "/boskit-admin/dashboard" },
+      { name: "Orders & Fulfillment", icon: FiShoppingCart, path: "/boskit-admin/orders" },
+      { name: "Payment Ledger", icon: FiDollarSign, path: "/boskit-admin/payments" },
+    ],
+  },
+  {
+    title: "Franchise & Dealer Network",
+    items: [
+      { name: "Distributor Onboarding", icon: FiFileText, path: "/boskit-admin/applications", badge: "Live" },
+      { name: "Authorized Distributors", icon: FiShield, path: "/boskit-admin/distributors" },
+      { name: "Distributor Plans", icon: FiLayers, path: "/boskit-admin/plans" },
+      { name: "Dealer Management", icon: FiUsers, path: "/boskit-admin/dealers" },
+      { name: "Territory Allocation", icon: FiMapPin, path: "/boskit-admin/territories" },
+    ],
+  },
+  {
+    title: "Commercial & Pricing Masters",
+    items: [
+      { name: "Channel Settings", icon: FiSliders, path: "/boskit-admin/channel-settings" },
+      { name: "Equipment Products", icon: FiPackage, path: "/boskit-admin/products" },
+      { name: "Product Categories", icon: FiLayers, path: "/boskit-admin/categories" },
+      { name: "MRP Master", icon: FiDollarSign, path: "/boskit-admin/mrp-master" },
+      { name: "Distributor Rates", icon: FiPercent, path: "/boskit-admin/distributor-rates" },
+      { name: "Dealer Pricing", icon: FiUsers, path: "/boskit-admin/dealer-pricing" },
+      { name: "MOQ Settings", icon: FiSliders, path: "/boskit-admin/moq-settings" },
+      { name: "GST Tax Rules", icon: FiPercent, path: "/boskit-admin/gst-settings" },
+    ],
+  },
+  {
+    title: "Marketing & Intelligence",
+    items: [
+      { name: "Content & Banners", icon: FiSettings, path: "/boskit-admin/content" },
+      { name: "Executive Reports", icon: FiPieChart, path: "/boskit-admin/reports" },
+      { name: "Audit Trail", icon: FiActivity, path: "/boskit-admin/audit-logs" },
+    ],
+  },
 ];
 
 export default function BoskitAdminLayout() {
@@ -71,36 +102,40 @@ export default function BoskitAdminLayout() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="p-3 space-y-1">
-            <div className="px-3 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
-              Business Navigation
-            </div>
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname.startsWith(item.path);
+          <nav className="p-3 space-y-4 overflow-y-auto max-h-[calc(100vh-160px)] scrollbar-thin">
+            {NAV_GROUPS.map((grp, gIdx) => (
+              <div key={gIdx} className="space-y-1">
+                <div className="px-3 py-1 text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                  {grp.title}
+                </div>
+                {grp.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname.startsWith(item.path);
 
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
-                      ? "bg-primary text-white font-bold shadow-md shadow-primary/20"
-                      : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon size={16} />
-                    <span>{item.name}</span>
-                  </div>
-                  {item.badge && !isActive && (
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
-                      {stats?.pending_reviews ? `${stats.pending_reviews} New` : item.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        isActive
+                          ? "bg-primary text-white font-bold shadow-md shadow-primary/20"
+                          : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon size={15} />
+                        <span>{item.name}</span>
+                      </div>
+                      {item.badge && !isActive && (
+                        <span className="text-[9px] bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
+                          {stats?.pending_reviews ? `${stats.pending_reviews} New` : item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
 
             <div className="pt-4 px-3 py-2 text-[10px] font-bold text-text-muted uppercase tracking-widest">
               Unified Portals

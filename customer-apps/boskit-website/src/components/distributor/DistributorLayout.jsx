@@ -30,6 +30,7 @@ import {
   FiUsers,
   FiFileText,
   FiBox,
+  FiSliders,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import logoImg from '../../assets/images/logo.png';
@@ -112,14 +113,9 @@ export default function DistributorLayout() {
       icon: <FaSolarPanel size={14} />,
     },
     {
-      name: 'Customer BOS Kit',
+      name: 'Customization BOS Kit',
       path: '/distributor/portal/custom-kits',
       icon: <MdSettings size={15} />,
-    },
-    {
-      name: 'Wholesale Products',
-      path: '/distributor/portal/procure',
-      icon: <FaShoppingBag size={14} />,
     },
   ];
 
@@ -290,8 +286,13 @@ export default function DistributorLayout() {
                 </div>
               </Link>
 
+              {/* Section Header: Buy Stock */}
+              <div className="pt-2 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Factory Stock Procurement
+              </div>
+
               {/* 2. My Catalog (Collapsible Dropdown containing Combo BOS Kit & Customer BOS Kit) */}
-              <div className="space-y-1 pt-0.5">
+              <div className="space-y-1">
                 <button
                   type="button"
                   onClick={() => setCatalogDropdownOpen(!catalogDropdownOpen)}
@@ -305,7 +306,7 @@ export default function DistributorLayout() {
                     <span className="text-blue-700">
                       <FaShoppingBag size={16} />
                     </span>
-                    <span>My Catalog</span>
+                    <span>Procure Equipment</span>
                   </div>
                   <span className="text-slate-400">
                     {catalogDropdownOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
@@ -316,11 +317,7 @@ export default function DistributorLayout() {
                 {catalogDropdownOpen && (
                   <div className="pl-4 pr-1 py-1 space-y-1 border-l-2 border-blue-100 ml-4 animate-in fade-in duration-150">
                     {catalogSubItems.map((sub) => {
-                      const isSubActive =
-                        location.pathname === sub.path ||
-                        (sub.path === '/distributor/portal/procure' &&
-                          (location.pathname === '/distributor/portal/catalogue' ||
-                            location.pathname === '/products'));
+                      const isSubActive = location.pathname === sub.path;
 
                       return (
                         <Link
@@ -343,7 +340,38 @@ export default function DistributorLayout() {
                 )}
               </div>
 
-              {/* 3. Sub-Dealer Network */}
+              {/* Section Header: Resell to Dealers */}
+              <div className="pt-3 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Dealer Reselling & Margins
+              </div>
+
+              {/* 3. Dealer Margin & Pricing Control Manager */}
+              <Link
+                to="/distributor/portal/dealer-margins"
+                className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  location.pathname === '/distributor/portal/dealer-margins' || location.pathname === '/distributor/portal/catalogue'
+                    ? 'bg-[#185ADB] text-white font-bold shadow-sm'
+                    : 'text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-200/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={location.pathname === '/distributor/portal/dealer-margins' ? 'text-white' : 'text-emerald-600'}>
+                    <FiSliders size={17} />
+                  </span>
+                  <span>Set Dealer Margins</span>
+                </div>
+                <span
+                  className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
+                    location.pathname === '/distributor/portal/dealer-margins'
+                      ? 'bg-white text-blue-800'
+                      : 'bg-emerald-200 text-emerald-900'
+                  }`}
+                >
+                  Set Profit
+                </span>
+              </Link>
+
+              {/* 4. Sub-Dealer Network */}
               <Link
                 to="/distributor/portal/dealers"
                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -360,7 +388,7 @@ export default function DistributorLayout() {
                 </div>
               </Link>
 
-              {/* 4. Dealer Applications */}
+              {/* 5. Dealer Applications */}
               <Link
                 to="/distributor/portal/dealer-applications"
                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
@@ -377,7 +405,12 @@ export default function DistributorLayout() {
                 </div>
               </Link>
 
-              {/* 5. Wholesale Cart */}
+              {/* Section Header: Orders & Compliance */}
+              <div className="pt-3 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Orders & Compliance
+              </div>
+
+              {/* 6. Wholesale Cart */}
               <Link
                 to="/distributor/portal/cart"
                 className={`flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${

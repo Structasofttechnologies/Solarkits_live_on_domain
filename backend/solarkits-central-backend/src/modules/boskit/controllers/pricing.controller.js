@@ -28,6 +28,10 @@ const calculate_price = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       success: true,
+      items: result.items,
+      summary: result.summary,
+      moq_passed: result.moq_passed,
+      moq_errors: result.moq_errors,
       data: result,
     });
   } catch (error) {

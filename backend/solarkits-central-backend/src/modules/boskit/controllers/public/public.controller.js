@@ -1,6 +1,7 @@
 'use strict';
 
 const mongoose = require('mongoose');
+require('../../models'); // Ensure all boskit schemas are registered
 
 /**
  * Default fallback plans with clean distributor terminology
@@ -101,33 +102,112 @@ const DEFAULT_PLANS = [
 ];
 
 /**
- * 1. Get Public Product Catalogue
+ * 1. Get Public Product Catalogue (combining Products & BOS Kits)
  */
 const get_products = async (req, res) => {
   try {
     const { category, search, brand, page = 1, limit = 20 } = req.query;
     const skip = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
 
-    const Product = mongoose.model('products');
+    const { Product } = require('../../../admin-panel/models/core_db');
+    let BosKitModel;
+    try {
+      BosKitModel = mongoose.model('bos_kits');
+    } catch {
+      BosKitModel = require('../../../solarshop-india/models/india_solarshop_db/bos_kits.schema');
+    }
+
     let query = { deleted_at: null, is_active: { $ne: false } };
 
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
-        { sku: { $regex: search, $options: 'i' } },
+        { sku_code: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
       ];
     }
 
-    const [total, products] = await Promise.all([
-      Product.countDocuments(query),
+    const [productsList, bosKitsList] = await Promise.all([
       Product.find(query)
         .populate('brand_id', 'name logo_url')
         .sort({ is_featured: -1, created_at: -1 })
-        .skip(skip)
-        .limit(parseInt(limit, 10))
         .lean(),
+      BosKitModel.find({ deleted_at: null, is_active: { $ne: false } })
+        .sort({ createdAt: -1 })
+        .lean()
     ]);
+
+    const formattedProducts = productsList.map((p) => {
+      const mrpVal = p.mrp || (p.base_price_paise ? Math.round(p.base_price_paise / 100 * 1.25) : 9999);
+      const ourPriceVal = p.base_price_paise ? Math.round(p.base_price_paise / 100) : mrpVal;
+
+      return {
+        id: p._id,
+        name: p.name,
+        sku: p.sku_code || p.sku || `BK-${p._id.toString().slice(-6).toUpperCase()}`,
+        category: p.category || (p.name.toLowerCase().includes('panel') || p.name.toLowerCase().includes('module') ? 'panels' : p.name.toLowerCase().includes('inverter') ? 'inverters' : p.name.toLowerCase().includes('battery') ? 'batteries' : 'boskit'),
+        brand: p.brand_id?.name || (p.name.includes('Tata') ? 'Tata Power Solar' : p.name.includes('Waaree') ? 'Waaree Energies' : p.name.includes('Adani') ? 'Adani Solar' : p.name.includes('Havells') ? 'Havells' : p.name.includes('Growatt') ? 'Growatt' : p.name.includes('Exide') ? 'Exide' : 'SolarKits Pro'),
+        brand_logo: p.brand_id?.logo_url || null,
+        mrp: mrpVal,
+        our_price: ourPriceVal,
+        moq: p.moq || 1,
+        image_url: p.image_url || p.image || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+        in_stock: p.stock_quantity !== undefined ? p.stock_quantity > 0 : true,
+        rating: 4.9,
+        reviews_count: 28,
+        features: p.features || [],
+        components: p.components || [],
+        specifications: p.specifications || {},
+        warranty: p.warranty || p.specifications?.Warranty || p.specifications?.warranty || '10 Years Replacement'
+      };
+    });
+
+    const formattedBosKits = bosKitsList.map((bk) => ({
+      id: bk._id,
+      name: bk.name,
+      sku: `BK-KIT-${bk._id.toString().slice(-6).toUpperCase()}`,
+      category: 'boskit',
+      subCategory: bk.subCategory,
+      systemType: bk.systemType,
+      projectRange: bk.projectRange,
+      brand: 'SolarKits ProBOS',
+      brand_logo: null,
+      mrp: bk.marketPrice || Math.round((bk.ourPrice || 10000) * 1.35),
+      our_price: bk.ourPrice,
+      moq: 1,
+      image_url: bk.imageUrl || bk.image || 'https://images.unsplash.com/photo-1592833159057-651427788523?w=800&auto=format&fit=crop&q=80',
+      in_stock: bk.inStock !== false,
+      available_stock: bk.availableStock || 25,
+      rating: bk.rating || 4.9,
+      reviews_count: bk.reviewsCount || 32,
+      components: bk.components || [],
+      specifications: bk.specifications || {},
+      warranty: bk.warranty || '5 Years Replacement',
+      badge: bk.badge || 'Certified BOS Kit'
+    }));
+
+    let allItems = [...formattedBosKits, ...formattedProducts];
+
+    // Filter by category if requested
+    if (category && category !== 'all') {
+      allItems = allItems.filter(item => 
+        (item.category || '').toLowerCase() === category.toLowerCase() ||
+        (item.category || '').toLowerCase().includes(category.toLowerCase()) ||
+        (item.subCategory || '').toLowerCase().includes(category.toLowerCase())
+      );
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      allItems = allItems.filter(item =>
+        (item.name || '').toLowerCase().includes(q) ||
+        (item.sku || '').toLowerCase().includes(q) ||
+        (item.category || '').toLowerCase().includes(q)
+      );
+    }
+
+    const total = allItems.length;
+    const paginated = allItems.slice(skip, skip + parseInt(limit, 10));
 
     return res.status(200).json({
       status: 'success',
@@ -136,19 +216,7 @@ const get_products = async (req, res) => {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
       totalPages: Math.ceil(total / parseInt(limit, 10)),
-      products: products.map((p) => ({
-        id: p._id,
-        name: p.name,
-        sku: p.sku,
-        brand: p.brand_id?.name || 'BOSKIT',
-        brand_logo: p.brand_id?.logo_url || null,
-        mrp: p.mrp || 9999,
-        moq: p.moq || 1,
-        image_url: p.image_url || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-        in_stock: true,
-        rating: 4.8,
-        reviews_count: 24,
-      })),
+      products: paginated,
     });
   } catch (error) {
     console.error('[get_products Error]:', error);
@@ -175,7 +243,45 @@ const get_product_detail = async (req, res) => {
       });
     }
 
-    const Product = mongoose.model('products');
+    const { Product } = require('../../../admin-panel/models/core_db');
+    let BosKitModel;
+    try {
+      BosKitModel = mongoose.model('bos_kits');
+    } catch {
+      BosKitModel = require('../../../solarshop-india/models/india_solarshop_db/bos_kits.schema');
+    }
+
+    // Try finding in BosKitModel first
+    const bosKit = await BosKitModel.findById(id).lean();
+    if (bosKit) {
+      return res.status(200).json({
+        status: 'success',
+        success: true,
+        product: {
+          id: bosKit._id,
+          name: bosKit.name,
+          sku: `BK-KIT-${bosKit._id.toString().slice(-6).toUpperCase()}`,
+          category: 'boskit',
+          subCategory: bosKit.subCategory,
+          systemType: bosKit.systemType,
+          projectRange: bosKit.projectRange,
+          brand: 'SolarKits ProBOS',
+          mrp: bosKit.marketPrice || Math.round((bosKit.ourPrice || 10000) * 1.35),
+          our_price: bosKit.ourPrice,
+          moq: 1,
+          description: `Certified turnkey Balance of System (BOS) kit engineered for high-performance solar installations conforming to Indian grid & MNRE specifications.`,
+          components: bosKit.components || [],
+          specs: bosKit.specifications || {},
+          warranty: bosKit.warranty || '5 Years Replacement',
+          image_url: bosKit.imageUrl || bosKit.image || 'https://images.unsplash.com/photo-1592833159057-651427788523?w=800&auto=format&fit=crop&q=80',
+          in_stock: bosKit.inStock !== false,
+          available_stock: bosKit.availableStock || 25,
+          rating: bosKit.rating || 4.9,
+          reviews_count: bosKit.reviewsCount || 32,
+        },
+      });
+    }
+
     const product = await Product.findById(id).populate('brand_id', 'name logo_url').lean();
 
     if (!product) {
@@ -192,14 +298,14 @@ const get_product_detail = async (req, res) => {
       product: {
         id: product._id,
         name: product.name,
-        sku: product.sku,
+        sku: product.sku_code || product.sku || `BK-${product._id.toString().slice(-6).toUpperCase()}`,
         brand: product.brand_id?.name || 'BOSKIT',
-        mrp: product.mrp || 9999,
+        mrp: product.mrp || Math.round((product.base_price_paise || 1000000) / 100 * 1.25) || 9999,
         moq: product.moq || 1,
         description: product.description,
         specs: product.specifications || {},
-        image_url: product.image_url || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-        in_stock: true,
+        image_url: product.image_url || product.image || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+        in_stock: product.stock_quantity !== undefined ? product.stock_quantity > 0 : true,
       },
     });
   } catch (error) {

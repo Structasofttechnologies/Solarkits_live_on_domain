@@ -206,7 +206,46 @@ export default function DashboardHome() {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto transition-opacity duration-300" style={themeStyles}>
-      
+
+      {/* ── 0. Commerce-first Welcome Banner ─────────────────────────────────── */}
+      <div className="rounded-2xl p-6 sm:p-8 border shadow-sm overflow-hidden relative" style={{ background: "var(--gradient-primary)", borderColor: "var(--color-border)" }}>
+        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="text-xs font-bold text-white/70 uppercase tracking-widest">Reseller Portal</div>
+            <h1 className="font-heading font-black text-2xl sm:text-3xl text-white tracking-tight">
+              Welcome back, {reseller?.business_name || "Partner"}!
+            </h1>
+            <p className="text-sm text-white/80 font-medium">
+              {reseller?.kyc_status === "verified"
+                ? "Your account is verified. Browse products, manage listings, and track your orders."
+                : "Complete your KYC verification to unlock all ordering and listing features."}
+            </p>
+          </div>
+
+          {/* Quick actions */}
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Link
+              to="/catalog"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-blue-900 hover:bg-blue-50 shadow-sm transition-all whitespace-nowrap"
+            >
+              <FiPackage size={14} /> Browse Products
+            </Link>
+            <Link
+              to="/orders"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/15 text-white hover:bg-white/25 border border-white/20 transition-all whitespace-nowrap"
+            >
+              <FiShoppingBag size={14} /> My Orders
+            </Link>
+            <Link
+              to="/storefront-listings"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/15 text-white hover:bg-white/25 border border-white/20 transition-all whitespace-nowrap"
+            >
+              <FiLayers size={14} /> My Listings
+            </Link>
+          </div>
+        </div>
+      </div>
+
       {/* ── 1. Industry Switcher Bar ───────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900/60 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-md">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">

@@ -26,13 +26,13 @@ import api from "../services/api";
 import logoImg from "@/assets/images/logo.png";
 
 const NAV_ITEMS = [
-  { name: "Overview", icon: FiHome, path: "/dashboard" },
-  { name: "Authorized Catalog", icon: FiPackage, path: "/catalog" },
-  { name: "B2B Stock & Procurement", icon: FiBox, path: "/procurement-inventory" },
-  { name: "Storefront Pricing (MAP)", icon: FiTag, path: "/storefront-listings" },
-  { name: "My EPC Buyers", icon: FiUsers, path: "/epc-buyers" },
-  { name: "My Orders", icon: FiShoppingCart, path: "/orders" },
-  { name: "My Earnings & Payouts", icon: FiCreditCard, path: "/wallet" },
+  { name: "Home", icon: FiHome, path: "/dashboard" },
+  { name: "Browse Products", icon: FiPackage, path: "/catalog" },
+  { name: "Order Stock", icon: FiBox, path: "/procurement-inventory" },
+  { name: "My Listings", icon: FiTag, path: "/storefront-listings" },
+  { name: "My Buyers", icon: FiUsers, path: "/epc-buyers" },
+  { name: "Orders & Tracking", icon: FiShoppingCart, path: "/orders" },
+  { name: "Earnings & Payouts", icon: FiCreditCard, path: "/wallet" },
 ];
 
 export default function DashboardLayout() {
@@ -178,7 +178,7 @@ export default function DashboardLayout() {
               <img src={logoImg} alt="SolarKits Logo" className="w-28 h-auto" />
             </div>
 
-            {/* Franchisee badge in sidebar */}
+            {/* Reseller info + Verified Partner badge */}
             {reseller && (
               <div className="px-3 py-2" style={{ borderBottom: "1px solid var(--color-border)" }}>
                 <div
@@ -189,9 +189,9 @@ export default function DashboardLayout() {
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
                     style={{ background: "var(--gradient-primary)" }}
                   >
-                    {reseller.business_name?.charAt(0)?.toUpperCase() || "F"}
+                    {reseller.business_name?.charAt(0)?.toUpperCase() || "R"}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div
                       className="text-xs font-bold truncate"
                       style={{ color: "var(--color-text-primary)" }}
@@ -205,14 +205,22 @@ export default function DashboardLayout() {
                       }}
                     >
                       {reseller.kyc_status === "verified" ? (
-                        <FiCheckCircle size={9} />
+                        <><FiCheckCircle size={9} /> Verified Partner</>
                       ) : (
-                        <FiAlertCircle size={9} />
+                        <><FiAlertCircle size={9} /> KYC Pending</>
                       )}
-                      KYC {reseller.kyc_status}
                     </div>
                   </div>
                 </div>
+
+                {/* Quick Order CTA */}
+                <Link
+                  to="/catalog"
+                  className="mt-2 flex items-center justify-center gap-1.5 w-full py-2 rounded-xl text-xs font-bold text-white shadow-xs transition-all hover:opacity-90"
+                  style={{ background: "var(--gradient-primary)" }}
+                >
+                  <FiShoppingCart size={12} /> Quick Order
+                </Link>
               </div>
             )}
 

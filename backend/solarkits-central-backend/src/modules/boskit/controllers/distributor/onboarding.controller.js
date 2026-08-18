@@ -463,14 +463,11 @@ const get_geo_states = async (req, res) => {
  */
 const get_geo_districts = async (req, res) => {
   try {
-    const { state_id } = req.query;
-    if (!state_id) {
-      return res.status(400).json({ status: 'error', success: false, message: 'state_id is required.' });
-    }
+    const stateIdentifier = req.query.state_id || req.query.state || req.query.state_name;
 
     const GeoLevel2 = mongoose.model('geolocation_level_2');
-    const query = mongoose.Types.ObjectId.isValid(state_id)
-      ? { level_1: state_id, deleted_at: null }
+    const query = mongoose.Types.ObjectId.isValid(stateIdentifier)
+      ? { level_1: stateIdentifier, deleted_at: null }
       : { deleted_at: null };
 
     const districts = await GeoLevel2.find(query).sort({ name: 1 }).select('_id name code').lean();

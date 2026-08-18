@@ -34,39 +34,37 @@ export default function BosKitManager() {
   // Custom Catalog Database State
   const [customCatalog, setCustomCatalog] = useState([]);
 
-  // Fetch BOS Kits & Custom Catalog from Database API or DB store
+  // Fetch BOS Kits & Custom Catalog from Live Database APIs
   const fetchDatabaseData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch existing combo-kits & BOS Kits from backend DB API
+      // 1. Fetch Pre-Configured BOS Kits directly from backend MongoDB API
       let fetchedKits = [];
       try {
-        const resKits = await axios.get(
-          `${API_URL}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`,
-          { headers: authHeaderObj() }
-        );
-        if (resKits.data?.data && Array.isArray(resKits.data.data)) {
-          fetchedKits = resKits.data.data.filter(
-            (k) => (k.category || "").toLowerCase().includes("bos") || (k.name || "").toLowerCase().includes("bos")
-          );
-        }
-      } catch {
-        // Fallback to local DB cache if API offline
-      }
-
-      // 2. Fetch Custom Catalog directly from Live MongoDB Database API endpoint
-      // Note: catalog is under /api/india/v1/shop (shop route), NOT admin-api
-      try {
-        const resCat = await axios.get(`${SHOP_API_URL}/india/v1/shop/bos-custom-catalog`);
-        if (resCat.data?.data && Array.isArray(resCat.data.data)) {
-          setCustomCatalog(resCat.data.data);
-          localStorage.setItem("solar_custom_bos_catalog_admin_store", JSON.stringify(resCat.data.data));
+        const resKits = await axios.get(`${SHOP_API_URL}/india/v1/shop/bos-kits`);
+        if (resKits.data?.data && Array.isArray(resKits.data.data) && resKits.data.data.length > 0) {
+          fetchedKits = resKits.data.data;
         }
       } catch (e) {
-        console.error("API fetch for custom catalog error:", e);
+        console.warn("API fetch for bos-kits error:", e.message);
       }
 
-      // 3. Fetch BOS Kits from DB store
+      // Fallback: Check combo-kits or local cache if bos-kits was empty
+      if (fetchedKits.length === 0) {
+        try {
+          const resCombo = await axios.get(
+            `${API_URL}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`,
+            { headers: authHeaderObj() }
+          );
+          if (resCombo.data?.data && Array.isArray(resCombo.data.data)) {
+            const bosCombo = resCombo.data.data.filter(
+              (k) => (k.category || "").toLowerCase().includes("bos") || (k.name || "").toLowerCase().includes("bos")
+            );
+            if (bosCombo.length > 0) fetchedKits = bosCombo;
+          }
+        } catch {}
+      }
+
       if (fetchedKits.length === 0) {
         const dbKitsStr = localStorage.getItem("solar_bos_kits_admin_store");
         if (dbKitsStr && JSON.parse(dbKitsStr).length > 0) {
@@ -74,6 +72,18 @@ export default function BosKitManager() {
         }
       }
       setBosKits(fetchedKits);
+      localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(fetchedKits));
+
+      // 2. Fetch Custom Catalog directly from Live MongoDB Database API endpoint
+      try {
+        const resCat = await axios.get(`${SHOP_API_URL}/india/v1/shop/bos-custom-catalog`);
+        if (resCat.data?.data && Array.isArray(resCat.data.data) && resCat.data.data.length > 0) {
+          setCustomCatalog(resCat.data.data);
+          localStorage.setItem("solar_custom_bos_catalog_admin_store", JSON.stringify(resCat.data.data));
+        }
+      } catch (e) {
+        console.warn("API fetch for custom catalog error:", e.message);
+      }
 
       // Broadcast update event so customer app syncs instantly
       window.dispatchEvent(new Event("solar_bos_data_updated"));
@@ -92,6 +102,11 @@ export default function BosKitManager() {
   const saveBosKits = async (updatedKits) => {
     setBosKits(updatedKits);
     localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(updatedKits));
+    try {
+      await axios.post(`${SHOP_API_URL}/india/v1/shop/bos-kits`, { kits: updatedKits });
+    } catch (e) {
+      console.warn("Failed to sync full BOS kits to API:", e.message);
+    }
     window.dispatchEvent(new Event("solar_bos_data_updated"));
   };
 
@@ -99,10 +114,9 @@ export default function BosKitManager() {
     setCustomCatalog(updatedCatalog);
     localStorage.setItem("solar_custom_bos_catalog_admin_store", JSON.stringify(updatedCatalog));
     try {
-      // Note: catalog is under /api/india/v1/shop (shop route), NOT admin-api
       await axios.post(`${SHOP_API_URL}/india/v1/shop/bos-custom-catalog`, { catalog: updatedCatalog });
     } catch (e) {
-      console.error("Failed to save custom catalog to API:", e);
+      console.warn("Failed to save custom catalog to API:", e.message);
     }
     window.dispatchEvent(new Event("solar_bos_data_updated"));
   };
@@ -152,16 +166,16 @@ export default function BosKitManager() {
       setEditingKit(kit);
       setKitForm({
         name: kit.name,
-        category: kit.category,
-        subCategory: kit.subCategory,
-        systemType: kit.systemType,
-        projectRange: kit.projectRange,
-        comboKitType: kit.comboKitType,
+        category: kit.category || "Complete BOS Combos",
+        subCategory: kit.subCategory || "Single Phase",
+        systemType: kit.systemType || "On-Grid & Hybrid",
+        projectRange: kit.projectRange || "3kw-5kw",
+        comboKitType: kit.comboKitType || "Standard Residential",
         ourPrice: kit.ourPrice,
         marketPrice: kit.marketPrice,
-        inStock: kit.inStock,
-        availableStock: kit.availableStock,
-        warranty: kit.warranty,
+        inStock: kit.inStock !== false,
+        availableStock: kit.availableStock || 20,
+        warranty: kit.warranty || "5 Years Replacement",
         badge: kit.badge || "Certified BOS Kit",
         imageUrl: kit.imageUrl || kit.image || "",
         selectedComponents: Array.isArray(kit.components) ? [...kit.components] : [],
@@ -176,8 +190,8 @@ export default function BosKitManager() {
         systemType: "On-Grid & Hybrid",
         projectRange: "3kw-5kw",
         comboKitType: "Standard Residential",
-        ourPrice: 5000,
-        marketPrice: 7500,
+        ourPrice: 8500,
+        marketPrice: 12500,
         inStock: true,
         availableStock: 20,
         warranty: "5 Years Replacement",
@@ -208,10 +222,11 @@ export default function BosKitManager() {
     }));
   };
 
-  const handleSaveKit = (e) => {
+  const handleSaveKit = async (e) => {
     e.preventDefault();
     const kitPayload = {
-      id: editingKit ? editingKit.id : `bos_kit_${Date.now()}`,
+      id: editingKit ? (editingKit._id || editingKit.id) : undefined,
+      _id: editingKit ? (editingKit._id || editingKit.id) : undefined,
       name: kitForm.name,
       category: kitForm.category,
       subCategory: kitForm.subCategory,
@@ -237,14 +252,32 @@ export default function BosKitManager() {
       }
     };
 
-    let updated;
-    if (editingKit) {
-      updated = bosKits.map((k) => (k.id === editingKit.id ? kitPayload : k));
-    } else {
-      updated = [kitPayload, ...bosKits];
+    try {
+      // Save directly to Backend Database API
+      const res = await axios.post(`${SHOP_API_URL}/india/v1/shop/bos-kits/save-single`, kitPayload);
+      const savedDoc = res.data?.data || kitPayload;
+      
+      let updated;
+      if (editingKit) {
+        const editId = editingKit._id || editingKit.id;
+        updated = bosKits.map((k) => ((k._id || k.id) === editId ? savedDoc : k));
+      } else {
+        updated = [savedDoc, ...bosKits];
+      }
+      setBosKits(updated);
+      localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(updated));
+      window.dispatchEvent(new Event("solar_bos_data_updated"));
+    } catch (err) {
+      console.warn("Direct save API error, updating local state:", err.message);
+      let updated;
+      if (editingKit) {
+        updated = bosKits.map((k) => ((k._id || k.id) === (editingKit._id || editingKit.id) ? kitPayload : k));
+      } else {
+        updated = [kitPayload, ...bosKits];
+      }
+      saveBosKits(updated);
     }
 
-    saveBosKits(updated);
     setShowKitModal(false);
   };
 
@@ -252,22 +285,36 @@ export default function BosKitManager() {
     if (window.confirm("Are you sure you want to delete this BOS Kit?")) {
       const targetId = typeof id === "object" ? (id._id || id.id) : id;
       try {
+        await axios.delete(`${SHOP_API_URL}/india/v1/shop/bos-kits/${targetId}`);
+      } catch (err) {
+        console.warn("Error deleting kit from shop bos-kits API:", err.message);
+      }
+      try {
         await axios.post(
           `${API_URL}/combo-kits/india/delete-kit?unique_id=ADM_COMBO_KITS&req_for=delete`,
           { id: targetId },
           { headers: authHeaderObj() }
         );
-      } catch (err) {
-        console.error("Error deleting kit from backend:", err);
-      }
-      const updated = bosKits.filter((k) => (k._id || k.id) !== id && k.id !== id);
-      saveBosKits(updated);
+      } catch {}
+
+      const updated = bosKits.filter((k) => (k._id || k.id) !== targetId && k.id !== targetId);
+      setBosKits(updated);
+      localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(updated));
+      window.dispatchEvent(new Event("solar_bos_data_updated"));
     }
   };
 
-  const handleToggleStockKit = (id) => {
-    const updated = bosKits.map((k) => (k.id === id ? { ...k, inStock: !k.inStock } : k));
-    saveBosKits(updated);
+  const handleToggleStockKit = async (id) => {
+    const targetId = typeof id === "object" ? (id._id || id.id) : id;
+    try {
+      await axios.patch(`${SHOP_API_URL}/india/v1/shop/bos-kits/${targetId}/stock`);
+    } catch (err) {
+      console.warn("Stock toggle API error:", err.message);
+    }
+    const updated = bosKits.map((k) => ((k._id || k.id) === targetId ? { ...k, inStock: !k.inStock } : k));
+    setBosKits(updated);
+    localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(updated));
+    window.dispatchEvent(new Event("solar_bos_data_updated"));
   };
 
   // Custom Component Actions

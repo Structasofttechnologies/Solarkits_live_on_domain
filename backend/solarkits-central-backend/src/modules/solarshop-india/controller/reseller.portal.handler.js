@@ -763,6 +763,28 @@ const get_reseller_authorized_products = async (req, res) => {
       }
     });
 
+    if (items.length === 0) {
+      // Fallback: If no custom authorization rules are set, allow all active products & combo kits
+      const allProducts = await Product.find({ deleted_at: null, is_active: { $ne: false } }).limit(50).lean();
+      allProducts.forEach(p => {
+        const listing = listingMap[p._id.toString()];
+        const priceInr = listing?.cost_price_paise
+          ? listing.cost_price_paise / 100
+          : (p.base_price || (p.base_price_paise ? p.base_price_paise / 100 : null) || p.price || 1000);
+        items.push({
+          _id: p._id,
+          id: p._id,
+          scope_type: 'product',
+          is_kit: false,
+          name: p.name,
+          sku_code: p.sku_code || 'PROD-SKU',
+          base_price: priceInr,
+          price: priceInr,
+          reseller_cost_inr: priceInr,
+        });
+      });
+    }
+
     return res.json({
       status: 'success',
       data: items,

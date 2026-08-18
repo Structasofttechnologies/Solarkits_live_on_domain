@@ -2,7 +2,7 @@
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-const { generateAccessRefreshToken } = require('../../utils/jsonwebtoken');
+const { generate_auth_tokens, set_auth_cookies } = require('../../utils/jsonwebtoken');
 const { logBoskitAudit } = require('../../utils/audit_logger');
 const { sendOTP } = require('../../../solarshop-india/utils/nodemailer');
 
@@ -113,7 +113,8 @@ const register_dealer = async (req, res) => {
     }
 
     // Generate tokens
-    const { accessToken, refreshToken } = generateAccessRefreshToken(dealer, 'dealer', res);
+    const { accessToken, refreshToken } = generate_auth_tokens(dealer, 'boskit_dealer');
+    set_auth_cookies(res, req, { accessToken, refreshToken, prefix: 'boskit_dealer' });
 
     logBoskitAudit({
       actor_type: 'boskit_dealer',
@@ -218,38 +219,90 @@ const get_dealer_dashboard_stats = async (req, res) => {
 };
 
 /**
- * 3. Dealer Wholesale Catalogue (Scoped with Dealer Pricing Slabs)
+ * 3. Dealer Wholesale Catalogue (Scoped with Assigned Distributor's Custom Pricing & Margin Rules)
  */
 const get_dealer_catalogue = async (req, res) => {
   try {
+    const dealerId = req.user?.id || req.user?._id;
+    const BoskitDealer = mongoose.model('boskit_dealers');
+    const BoskitPriceRule = mongoose.model('boskit_price_rules');
+    const BoskitChannelSettings = mongoose.model('boskit_channel_settings');
     const Product = mongoose.model('products');
+
+    let distributorId = null;
+    if (dealerId) {
+      const dealer = await BoskitDealer.findById(dealerId).lean();
+      if (dealer?.distributor_id) {
+        distributorId = dealer.distributor_id;
+      }
+    }
+
+    // 1. Fetch custom distributor margin / price overrides
+    let distributorRules = [];
+    if (distributorId) {
+      distributorRules = await BoskitPriceRule.find({
+        distributor_id: distributorId,
+        scope: 'user_override',
+      }).lean();
+    }
+
     const products = await Product.find({ is_active: true, deleted_at: null })
-      .select('name sku category_id brand_id mrp_paise min_order_qty specifications image_url')
-      .limit(20)
+      .select('name sku category_id brand_id mrp_paise price min_order_qty specifications image_url')
+      .limit(50)
       .lean();
 
-    const items = products.map((p) => {
-      const mrp = p.mrp_paise || 999900;
-      // 18% wholesale dealer discount from MRP
-      const wholesalePaise = Math.round(mrp * 0.82);
+    const items = products
+      .map((p) => {
+        const prodIdStr = p._id.toString();
+        const baseMrpPaise = p.mrp_paise && p.mrp_paise > 0 ? p.mrp_paise : (p.price ? p.price * 100 : 1000000);
+        const mrpInr = Math.round(baseMrpPaise / 100);
 
-      return {
-        id: p._id,
-        name: p.name,
-        sku: p.sku || `BK-PROD-${p._id.toString().slice(-6).toUpperCase()}`,
-        mrp_inr: Math.round(mrp / 100),
-        dealer_wholesale_inr: Math.round(wholesalePaise / 100),
-        dealer_discount_percent: 18,
-        moq: p.min_order_qty || 1,
-        image_url: p.image_url || 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
-        in_stock: true,
-        warranty_years: 10,
-      };
-    });
+        // Check if distributor set custom override rule for this product
+        const customRule = distributorRules.find(
+          (r) => r.product_id && r.product_id.toString() === prodIdStr
+        );
+
+        // If distributor deactivated / unwhitelisted this product for their dealers
+        if (customRule && customRule.status === 'inactive') {
+          return null;
+        }
+
+        let dealerSellPriceInr = Math.round(mrpInr * 0.90); // Default 10% dealer discount from MRP
+        let discountPercent = 10;
+
+        if (customRule) {
+          if (customRule.dealer_rate_paise && customRule.dealer_rate_paise > 0) {
+            dealerSellPriceInr = Math.round(customRule.dealer_rate_paise / 100);
+            discountPercent = Math.max(0, Math.round(((mrpInr - dealerSellPriceInr) / mrpInr) * 100));
+          } else if (customRule.discount_percentage !== undefined) {
+            discountPercent = customRule.discount_percentage;
+            dealerSellPriceInr = Math.round(mrpInr * (1 - discountPercent / 100));
+          }
+        }
+
+        return {
+          id: p._id,
+          name: p.name,
+          sku: p.sku || `BK-PROD-${p._id.toString().slice(-6).toUpperCase()}`,
+          mrp_inr: mrpInr,
+          dealer_wholesale_inr: dealerSellPriceInr,
+          dealer_discount_percent: discountPercent,
+          moq: customRule?.moq || p.min_order_qty || 1,
+          image_url:
+            p.image_url ||
+            'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=800&q=80',
+          in_stock: true,
+          distributor_custom_rate_applied: Boolean(customRule),
+          warranty_years: 10,
+        };
+      })
+      .filter(Boolean);
 
     return res.status(200).json({
       status: 'success',
       success: true,
+      distributor_id: distributorId,
+      total_products: items.length,
       products: items,
     });
   } catch (error) {

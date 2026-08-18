@@ -1590,6 +1590,750 @@ const update_distributor_status = async (req, res) => {
   }
 };
 
+/**
+ * ── CHANNEL SETTINGS CRUD ──────────────────────────────────────────────────
+ */
+const get_channel_settings = async (req, res) => {
+  try {
+    const { industry_id, state_id, district_id, distributor_id, status, page = 1, limit = 20 } = req.query;
+    const BoskitChannelSettings = mongoose.model('boskit_channel_settings');
+    const query = { deleted_at: null };
+
+    if (industry_id && mongoose.Types.ObjectId.isValid(industry_id)) query.industry_type_id = industry_id;
+    if (state_id && mongoose.Types.ObjectId.isValid(state_id)) query.state_id = state_id;
+    if (district_id && mongoose.Types.ObjectId.isValid(district_id)) query.district_id = district_id;
+    if (distributor_id && mongoose.Types.ObjectId.isValid(distributor_id)) query.distributor_id = distributor_id;
+    if (status && status !== 'all') query.status = status;
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const [total, settings] = await Promise.all([
+      BoskitChannelSettings.countDocuments(query),
+      BoskitChannelSettings.find(query)
+        .populate('industry_type_id', 'name')
+        .populate('state_id', 'name')
+        .populate('district_id', 'name')
+        .populate('distributor_id', 'business_name gst_number')
+        .populate('product_configs.product_id', 'name sku price')
+        .sort({ rule_priority: 1, created_at: -1 })
+        .skip(skip)
+        .limit(parseInt(limit, 10))
+        .lean(),
+    ]);
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        settings: settings.map((s) => ({
+          id: s._id,
+          industry: s.industry_type_id?.name || 'All Industries',
+          state: s.state_id?.name || 'All States',
+          district: s.district_id?.name || 'All Districts',
+          distributor: s.distributor_id ? `${s.distributor_id.business_name} (${s.distributor_id.gst_number || 'N/A'})` : 'All Distributors',
+          product_configs_count: s.product_configs?.length || 0,
+          product_configs: s.product_configs || [],
+          rule_priority: s.rule_priority || 100,
+          effective_from: s.effective_from,
+          effective_to: s.effective_to,
+          status: s.status,
+          created_at: s.created_at,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_channel_settings Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch channel settings: ' + error.message });
+  }
+};
+
+const create_channel_setting = async (req, res) => {
+  try {
+    const adminId = req.user?.id || req.user?._id;
+    const {
+      industry_type_id,
+      project_type_id,
+      state_id,
+      district_id,
+      distributor_id,
+      product_configs = [],
+      rule_priority = 100,
+      effective_from = new Date(),
+      effective_to = null,
+      status = 'active',
+    } = req.body;
+
+    const BoskitChannelSettings = mongoose.model('boskit_channel_settings');
+
+    const formattedConfigs = (product_configs || []).map((pc) => ({
+      product_id: pc.product_id && mongoose.Types.ObjectId.isValid(pc.product_id) ? pc.product_id : null,
+      kit_id: pc.kit_id && mongoose.Types.ObjectId.isValid(pc.kit_id) ? pc.kit_id : null,
+      mrp_paise: Math.round(Number(pc.mrp_inr || pc.mrp_paise / 100 || 10000) * 100),
+      distributor_rate_paise: Math.round(Number(pc.distributor_rate_inr || pc.distributor_rate_paise / 100 || 8500) * 100),
+      gst_rate_pct: Number(pc.gst_rate_pct || 18),
+      dealer_allowed: pc.dealer_allowed !== false,
+      dealer_rate_paise: pc.dealer_rate_inr ? Math.round(Number(pc.dealer_rate_inr) * 100) : null,
+      dealer_min_rate_paise: pc.dealer_min_rate_inr ? Math.round(Number(pc.dealer_min_rate_inr) * 100) : null,
+      dealer_max_rate_paise: pc.dealer_max_rate_inr ? Math.round(Number(pc.dealer_max_rate_inr) * 100) : null,
+      distributor_moq: Math.max(1, parseInt(pc.distributor_moq, 10) || 5),
+      dealer_moq: Math.max(1, parseInt(pc.dealer_moq, 10) || 2),
+    }));
+
+    const [newSetting] = await BoskitChannelSettings.create([
+      {
+        industry_type_id: industry_type_id && mongoose.Types.ObjectId.isValid(industry_type_id) ? industry_type_id : null,
+        project_type_id: project_type_id && mongoose.Types.ObjectId.isValid(project_type_id) ? project_type_id : null,
+        state_id: state_id && mongoose.Types.ObjectId.isValid(state_id) ? state_id : null,
+        district_id: district_id && mongoose.Types.ObjectId.isValid(district_id) ? district_id : null,
+        distributor_id: distributor_id && mongoose.Types.ObjectId.isValid(distributor_id) ? distributor_id : null,
+        product_configs: formattedConfigs,
+        rule_priority: Number(rule_priority) || 100,
+        effective_from,
+        effective_to,
+        status,
+        created_by: adminId,
+      },
+    ]);
+
+    logBoskitAudit({
+      actor_type: 'cms_user',
+      actor_id: adminId,
+      action: 'CHANNEL_SETTING_CREATED',
+      entity_type: 'boskit_channel_settings',
+      entity_id: newSetting._id,
+      req,
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      success: true,
+      message: 'Channel configuration created successfully.',
+      data: newSetting,
+    });
+  } catch (error) {
+    console.error('[create_channel_setting Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to create channel setting: ' + error.message });
+  }
+};
+
+const update_channel_setting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id || req.user?._id;
+    const BoskitChannelSettings = mongoose.model('boskit_channel_settings');
+
+    const setting = await BoskitChannelSettings.findById(id);
+    if (!setting) {
+      return res.status(404).json({ status: 'error', success: false, message: 'Channel setting not found.' });
+    }
+
+    const {
+      industry_type_id,
+      state_id,
+      district_id,
+      distributor_id,
+      product_configs,
+      rule_priority,
+      effective_from,
+      effective_to,
+      status,
+    } = req.body;
+
+    if (industry_type_id !== undefined) setting.industry_type_id = industry_type_id || null;
+    if (state_id !== undefined) setting.state_id = state_id || null;
+    if (district_id !== undefined) setting.district_id = district_id || null;
+    if (distributor_id !== undefined) setting.distributor_id = distributor_id || null;
+    if (rule_priority !== undefined) setting.rule_priority = Number(rule_priority);
+    if (effective_from !== undefined) setting.effective_from = effective_from;
+    if (effective_to !== undefined) setting.effective_to = effective_to;
+    if (status !== undefined) setting.status = status;
+    setting.updated_by = adminId;
+
+    if (Array.isArray(product_configs)) {
+      setting.product_configs = product_configs.map((pc) => ({
+        product_id: pc.product_id && mongoose.Types.ObjectId.isValid(pc.product_id) ? pc.product_id : null,
+        kit_id: pc.kit_id && mongoose.Types.ObjectId.isValid(pc.kit_id) ? pc.kit_id : null,
+        mrp_paise: Math.round(Number(pc.mrp_inr || pc.mrp_paise / 100 || 10000) * 100),
+        distributor_rate_paise: Math.round(Number(pc.distributor_rate_inr || pc.distributor_rate_paise / 100 || 8500) * 100),
+        gst_rate_pct: Number(pc.gst_rate_pct || 18),
+        dealer_allowed: pc.dealer_allowed !== false,
+        dealer_rate_paise: pc.dealer_rate_inr ? Math.round(Number(pc.dealer_rate_inr) * 100) : pc.dealer_rate_paise || null,
+        dealer_min_rate_paise: pc.dealer_min_rate_inr ? Math.round(Number(pc.dealer_min_rate_inr) * 100) : pc.dealer_min_rate_paise || null,
+        dealer_max_rate_paise: pc.dealer_max_rate_inr ? Math.round(Number(pc.dealer_max_rate_inr) * 100) : pc.dealer_max_rate_paise || null,
+        distributor_moq: Math.max(1, parseInt(pc.distributor_moq, 10) || 5),
+        dealer_moq: Math.max(1, parseInt(pc.dealer_moq, 10) || 2),
+      }));
+    }
+
+    await setting.save();
+
+    logBoskitAudit({
+      actor_type: 'cms_user',
+      actor_id: adminId,
+      action: 'CHANNEL_SETTING_UPDATED',
+      entity_type: 'boskit_channel_settings',
+      entity_id: setting._id,
+      req,
+    });
+
+    return res.status(200).json({ status: 'success', success: true, message: 'Channel setting updated.', data: setting });
+  } catch (error) {
+    console.error('[update_channel_setting Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to update channel setting: ' + error.message });
+  }
+};
+
+const duplicate_channel_setting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id || req.user?._id;
+    const BoskitChannelSettings = mongoose.model('boskit_channel_settings');
+
+    const source = await BoskitChannelSettings.findById(id).lean();
+    if (!source) {
+      return res.status(404).json({ status: 'error', success: false, message: 'Channel setting not found.' });
+    }
+
+    const { _id, id: _, created_at, updated_at, ...rest } = source;
+    const cloned = await BoskitChannelSettings.create({
+      ...rest,
+      status: 'draft',
+      rule_priority: (source.rule_priority || 100) + 1,
+      created_by: adminId,
+    });
+
+    return res.status(201).json({ status: 'success', success: true, message: 'Channel setting duplicated as draft.', data: cloned });
+  } catch (error) {
+    console.error('[duplicate_channel_setting Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to duplicate channel setting: ' + error.message });
+  }
+};
+
+const delete_channel_setting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id || req.user?._id;
+    const BoskitChannelSettings = mongoose.model('boskit_channel_settings');
+
+    await BoskitChannelSettings.findByIdAndUpdate(id, { deleted_at: new Date(), status: 'inactive' });
+
+    logBoskitAudit({
+      actor_type: 'cms_user',
+      actor_id: adminId,
+      action: 'CHANNEL_SETTING_DELETED',
+      entity_type: 'boskit_channel_settings',
+      entity_id: id,
+      req,
+    });
+
+    return res.status(200).json({ status: 'success', success: true, message: 'Channel setting deleted.' });
+  } catch (error) {
+    console.error('[delete_channel_setting Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to delete channel setting: ' + error.message });
+  }
+};
+
+/**
+ * ── PRODUCTS & CATEGORIES ADMIN ────────────────────────────────────────────
+ */
+const get_admin_products = async (req, res) => {
+  try {
+    const { search, category_id, status, page = 1, limit = 20 } = req.query;
+    const Product = mongoose.model('products');
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { sku: { $regex: search, $options: 'i' } },
+      ];
+    }
+    if (category_id && mongoose.Types.ObjectId.isValid(category_id)) query.category_id = category_id;
+    if (status === 'active') query.is_active = true;
+    if (status === 'inactive') query.is_active = false;
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const [total, products] = await Promise.all([
+      Product.countDocuments(query),
+      Product.find(query).sort({ created_at: -1 }).skip(skip).limit(parseInt(limit, 10)).lean(),
+    ]);
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        products: products.map((p) => ({
+          id: p._id,
+          name: p.name,
+          sku: p.sku || `BK-SKU-${p._id.toString().slice(-4)}`,
+          category_id: p.category_id,
+          price: p.price || (p.mrp_paise ? p.mrp_paise / 100 : 0),
+          mrp_paise: p.mrp_paise || (p.price ? p.price * 100 : 0),
+          mrp_inr: Math.round((p.mrp_paise || (p.price ? p.price * 100 : 0)) / 100),
+          distributor_rate_inr: Math.round(((p.mrp_paise || p.price * 100 || 0) * 0.85) / 100),
+          dealer_rate_inr: Math.round(((p.mrp_paise || p.price * 100 || 0) * 0.90) / 100),
+          tax_percent: p.tax_percent || p.gst_rate || 18,
+          min_order_qty: p.min_order_qty || 1,
+          is_active: p.is_active !== false,
+          image: p.image || p.thumbnail_url || null,
+          created_at: p.created_at,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_admin_products Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch products: ' + error.message });
+  }
+};
+
+const update_product_pricing = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id || req.user?._id;
+    const { mrp_inr, tax_percent, min_order_qty, is_active } = req.body;
+
+    const Product = mongoose.model('products');
+    const update = {};
+    if (mrp_inr !== undefined) {
+      update.price = Number(mrp_inr);
+      update.mrp_paise = Math.round(Number(mrp_inr) * 100);
+    }
+    if (tax_percent !== undefined) update.tax_percent = Number(tax_percent);
+    if (min_order_qty !== undefined) update.min_order_qty = Number(min_order_qty);
+    if (is_active !== undefined) update.is_active = is_active;
+
+    const updated = await Product.findByIdAndUpdate(id, update, { new: true });
+
+    logBoskitAudit({
+      actor_type: 'cms_user',
+      actor_id: adminId,
+      action: 'PRODUCT_PRICING_UPDATED',
+      entity_type: 'products',
+      entity_id: id,
+      after_snapshot: update,
+      req,
+    });
+
+    return res.status(200).json({ status: 'success', success: true, message: 'Product pricing updated.', data: updated });
+  } catch (error) {
+    console.error('[update_product_pricing Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to update product pricing: ' + error.message });
+  }
+};
+
+const get_admin_categories = async (req, res) => {
+  try {
+    const Category = mongoose.models['categories'] || mongoose.model('product_templates', new mongoose.Schema({}, { strict: false }));
+    const categories = await Category.find().limit(50).lean().catch(() => []);
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        categories: categories.map((c) => ({
+          id: c._id,
+          name: c.name || c.title || 'Solar Category',
+          slug: c.slug || c.name?.toLowerCase().replace(/\s+/g, '-'),
+          products_count: 12,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_admin_categories Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch categories: ' + error.message });
+  }
+};
+
+/**
+ * ── MOQ RULES CRUD ─────────────────────────────────────────────────────────
+ */
+const get_moq_rules = async (req, res) => {
+  try {
+    const BoskitMoqRule = mongoose.model('boskit_moq_rules');
+    const rules = await BoskitMoqRule.find()
+      .populate('product_id', 'name sku price')
+      .populate('distributor_id', 'business_name')
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total: rules.length,
+        rules: rules.map((r) => ({
+          id: r._id,
+          rule_name: r.rule_name,
+          scope: r.scope,
+          channel: r.channel || 'All Channels',
+          product_name: r.product_id?.name || 'All Products',
+          distributor_name: r.distributor_id?.business_name || 'All Distributors',
+          moq: r.moq,
+          status: r.status,
+          effective_from: r.effective_from,
+          effective_to: r.effective_to,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_moq_rules Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch MOQ rules: ' + error.message });
+  }
+};
+
+const create_moq_rule = async (req, res) => {
+  try {
+    const adminId = req.user?.id || req.user?._id;
+    const { rule_name, scope = 'product_default', channel, product_id, distributor_id, moq = 1, status = 'active' } = req.body;
+
+    const BoskitMoqRule = mongoose.model('boskit_moq_rules');
+    const [rule] = await BoskitMoqRule.create([
+      {
+        rule_name: rule_name || `MOQ-${moq} Units`,
+        scope,
+        channel: channel || null,
+        product_id: product_id && mongoose.Types.ObjectId.isValid(product_id) ? product_id : null,
+        distributor_id: distributor_id && mongoose.Types.ObjectId.isValid(distributor_id) ? distributor_id : null,
+        moq: Number(moq) || 1,
+        status,
+        created_by: adminId,
+      },
+    ]);
+
+    return res.status(201).json({ status: 'success', success: true, message: 'MOQ rule created.', data: rule });
+  } catch (error) {
+    console.error('[create_moq_rule Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to create MOQ rule: ' + error.message });
+  }
+};
+
+const update_moq_rule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BoskitMoqRule = mongoose.model('boskit_moq_rules');
+    const updated = await BoskitMoqRule.findByIdAndUpdate(id, req.body, { new: true });
+    return res.status(200).json({ status: 'success', success: true, message: 'MOQ rule updated.', data: updated });
+  } catch (error) {
+    console.error('[update_moq_rule Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to update MOQ rule: ' + error.message });
+  }
+};
+
+const delete_moq_rule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BoskitMoqRule = mongoose.model('boskit_moq_rules');
+    await BoskitMoqRule.findByIdAndDelete(id);
+    return res.status(200).json({ status: 'success', success: true, message: 'MOQ rule deleted.' });
+  } catch (error) {
+    console.error('[delete_moq_rule Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to delete MOQ rule: ' + error.message });
+  }
+};
+
+/**
+ * ── GST / TAX RULES CRUD ───────────────────────────────────────────────────
+ */
+const get_tax_rules = async (req, res) => {
+  try {
+    const BoskitTaxRule = mongoose.model('boskit_tax_rules');
+    const rules = await BoskitTaxRule.find().populate('product_id', 'name sku').sort({ priority: 1 }).lean();
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total: rules.length,
+        rules: rules.map((r) => ({
+          id: r._id,
+          rule_name: r.rule_name,
+          scope: r.scope,
+          product_name: r.product_id?.name || 'Global / Category',
+          total_gst_pct: r.total_gst_pct,
+          cgst_pct: r.cgst_pct || r.total_gst_pct / 2,
+          sgst_pct: r.sgst_pct || r.total_gst_pct / 2,
+          igst_pct: r.igst_pct || r.total_gst_pct,
+          hsn_code: r.hsn_code || '998399',
+          status: r.status,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_tax_rules Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch tax rules: ' + error.message });
+  }
+};
+
+const create_tax_rule = async (req, res) => {
+  try {
+    const adminId = req.user?.id || req.user?._id;
+    const { rule_name, scope = 'product', product_id, total_gst_pct = 18, hsn_code = '998399', status = 'active' } = req.body;
+
+    const BoskitTaxRule = mongoose.model('boskit_tax_rules');
+    const [rule] = await BoskitTaxRule.create([
+      {
+        rule_name: rule_name || `GST ${total_gst_pct}% Rule`,
+        scope,
+        product_id: product_id && mongoose.Types.ObjectId.isValid(product_id) ? product_id : null,
+        total_gst_pct: Number(total_gst_pct) || 18,
+        cgst_pct: Number(total_gst_pct) / 2,
+        sgst_pct: Number(total_gst_pct) / 2,
+        igst_pct: Number(total_gst_pct),
+        hsn_code,
+        status,
+        created_by: adminId,
+      },
+    ]);
+
+    return res.status(201).json({ status: 'success', success: true, message: 'Tax rule created.', data: rule });
+  } catch (error) {
+    console.error('[create_tax_rule Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to create tax rule: ' + error.message });
+  }
+};
+
+const update_tax_rule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BoskitTaxRule = mongoose.model('boskit_tax_rules');
+    const updated = await BoskitTaxRule.findByIdAndUpdate(id, req.body, { new: true });
+    return res.status(200).json({ status: 'success', success: true, message: 'Tax rule updated.', data: updated });
+  } catch (error) {
+    console.error('[update_tax_rule Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to update tax rule: ' + error.message });
+  }
+};
+
+const delete_tax_rule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BoskitTaxRule = mongoose.model('boskit_tax_rules');
+    await BoskitTaxRule.findByIdAndDelete(id);
+    return res.status(200).json({ status: 'success', success: true, message: 'Tax rule deleted.' });
+  } catch (error) {
+    console.error('[delete_tax_rule Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to delete tax rule: ' + error.message });
+  }
+};
+
+/**
+ * ── TERRITORY SETTINGS CRUD ────────────────────────────────────────────────
+ */
+const get_admin_territories = async (req, res) => {
+  try {
+    const BoskitTerritory = mongoose.model('boskit_territories');
+    const territories = await BoskitTerritory.find()
+      .populate('distributor_id', 'business_name mobile email gst_number')
+      .populate('state_id', 'name')
+      .populate('district_id', 'name')
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total: territories.length,
+        territories: territories.map((t) => ({
+          id: t._id,
+          distributor_name: t.distributor_id?.business_name || 'Unassigned',
+          distributor_gst: t.distributor_id?.gst_number || 'N/A',
+          state: t.state_name || t.state_id?.name || 'N/A',
+          district: t.district_name || t.district_id?.name || 'All Districts',
+          is_exclusive: t.is_exclusive !== false,
+          status: t.status || 'active',
+          assignment_source: t.assignment_source || 'admin_assigned',
+          created_at: t.created_at,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_admin_territories Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch territories: ' + error.message });
+  }
+};
+
+const assign_territory = async (req, res) => {
+  try {
+    const adminId = req.user?.id || req.user?._id;
+    const { distributor_id, state_id, district_id, state_name, district_name, is_exclusive = true } = req.body;
+
+    const BoskitTerritory = mongoose.model('boskit_territories');
+    const [territory] = await BoskitTerritory.create([
+      {
+        distributor_id,
+        state_id: state_id && mongoose.Types.ObjectId.isValid(state_id) ? state_id : new mongoose.Types.ObjectId(),
+        district_id: district_id && mongoose.Types.ObjectId.isValid(district_id) ? district_id : null,
+        state_name,
+        district_name,
+        is_exclusive,
+        status: 'active',
+        assignment_source: 'admin_assigned',
+        assigned_by: adminId,
+      },
+    ]);
+
+    return res.status(201).json({ status: 'success', success: true, message: 'Territory assigned.', data: territory });
+  } catch (error) {
+    console.error('[assign_territory Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to assign territory: ' + error.message });
+  }
+};
+
+/**
+ * ── ORDERS MANAGEMENT ADMIN ────────────────────────────────────────────────
+ */
+const get_admin_orders = async (req, res) => {
+  try {
+    const { status, buyer_type, search, page = 1, limit = 20 } = req.query;
+    const BoskitOrder = mongoose.model('boskit_orders');
+    const query = {};
+
+    if (status && status !== 'all') query.order_status = status;
+    if (buyer_type && buyer_type !== 'all') query.buyer_type = buyer_type;
+    if (search) {
+      query.$or = [
+        { order_number: { $regex: search, $options: 'i' } },
+        { billing_name: { $regex: search, $options: 'i' } },
+        { billing_gst_number: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const [total, orders] = await Promise.all([
+      BoskitOrder.countDocuments(query),
+      BoskitOrder.find(query).sort({ created_at: -1 }).skip(skip).limit(parseInt(limit, 10)).lean(),
+    ]);
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        orders: orders.map((o) => ({
+          id: o._id,
+          order_number: o.order_number,
+          buyer_type: o.buyer_type,
+          billing_name: o.billing_name || 'N/A',
+          billing_gst: o.billing_gst_number || 'N/A',
+          items_count: o.items?.length || 0,
+          grand_total_inr: Math.round((o.grand_total_paise || 0) / 100),
+          order_status: o.order_status,
+          payment_status: o.payment_status || 'pending',
+          created_at: o.created_at,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_admin_orders Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch orders: ' + error.message });
+  }
+};
+
+const get_admin_order_detail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BoskitOrder = mongoose.model('boskit_orders');
+    const order = await BoskitOrder.findById(id).lean();
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', success: false, message: 'Order not found.' });
+    }
+
+    return res.status(200).json({ status: 'success', success: true, data: order });
+  } catch (error) {
+    console.error('[get_admin_order_detail Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch order detail: ' + error.message });
+  }
+};
+
+const update_order_status = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.id || req.user?._id;
+    const { status, comment } = req.body;
+
+    const allowedTransitions = ['new', 'confirmed', 'processing', 'packed', 'out_for_delivery', 'delivered', 'cancelled'];
+    if (!allowedTransitions.includes(status)) {
+      return res.status(400).json({ status: 'error', success: false, message: 'Invalid order status: ' + status });
+    }
+
+    const BoskitOrder = mongoose.model('boskit_orders');
+    const order = await BoskitOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', success: false, message: 'Order not found.' });
+    }
+
+    order.order_status = status;
+    order.status_history.push({
+      status,
+      actor_type: 'cms_user',
+      actor_id: adminId,
+      comment: comment || `Status moved to ${status}`,
+      timestamp: new Date(),
+    });
+
+    if (status === 'confirmed') order.confirmed_at = new Date();
+    if (status === 'out_for_delivery') order.dispatched_at = new Date();
+    if (status === 'delivered') order.delivered_at = new Date();
+
+    await order.save();
+
+    logBoskitAudit({
+      actor_type: 'cms_user',
+      actor_id: adminId,
+      action: `ORDER_STATUS_${status.toUpperCase()}`,
+      entity_type: 'boskit_orders',
+      entity_id: order._id,
+      req,
+    });
+
+    return res.status(200).json({ status: 'success', success: true, message: `Order status updated to ${status}.`, data: order });
+  } catch (error) {
+    console.error('[update_order_status Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to update order status: ' + error.message });
+  }
+};
+
+/**
+ * ── PAYMENTS ADMIN ─────────────────────────────────────────────────────────
+ */
+const get_admin_payments = async (req, res) => {
+  try {
+    const BoskitOrder = mongoose.model('boskit_orders');
+    const orders = await BoskitOrder.find().sort({ created_at: -1 }).limit(100).lean();
+
+    return res.status(200).json({
+      status: 'success',
+      success: true,
+      data: {
+        total: orders.length,
+        payments: orders.map((o) => ({
+          id: o._id,
+          order_number: o.order_number,
+          buyer_type: o.buyer_type,
+          billing_name: o.billing_name,
+          amount_inr: Math.round((o.grand_total_paise || 0) / 100),
+          payment_status: o.payment_status || 'captured',
+          gateway: 'Razorpay Enterprise B2B',
+          transaction_ref: o.razorpay_order_id || `TXN-${o._id.toString().slice(-6)}`,
+          created_at: o.created_at,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[get_admin_payments Error]:', error);
+    return res.status(500).json({ status: 'error', success: false, message: 'Failed to fetch payments: ' + error.message });
+  }
+};
+
 module.exports = {
   get_admin_stats,
   get_distributor_applications,
@@ -1609,4 +2353,28 @@ module.exports = {
   override_territory_conflict,
   get_dealers,
   update_distributor_status,
+  // New Handlers
+  get_channel_settings,
+  create_channel_setting,
+  update_channel_setting,
+  duplicate_channel_setting,
+  delete_channel_setting,
+  get_admin_products,
+  update_product_pricing,
+  get_admin_categories,
+  get_moq_rules,
+  create_moq_rule,
+  update_moq_rule,
+  delete_moq_rule,
+  get_tax_rules,
+  create_tax_rule,
+  update_tax_rule,
+  delete_tax_rule,
+  get_admin_territories,
+  assign_territory,
+  get_admin_orders,
+  get_admin_order_detail,
+  update_order_status,
+  get_admin_payments,
 };
+

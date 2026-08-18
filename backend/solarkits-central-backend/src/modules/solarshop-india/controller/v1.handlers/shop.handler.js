@@ -2433,6 +2433,135 @@ const verify_razorpay_payment = async (req, res) => {
 };
 
 const CustomBosCatalog = require("../../models/india_solarshop_db/custom_bos_catalog.schema");
+const BosKit = require("../../models/india_solarshop_db/bos_kits.schema");
+
+// ─── BOS Kits (Pre-Configured) Handlers ────────────────────────────────────────
+
+const get_bos_kits = async (req, res) => {
+  try {
+    const { category, search } = req.query;
+    let query = { deleted_at: null, is_active: { $ne: false } };
+
+    if (category && category !== "all") {
+      query.category = { $regex: new RegExp(category, "i") };
+    }
+
+    if (search && search.trim()) {
+      query.$or = [
+        { name: { $regex: search.trim(), $options: "i" } },
+        { category: { $regex: search.trim(), $options: "i" } },
+        { subCategory: { $regex: search.trim(), $options: "i" } },
+        { systemType: { $regex: search.trim(), $options: "i" } }
+      ];
+    }
+
+    const kits = await BosKit.find(query).sort({ createdAt: -1 }).lean();
+    return res.status(200).json({ success: true, data: kits });
+  } catch (error) {
+    console.error("get_bos_kits error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const save_bos_kits = async (req, res) => {
+  try {
+    const kits = Array.isArray(req.body) ? req.body : req.body.kits;
+    if (Array.isArray(kits)) {
+      await BosKit.deleteMany({});
+      const formatted = kits.map(k => {
+        const clean = { ...k };
+        if (clean.id && !clean._id && mongoose.Types.ObjectId.isValid(clean.id)) {
+          clean._id = clean.id;
+        }
+        delete clean.id;
+        return clean;
+      });
+      const inserted = await BosKit.insertMany(formatted);
+      return res.status(200).json({ success: true, message: "BOS Kits synchronized successfully", data: inserted });
+    }
+    return res.status(400).json({ success: false, message: "Kits array is required" });
+  } catch (error) {
+    console.error("save_bos_kits error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const create_or_update_bos_kit = async (req, res) => {
+  try {
+    const kitData = req.body;
+    if (!kitData.name || !kitData.ourPrice) {
+      return res.status(400).json({ success: false, message: "Kit name and ourPrice are required." });
+    }
+
+    const targetId = kitData.id || kitData._id;
+    let saved;
+    if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+      saved = await BosKit.findByIdAndUpdate(
+        targetId,
+        { $set: kitData },
+        { new: true, upsert: true }
+      );
+    } else {
+      saved = await BosKit.create(kitData);
+    }
+
+    return res.status(200).json({ success: true, message: "BOS Kit saved successfully", data: saved });
+  } catch (error) {
+    console.error("create_or_update_bos_kit error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const delete_bos_kit = async (req, res) => {
+  try {
+    const id = req.params.id || req.body.id;
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Kit ID is required" });
+    }
+
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      await BosKit.findByIdAndUpdate(id, { $set: { deleted_at: new Date() } });
+    } else {
+      await BosKit.deleteOne({ $or: [{ _id: id }, { name: req.body.name }] });
+    }
+
+    return res.status(200).json({ success: true, message: "BOS Kit deleted successfully" });
+  } catch (error) {
+    console.error("delete_bos_kit error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const toggle_bos_kit_stock = async (req, res) => {
+  try {
+    const id = req.params.id || req.body.id;
+    if (!id) {
+      return res.status(400).json({ success: false, message: "Kit ID is required" });
+    }
+
+    let kit = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      kit = await BosKit.findById(id);
+    }
+    if (!kit) {
+      kit = await BosKit.findOne({ name: req.body.name });
+    }
+
+    if (!kit) {
+      return res.status(404).json({ success: false, message: "Kit not found" });
+    }
+
+    kit.inStock = !kit.inStock;
+    await kit.save();
+
+    return res.status(200).json({ success: true, message: `Stock status toggled to ${kit.inStock ? "In Stock" : "Out of Stock"}`, inStock: kit.inStock });
+  } catch (error) {
+    console.error("toggle_bos_kit_stock error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Custom BOS Catalog Handlers ──────────────────────────────────────────────
 
 const get_bos_custom_catalog = async (req, res) => {
   try {
@@ -2476,7 +2605,13 @@ module.exports = {
   update_order_address,
   create_razorpay_order,
   verify_razorpay_payment,
+  get_bos_kits,
+  save_bos_kits,
+  create_or_update_bos_kit,
+  delete_bos_kit,
+  toggle_bos_kit_stock,
   get_bos_custom_catalog,
   save_bos_custom_catalog
 };
+
 
