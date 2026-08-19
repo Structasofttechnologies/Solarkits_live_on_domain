@@ -117,20 +117,20 @@ export default function KitProductCard({
   return (
     <div
       className={`group relative bg-surface rounded-2xl border border-border hover:border-primary/40 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden ${
-        viewMode === "list" ? "md:flex-row gap-6 p-4" : "p-4 sm:p-5"
+        viewMode === "list" ? "md:flex-row gap-4 sm:gap-6 p-3.5 sm:p-4" : "p-3 sm:p-4 sm:p-5"
       }`}
     >
       {/* Top Badges overlay: Capacity, District, Tier */}
-      <div className="flex items-center justify-between gap-2 mb-3 z-10">
+      <div className="flex items-center justify-between gap-1.5 mb-2.5 z-10">
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Capacity kW Pill */}
-          <span className="inline-flex items-center gap-1 bg-primary text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shadow-xs">
+          <span className="inline-flex items-center gap-1 bg-primary text-white text-[10px] sm:text-[11px] font-extrabold px-2 sm:px-2.5 py-0.5 rounded-full shadow-xs">
             <FiZap size={11} />
             <span>{kit.capacityKW} kW Kit</span>
           </span>
 
           {/* Application Badge */}
-          <span className="inline-flex items-center text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md border border-border">
+          <span className="inline-flex items-center text-[9px] sm:text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 sm:px-2 py-0.5 rounded-md border border-border">
             {usageLabel}
           </span>
         </div>
@@ -139,7 +139,7 @@ export default function KitProductCard({
         {onToggleCompare && (
           <label
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-[10px] font-semibold text-text-muted hover:text-primary cursor-pointer select-none bg-surface px-2 py-0.5 rounded-md border border-border"
+            className="flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-text-muted hover:text-primary cursor-pointer select-none bg-surface px-1.5 sm:px-2 py-0.5 rounded-md border border-border"
           >
             <input
               type="checkbox"
@@ -155,8 +155,8 @@ export default function KitProductCard({
       {/* Product Image Box */}
       <div
         onClick={() => onQuickView && onQuickView(kit, selectedVariantIndex)}
-        className={`relative bg-gradient-to-tr from-slate-50 to-slate-100/70 dark:from-slate-800/40 dark:to-slate-900/60 rounded-xl overflow-hidden flex items-center justify-center p-3 cursor-pointer group-hover:scale-[1.01] transition-transform duration-300 ${
-          viewMode === "list" ? "w-full md:w-56 h-48 md:h-auto shrink-0" : "h-52 w-full mb-4"
+        className={`relative bg-gradient-to-tr from-slate-50 to-slate-100/70 dark:from-slate-800/40 dark:to-slate-900/60 rounded-xl overflow-hidden flex items-center justify-center p-2.5 sm:p-3 cursor-pointer group-hover:scale-[1.01] transition-transform duration-300 ${
+          viewMode === "list" ? "w-full md:w-56 h-44 md:h-auto shrink-0" : "h-44 sm:h-52 w-full mb-3"
         }`}
       >
         <img
@@ -169,6 +169,7 @@ export default function KitProductCard({
             e.target.src = DEFAULT_KIT_IMAGE;
           }}
         />
+
 
         {/* Quick View Button overlay on hover */}
         <button

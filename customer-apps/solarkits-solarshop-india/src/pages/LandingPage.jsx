@@ -244,42 +244,42 @@ export default function LandingPage() {
       />
 
       {/* ─── 4. BRIGHT COMMERCE HERO SECTION ─────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-white via-sky-50/50 to-slate-50 text-slate-900 py-12 md:py-16 lg:py-20 border-b border-slate-200/80">
+      <section className="relative overflow-hidden bg-gradient-to-b from-white via-sky-50/50 to-slate-50 text-slate-900 py-8 sm:py-12 md:py-16 lg:py-20 border-b border-slate-200/80">
         {/* Soft background ambient light gradients */}
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-10 w-80 h-80 bg-secondary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-1/4 w-72 sm:w-96 h-72 sm:h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-5 sm:left-10 w-60 sm:w-80 h-60 sm:h-80 bg-secondary/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
             
             {/* Left Content */}
-            <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
+            <div className="lg:col-span-7 space-y-4 sm:space-y-6 text-center lg:text-left">
               
               {/* Trust Tag */}
-              <div className="inline-flex items-center gap-2 bg-white border border-primary/20 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-xs">
-                <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-white border border-primary/20 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-secondary animate-pulse shrink-0" />
                 <span className="text-slate-700">India's Dedicated Solar Kit Marketplace</span>
-                <span className="text-secondary font-bold">• Turnkey Solutions</span>
+                <span className="text-secondary font-bold hidden xs:inline">• Turnkey</span>
               </div>
 
               {/* Main Headline */}
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-5.5xl font-black tracking-tight text-slate-900 leading-tight font-heading">
+              <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-5.5xl font-black tracking-tight text-slate-900 leading-tight font-heading">
                 Complete Solar Kits for <span className="gradient-text-secondary">Every Energy Need</span>
               </h1>
 
               {/* Supporting Message */}
-              <p className="text-sm sm:text-base md:text-lg text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
+              <p className="text-xs sm:text-base md:text-lg text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
                 Explore carefully configured on-grid, off-grid and hybrid solar kits for homes and businesses. Includes Tier-1 solar panels, inverters, mounting structure, and complete safety protection.
               </p>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-2.5 sm:gap-3.5 pt-1">
                 <Button
                   variant="primary"
                   size="lg"
                   onClick={() => navigate("/shop")}
-                  rightIcon={<FiArrowRight size={17} />}
-                  className="w-full sm:w-auto font-bold py-3.5 px-7 rounded-2xl shadow-glow text-base cursor-pointer"
+                  rightIcon={<FiArrowRight size={16} />}
+                  className="w-full sm:w-auto font-bold py-3 sm:py-3.5 px-6 sm:px-7 rounded-2xl shadow-glow text-sm sm:text-base cursor-pointer justify-center"
                 >
                   Shop Solar Kits
                 </Button>
@@ -292,8 +292,8 @@ export default function LandingPage() {
                     if (el) el.scrollIntoView({ behavior: "smooth" });
                     else navigate("/kit-finder");
                   }}
-                  leftIcon={<FiSliders size={17} />}
-                  className="w-full sm:w-auto font-bold py-3.5 px-6 rounded-2xl text-base cursor-pointer shadow-sm"
+                  leftIcon={<FiSliders size={16} />}
+                  className="w-full sm:w-auto font-bold py-3 sm:py-3.5 px-5 sm:px-6 rounded-2xl text-sm sm:text-base cursor-pointer shadow-sm justify-center"
                 >
                   Find the Right Kit
                 </Button>
@@ -301,7 +301,7 @@ export default function LandingPage() {
                 <button
                   type="button"
                   onClick={() => handleOpenExpertHelp()}
-                  className="text-xs font-bold text-slate-700 hover:text-primary flex items-center gap-1.5 py-2 px-3 transition-colors cursor-pointer bg-white rounded-full border border-slate-200 shadow-xs"
+                  className="w-full sm:w-auto text-xs font-bold text-slate-700 hover:text-primary flex items-center justify-center gap-1.5 py-2.5 px-4 transition-colors cursor-pointer bg-white rounded-2xl sm:rounded-full border border-slate-200 shadow-xs"
                 >
                   <FiPhoneCall className="text-secondary" />
                   <span>Talk to an Expert</span>
@@ -309,26 +309,26 @@ export default function LandingPage() {
               </div>
 
               {/* Hero highlights strip */}
-              <div className="grid grid-cols-3 gap-3 pt-6 border-t border-slate-200 text-left">
-                <div className="flex items-center gap-2">
-                  <FiCheckCircle className="text-secondary shrink-0" size={18} />
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">Tier-1 Panels</p>
-                    <p className="text-[10px] text-slate-500">25-Yr Performance</p>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-4 sm:pt-6 border-t border-slate-200 text-left">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <FiCheckCircle className="text-secondary shrink-0" size={16} />
+                  <div className="min-w-0">
+                    <p className="text-[11px] sm:text-xs font-bold text-slate-900 truncate">Tier-1 Panels</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 truncate">25-Yr Performance</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <FiCheckCircle className="text-primary shrink-0" size={18} />
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">All Inclusions</p>
-                    <p className="text-[10px] text-slate-500">Turnkey Protection</p>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <FiCheckCircle className="text-primary shrink-0" size={16} />
+                  <div className="min-w-0">
+                    <p className="text-[11px] sm:text-xs font-bold text-slate-900 truncate">All Inclusions</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 truncate">Turnkey Protection</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <FiCheckCircle className="text-emerald-600 shrink-0" size={18} />
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">GST Invoices</p>
-                    <p className="text-[10px] text-slate-500">100% Transparent</p>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                  <div className="min-w-0">
+                    <p className="text-[11px] sm:text-xs font-bold text-slate-900 truncate">GST Invoices</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 truncate">100% Transparent</p>
                   </div>
                 </div>
               </div>
@@ -336,8 +336,8 @@ export default function LandingPage() {
             </div>
 
             {/* Right Visual Box */}
-            <div className="lg:col-span-5 relative flex justify-center">
-              <div className="relative w-full max-w-md rounded-3xl overflow-hidden bg-white p-3 border border-slate-200/90 shadow-xl">
+            <div className="lg:col-span-5 relative flex justify-center mt-2 lg:mt-0">
+              <div className="relative w-full max-w-md rounded-3xl overflow-hidden bg-white p-2.5 sm:p-3 border border-slate-200/90 shadow-xl">
                 <img
                   src={heroHouseImg}
                   alt="Complete Rooftop Solar Kit Installation"
@@ -345,19 +345,19 @@ export default function LandingPage() {
                 />
 
                 {/* Floating Badge on Visual */}
-                <div className="absolute bottom-6 left-6 right-6 bg-white/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-200 shadow-xl flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center text-primary">
-                      <FaSolarPanel size={20} />
+                <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-6 right-4 sm:right-6 bg-white/95 backdrop-blur-md p-2.5 sm:p-3.5 rounded-2xl border border-slate-200 shadow-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-primary-soft flex items-center justify-center text-primary shrink-0">
+                      <FaSolarPanel size={16} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-900">Complete Turnkey Kits</p>
-                      <p className="text-[11px] text-slate-500">Ready to deliver & install</p>
+                      <p className="text-xs font-bold text-slate-900 leading-tight">Complete Turnkey Kits</p>
+                      <p className="text-[10px] sm:text-[11px] text-slate-500">Ready to deliver & install</p>
                     </div>
                   </div>
                   <Link
                     to="/shop"
-                    className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1"
+                    className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1 shrink-0 ml-1"
                   >
                     <span>Browse</span>
                     <FiArrowRight size={12} />
@@ -369,6 +369,7 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
 
       {/* ─── 5. SHOP BY SOLAR KIT TYPE ───────────────────────────────────── */}
       <section className="py-12 md:py-16 max-w-7xl mx-auto px-4 sm:px-6 w-full">
@@ -477,13 +478,13 @@ export default function LandingPage() {
       </section>
 
       {/* ─── 7. FEATURED COMPLETE SOLAR KITS ─────────────────────────────── */}
-      <section className="py-12 md:py-16 max-w-7xl mx-auto px-4 sm:px-6 w-full">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+      <section className="py-8 sm:py-12 md:py-16 max-w-7xl mx-auto px-3 sm:px-6 w-full">
+        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 mb-6 sm:mb-8">
           <div>
             <span className="text-xs font-extrabold uppercase tracking-wider text-primary">
               Direct from Regional Warehouses
             </span>
-            <h2 className="text-2xl sm:text-3xl font-black text-text-primary mt-1 font-heading">
+            <h2 className="text-xl sm:text-3xl font-black text-text-primary mt-1 font-heading">
               Featured Complete Solar Kits
             </h2>
             <p className="text-xs sm:text-sm text-text-secondary mt-1">
@@ -491,15 +492,16 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               to="/shop"
-              className="px-4 py-2 bg-primary-soft hover:bg-primary text-primary hover:text-white text-xs font-bold rounded-xl transition-colors"
+              className="px-3.5 sm:px-4 py-2 bg-primary-soft hover:bg-primary text-primary hover:text-white text-xs font-bold rounded-xl transition-colors"
             >
               Browse Catalog ({availableKits.length} Kits) →
             </Link>
           </div>
         </div>
+
 
         {availableKits.length === 0 ? (
           <div className="p-12 text-center bg-surface rounded-2xl border border-border">

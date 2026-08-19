@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import FranchiseLanding from "./pages/FranchiseLanding";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import DashboardLayout from "./components/DashboardLayout";
@@ -17,7 +18,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* Franchisee Storefront & Business Website */}
+        <Route path="/" element={<FranchiseLanding />} />
+        <Route path="/store" element={<FranchiseLanding />} />
+        <Route path="/products" element={<FranchiseLanding />} />
+        <Route path="/franchise-plans" element={<FranchiseLanding />} />
+
+        {/* Partner Auth Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
@@ -35,7 +42,7 @@ export default function App() {
           <Route path="/wallet" element={<WalletPortal />} />
         </Route>
 
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

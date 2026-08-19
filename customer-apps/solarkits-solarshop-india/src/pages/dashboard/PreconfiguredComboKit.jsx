@@ -362,32 +362,32 @@ export default function PreconfiguredComboKit() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text-primary py-6 max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+    <div className="min-h-screen bg-bg text-text-primary py-4 sm:py-6 max-w-7xl mx-auto px-3 sm:px-6 space-y-4 sm:space-y-6">
       
       {/* Breadcrumbs */}
-      <nav className="text-xs text-text-muted flex items-center gap-1.5" aria-label="Breadcrumb">
-        <Link to="/" className="hover:text-primary transition-colors">Home</Link>
+      <nav className="text-xs text-text-muted flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5" aria-label="Breadcrumb">
+        <Link to="/" className="hover:text-primary transition-colors shrink-0">Home</Link>
         <span>/</span>
-        <span className="text-primary font-bold">Solar Kit Marketplace</span>
+        <span className="text-primary font-bold shrink-0">Solar Kit Marketplace</span>
         <span>/</span>
-        <span className="text-text-primary font-bold">
+        <span className="text-text-primary font-bold truncate">
           {activeCatalogTab === "combo-kits" ? "Combo Kit Configuration" : "Customize Kit Configuration"}
         </span>
       </nav>
 
       {/* ─── Header Banner with Active Kit Count & Mode Switcher ───── */}
-      <div className="bg-gradient-to-r from-primary via-primary-end to-primary-navy rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
+      <div className="bg-gradient-to-r from-primary via-primary-end to-primary-navy rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-2xl pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+          <div className="space-y-1.5 sm:space-y-2">
             <div className="flex items-center gap-2">
-              <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-white flex items-center gap-1.5">
-                <FiPackage size={14} className="text-secondary" />
+              <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold text-white flex items-center gap-1.5">
+                <FiPackage size={13} className="text-secondary" />
                 <span>Turnkey Solar Power Kits</span>
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight font-heading">
+            <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight font-heading">
               {activeCatalogTab === "combo-kits" ? "Combokit Configuration" : "Customize Kit Configuration"}
             </h1>
             <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
@@ -398,15 +398,15 @@ export default function PreconfiguredComboKit() {
           </div>
 
           {/* Stats Badge & Custom Kit Action */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-white/15 backdrop-blur-md border border-white/25 px-5 py-3 rounded-2xl text-center shadow-xs">
-              <span className="text-[10px] uppercase font-bold text-slate-300 block tracking-wider">
+          <div className="flex flex-row items-center gap-2.5 sm:gap-3 shrink-0">
+            <div className="flex-1 sm:flex-none bg-white/15 backdrop-blur-md border border-white/25 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-center shadow-xs">
+              <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-300 block tracking-wider">
                 Configured Kits
               </span>
-              <span className="text-2xl font-black text-white">
+              <span className="text-xl sm:text-2xl font-black text-white">
                 {availableKits.length}
               </span>
-              <span className="text-[10px] text-emerald-300 block font-semibold">Active India Catalog</span>
+              <span className="text-[9px] sm:text-[10px] text-emerald-300 block font-semibold">Active India Catalog</span>
             </div>
 
             <Button
@@ -419,45 +419,46 @@ export default function PreconfiguredComboKit() {
                   setActiveCatalogTab("combo-kits");
                 }
               }}
-              className="font-bold py-3.5 px-5 rounded-2xl shadow-md cursor-pointer whitespace-nowrap"
+              className="flex-1 sm:flex-none font-bold py-3 sm:py-3.5 px-4 sm:px-5 rounded-2xl shadow-md cursor-pointer whitespace-nowrap text-xs sm:text-sm justify-center"
             >
-              {activeCatalogTab === "combo-kits" ? "+ Customize Solar Kit" : "View Combo Kits"}
+              {activeCatalogTab === "combo-kits" ? "+ Customize Kit" : "View Combo Kits"}
             </Button>
           </div>
         </div>
 
         {/* Mode Switcher Tabs */}
-        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-white/15">
+        <div className="flex items-center gap-2 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/15 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveCatalogTab("combo-kits")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
               activeCatalogTab === "combo-kits"
                 ? "bg-white text-primary shadow-sm"
                 : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
-            <FiSun size={14} />
+            <FiSun size={13} />
             <span>Pre-Configured Combo Kits ({availableKits.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => navigate("/custom-combo-kit")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
               activeCatalogTab === "custom-kits"
                 ? "bg-white text-primary shadow-sm"
                 : "bg-white/10 text-white hover:bg-white/20"
             }`}
           >
-            <FiSliders size={14} />
+            <FiSliders size={13} />
             <span>Custom Brand Sizing Tool</span>
           </button>
         </div>
       </div>
 
       {/* ─── Exact Admin Panel Filter Bar ──────────────────────────── */}
-      <div className="bg-surface rounded-3xl p-5 sm:p-6 border border-border shadow-xs space-y-4">
+      <div className="bg-surface rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-border shadow-xs space-y-3 sm:space-y-4">
+
         
         {/* Top Title & Clear Filter Button */}
         <div className="flex items-center justify-between pb-3 border-b border-border">

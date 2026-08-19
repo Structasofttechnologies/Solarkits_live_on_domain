@@ -41,10 +41,10 @@ export default function CategoryNav({ className = "" }) {
 
   return (
     <nav
-      className={`bg-surface border-b border-border shadow-xs overflow-x-auto scrollbar-none transition-colors ${className}`}
+      className={`bg-surface border-b border-border shadow-xs overflow-x-auto scrollbar-none no-scrollbar transition-colors overscroll-x-contain ${className}`}
       aria-label="Solar Kit Categories"
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center gap-1.5 py-1.5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 flex items-center gap-1.5 sm:gap-2 py-1.5 sm:py-2">
         {CATEGORY_LINKS.map((item) => {
           const Icon = item.icon;
           const isActive = isCurrentActive(item.path);
@@ -53,15 +53,15 @@ export default function CategoryNav({ className = "" }) {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-150 shrink-0 ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all duration-150 shrink-0 select-none ${
                 item.highlight
                   ? "bg-secondary-soft text-amber-700 hover:bg-amber-100/80 font-bold border border-secondary/30"
                   : isActive
                   ? "bg-primary text-white font-bold shadow-xs"
-                  : "text-text-secondary hover:text-primary hover:bg-primary-soft"
+                  : "text-text-secondary hover:text-primary hover:bg-primary-soft bg-surface-hover/60 sm:bg-transparent"
               }`}
             >
-              {Icon && <Icon size={14} className={isActive ? "text-white" : item.highlight ? "text-secondary" : "text-primary/70"} />}
+              {Icon && <Icon size={13} className={isActive ? "text-white" : item.highlight ? "text-secondary" : "text-primary/70"} />}
               <span>{item.name}</span>
             </Link>
           );
@@ -70,3 +70,4 @@ export default function CategoryNav({ className = "" }) {
     </nav>
   );
 }
+
