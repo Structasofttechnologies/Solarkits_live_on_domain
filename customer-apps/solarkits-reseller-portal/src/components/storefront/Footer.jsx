@@ -14,25 +14,25 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-slate-900 text-slate-300 border-t border-slate-800 text-xs">
+    <footer className="bg-gradient-to-b from-white via-slate-50 to-sky-50/40 text-slate-600 border-t border-slate-200 text-xs">
       {/* Top Banner with Trust Badges */}
-      <div className="border-b border-slate-800 bg-slate-950/70 py-4 sm:py-6">
+      <div className="border-b border-slate-200/80 bg-white/80 backdrop-blur-xs py-4 sm:py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-slate-200 font-bold text-[11px] sm:text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-slate-700 font-bold text-[11px] sm:text-xs">
             <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#F49222] shrink-0" size={15} />
+              <FiCheckCircle className="text-[#F49222] shrink-0" size={16} />
               <span>MNRE & ALMM Approved Equipment</span>
             </div>
             <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#F49222] shrink-0" size={15} />
+              <FiCheckCircle className="text-[#0575B8] shrink-0" size={16} />
               <span>28 States Regional Logistics Hubs</span>
             </div>
             <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#F49222] shrink-0" size={15} />
+              <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
               <span>100% Paperless Digital GSTIN KYC</span>
             </div>
             <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#F49222] shrink-0" size={15} />
+              <FiCheckCircle className="text-[#F49222] shrink-0" size={16} />
               <span>T+0 Automated Wallet Payouts</span>
             </div>
           </div>
@@ -49,32 +49,32 @@ export default function Footer() {
               <img
                 src={logoImg}
                 alt="SolarKits Logo"
-                className="h-9 sm:h-10 w-auto object-contain brightness-110"
+                className="h-9 sm:h-10 w-auto object-contain"
               />
-              <div className="flex flex-col border-l border-slate-800 pl-2.5 sm:pl-3">
-                <span className="text-xs font-black uppercase text-[#F49222] tracking-wider">
+              <div className="flex flex-col border-l border-slate-200 pl-2.5 sm:pl-3">
+                <span className="text-xs font-black uppercase text-[#0575B8] tracking-wider">
                   Franchisee Portal
                 </span>
-                <span className="text-[8px] sm:text-[9px] text-slate-400 font-semibold tracking-wider uppercase">
+                <span className="text-[8px] sm:text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase">
                   Partner Network
                 </span>
               </div>
             </Link>
 
-            <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
+            <p className="text-slate-500 text-xs leading-relaxed max-w-sm">
               SolarKits is India's leading unified solar technology platform connecting Tier-1 manufacturers, EPC contractors, and authorized franchisee dealers.
             </p>
 
-            <div className="pt-2 flex items-center gap-2.5 sm:gap-3">
+            <div className="pt-2 flex items-center gap-2.5 sm:gap-3 flex-wrap">
               <Link
                 to="/register"
-                className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] text-white font-black text-xs transition-all shadow-md shadow-blue-500/20"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-extrabold text-xs transition-all shadow-md shadow-blue-500/20"
               >
                 Join Franchise Network
               </Link>
               <Link
                 to="/login"
-                className="px-3.5 sm:px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all"
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 shadow-xs transition-all"
               >
                 Partner Login
               </Link>
@@ -83,30 +83,30 @@ export default function Footer() {
 
           {/* Column 2: Quick Links */}
           <div className="lg:col-span-2 space-y-2.5 sm:space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-white">Franchise Program</h4>
-            <ul className="space-y-2 text-slate-400">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Franchise Program</h4>
+            <ul className="space-y-2 text-slate-600">
               <li>
-                <a href="#plans" className="hover:text-[#F49222] transition-colors">
+                <a href="#plans" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Franchise Plans
                 </a>
               </li>
               <li>
-                <a href="#products" className="hover:text-[#F49222] transition-colors">
+                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Wholesale Store
                 </a>
               </li>
               <li>
-                <a href="#benefits" className="hover:text-[#F49222] transition-colors">
+                <a href="#benefits" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Partner Benefits
                 </a>
               </li>
               <li>
-                <a href="#calculator" className="hover:text-[#F49222] transition-colors">
+                <a href="#calculator" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   ROI Calculator
                 </a>
               </li>
               <li>
-                <a href="#how-to-join" className="hover:text-[#F49222] transition-colors">
+                <a href="#how-to-join" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   How to Join
                 </a>
               </li>
@@ -115,30 +115,30 @@ export default function Footer() {
 
           {/* Column 3: Product Categories */}
           <div className="lg:col-span-3 space-y-2.5 sm:space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-white">Wholesale Catalog</h4>
-            <ul className="space-y-2 text-slate-400">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Wholesale Catalog</h4>
+            <ul className="space-y-2 text-slate-600">
               <li>
-                <a href="#products" className="hover:text-[#F49222] transition-colors">
+                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Residential 3kW-10kW Kits
                 </a>
               </li>
               <li>
-                <a href="#products" className="hover:text-[#F49222] transition-colors">
+                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Commercial 3-Phase Inverters
                 </a>
               </li>
               <li>
-                <a href="#products" className="hover:text-[#F49222] transition-colors">
+                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Tier-1 TOPCon & Mono Panels
                 </a>
               </li>
               <li>
-                <a href="#products" className="hover:text-[#F49222] transition-colors">
+                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   Universal BOS Packages
                 </a>
               </li>
               <li>
-                <a href="#products" className="hover:text-[#F49222] transition-colors">
+                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
                   LiFePO4 Lithium Storage
                 </a>
               </li>
@@ -147,18 +147,18 @@ export default function Footer() {
 
           {/* Column 4: Contact & Regional Presence */}
           <div className="sm:col-span-2 lg:col-span-3 space-y-2.5 sm:space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-white">Franchise Headquarters</h4>
-            <div className="space-y-2 text-slate-400">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Franchise Headquarters</h4>
+            <div className="space-y-2.5 text-slate-600">
               <div className="flex items-start gap-2">
                 <FiMapPin className="text-[#F49222] shrink-0 mt-0.5" size={14} />
                 <span>SolarKits Tech Park, Sector 62, Noida, Uttar Pradesh, 201309</span>
               </div>
               <div className="flex items-center gap-2">
-                <FiPhone className="text-[#F49222] shrink-0" size={14} />
+                <FiPhone className="text-[#0575B8] shrink-0" size={14} />
                 <span>+91 1800-SOLAR-KIT / +91 98765 43210</span>
               </div>
               <div className="flex items-center gap-2">
-                <FiMail className="text-[#F49222] shrink-0" size={14} />
+                <FiMail className="text-[#0575B8] shrink-0" size={14} />
                 <span>franchise@solarkits.co.in</span>
               </div>
             </div>
@@ -167,14 +167,14 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-[10px] sm:text-[11px] text-slate-500 text-center sm:text-left">
+        <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-[10px] sm:text-[11px] text-slate-500 text-center sm:text-left">
           <p>© {new Date().getFullYear()} SolarKits India Technologies Pvt Ltd. All rights reserved.</p>
           <div className="flex items-center gap-3 sm:gap-4">
-            <a href="#" className="hover:text-slate-300">Privacy Policy</a>
-            <a href="#" className="hover:text-slate-300">Terms & Conditions</a>
+            <a href="#" className="hover:text-slate-800 transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-slate-800 transition-colors">Terms & Conditions</a>
             <button
               onClick={scrollToTop}
-              className="p-1.5 sm:p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 ml-1"
+              className="p-1.5 sm:p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs cursor-pointer ml-1 transition-all hover:text-[#0575B8]"
               aria-label="Back to top"
             >
               <FiArrowUp size={13} />
@@ -185,3 +185,4 @@ export default function Footer() {
     </footer>
   );
 }
+
