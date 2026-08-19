@@ -11,10 +11,15 @@ import {
   FiTrendingUp,
   FiArrowRight,
   FiCheckCircle,
+  FiMapPin,
+  FiAward,
+  FiHelpCircle,
+  FiDollarSign,
+  FiMessageSquare,
 } from "react-icons/fi";
 import logoImg from "../../assets/images/logo.png";
 
-export default function Navbar() {
+export default function Navbar({ onOpenLeadModal }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -26,24 +31,34 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Primary navigation matching exact requirements
   const navLinks = [
-    { name: "Franchise Plans", href: "#plans", icon: FiZap },
-    { name: "Wholesale Store", href: "#products", icon: FiShoppingBag },
-    { name: "Benefits", href: "#benefits", icon: FiShield },
-    { name: "ROI Calculator", href: "#calculator", icon: FiTrendingUp },
-    { name: "How to Join", href: "#how-to-join", icon: FiCheckCircle },
+    { name: "Home", href: "#" },
+    { name: "Browse Solarkits", href: "#catalog-browser", icon: FiShoppingBag },
+    { name: "Franchise", href: "#franchise-plans", icon: FiZap },
+    { name: "Store Availability", href: "#store-availability", icon: FiMapPin },
+    { name: "Eligibility Checker", href: "#eligibility-checker", icon: FiAward },
+    { name: "Revenue Potential", href: "#revenue-potential", icon: FiTrendingUp },
+    { name: "How It Works", href: "#how-it-works", icon: FiCheckCircle },
+    { name: "FAQ", href: "#faq-section", icon: FiHelpCircle },
   ];
+
+  const handleWhatsApp = () => {
+    window.open("https://wa.me/919876543210?text=Hello%20SolarKits,%20I%20am%20interested%20in%20Solarkits%20and%20Franchise.", "_blank");
+  };
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
-          ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 py-2.5 sm:py-3"
-          : "bg-white/90 backdrop-blur-sm border-b border-slate-100 py-3 sm:py-4"
-        }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 py-2.5"
+          : "bg-white/90 backdrop-blur-sm border-b border-slate-100 py-3 sm:py-3.5"
+      }`}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4">
-          {/* Logo & Portal Badge */}
+          
+          {/* Logo & Portal Branding */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link to="/" className="flex items-center gap-2 sm:gap-3 group shrink-0">
               <img
@@ -53,63 +68,70 @@ export default function Navbar() {
               />
               <div className="flex flex-col border-l border-slate-200 pl-2 sm:pl-3 shrink-0">
                 <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-[#0575B8] whitespace-nowrap">
-                  Franchisee Portal
+                  Solarkits B2B
                 </span>
                 <span className="hidden xs:block text-[8px] sm:text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase whitespace-nowrap">
-                  Partner Network
+                  Franchisee Network
                 </span>
               </div>
             </Link>
           </div>
 
-          {/* Desktop Navigation Links - Single line guaranteed */}
-          <nav className="hidden xl:flex items-center gap-1 2xl:gap-1.5 shrink-0">
+          {/* Desktop Navigation Links */}
+          <nav className="hidden 2xl:flex items-center gap-1 2xl:gap-1.5 shrink-0">
             {navLinks.map((item) => (
               <a
                 key={item.name}
                 href={item.href}
-                className="px-2.5 2xl:px-3.5 py-2 rounded-xl text-xs 2xl:text-sm font-semibold text-slate-700 hover:text-[#0575B8] hover:bg-sky-50 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="px-2.5 py-1.5 rounded-xl text-xs 2xl:text-xs font-bold text-slate-700 hover:text-[#0575B8] hover:bg-sky-50 transition-all whitespace-nowrap shrink-0"
               >
-                <item.icon className="text-[#F49222] text-xs shrink-0" />
-                <span className="whitespace-nowrap">{item.name}</span>
+                {item.name}
               </a>
             ))}
           </nav>
 
-          {/* Right Action Buttons */}
-          <div className="hidden xl:flex items-center gap-2.5 2xl:gap-3 shrink-0">
+          {/* Right Action CTAs */}
+          <div className="hidden xl:flex items-center gap-2 2xl:gap-3 shrink-0">
+            <button
+              onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Header Bulk Quote" }, "bulk_price")}
+              className="px-3 py-2 rounded-xl text-xs font-extrabold text-[#0575B8] hover:bg-sky-50 border border-sky-200 transition-all flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <FiDollarSign size={13} />
+              <span>Get Bulk Price</span>
+            </button>
+
             <Link
               to="/login"
-              className="px-3.5 2xl:px-4 py-2 2xl:py-2.5 rounded-xl text-xs 2xl:text-sm font-bold text-slate-700 hover:text-[#0575B8] hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1.5 2xl:gap-2 shadow-xs whitespace-nowrap shrink-0"
+              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-[#0575B8] hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
             >
-              <FiUser className="text-[#0575B8] shrink-0" />
+              <FiUser className="text-[#0575B8] shrink-0" size={13} />
               <span>Partner Login</span>
             </Link>
 
-            <Link
-              to="/register"
-              className="px-4 2xl:px-5 py-2 2xl:py-2.5 rounded-xl text-xs 2xl:text-sm font-extrabold text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] transition-all transform hover:-translate-y-0.5 shadow-md shadow-blue-500/20 flex items-center gap-1.5 2xl:gap-2 whitespace-nowrap shrink-0"
+            <button
+              onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Header Fast Application" }, "franchise_apply")}
+              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] transition-all transform hover:-translate-y-0.5 shadow-md shadow-blue-500/20 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <span>Join Franchise Network</span>
-              <FiArrowRight className="shrink-0" />
-            </Link>
+              <FiZap size={13} />
+              <span>Apply Now</span>
+            </button>
           </div>
 
-          {/* Mobile Right Buttons & Hamburger (< xl) */}
+          {/* Mobile Right Buttons & Hamburger */}
           <div className="flex xl:hidden items-center gap-1.5 sm:gap-2 shrink-0">
-            <Link
-              to="/login"
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100"
+            <button
+              onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Mobile Quick Price" }, "bulk_price")}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-[#0575B8] bg-sky-50 border border-sky-200"
             >
-              Login
-            </Link>
+              Bulk Price
+            </button>
 
-            <Link
-              to="/register"
+            <button
+              onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Mobile Fast Application" }, "franchise_apply")}
               className="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-white bg-[#0575B8] shadow-xs whitespace-nowrap"
             >
-              Join
-            </Link>
+              Apply Now
+            </button>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -122,7 +144,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Drawer (< xl) */}
+      {/* Mobile Drawer */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
@@ -131,37 +153,82 @@ export default function Navbar() {
             exit={{ opacity: 0, height: 0 }}
             className="xl:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 shadow-xl"
           >
-
             <div className="space-y-1">
-              {navLinks.map((item) => (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-sky-50 hover:text-[#0575B8]"
-                >
-                  <item.icon className="text-[#F49222]" />
-                  {item.name}
-                </a>
-              ))}
+              {/* Quick links on mobile */}
+              <a
+                href="#catalog-browser"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+              >
+                <FiShoppingBag className="text-[#0575B8]" />
+                Browse Solarkits
+              </a>
+
+              <a
+                href="#store-availability"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+              >
+                <FiMapPin className="text-[#F49222]" />
+                Check Store Availability
+              </a>
+
+              <a
+                href="#eligibility-checker"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+              >
+                <FiAward className="text-emerald-600" />
+                Check Eligibility
+              </a>
+
+              <a
+                href="#franchise-plans"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+              >
+                <FiZap className="text-purple-600" />
+                Franchise Plans
+              </a>
+
+              <a
+                href="#revenue-potential"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+              >
+                <FiTrendingUp className="text-amber-600" />
+                Revenue Potential
+              </a>
+
+              <a
+                href="#faq-section"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+              >
+                <FiHelpCircle className="text-slate-600" />
+                FAQ
+              </a>
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleWhatsApp();
+                }}
+                className="w-full py-2.5 text-center text-xs font-bold text-emerald-800 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <FiMessageSquare className="text-emerald-600" />
+                Chat on WhatsApp
+              </button>
+
               <Link
                 to="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full py-2.5 text-center text-sm font-bold text-slate-700 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-center gap-2"
+                className="w-full py-2.5 text-center text-xs font-bold text-slate-700 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-center gap-2"
               >
                 <FiUser className="text-[#0575B8]" />
                 Partner Login
-              </Link>
-              <Link
-                to="/register"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full py-2.5 text-center text-sm font-extrabold text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] rounded-xl flex items-center justify-center gap-2 shadow-md shadow-blue-500/20"
-              >
-                <span>Join Franchise Network</span>
-                <FiArrowRight />
               </Link>
             </div>
           </motion.div>

@@ -4,65 +4,68 @@ import {
   FiTrendingUp,
   FiCheckCircle,
   FiPercent,
+  FiAlertCircle,
+  FiInfo,
 } from "react-icons/fi";
 
-export default function RoiCalculator() {
-  const [projectCapacity, setProjectCapacity] = useState(5); // in kW
-  const [monthlyProjects, setMonthlyProjects] = useState(6); // number of installations
+export default function RoiCalculator({ onOpenLeadModal }) {
+  const [projectCapacity, setProjectCapacity] = useState(3.3); // in kW (India's standard residential kit)
+  const [monthlyProjects, setMonthlyProjects] = useState(5); // number of completed kits / installations
   const [tierMode, setTierMode] = useState("dealer"); // "commission" | "dealer"
 
-  // Cost estimation per kW: approx ₹45,000 turnkey baseline
-  const costPerKw = 45000;
-  const projectRevenuePerUnit = projectCapacity * costPerKw;
+  // Cost estimation per kW based on real market wholesale price averages: ~₹42,000 / kW
+  const costPerKw = 42000;
+  const projectRevenuePerUnit = Math.round(projectCapacity * costPerKw);
   const totalMonthlyRevenue = projectRevenuePerUnit * monthlyProjects;
 
-  // Margin percentages
-  const marginRate = tierMode === "dealer" ? 0.16 : 0.09; // 16% for dealer, 9% for commission
+  // Realistic margin percentages based on actual Solarkit wholesale rules
+  const marginRate = tierMode === "dealer" ? 0.16 : 0.09; // 16% for stocking dealer, 9% for zero-stock commission
   const monthlyProfit = Math.round(totalMonthlyRevenue * marginRate);
   const annualProfit = monthlyProfit * 12;
   const annualRevenue = totalMonthlyRevenue * 12;
 
   return (
-    <section id="calculator" className="py-24 bg-white text-slate-900 relative overflow-hidden border-t border-slate-100">
+    <section id="revenue-potential" className="py-16 sm:py-24 bg-white text-slate-900 relative overflow-hidden border-t border-slate-100">
       {/* Background Soft Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[400px] bg-sky-500/10 blur-[150px] rounded-full pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 shadow-xs">
+        <div className="text-center max-w-3xl mx-auto space-y-3 sm:space-y-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 shadow-xs">
             <FiPercent className="text-[#F49222]" size={14} />
-            <span className="text-xs font-black uppercase tracking-wider text-[#D97E15]">
-              Interactive Revenue Simulator
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#D97E15]">
+              Illustrative Revenue Simulator
             </span>
           </div>
 
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Calculate Your{" "}
+          <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
+            Explore Your Illustrative{" "}
             <span className="text-[#F49222]">
-              Monthly Franchisee Earnings
+              Franchise Revenue Potential
             </span>
           </h2>
 
-          <p className="text-slate-600 text-sm sm:text-base font-normal">
-            Simulate your revenue and net profit potential based on your territory size, project volume, and franchise operating model.
+          <p className="text-xs sm:text-base text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
+            Simulate illustrative turnover and realized gross margins based on system capacities, installation volumes, and franchise commercial models.
           </p>
         </div>
 
         {/* Calculator Body Card */}
-        <div className="max-w-5xl mx-auto mt-12 rounded-3xl bg-slate-50/90 border border-slate-200 shadow-xl p-6 sm:p-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        <div className="max-w-5xl mx-auto mt-10 sm:mt-14 rounded-3xl bg-slate-50 border border-slate-200 shadow-xl p-6 sm:p-10 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
             
             {/* Left Column: Sliders & Controls */}
-            <div className="lg:col-span-7 space-y-7">
+            <div className="lg:col-span-7 space-y-6">
               {/* Tier Mode Selector */}
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 block">
                   Select Franchise Commercial Model
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
+                    type="button"
                     onClick={() => setTierMode("commission")}
                     className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                       tierMode === "commission"
@@ -77,11 +80,12 @@ export default function RoiCalculator() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1">
-                      Zero inventory risk. SolarKits fulfills directly.
+                      Zero stock risk. Direct fulfillment by SolarKits.
                     </p>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => setTierMode("dealer")}
                     className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                       tierMode === "dealer"
@@ -92,7 +96,7 @@ export default function RoiCalculator() {
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black">Dealer Wholesale</span>
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        15% - 20% Margin
+                        15% - 18% Margin
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1">
@@ -103,7 +107,7 @@ export default function RoiCalculator() {
               </div>
 
               {/* Slider 1: Average Plant Capacity (kW) */}
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-700">Average System Capacity per Project</span>
                   <span className="text-sm font-black text-[#0575B8] bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-xs">
@@ -112,85 +116,86 @@ export default function RoiCalculator() {
                 </div>
                 <input
                   type="range"
-                  min="3"
-                  max="30"
-                  step="1"
+                  min="1"
+                  max="20"
+                  step="0.5"
                   value={projectCapacity}
                   onChange={(e) => setProjectCapacity(Number(e.target.value))}
                   className="w-full accent-[#0575B8] bg-slate-200 h-2 rounded-lg cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                  <span>3 kW (Rooftop)</span>
-                  <span>10 kW (Large Res)</span>
-                  <span>30 kW (Commercial)</span>
+                  <span>1.1 kW (Compact)</span>
+                  <span>3.3 kW (Standard)</span>
+                  <span>5 kW (Villa)</span>
+                  <span>20 kW (Commercial)</span>
                 </div>
               </div>
 
               {/* Slider 2: Monthly Projects */}
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-700">Monthly Completed Projects / Orders</span>
                   <span className="text-sm font-black text-[#F49222] bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-xs">
-                    {monthlyProjects} Installations / Month
+                    {monthlyProjects} Kits / Month
                   </span>
                 </div>
                 <input
                   type="range"
                   min="1"
-                  max="20"
+                  max="25"
                   step="1"
                   value={monthlyProjects}
                   onChange={(e) => setMonthlyProjects(Number(e.target.value))}
                   className="w-full accent-[#F49222] bg-slate-200 h-2 rounded-lg cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                  <span>1 Project / mo</span>
-                  <span>10 Projects / mo</span>
-                  <span>20 Projects / mo</span>
+                  <span>1 Kit / mo</span>
+                  <span>10 Kits / mo</span>
+                  <span>25 Kits / mo</span>
                 </div>
               </div>
 
               {/* Quick Perks Bar */}
               <div className="grid grid-cols-2 gap-3 pt-2 text-[11px] text-slate-600">
-                <div className="flex items-center gap-2">
-                  <FiCheckCircle className="text-emerald-600" />
-                  <span>Instant GST Input Tax Credit</span>
+                <div className="flex items-center gap-1.5">
+                  <FiCheckCircle className="text-emerald-600 shrink-0" />
+                  <span>Full 12% GST Input Tax Credit</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <FiCheckCircle className="text-emerald-600" />
-                  <span>T+0 Wallet Withdrawal</span>
+                <div className="flex items-center gap-1.5">
+                  <FiCheckCircle className="text-emerald-600 shrink-0" />
+                  <span>Automated Wallet Settlements</span>
                 </div>
               </div>
             </div>
 
             {/* Right Column: Calculated Profit Projections */}
             <div className="lg:col-span-5">
-              <div className="rounded-3xl bg-white p-6 sm:p-7 border border-slate-200 shadow-lg space-y-6">
+              <div className="rounded-3xl bg-white p-6 sm:p-7 border border-slate-200 shadow-lg space-y-5">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    Projected Franchise Earnings
+                    Illustrative Partner Projections
                   </span>
                   <span className="text-[10px] font-black text-[#F49222] bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                    ESTIMATED ROI
+                    SIMULATOR
                   </span>
                 </div>
 
-                {/* Monthly Profit Big Card */}
+                {/* Monthly Profit Card */}
                 <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 space-y-1">
-                  <span className="text-xs font-bold text-slate-700">Monthly Net Profit</span>
-                  <div className="text-3xl sm:text-4xl font-black text-[#D97E15]">
+                  <span className="text-xs font-bold text-slate-700">Estimated Monthly Gross Margin</span>
+                  <div className="text-2xl sm:text-3xl font-black text-[#D97E15]">
                     ₹{monthlyProfit.toLocaleString("en-IN")}
                     <span className="text-xs text-slate-500 font-semibold"> / month</span>
                   </div>
                   <p className="text-[10px] text-emerald-700 font-semibold">
-                    Based on {Math.round(marginRate * 100)}% average realized margin
+                    Based on {Math.round(marginRate * 100)}% realized gross dealer margin
                   </p>
                 </div>
 
-                {/* Annual Projections Breakdown */}
-                <div className="space-y-3 text-xs">
+                {/* Turnover Breakdown */}
+                <div className="space-y-2.5 text-xs">
                   <div className="flex justify-between items-center text-slate-600 py-1 border-b border-slate-100">
-                    <span>Monthly Turnkey Volume:</span>
+                    <span>Monthly Kit Turnkey Volume:</span>
                     <span className="font-mono font-bold text-slate-900">
                       ₹{totalMonthlyRevenue.toLocaleString("en-IN")}
                     </span>
@@ -202,23 +207,31 @@ export default function RoiCalculator() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600 py-1 border-b border-slate-100">
-                    <span>Annual Net Partner Profit:</span>
+                    <span>Annual Estimated Margin:</span>
                     <span className="font-mono font-bold text-emerald-600">
                       ₹{annualProfit.toLocaleString("en-IN")}
                     </span>
                   </div>
                 </div>
 
-                {/* CTA inside calculator */}
-                <Link
-                  to="/register"
-                  className="block w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider text-center transition-all shadow-md shadow-blue-500/20"
+                {/* CTA */}
+                <button
+                  onClick={() => onOpenLeadModal({ requiredConfig: "Territory Dealership Application" }, "franchise_apply")}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider text-center transition-all shadow-md shadow-blue-500/20 cursor-pointer"
                 >
-                  Claim Your Territory & Start Earning →
-                </Link>
+                  Apply to Secure Territory & Pricing →
+                </button>
               </div>
             </div>
 
+          </div>
+
+          {/* Mandatory Statutory Disclaimer Banner verbatim */}
+          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/90 flex items-start gap-2.5 text-xs text-slate-700 leading-relaxed">
+            <FiAlertCircle className="text-[#D97E15] shrink-0 mt-0.5" size={16} />
+            <span>
+              <strong>Regulatory Notice:</strong> Revenue figures are illustrative and depend on territory, sales volume, product mix, margins, operating costs, and business performance. Solarkits does not guarantee revenue or profit.
+            </span>
           </div>
         </div>
 

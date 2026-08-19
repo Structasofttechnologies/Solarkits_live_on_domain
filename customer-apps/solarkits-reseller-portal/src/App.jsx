@@ -18,11 +18,16 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Franchisee Storefront & Business Website */}
+        {/* Solarkits B2B Platform & Franchisee Storefront Routes */}
         <Route path="/" element={<FranchiseLanding />} />
+        <Route path="/solarkits" element={<FranchiseLanding />} />
         <Route path="/store" element={<FranchiseLanding />} />
         <Route path="/products" element={<FranchiseLanding />} />
+        <Route path="/franchise" element={<FranchiseLanding />} />
         <Route path="/franchise-plans" element={<FranchiseLanding />} />
+        <Route path="/store-availability" element={<FranchiseLanding />} />
+        <Route path="/eligibility" element={<FranchiseLanding />} />
+        <Route path="/revenue-potential" element={<FranchiseLanding />} />
 
         {/* Partner Auth Routes */}
         <Route path="/login" element={<Login />} />

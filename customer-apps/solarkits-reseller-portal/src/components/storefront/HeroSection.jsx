@@ -9,9 +9,11 @@ import {
   FiAward,
   FiPercent,
   FiMapPin,
+  FiDollarSign,
+  FiShield,
 } from "react-icons/fi";
 
-export default function HeroSection() {
+export default function HeroSection({ onOpenLeadModal }) {
   return (
     <section className="relative pt-24 sm:pt-32 pb-14 sm:pb-20 overflow-hidden bg-gradient-to-b from-white via-sky-50/40 to-slate-50 text-slate-900 flex items-center">
       {/* Background Soft Glow & Grid Pattern */}
@@ -33,7 +35,7 @@ export default function HeroSection() {
             >
               <span className="flex h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-[#F49222] animate-pulse" />
               <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#D97E15]">
-                Official SolarKits Franchise Program 2026
+                Solarkits — One-Stop Solar Business Platform
               </span>
             </motion.div>
 
@@ -44,10 +46,11 @@ export default function HeroSection() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-2xl sm:text-4xl md:text-5xl xl:text-6xl font-black tracking-tight text-slate-900 leading-[1.18] sm:leading-[1.14]"
             >
-              Scale Your Solar Business as an{" "}
-              <span className="text-[#F49222]">
-                Authorized Franchisee Partner
-              </span>
+              Complete Solar Kits for{" "}
+              <span className="text-[#0575B8]">
+                Dealers, EPCs
+              </span>{" "}
+              and <span className="text-[#F49222]">Solar Businesses</span>
             </motion.h1>
 
             {/* Subtitle */}
@@ -57,7 +60,7 @@ export default function HeroSection() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="text-xs sm:text-base text-slate-600 font-normal leading-relaxed max-w-2xl mx-auto sm:mx-0"
             >
-              Unlock factory-direct wholesale pricing on Tier-1 Solar Kits, Inverters, and BOS Packages. Guaranteed territory rights, instant GST verification, digital wallet settlements, and direct local EPC buyer lead allocation.
+              Source ready-to-sell On-Grid, Off-Grid and Hybrid Solarkits in multiple panel wattages, brands and system capacities—with B2B procurement and franchise support.
             </motion.p>
 
             {/* Badges Bar */}
@@ -69,7 +72,7 @@ export default function HeroSection() {
             >
               <div className="flex items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-800 shadow-xs">
                 <FiPercent className="text-[#F49222] text-sm sm:text-base shrink-0" />
-                <span>Up to 15% Margin</span>
+                <span>Up to 18% Margin</span>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-800 shadow-xs">
                 <FiMapPin className="text-[#0575B8] text-sm sm:text-base shrink-0" />
@@ -77,11 +80,11 @@ export default function HeroSection() {
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-800 shadow-xs">
                 <FiTruck className="text-emerald-600 text-sm sm:text-base shrink-0" />
-                <span>48-Hr Dispatch</span>
+                <span>24-48h Dispatch</span>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] sm:text-xs font-bold text-slate-800 shadow-xs">
                 <FiAward className="text-purple-600 text-sm sm:text-base shrink-0" />
-                <span>MNRE Approved</span>
+                <span>DCR & Subsidy</span>
               </div>
             </motion.div>
 
@@ -93,21 +96,21 @@ export default function HeroSection() {
               className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2"
             >
               <a
-                href="#plans"
+                href="#catalog-browser"
                 className="w-full sm:w-auto px-6 py-3.5 sm:px-7 sm:py-4 rounded-2xl text-xs sm:text-base font-extrabold text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] transition-all transform hover:-translate-y-0.5 shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 text-center cursor-pointer"
               >
-                <FiZap size={16} className="shrink-0" />
-                <span>Explore Franchise Plans</span>
+                <FiShoppingBag size={16} className="shrink-0" />
+                <span>Browse Solarkits</span>
                 <FiArrowRight size={16} className="shrink-0" />
               </a>
 
-              <a
-                href="#products"
+              <button
+                onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "B2B Bulk Pricing Inquiry" }, "bulk_price")}
                 className="w-full sm:w-auto px-5 py-3.5 sm:px-6 sm:py-4 rounded-2xl text-xs sm:text-base font-bold text-slate-700 hover:text-[#0575B8] bg-white hover:bg-slate-50 border border-slate-200 transition-all flex items-center justify-center gap-2 shadow-xs text-center cursor-pointer"
               >
-                <FiShoppingBag className="text-[#0575B8] shrink-0" size={16} />
-                <span>Browse Wholesale Catalog</span>
-              </a>
+                <FiDollarSign className="text-[#0575B8] shrink-0" size={16} />
+                <span>Get Bulk Price</span>
+              </button>
             </motion.div>
 
             {/* Fast onboarding guarantee */}
@@ -118,7 +121,7 @@ export default function HeroSection() {
               className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-semibold text-slate-500 pt-1"
             >
               <FiCheckCircle className="text-emerald-600 shrink-0" />
-              <span>Zero setup friction • 2-Minute GSTIN verification • Pan-India</span>
+              <span>Full 12% GST Input Tax Credit • MNRE & ALMM Approved • Pan-India</span>
             </motion.div>
           </div>
 
@@ -145,7 +148,7 @@ export default function HeroSection() {
                   </div>
                   <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] sm:text-[11px] font-extrabold flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
-                    LIVE
+                    LIVE B2B
                   </span>
                 </div>
 
@@ -164,43 +167,25 @@ export default function HeroSection() {
                   </div>
 
                   <div className="p-2.5 sm:p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Average Partner ROI</p>
-                    <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5 sm:mt-1">3.2x</p>
-                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5">Capital Turnover</p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Wattage Range</p>
+                    <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-0.5 sm:mt-1">450 - 600W+</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5">TOPCon / DCR Mono</p>
                   </div>
 
                   <div className="p-2.5 sm:p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70">
-                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Instant Settlements</p>
-                    <p className="text-xl sm:text-2xl font-black text-purple-600 mt-0.5 sm:mt-1">T+0</p>
-                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5">Wallet Auto-credit</p>
-                  </div>
-                </div>
-
-                {/* Partner Commercial Modes Overview */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-sky-50/60 border border-sky-100 space-y-2 sm:space-y-2.5">
-                  <div className="flex items-center justify-between text-[11px] sm:text-xs font-bold">
-                    <span className="text-slate-700">Commission (Zero Stock)</span>
-                    <span className="text-[#F49222]">8% - 12% Deal</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#F49222] h-full w-[70%] rounded-full" />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] sm:text-xs font-bold pt-1">
-                    <span className="text-slate-700">Dealer Wholesale (Stock)</span>
-                    <span className="text-emerald-600">15% - 22% Margin</span>
-                  </div>
-                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-emerald-600 h-full w-[90%] rounded-full" />
+                    <p className="text-[10px] sm:text-xs text-slate-500 font-medium">Turnaround Dispatch</p>
+                    <p className="text-xl sm:text-2xl font-black text-purple-600 mt-0.5 sm:mt-1">24-48h</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold mt-0.5">Regional Hub Stock</p>
                   </div>
                 </div>
 
                 {/* Direct Register Action Card */}
-                <Link
-                  to="/register"
-                  className="block w-full py-3 text-center text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] rounded-xl transition-all shadow-md shadow-blue-500/20"
+                <button
+                  onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Hero Direct Application" }, "franchise_apply")}
+                  className="w-full py-3.5 text-center text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] rounded-xl transition-all shadow-md shadow-blue-500/20 cursor-pointer"
                 >
                   Start Franchise Application →
-                </Link>
+                </button>
               </div>
             </motion.div>
           </div>

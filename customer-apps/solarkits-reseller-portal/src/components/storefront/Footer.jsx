@@ -1,188 +1,221 @@
 import { Link } from "react-router-dom";
 import {
-  FiMapPin,
-  FiPhone,
+  FiZap,
   FiMail,
-  FiArrowUp,
+  FiPhone,
+  FiMapPin,
+  FiShield,
   FiCheckCircle,
+  FiArrowUp,
+  FiMessageSquare,
 } from "react-icons/fi";
 import logoImg from "../../assets/images/logo.png";
 
-export default function Footer() {
+export default function Footer({ onOpenLeadModal }) {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  return (
-    <footer className="bg-gradient-to-b from-white via-slate-50 to-sky-50/40 text-slate-600 border-t border-slate-200 text-xs">
-      {/* Top Banner with Trust Badges */}
-      <div className="border-b border-slate-200/80 bg-white/80 backdrop-blur-xs py-4 sm:py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-slate-700 font-bold text-[11px] sm:text-xs">
-            <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#F49222] shrink-0" size={16} />
-              <span>MNRE & ALMM Approved Equipment</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#0575B8] shrink-0" size={16} />
-              <span>28 States Regional Logistics Hubs</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
-              <span>100% Paperless Digital GSTIN KYC</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <FiCheckCircle className="text-[#F49222] shrink-0" size={16} />
-              <span>T+0 Automated Wallet Payouts</span>
-            </div>
-          </div>
-        </div>
-      </div>
+  const handleWhatsApp = () => {
+    window.open("https://wa.me/919876543210?text=Hello%20SolarKits,%20I%20want%20to%20inquire%20about%20Solarkits.", "_blank");
+  };
 
-      {/* Main Footer Links */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-8 sm:gap-10">
+  return (
+    <footer className="bg-slate-50 text-slate-900 relative overflow-hidden border-t border-slate-200 pb-20 md:pb-0">
+      {/* Background Soft Glow */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/5 blur-[150px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-500/5 blur-[150px] rounded-full pointer-events-none" />
+
+      {/* Main Footer Container */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12 relative z-10">
+        
+        {/* Top Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 pb-12 border-b border-slate-200">
           
-          {/* Column 1: Brand & Bio */}
-          <div className="sm:col-span-2 lg:col-span-4 space-y-3 sm:space-y-4">
-            <Link to="/" className="flex items-center gap-2.5 sm:gap-3">
+          {/* Col 1: Brand & Positioning (4 Cols) */}
+          <div className="lg:col-span-4 space-y-4">
+            <div className="flex items-center gap-3">
               <img
                 src={logoImg}
                 alt="SolarKits Logo"
-                className="h-9 sm:h-10 w-auto object-contain"
+                className="h-9 w-auto object-contain"
               />
-              <div className="flex flex-col border-l border-slate-200 pl-2.5 sm:pl-3">
-                <span className="text-xs font-black uppercase text-[#0575B8] tracking-wider">
-                  Franchisee Portal
+              <div className="flex flex-col border-l border-slate-300 pl-2.5">
+                <span className="text-xs font-black tracking-wider uppercase text-[#0575B8]">
+                  Solarkits Platform
                 </span>
-                <span className="text-[8px] sm:text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase">
-                  Partner Network
+                <span className="text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase">
+                  B2B Franchise Network
                 </span>
               </div>
-            </Link>
+            </div>
 
-            <p className="text-slate-500 text-xs leading-relaxed max-w-sm">
-              SolarKits is India's leading unified solar technology platform connecting Tier-1 manufacturers, EPC contractors, and authorized franchisee dealers.
+            <p className="text-xs text-slate-600 leading-relaxed font-normal">
+              India's primary B2B ready-to-sell solar platform and franchise opportunity. Sourcing certified On-Grid, Off-Grid, and Hybrid Solarkits for solar dealers, EPC contractors, and regional distributors.
             </p>
 
-            <div className="pt-2 flex items-center gap-2.5 sm:gap-3 flex-wrap">
-              <Link
-                to="/register"
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-extrabold text-xs transition-all shadow-md shadow-blue-500/20"
-              >
-                Join Franchise Network
-              </Link>
-              <Link
-                to="/login"
-                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 shadow-xs transition-all"
-              >
-                Partner Login
-              </Link>
+            <div className="flex items-center gap-2 pt-1">
+              <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                <FiCheckCircle size={12} className="text-emerald-600" />
+                ALMM / DCR Certified
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-[#0575B8] text-[10px] font-bold flex items-center gap-1">
+                <FiShield size={12} />
+                100% GST ITC Claim
+              </span>
             </div>
           </div>
 
-          {/* Column 2: Quick Links */}
-          <div className="lg:col-span-2 space-y-2.5 sm:space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Franchise Program</h4>
-            <ul className="space-y-2 text-slate-600">
+          {/* Col 2: Solarkits by Capacity (2.5 Cols) */}
+          <div className="lg:col-span-3 space-y-3">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+              Solarkits by Capacity
+            </h4>
+            <ul className="space-y-2 text-xs text-slate-600">
               <li>
-                <a href="#plans" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  1.1 kW On-Grid DCR Kit
+                </a>
+              </li>
+              <li>
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  2.2 kW PM Surya Ghar Kit
+                </a>
+              </li>
+              <li>
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  3.3 kW 550W Turnkey Solarkit
+                </a>
+              </li>
+              <li>
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  5 kW Villa Hybrid Power Kit
+                </a>
+              </li>
+              <li>
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  6 kW Lithium-Ready Hybrid Kit
+                </a>
+              </li>
+              <li>
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  10 kW Commercial 3-Phase Kit
+                </a>
+              </li>
+              <li>
+                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
+                  20 kW MW-Grade TOPCon Kit
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Col 3: Franchise & Territory Navigation (2.5 Cols) */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+              Franchise Portal
+            </h4>
+            <ul className="space-y-2 text-xs text-slate-600">
+              <li>
+                <a href="#store-availability" className="hover:text-[#0575B8] transition-colors">
+                  Territory Checker
+                </a>
+              </li>
+              <li>
+                <a href="#eligibility-checker" className="hover:text-[#0575B8] transition-colors">
+                  Eligibility Calculator
+                </a>
+              </li>
+              <li>
+                <a href="#franchise-plans" className="hover:text-[#0575B8] transition-colors">
                   Franchise Plans
                 </a>
               </li>
               <li>
-                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  Wholesale Store
+                <a href="#revenue-potential" className="hover:text-[#0575B8] transition-colors">
+                  Revenue Potential
                 </a>
               </li>
               <li>
-                <a href="#benefits" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  Partner Benefits
+                <a href="#dealer-support" className="hover:text-[#0575B8] transition-colors">
+                  Dealer & EPC Support
                 </a>
               </li>
               <li>
-                <a href="#calculator" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  ROI Calculator
-                </a>
-              </li>
-              <li>
-                <a href="#how-to-join" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  How to Join
-                </a>
+                <Link to="/login" className="hover:text-[#0575B8] transition-colors">
+                  Partner Portal Login
+                </Link>
               </li>
             </ul>
           </div>
 
-          {/* Column 3: Product Categories */}
-          <div className="lg:col-span-3 space-y-2.5 sm:space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Wholesale Catalog</h4>
-            <ul className="space-y-2 text-slate-600">
-              <li>
-                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  Residential 3kW-10kW Kits
-                </a>
-              </li>
-              <li>
-                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  Commercial 3-Phase Inverters
-                </a>
-              </li>
-              <li>
-                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  Tier-1 TOPCon & Mono Panels
-                </a>
-              </li>
-              <li>
-                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  Universal BOS Packages
-                </a>
-              </li>
-              <li>
-                <a href="#products" className="hover:text-[#0575B8] hover:translate-x-0.5 inline-block transition-all">
-                  LiFePO4 Lithium Storage
-                </a>
-              </li>
-            </ul>
-          </div>
+          {/* Col 4: B2B Support & Contact (3 Cols) */}
+          <div className="lg:col-span-3 space-y-3">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
+              National B2B Partner Desk
+            </h4>
+            <div className="space-y-2.5 text-xs text-slate-600">
+              <div className="flex items-start gap-2.5">
+                <FiMapPin className="text-[#0575B8] shrink-0 mt-0.5" size={14} />
+                <span>SolarKits Tech Park, Phase-1 Central Logistics Hub, Pune, Maharashtra 411045</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <FiPhone className="text-emerald-600 shrink-0" size={14} />
+                <span>+91 (020) 6789-SOLAR / 1800-SOLAR-KIT</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <FiMail className="text-[#F49222] shrink-0" size={14} />
+                <span>franchise@solarkits.in | b2b@solarkits.in</span>
+              </div>
+            </div>
 
-          {/* Column 4: Contact & Regional Presence */}
-          <div className="sm:col-span-2 lg:col-span-3 space-y-2.5 sm:space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">Franchise Headquarters</h4>
-            <div className="space-y-2.5 text-slate-600">
-              <div className="flex items-start gap-2">
-                <FiMapPin className="text-[#F49222] shrink-0 mt-0.5" size={14} />
-                <span>SolarKits Tech Park, Sector 62, Noida, Uttar Pradesh, 201309</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FiPhone className="text-[#0575B8] shrink-0" size={14} />
-                <span>+91 1800-SOLAR-KIT / +91 98765 43210</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FiMail className="text-[#0575B8] shrink-0" size={14} />
-                <span>franchise@solarkits.co.in</span>
-              </div>
+            <div className="pt-2 flex items-center gap-2">
+              <button
+                onClick={handleWhatsApp}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <FiMessageSquare />
+                <span>WhatsApp B2B</span>
+              </button>
+
+              <button
+                onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Footer Consultation" }, "bulk_price")}
+                className="px-3.5 py-2 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
+              >
+                Request Callback
+              </button>
             </div>
           </div>
 
         </div>
 
-        {/* Bottom Bar */}
-        <div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-[10px] sm:text-[11px] text-slate-500 text-center sm:text-left">
-          <p>© {new Date().getFullYear()} SolarKits India Technologies Pvt Ltd. All rights reserved.</p>
-          <div className="flex items-center gap-3 sm:gap-4">
-            <a href="#" className="hover:text-slate-800 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-slate-800 transition-colors">Terms & Conditions</a>
-            <button
-              onClick={scrollToTop}
-              className="p-1.5 sm:p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs cursor-pointer ml-1 transition-all hover:text-[#0575B8]"
-              aria-label="Back to top"
-            >
-              <FiArrowUp size={13} />
-            </button>
+        {/* Bottom Legal & Statutory Disclaimers */}
+        <div className="pt-8 space-y-4 text-slate-500 text-[11px] leading-relaxed">
+          <p>
+            <strong>Regulatory & Statutory Disclaimer:</strong> Solarkits is a registered B2B e-commerce platform and equipment fulfillment provider for authorized dealers, EPC contractors, and franchisees. Revenue figures, margins, and generation estimates shown on this website are illustrative and depend on territory, sales volume, product mix, margins, operating costs, and business performance. Solarkits does not guarantee revenue or profit. PM Surya Ghar Muft Bijli Yojana subsidies are disbursed directly by the Government of India / State DISCOMs subject to applicant eligibility and DISCOM technical feasibility.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200 text-slate-600 text-xs">
+            <div>
+              © 2026 Solarkits Platform India. All Rights Reserved. Position: One-Stop Solar Business Platform.
+            </div>
+
+            <div className="flex items-center gap-4">
+              <a href="#" className="hover:text-[#0575B8] transition-colors">Privacy Policy</a>
+              <a href="#" className="hover:text-[#0575B8] transition-colors">Terms of Franchise</a>
+              <a href="#" className="hover:text-[#0575B8] transition-colors">GST Compliance</a>
+              <button
+                onClick={scrollToTop}
+                className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors shadow-xs"
+                title="Scroll to Top"
+              >
+                <FiArrowUp size={14} />
+              </button>
+            </div>
           </div>
         </div>
+
       </div>
     </footer>
   );
 }
-

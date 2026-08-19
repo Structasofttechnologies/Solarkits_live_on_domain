@@ -6,39 +6,67 @@ import {
   FiSend,
   FiCheckCircle,
   FiLoader,
+  FiMessageSquare,
+  FiPhone,
 } from "react-icons/fi";
+import { INDIAN_STATES_DISTRICTS } from "../../data/territoryData";
 
-const FAQS = [
-  {
-    q: "Is GST registration mandatory to become an authorized franchisee?",
-    a: "Yes. Because SolarKits provides B2B factory-gate pricing with full 18%/12% GST Input Tax Credit (ITC), a valid GSTIN number is required during digital onboarding.",
-  },
-  {
-    q: "What is the upfront investment required to start?",
-    a: "You can start with zero upfront capital under the Commission Starter Plan (Free/Promo). For established distributors wanting direct stock holding and maximum wholesale margins, the Dealer Starter Plan is only ₹5,000 / year.",
-  },
-  {
-    q: "How does territory exclusivity work in my district?",
-    a: "Your allotted revenue districts (minimum 2 districts per plan) are registered on our central platform. Local rooftop customer leads and commercial EPC inquiries originating in your district are routed directly into your franchisee portal.",
-  },
-  {
-    q: "How and when do I receive commission and profit payouts?",
-    a: "Payouts are automated via the Franchisee Digital Wallet. As soon as an order is fulfilled or dispatched, your commission is credited (T+0) and can be withdrawn directly to your registered bank account.",
-  },
-  {
-    q: "How is equipment warranty and technical support handled?",
-    a: "All equipment comes with direct manufacturer warranties (5 to 10 years for Inverters, 25 to 30 years for Tier-1 Solar Modules). SolarKits provides technical SLD engineering support and fast regional replacement services.",
-  },
-];
+const FAQ_CATEGORIES = {
+  "Complete SolarKits": [
+    {
+      q: "What components are included in a standard Solarkit?",
+      a: "Every Solarkit is a turn-key solution containing Tier-1 Mono PERC or N-Type TOPCon Solar Modules, a cloud-connected smart grid or hybrid inverter, pre-wired IP65 ACDB & DCDB boxes with Type-II SPDs, UV-rated 4/6sqmm DC solar cables, chemical bonded earthing electrodes, copper lightning arrester, and elevated HDGI mounting hardware.",
+    },
+    {
+      q: "Are Solarkits compliant with PM Surya Ghar Muft Bijli Yojana?",
+      a: "Yes. All DCR designated Solarkits (1.1kW, 2.2kW, 3.3kW, 5kW) use ALMM-approved, MNRE-certified Domestic Content Requirement (DCR) solar cells and modules, qualifying your customers for up to ₹78,000 direct bank DBT subsidies.",
+    },
+    {
+      q: "Can I customize the inverter brand or panel wattage in a Solarkit?",
+      a: "Yes. In addition to our pre-engineered standard packages, dealers can request custom combinations (e.g. 580W TOPCon with Deye Hybrid Inverter) via the 'Request Custom Configuration' action on the catalog.",
+    },
+  ],
+  "Franchise & Territory": [
+    {
+      q: "How does territory exclusivity work for authorized franchisees?",
+      a: "When you are onboarded as an Authorized Dealer, up to 2 revenue districts are assigned exclusively to your franchise code. Local residential rooftop and commercial EPC buyer inquiries originating from those districts are automatically routed to your portal dashboard.",
+    },
+    {
+      q: "Is GST registration mandatory to become a franchisee?",
+      a: "GST registration is recommended to claim 100% of the 12% GST Input Tax Credit (ITC) on factory-gate purchases. However, individual solar contractors without GST can begin under our Commission Starter Partner plan.",
+    },
+    {
+      q: "What is the upfront investment required to launch a Solarkits store?",
+      a: "The Commission Starter Partner program has zero upfront investment. For Authorized Dealerships with stocking rights and territory protection, the program fee is only ₹5,000/year plus your initial equipment inventory capital.",
+    },
+  ],
+  "B2B Pricing & Payouts": [
+    {
+      q: "How are dealer margins and commissions paid out?",
+      a: "All wholesale margins and commission earnings are settled automatically via the Franchisee Digital Wallet (T+0). You can initiate direct NEFT/IMPS bank withdrawals to your registered current account anytime without threshold delays.",
+    },
+    {
+      q: "How fast is regional hub dispatch and what are the delivery charges?",
+      a: "Orders are dispatched within 24 to 48 hours from our nearest state regional warehouse with full transit insurance. Delivery is free for local hub radius orders or calculated at transparent nominal freight rates for remote sites.",
+    },
+    {
+      q: "How are equipment warranty replacements handled?",
+      a: "All items carry direct manufacturer warranties (10-12 yrs on panels, 5-7 yrs on inverters, 5 yrs on BOS). SolarKits provides centralized RMA assistance and fast regional unit swaps so you don't face customer downtime.",
+    },
+  ],
+};
 
-export default function FaqContactSection() {
+export default function FaqContactSection({ onOpenLeadModal }) {
+  const [activeCategory, setActiveCategory] = useState("Complete SolarKits");
   const [openIndex, setOpenIndex] = useState(0);
+
   const [formData, setFormData] = useState({
     name: "",
     mobile: "",
     email: "",
-    state: "",
-    district: "",
+    state: "Maharashtra",
+    district: "Pune",
+    businessType: "Solar Dealer / Installer",
     message: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -47,6 +75,26 @@ export default function FaqContactSection() {
   const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitting(true);
+
+    try {
+      const existing = JSON.parse(localStorage.getItem("solarkits_crm_leads") || "[]");
+      existing.unshift({
+        id: `CONSULT-${Date.now()}`,
+        fullName: formData.name,
+        mobileNumber: formData.mobile,
+        email: formData.email,
+        state: formData.state,
+        district: formData.district,
+        businessType: formData.businessType,
+        notes: formData.message,
+        actionType: "consultation_request",
+        submittedAt: new Date().toISOString(),
+      });
+      localStorage.setItem("solarkits_crm_leads", JSON.stringify(existing));
+    } catch (err) {
+      console.warn("Storage note:", err);
+    }
+
     setTimeout(() => {
       setSubmitting(false);
       setSubmitted(true);
@@ -54,40 +102,65 @@ export default function FaqContactSection() {
         name: "",
         mobile: "",
         email: "",
-        state: "",
-        district: "",
+        state: "Maharashtra",
+        district: "Pune",
+        businessType: "Solar Dealer / Installer",
         message: "",
       });
-    }, 1000);
+    }, 800);
+  };
+
+  const handleWhatsApp = () => {
+    window.open("https://wa.me/919876543210?text=Hello%20SolarKits,%20I%20have%20an%20inquiry%20regarding%20franchise%20and%20kit%20procurement.", "_blank");
   };
 
   return (
-    <section id="contact" className="py-24 bg-white text-slate-900 relative overflow-hidden border-t border-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    <section id="faq-section" className="py-16 sm:py-24 bg-white text-slate-900 relative border-t border-slate-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
           
-          {/* Left Column: FAQ Accordion */}
+          {/* Left Column: Categorized FAQ Accordion */}
           <div className="lg:col-span-7 space-y-6">
             <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-50 border border-sky-100 shadow-xs">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 shadow-xs">
                 <FiHelpCircle className="text-[#0575B8]" size={14} />
-                <span className="text-xs font-black uppercase tracking-wider text-[#0575B8]">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
                   Frequently Asked Questions
                 </span>
               </div>
 
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-                Everything You Need to Know About the{" "}
+              <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
+                Everything You Need to Know About{" "}
                 <span className="text-[#F49222]">
-                  Franchise Portal
+                  Solarkits & Dealerships
                 </span>
               </h2>
             </div>
 
+            {/* Category Switcher Tabs */}
+            <div className="flex gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
+              {Object.keys(FAQ_CATEGORIES).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    setOpenIndex(0);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    activeCategory === cat
+                      ? "bg-[#0575B8] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
             {/* Accordion */}
-            <div className="space-y-3 pt-4">
-              {FAQS.map((faq, idx) => {
+            <div className="space-y-3 pt-2">
+              {FAQ_CATEGORIES[activeCategory].map((faq, idx) => {
                 const isOpen = openIndex === idx;
                 return (
                   <div
@@ -96,7 +169,7 @@ export default function FaqContactSection() {
                   >
                     <button
                       onClick={() => setOpenIndex(isOpen ? null : idx)}
-                      className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-sm text-slate-900 hover:text-[#0575B8] transition-colors cursor-pointer"
+                      className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 font-bold text-xs sm:text-sm text-slate-900 hover:text-[#0575B8] transition-colors cursor-pointer"
                     >
                       <span>{faq.q}</span>
                       <FiChevronDown
@@ -113,7 +186,7 @@ export default function FaqContactSection() {
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
                           exit={{ opacity: 0, height: 0 }}
-                          className="px-5 pb-5 text-xs sm:text-sm text-slate-600 leading-relaxed font-normal border-t border-slate-200/80 pt-3"
+                          className="px-4 sm:px-5 pb-5 text-xs sm:text-sm text-slate-600 leading-relaxed font-normal border-t border-slate-200/80 pt-3"
                         >
                           {faq.a}
                         </motion.div>
@@ -125,13 +198,18 @@ export default function FaqContactSection() {
             </div>
           </div>
 
-          {/* Right Column: Callback & Inquiry Form */}
+          {/* Right Column: Callback & Consultation Form */}
           <div className="lg:col-span-5">
-            <div className="rounded-3xl bg-slate-50 border border-slate-200 p-7 sm:p-8 shadow-lg space-y-6">
+            <div className="rounded-3xl bg-slate-50 border border-slate-200 p-6 sm:p-8 shadow-xl space-y-5">
               <div>
-                <h3 className="text-xl font-black text-slate-900">Request Franchise Consultation</h3>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Have specific queries about multi-district or state distribution? Our partner team will call you within 2 hours.
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#0575B8] bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-100">
+                  Priority B2B Desk
+                </span>
+                <h3 className="text-xl font-black text-slate-900 mt-2">
+                  Request Partner Consultation
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Have questions regarding state distribution or container pricing? Our team will call back within 2 hours.
                 </p>
               </div>
 
@@ -140,7 +218,7 @@ export default function FaqContactSection() {
                   <FiCheckCircle className="mx-auto text-emerald-600" size={36} />
                   <h4 className="text-base font-bold text-slate-900">Inquiry Received Successfully!</h4>
                   <p className="text-xs text-slate-600">
-                    A SolarKits Franchise Director has been assigned to your request and will contact you shortly.
+                    A SolarKits Regional Director has been assigned and will connect with you shortly.
                   </p>
                   <button
                     onClick={() => setSubmitted(false)}
@@ -150,18 +228,18 @@ export default function FaqContactSection() {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-3.5">
                   <div>
                     <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Full Name / Contact Person
+                      Full Name
                     </label>
                     <input
                       type="text"
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="e.g. Rajesh Kumar"
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      placeholder="e.g. Ramesh Kumar"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
                     />
                   </div>
 
@@ -173,10 +251,11 @@ export default function FaqContactSection() {
                       <input
                         type="tel"
                         required
+                        pattern="[6-9][0-9]{9}"
                         value={formData.mobile}
                         onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                         placeholder="9876543210"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
                       />
                     </div>
 
@@ -189,8 +268,8 @@ export default function FaqContactSection() {
                         required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="rajesh@company.com"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        placeholder="ramesh@company.com"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
                       />
                     </div>
                   </div>
@@ -200,61 +279,78 @@ export default function FaqContactSection() {
                       <label className="text-xs font-bold text-slate-700 block mb-1">
                         State
                       </label>
-                      <input
-                        type="text"
-                        required
+                      <select
                         value={formData.state}
                         onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        placeholder="e.g. Maharashtra"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
-                      />
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0575B8]"
+                      >
+                        {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
+                          <option key={st} value={st}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
                       <label className="text-xs font-bold text-slate-700 block mb-1">
-                        Target District
+                        District
                       </label>
-                      <input
-                        type="text"
-                        required
+                      <select
                         value={formData.district}
                         onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                        placeholder="e.g. Pune"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
-                      />
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0575B8]"
+                      >
+                        {(INDIAN_STATES_DISTRICTS[formData.state] || []).map((dist) => (
+                          <option key={dist} value={dist}>
+                            {dist}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
                   <div>
                     <label className="text-xs font-bold text-slate-700 block mb-1">
-                      Business Details / Expected Volume
+                      Business Details / Queries
                     </label>
                     <textarea
-                      rows={3}
+                      rows={2}
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                      placeholder="Tell us about your current solar installation or electrical business..."
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      placeholder="Tell us about your target kilowatt volume or dealership questions..."
+                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-                  >
-                    {submitting ? (
-                      <>
-                        <FiLoader className="animate-spin" size={16} />
-                        <span>Sending Request...</span>
-                      </>
-                    ) : (
-                      <>
-                        <FiSend size={16} />
-                        <span>Request Callback Now</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="pt-1 space-y-2">
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                    >
+                      {submitting ? (
+                        <>
+                          <FiLoader className="animate-spin" size={15} />
+                          <span>Sending Request...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiSend size={14} />
+                          <span>Request Callback Now →</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleWhatsApp}
+                      className="w-full py-2.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <FiMessageSquare className="text-emerald-600" />
+                      <span>Chat Directly on WhatsApp</span>
+                    </button>
+                  </div>
                 </form>
               )}
             </div>
