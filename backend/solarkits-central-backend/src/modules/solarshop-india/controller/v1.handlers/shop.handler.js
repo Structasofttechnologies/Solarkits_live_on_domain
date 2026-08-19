@@ -2846,6 +2846,86 @@ const get_nearby_stores = async (req, res) => {
   }
 };
 
+const get_shop_hierarchy = async (req, res) => {
+  try {
+    const {
+      IndustryType,
+      ProjectCategory,
+      ProjectSubcategory,
+      ProjectType,
+      ProjectSubcategoryType,
+      ProjectRange,
+    } = require("../../../admin-panel/models/core_db");
+
+    const industryTypes = await IndustryType.find({ deleted_at: null, is_active: true })
+      .sort({ sort_order: 1, name: 1 })
+      .lean();
+    const categories = await ProjectCategory.find({ deleted_at: null, is_active: true })
+      .sort({ sort_order: 1, _id: 1 })
+      .lean();
+    const subcategories = await ProjectSubcategory.find({ deleted_at: null, is_active: true }).lean();
+    const types = await ProjectType.find({ deleted_at: null, is_active: true }).lean();
+    const maps = await ProjectSubcategoryType.find({ deleted_at: null }).lean();
+    const ranges = await ProjectRange.find({ deleted_at: null }).populate('unit_id').lean();
+
+    const buildCategoryTree = (cat) => {
+      const catSubs = subcategories.filter((sc) => String(sc.category || '') === String(cat._id));
+      return {
+        id: cat._id,
+        name: cat.name || "Unnamed Category",
+        industry_type_id: cat.industry_type_id || null,
+        subcategories: catSubs.map((sc) => {
+          const subMaps = maps.filter((m) => String(m.subcategory || '') === String(sc._id));
+          return {
+            id: sc._id,
+            name: sc.name || "Unnamed Subcategory",
+            category_id: sc.category,
+            image: sc.image || null,
+            color: sc.color || null,
+            mappedTypes: subMaps.map((m) => {
+              const type = types.find((t) => String(t._id) === String(m.type));
+              const typeRanges = ranges.filter((r) => String(r.subcategory_type || '') === String(m._id));
+              return {
+                id: m._id,
+                subcategory_type_id: m._id,
+                type_id: type?._id,
+                name: type ? type.name : "Unknown Type",
+                ranges: typeRanges.map((r) => ({
+                  id: r._id,
+                  min_value: r.min_value ?? 0,
+                  max_value: r.max_value ?? 0,
+                  unit_symbol: r.unit_id?.symbol || "kW",
+                  range_label: `${r.min_value} - ${r.max_value} ${r.unit_id?.symbol || 'kW'}`,
+                })),
+              };
+            }),
+          };
+        }),
+      };
+    };
+
+    const hierarchy = industryTypes.map((ind) => {
+      const indCats = categories.filter((cat) => String(cat.industry_type_id || '') === String(ind._id));
+      return {
+        id: ind._id,
+        name: ind.name,
+        slug: ind.slug,
+        description: ind.description,
+        categories: indCats.map(buildCategoryTree),
+      };
+    });
+
+    return res.json({
+      status: "success",
+      success: true,
+      data: hierarchy,
+    });
+  } catch (error) {
+    console.error("get_shop_hierarchy error:", error);
+    return res.status(500).json({ status: "error", success: false, message: error.message });
+  }
+};
+
 module.exports = {
   get_combo_kits_by_district,
   get_inventory_status,
@@ -2871,6 +2951,7 @@ module.exports = {
   get_bos_custom_catalog,
   save_bos_custom_catalog,
   get_nearby_stores,
+  get_shop_hierarchy,
 };
 
 

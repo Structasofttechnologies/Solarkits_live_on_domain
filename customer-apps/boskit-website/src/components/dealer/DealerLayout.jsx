@@ -25,13 +25,15 @@ import {
   FiMoon,
   FiSun,
 } from 'react-icons/fi';
+import { useDealerCart } from '../../context/DealerCartContext';
 import api from '../../services/api';
 import logoImg from '../../assets/images/logo.png';
 
 const NAV_ITEMS = [
   { name: 'Installer Dashboard', icon: <MdDashboard size={18} />, path: '/dealer/portal/dashboard' },
   { name: 'Wholesale Catalogue', icon: <FaShoppingBag size={16} />, path: '/dealer/portal/catalogue' },
-  { name: 'My Orders & Dispatches', icon: <MdShoppingCart size={18} />, path: '/dealer/portal/orders' },
+  { name: 'Procurement Cart', icon: <FiShoppingCart size={17} />, path: '/dealer/portal/cart' },
+  { name: 'My Orders & Dispatches', icon: <MdListAlt size={18} />, path: '/dealer/portal/orders' },
   { name: 'Distributor Hub', icon: <FiMapPin size={17} />, path: '/dealer/portal/hub' },
 ];
 
@@ -39,9 +41,9 @@ export default function DealerLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, dealer, logout } = useAuth();
+  const { totalItemsCount, openDrawer } = useDealerCart();
   const [stats, setStats] = useState(null);
   const [isDark, setIsDark] = useState(false);
-  const [cartCount, setCartCount] = useState(2);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const userMenuRef = useRef(null);
@@ -114,16 +116,16 @@ export default function DealerLayout() {
             {isDark ? <FiSun size={17} className="text-amber-500" /> : <FiMoon size={17} />}
           </button>
 
-          {/* Shopping Cart Icon with Badge */}
+          {/* Shopping Cart Icon with Live Badge */}
           <Link
-            to="/dealer/portal/orders"
+            to="/dealer/portal/cart"
             className="relative p-2 text-slate-700 hover:text-blue-600 hover:bg-slate-100 rounded-full transition-colors"
-            title="Orders & Cart"
+            title="Procurement Cart"
           >
             <FiShoppingCart size={19} />
-            {cartCount > 0 && (
+            {totalItemsCount > 0 && (
               <span className="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center border-2 border-white shadow-xs">
-                {cartCount}
+                {totalItemsCount}
               </span>
             )}
           </Link>

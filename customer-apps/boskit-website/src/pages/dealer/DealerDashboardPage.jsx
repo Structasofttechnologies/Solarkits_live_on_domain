@@ -116,7 +116,7 @@ export default function DealerDashboardPage() {
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="font-heading font-black text-2xl text-slate-900">
-              ₹{(metrics.lifetime_procurement_inr || 450000).toLocaleString('en-IN')}
+              ₹{(metrics.lifetime_procurement_inr !== undefined ? metrics.lifetime_procurement_inr : 0).toLocaleString('en-IN')}
             </span>
           </div>
         </div>
@@ -131,7 +131,7 @@ export default function DealerDashboardPage() {
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="font-heading font-black text-2xl text-slate-900">
-              {metrics.total_orders_count || 3}
+              {metrics.total_orders_count !== undefined ? metrics.total_orders_count : 0}
             </span>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
               100% On-Time
@@ -188,11 +188,11 @@ export default function DealerDashboardPage() {
                         {new Date(order.created_at || Date.now()).toLocaleDateString('en-IN')}
                       </td>
                       <td className="py-3 font-heading font-bold text-slate-900">
-                        ₹{(order.total_amount_inr || 150000).toLocaleString('en-IN')}
+                        ₹{(order.grand_total_inr !== undefined ? order.grand_total_inr : (order.total_amount_inr || 0)).toLocaleString('en-IN')}
                       </td>
                       <td className="py-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {order.status || 'Dispatched'}
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 capitalize">
+                          {order.status || 'Confirmed'}
                         </span>
                       </td>
                     </tr>

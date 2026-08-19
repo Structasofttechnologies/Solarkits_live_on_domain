@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { DealerCartProvider } from './context/DealerCartContext';
 
 // Public Layout
 import Navbar from './components/layout/Navbar';
@@ -42,6 +43,8 @@ import DistributorCartPage from './pages/distributor/DistributorCartPage';
 import DealerLayout from './components/dealer/DealerLayout';
 import DealerDashboardPage from './pages/dealer/DealerDashboardPage';
 import DealerCataloguePage from './pages/dealer/DealerCataloguePage';
+import DealerCartPage from './pages/dealer/DealerCartPage';
+import DealerCheckoutPage from './pages/dealer/DealerCheckoutPage';
 import DealerOrdersPage from './pages/dealer/DealerOrdersPage';
 import DealerDistributorHubPage from './pages/dealer/DealerDistributorHubPage';
 
@@ -61,39 +64,42 @@ export default function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Distributor Authenticated Portal */}
-            <Route path="/distributor/portal" element={<DistributorLayout />}>
-              <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<DistributorDashboardPage />} />
-              <Route path="procure" element={<DistributorProcureCataloguePage />} />
-              <Route path="catalogue" element={<DistributorProcureCataloguePage />} />
-              <Route path="combo-kits" element={<DistributorComboKitsStorePage />} />
-              <Route path="bos-kits" element={<DistributorComboKitsStorePage />} />
-              <Route path="custom-kits" element={<DistributorCustomBosKitPage />} />
-              <Route path="customization-bos-kit" element={<DistributorCustomBosKitPage />} />
-              <Route path="cart" element={<DistributorCartPage />} />
-              <Route path="dealers" element={<DistributorDealersPage />} />
-              <Route path="dealer-margins" element={<DistributorProcureCataloguePage />} />
-              <Route path="dealer-pricing" element={<DistributorProcureCataloguePage />} />
-              <Route path="reselling-margins" element={<DistributorProcureCataloguePage />} />
-              <Route path="dealer-applications" element={<DistributorDealerApplicationsPage />} />
-              <Route path="territory" element={<DistributorTerritoryPage />} />
-              <Route path="plan" element={<DistributorPlanPage />} />
-              <Route path="kyc" element={<DistributorOnboardingPage />} />
-              <Route path="onboarding" element={<DistributorOnboardingPage />} />
-              <Route path="settings" element={<DistributorPlanPage />} />
-            </Route>
+        <DealerCartProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Distributor Authenticated Portal */}
+              <Route path="/distributor/portal" element={<DistributorLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<DistributorDashboardPage />} />
+                <Route path="procure" element={<DistributorProcureCataloguePage />} />
+                <Route path="catalogue" element={<DistributorProcureCataloguePage />} />
+                <Route path="combo-kits" element={<DistributorComboKitsStorePage />} />
+                <Route path="bos-kits" element={<DistributorComboKitsStorePage />} />
+                <Route path="custom-kits" element={<DistributorCustomBosKitPage />} />
+                <Route path="customization-bos-kit" element={<DistributorCustomBosKitPage />} />
+                <Route path="cart" element={<DistributorCartPage />} />
+                <Route path="dealers" element={<DistributorDealersPage />} />
+                <Route path="dealer-margins" element={<DistributorProcureCataloguePage />} />
+                <Route path="dealer-pricing" element={<DistributorProcureCataloguePage />} />
+                <Route path="reselling-margins" element={<DistributorProcureCataloguePage />} />
+                <Route path="dealer-applications" element={<DistributorDealerApplicationsPage />} />
+                <Route path="territory" element={<DistributorTerritoryPage />} />
+                <Route path="plan" element={<DistributorPlanPage />} />
+                <Route path="kyc" element={<DistributorOnboardingPage />} />
+                <Route path="onboarding" element={<DistributorOnboardingPage />} />
+                <Route path="settings" element={<DistributorPlanPage />} />
+              </Route>
 
-            {/* Dealer Authenticated Portal */}
-            <Route path="/dealer/portal" element={<DealerLayout />}>
-              <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<DealerDashboardPage />} />
-              <Route path="catalogue" element={<DealerCataloguePage />} />
-              <Route path="orders" element={<DealerOrdersPage />} />
-              <Route path="hub" element={<DealerDistributorHubPage />} />
-            </Route>
+              {/* Dealer Authenticated Portal */}
+              <Route path="/dealer/portal" element={<DealerLayout />}>
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<DealerDashboardPage />} />
+                <Route path="catalogue" element={<DealerCataloguePage />} />
+                <Route path="cart" element={<DealerCartPage />} />
+                <Route path="checkout" element={<DealerCheckoutPage />} />
+                <Route path="orders" element={<DealerOrdersPage />} />
+                <Route path="hub" element={<DealerDistributorHubPage />} />
+              </Route>
 
             {/* Dashboard Redirect Aliases */}
             <Route path="/distributor/dashboard" element={<Navigate to="/distributor/portal/dashboard" replace />} />
@@ -122,6 +128,7 @@ export default function App() {
             </Route>
           </Routes>
         </BrowserRouter>
+        </DealerCartProvider>
       </CartProvider>
     </AuthProvider>
   );

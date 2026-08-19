@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
+import axios from "axios";
 import {
   FiFilter,
   FiGrid,
@@ -70,6 +71,93 @@ export default function PreconfiguredComboKit() {
   const [viewMode, setViewMode] = useState("grid");
   const [activeCatalogTab, setActiveCatalogTab] = useState("combo-kits");
 
+  // Live Admin Panel Hierarchy Data
+  const [hierarchyTree, setHierarchyTree] = useState([]);
+
+  useEffect(() => {
+    const fetchHierarchy = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+        const res = await axios.get(`${apiBase}/india/v1/shop/hierarchy`);
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setHierarchyTree(res.data.data);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch live shop hierarchy:", err.message);
+      }
+    };
+    fetchHierarchy();
+  }, []);
+
+  // Cascading Hierarchy Options
+  const apiIndustryTypes = useMemo(() => {
+    return hierarchyTree.map((ind) => ({ id: ind.id, name: ind.name, slug: ind.slug }));
+  }, [hierarchyTree]);
+
+  const apiCategories = useMemo(() => {
+    if (selectedIndustryType === "all") {
+      const allCats = [];
+      hierarchyTree.forEach((ind) => {
+        (ind.categories || []).forEach((c) => {
+          if (!allCats.some((x) => x.name === c.name)) allCats.push(c);
+        });
+      });
+      return allCats;
+    }
+    const matchedInd = hierarchyTree.find(
+      (ind) => ind.name.toLowerCase() === selectedIndustryType.toLowerCase() || ind.id === selectedIndustryType
+    );
+    return matchedInd?.categories || [];
+  }, [hierarchyTree, selectedIndustryType]);
+
+  const apiSubcategories = useMemo(() => {
+    if (selectedCategory === "all") {
+      const allSubs = [];
+      apiCategories.forEach((cat) => {
+        (cat.subcategories || []).forEach((s) => {
+          if (!allSubs.some((x) => x.name === s.name)) allSubs.push(s);
+        });
+      });
+      return allSubs;
+    }
+    const matchedCat = apiCategories.find(
+      (cat) => cat.name.toLowerCase() === selectedCategory.toLowerCase() || cat.id === selectedCategory
+    );
+    return matchedCat?.subcategories || [];
+  }, [apiCategories, selectedCategory]);
+
+  const apiSystemTypes = useMemo(() => {
+    if (selectedSubCategory === "all") {
+      const allTypes = [];
+      apiSubcategories.forEach((sub) => {
+        (sub.mappedTypes || []).forEach((t) => {
+          if (!allTypes.some((x) => x.name === t.name)) allTypes.push(t);
+        });
+      });
+      return allTypes;
+    }
+    const matchedSub = apiSubcategories.find(
+      (sub) => sub.name.toLowerCase() === selectedSubCategory.toLowerCase() || sub.id === selectedSubCategory
+    );
+    return matchedSub?.mappedTypes || [];
+  }, [apiSubcategories, selectedSubCategory]);
+
+  const apiProjectRanges = useMemo(() => {
+    if (selectedSystemType === "all") {
+      const allRanges = [];
+      apiSystemTypes.forEach((t) => {
+        (t.ranges || []).forEach((r) => {
+          if (!allRanges.some((x) => x.range_label === r.range_label)) allRanges.push(r);
+        });
+      });
+      return allRanges;
+    }
+    const matchedType = apiSystemTypes.find(
+      (t) => t.name.toLowerCase() === selectedSystemType.toLowerCase() || t.id === selectedSystemType
+    );
+    return matchedType?.ranges || [];
+  }, [apiSystemTypes, selectedSystemType]);
+
   // Modals & Drawers
   const [quickViewKit, setQuickViewKit] = useState(null);
   const [quickViewVariantIndex, setQuickViewVariantIndex] = useState(0);
@@ -87,50 +175,11 @@ export default function PreconfiguredComboKit() {
       else if (urlType === "hybrid") setSelectedCategory("Hybrid");
     }
     if (urlApp !== "all") {
-      if (urlApp === "residential") setSelectedIndustryType("Residential");
-      else if (urlApp === "commercial") setSelectedIndustryType("Commercial");
+      if (urlApp === "residential") setSelectedIndustryType("Residential Solar");
+      else if (urlApp === "commercial") setSelectedIndustryType("Commercial & Industrial (C&I)");
     }
     if (urlCap !== "all") setSelectedProjectRange(urlCap);
   }, [urlSearch, urlType, urlApp, urlCap]);
-
-  // Dynamically extract unique filter options safely
-  const filterOptions = useMemo(() => {
-    const industries = new Set();
-    const categories = new Set();
-    const subCategories = new Set();
-    const systemTypes = new Set();
-    const projectRanges = new Set();
-
-    availableKits.forEach((k) => {
-      const ind = safeString(k.industryType || k.industry_type_name);
-      if (ind) industries.add(ind);
-
-      const cat = safeString(k.category);
-      if (cat) categories.add(cat);
-
-      const sub = safeString(k.subCategory || k.usageType);
-      if (sub) subCategories.add(sub);
-
-      const sys = safeString(k.projectType || k.inverter?.type);
-      if (sys) systemTypes.add(sys);
-
-      if (k.capacityKW) {
-        projectRanges.add(`${k.capacityKW} kW`);
-      }
-      if (k.projectRange) {
-        const pr = safeString(k.projectRange);
-        if (pr) projectRanges.add(pr);
-      }
-    });
-
-    return {
-      industries: Array.from(industries).filter(Boolean),
-      categories: Array.from(categories).filter(Boolean),
-      subCategories: Array.from(subCategories).filter(Boolean),
-      systemTypes: Array.from(systemTypes).filter(Boolean),
-      projectRanges: Array.from(projectRanges).filter(Boolean).sort((a, b) => parseFloat(a) - parseFloat(b)),
-    };
-  }, [availableKits]);
 
   // Comparison handlers
   const handleToggleCompare = (kit) => {
@@ -185,7 +234,11 @@ export default function PreconfiguredComboKit() {
           safeString(k.industryType).toLowerCase().includes(target) ||
           safeString(k.industry_type_name).toLowerCase().includes(target) ||
           safeString(k.usageType).toLowerCase().includes(target) ||
-          safeString(k.category).toLowerCase().includes(target)
+          safeString(k.category).toLowerCase().includes(target) ||
+          (target.includes("residential") && (safeString(k.usageType).toLowerCase().includes("residential") || safeString(k.category).toLowerCase().includes("residential"))) ||
+          (target.includes("commercial") && (safeString(k.usageType).toLowerCase().includes("commercial") || safeString(k.category).toLowerCase().includes("commercial"))) ||
+          (target.includes("agriculture") && (safeString(k.usageType).toLowerCase().includes("pump") || safeString(k.category).toLowerCase().includes("pump") || safeString(k.kitName).toLowerCase().includes("pump"))) ||
+          (target.includes("utility") && (safeString(k.usageType).toLowerCase().includes("utility") || (k.capacityKW || 0) >= 50))
       );
     }
 
@@ -196,7 +249,8 @@ export default function PreconfiguredComboKit() {
         (k) =>
           safeString(k.category).toLowerCase().includes(target) ||
           safeString(k.projectType).toLowerCase().includes(target) ||
-          safeString(k.inverter?.type).toLowerCase().includes(target)
+          safeString(k.inverter?.type).toLowerCase().includes(target) ||
+          safeString(k.subCategory).toLowerCase().includes(target)
       );
     }
 
@@ -206,7 +260,8 @@ export default function PreconfiguredComboKit() {
       result = result.filter(
         (k) =>
           safeString(k.subCategory).toLowerCase().includes(target) ||
-          safeString(k.usageType).toLowerCase().includes(target)
+          safeString(k.usageType).toLowerCase().includes(target) ||
+          safeString(k.kitName).toLowerCase().includes(target)
       );
     }
 
@@ -216,15 +271,26 @@ export default function PreconfiguredComboKit() {
       result = result.filter(
         (k) =>
           safeString(k.projectType).toLowerCase().includes(target) ||
-          safeString(k.inverter?.type).toLowerCase().includes(target)
+          safeString(k.inverter?.type).toLowerCase().includes(target) ||
+          (target.includes("grid") && safeString(k.inverter?.type).toLowerCase().includes("grid"))
       );
     }
 
     // 6. Project Range / Capacity filter
     if (selectedProjectRange !== "all") {
-      const capNum = parseFloat(selectedProjectRange);
-      if (!isNaN(capNum)) {
-        result = result.filter((k) => (k.capacityKW || 0) === capNum || Math.floor(k.capacityKW || 0) === capNum);
+      const parts = selectedProjectRange.match(/\d+(\.\d+)?/g);
+      if (parts && parts.length >= 2) {
+        const minVal = parseFloat(parts[0]);
+        const maxVal = parseFloat(parts[1]);
+        result = result.filter((k) => {
+          const cap = k.capacityKW || 0;
+          return cap >= minVal && cap <= maxVal;
+        });
+      } else {
+        const capNum = parseFloat(selectedProjectRange);
+        if (!isNaN(capNum)) {
+          result = result.filter((k) => (k.capacityKW || 0) === capNum || Math.floor(k.capacityKW || 0) === capNum);
+        }
       }
     }
 
@@ -447,17 +513,19 @@ export default function PreconfiguredComboKit() {
             </label>
             <select
               value={selectedIndustryType}
-              onChange={(e) => setSelectedIndustryType(e.target.value)}
+              onChange={(e) => {
+                setSelectedIndustryType(e.target.value);
+                setSelectedCategory("all");
+                setSelectedSubCategory("all");
+                setSelectedSystemType("all");
+                setSelectedProjectRange("all");
+              }}
               className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
             >
               <option value="all">All Industry Types</option>
-              {filterOptions.industries.map((ind, idx) => {
-                const label = safeString(ind);
-                return <option key={idx} value={label}>{label}</option>;
-              })}
-              <option value="Residential">Residential</option>
-              <option value="Commercial">Commercial</option>
-              <option value="Industrial">Industrial</option>
+              {apiIndustryTypes.map((ind) => (
+                <option key={ind.id} value={ind.name}>{ind.name}</option>
+              ))}
             </select>
           </div>
 
@@ -468,17 +536,18 @@ export default function PreconfiguredComboKit() {
             </label>
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setSelectedSubCategory("all");
+                setSelectedSystemType("all");
+                setSelectedProjectRange("all");
+              }}
               className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
             >
               <option value="all">All Categories</option>
-              {filterOptions.categories.map((cat, idx) => {
-                const label = safeString(cat);
-                return <option key={idx} value={label}>{label}</option>;
-              })}
-              <option value="On-Grid">On-Grid Solar Kits</option>
-              <option value="Off-Grid">Off-Grid Solar Kits</option>
-              <option value="Hybrid">Hybrid Solar Kits</option>
+              {apiCategories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
             </select>
           </div>
 
@@ -489,17 +558,17 @@ export default function PreconfiguredComboKit() {
             </label>
             <select
               value={selectedSubCategory}
-              onChange={(e) => setSelectedSubCategory(e.target.value)}
+              onChange={(e) => {
+                setSelectedSubCategory(e.target.value);
+                setSelectedSystemType("all");
+                setSelectedProjectRange("all");
+              }}
               className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
             >
               <option value="all">All Sub-Categories</option>
-              {filterOptions.subCategories.map((sub, idx) => {
-                const label = safeString(sub);
-                return <option key={idx} value={label}>{label}</option>;
-              })}
-              <option value="Residential Rooftop">Residential Rooftop</option>
-              <option value="Commercial Shed">Commercial Shed</option>
-              <option value="Ground Mount">Ground Mount</option>
+              {apiSubcategories.map((sub) => (
+                <option key={sub.id} value={sub.name}>{sub.name}</option>
+              ))}
             </select>
           </div>
 
@@ -510,18 +579,16 @@ export default function PreconfiguredComboKit() {
             </label>
             <select
               value={selectedSystemType}
-              onChange={(e) => setSelectedSystemType(e.target.value)}
+              onChange={(e) => {
+                setSelectedSystemType(e.target.value);
+                setSelectedProjectRange("all");
+              }}
               className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
             >
               <option value="all">All Types</option>
-              {filterOptions.systemTypes.map((sys, idx) => {
-                const label = safeString(sys);
-                return <option key={idx} value={label}>{label}</option>;
-              })}
-              <option value="Single Phase">Single Phase (1-Phase)</option>
-              <option value="Three Phase">Three Phase (3-Phase)</option>
-              <option value="String Inverter">String Inverter</option>
-              <option value="Micro Inverter">Micro Inverter</option>
+              {apiSystemTypes.map((type, idx) => (
+                <option key={type.id || type.subcategory_type_id || idx} value={type.name}>{type.name}</option>
+              ))}
             </select>
           </div>
 
@@ -536,16 +603,14 @@ export default function PreconfiguredComboKit() {
               className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
             >
               <option value="all">All Ranges</option>
-              {filterOptions.projectRanges.map((rng, idx) => {
-                const label = safeString(rng);
-                return <option key={idx} value={label}>{label}</option>;
+              {apiProjectRanges.map((rng, idx) => {
+                const label = rng.range_label || `${rng.min_value} - ${rng.max_value} ${rng.unit_symbol || 'kW'}`;
+                return (
+                  <option key={rng.id || idx} value={label}>
+                    {label}
+                  </option>
+                );
               })}
-              <option value="1">1 kW</option>
-              <option value="2">2 kW</option>
-              <option value="3">3 kW</option>
-              <option value="5">5 kW</option>
-              <option value="10">10 kW</option>
-              <option value="15">15 kW+</option>
             </select>
           </div>
 

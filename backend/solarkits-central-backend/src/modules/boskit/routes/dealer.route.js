@@ -13,6 +13,9 @@ router.post('/register', dealerController.register_dealer);
 router.get('/dashboard/stats',   authenticateBoskitDealer, dealerController.get_dealer_dashboard_stats);
 router.get('/catalogue',         authenticateBoskitDealer, dealerController.get_dealer_catalogue);
 router.get('/orders',            authenticateBoskitDealer, dealerController.get_dealer_orders);
+router.get('/orders/:id',        authenticateBoskitDealer, dealerController.get_dealer_order_by_id);
+router.post('/orders/checkout',  authenticateBoskitDealer, dealerController.create_dealer_order);
+router.post('/order/create',     authenticateBoskitDealer, dealerController.create_dealer_order);
 router.get('/distributor-hub',   authenticateBoskitDealer, dealerController.get_dealer_distributor_hub);
 
 module.exports = router;
