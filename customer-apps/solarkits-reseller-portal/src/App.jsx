@@ -13,6 +13,7 @@ import WalletPortal from "./pages/WalletPortal";
 import ProcurementInventory from "./pages/ProcurementInventory";
 import StorefrontListings from "./pages/StorefrontListings";
 import MyEpcBuyers from "./pages/MyEpcBuyers";
+import EligibilityChecker from "./pages/EligibilityChecker";
 
 export default function App() {
   return (
@@ -26,7 +27,7 @@ export default function App() {
         <Route path="/franchise" element={<FranchiseLanding />} />
         <Route path="/franchise-plans" element={<FranchiseLanding />} />
         <Route path="/store-availability" element={<FranchiseLanding />} />
-        <Route path="/eligibility" element={<FranchiseLanding />} />
+        <Route path="/eligibility" element={<EligibilityChecker />} />
         <Route path="/revenue-potential" element={<FranchiseLanding />} />
 
         {/* Partner Auth Routes */}

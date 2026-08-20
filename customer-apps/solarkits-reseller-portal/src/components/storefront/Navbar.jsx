@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link  } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiMenu,
@@ -34,12 +34,9 @@ export default function Navbar({ onOpenLeadModal }) {
   // Primary navigation matching exact requirements
   const navLinks = [
     { name: "Home", href: "#" },
-    { name: "Browse Solarkits", href: "#catalog-browser", icon: FiShoppingBag },
-    { name: "Franchise", href: "#franchise-plans", icon: FiZap },
-    { name: "Store Availability", href: "#store-availability", icon: FiMapPin },
-    { name: "Eligibility Checker", href: "#eligibility-checker", icon: FiAward },
-    { name: "Revenue Potential", href: "#revenue-potential", icon: FiTrendingUp },
-    { name: "How It Works", href: "#how-it-works", icon: FiCheckCircle },
+    { name: "Franchise Plan", href: "#franchise-plans", icon: FiZap },
+    // { name: "Store Availability", href: "#store-availability", icon: FiMapPin },
+    { name: "Eligibility Checker",  href: "/eligibility", icon: FiAward },
     { name: "FAQ", href: "#faq-section", icon: FiHelpCircle },
   ];
 
@@ -49,15 +46,14 @@ export default function Navbar({ onOpenLeadModal }) {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 py-2.5"
-          : "bg-white/90 backdrop-blur-sm border-b border-slate-100 py-3 sm:py-3.5"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled
+        ? "bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 py-2.5"
+        : "bg-white/90 backdrop-blur-sm border-b border-slate-100 py-3 sm:py-3.5"
+        }`}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4">
-          
+
           {/* Logo & Portal Branding */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link to="/" className="flex items-center gap-2 sm:gap-3 group shrink-0">
@@ -68,10 +64,10 @@ export default function Navbar({ onOpenLeadModal }) {
               />
               <div className="flex flex-col border-l border-slate-200 pl-2 sm:pl-3 shrink-0">
                 <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-[#0575B8] whitespace-nowrap">
-                  Solarkits B2B
+                  Franchisee Network
                 </span>
                 <span className="hidden xs:block text-[8px] sm:text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase whitespace-nowrap">
-                  Franchisee Network
+
                 </span>
               </div>
             </Link>
@@ -92,13 +88,7 @@ export default function Navbar({ onOpenLeadModal }) {
 
           {/* Right Action CTAs */}
           <div className="hidden xl:flex items-center gap-2 2xl:gap-3 shrink-0">
-            <button
-              onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Header Bulk Quote" }, "bulk_price")}
-              className="px-3 py-2 rounded-xl text-xs font-extrabold text-[#0575B8] hover:bg-sky-50 border border-sky-200 transition-all flex items-center gap-1 shadow-2xs whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <FiDollarSign size={13} />
-              <span>Get Bulk Price</span>
-            </button>
+
 
             <Link
               to="/login"
@@ -119,12 +109,7 @@ export default function Navbar({ onOpenLeadModal }) {
 
           {/* Mobile Right Buttons & Hamburger */}
           <div className="flex xl:hidden items-center gap-1.5 sm:gap-2 shrink-0">
-            <button
-              onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Mobile Quick Price" }, "bulk_price")}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-[#0575B8] bg-sky-50 border border-sky-200"
-            >
-              Bulk Price
-            </button>
+
 
             <button
               onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Mobile Fast Application" }, "franchise_apply")}
@@ -173,14 +158,14 @@ export default function Navbar({ onOpenLeadModal }) {
                 Check Store Availability
               </a>
 
-              <a
-                href="#eligibility-checker"
+              <Link
+                href="/eligibility"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
               >
                 <FiAward className="text-emerald-600" />
                 Check Eligibility
-              </a>
+              </Link>
 
               <a
                 href="#franchise-plans"

@@ -94,6 +94,19 @@ export const fetchLiveInventory = createAsyncThunk(
   }
 );
 
+export const fetchShopHierarchy = createAsyncThunk(
+  "solar/fetchShopHierarchy",
+  async (_, { rejectWithValue }) => {
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      const response = await axios.get(`${apiBase}/india/v1/shop/hierarchy`);
+      return response.data?.data || [];
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch shop hierarchy');
+    }
+  }
+);
+
 // ─────────────────────────────────────────────────────────────────
 // Helper
 // ─────────────────────────────────────────────────────────────────
@@ -107,6 +120,7 @@ const generateCartItemId = (kitId, variantIndex, districtId) => {
 const slice = createSlice({
   name: "slice",
   initialState: {
+    shopHierarchy: [],
     availableKits: [],
     bulkKits: [],
     cart: [],
@@ -559,6 +573,9 @@ const slice = createSlice({
       .addCase(getAvailableKitData.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.error.message;
+      })
+      .addCase(fetchShopHierarchy.fulfilled, (state, action) => {
+        state.shopHierarchy = Array.isArray(action.payload) ? action.payload : [];
       })
       .addCase(fetchCart.fulfilled, (state, action) => {
         const backendCart = action.payload.cart || [];

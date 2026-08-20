@@ -28,10 +28,10 @@ export default function Footer({ onOpenLeadModal }) {
 
       {/* Main Footer Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12 relative z-10">
-        
+
         {/* Top Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-8 pb-12 border-b border-slate-200">
-          
+
           {/* Col 1: Brand & Positioning (4 Cols) */}
           <div className="lg:col-span-4 space-y-4">
             <div className="flex items-center gap-3">
@@ -66,49 +66,7 @@ export default function Footer({ onOpenLeadModal }) {
             </div>
           </div>
 
-          {/* Col 2: Solarkits by Capacity (2.5 Cols) */}
-          <div className="lg:col-span-3 space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              Solarkits by Capacity
-            </h4>
-            <ul className="space-y-2 text-xs text-slate-600">
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  1.1 kW On-Grid DCR Kit
-                </a>
-              </li>
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  2.2 kW PM Surya Ghar Kit
-                </a>
-              </li>
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  3.3 kW 550W Turnkey Solarkit
-                </a>
-              </li>
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  5 kW Villa Hybrid Power Kit
-                </a>
-              </li>
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  6 kW Lithium-Ready Hybrid Kit
-                </a>
-              </li>
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  10 kW Commercial 3-Phase Kit
-                </a>
-              </li>
-              <li>
-                <a href="#catalog-browser" className="hover:text-[#0575B8] transition-colors">
-                  20 kW MW-Grade TOPCon Kit
-                </a>
-              </li>
-            </ul>
-          </div>
+
 
           {/* Col 3: Franchise & Territory Navigation (2.5 Cols) */}
           <div className="lg:col-span-2 space-y-3">
@@ -123,7 +81,7 @@ export default function Footer({ onOpenLeadModal }) {
               </li>
               <li>
                 <a href="#eligibility-checker" className="hover:text-[#0575B8] transition-colors">
-                  Eligibility Calculator
+                  Eligibility Checker
                 </a>
               </li>
               <li>
@@ -131,11 +89,7 @@ export default function Footer({ onOpenLeadModal }) {
                   Franchise Plans
                 </a>
               </li>
-              <li>
-                <a href="#revenue-potential" className="hover:text-[#0575B8] transition-colors">
-                  Revenue Potential
-                </a>
-              </li>
+
               <li>
                 <a href="#dealer-support" className="hover:text-[#0575B8] transition-colors">
                   Dealer & EPC Support

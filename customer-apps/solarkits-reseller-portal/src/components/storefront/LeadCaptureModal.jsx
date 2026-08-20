@@ -324,7 +324,7 @@ export default function LeadCaptureModal({
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
-                    GSTIN (For 12% ITC Claim)
+                    GSTIN
                   </label>
                   <input
                     type="text"
@@ -477,7 +477,7 @@ export default function LeadCaptureModal({
                   ) : (
                     <>
                       <FiSend size={14} />
-                      <span>Submit B2B Lead Request →</span>
+                      <span>Submit Become Franchise  Request →</span>
                     </>
                   )}
                 </button>

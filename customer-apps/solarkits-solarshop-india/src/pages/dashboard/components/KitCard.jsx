@@ -95,7 +95,9 @@ const KitComponentsRow = ({ kit }) => {
   );
 };
 
-const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact = false, isCart = false, activeOffers = [] }) => {
+import { FaLayerGroup } from "react-icons/fa";
+
+const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact = false, isCart = false, activeOffers = [], isCompared = false, onToggleCompare = null }) => {
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.slice.cart);
   const liveStock = useSelector(selectLiveStock);
@@ -421,6 +423,24 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
             </span>
           )}
         </div>
+        {onToggleCompare && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCompare(kit);
+            }}
+            className={`absolute top-2 right-2 z-10 px-2.5 py-1 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
+              isCompared
+                ? "bg-primary text-white ring-2 ring-primary/40"
+                : "bg-white/95 dark:bg-slate-900/95 text-text-primary hover:bg-white border border-border"
+            }`}
+            title={isCompared ? "Remove from comparison" : "Add to comparison"}
+          >
+            <FaLayerGroup size={10} className={isCompared ? "text-white" : "text-primary"} />
+            <span>{isCompared ? "✓ Compared" : "Compare"}</span>
+          </button>
+        )}
         <img
           src={resolveImageUrl(kit?.kitImage)}
           alt={kit?.kitName || "Solar Kit"}
@@ -730,6 +750,24 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               </span>
             )}
           </div>
+          {onToggleCompare && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCompare(kit);
+              }}
+              className={`absolute top-1 right-1 z-10 px-1.5 py-0.5 rounded text-[8px] font-bold flex items-center gap-1 transition-all shadow cursor-pointer ${
+                isCompared
+                  ? "bg-primary text-white"
+                  : "bg-white/95 dark:bg-slate-900/95 text-text-primary hover:bg-white border border-border"
+              }`}
+              title={isCompared ? "Remove from comparison" : "Add to comparison"}
+            >
+              <FaLayerGroup size={8} className={isCompared ? "text-white" : "text-primary"} />
+              <span>{isCompared ? "✓" : "Compare"}</span>
+            </button>
+          )}
           <img
             src={resolveImageUrl(kit?.kitImage)}
             alt={kit?.kitName || "Solar Kit"}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from"react";
-import { useSelector } from"react-redux";
+import { useSelector, useDispatch } from"react-redux";
 import BulkKitCard from"./components/BulkKitCard";
 import SelectedBulkKitCard from"./components/SelectedBulkKitCard";
 import BulkKitFilters, { options } from"./components/BulkKitFilters";
@@ -20,9 +20,11 @@ import {
     FiSliders,
 } from"react-icons/fi";
 import Dropdown from"@/components/Dropdown";
+import { fetchShopHierarchy } from "../../features/slice";
 
 export default function BulkKits() {
-    const { bulkKits } = useSelector((state) => state.slice);
+    const dispatch = useDispatch();
+    const { bulkKits = [], shopHierarchy = [] } = useSelector((state) => state.slice);
     const [selected, setSelected] = useState(null);
     const [selectedKit, setSelectedKit] = useState(null);
     const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -61,6 +63,12 @@ export default function BulkKits() {
     });
 
     useEffect(() => {
+        if (!shopHierarchy || shopHierarchy.length === 0) {
+            dispatch(fetchShopHierarchy());
+        }
+    }, [dispatch, shopHierarchy]);
+
+    useEffect(() => {
         setSelectedKit(selected ? bulkKits.find((k) => 
             String(k.id) === String(selected?.split('-')[0])
         ) : null);
@@ -97,36 +105,117 @@ export default function BulkKits() {
     }, [bulkKits, filters.category, filters.subCategory, filters.systemType, filters.projectRange]);
 
     const industryTypeOptions = useMemo(() => {
-        const industries = [...new Set(bulkKits.map(kit => kit.industryType || kit.industry_type_name).filter(Boolean))];
+        const list = [];
+        const seen = new Set();
+        if (shopHierarchy && shopHierarchy.length > 0) {
+            shopHierarchy.forEach((ind) => {
+                if (ind.name && !seen.has(ind.name.toLowerCase())) {
+                    seen.add(ind.name.toLowerCase());
+                    list.push({ value: ind.name, text: ind.name, id: ind.id });
+                }
+            });
+        }
+        bulkKits.forEach((kit) => {
+            const name = kit.industryType || kit.industry_type_name;
+            if (name && !seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase());
+                list.push({ value: name, text: name });
+            }
+        });
+
         return [
             { value:"all", text:"All Industry Types" },
-            ...industries.map(ind => ({ value: ind.toLowerCase(), text: ind }))
+            ...list
         ];
-    }, [bulkKits]);
+    }, [shopHierarchy, bulkKits]);
 
     const categoryOptions = useMemo(() => {
+        const catMap = new Map();
+
+        if (shopHierarchy && shopHierarchy.length > 0) {
+            let relevantInds = shopHierarchy;
+            if (filters.industryType && filters.industryType !== "all") {
+                relevantInds = shopHierarchy.filter(ind =>
+                    ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+                    String(ind.id) === String(filters.industryType) ||
+                    ind.slug?.toLowerCase() === filters.industryType.toLowerCase()
+                );
+            }
+            relevantInds.forEach(ind => {
+                (ind.categories || []).forEach(cat => {
+                    if (cat.name && !catMap.has(cat.name.toLowerCase())) {
+                        catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat.id });
+                    }
+                });
+            });
+        }
+
         let filteredKits = bulkKits;
         if (filters.industryType && filters.industryType !== "all") {
-            filteredKits = filteredKits.filter(kit => (kit.industryType || kit.industry_type_name)?.toLowerCase() === filters.industryType.toLowerCase());
+            filteredKits = filteredKits.filter(kit => {
+                const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+                const sel = filters.industryType.toLowerCase();
+                return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+            });
         }
-        const cats = [...new Set(filteredKits.map(kit => kit.category).filter(Boolean))];
+        filteredKits.forEach(kit => {
+            if (kit.category && !catMap.has(kit.category.toLowerCase())) {
+                catMap.set(kit.category.toLowerCase(), { value: kit.category, text: kit.category });
+            }
+        });
+
         return [
             { value:"all", text:"All Categories" },
-            ...cats.map(cat => ({ value: cat.toLowerCase(), text: cat }))
+            ...Array.from(catMap.values())
         ];
-    }, [bulkKits, filters.industryType]);
+    }, [shopHierarchy, bulkKits, filters.industryType]);
 
     const subCategoryOptions = useMemo(() => {
-        if (filters.category ==="all") return [{ value:"all", text:"All Sub-Categories" }];
-        
-        const filteredKits = bulkKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
         const subsMap = new Map();
+
+        if (shopHierarchy && shopHierarchy.length > 0) {
+            let relevantInds = shopHierarchy;
+            if (filters.industryType && filters.industryType !== "all") {
+                relevantInds = shopHierarchy.filter(ind =>
+                    ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+                    String(ind.id) === String(filters.industryType)
+                );
+            }
+            relevantInds.forEach(ind => {
+                (ind.categories || []).forEach(cat => {
+                    if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase() || String(cat.id) === String(filters.category)) {
+                        (cat.subcategories || []).forEach(sub => {
+                            if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+                                subsMap.set(sub.name.toLowerCase(), {
+                                    value: sub.name,
+                                    text: sub.name,
+                                    id: sub.id,
+                                    image: sub.image || null
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        let filteredKits = bulkKits;
+        if (filters.industryType && filters.industryType !== "all") {
+            filteredKits = filteredKits.filter(kit => {
+                const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+                const sel = filters.industryType.toLowerCase();
+                return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+            });
+        }
+        if (filters.category && filters.category !== "all") {
+            filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+        }
         filteredKits.forEach(kit => {
             const subName = kit.subCategory || kit.usageType;
             if (subName && !subsMap.has(subName.toLowerCase())) {
                 subsMap.set(subName.toLowerCase(), {
+                    value: subName,
                     text: subName,
-                    value: subName.toLowerCase(),
                     image: kit.usageTypeImage || null
                 });
             }
@@ -136,52 +225,146 @@ export default function BulkKits() {
             { value:"all", text:"All Sub-Categories" },
             ...Array.from(subsMap.values())
         ];
-    }, [bulkKits, filters.category]);
+    }, [shopHierarchy, bulkKits, filters.industryType, filters.category]);
 
     const systemTypeOptions = useMemo(() => {
-        if (filters.category ==="all" || filters.subCategory ==="all") return [{ value:"all", text:"All System Types" }];
-        
-        const filteredKits = bulkKits.filter(kit => 
-            kit.category?.toLowerCase() === filters.category.toLowerCase() &&
-            (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase())
-        );
-        const types = [...new Set(filteredKits.map(kit => kit.projectType || kit.inverter?.type).filter(Boolean))];
+        const typesMap = new Map();
+
+        if (shopHierarchy && shopHierarchy.length > 0) {
+            let relevantInds = shopHierarchy;
+            if (filters.industryType && filters.industryType !== "all") {
+                relevantInds = shopHierarchy.filter(ind =>
+                    ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+                    String(ind.id) === String(filters.industryType)
+                );
+            }
+            relevantInds.forEach(ind => {
+                (ind.categories || []).forEach(cat => {
+                    if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase()) {
+                        (cat.subcategories || []).forEach(sub => {
+                            if (filters.subCategory === "all" || sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()) {
+                                (sub.mappedTypes || []).forEach(mt => {
+                                    if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                                        typesMap.set(mt.name.toLowerCase(), {
+                                            value: mt.name,
+                                            text: mt.name,
+                                            id: mt.id || mt.type_id
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        let filteredKits = bulkKits;
+        if (filters.industryType && filters.industryType !== "all") {
+            filteredKits = filteredKits.filter(kit => {
+                const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+                const sel = filters.industryType.toLowerCase();
+                return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+            });
+        }
+        if (filters.category && filters.category !== "all") {
+            filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+        }
+        if (filters.subCategory && filters.subCategory !== "all") {
+            filteredKits = filteredKits.filter(kit => (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()));
+        }
+        filteredKits.forEach(kit => {
+            const typeName = kit.projectType || kit.inverter?.type || kit.systemType;
+            if (typeName && !typesMap.has(typeName.toLowerCase())) {
+                typesMap.set(typeName.toLowerCase(), { value: typeName, text: typeName });
+            }
+        });
+
         return [
             { value:"all", text:"All System Types" },
-            ...types.map(t => ({ value: t.toLowerCase(), text: t }))
+            ...Array.from(typesMap.values())
         ];
-    }, [bulkKits, filters.category, filters.subCategory]);
+    }, [shopHierarchy, bulkKits, filters.industryType, filters.category, filters.subCategory]);
 
     const projectRangeOptions = useMemo(() => {
-        if (filters.category ==="all" || filters.subCategory ==="all" || filters.systemType ==="all") {
-            return [{ value:"all", text:"All Project Ranges" }];
-        }
+        const rangesMap = new Map();
 
-        const filteredKits = bulkKits.filter(kit => 
-            kit.category?.toLowerCase() === filters.category.toLowerCase() &&
-            (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()) &&
-            (kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() || kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase())
-        );
-
-        const ranges = filteredKits.map(kit => kit.projectRange).filter(Boolean);
-        const uniqueRanges = [];
-        const seenIds = new Set();
-        for (const r of ranges) {
-            if (!seenIds.has(r.id)) {
-                seenIds.add(r.id);
-                uniqueRanges.push(r);
+        if (shopHierarchy && shopHierarchy.length > 0) {
+            let relevantInds = shopHierarchy;
+            if (filters.industryType && filters.industryType !== "all") {
+                relevantInds = shopHierarchy.filter(ind =>
+                    ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+                    String(ind.id) === String(filters.industryType)
+                );
             }
+            relevantInds.forEach(ind => {
+                (ind.categories || []).forEach(cat => {
+                    if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase()) {
+                        (cat.subcategories || []).forEach(sub => {
+                            if (filters.subCategory === "all" || sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()) {
+                                (sub.mappedTypes || []).forEach(mt => {
+                                    if (filters.systemType === "all" || mt.name?.toLowerCase() === filters.systemType?.toLowerCase()) {
+                                        (mt.ranges || []).forEach(r => {
+                                            const idVal = String(r.id || r.range_label);
+                                            if (idVal && !rangesMap.has(idVal)) {
+                                                rangesMap.set(idVal, {
+                                                    value: idVal,
+                                                    text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || 'kW'}`,
+                                                    min: r.min_value || 0
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            });
         }
-        uniqueRanges.sort((a, b) => a.min - b.min);
+
+        let filteredKits = bulkKits;
+        if (filters.industryType && filters.industryType !== "all") {
+            filteredKits = filteredKits.filter(kit => {
+                const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+                const sel = filters.industryType.toLowerCase();
+                return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+            });
+        }
+        if (filters.category && filters.category !== "all") {
+            filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+        }
+        if (filters.subCategory && filters.subCategory !== "all") {
+            filteredKits = filteredKits.filter(kit => (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()));
+        }
+        if (filters.systemType && filters.systemType !== "all") {
+            filteredKits = filteredKits.filter(kit => (kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() || kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase() || kit.systemType?.toLowerCase() === filters.systemType.toLowerCase()));
+        }
+        filteredKits.forEach(kit => {
+            if (kit.projectRange) {
+                const idVal = String(kit.projectRange.id || kit.projectRange.text);
+                if (idVal && !rangesMap.has(idVal)) {
+                    rangesMap.set(idVal, {
+                        value: idVal,
+                        text: kit.projectRange.text || idVal,
+                        min: kit.projectRange.min || 0
+                    });
+                }
+            }
+        });
+
+        const uniqueRanges = Array.from(rangesMap.values()).sort((a, b) => (a.min || 0) - (b.min || 0));
 
         return [
             { value:"all", text:"All Project Ranges" },
-            ...uniqueRanges.map(r => ({ value: r.id, text: r.text }))
+            ...uniqueRanges.map(r => ({ value: r.value, text: r.text }))
         ];
-    }, [bulkKits, filters.category, filters.subCategory, filters.systemType]);
+    }, [shopHierarchy, bulkKits, filters.industryType, filters.category, filters.subCategory, filters.systemType]);
 
     const getDropdownOptions = (key) => {
         switch (key) {
+            case"industryType":
+                return industryTypeOptions;
             case"comboKitType":
                 return comboKitTypeOptions;
             case"category":
@@ -197,7 +380,7 @@ export default function BulkKits() {
         }
     };
 
-    const mainFilterKeys = ["category","subCategory","systemType","projectRange"];
+    const mainFilterKeys = ["industryType","category","subCategory","systemType","projectRange"];
     const subFilterKeys = ["comboKitType","pricePerKw"];
 
     const clearAllFilters = () => {
@@ -317,21 +500,41 @@ export default function BulkKits() {
                         return hasVariantInRange;
                     }
                     
-                    case"projectRange": {
-                        return k.projectRange?.id === value;
+                    case "projectRange": {
+                        if (!k.projectRange) return false;
+                        return String(k.projectRange.id) === String(value) || String(k.projectRange.text) === String(value) || String(k.project_range_id) === String(value);
                     }
 
-                    case "industryType":
-                        return (k.industryType || k.industry_type_name)?.toLowerCase() === value.toLowerCase();
+                    case "industryType": {
+                        const kitInd = (k.industryType || k.industry_type_name || "").toLowerCase();
+                        const selInd = value.toLowerCase();
+                        if (kitInd === selInd) return true;
+                        if (k.industry_type_id && String(k.industry_type_id) === String(value)) return true;
+                        return kitInd.includes(selInd) || selInd.includes(kitInd);
+                    }
 
-                    case"category":
-                        return k.category?.toLowerCase() === value.toLowerCase();
+                    case "category": {
+                        const kitCat = (k.category || "").toLowerCase();
+                        const selCat = value.toLowerCase();
+                        if (kitCat === selCat) return true;
+                        if (k.category_id && String(k.category_id) === String(value)) return true;
+                        return kitCat.includes(selCat) || selCat.includes(kitCat);
+                    }
                         
-                    case"subCategory":
-                        return k.subCategory?.toLowerCase() === value.toLowerCase() || k.usageType?.toLowerCase() === value.toLowerCase();
+                    case "subCategory": {
+                        const kitSub = (k.subCategory || k.usageType || "").toLowerCase();
+                        const selSub = value.toLowerCase();
+                        if (kitSub === selSub) return true;
+                        if (k.subcategory_id && String(k.subcategory_id) === String(value)) return true;
+                        return kitSub.includes(selSub) || selSub.includes(kitSub);
+                    }
                         
-                    case"systemType":
-                        return k.projectType?.toLowerCase() === value.toLowerCase() || k.inverter?.type?.toLowerCase() === value.toLowerCase();
+                    case "systemType": {
+                        const kitType = (k.projectType || k.inverter?.type || k.systemType || "").toLowerCase();
+                        const selType = value.toLowerCase();
+                        if (kitType === selType) return true;
+                        return kitType.includes(selType) || selType.includes(kitType);
+                    }
                         
                     case"subProjectType":
                         return k.subProjectType?.toLowerCase() === value.toLowerCase();
@@ -881,7 +1084,21 @@ export default function BulkKits() {
                                     Clear Main
                                 </Button>
                             </div>
-                            <div className="grid grid-cols-4 gap-4">
+                            <div className="grid grid-cols-5 gap-4">
+                                <Dropdown
+                                    label="Industry Type"
+                                    options={industryTypeOptions}
+                                    value={filters.industryType}
+                                    onChange={(val) => setFilters((prev) => ({
+                                        ...prev,
+                                        industryType: val,
+                                        category: "all",
+                                        subCategory: "all",
+                                        systemType: "all",
+                                        projectRange: "all"
+                                    }))}
+                                    className="w-full"
+                                />
                                 <Dropdown
                                     label="Category"
                                     options={categoryOptions}
@@ -899,12 +1116,9 @@ export default function BulkKits() {
                                     label="Sub Category"
                                     options={subCategoryOptions}
                                     value={filters.subCategory}
-                                    disabled={filters.category ==="all"}
                                     onChange={(val) => setFilters((prev) => ({
                                         ...prev,
-                                        subCategory: val,
-                                        systemType:"all",
-                                        projectRange:"all"
+                                        subCategory: val
                                     }))}
                                     className="w-full"
                                 />
@@ -912,11 +1126,9 @@ export default function BulkKits() {
                                     label="System Type"
                                     options={systemTypeOptions}
                                     value={filters.systemType}
-                                    disabled={filters.category ==="all" || filters.subCategory ==="all"}
                                     onChange={(val) => setFilters((prev) => ({
                                         ...prev,
-                                        systemType: val,
-                                        projectRange:"all"
+                                        systemType: val
                                     }))}
                                     className="w-full"
                                 />
@@ -924,7 +1136,6 @@ export default function BulkKits() {
                                     label="Project Range"
                                     options={projectRangeOptions}
                                     value={filters.projectRange}
-                                    disabled={filters.category ==="all" || filters.subCategory ==="all" || filters.systemType ==="all"}
                                     onChange={(val) => setFilters((prev) => ({
                                         ...prev,
                                         projectRange: val

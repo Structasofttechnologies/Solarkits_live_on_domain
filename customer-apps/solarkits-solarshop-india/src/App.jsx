@@ -8,7 +8,6 @@ import Alert from "./components/Alert";
 import SignUp from "./pages/SignUp";
 import ForgotPassword from "./pages/ForgotPassword";
 import LandingPage from "./pages/LandingPage";
-import StoreLocatorPage from "./pages/store-locator/StoreLocatorPage";
 import PrivacyPolicy from "./pages/policies/PrivacyPolicy";
 import TermsOfService from "./pages/policies/TermsOfService";
 import RefundPolicy from "./pages/policies/RefundPolicy";
@@ -25,14 +24,7 @@ function AppContent() {
   const { isAuthenticated, loading } = useSelector(state => state.auth_slice);
 
   useEffect(() => {
-    const hasToken =
-      localStorage.getItem("access_token") ||
-      sessionStorage.getItem("access_token") ||
-      localStorage.getItem("user") ||
-      sessionStorage.getItem("user");
-    if (hasToken) {
-      dispatch(checkAuth());
-    }
+    dispatch(checkAuth());
   }, [dispatch]);
 
   useEffect(() => {
@@ -48,11 +40,6 @@ function AppContent() {
       <Routes>
         {/* Public landing page */}
         <Route path="/" element={<LandingPage />} />
-
-        {/* Public Store Locator */}
-        <Route path="/store-locator" element={<StoreLocatorPage />} />
-        <Route path="/find-store" element={<StoreLocatorPage />} />
-        <Route path="/stores" element={<StoreLocatorPage />} />
 
         {/* Legal & Policy Pages */}
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />

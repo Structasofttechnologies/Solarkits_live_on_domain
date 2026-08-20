@@ -4,8 +4,8 @@ import { MdMenu, MdSettings, MdLogin, MdLogout } from "react-icons/md";
 import { FaWarehouse, FaLock, FaExclamationTriangle } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { HiUser, HiUserAdd } from "react-icons/hi";
-import { FiSun, FiMoon, FiShoppingCart, FiTrash2, FiChevronRight, FiMapPin, FiUsers, FiZap } from "react-icons/fi";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FiSun, FiMoon, FiShoppingCart, FiTrash2, FiChevronRight, FiMapPin, FiUsers } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "@/features/auth.slice";
 import { setAlert } from "@/features/alert.slice";
@@ -22,8 +22,7 @@ import IconButton from "./IconButton";
 import DropdownWithSearchInput from "./DropdownWithSearchInput";
 import axios from "axios";
 
-export default function Header({ isOpen, setIsOpen, isMobile, shopNav = [] }) {
-  const location = useLocation();
+export default function Header({ isOpen, setIsOpen, isMobile }) {
   const { toggleTheme, isDark } = useTheme();
   const { cart, selectedState, selectedDistrict } = useSelector((state) => state.slice);
   const totalCartItems = useSelector(selectCartTotalItems);
@@ -157,75 +156,67 @@ export default function Header({ isOpen, setIsOpen, isMobile, shopNav = [] }) {
 
   return (
     <>
-      {/* E-commerce top header */}
-      <header className="sticky top-0 z-30 bg-surface border-b border-border shadow-sm transition-colors duration-200">
+      <header className="flex items-center justify-between px-6 py-3 bg-surface border-b border-border shadow-sm relative z-30 transition-colors duration-200">
+      {/* Left side - Mobile Menu Toggle */}
+      {isMobile ? (
+        <IconButton
+          variant="ghost"
+          size="md"
+          onClick={() => setIsOpen(!isOpen)}
+          className="text-text-primary dark:text-info hover:bg-surface-hover"
+        >
+          <MdMenu />
+        </IconButton>
+      ) : (
+        <span></span>
+      )}
 
-        {/* Top row: logo | location | actions */}
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 gap-3">
+      {/* Middle - Geolocation Selector */}
+      <div className="flex items-center space-x-2.5 bg-surface-hover px-4 py-1.5 rounded-full border border-border shadow-inner">
+        <div className="flex items-center space-x-1.5 text-text-secondary">
+          <FiMapPin size={13} className="text-primary dark:text-info" />
+          <span className="text-xs font-semibold uppercase tracking-wider opacity-90">Location:</span>
+        </div>
 
-          {/* Left: Mobile hamburger + Logo */}
-          <div className="flex items-center gap-3">
-            {/* Mobile hamburger - opens Drawer as slide-in nav */}
-            {isMobile && (
-              <IconButton
-                variant="ghost"
-                size="md"
-                onClick={() => setIsOpen(!isOpen)}
-                className="text-text-primary dark:text-info hover:bg-surface-hover"
-                aria-label="Open menu"
-              >
-                <MdMenu />
-              </IconButton>
-            )}
+        {/* State Dropdown */}
+        <DropdownWithSearchInput
+          value={selectedState?.id || ""}
+          onChange={(val) => {
+            const found = statesList.find(s => s.id === val);
+            if (found) {
+              handleLocationChange(found, null);
+            } else {
+              handleLocationChange(null, null);
+            }
+          }}
+          options={stateOptions}
+          placeholder="Select State"
+          searchPlaceholder="Search State..."
+          className="w-40 text-xs text-text-primary dark:text-info !"
+          forceDown={true}
+        />
 
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-2 group shrink-0">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 dark:bg-info/10 flex items-center justify-center">
-                <FiZap className="text-primary dark:text-info w-4 h-4" />
-              </div>
-              <span className="font-bold text-base text-text-primary dark:text-info tracking-tight hidden sm:block">
-                Solar<span className="text-primary dark:text-info">Kits</span>
-              </span>
-            </Link>
-          </div>
+        <span className="text-text-muted/30 text-xs">|</span>
 
-          {/* Center - Location Selector (compact pill) */}
-          <div className="flex items-center space-x-2 bg-surface-hover px-3 py-1.5 rounded-full border border-border shadow-inner flex-1 max-w-xs mx-2">
-            <FiMapPin size={12} className="text-primary dark:text-info shrink-0" />
-
-            {/* State Dropdown */}
-            <DropdownWithSearchInput
-              value={selectedState?.id || ""}
-              onChange={(val) => {
-                const found = statesList.find(s => s.id === val);
-                if (found) { handleLocationChange(found, null); }
-                else { handleLocationChange(null, null); }
-              }}
-              options={stateOptions}
-              placeholder="State"
-              searchPlaceholder="Search State..."
-              className="w-28 text-xs text-text-primary dark:text-info !"
-              forceDown={true}
-            />
-
-            <span className="text-text-muted/30 text-xs">|</span>
-
-            {/* District Dropdown */}
-            <DropdownWithSearchInput
-              value={selectedDistrict?.id || ""}
-              onChange={(val) => {
-                const found = districtsList.find(d => d.id === val);
-                if (found) { handleLocationChange(selectedState, found); }
-                else { handleLocationChange(selectedState, null); }
-              }}
-              options={districtOptions}
-              disabled={!selectedState}
-              placeholder="District"
-              searchPlaceholder="Search District..."
-              className="w-28 text-xs text-text-primary dark:text-info !"
-              forceDown={true}
-            />
-          </div>
+        {/* District Dropdown */}
+        <DropdownWithSearchInput
+          value={selectedDistrict?.id || ""}
+          onChange={(val) => {
+            const found = districtsList.find(d => d.id === val);
+            if (found) {
+              handleLocationChange(selectedState, found);
+            } else {
+              handleLocationChange(selectedState, null);
+            }
+          }}
+          options={districtOptions}
+          disabled={!selectedState}
+          placeholder="Select District"
+          searchPlaceholder="Search District..."
+          className="w-40 text-xs text-text-primary dark:text-info !"
+          forceDown={true}
+        />
+      </div>
 
       {/* Franchisee Partner Badge */}
       {user?.reseller?.business_name && (
@@ -239,7 +230,17 @@ export default function Header({ isOpen, setIsOpen, isMobile, shopNav = [] }) {
       )}
 
       {/* Right side - Actions */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2.5 sm:space-x-3">
+        {/* Find Nearby Store */}
+        <button
+          onClick={() => navigate("/store-locator")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary-soft border border-secondary/30 text-secondary hover:bg-secondary/15 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+          title="Find Nearby Authorized SolarKits Stores"
+        >
+          <FiMapPin size={13} className="text-secondary" />
+          <span className="hidden sm:inline">Find Store</span>
+        </button>
+
         {/* Theme Toggle */}
         <IconButton
           variant="ghost"
@@ -427,33 +428,8 @@ export default function Header({ isOpen, setIsOpen, isMobile, shopNav = [] }) {
             Sign In
           </Button>
         )}
-        </div>
       </div>
-
-        {/* Bottom row: Category navigation links (desktop only) */}
-        {shopNav.length > 0 && (
-          <nav className="hidden lg:flex items-center gap-1 px-4 sm:px-6 pb-2 border-t border-border/50 pt-2 overflow-x-auto scrollbar-none" aria-label="Shop categories">
-            {shopNav.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                    isActive
-                      ? 'bg-primary/10 text-primary dark:bg-info/10 dark:text-info font-bold'
-                      : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover dark:text-info/70 dark:hover:text-info'
-                  }`}
-                >
-                  {Icon && <Icon className="w-3.5 h-3.5" />}
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-        )}
-      </header>
+    </header>
     {createPortal(
       <AnimatePresence>
         {showLocationWarning && (

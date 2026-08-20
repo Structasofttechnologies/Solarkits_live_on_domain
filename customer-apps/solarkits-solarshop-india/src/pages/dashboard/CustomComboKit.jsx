@@ -1,458 +1,473 @@
-import React, { useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  FiSliders,
-  FiCheckCircle,
-  FiShoppingCart,
-  FiRefreshCw,
-  FiInfo,
-  FiArrowRight,
-  FiSun,
-  FiZap,
-  FiCheck,
-  FiShield
-} from "react-icons/fi";
-import { FaSolarPanel, FaBolt, FaWarehouse, FaLeaf } from "react-icons/fa";
-import { addCustomKitToCart, setShowAuthDialog } from "@/features/slice";
-import Button from "@/components/Button";
+import { addCustomKitToCart, setShowAuthDialog, fetchShopHierarchy } from "@/features/slice";
+import Dropdown from"@/components/Dropdown";
+import Button from"@/components/Button";
+import { FiRefreshCw, FiInfo, FiShoppingCart } from"react-icons/fi";
+import { FaCalculator } from"react-icons/fa";
 
 export default function CustomComboKit() {
-  const navigate = useNavigate();
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
-  const availableKits = useSelector((state) => state.slice.availableKits || []);
-
+  const shopHierarchy = useSelector((state) => state.slice?.shopHierarchy || []);
   const [formData, setFormData] = useState({
-    industryType: "Residential Solar Systems",
-    category: "Rooftop Residential",
-    subcategory: "Single Phase Residential",
-    systemType: "On-Grid (Net Metering)",
-    projectRange: "3 kW",
-    panelBrand: "Tata Power Solar",
-    panelWattage: "550W",
-    panelTechnology: "Mono PERC Half-Cut",
-    inverterBrand: "Growatt",
-    inverterType: "Single Phase MPPT String",
-    structureType: "Anodized Aluminum Rooftop Rail",
-    bosSafetyPackage: "Turnkey ACDB/DCDB + Type-II SPD Surge Protection",
+    industryType: 'all',
+    category: 'all',
+    subCategory: 'all',
+    projectType: 'all',
+    subProjectType: 'all',
+    technology: 'all',
+    panelWattage: 'all',
+    numberOfPanels: 'all',
+    systemCapacity: 'all',
+    panelBrand: 'all',
+    inverter: 'all',
+    bosKits: 'all'
   });
 
-  const [calculated, setCalculated] = useState({
-    capacityKW: 3,
-    panelsCount: 6,
-    dailyUnits: "12 - 14 Units/Day",
-    annualGeneration: "4,600 kWh/Year",
-    totalCost: 145000,
-    marketPrice: 175000,
-    annualSavings: 38000,
-    co2Offset: "3.6 Tons/Year",
-    roi: "3.8 Years",
-  });
+  useEffect(() => {
+    if (!shopHierarchy || shopHierarchy.length === 0) {
+      dispatch(fetchShopHierarchy());
+    }
+  }, [dispatch, shopHierarchy]);
+
+  const [calculated, setCalculated] = useState(null);
 
   const handleChange = (key, value) => {
-    setFormData((prev) => {
-      const updated = { ...prev, [key]: value };
-      
-      // Auto-recalculate specs
-      const capNum = parseFloat(updated.projectRange) || 3;
-      const wattNum = parseInt(updated.panelWattage) || 550;
-      const panelsNeeded = Math.ceil((capNum * 1000) / wattNum);
-      const estimatedCost = Math.round(capNum * 48000 + (updated.panelBrand === "Tata Power Solar" ? 5000 : 0));
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
 
-      setCalculated({
-        capacityKW: capNum,
-        panelsCount: panelsNeeded,
-        dailyUnits: `${(capNum * 4.2).toFixed(0)} - ${(capNum * 4.8).toFixed(0)} Units/Day`,
-        annualGeneration: `${(capNum * 1480).toLocaleString("en-IN")} kWh/Year`,
-        totalCost: estimatedCost,
-        marketPrice: Math.round(estimatedCost * 1.18),
-        annualSavings: Math.round(capNum * 1480 * 8.2),
-        co2Offset: `${(capNum * 1.2).toFixed(1)} Tons/Year`,
-        roi: "3.8 Years",
+  const industryTypeOptions = useMemo(() => {
+    const list = [];
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        if (ind.name) {
+          list.push({ text: ind.name, value: ind.name.toLowerCase() });
+        }
       });
+    } else {
+      list.push(
+        { text:"Residential Solar", value: 'residential solar' },
+        { text:"Commercial & Industrial (C&I)", value: 'commercial & industrial (c&i)' },
+        { text:"Agriculture & Solar Pumps", value: 'agriculture & solar pumps' },
+        { text:"Utility Scale & Ground Mount", value: 'utility scale & ground mount' }
+      );
+    }
+    return [
+      { text:"All Industry Types", value: 'all' },
+      ...list
+    ];
+  }, [shopHierarchy]);
 
-      return updated;
+  const categoryOptions = useMemo(() => {
+    const catMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (formData.industryType && formData.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === formData.industryType.toLowerCase() ||
+          String(ind.id) === String(formData.industryType)
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (cat.name && !catMap.has(cat.name.toLowerCase())) {
+            catMap.set(cat.name.toLowerCase(), { text: cat.name, value: cat.name.toLowerCase() });
+          }
+        });
+      });
+    }
+    return [
+      { text:"All Categories", value: 'all' },
+      ...Array.from(catMap.values())
+    ];
+  }, [shopHierarchy, formData.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    const subsMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (formData.industryType && formData.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === formData.industryType.toLowerCase() ||
+          String(ind.id) === String(formData.industryType)
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (formData.category === 'all' || cat.name?.toLowerCase() === formData.category?.toLowerCase()) {
+            (cat.subcategories || []).forEach(sub => {
+              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+                subsMap.set(sub.name.toLowerCase(), { text: sub.name, value: sub.name.toLowerCase() });
+              }
+            });
+          }
+        });
+      });
+    }
+    return [
+      { text:"All Sub-Categories", value: 'all' },
+      ...Array.from(subsMap.values())
+    ];
+  }, [shopHierarchy, formData.industryType, formData.category]);
+
+  const projectTypeOptions = useMemo(() => {
+    const typesMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (formData.industryType && formData.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === formData.industryType.toLowerCase() ||
+          String(ind.id) === String(formData.industryType)
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (formData.category === 'all' || cat.name?.toLowerCase() === formData.category?.toLowerCase()) {
+            (cat.subcategories || []).forEach(sub => {
+              if (formData.subCategory === 'all' || sub.name?.toLowerCase() === formData.subCategory?.toLowerCase()) {
+                (sub.mappedTypes || []).forEach(mt => {
+                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                    typesMap.set(mt.name.toLowerCase(), { text: mt.name, value: mt.name.toLowerCase() });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+    if (typesMap.size === 0) {
+      typesMap.set('on-grid', { text: "On-Grid", value: 'on-grid' });
+      typesMap.set('off-grid', { text: "Off-Grid", value: 'off-grid' });
+      typesMap.set('hybrid', { text: "Hybrid", value: 'hybrid' });
+    }
+    return [
+      { text:"All Project Types", value: 'all' },
+      ...Array.from(typesMap.values())
+    ];
+  }, [shopHierarchy, formData.industryType, formData.category, formData.subCategory]);
+
+  const handleCalculate = () => {
+    // Simulate calculation based on input choices
+    const capacityStr = formData.systemCapacity !== 'all' ? formData.systemCapacity : '3 kW';
+    const panelsStr = formData.numberOfPanels !== 'all' ? formData.numberOfPanels : '12 panels';
+    const capVal = parseFloat(capacityStr) || 3;
+    const cost = capVal * 80000; // ₹80,000 per kW estimate
+    
+    setCalculated({
+      estimatedOutput:`${(capVal * 4.5).toFixed(1)} kWh/day`,
+      panelsRequired: panelsStr,
+      totalCost:`₹${cost.toLocaleString('en-IN')}`,
+      savings:`₹${(capVal * 15000).toLocaleString('en-IN')}/year`,
+      roi: '5.5 years'
     });
   };
 
   const handleAddToCart = () => {
+    if (!calculated) return;
     if (!isAuthenticated) {
       dispatch(setShowAuthDialog(true));
       return;
     }
+    const costNum = parseFloat(calculated.totalCost.replace(/[^\d]/g, '')) || 240000;
+    const capacityVal = parseFloat(formData.systemCapacity) || 3;
+    const panelsVal = parseInt(formData.numberOfPanels) || 12;
+    const wattVal = parseInt(formData.panelWattage) || 440;
+    
+    dispatch(addCustomKitToCart({
+      id:`custom-${Date.now()}`,
+      cartItemId:`custom-${Date.now()}`,
+      kitName:`Custom Combo Kit (${formData.panelBrand.toUpperCase()} + ${formData.inverter.toUpperCase()})`,
+      capacityKW: capacityVal,
+      qty: 1,
+      ourPrice: costNum,
+      marketPrice: Math.round(costNum * 1.15),
+      is_custom: true,
+      productTier:"Customized",
+      usageType: formData.subCategory !== 'all' ? formData.subCategory :"Residential",
+      panelBrand: formData.panelBrand,
+      inverter: formData.inverter,
+      bosKits: formData.bosKits,
+      numberOfPanels: panelsVal,
+      panelWattage: wattVal,
+      availableStock: 999,
+      inStock: true
+    }));
+  };
 
-    dispatch(
-      addCustomKitToCart({
-        id: `custom-kit-${Date.now()}`,
-        cartItemId: `custom-kit-${Date.now()}`,
-        kitName: `Custom ${formData.projectRange} Solar Kit (${formData.panelBrand} + ${formData.inverterBrand})`,
-        capacityKW: calculated.capacityKW,
-        qty: 1,
-        ourPrice: calculated.totalCost,
-        marketPrice: calculated.marketPrice,
-        is_custom: true,
-        productTier: "Custom Engineered",
-        usageType: formData.industryType,
-        panelBrand: formData.panelBrand,
-        inverter: formData.inverterBrand,
-        numberOfPanels: calculated.panelsCount,
-        panelWattage: formData.panelWattage,
-        availableStock: 999,
-        inStock: true,
-      })
-    );
-    navigate("/cart");
+  const handleReset = () => {
+    setFormData({
+      industryType: 'all',
+      category: 'all',
+      subCategory: 'all',
+      projectType: 'all',
+      subProjectType: 'all',
+      technology: 'all',
+      panelWattage: 'all',
+      numberOfPanels: 'all',
+      systemCapacity: 'all',
+      panelBrand: 'all',
+      inverter: 'all',
+      bosKits: 'all'
+    });
+    setCalculated(null);
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text-primary py-6 max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-      
-      {/* Breadcrumbs */}
-      <nav className="text-xs text-text-muted flex items-center gap-1.5" aria-label="Breadcrumb">
-        <Link to="/" className="hover:text-primary transition-colors">Home</Link>
-        <span>/</span>
-        <Link to="/shop" className="hover:text-primary transition-colors">Solar Shop</Link>
-        <span>/</span>
-        <span className="text-text-primary font-bold">Customize Kit Configuration</span>
-      </nav>
+    <div className="min-h-screen">
+      <div className="bg-surface shadow-sm rounded-xl border border-border overflow-hidden">
+        {/* Header with Gradient */}
+        <div className="gradient-primary px-6 py-4">
+          <h1 className="font-bold text-2xl text-text-inverse">Customize Your Solar Kit</h1>
+          <p className="text-text-inverse/80 text-sm mt-1">
+            Build your perfect solar solution with our customization tool
+          </p>
+        </div>
 
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-primary via-primary-end to-primary-navy rounded-3xl p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight font-heading">
-              Customize Kit Configuration
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
-              Manage custom brand configurations of complete solar power kit components and accessories for India.
-            </p>
-          </div>
+        {/* Main Content */}
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form Section - Takes 2/3 on large screens */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Section 1: Basic Configuration */}
+              <div className="bg-surface-hover p-5 rounded-xl border border-border">
+                <h3 className="font-semibold text-text-primary dark:text-info mb-4 flex items-center gap-2">
+                  <span className="w-1 h-5 gradient-primary rounded-full"></span>
+                  Basic Configuration
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Dropdown
+                    label="Industry Type"
+                    className="w-full"
+                    options={industryTypeOptions}
+                    value={formData.industryType}
+                    onChange={(val) => handleChange('industryType', val)}
+                  />
+                  <Dropdown
+                    label="Category"
+                    className="w-full"
+                    options={categoryOptions}
+                    value={formData.category}
+                    onChange={(val) => handleChange('category', val)}
+                  />
+                  <Dropdown
+                    label="Sub-Category"
+                    className="w-full"
+                    options={subCategoryOptions}
+                    value={formData.subCategory}
+                    onChange={(val) => handleChange('subCategory', val)}
+                  />
+                  <Dropdown
+                    label="Project Type"
+                    className="w-full"
+                    options={projectTypeOptions}
+                    value={formData.projectType}
+                    onChange={(val) => handleChange('projectType', val)}
+                  />
+                  <Dropdown
+                    label="Sub Project Type"
+                    className="w-full"
+                    options={[
+                      { text:"Residential Net Metering", value: 'residential net metering' },
+                      { text:"Commercial Net Metering", value: 'Commercial Net Metering' },
+                      { text:"Gross Metering", value: 'gross metering' }
+                    ]}
+                    value={formData.subProjectType}
+                    onChange={(val) => handleChange('subProjectType', val)}
+                  />
+                </div>
+              </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="bg-white/15 backdrop-blur-md border border-white/25 px-5 py-3 rounded-2xl text-center shadow-xs">
-              <span className="text-[10px] uppercase font-bold text-slate-300 block tracking-wider">
-                Configured Custom Kits
-              </span>
-              <span className="text-2xl font-black text-white">
-                {availableKits.length}
-              </span>
-              <span className="text-[10px] text-emerald-300 block font-semibold">Active Custom Options</span>
+              {/* Section 2: Panel Configuration */}
+              <div className="bg-surface-hover p-5 rounded-xl border border-border">
+                <h3 className="font-semibold text-text-primary dark:text-info mb-4 flex items-center gap-2">
+                  <span className="w-1 h-5 gradient-primary rounded-full"></span>
+                  Panel Configuration
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Dropdown
+                    label="Technology"
+                    className="w-full"
+                    options={[
+                      { text:"TopCon", value: 'topcon' },
+                      { text:"Bifacial", value: 'bifacial' },
+                      { text:"Mono PERC", value: 'mono perc' },
+                      { text:"Polycrystalline", value: 'poly' }
+                    ]}
+                    value={formData.technology}
+                    onChange={(val) => handleChange('technology', val)}
+                  />
+                  <Dropdown
+                    label="Panel Wattage"
+                    className="w-full"
+                    options={[
+                      { text:"370 Watt", value: '370 watt' },
+                      { text:"440 Watt", value: '440 watt' },
+                      { text:"540 Watt", value: '540 watt' },
+                      { text:"570 Watt", value: '570 watt' }
+                    ]}
+                    value={formData.panelWattage}
+                    onChange={(val) => handleChange('panelWattage', val)}
+                  />
+                  <Dropdown
+                    label="Number of Panels"
+                    className="w-full"
+                    options={[
+                      { text:"4 Panels", value: '4 panels' },
+                      { text:"6 Panels", value: '6 panels' },
+                      { text:"8 Panels", value: '8 panels' },
+                      { text:"10 Panels", value: '10 panels' },
+                      { text:"12 Panels", value: '12 panels' }
+                    ]}
+                    value={formData.numberOfPanels}
+                    onChange={(val) => handleChange('numberOfPanels', val)}
+                  />
+                  <Dropdown
+                    label="System Capacity"
+                    className="w-full"
+                    options={[
+                      { text:"1 kW", value: '1 kW' },
+                      { text:"2 kW", value: '2 kW' },
+                      { text:"3 kW", value: '3 kW' },
+                      { text:"5 kW", value: '5 kW' },
+                      { text:"10 kW", value: '10 kW' }
+                    ]}
+                    value={formData.systemCapacity}
+                    onChange={(val) => handleChange('systemCapacity', val)}
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Component Selection */}
+              <div className="bg-surface-hover p-5 rounded-xl border border-border">
+                <h3 className="font-semibold text-text-primary dark:text-info mb-4 flex items-center gap-2">
+                  <span className="w-1 h-5 gradient-primary rounded-full"></span>
+                  Component Selection
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Dropdown
+                    label="Panel Brand"
+                    className="w-full"
+                    options={[
+                      { text:"Adani", value: 'adani' },
+                      { text:"Vikram Solar", value: 'vikram solar' },
+                      { text:"Waaree", value: 'waaree' },
+                      { text:"Luminous", value: 'luminous' }
+                    ]}
+                    value={formData.panelBrand}
+                    onChange={(val) => handleChange('panelBrand', val)}
+                  />
+                  <Dropdown
+                    label="Inverter Type"
+                    className="w-full"
+                    options={[
+                      { text:"On-grid", value: 'on-grid' },
+                      { text:"Off-grid", value: 'Off-grid' },
+                      { text:"Hybrid", value: 'Hybrid' }
+                    ]}
+                    value={formData.inverter}
+                    onChange={(val) => handleChange('inverter', val)}
+                  />
+                  <Dropdown
+                    label="BOS Kits"
+                    className="w-full"
+                    options={[
+                      { text:"1 kW Kit", value: '1 kW' },
+                      { text:"2 kW Kit", value: '2 kW' },
+                      { text:"3 kW Kit", value: '3 kW' },
+                      { text:"5 kW Kit", value: '5 kW' }
+                    ]}
+                    value={formData.bosKits}
+                    onChange={(val) => handleChange('bosKits', val)}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={handleCalculate}
+                  variant="primary"
+                  size="md"
+                  leftIcon={<FaCalculator size={18} />}
+                >
+                  Calculate Estimate
+                </Button>
+                <Button
+                  onClick={handleReset}
+                  variant="secondary"
+                  size="md"
+                  leftIcon={<FiRefreshCw size={18} />}
+                >
+                  Reset All
+                </Button>
+              </div>
             </div>
 
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={() => navigate("/shop")}
-              className="font-bold py-3.5 px-5 rounded-2xl shadow-md cursor-pointer whitespace-nowrap"
-            >
-              Browse Pre-Configured Kits
-            </Button>
+            {/* Results Section - Takes 1/3 on large screens */}
+            <div className="lg:col-span-1">
+              <div className="bg-gradient-bg-subtle rounded-xl border border-border p-5 sticky top-4">
+                <h3 className="font-semibold text-text-primary dark:text-info mb-4 flex items-center gap-2">
+                  <FiInfo className="text-primary dark:text-info" size={18} />
+                  Estimated Results
+                </h3>
+
+                {calculated ? (
+                  <div className="space-y-4">
+                    <div className="bg-surface p-4 rounded-lg border border-border">
+                      <p className="text-sm text-text-secondary">Daily Output</p>
+                      <p className="text-2xl font-bold text-primary dark:text-info">{calculated.estimatedOutput}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-surface p-3 rounded-lg border border-border">
+                        <p className="text-xs text-text-secondary">Panels</p>
+                        <p className="text-lg font-semibold text-text-primary dark:text-info">{calculated.panelsRequired}</p>
+                      </div>
+                      <div className="bg-surface p-3 rounded-lg border border-border">
+                        <p className="text-xs text-text-secondary">Total Cost</p>
+                        <p className="text-lg font-semibold text-primary dark:text-info">{calculated.totalCost}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-success-soft p-3 rounded-lg border border-success/20">
+                        <p className="text-xs text-success">Yearly Savings</p>
+                        <p className="text-lg font-semibold text-success">{calculated.savings}</p>
+                      </div>
+                      <div className="bg-warning-soft p-3 rounded-lg border border-warning/20">
+                        <p className="text-xs text-warning">ROI Period</p>
+                        <p className="text-lg font-semibold text-warning">{calculated.roi}</p>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={handleAddToCart}
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      leftIcon={<FiShoppingCart size={18} />}
+                      className="mt-2"
+                    >
+                      Add to Cart
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 gradient-primary-soft rounded-full flex items-center justify-center mx-auto mb-3">
+                      <FaCalculator size={24} className="text-primary dark:text-info" />
+                    </div>
+                    <p className="text-text-secondary text-sm">
+                      Configure your kit and click"Calculate" to see estimated results
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Top 5-Hierarchy Filter Row (Matching Admin Panel) */}
-      <div className="bg-surface rounded-3xl p-5 sm:p-6 border border-border shadow-xs">
-        <h3 className="text-xs font-extrabold uppercase text-text-secondary tracking-wider mb-4 flex items-center gap-2">
-          <FiSliders className="text-primary" size={15} />
-          <span>Select Solar System Hierarchy</span>
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          
-          {/* 1. Industry Type */}
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary mb-1">
-              Industry Type
-            </label>
-            <select
-              value={formData.industryType}
-              onChange={(e) => handleChange("industryType", e.target.value)}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="Residential Solar Systems">Residential Solar Systems</option>
-              <option value="Commercial Solar Systems">Commercial Solar Systems</option>
-              <option value="Industrial Solar Systems">Industrial Solar Systems</option>
-              <option value="Agricultural Solar Systems">Agricultural Solar Systems</option>
-            </select>
-          </div>
-
-          {/* 2. Category */}
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary mb-1">
-              Category
-            </label>
-            <select
-              value={formData.category}
-              onChange={(e) => handleChange("category", e.target.value)}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="Rooftop Residential">Rooftop Residential</option>
-              <option value="Rooftop Commercial">Rooftop Commercial</option>
-              <option value="Ground Mounted Solar">Ground Mounted Solar</option>
-              <option value="Solar Carport">Solar Carport</option>
-            </select>
-          </div>
-
-          {/* 3. Subcategory */}
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary mb-1">
-              Subcategory
-            </label>
-            <select
-              value={formData.subcategory}
-              onChange={(e) => handleChange("subcategory", e.target.value)}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="Single Phase Residential">Single Phase Residential</option>
-              <option value="Three Phase Residential">Three Phase Residential</option>
-              <option value="Commercial Shed">Commercial Shed</option>
-              <option value="High Tension Industrial">High Tension Industrial</option>
-            </select>
-          </div>
-
-          {/* 4. System Type */}
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary mb-1">
-              System Type
-            </label>
-            <select
-              value={formData.systemType}
-              onChange={(e) => handleChange("systemType", e.target.value)}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="On-Grid (Net Metering)">On-Grid (Net Metering)</option>
-              <option value="Off-Grid (Battery Storage)">Off-Grid (Battery Storage)</option>
-              <option value="Hybrid (Storage + Net-Metering)">Hybrid (Storage + Net-Metering)</option>
-            </select>
-          </div>
-
-          {/* 5. Project Range */}
-          <div>
-            <label className="block text-[11px] font-bold text-text-secondary mb-1">
-              Project Range (Capacity)
-            </label>
-            <select
-              value={formData.projectRange}
-              onChange={(e) => handleChange("projectRange", e.target.value)}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="1 kW">1 kW (Small Home)</option>
-              <option value="2 kW">2 kW (2 BHK)</option>
-              <option value="3 kW">3 kW (Most Popular)</option>
-              <option value="5 kW">5 kW (Large Villa)</option>
-              <option value="10 kW">10 kW (Commercial)</option>
-              <option value="15 kW">15 kW (Enterprise)</option>
-            </select>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Main Grid: Custom Component Pickers + Live Calculation Output */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left 2 Cols: Brand & Component Inclusions */}
-        <div className="lg:col-span-2 space-y-5">
-          
-          {/* 1. Solar Panels Selection */}
-          <div className="bg-surface rounded-3xl p-6 border border-border shadow-xs space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-border">
-              <div className="w-10 h-10 rounded-2xl bg-primary-soft text-primary flex items-center justify-center">
-                <FaSolarPanel size={20} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-text-primary">1. Solar PV Modules</h3>
-                <p className="text-xs text-text-secondary">Select module brand and wattage technology</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-text-secondary mb-1">Panel Brand</label>
-                <select
-                  value={formData.panelBrand}
-                  onChange={(e) => handleChange("panelBrand", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-primary"
-                >
-                  <option value="Tata Power Solar">Tata Power Solar</option>
-                  <option value="Waaree Energies">Waaree Energies</option>
-                  <option value="Adani Solar">Adani Solar</option>
-                  <option value="Vikram Solar">Vikram Solar</option>
-                  <option value="RenewSys">RenewSys</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-text-secondary mb-1">Module Wattage</label>
-                <select
-                  value={formData.panelWattage}
-                  onChange={(e) => handleChange("panelWattage", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-primary"
-                >
-                  <option value="550W">550W High-Output</option>
-                  <option value="540W">540W Mono PERC</option>
-                  <option value="580W">580W TopCon N-Type</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-text-secondary mb-1">Cell Technology</label>
-                <select
-                  value={formData.panelTechnology}
-                  onChange={(e) => handleChange("panelTechnology", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-primary"
-                >
-                  <option value="Mono PERC Half-Cut">Mono PERC Half-Cut</option>
-                  <option value="TopCon Bifacial">TopCon Bifacial</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Solar Inverter Selection */}
-          <div className="bg-surface rounded-3xl p-6 border border-border shadow-xs space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-border">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                <FaBolt size={20} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-text-primary">2. Solar Power Inverter</h3>
-                <p className="text-xs text-text-secondary">Select inverter brand with WiFi telemetry monitoring</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-text-secondary mb-1">Inverter Brand</label>
-                <select
-                  value={formData.inverterBrand}
-                  onChange={(e) => handleChange("inverterBrand", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-primary"
-                >
-                  <option value="Growatt">Growatt (WiFi Integrated)</option>
-                  <option value="Solis">Solis (Dual MPPT)</option>
-                  <option value="Havells">Havells Solar</option>
-                  <option value="Luminous">Luminous Solar</option>
-                  <option value="Sungrow">Sungrow Enterprise</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-text-secondary mb-1">Inverter Topology</label>
-                <select
-                  value={formData.inverterType}
-                  onChange={(e) => handleChange("inverterType", e.target.value)}
-                  className="w-full px-3 py-2.5 bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-primary"
-                >
-                  <option value="Single Phase MPPT String">Single Phase MPPT String</option>
-                  <option value="Three Phase MPPT String">Three Phase MPPT String</option>
-                  <option value="Hybrid Smart Inverter">Hybrid Smart Inverter</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Mounting & Protection Kit Inclusions */}
-          <div className="bg-surface rounded-3xl p-6 border border-border shadow-xs space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-border">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                <FiShield size={20} />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-text-primary">3. Complete Turnkey Safety & Mounting Inclusions</h3>
-                <p className="text-xs text-text-secondary">Pre-bundled accessories included inside the kit</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-border">
-                <p className="font-bold text-text-primary flex items-center gap-1.5">
-                  <FiCheck className="text-emerald-500" /> Structure: {formData.structureType}
-                </p>
-                <p className="text-[11px] text-text-muted mt-1">Wind rated 150 km/h with stainless hardware</p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-border">
-                <p className="font-bold text-text-primary flex items-center gap-1.5">
-                  <FiCheck className="text-emerald-500" /> Safety: {formData.bosSafetyPackage}
-                </p>
-                <p className="text-[11px] text-text-muted mt-1">Includes 4 sq.mm solar cables, MC4, and copper earthing</p>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Right Col: Live Calculation Card & Add to Cart */}
-        <div className="lg:col-span-1 space-y-5">
-          <div className="bg-surface rounded-3xl p-6 border border-border shadow-xl sticky top-24 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">
-                Engineering Summary
-              </span>
-              <span className="bg-primary text-white text-xs font-black px-2.5 py-0.5 rounded-full">
-                {calculated.capacityKW} kW Kit
-              </span>
-            </div>
-
-            {/* Price block */}
-            <div>
-              <span className="text-[10px] uppercase font-bold text-text-muted">Estimated Kit Price</span>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl sm:text-3xl font-black text-text-primary">
-                  ₹{calculated.totalCost.toLocaleString("en-IN")}
-                </span>
-                <del className="text-xs text-text-muted font-medium">
-                  ₹{calculated.marketPrice.toLocaleString("en-IN")}
-                </del>
-              </div>
-              <p className="text-[11px] text-emerald-600 font-bold mt-1">
-                ✓ Includes All Solar Panels, Inverter & Protection Hardware
-              </p>
-            </div>
-
-            {/* System Breakdown */}
-            <div className="space-y-2.5 text-xs border-t border-b border-border py-4">
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Solar Modules:</span>
-                <span className="font-bold text-text-primary">{calculated.panelsCount}x {formData.panelWattage} ({formData.panelBrand})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Inverter:</span>
-                <span className="font-bold text-text-primary">{formData.inverterBrand} {formData.projectRange}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Daily Generation:</span>
-                <span className="font-bold text-primary">{calculated.dailyUnits}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Annual Bill Savings:</span>
-                <span className="font-bold text-emerald-600">~₹{calculated.annualSavings.toLocaleString("en-IN")} / Year</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-secondary">Payback Period:</span>
-                <span className="font-bold text-amber-600">{calculated.roi}</span>
-              </div>
-            </div>
-
-            {/* Add to Cart Button */}
-            <Button
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={handleAddToCart}
-              leftIcon={<FiShoppingCart size={17} />}
-              className="font-bold py-3.5 rounded-2xl shadow-md text-sm"
-            >
-              Add Customized Kit to Cart
-            </Button>
-          </div>
-        </div>
-
-      </div>
-
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../../features/alert.slice";
-import { addToCart, syncCartWithBackend, getAvailableKitData } from "../../features/slice";
+import { addToCart, syncCartWithBackend, getAvailableKitData, fetchShopHierarchy } from "../../features/slice";
 import Dropdown from "@/components/Dropdown";
 import Button from "@/components/Button";
 import {
@@ -73,6 +73,7 @@ export default function SolarBosKit() {
   const dispatch = useDispatch();
   const selectedDistrict = useSelector((state) => state.slice?.selectedDistrict);
   const rawKits = useSelector((state) => state.slice?.availableKits);
+  const shopHierarchy = useSelector((state) => state.slice?.shopHierarchy || []);
 
   // Tab mode: 'preconfigured' | 'customize'
   const [activeTab, setActiveTab] = useState("preconfigured");
@@ -92,6 +93,12 @@ export default function SolarBosKit() {
     comboKitType: "all",
     pricePerKw: "all",
   });
+
+  useEffect(() => {
+    if (!shopHierarchy || shopHierarchy.length === 0) {
+      dispatch(fetchShopHierarchy());
+    }
+  }, [dispatch, shopHierarchy]);
 
   // Live admin-managed BOS Kits & Custom Catalog Store from Database API
   const [adminBosKits, setAdminBosKits] = useState(() => {
@@ -115,34 +122,22 @@ export default function SolarBosKit() {
   // Customizer System Capacity State (Default: 5 kW)
   const [customSystemKw, setCustomSystemKw] = useState(5);
 
-  // Fetch live BOS Kits and custom catalog from MongoDB Database API
+  // Fetch live custom catalog from MongoDB Database API
   const fetchCatalogFromApi = async () => {
     try {
-      // 1. Fetch Pre-Configured BOS Kits
-      const resKits = await axios.get("http://localhost:5000/api/india/v1/shop/bos-kits");
-      if (resKits.data?.data && Array.isArray(resKits.data.data) && resKits.data.data.length > 0) {
-        setAdminBosKits(resKits.data.data);
-        localStorage.setItem("solar_bos_kits_admin_store", JSON.stringify(resKits.data.data));
-      }
-    } catch (err) {
-      console.warn("Failed to fetch live BOS kits from DB API:", err.message);
-    }
-
-    try {
-      // 2. Fetch Custom Catalog
       const res = await axios.get("http://localhost:5000/api/india/v1/shop/bos-custom-catalog");
       if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
         setAdminCustomCatalog(res.data.data);
         localStorage.setItem("solar_custom_bos_catalog_admin_store", JSON.stringify(res.data.data));
       }
     } catch (err) {
-      console.warn("Failed to fetch live custom catalog from DB API:", err.message);
+      console.error("Failed to fetch live custom catalog from DB API:", err);
     }
   };
 
   useEffect(() => {
     fetchCatalogFromApi();
-    const interval = setInterval(fetchCatalogFromApi, 5000);
+    const interval = setInterval(fetchCatalogFromApi, 3000);
     window.addEventListener("focus", fetchCatalogFromApi);
     return () => {
       clearInterval(interval);
@@ -221,97 +216,284 @@ export default function SolarBosKit() {
     return combined;
   }, [rawKits, adminBosKits]);
 
-  // Dynamic Quick Filter Options derived from available kit data
+  // Dynamic Quick Filter Options derived from shopHierarchy and kit data
   const industryTypeOptions = useMemo(() => {
-    const industries = [...new Set(availableKits.map((kit) => kit.industryType || kit.industry_type_name).filter(Boolean))];
-    return [
-      { value: "all", text: "All Industry Types" },
-      ...industries.map((ind) => ({ value: ind, text: ind })),
-    ];
-  }, [availableKits]);
-
-  const categoryOptions = useMemo(() => {
-    let filteredKits = availableKits;
-    if (filters.industryType && filters.industryType !== "all") {
-      filteredKits = filteredKits.filter((kit) => (kit.industryType || kit.industry_type_name)?.toLowerCase() === filters.industryType.toLowerCase());
-    }
-    const cats = [...new Set(filteredKits.map((kit) => kit.category).filter(Boolean))];
-    return [
-      { value: "all", text: "All Categories" },
-      ...cats.map((cat) => ({ value: cat, text: cat })),
-    ];
-  }, [availableKits, filters.industryType]);
-
-  const subCategoryOptions = useMemo(() => {
-    if (filters.category === "all") return [{ value: "all", text: "All Sub-Categories" }];
-
-    const filteredKits = availableKits.filter(
-      (kit) => kit.category?.toLowerCase() === filters.category.toLowerCase()
-    );
-    const subs = [...new Set(filteredKits.map((kit) => kit.subCategory || kit.usageType).filter(Boolean))];
-
-    return [
-      { value: "all", text: "All Sub-Categories" },
-      ...subs.map((sub) => ({ value: sub, text: sub })),
-    ];
-  }, [availableKits, filters.category]);
-
-  const systemTypeOptions = useMemo(() => {
-    if (filters.category === "all" || filters.subCategory === "all") {
-      return [{ value: "all", text: "All System Types" }];
-    }
-
-    const filteredKits = availableKits.filter(
-      (kit) =>
-        kit.category?.toLowerCase() === filters.category.toLowerCase() &&
-        (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() ||
-          kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase())
-    );
-    const types = [
-      ...new Set(
-        filteredKits.map((kit) => kit.systemType || kit.projectType || kit.inverter?.type).filter(Boolean)
-      ),
-    ];
-    return [
-      { value: "all", text: "All System Types" },
-      ...types.map((t) => ({ value: t, text: t })),
-    ];
-  }, [availableKits, filters.category, filters.subCategory]);
-
-  const projectRangeOptions = useMemo(() => {
-    if (filters.category === "all" || filters.subCategory === "all" || filters.systemType === "all") {
-      return [{ value: "all", text: "All Project Ranges" }];
-    }
-
-    const filteredKits = availableKits.filter(
-      (kit) =>
-        kit.category?.toLowerCase() === filters.category.toLowerCase() &&
-        (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() ||
-          kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()) &&
-        (kit.systemType?.toLowerCase() === filters.systemType.toLowerCase() ||
-          kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() ||
-          kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase())
-    );
-
-    const rangesMap = new Map();
-    filteredKits.forEach((kit) => {
-      if (typeof kit.projectRange === "object" && kit.projectRange !== null) {
-        const idVal = String(kit.projectRange.id || kit.projectRange.text);
-        if (idVal && !rangesMap.has(idVal)) {
-          rangesMap.set(idVal, kit.projectRange.text || idVal);
+    const list = [];
+    const seen = new Set();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        if (ind.name && !seen.has(ind.name.toLowerCase())) {
+          seen.add(ind.name.toLowerCase());
+          list.push({ value: ind.name, text: ind.name, id: ind.id });
         }
-      } else if (typeof kit.projectRange === "string" && kit.projectRange) {
-        if (!rangesMap.has(kit.projectRange)) {
-          rangesMap.set(kit.projectRange, kit.projectRange);
-        }
+      });
+    }
+    availableKits.forEach((kit) => {
+      const name = kit.industryType || kit.industry_type_name;
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ value: name, text: name });
       }
     });
 
     return [
-      { value: "all", text: "All Project Ranges" },
-      ...Array.from(rangesMap.entries()).map(([val, txt]) => ({ value: val, text: txt })),
+      { value: "all", text: "All Industry Types" },
+      ...list,
     ];
-  }, [availableKits, filters.category, filters.subCategory, filters.systemType]);
+  }, [shopHierarchy, availableKits]);
+
+  const categoryOptions = useMemo(() => {
+    const catMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter((ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType) ||
+          ind.slug?.toLowerCase() === filters.industryType.toLowerCase()
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (cat.name && !catMap.has(cat.name.toLowerCase())) {
+            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat.id });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter((kit) => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    filteredKits.forEach((kit) => {
+      if (kit.category && !catMap.has(kit.category.toLowerCase())) {
+        catMap.set(kit.category.toLowerCase(), { value: kit.category, text: kit.category });
+      }
+    });
+
+    return [
+      { value: "all", text: "All Categories" },
+      ...Array.from(catMap.values()),
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    const subsMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter((ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase() || String(cat.id) === String(filters.category)) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+                subsMap.set(sub.name.toLowerCase(), {
+                  value: sub.name,
+                  text: sub.name,
+                  id: sub.id,
+                  image: sub.image || null,
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter((kit) => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    if (filters.category && filters.category !== "all") {
+      filteredKits = filteredKits.filter((kit) => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    filteredKits.forEach((kit) => {
+      const subName = kit.subCategory || kit.usageType;
+      if (subName && !subsMap.has(subName.toLowerCase())) {
+        subsMap.set(subName.toLowerCase(), {
+          value: subName,
+          text: subName,
+        });
+      }
+    });
+
+    return [
+      { value: "all", text: "All Sub-Categories" },
+      ...Array.from(subsMap.values()),
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType, filters.category]);
+
+  const systemTypeOptions = useMemo(() => {
+    const typesMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter((ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase()) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (filters.subCategory === "all" || sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                    typesMap.set(mt.name.toLowerCase(), {
+                      value: mt.name,
+                      text: mt.name,
+                      id: mt.id || mt.type_id,
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter((kit) => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    if (filters.category && filters.category !== "all") {
+      filteredKits = filteredKits.filter((kit) => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    if (filters.subCategory && filters.subCategory !== "all") {
+      filteredKits = filteredKits.filter(
+        (kit) =>
+          kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() ||
+          kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()
+      );
+    }
+    filteredKits.forEach((kit) => {
+      const typeName = kit.systemType || kit.projectType || kit.inverter?.type;
+      if (typeName && !typesMap.has(typeName.toLowerCase())) {
+        typesMap.set(typeName.toLowerCase(), { value: typeName, text: typeName });
+      }
+    });
+
+    return [
+      { value: "all", text: "All System Types" },
+      ...Array.from(typesMap.values()),
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType, filters.category, filters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    const rangesMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter((ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase()) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (filters.subCategory === "all" || sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (filters.systemType === "all" || mt.name?.toLowerCase() === filters.systemType?.toLowerCase()) {
+                    (mt.ranges || []).forEach((r) => {
+                      const idVal = String(r.id || r.range_label);
+                      if (idVal && !rangesMap.has(idVal)) {
+                        rangesMap.set(idVal, {
+                          value: idVal,
+                          text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || 'kW'}`,
+                          min: r.min_value || 0,
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter((kit) => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    if (filters.category && filters.category !== "all") {
+      filteredKits = filteredKits.filter((kit) => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    if (filters.subCategory && filters.subCategory !== "all") {
+      filteredKits = filteredKits.filter(
+        (kit) =>
+          kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() ||
+          kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()
+      );
+    }
+    if (filters.systemType && filters.systemType !== "all") {
+      filteredKits = filteredKits.filter(
+        (kit) =>
+          kit.systemType?.toLowerCase() === filters.systemType.toLowerCase() ||
+          kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() ||
+          kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase()
+      );
+    }
+
+    filteredKits.forEach((kit) => {
+      if (typeof kit.projectRange === "object" && kit.projectRange !== null) {
+        const idVal = String(kit.projectRange.id || kit.projectRange.text);
+        if (idVal && !rangesMap.has(idVal)) {
+          rangesMap.set(idVal, {
+            value: idVal,
+            text: kit.projectRange.text || idVal,
+            min: kit.projectRange.min || 0,
+          });
+        }
+      } else if (typeof kit.projectRange === "string" && kit.projectRange) {
+        if (!rangesMap.has(kit.projectRange)) {
+          rangesMap.set(kit.projectRange, {
+            value: kit.projectRange,
+            text: kit.projectRange,
+            min: 0,
+          });
+        }
+      }
+    });
+
+    const uniqueRanges = Array.from(rangesMap.values()).sort((a, b) => (a.min || 0) - (b.min || 0));
+
+    return [
+      { value: "all", text: "All Project Ranges" },
+      ...uniqueRanges.map((r) => ({ value: r.value, text: r.text })),
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType, filters.category, filters.subCategory, filters.systemType]);
 
   const comboKitTypeOptions = useMemo(() => {
     let filteredKits = availableKits;
@@ -388,26 +570,35 @@ export default function SolarBosKit() {
       // Industry Type
       if (filters.industryType !== "all") {
         const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
-        if (ind !== filters.industryType.toLowerCase()) return false;
+        const sel = filters.industryType.toLowerCase();
+        const matchInd = ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+        if (!matchInd) return false;
       }
       // Category
-      if (filters.category !== "all" && kit.category?.toLowerCase() !== filters.category.toLowerCase()) {
-        return false;
+      if (filters.category !== "all") {
+        const cat = (kit.category || "").toLowerCase();
+        const sel = filters.category.toLowerCase();
+        const matchCat = cat === sel || (kit.category_id && String(kit.category_id) === String(filters.category)) || cat.includes(sel) || sel.includes(cat);
+        if (!matchCat) return false;
       }
       // Sub Category
       if (filters.subCategory !== "all") {
         const sub = (kit.subCategory || kit.usageType || "").toLowerCase();
-        if (sub !== filters.subCategory.toLowerCase()) return false;
+        const sel = filters.subCategory.toLowerCase();
+        const matchSub = sub === sel || (kit.subcategory_id && String(kit.subcategory_id) === String(filters.subCategory)) || sub.includes(sel) || sel.includes(sub);
+        if (!matchSub) return false;
       }
       // System Type
       if (filters.systemType !== "all") {
         const sys = (kit.systemType || kit.projectType || kit.inverter?.type || "").toLowerCase();
-        if (sys !== filters.systemType.toLowerCase()) return false;
+        const sel = filters.systemType.toLowerCase();
+        if (sys !== sel && !sys.includes(sel) && !sel.includes(sys)) return false;
       }
       // Project Range
       if (filters.projectRange !== "all") {
-        const prId = typeof kit.projectRange === "object" ? String(kit.projectRange?.id || "") : String(kit.projectRange || "");
-        if (prId.toLowerCase() !== filters.projectRange.toLowerCase()) return false;
+        const prId = typeof kit.projectRange === "object" ? String(kit.projectRange?.id || kit.projectRange?.text || "") : String(kit.projectRange || "");
+        const sel = String(filters.projectRange);
+        if (prId.toLowerCase() !== sel.toLowerCase() && prId !== sel && String(kit.project_range_id || '') !== sel) return false;
       }
       // Combo Kit Type
       if (filters.comboKitType !== "all") {
@@ -629,7 +820,7 @@ export default function SolarBosKit() {
             }`}
           >
             <FiPackage className="text-base" />
-            <span>Combo BOS Kit</span>
+            <span>Pre-configured BOS Kits</span>
           </button>
 
           <button
@@ -642,13 +833,13 @@ export default function SolarBosKit() {
             }`}
           >
             <FiTool className="text-base text-amber-400" />
-            <span>Customization BOS Kit</span>
+            <span>Customize BOS Kit</span>
           </button>
         </div>
 
         <div className="text-xs text-text-secondary font-medium px-2">
           {activeTab === "preconfigured" ? (
-            <span className="text-primary font-semibold">Showing Pre-Packaged Combo BOS Kits</span>
+            <span className="text-primary font-semibold">Showing Pre-Packaged BOS Combos</span>
           ) : (
             <span className="text-amber-600 font-semibold">Custom Component Selector Active</span>
           )}
@@ -756,13 +947,10 @@ export default function SolarBosKit() {
             <Dropdown
               label="Sub Category"
               value={filters.subCategory}
-              disabled={filters.category === "all"}
               onChange={(val) =>
                 setFilters((prev) => ({
                   ...prev,
                   subCategory: val,
-                  systemType: "all",
-                  projectRange: "all",
                 }))
               }
               options={subCategoryOptions}
@@ -771,7 +959,6 @@ export default function SolarBosKit() {
             <Dropdown
               label="System Type"
               value={filters.systemType}
-              disabled={filters.category === "all" || filters.subCategory === "all"}
               onChange={(val) =>
                 setFilters((prev) => ({
                   ...prev,
@@ -785,7 +972,6 @@ export default function SolarBosKit() {
             <Dropdown
               label="Project Range"
               value={filters.projectRange}
-              disabled={filters.category === "all" || filters.subCategory === "all" || filters.systemType === "all"}
               onChange={(val) =>
                 setFilters((prev) => ({
                   ...prev,
@@ -1123,37 +1309,6 @@ export default function SolarBosKit() {
                                   <FiPlus size={14} />
                                 </button>
                               </div>
-
-                              {qty > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const districtId = selectedDistrict?.id || selectedDistrict?._id || "dist_default";
-                                    const districtName = selectedDistrict?.name || "Pan India Supply";
-                                    const cartPayload = {
-                                      id: `${item.id}_${Date.now()}`,
-                                      name: `${item.name} (${qty} ${item.unit}s)`,
-                                      category: "Custom BOS Item",
-                                      ourPrice: item.unitPrice * qty,
-                                      marketPrice: Math.round(item.unitPrice * qty * 1.25),
-                                      productTier: "BOS Hardware",
-                                      inStock: true,
-                                      availableStock: 99,
-                                      districtId,
-                                      districtName,
-                                      qty: 1,
-                                      image: item.image || item.imageUrl || "⚡",
-                                    };
-                                    dispatch(addToCart(cartPayload));
-                                    dispatch(syncCartWithBackend());
-                                    dispatch(setAlert({ type: "success", message: `Added ${qty} ${item.unit}s of ${item.name} to Cart!` }));
-                                  }}
-                                  className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold text-xs transition cursor-pointer flex items-center gap-1 shrink-0"
-                                  title="Add only this item to cart"
-                                >
-                                  <FiShoppingCart size={12} /> Add Item
-                                </button>
-                              )}
                             </div>
                           </div>
                         </div>

@@ -1,808 +1,1566 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { useLocation, useNavigate, Link } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
-import axios from "axios";
+import { useEffect, useState, useMemo, useRef } from"react";
+import { useSelector, useDispatch } from"react-redux";
+import KitCard from"./components/KitCard";
+import SelectedKitCard from"./components/SelectedKitCard";
+import KitFilters, { options } from"./components/KitFilters";
+import Dialog from"@/components/Dialog";
+import Button from"@/components/Button";
+import IconButton from"@/components/IconButton";
 import {
   FiFilter,
   FiGrid,
   FiList,
-  FiSearch,
   FiX,
-  FiSliders,
-  FiSun,
-  FiZap,
-  FiBatteryCharging,
-  FiHome,
-  FiBriefcase,
-  FiCheckCircle,
-  FiLayers,
-  FiArrowRight,
-  FiHelpCircle,
+  FiSearch,
   FiRefreshCw,
+  FiCheckSquare,
+  FiSquare,
   FiPackage,
-  FiCheck
-} from "react-icons/fi";
-import { FaSolarPanel, FaBolt, FaWarehouse } from "react-icons/fa";
-import { getAvailableKitData } from "@/features/slice";
-
-import KitProductCard from "@/components/storefront/KitProductCard";
-import KitProductModal from "@/components/storefront/KitProductModal";
+  FiTrendingUp,
+  FiSliders,
+  FiLayers,
+} from"react-icons/fi";
+import Dropdown from"@/components/Dropdown";
 import KitComparisonDrawer from "@/components/storefront/KitComparisonDrawer";
-import ExpertHelpModal from "@/components/storefront/ExpertHelpModal";
-import Button from "@/components/Button";
-import IconButton from "@/components/IconButton";
+import { fetchShopHierarchy } from "../../features/slice";
 
-// Safe string helper to avoid React child object errors
-const safeString = (val) => {
-  if (!val) return "";
-  if (typeof val === "string") return val.trim();
-  if (typeof val === "number") return String(val);
-  if (typeof val === "object") {
-    return (val.text || val.name || val.title || val.symbol || "").trim();
-  }
-  return String(val).trim();
-};
+const SYSTEM_CAPACITIES = [
+  { kw: 1, label: "1 kW", units: "~4-5 Units/Day", note: "Small Home / 1 BHK" },
+  { kw: 2, label: "2 kW", units: "~8-10 Units/Day", note: "2 BHK / 1 AC" },
+  { kw: 3, label: "3 kW", units: "~12-15 Units/Day", note: "3 BHK / Most Popular" },
+  { kw: 5, label: "5 kW", units: "~20-25 Units/Day", note: "Large Home / 2-3 ACs" },
+  { kw: 10, label: "10 kW", units: "~40-50 Units/Day", note: "Commercial / Large Villa" },
+  { kw: 15, label: "15 kW+", units: "~60+ Units/Day", note: "Industrial / Enterprise" },
+];
 
 export default function PreconfiguredComboKit() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const dispatch = useDispatch();
-
   const rawKits = useSelector((state) => state.slice?.availableKits);
   const availableKits = useMemo(() => (Array.isArray(rawKits) ? rawKits : []), [rawKits]);
-  const selectedDistrict = useSelector((state) => state.slice?.selectedDistrict);
-
-  // Read URL query params
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const urlSearch = searchParams.get("search") || "";
-  const urlType = searchParams.get("type") || "all";
-  const urlApp = searchParams.get("application") || "all";
-  const urlCap = searchParams.get("capacity") || "all";
-
-  // Filter States matching Admin Panel Hierarchy
-  const [searchTerm, setSearchTerm] = useState(urlSearch);
-  const [selectedIndustryType, setSelectedIndustryType] = useState("all");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedSubCategory, setSelectedSubCategory] = useState("all");
-  const [selectedSystemType, setSelectedSystemType] = useState("all");
-  const [selectedProjectRange, setSelectedProjectRange] = useState("all");
-  const [inStockOnly, setInStockOnly] = useState(false);
-  const [sortBy, setSortBy] = useState("featured");
+  const shopHierarchy = useSelector((state) => state.slice?.shopHierarchy || []);
+  const [selected, setSelected] = useState(null);
+  const [selectedKit, setSelectedKit] = useState(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCapacity, setSelectedCapacity] = useState(null);
+  const [comparedKits, setComparedKits] = useState([]);
+  const [isCompareDrawerOpen, setIsCompareDrawerOpen] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
-  const [activeCatalogTab, setActiveCatalogTab] = useState("combo-kits");
+  const [expandedSections, setExpandedSections] = useState({
+    panel: true,
+    inverter: false,
+    battery: false
+  });
+  const [showInStockOnly, setShowInStockOnly] = useState(false);
+  const [selectedTiers, setSelectedTiers] = useState([]);
 
-  // Live Admin Panel Hierarchy Data
-  const [hierarchyTree, setHierarchyTree] = useState([]);
+  const [filters, setFilters] = useState({
+    industryType: "all",
+    category: "all",
+    subCategory: "all",
+    systemType: "all",
+    subProjectType: "all",
+    comboKitType: "all",
+    projectRange: "all",
+    pricePerKw: "all",
+    panelBrand: "all",
+    panelTechnology: "all",
+    panelWattage: "all",
+    panelWarranty: "all",
+    panelEfficiency: "all",
+    inverterBrand: "all",
+    inverterType: "all",
+    inverterCapacity: "all",
+    inverterWarranty: "all",
+    inverterEfficiency: "all",
+    batteryBrand: "all",
+    batteryType: "all",
+    batteryCapacity: "all",
+  });
+
+  const selectedDistrict = useSelector((state) => state.slice?.selectedDistrict);
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [currentOfferIndex, setCurrentOfferIndex] = useState(0);
 
   useEffect(() => {
-    const fetchHierarchy = async () => {
+    if (!shopHierarchy || shopHierarchy.length === 0) {
+      dispatch(fetchShopHierarchy());
+    }
+  }, [dispatch, shopHierarchy]);
+
+  useEffect(() => {
+    const fetchOffers = async () => {
       try {
         const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-        const res = await axios.get(`${apiBase}/india/v1/shop/hierarchy`);
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          setHierarchyTree(res.data.data);
+        const districtId = selectedDistrict?.id || selectedDistrict?._id || "";
+        const res = await fetch(`${apiBase}/india/v1/shop/active-offers?district_id=${districtId}`);
+        const json = await res.json();
+        if (json.success) {
+          setActiveOffers(json.data || []);
         }
       } catch (err) {
-        console.warn("Failed to fetch live shop hierarchy:", err.message);
+        console.error("Error fetching active offers:", err);
       }
     };
-    fetchHierarchy();
-  }, []);
+    fetchOffers();
+  }, [selectedDistrict]);
 
-  // Cascading Hierarchy Options
-  const apiIndustryTypes = useMemo(() => {
-    return hierarchyTree.map((ind) => ({ id: ind.id, name: ind.name, slug: ind.slug }));
-  }, [hierarchyTree]);
-
-  const apiCategories = useMemo(() => {
-    if (selectedIndustryType === "all") {
-      const allCats = [];
-      hierarchyTree.forEach((ind) => {
-        (ind.categories || []).forEach((c) => {
-          if (!allCats.some((x) => x.name === c.name)) allCats.push(c);
-        });
-      });
-      return allCats;
-    }
-    const matchedInd = hierarchyTree.find(
-      (ind) => ind.name.toLowerCase() === selectedIndustryType.toLowerCase() || ind.id === selectedIndustryType
-    );
-    return matchedInd?.categories || [];
-  }, [hierarchyTree, selectedIndustryType]);
-
-  const apiSubcategories = useMemo(() => {
-    if (selectedCategory === "all") {
-      const allSubs = [];
-      apiCategories.forEach((cat) => {
-        (cat.subcategories || []).forEach((s) => {
-          if (!allSubs.some((x) => x.name === s.name)) allSubs.push(s);
-        });
-      });
-      return allSubs;
-    }
-    const matchedCat = apiCategories.find(
-      (cat) => cat.name.toLowerCase() === selectedCategory.toLowerCase() || cat.id === selectedCategory
-    );
-    return matchedCat?.subcategories || [];
-  }, [apiCategories, selectedCategory]);
-
-  const apiSystemTypes = useMemo(() => {
-    if (selectedSubCategory === "all") {
-      const allTypes = [];
-      apiSubcategories.forEach((sub) => {
-        (sub.mappedTypes || []).forEach((t) => {
-          if (!allTypes.some((x) => x.name === t.name)) allTypes.push(t);
-        });
-      });
-      return allTypes;
-    }
-    const matchedSub = apiSubcategories.find(
-      (sub) => sub.name.toLowerCase() === selectedSubCategory.toLowerCase() || sub.id === selectedSubCategory
-    );
-    return matchedSub?.mappedTypes || [];
-  }, [apiSubcategories, selectedSubCategory]);
-
-  const apiProjectRanges = useMemo(() => {
-    if (selectedSystemType === "all") {
-      const allRanges = [];
-      apiSystemTypes.forEach((t) => {
-        (t.ranges || []).forEach((r) => {
-          if (!allRanges.some((x) => x.range_label === r.range_label)) allRanges.push(r);
-        });
-      });
-      return allRanges;
-    }
-    const matchedType = apiSystemTypes.find(
-      (t) => t.name.toLowerCase() === selectedSystemType.toLowerCase() || t.id === selectedSystemType
-    );
-    return matchedType?.ranges || [];
-  }, [apiSystemTypes, selectedSystemType]);
-
-  // Modals & Drawers
-  const [quickViewKit, setQuickViewKit] = useState(null);
-  const [quickViewVariantIndex, setQuickViewVariantIndex] = useState(0);
-  const [comparedKits, setComparedKits] = useState([]);
-  const [showCompareDrawer, setShowCompareDrawer] = useState(false);
-  const [showExpertModal, setShowExpertModal] = useState(false);
-  const [expertPreselectedKit, setExpertPreselectedKit] = useState(null);
-
-  // Sync state if URL query params change
   useEffect(() => {
-    if (urlSearch) setSearchTerm(urlSearch);
-    if (urlType !== "all") {
-      if (urlType === "on-grid") setSelectedCategory("On-Grid");
-      else if (urlType === "off-grid") setSelectedCategory("Off-Grid");
-      else if (urlType === "hybrid") setSelectedCategory("Hybrid");
-    }
-    if (urlApp !== "all") {
-      if (urlApp === "residential") setSelectedIndustryType("Residential Solar");
-      else if (urlApp === "commercial") setSelectedIndustryType("Commercial & Industrial (C&I)");
-    }
-    if (urlCap !== "all") setSelectedProjectRange(urlCap);
-  }, [urlSearch, urlType, urlApp, urlCap]);
+    if (activeOffers.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentOfferIndex(prev => (prev + 1) % activeOffers.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeOffers]);
 
-  // Comparison handlers
+  useEffect(() => {
+    setSelectedKit(selected ? availableKits.find((k) => 
+      String(k.id) === String(selected?.split('-')[0])
+    ) : null);
+  }, [selected, availableKits]);
+
+  // Get unique kit types from data
+  const comboKitTypeOptions = useMemo(() => {
+    let filteredKits = availableKits;
+
+    if (filters.category && filters.category !=="all") {
+      filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    if (filters.subCategory && filters.subCategory !=="all") {
+      filteredKits = filteredKits.filter(kit => kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase());
+    }
+    if (filters.systemType && filters.systemType !=="all") {
+      filteredKits = filteredKits.filter(kit => kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() || kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase());
+    }
+    if (filters.projectRange && filters.projectRange !=="all") {
+      filteredKits = filteredKits.filter(kit => String(kit.projectRange?.id) === String(filters.projectRange));
+    }
+
+    const types = [...new Set(filteredKits
+      .filter(kit => !kit.hasNoAssignedVariants)
+      .flatMap(kit => 
+        kit.variants?.map(v => v.productTier) || []
+      ).filter(Boolean)
+    )];
+
+    return [
+      { value:"all", text:"All Combo Kit Types" },
+      ...types.map(type => ({ 
+        value: type.toLowerCase(), 
+        text: type 
+      }))
+    ];
+  }, [availableKits, filters.category, filters.subCategory, filters.systemType, filters.projectRange]);
+
+  const industryTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        if (ind.name && !seen.has(ind.name.toLowerCase())) {
+          seen.add(ind.name.toLowerCase());
+          list.push({ value: ind.name, text: ind.name, id: ind.id });
+        }
+      });
+    }
+    availableKits.forEach((kit) => {
+      const name = kit.industryType || kit.industry_type_name;
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ value: name, text: name });
+      }
+    });
+
+    return [
+      { value:"all", text:"All Industry Types" },
+      ...list
+    ];
+  }, [shopHierarchy, availableKits]);
+
+  const categoryOptions = useMemo(() => {
+    const catMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType) ||
+          ind.slug?.toLowerCase() === filters.industryType.toLowerCase()
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (cat.name && !catMap.has(cat.name.toLowerCase())) {
+            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat.id });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter(kit => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    filteredKits.forEach(kit => {
+      if (kit.category && !catMap.has(kit.category.toLowerCase())) {
+        catMap.set(kit.category.toLowerCase(), { value: kit.category, text: kit.category });
+      }
+    });
+
+    return [
+      { value:"all", text:"All Categories" },
+      ...Array.from(catMap.values())
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    const subsMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase() || String(cat.id) === String(filters.category)) {
+            (cat.subcategories || []).forEach(sub => {
+              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+                subsMap.set(sub.name.toLowerCase(), {
+                  value: sub.name,
+                  text: sub.name,
+                  id: sub.id,
+                  image: sub.image || null
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter(kit => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    if (filters.category && filters.category !== "all") {
+      filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    filteredKits.forEach(kit => {
+      const subName = kit.subCategory || kit.usageType;
+      if (subName && !subsMap.has(subName.toLowerCase())) {
+        subsMap.set(subName.toLowerCase(), {
+          value: subName,
+          text: subName,
+          image: kit.usageTypeImage || null
+        });
+      }
+    });
+
+    return [
+      { value:"all", text:"All Sub-Categories" },
+      ...Array.from(subsMap.values())
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType, filters.category]);
+
+  const systemTypeOptions = useMemo(() => {
+    const typesMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase()) {
+            (cat.subcategories || []).forEach(sub => {
+              if (filters.subCategory === "all" || sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()) {
+                (sub.mappedTypes || []).forEach(mt => {
+                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                    typesMap.set(mt.name.toLowerCase(), {
+                      value: mt.name,
+                      text: mt.name,
+                      id: mt.id || mt.type_id
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter(kit => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    if (filters.category && filters.category !== "all") {
+      filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    if (filters.subCategory && filters.subCategory !== "all") {
+      filteredKits = filteredKits.filter(kit => (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()));
+    }
+    filteredKits.forEach(kit => {
+      const typeName = kit.projectType || kit.inverter?.type || kit.systemType;
+      if (typeName && !typesMap.has(typeName.toLowerCase())) {
+        typesMap.set(typeName.toLowerCase(), { value: typeName, text: typeName });
+      }
+    });
+
+    return [
+      { value:"all", text:"All System Types" },
+      ...Array.from(typesMap.values())
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType, filters.category, filters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    const rangesMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (filters.industryType && filters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(ind =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+        );
+      }
+      relevantInds.forEach(ind => {
+        (ind.categories || []).forEach(cat => {
+          if (filters.category === "all" || cat.name?.toLowerCase() === filters.category?.toLowerCase()) {
+            (cat.subcategories || []).forEach(sub => {
+              if (filters.subCategory === "all" || sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()) {
+                (sub.mappedTypes || []).forEach(mt => {
+                  if (filters.systemType === "all" || mt.name?.toLowerCase() === filters.systemType?.toLowerCase()) {
+                    (mt.ranges || []).forEach(r => {
+                      const idVal = String(r.id || r.range_label);
+                      if (idVal && !rangesMap.has(idVal)) {
+                        rangesMap.set(idVal, {
+                          value: idVal,
+                          text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || 'kW'}`,
+                          min: r.min_value || 0
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    let filteredKits = availableKits;
+    if (filters.industryType && filters.industryType !== "all") {
+      filteredKits = filteredKits.filter(kit => {
+        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
+        const sel = filters.industryType.toLowerCase();
+        return ind === sel || (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+    if (filters.category && filters.category !== "all") {
+      filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
+    }
+    if (filters.subCategory && filters.subCategory !== "all") {
+      filteredKits = filteredKits.filter(kit => (kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()));
+    }
+    if (filters.systemType && filters.systemType !== "all") {
+      filteredKits = filteredKits.filter(kit => (kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() || kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase() || kit.systemType?.toLowerCase() === filters.systemType.toLowerCase()));
+    }
+    filteredKits.forEach(kit => {
+      if (kit.projectRange) {
+        const idVal = String(kit.projectRange.id || kit.projectRange.text);
+        if (idVal && !rangesMap.has(idVal)) {
+          rangesMap.set(idVal, {
+            value: idVal,
+            text: kit.projectRange.text || idVal,
+            min: kit.projectRange.min || 0
+          });
+        }
+      }
+    });
+
+    const uniqueRanges = Array.from(rangesMap.values()).sort((a, b) => (a.min || 0) - (b.min || 0));
+
+    return [
+      { value:"all", text:"All Project Ranges" },
+      ...uniqueRanges.map(r => ({ value: r.value, text: r.text }))
+    ];
+  }, [shopHierarchy, availableKits, filters.industryType, filters.category, filters.subCategory, filters.systemType]);
+
+  const getDropdownOptions = (key) => {
+    switch (key) {
+      case "industryType":
+        return industryTypeOptions;
+      case "comboKitType":
+        return comboKitTypeOptions;
+      case "category":
+        return categoryOptions;
+      case "subCategory":
+        return subCategoryOptions;
+      case "systemType":
+        return systemTypeOptions;
+      case "projectRange":
+        return projectRangeOptions;
+      default:
+        return options[key] || [];
+    }
+  };
+
+  const mainFilterKeys = ["industryType", "category", "subCategory", "systemType", "projectRange"];
+  const subFilterKeys = ["comboKitType","pricePerKw"];
+
+  const clearAllFilters = () => {
+    setFilters({
+      category:"all",
+      subCategory:"all",
+      systemType:"all",
+      subProjectType:"all",
+      comboKitType:"all",
+      projectRange:"all",
+      pricePerKw:"all",
+      panelBrand:"all",
+      panelTechnology:"all",
+      panelWattage:"all",
+      panelWarranty:"all",
+      panelEfficiency:"all",
+      inverterBrand:"all",
+      inverterType:"all",
+      inverterCapacity:"all",
+      inverterWarranty:"all",
+      inverterEfficiency:"all",
+      batteryBrand:"all",
+      batteryType:"all",
+      batteryCapacity:"all",
+    });
+    setSearchTerm("");
+    setSelectedCapacity(null);
+    setShowInStockOnly(false);
+    setSelectedTiers([]);
+  };
+
   const handleToggleCompare = (kit) => {
     setComparedKits((prev) => {
-      const exists = prev.find((k) => k.id === kit.id);
-      if (exists) return prev.filter((k) => k.id !== kit.id);
+      const exists = prev.some((k) => k.id === kit.id);
+      if (exists) {
+        return prev.filter((k) => k.id !== kit.id);
+      }
       if (prev.length >= 4) {
-        alert("You can compare up to 4 complete solar kits simultaneously.");
+        alert("You can compare up to 4 solar kits at a time.");
         return prev;
       }
       return [...prev, kit];
     });
   };
 
-  const handleQuickView = (kit, variantIdx = 0) => {
-    setQuickViewKit(kit);
-    setQuickViewVariantIndex(variantIdx);
+  const clearMainFilters = () => {
+    const newFilters = { ...filters };
+    mainFilterKeys.forEach((k) => (newFilters[k] ="all"));
+    setFilters(newFilters);
   };
 
-  const handleOpenExpertHelp = (kit = null) => {
-    setExpertPreselectedKit(kit);
-    setShowExpertModal(true);
+  const clearSubFilters = () => {
+    const newFilters = { ...filters };
+    subFilterKeys.forEach((k) => (newFilters[k] ="all"));
+    setFilters(newFilters);
   };
 
-  // Filter and sort logic
-  const filteredKits = useMemo(() => {
+  const clearProductFilters = () => {
+    const newFilters = { ...filters };
+    Object.keys(newFilters).forEach((k) => {
+      if (![...mainFilterKeys, ...subFilterKeys].includes(k)) newFilters[k] ="all";
+    });
+    setFilters(newFilters);
+  };
+
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const toggleTier = (tier) => {
+    setSelectedTiers(prev => 
+      prev.includes(tier) 
+        ? prev.filter(t => t !== tier)
+        : [...prev, tier]
+    );
+  };
+
+  const finalKits = useMemo(() => {
     let result = [...availableKits];
 
-    // 1. Search filter
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase().trim();
-      result = result.filter(
-        (k) =>
-          safeString(k.kitName).toLowerCase().includes(q) ||
-          safeString(k.industryType).toLowerCase().includes(q) ||
-          safeString(k.industry_type_name).toLowerCase().includes(q) ||
-          safeString(k.category).toLowerCase().includes(q) ||
-          safeString(k.subCategory).toLowerCase().includes(q) ||
-          safeString(k.usageType).toLowerCase().includes(q) ||
-          safeString(k.projectType).toLowerCase().includes(q) ||
-          safeString(k.brand).toLowerCase().includes(q) ||
-          safeString(k.description).toLowerCase().includes(q) ||
-          `${k.capacityKW}kw`.includes(q.replace(/\s+/g, ""))
-      );
-    }
+    // Only show kits that have at least one variant assigned from the backend
+    result = result.filter(k => k.variants && k.variants.length > 0);
 
-    // 2. Industry Type filter
-    if (selectedIndustryType !== "all") {
-      const target = selectedIndustryType.toLowerCase();
-      result = result.filter(
-        (k) =>
-          safeString(k.industryType).toLowerCase().includes(target) ||
-          safeString(k.industry_type_name).toLowerCase().includes(target) ||
-          safeString(k.usageType).toLowerCase().includes(target) ||
-          safeString(k.category).toLowerCase().includes(target) ||
-          (target.includes("residential") && (safeString(k.usageType).toLowerCase().includes("residential") || safeString(k.category).toLowerCase().includes("residential"))) ||
-          (target.includes("commercial") && (safeString(k.usageType).toLowerCase().includes("commercial") || safeString(k.category).toLowerCase().includes("commercial"))) ||
-          (target.includes("agriculture") && (safeString(k.usageType).toLowerCase().includes("pump") || safeString(k.category).toLowerCase().includes("pump") || safeString(k.kitName).toLowerCase().includes("pump"))) ||
-          (target.includes("utility") && (safeString(k.usageType).toLowerCase().includes("utility") || (k.capacityKW || 0) >= 50))
-      );
-    }
-
-    // 3. Category filter
-    if (selectedCategory !== "all") {
-      const target = selectedCategory.toLowerCase();
-      result = result.filter(
-        (k) =>
-          safeString(k.category).toLowerCase().includes(target) ||
-          safeString(k.projectType).toLowerCase().includes(target) ||
-          safeString(k.inverter?.type).toLowerCase().includes(target) ||
-          safeString(k.subCategory).toLowerCase().includes(target)
-      );
-    }
-
-    // 4. Sub-Category filter
-    if (selectedSubCategory !== "all") {
-      const target = selectedSubCategory.toLowerCase();
-      result = result.filter(
-        (k) =>
-          safeString(k.subCategory).toLowerCase().includes(target) ||
-          safeString(k.usageType).toLowerCase().includes(target) ||
-          safeString(k.kitName).toLowerCase().includes(target)
-      );
-    }
-
-    // 5. System Type filter
-    if (selectedSystemType !== "all") {
-      const target = selectedSystemType.toLowerCase();
-      result = result.filter(
-        (k) =>
-          safeString(k.projectType).toLowerCase().includes(target) ||
-          safeString(k.inverter?.type).toLowerCase().includes(target) ||
-          (target.includes("grid") && safeString(k.inverter?.type).toLowerCase().includes("grid"))
-      );
-    }
-
-    // 6. Project Range / Capacity filter
-    if (selectedProjectRange !== "all") {
-      const parts = selectedProjectRange.match(/\d+(\.\d+)?/g);
-      if (parts && parts.length >= 2) {
-        const minVal = parseFloat(parts[0]);
-        const maxVal = parseFloat(parts[1]);
-        result = result.filter((k) => {
-          const cap = k.capacityKW || 0;
-          return cap >= minVal && cap <= maxVal;
-        });
+    // Capacity quick filter
+    if (selectedCapacity !== null) {
+      if (selectedCapacity === 15) {
+        result = result.filter((k) => (k.capacityKW || 0) >= 15);
       } else {
-        const capNum = parseFloat(selectedProjectRange);
-        if (!isNaN(capNum)) {
-          result = result.filter((k) => (k.capacityKW || 0) === capNum || Math.floor(k.capacityKW || 0) === capNum);
-        }
+        result = result.filter((k) => Math.abs((k.capacityKW || 0) - selectedCapacity) < 0.6);
       }
     }
 
-    // 7. In-Stock filter
-    if (inStockOnly) {
-      result = result.filter((k) => k.variants?.some((v) => v.inStock !== false));
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(
+        (k) =>
+          k.kitName?.toLowerCase().includes(term) ||
+          k.brand?.toLowerCase().includes(term) ||
+          k.usageType?.toLowerCase().includes(term) ||
+          k.description?.toLowerCase().includes(term) ||
+          (k.capacityKW && `${k.capacityKW}kw`.includes(term.replace(/\s+/g, ""))) ||
+          k.variants?.some(v => v.productTier?.toLowerCase().includes(term))
+      );
     }
 
-    // 8. Sorting
-    if (sortBy === "price-low") {
-      result.sort((a, b) => (a.variants?.[0]?.ourPrice || 0) - (b.variants?.[0]?.ourPrice || 0));
-    } else if (sortBy === "price-high") {
-      result.sort((a, b) => (b.variants?.[0]?.ourPrice || 0) - (a.variants?.[0]?.ourPrice || 0));
-    } else if (sortBy === "capacity-high") {
-      result.sort((a, b) => (b.capacityKW || 0) - (a.capacityKW || 0));
-    } else if (sortBy === "capacity-low") {
-      result.sort((a, b) => (a.capacityKW || 0) - (b.capacityKW || 0));
-    } else if (sortBy === "savings") {
-      result.sort((a, b) => {
-        const savA = (a.variants?.[0]?.marketPrice || 0) - (a.variants?.[0]?.ourPrice || 0);
-        const savB = (b.variants?.[0]?.marketPrice || 0) - (b.variants?.[0]?.ourPrice || 0);
-        return savB - savA;
-      });
+    // Tier filter
+    if (selectedTiers.length > 0) {
+      result = result.filter(k => 
+        k.variants?.some(v => 
+          selectedTiers.includes(v.productTier?.toLowerCase())
+        )
+      );
     }
+
+    // Stock filter
+    if (showInStockOnly) {
+      result = result.filter((k) => 
+        k.variants?.some(v => v.inStock === true)
+      );
+    }
+
+    // Apply other filters
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value ==="all") return;
+      
+      result = result.filter((k) => {
+        switch (key) {
+          case "industryType": {
+            const kitInd = (k.industryType || k.industry_type_name || "").toLowerCase();
+            const selInd = value.toLowerCase();
+            if (kitInd === selInd) return true;
+            if (k.industry_type_id && String(k.industry_type_id) === String(value)) return true;
+            return kitInd.includes(selInd) || selInd.includes(kitInd);
+          }
+
+          case "category": {
+            const kitCat = (k.category || "").toLowerCase();
+            const selCat = value.toLowerCase();
+            if (kitCat === selCat) return true;
+            if (k.category_id && String(k.category_id) === String(value)) return true;
+            return kitCat.includes(selCat) || selCat.includes(kitCat);
+          }
+            
+          case "subCategory": {
+            const kitSub = (k.subCategory || k.usageType || "").toLowerCase();
+            const selSub = value.toLowerCase();
+            if (kitSub === selSub) return true;
+            if (k.subcategory_id && String(k.subcategory_id) === String(value)) return true;
+            return kitSub.includes(selSub) || selSub.includes(kitSub);
+          }
+            
+          case "systemType": {
+            const kitType = (k.projectType || k.inverter?.type || k.systemType || "").toLowerCase();
+            const selType = value.toLowerCase();
+            if (kitType === selType) return true;
+            return kitType.includes(selType) || selType.includes(kitType);
+          }
+            
+          case "subProjectType":
+            return k.subProjectType?.toLowerCase() === value.toLowerCase();
+
+          case "comboKitType":
+            if (k.hasNoAssignedVariants) return false;
+            return k.variants?.some(v => v.productTier?.toLowerCase() === value);
+            
+          case "pricePerKw": {
+            const hasVariantInRange = k.variants?.some(v => {
+              const pricePerKw = v.ourPrice / (k.capacityKW || 1);
+              const ranges = {"0-25000": [0, 25000],"25000-60000": [25000, 50000],"50000-75000": [50000, 75000],"75000-100000": [75000, 100000],"100000+": [100000, Infinity],
+              };
+              const [min, max] = ranges[value] || [0, Infinity];
+              return pricePerKw >= min && pricePerKw <= max;
+            });
+            return hasVariantInRange;
+          }
+          
+          case "projectRange": {
+            if (!k.projectRange) return false;
+            return String(k.projectRange.id) === String(value) || String(k.projectRange.text) === String(value) || String(k.project_range_id) === String(value);
+          }
+
+          // Panel filters
+          case"panelBrand":
+            return k.panel?.brandName?.toLowerCase() === value;
+          case"panelTechnology":
+            return k.panel?.technologyType?.toLowerCase() === value;
+          case"panelWattage": {
+            const watt = k.panel?.wattPerPanel || 0;
+            // Support exact numeric value (from dynamic options, e.g."550") or range (e.g."500-600")
+            const numVal = parseFloat(value);
+            if (!isNaN(numVal) && String(numVal) === value) {
+              return watt === numVal;
+            }
+            const ranges = {"under-300": [0, 300],"300-400": [300, 400],"400-500": [400, 500],"500-600": [500, 600],"600+": [600, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return watt >= min && watt <= max;
+          }
+          case"panelWarranty": {
+            const warranty = k.panel?.warrantyYears || 0;
+            // Support exact numeric value (from dynamic options, e.g."25") or range (e.g."20+")
+            const numVal = parseFloat(value);
+            if (!isNaN(numVal) && String(numVal) === value) {
+              return warranty === numVal;
+            }
+            const ranges = {"1-5": [1, 5],"5-10": [5, 10],"10-15": [10, 15],"15-20": [15, 20],"20+": [20, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return warranty >= min && warranty <= max;
+          }
+          case"panelEfficiency": {
+            const eff = k.panel?.efficiencyPercent || 0;
+            const ranges = {"under-15": [0, 15],"15-18": [15, 18],"18-20": [18, 20],"20-22": [20, 22],"22+": [22, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return eff >= min && eff <= max;
+          }
+
+          // Inverter filters
+          case"inverterBrand":
+            return k.inverter?.brandName?.toLowerCase() === value;
+          case"inverterType":
+            return k.inverter?.type?.toLowerCase() === value;
+          case"inverterCapacity": {
+            const cap = k.inverter?.capacityKW || 0;
+            // Support exact numeric value (from dynamic options, e.g."5") or range (e.g."3-5")
+            const numVal = parseFloat(value);
+            if (!isNaN(numVal) && String(numVal) === value) {
+              return cap === numVal;
+            }
+            const ranges = {"under-1": [0, 1],"1-3": [1, 3],"3-5": [3, 5],"5-10": [5, 10],"10+": [10, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return cap >= min && cap <= max;
+          }
+          case"inverterWarranty": {
+            const warranty = k.inverter?.warrantyYears || 0;
+            const ranges = {"1-5": [1, 5],"5-10": [5, 10],"10-15": [10, 15],"15-20": [15, 20],"20+": [20, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return warranty >= min && warranty <= max;
+          }
+          case"inverterEfficiency": {
+            const eff = k.inverter?.efficiencyPercent || 0;
+            const ranges = {"under-15": [0, 15],"15-18": [15, 18],"18-20": [18, 20],"20-22": [20, 22],"22+": [22, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return eff >= min && eff <= max;
+          }
+
+          // Battery filters
+          case"batteryBrand":
+            return k.battery?.brandName?.toLowerCase() === value;
+          case"batteryType":
+            return k.battery?.type?.toLowerCase() === value;
+          case"batteryCapacity": {
+            const cap = k.battery?.capacityKWh || 0;
+            const ranges = {"under-2": [0, 2],"2-5": [2, 5],"5-10": [5, 10],"10-20": [10, 20],"20+": [20, Infinity],
+            };
+            const [min, max] = ranges[value] || [0, Infinity];
+            return cap >= min && cap <= max;
+          }
+
+          default:
+            return true;
+        }
+      });
+    });
 
     return result;
-  }, [
-    availableKits,
-    searchTerm,
-    selectedIndustryType,
-    selectedCategory,
-    selectedSubCategory,
-    selectedSystemType,
-    selectedProjectRange,
-    inStockOnly,
-    sortBy,
-  ]);
+  }, [availableKits, searchTerm, filters, showInStockOnly, selectedTiers, selectedCapacity]);
 
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (searchTerm.trim()) count++;
-    if (selectedIndustryType !== "all") count++;
-    if (selectedCategory !== "all") count++;
-    if (selectedSubCategory !== "all") count++;
-    if (selectedSystemType !== "all") count++;
-    if (selectedProjectRange !== "all") count++;
-    if (inStockOnly) count++;
-    return count;
-  }, [
-    searchTerm,
-    selectedIndustryType,
-    selectedCategory,
-    selectedSubCategory,
-    selectedSystemType,
-    selectedProjectRange,
-    inStockOnly,
-  ]);
+  const activeFiltersCount = useMemo(
+    () => Object.values(filters).filter((v) => v !=="all").length + 
+           (showInStockOnly ? 1 : 0) + 
+           selectedTiers.length +
+           (selectedCapacity !== null ? 1 : 0),
+    [filters, showInStockOnly, selectedTiers, selectedCapacity]
+  );
 
-  const handleClearAllFilters = () => {
-    setSearchTerm("");
-    setSelectedIndustryType("all");
-    setSelectedCategory("all");
-    setSelectedSubCategory("all");
-    setSelectedSystemType("all");
-    setSelectedProjectRange("all");
-    setInStockOnly(false);
-    setSortBy("featured");
-    navigate("/shop");
+  const inStockKitsCount = useMemo(() =>
+    availableKits.filter(kit => kit.variants?.some(v => v.inStock)).length,
+    [availableKits]
+  );
+
+
+  // Mobile Filters Drawer Component
+  const MobileFiltersDrawer = () => {
+    const drawerRef = useRef(null);
+    const [startY, setStartY] = useState(0);
+    const [currentY, setCurrentY] = useState(0);
+    const [isSwiping, setIsSwiping] = useState(false);
+
+    const handleTouchStart = (e) => {
+      setStartY(e.touches[0].clientY);
+      setIsSwiping(true);
+    };
+
+    const handleTouchMove = (e) => {
+      if (!isSwiping) return;
+      const currentY = e.touches[0].clientY;
+      setCurrentY(currentY);
+
+      const diff = currentY - startY;
+      if (diff > 0) {
+        drawerRef.current.style.transform =`translateY(${diff}px)`;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!isSwiping) return;
+
+      const diff = currentY - startY;
+      if (diff > 100) {
+        setShowMobileFilters(false);
+      } else {
+        drawerRef.current.style.transform = 'translateY(0)';
+      }
+
+      setIsSwiping(false);
+      setStartY(0);
+      setCurrentY(0);
+    };
+
+    return (
+      <div className="lg:hidden">
+        {/* Backdrop */}
+        {showMobileFilters && (
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"
+            onClick={() => setShowMobileFilters(false)}
+          />
+        )}
+
+        {/* Drawer */}
+        <div
+          ref={drawerRef}
+          className={`
+            fixed bottom-0 left-0 right-0 bg-surface rounded-t-2xl shadow-lg z-50 transform transition-transform duration-300
+            ${showMobileFilters ? 'translate-y-0' : 'translate-y-full'}`}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Drag Handle */}
+          <div className="flex justify-center pt-3 pb-2">
+            <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
+          </div>
+
+          {/* Header */}
+          <div className="bg-linear-120 from-primary to-primary-end px-4 py-3 rounded-t-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg text-white">All Filters</h3>
+                <p className="text-sm text-white/80">
+                  {activeFiltersCount > 0 ?`${activeFiltersCount} active filters` : 'Adjust your search'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {activeFiltersCount > 0 && (
+                  <Button
+                    onClick={clearAllFilters}
+                    variant="ghost"
+                    size="sm"
+                    className="text-white hover:bg-white/20"
+                  >
+                    Clear All
+                  </Button>
+                )}
+                <IconButton
+                  onClick={() => setShowMobileFilters(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/20"
+                >
+                  <FiX size={20} />
+                </IconButton>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Content */}
+          <div className="max-h-[65vh] overflow-y-auto bg-surface">
+            <div className="p-4 space-y-6">
+              {/* Search */}
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted" size={18} />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search kits..."
+                  className="w-full pl-10 pr-3 py-2.5 text-sm border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-surface-hover"
+                />
+                {searchTerm && (
+                  <IconButton
+                    onClick={() => setSearchTerm("")}
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                  >
+                    <FiX size={16} />
+                  </IconButton>
+                )}
+              </div>
+
+              {/* In Stock Filter */}
+              <div className="p-4 border border-border rounded-xl bg-surface-hover">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showInStockOnly}
+                    onChange={(e) => setShowInStockOnly(e.target.checked)}
+                    className="hidden"
+                  />
+                  <div className={`flex items-center justify-center w-5 h-5 border rounded-md transition-all ${
+                    showInStockOnly
+                      ?"bg-linear-120 from-primary to-primary-end border-primary text-white"
+                      :"border-border text-transparent"
+                  }`}>
+                    {showInStockOnly && <FiCheckSquare size={14} />}
+                  </div>
+                  <div className="flex-1">
+                    <span className={`font-medium ${showInStockOnly ? 'text-primary dark:text-info ' : 'text-text-primary dark:text-info '}`}>
+                      Show In Stock Only
+                    </span>
+                    <p className="text-xs text-text-secondary mt-1">
+                      {inStockKitsCount} of {availableKits.length} kits available
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Quick Filters */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FiPackage className="text-primary dark:text-info" size={16} />
+                    <h4 className="font-semibold text-text-primary dark:text-info">Quick Filters</h4>
+                  </div>
+                  <Button onClick={clearMainFilters} variant="link" size="sm">
+                    Clear
+                  </Button>
+                </div>
+                <div className="grid gap-3">
+                  <Dropdown
+                    label="Industry Type"
+                    options={industryTypeOptions}
+                    value={filters.industryType}
+                    onChange={(val) => setFilters((prev) => ({
+                      ...prev,
+                      industryType: val,
+                      category: "all",
+                      subCategory: "all",
+                      systemType: "all",
+                      projectRange: "all"
+                    }))}
+                    className="w-full"
+                  />
+                  <Dropdown
+                    label="Category"
+                    options={categoryOptions}
+                    value={filters.category}
+                    onChange={(val) => setFilters((prev) => ({
+                      ...prev,
+                      category: val,
+                      subCategory:"all",
+                      systemType:"all",
+                      projectRange:"all"
+                    }))}
+                    className="w-full"
+                  />
+                  <Dropdown
+                    label="Sub Category"
+                    options={subCategoryOptions}
+                    value={filters.subCategory}
+                    disabled={filters.category ==="all"}
+                    onChange={(val) => setFilters((prev) => ({
+                      ...prev,
+                      subCategory: val,
+                      systemType:"all",
+                      projectRange:"all"
+                    }))}
+                    className="w-full"
+                  />
+                  <Dropdown
+                    label="System Type"
+                    options={systemTypeOptions}
+                    value={filters.systemType}
+                    disabled={filters.category ==="all" || filters.subCategory ==="all"}
+                    onChange={(val) => setFilters((prev) => ({
+                      ...prev,
+                      systemType: val,
+                      projectRange:"all"
+                    }))}
+                    className="w-full"
+                  />
+                  <Dropdown
+                    label="Project Range"
+                    options={projectRangeOptions}
+                    value={filters.projectRange}
+                    disabled={filters.category ==="all" || filters.subCategory ==="all" || filters.systemType ==="all"}
+                    onChange={(val) => setFilters((prev) => ({
+                      ...prev,
+                      projectRange: val
+                    }))}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              {/* Performance Filters */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FiTrendingUp className="text-primary dark:text-info" size={16} />
+                    <h4 className="font-semibold text-text-primary dark:text-info">Performance Filters</h4>
+                  </div>
+                  <Button onClick={clearSubFilters} variant="link" size="sm">
+                    Clear
+                  </Button>
+                </div>
+                <div className="grid gap-3">
+                  {subFilterKeys.map((key) => (
+                    <Dropdown
+                      key={key}
+                      label={key ==="comboKitType" ?"Combo Kit Type" : key.replace(/([A-Z])/g," $1").replace(/^./, str => str.toUpperCase())}
+                      options={key ==="comboKitType" ? getDropdownOptions(key) : options[key]}
+                      value={filters[key]}
+                      onChange={(val) => setFilters((prev) => ({ ...prev, [key]: val }))}
+                      className="w-full"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Product Filters */}
+              <div className="border-t border-border pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FiSliders className="text-primary dark:text-info" size={16} />
+                    <h4 className="font-semibold text-text-primary dark:text-info">Product Filters</h4>
+                  </div>
+                  <Button onClick={clearProductFilters} variant="link" size="sm">
+                    Clear All
+                  </Button>
+                </div>
+                <KitFilters
+                  availableKits={availableKits}
+                  filters={filters}
+                  setFilters={setFilters}
+                  clearFilters={clearProductFilters}
+                  filterKeys={[]}
+                  expandedSections={expandedSections}
+                  onToggleSection={toggleSection}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Actions */}
+          <div className="sticky bottom-0 left-0 right-0 bg-surface border-t border-border p-4">
+            <div className="flex gap-3">
+              <Button onClick={clearAllFilters} variant="secondary" size="lg" fullWidth>
+                Reset All
+              </Button>
+              <Button onClick={() => setShowMobileFilters(false)} variant="primary" size="lg" fullWidth>
+                <span className="flex items-center justify-center gap-2">
+                  Show Results
+                  <span className="bg-white/20 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">
+                    {finalKits.length}
+                  </span>
+                </span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text-primary py-4 sm:py-6 max-w-7xl mx-auto px-3 sm:px-6 space-y-4 sm:space-y-6">
-      
-      {/* Breadcrumbs */}
-      <nav className="text-xs text-text-muted flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5" aria-label="Breadcrumb">
-        <Link to="/" className="hover:text-primary transition-colors shrink-0">Home</Link>
-        <span>/</span>
-        <span className="text-primary font-bold shrink-0">Solar Kit Marketplace</span>
-        <span>/</span>
-        <span className="text-text-primary font-bold truncate">
-          {activeCatalogTab === "combo-kits" ? "Combo Kit Configuration" : "Customize Kit Configuration"}
-        </span>
-      </nav>
-
-      {/* ─── Header Banner with Active Kit Count & Mode Switcher ───── */}
-      <div className="bg-gradient-to-r from-primary via-primary-end to-primary-navy rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-          <div className="space-y-1.5 sm:space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold text-white flex items-center gap-1.5">
-                <FiPackage size={13} className="text-secondary" />
-                <span>Turnkey Solar Power Kits</span>
+    <div className="min-h-screen">
+      {/* Header */}
+      <div className="bg-linear-120 from-primary to-primary-end rounded-xl shadow-md mb-6">
+        <div className="mx-auto px-4 py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-white">
+                Pre-Configured Solar Kits
+              </h1>
+              <p className="text-sm lg:text-base text-white/80 mt-1">
+                Browse and compare our expertly curated solar solutions
+              </p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
+              <span className="text-white font-semibold text-sm lg:text-base">
+                {finalKits.length} of {availableKits.length} kits
+                {showInStockOnly &&` (${inStockKitsCount} in stock)`}
               </span>
             </div>
-            <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight font-heading">
-              {activeCatalogTab === "combo-kits" ? "Combokit Configuration" : "Customize Kit Configuration"}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
-              {activeCatalogTab === "combo-kits"
-                ? "Browse verified, pre-configured solar combo kits bundled with Tier-1 solar panels, inverters, mounting rails, and AC/DC safety boxes."
-                : "Customize your own solar power kit by choosing tailored panel brands, inverters, and electrical protection components."}
-            </p>
           </div>
-
-          {/* Stats Badge & Custom Kit Action */}
-          <div className="flex flex-row items-center gap-2.5 sm:gap-3 shrink-0">
-            <div className="flex-1 sm:flex-none bg-white/15 backdrop-blur-md border border-white/25 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-center shadow-xs">
-              <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-300 block tracking-wider">
-                Configured Kits
-              </span>
-              <span className="text-xl sm:text-2xl font-black text-white">
-                {availableKits.length}
-              </span>
-              <span className="text-[9px] sm:text-[10px] text-emerald-300 block font-semibold">Active India Catalog</span>
-            </div>
-
-            <Button
-              variant={activeCatalogTab === "custom-kits" ? "primary" : "secondary"}
-              size="lg"
-              onClick={() => {
-                if (activeCatalogTab === "combo-kits") {
-                  navigate("/custom-combo-kit");
-                } else {
-                  setActiveCatalogTab("combo-kits");
-                }
-              }}
-              className="flex-1 sm:flex-none font-bold py-3 sm:py-3.5 px-4 sm:px-5 rounded-2xl shadow-md cursor-pointer whitespace-nowrap text-xs sm:text-sm justify-center"
-            >
-              {activeCatalogTab === "combo-kits" ? "+ Customize Kit" : "View Combo Kits"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Mode Switcher Tabs */}
-        <div className="flex items-center gap-2 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-white/15 overflow-x-auto no-scrollbar">
-          <button
-            type="button"
-            onClick={() => setActiveCatalogTab("combo-kits")}
-            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
-              activeCatalogTab === "combo-kits"
-                ? "bg-white text-primary shadow-sm"
-                : "bg-white/10 text-white hover:bg-white/20"
-            }`}
-          >
-            <FiSun size={13} />
-            <span>Pre-Configured Combo Kits ({availableKits.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate("/custom-combo-kit")}
-            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
-              activeCatalogTab === "custom-kits"
-                ? "bg-white text-primary shadow-sm"
-                : "bg-white/10 text-white hover:bg-white/20"
-            }`}
-          >
-            <FiSliders size={13} />
-            <span>Custom Brand Sizing Tool</span>
-          </button>
         </div>
       </div>
 
-      {/* ─── Exact Admin Panel Filter Bar ──────────────────────────── */}
-      <div className="bg-surface rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-border shadow-xs space-y-3 sm:space-y-4">
+      {/* ─── Shop by System Capacity (kW) Quick Filter Strip ─── */}
+      <div className="bg-surface rounded-2xl p-5 sm:p-6 border border-border shadow-xs mb-6 text-center">
+        <span className="text-[11px] font-black uppercase tracking-wider text-primary">
+          ROOFTOP SIZING
+        </span>
+        <h2 className="text-xl sm:text-2xl font-black text-text-primary mt-1 font-heading">
+          Shop by System Capacity (kW)
+        </h2>
+        <p className="text-xs text-text-secondary mt-1 max-w-xl mx-auto mb-5">
+          Browse complete kits calibrated for your daily unit consumption and load requirements.
+        </p>
 
-        
-        {/* Top Title & Clear Filter Button */}
-        <div className="flex items-center justify-between pb-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <FiSliders className="text-primary" size={17} />
-            <h3 className="font-extrabold text-sm text-text-primary uppercase tracking-wider">
-              Filter Catalog Kits
-            </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {SYSTEM_CAPACITIES.map((c) => {
+            const isActive = selectedCapacity === c.kw;
+            return (
+              <button
+                key={c.kw}
+                type="button"
+                onClick={() => setSelectedCapacity(isActive ? null : c.kw)}
+                className={`
+                  p-4 rounded-2xl border transition-all text-center flex flex-col items-center justify-between cursor-pointer group
+                  ${isActive
+                    ? "bg-primary/10 border-primary ring-2 ring-primary/30 shadow-md transform -translate-y-0.5"
+                    : "bg-surface hover:bg-slate-50 dark:hover:bg-slate-800/60 border-border hover:border-primary/40 hover:shadow-xs"
+                  }
+                `}
+              >
+                <div className={`w-8 h-8 rounded-xl font-black text-xs flex items-center justify-center mb-2.5 transition-colors ${
+                  isActive
+                    ? "bg-primary text-white"
+                    : "bg-sky-50 dark:bg-sky-950/60 text-primary group-hover:bg-primary group-hover:text-white"
+                }`}>
+                  {c.kw}
+                </div>
+                <h4 className="font-black text-sm text-text-primary">
+                  {c.label}
+                </h4>
+                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                  {c.units}
+                </p>
+                <p className="text-[10px] text-text-muted mt-0.5 line-clamp-1">
+                  {c.note}
+                </p>
+                {isActive && (
+                  <span className="text-[9px] font-black text-primary mt-1.5 uppercase tracking-wide">
+                    ● Selected
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Active Offers Banners */}
+      {activeOffers.length > 0 && (
+        <div className="relative overflow-hidden rounded-xl mb-6 shadow-sm border border-border bg-surface">
+          <div 
+            className="flex transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${currentOfferIndex * 100}%)` }}
+          >
+            {activeOffers.map((offer) => {
+              let bgGradient = "from-amber-500 to-orange-600";
+              let icon = "⚡";
+              let badgeText = "FLASH SALE";
+
+              if (offer.offer_type === 'bundle') {
+                bgGradient = "from-blue-600 to-indigo-700";
+                icon = "📦";
+                badgeText = "BUY PACK OFFER";
+              } else if (offer.offer_type === 'coupon') {
+                bgGradient = "from-emerald-500 to-teal-600";
+                icon = "🎟️";
+                badgeText = "COUPON CODE";
+              } else if (offer.offer_type === 'discount') {
+                bgGradient = "from-pink-500 to-rose-600";
+                icon = "🏷️";
+                badgeText = "SPECIAL DISCOUNT";
+              }
+
+              const formattedValue = offer.discount_type === 'percent' 
+                ? `${offer.discount_value}%` 
+                : `₹${offer.discount_value.toLocaleString("en-IN")}`;
+
+              return (
+                <div 
+                  key={offer._id} 
+                  className={`w-full shrink-0 bg-gradient-to-r ${bgGradient} text-white p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6`}
+                >
+                  <div className="space-y-2 flex-1 text-left">
+                    <span className="inline-block text-xs font-bold bg-white/20 px-3 py-1 rounded-full backdrop-blur-sm tracking-wider">
+                      {icon} {badgeText}
+                    </span>
+                    <h2 className="text-xl md:text-2xl font-bold tracking-tight">
+                      {offer.offer_name}
+                    </h2>
+                    <p className="text-white/80 text-sm max-w-xl">
+                      {offer.offer_type === 'bundle' 
+                        ? `Save ${formattedValue} per kW on purchasing a minimum of ${offer.max_qty || 5} kits.`
+                        : offer.offer_type === 'coupon'
+                          ? `Use coupon code "${offer.coupon_code}" to get ${formattedValue} off on your order!`
+                          : `Get ${formattedValue} off on eligible solar shop preconfigured kits.`
+                      }
+                    </p>
+                    <div className="text-xs text-white/60">
+                      Offer valid until {new Date(offer.end_date).toLocaleDateString("en-IN", { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <div className="shrink-0 flex items-center justify-center bg-white/10 rounded-2xl p-6 border border-white/10 backdrop-blur-sm w-36 h-36">
+                    <div className="text-center">
+                      <span className="block text-2xl font-extrabold md:text-3xl leading-none">
+                        {formattedValue}
+                      </span>
+                      <span className="block text-xs uppercase tracking-widest text-white/70 mt-1 font-bold">
+                        {offer.discount_type === 'percent' ? 'Discount' : 'Off'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {activeFiltersCount > 0 && (
-            <button
-              onClick={handleClearAllFilters}
-              className="text-xs font-bold text-danger hover:underline cursor-pointer flex items-center gap-1"
-            >
-              <FiX size={13} />
-              <span>Clear All ({activeFiltersCount})</span>
-            </button>
+
+          {/* Carousel dots */}
+          {activeOffers.length > 1 && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+              {activeOffers.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentOfferIndex(idx)}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    currentOfferIndex === idx ? "bg-white w-4" : "bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Exact 6 Filter Dropdowns Row (Matching Admin Panel) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          
-          {/* 1. SEARCH INPUT */}
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase text-text-secondary tracking-wider mb-1.5">
-              SEARCH
-            </label>
-            <div className="relative">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
-              <input
-                type="text"
-                placeholder="Search kits..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
-                >
-                  <FiX size={12} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* 2. INDUSTRY TYPE */}
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase text-text-secondary tracking-wider mb-1.5">
-              INDUSTRY TYPE
-            </label>
-            <select
-              value={selectedIndustryType}
-              onChange={(e) => {
-                setSelectedIndustryType(e.target.value);
-                setSelectedCategory("all");
-                setSelectedSubCategory("all");
-                setSelectedSystemType("all");
-                setSelectedProjectRange("all");
-              }}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="all">All Industry Types</option>
-              {apiIndustryTypes.map((ind) => (
-                <option key={ind.id} value={ind.name}>{ind.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 3. CATEGORY */}
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase text-text-secondary tracking-wider mb-1.5">
-              CATEGORY
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => {
-                setSelectedCategory(e.target.value);
-                setSelectedSubCategory("all");
-                setSelectedSystemType("all");
-                setSelectedProjectRange("all");
-              }}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="all">All Categories</option>
-              {apiCategories.map((cat) => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 4. SUB-CATEGORY */}
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase text-text-secondary tracking-wider mb-1.5">
-              SUB-CATEGORY
-            </label>
-            <select
-              value={selectedSubCategory}
-              onChange={(e) => {
-                setSelectedSubCategory(e.target.value);
-                setSelectedSystemType("all");
-                setSelectedProjectRange("all");
-              }}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="all">All Sub-Categories</option>
-              {apiSubcategories.map((sub) => (
-                <option key={sub.id} value={sub.name}>{sub.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 5. SYSTEM TYPE */}
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase text-text-secondary tracking-wider mb-1.5">
-              SYSTEM TYPE
-            </label>
-            <select
-              value={selectedSystemType}
-              onChange={(e) => {
-                setSelectedSystemType(e.target.value);
-                setSelectedProjectRange("all");
-              }}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="all">All Types</option>
-              {apiSystemTypes.map((type, idx) => (
-                <option key={type.id || type.subcategory_type_id || idx} value={type.name}>{type.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 6. PROJECT RANGE */}
-          <div>
-            <label className="block text-[10px] font-extrabold uppercase text-text-secondary tracking-wider mb-1.5">
-              PROJECT RANGE
-            </label>
-            <select
-              value={selectedProjectRange}
-              onChange={(e) => setSelectedProjectRange(e.target.value)}
-              className="w-full px-3 py-2 bg-surface-hover border border-border rounded-xl text-xs text-text-primary font-semibold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="all">All Ranges</option>
-              {apiProjectRanges.map((rng, idx) => {
-                const label = rng.range_label || `${rng.min_value} - ${rng.max_value} ${rng.unit_symbol || 'kW'}`;
-                return (
-                  <option key={rng.id || idx} value={label}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-        </div>
-
-        {/* Secondary controls: In-Stock checkbox, Sort, View switcher */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
-          
-          {/* In-Stock filter & active count */}
-          <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-2 text-xs font-bold text-text-primary cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={inStockOnly}
-                onChange={(e) => setInStockOnly(e.target.checked)}
-                className="h-4 w-4 rounded text-primary focus:ring-primary"
-              />
-              <span>In-Stock Only</span>
-            </label>
-
-            <span className="text-xs text-text-muted">
-              Showing <strong>{filteredKits.length}</strong> of <strong>{availableKits.length}</strong> complete kits
-            </span>
-          </div>
-
-          {/* Sorting & Grid/List switcher */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-              <span className="font-bold">Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-surface-hover border border-border text-text-primary rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-primary cursor-pointer"
-              >
-                <option value="featured">Featured Solar Kits</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="capacity-high">Capacity: High to Low</option>
-                <option value="capacity-low">Capacity: Low to High</option>
-                <option value="savings">Highest Savings</option>
-              </select>
-            </div>
-
-            <div className="flex items-center bg-surface-hover p-0.5 rounded-xl border border-border">
-              <IconButton
-                variant={viewMode === "grid" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-                className={`rounded-lg ${viewMode === "grid" ? "bg-primary text-white" : "text-text-secondary"}`}
-                aria-label="Grid View"
-              >
-                <FiGrid size={14} />
-              </IconButton>
-              <IconButton
-                variant={viewMode === "list" ? "primary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className={`rounded-lg ${viewMode === "list" ? "bg-primary text-white" : "text-text-secondary"}`}
-                aria-label="List View"
-              >
-                <FiList size={14} />
-              </IconButton>
-            </div>
-
-            {comparedKits.length > 0 && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShowCompareDrawer(true)}
-                leftIcon={<FiLayers size={13} />}
-                className="font-bold rounded-xl"
-              >
-                Compare ({comparedKits.length})
-              </Button>
-            )}
-          </div>
-
-        </div>
-
-        {/* Active Filter Badges */}
-        {activeFiltersCount > 0 && (
-          <div className="flex items-center gap-2 flex-wrap text-xs pt-1">
-            <span className="text-text-muted font-bold text-[11px]">Applied Filters:</span>
-            {searchTerm && (
-              <span className="inline-flex items-center gap-1 bg-primary-soft text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
-                Search: "{searchTerm}"
-                <button onClick={() => setSearchTerm("")} className="hover:text-danger"><FiX size={11} /></button>
-              </span>
-            )}
-            {selectedIndustryType !== "all" && (
-              <span className="inline-flex items-center gap-1 bg-primary-soft text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
-                Industry: {safeString(selectedIndustryType)}
-                <button onClick={() => setSelectedIndustryType("all")} className="hover:text-danger"><FiX size={11} /></button>
-              </span>
-            )}
-            {selectedCategory !== "all" && (
-              <span className="inline-flex items-center gap-1 bg-primary-soft text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
-                Category: {safeString(selectedCategory)}
-                <button onClick={() => setSelectedCategory("all")} className="hover:text-danger"><FiX size={11} /></button>
-              </span>
-            )}
-            {selectedSubCategory !== "all" && (
-              <span className="inline-flex items-center gap-1 bg-primary-soft text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
-                Sub-Category: {safeString(selectedSubCategory)}
-                <button onClick={() => setSelectedSubCategory("all")} className="hover:text-danger"><FiX size={11} /></button>
-              </span>
-            )}
-            {selectedSystemType !== "all" && (
-              <span className="inline-flex items-center gap-1 bg-primary-soft text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
-                System: {safeString(selectedSystemType)}
-                <button onClick={() => setSelectedSystemType("all")} className="hover:text-danger"><FiX size={11} /></button>
-              </span>
-            )}
-            {selectedProjectRange !== "all" && (
-              <span className="inline-flex items-center gap-1 bg-primary-soft text-primary font-bold px-2.5 py-0.5 rounded-full border border-primary/20 text-[11px]">
-                Range: {safeString(selectedProjectRange)}
-                <button onClick={() => setSelectedProjectRange("all")} className="hover:text-danger"><FiX size={11} /></button>
-              </span>
-            )}
-          </div>
-        )}
-
-      </div>
-
-      {/* ─── Product Results Section ───────────────────────────────── */}
-      <div>
-        {filteredKits.length === 0 ? (
-          <div className="bg-surface rounded-3xl p-12 text-center border border-border shadow-xs space-y-4">
-            <div className="w-16 h-16 bg-primary-soft text-primary rounded-full flex items-center justify-center mx-auto">
-              <FiSearch size={28} />
-            </div>
-            <h3 className="text-lg font-bold text-text-primary">No Matching Solar Kits Found</h3>
-            <p className="text-xs text-text-secondary max-w-sm mx-auto">
-              No complete kits match the selected filter combination. Try selecting "All Categories" or clearing the search query.
-            </p>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleClearAllFilters}
-              className="font-bold"
-            >
-              Reset Filters
-            </Button>
-          </div>
-        ) : (
-          <div
-            className={
-              viewMode === "grid"
-                ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
-                : "space-y-4"
-            }
-          >
-            {filteredKits.map((kit) => (
-              <KitProductCard
-                key={kit.id}
-                kit={kit}
-                onQuickView={handleQuickView}
-                isCompared={comparedKits.some((k) => k.id === kit.id)}
-                onToggleCompare={handleToggleCompare}
-                viewMode={viewMode}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ─── MODALS ────────────────────────────────────────────────── */}
-      {quickViewKit && (
-        <KitProductModal
-          kit={quickViewKit}
-          initialVariantIndex={quickViewVariantIndex}
-          isOpen={!!quickViewKit}
-          onClose={() => setQuickViewKit(null)}
-          onOpenExpertHelp={handleOpenExpertHelp}
-        />
       )}
 
+      <div className="">
+        {/* Search + Controls */}
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 mb-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+            {/* Search */}
+            <div className="relative flex-1 w-full">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-muted" size={18} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by kit name, brand, capacity (e.g. 3kW), type..."
+                className="w-full pl-10 pr-10 py-3 text-sm border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-surface-hover"
+              />
+              {searchTerm && (
+                <IconButton
+                  onClick={() => setSearchTerm("")}
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2"
+                >
+                  <FiX size={16} />
+                </IconButton>
+              )}
+            </div>
+
+            {/* Desktop Controls */}
+            <div className="hidden lg:flex items-center gap-3">
+              {/* Compare Button */}
+              <Button
+                onClick={() => setIsCompareDrawerOpen(true)}
+                variant={comparedKits.length > 0 ? "primary" : "secondary"}
+                size="md"
+                leftIcon={<FiLayers size={16} />}
+                className={comparedKits.length > 0 ? "bg-amber-500 hover:bg-amber-600 text-white font-bold" : "font-bold"}
+              >
+                <span>Compare {comparedKits.length > 0 ? `(${comparedKits.length}/4)` : "Kits"}</span>
+              </Button>
+
+              {/* View Toggle */}
+              <div className="flex bg-surface-hover rounded-xl p-1 border border-border">
+                <IconButton
+                  onClick={() => setViewMode("grid")}
+                  variant={viewMode ==="grid" ?"primary" :"ghost"}
+                  size="sm"
+                  className={`rounded-lg ${viewMode ==="grid" ?"shadow-sm" :""}`}
+                  title="Grid View"
+                >
+                  <FiGrid size={18} />
+                </IconButton>
+                <IconButton
+                  onClick={() => setViewMode("list")}
+                  variant={viewMode ==="list" ?"primary" :"ghost"}
+                  size="sm"
+                  className={`rounded-lg ${viewMode ==="list" ?"shadow-sm" :""}`}
+                  title="List View"
+                >
+                  <FiList size={18} />
+                </IconButton>
+              </div>
+
+              {/* In Stock Toggle */}
+              <Button
+                onClick={() => setShowInStockOnly(!showInStockOnly)}
+                variant={showInStockOnly ?"success" :"secondary"}
+                size="md"
+                leftIcon={showInStockOnly ? <FiCheckSquare size={18} /> : <FiSquare size={18} />}
+                className={showInStockOnly ?"bg-green-50 border-green-200 text-green-700" :""}
+              >
+                <span className="flex">In Stock Only
+                  {showInStockOnly && (
+                    <span className="ml-2 bg-surface text-green-700 rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold">
+                      {inStockKitsCount}
+                    </span>
+                  )}
+                </span>
+              </Button>
+
+              {/* Reset */}
+              {(activeFiltersCount > 0 || searchTerm) && (
+                <Button onClick={clearAllFilters} variant="primary" size="md" leftIcon={<FiRefreshCw size={16} />}>
+                  Reset All
+                </Button>
+              )}
+            </div>
+
+            {/* Mobile Controls */}
+            <div className="lg:hidden flex items-center gap-2 w-full">
+              <div className="flex bg-surface-hover rounded-lg p-1 border border-border">
+                <IconButton
+                  onClick={() => setViewMode("grid")}
+                  variant={viewMode ==="grid" ?"primary" :"ghost"}
+                  size="sm"
+                  className={`rounded-lg ${viewMode ==="grid" ?"shadow-sm" :""}`}
+                >
+                  <FiGrid size={16} />
+                </IconButton>
+                <IconButton
+                  onClick={() => setViewMode("list")}
+                  variant={viewMode ==="list" ?"primary" :"ghost"}
+                  className={`rounded-lg ${viewMode ==="list" ?"shadow-sm" :""}`}
+                  size="sm"
+                >
+                  <FiList size={16} />
+                </IconButton>
+              </div>
+
+              <Button
+                onClick={() => setShowInStockOnly(!showInStockOnly)}
+                variant={showInStockOnly ?"success" :"secondary"}
+                size="md"
+                fullWidth
+                leftIcon={showInStockOnly ? <FiCheckSquare size={16} /> : <FiSquare size={16} />}
+                className={showInStockOnly ?"bg-green-50 border-green-200 text-green-700" :""}
+              >
+                In Stock
+              </Button>
+
+              <Button
+                onClick={() => setShowMobileFilters(true)}
+                variant="primary"
+                size="md"
+                leftIcon={<FiFilter size={16} />}
+              >
+                <span className="flex items-center gap-2">
+                  Filter
+                  {activeFiltersCount > 0 && (
+                    <span className="bg-white/20 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Desktop Quick Filters */}
+          <div className="hidden lg:block mt-4">
+
+            {/* Main Filters */}
+            <div className="bg-surface-hover rounded-xl p-4 border border-border">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FiPackage className="text-primary dark:text-info" size={18} />
+                  <h3 className="font-semibold text-text-primary dark:text-info">Quick Filters</h3>
+                </div>
+                <Button onClick={clearMainFilters} variant="link" size="sm">
+                  Clear Main
+                </Button>
+              </div>
+              <div className="grid grid-cols-5 gap-4">
+                <Dropdown
+                  label="Industry Type"
+                  options={industryTypeOptions}
+                  value={filters.industryType}
+                  onChange={(val) => setFilters((prev) => ({
+                    ...prev,
+                    industryType: val,
+                    category: "all",
+                    subCategory: "all",
+                    systemType: "all",
+                    projectRange: "all"
+                  }))}
+                  className="w-full"
+                />
+                <Dropdown
+                  label="Category"
+                  options={categoryOptions}
+                  value={filters.category}
+                  onChange={(val) => setFilters((prev) => ({
+                    ...prev,
+                    category: val,
+                    subCategory:"all",
+                    systemType:"all",
+                    projectRange:"all"
+                  }))}
+                  className="w-full"
+                />
+                <Dropdown
+                  label="Sub Category"
+                  options={subCategoryOptions}
+                  value={filters.subCategory}
+                  onChange={(val) => setFilters((prev) => ({
+                    ...prev,
+                    subCategory: val
+                  }))}
+                  className="w-full"
+                />
+                <Dropdown
+                  label="System Type"
+                  options={systemTypeOptions}
+                  value={filters.systemType}
+                  onChange={(val) => setFilters((prev) => ({
+                    ...prev,
+                    systemType: val
+                  }))}
+                  className="w-full"
+                />
+                <Dropdown
+                  label="Project Range"
+                  options={projectRangeOptions}
+                  value={filters.projectRange}
+                  onChange={(val) => setFilters((prev) => ({
+                    ...prev,
+                    projectRange: val
+                  }))}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            {/* Performance Filters */}
+            <div className="bg-surface-hover rounded-xl p-4 border border-border mt-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FiTrendingUp className="text-primary dark:text-info" size={18} />
+                  <h3 className="font-semibold text-text-primary dark:text-info">Performance Filters</h3>
+                </div>
+                <Button onClick={clearSubFilters} variant="link" size="sm">
+                  Clear Performance
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {subFilterKeys.map((key) => (
+                  <Dropdown
+                    key={key}
+                    label={key ==="comboKitType" ?"Combo Kit Type" : key.replace(/([A-Z])/g," $1").replace(/^./, str => str.toUpperCase())}
+                    options={key ==="comboKitType" ? getDropdownOptions(key) : options[key]}
+                    value={filters[key]}
+                    onChange={(val) => setFilters((prev) => ({ ...prev, [key]: val }))}
+                    className="w-full"
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex gap-6">
+          {/* Sidebar - Desktop */}
+          <aside className="hidden lg:block w-64 flex-shrink-0">
+            <div className="bg-surface rounded-xl border border-border shadow-sm sticky top-4">
+              <div className="bg-linear-120 from-primary to-primary-end px-4 py-3 rounded-t-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FiSliders className="text-white" size={18} />
+                    <h3 className="font-bold text-white">Product Filters</h3>
+                  </div>
+                  <Button onClick={clearProductFilters} variant="link" size="sm" className="text-white hover:text-white">
+                    Clear All
+                  </Button>
+                </div>
+              </div>
+
+              <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
+                <KitFilters
+                  availableKits={availableKits}
+                  filters={filters}
+                  setFilters={setFilters}
+                  clearFilters={clearProductFilters}
+                  filterKeys={[]}
+                  expandedSections={expandedSections}
+                  onToggleSection={toggleSection}
+                />
+              </div>
+            </div>
+          </aside>
+
+          {/* Kits Grid/List */}
+          <main className="flex-1">
+            {finalKits.length === 0 ? (
+              <div className="bg-surface rounded-xl p-12 text-center border border-border shadow-sm">
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FiSearch size={32} className="text-primary dark:text-info" />
+                </div>
+                <h3 className="text-2xl font-semibold text-text-primary dark:text-info mb-2">No kits found</h3>
+                <p className="text-text-secondary mb-6 max-w-md mx-auto">
+                  {showInStockOnly
+                    ?"No in-stock kits match your search criteria. Try adjusting your filters or showing all items."
+                    :"Try adjusting your search criteria or filters to find more options."
+                  }
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <Button onClick={clearAllFilters} variant="primary" size="lg">
+                    Clear All Filters
+                  </Button>
+                  {showInStockOnly && (
+                    <Button onClick={() => setShowInStockOnly(false)} variant="secondary" size="lg">
+                      Show All Items
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : viewMode ==="grid" ? (
+              <div className="grid xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                {finalKits.map((kit) => (
+                  <KitCard
+                    key={kit.id}
+                    kit={kit}
+                    selected={selected}
+                    setSelected={setSelected}
+                    viewMode={viewMode}
+                    activeOffers={activeOffers}
+                    isCompared={comparedKits.some((k) => k.id === kit.id)}
+                    onToggleCompare={handleToggleCompare}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {finalKits.map((kit) => (
+                  <KitCard
+                    key={kit.id}
+                    kit={kit}
+                    selected={selected}
+                    setSelected={setSelected}
+                    viewMode={viewMode}
+                    activeOffers={activeOffers}
+                    isCompared={comparedKits.some((k) => k.id === kit.id)}
+                    onToggleCompare={handleToggleCompare}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+
+      <MobileFiltersDrawer />
+
+      {/* Floating Bottom Comparison Action Bar */}
+      {comparedKits.length > 0 && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 dark:bg-slate-900/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-4 animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black uppercase text-amber-400">Comparing:</span>
+            <div className="flex items-center gap-1.5">
+              {comparedKits.map((kit) => (
+                <span key={kit.id} className="text-xs bg-white/10 px-2.5 py-1 rounded-lg font-bold border border-white/15">
+                  {kit.capacityKW} kW
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setIsCompareDrawerOpen(true)}
+              variant="primary"
+              size="sm"
+              leftIcon={<FiLayers size={14} />}
+              className="font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-md cursor-pointer"
+            >
+              Compare Now ({comparedKits.length})
+            </Button>
+            <Button
+              onClick={() => setComparedKits([])}
+              variant="ghost"
+              size="sm"
+              className="text-slate-400 hover:text-white text-xs"
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Comparison Drawer Modal */}
       <KitComparisonDrawer
+        isOpen={isCompareDrawerOpen}
         comparedKits={comparedKits}
-        isOpen={showCompareDrawer}
-        onClose={() => setShowCompareDrawer(false)}
-        onRemoveKit={(id) => setComparedKits((p) => p.filter((k) => k.id !== id))}
+        onClose={() => setIsCompareDrawerOpen(false)}
+        onRemoveKit={(id) => setComparedKits((prev) => prev.filter((k) => k.id !== id))}
         onClearAll={() => setComparedKits([])}
       />
 
-      <ExpertHelpModal
-        isOpen={showExpertModal}
-        onClose={() => setShowExpertModal(false)}
-        preselectedKit={expertPreselectedKit}
-      />
-
+      {/* Selected Kit Dialog */}
+      {selectedKit && (
+        <Dialog isOpen={!!selectedKit} title={selectedKit.kitName} onClose={() => setSelected(null)} size="xl">
+          <SelectedKitCard kit={selectedKit} initialVariantIndex={selected ? parseInt(selected.split('-')[1]) || 0 : 0} activeOffers={activeOffers} />
+        </Dialog>
+      )}
     </div>
   );
 }

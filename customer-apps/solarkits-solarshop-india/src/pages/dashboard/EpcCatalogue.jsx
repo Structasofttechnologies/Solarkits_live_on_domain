@@ -390,7 +390,7 @@ export default function EpcCatalogue() {
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-semibold backdrop-blur-md mb-2">
               <MdSolarPower size={15} />
-              <span>Solar Store Catalogue</span>
+              <span>Franchisee Catalogue</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
               Product Catalogue

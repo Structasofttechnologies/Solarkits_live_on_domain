@@ -924,9 +924,30 @@ const get_combo_kits_by_district = async (req, res) => {
       }
 
       const catObj = kit.solar_kit_id?.category_id || {};
-      const categoryName = catObj.name || "Rooftop";
-      const indObj = catObj.industry_type_id ? industryTypes.find(i => i._id.toString() === catObj.industry_type_id.toString()) : null;
-      const industryTypeName = indObj ? indObj.name : "Residential Solar Systems";
+      let categoryName = catObj.name;
+      let indObj = catObj.industry_type_id ? industryTypes.find(i => i._id.toString() === catObj.industry_type_id.toString()) : null;
+      if (!indObj) {
+        const matchedCat = categories.find(c => c._id?.toString() === catObj._id?.toString() || (c.name && catObj.name && c.name.toLowerCase() === catObj.name.toLowerCase()));
+        if (matchedCat && matchedCat.industry_type_id) {
+          indObj = industryTypes.find(i => i._id.toString() === matchedCat.industry_type_id.toString());
+          if (!categoryName) categoryName = matchedCat.name;
+        }
+      }
+      if (!indObj) {
+        const kitNameLower = (kit.name || "").toLowerCase();
+        if (kitNameLower.includes("commercial") || kitNameLower.includes("industrial") || kitNameLower.includes("c&i") || kitNameLower.includes("factory")) {
+          indObj = industryTypes.find(i => i.name.toLowerCase().includes("commercial") || i.name.toLowerCase().includes("c&i"));
+        } else if (kitNameLower.includes("pump") || kitNameLower.includes("agri") || kitNameLower.includes("kusum") || kitNameLower.includes("irrigation")) {
+          indObj = industryTypes.find(i => i.name.toLowerCase().includes("agri") || i.name.toLowerCase().includes("pump"));
+        } else if (kitNameLower.includes("utility") || kitNameLower.includes("megawatt") || kitNameLower.includes("floating") || kitNameLower.includes("ground mount") || kitNameLower.includes("mw")) {
+          indObj = industryTypes.find(i => i.name.toLowerCase().includes("utility"));
+        } else {
+          indObj = industryTypes.find(i => i.name.toLowerCase().includes("residential")) || industryTypes[0];
+        }
+      }
+      const industryTypeName = indObj ? indObj.name : "Residential Solar";
+      const industryTypeId = indObj ? indObj._id.toString() : null;
+      if (!categoryName) categoryName = "Rooftop";
 
       const subCategoryObj = kit.solar_kit_id?.subcategory_id || {};
       const subCategoryName = subCategoryObj.name || "Residential";
@@ -943,8 +964,11 @@ const get_combo_kits_by_district = async (req, res) => {
         kitName: kit.name,
         industryType: industryTypeName,
         industry_type_name: industryTypeName,
+        industry_type_id: industryTypeId,
         category: categoryName,
+        category_id: catObj._id ? catObj._id.toString() : null,
         subCategory: subCategoryName,
+        subcategory_id: subCategoryObj._id ? subCategoryObj._id.toString() : null,
         usageType: subCategoryName,
         usageTypeColor: subCategoryColor,
         usageTypeImage: subCategoryImage,

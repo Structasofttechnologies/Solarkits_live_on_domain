@@ -9,7 +9,18 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5178,
-    open: true,
+    host: true,
+    strictPort: false,
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'framer-motion',
+      'react-icons/fi',
+      'axios'
+    ],
   },
   resolve: {
     alias: {
