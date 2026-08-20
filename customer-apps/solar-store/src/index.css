@@ -1,6 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ───── Reseller Portal Themed Design System & CSS Variables ───── */
+:root {
+  --color-primary: #1a3b8b;
+  --color-primary-end: #2d55bd;
+  --color-primary-hover: #122961;
+
+  --color-secondary: #f8c21a;
+  --color-secondary-hover: #e0ac10;
+
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f9fafb;
+
+  --color-border: #e5e7eb;
+  --color-ring: #26388040;
+
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  --color-success: #16a34a;
+  --color-success-hover: #15803d;
+  --color-success-soft: #f0fdf4;
+
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-soft: #fffbeb;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-soft: #fef2f2;
+
+  --color-info: #0ea5e9;
+  --color-info-hover: #0284c7;
+  --color-info-soft: #f0f9ff;
+
+  --shadow-xs: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 4px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  --gradient-primary: linear-gradient(135deg, #1a3b8b 0%, #2d55bd 100%);
+  --gradient-primary-soft: linear-gradient(135deg, rgba(58, 86, 201, 0.3) 0%, rgba(38, 56, 128, 0.3) 100%);
+  --gradient-danger: linear-gradient(135deg, #dc2626, #b91c1c);
+  --gradient-danger-soft: linear-gradient(135deg, rgba(220, 38, 38, 0.3) 0%, rgba(220, 38, 38, 0.3) 100%);
+  --gradient-warning: linear-gradient(135deg, #f59e0b, #d97706);
+  --gradient-warning-soft: linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%);
+  --gradient-success: linear-gradient(135deg, #16a34a, #15803d);
+  --gradient-success-soft: linear-gradient(135deg, rgba(22, 163, 74, 0.3) 0%, rgba(21, 128, 61, 0.3) 100%);
+  --gradient-info: linear-gradient(135deg, #0ea5e9, #0284c7);
+  --gradient-info-soft: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(2, 132, 199, 0.3) 100%);
+  --gradient-secondary: linear-gradient(135deg, #f8c21a 0%, #ffdf5e 100%);
+  --gradient-bg-subtle: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
+  --gradient-card-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.85) 100%);
+
+  --color-button-primary: var(--color-primary);
+  --color-button-primary-hover: var(--color-primary-hover);
+  --color-button-disabled: #cbd5e1;
+  --color-button-disabled-text: #64748b;
+  --color-glass-border: rgba(255, 255, 255, 0.2);
+  --color-card-glass-border: rgba(255, 255, 255, 0.3);
+}
+
+.dark {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-hover: #334155;
+  --color-border: #334155;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #64748b;
+  --color-text-inverse: #ffffff;
+
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-card-glass-border: rgba(255, 255, 255, 0.12);
+
+  --gradient-bg-subtle: linear-gradient(135deg, #020617 0%, #0f172a 100%);
+  --gradient-card-glass: linear-gradient(135deg, rgba(30, 41, 59, 0.92) 0%, rgba(15, 23, 42, 0.85) 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+}
 
 /* ───── Global Reset & Base ───── */
 *,
@@ -13,12 +98,15 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 90px;
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
-  background-color: #F8FAFF;
-  color: #1A2744;
+  font-family: 'Inter', 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  min-width: 280px;
+  overflow-x: hidden;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -28,16 +116,16 @@ body {
   min-height: 100vh;
 }
 
-/* ───── Swiper custom overrides ───── */
+/* ───── Swiper Custom Overrides (Reseller Theme Gold + Royal Navy) ───── */
 .swiper-pagination-bullet {
-  background: #29ABE2 !important;
-  opacity: 0.4 !important;
+  background: #2d55bd !important;
+  opacity: 0.35 !important;
   width: 10px !important;
   height: 10px !important;
 }
 
 .swiper-pagination-bullet-active {
-  background: #F5A623 !important;
+  background: #f8c21a !important;
   opacity: 1 !important;
   width: 28px !important;
   border-radius: 4px !important;
@@ -45,12 +133,12 @@ body {
 
 .swiper-button-next,
 .swiper-button-prev {
-  color: #1565C0 !important;
+  color: #1a3b8b !important;
   background: rgba(255, 255, 255, 0.95) !important;
   width: 44px !important;
   height: 44px !important;
   border-radius: 50% !important;
-  box-shadow: 0 4px 16px rgba(21, 101, 192, 0.15) !important;
+  box-shadow: 0 4px 16px rgba(26, 59, 139, 0.15) !important;
 }
 
 .swiper-button-next::after,
@@ -59,15 +147,17 @@ body {
   font-weight: 900 !important;
 }
 
-/* ───── Hero Gradient overlay ───── */
+/* ───── Hero Gradient Overlay ───── */
 .hero-overlay {
-  background: linear-gradient(to right,
-      rgba(13, 59, 110, 0.82) 0%,
-      rgba(13, 59, 110, 0.55) 50%,
-      rgba(13, 59, 110, 0.05) 100%);
+  background: linear-gradient(
+    to right,
+    rgba(26, 59, 139, 0.88) 0%,
+    rgba(45, 85, 189, 0.65) 50%,
+    rgba(26, 59, 139, 0.1) 100%
+  );
 }
 
-/* ───── Custom scrollbar ───── */
+/* ───── Custom Scrollbar ───── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -78,26 +168,46 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1565C0;
+  background: #1a3b8b;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #0D3B6E;
+  background: #122961;
 }
 
-/* ───── Section heading underline ───── */
+.scrollbar-hover {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.scrollbar-hover::-webkit-scrollbar { width: 4px; }
+.scrollbar-hover:hover { scrollbar-width: thin; }
+.scrollbar-hover:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+.scrollbar-none, .no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollbar-none::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ───── Section Heading Underline ───── */
 .section-heading::after {
   content: '';
   display: block;
   width: 64px;
   height: 4px;
-  background: linear-gradient(90deg, #F5A623, #1565C0);
+  background: linear-gradient(90deg, #f8c21a, #1a3b8b);
   border-radius: 2px;
   margin: 12px auto 0;
 }
 
-/* ───── Marquee / ticker ───── */
+/* ───── Marquee / Ticker ───── */
 .marquee-inner {
   display: flex;
   width: max-content;
@@ -108,17 +218,17 @@ body {
   animation-play-state: paused;
 }
 
-/* ───── Product card hover ───── */
+/* ───── Product Card Hover ───── */
 .product-card {
   transition: all 0.3s ease;
 }
 
 .product-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 20px 50px rgba(21, 101, 192, 0.14);
+  box-shadow: 0 20px 50px rgba(26, 59, 139, 0.15);
 }
 
-/* ───── WhatsApp floating button ───── */
+/* ───── WhatsApp Floating Button ───── */
 .whatsapp-float {
   position: fixed;
   bottom: 24px;
@@ -141,29 +251,28 @@ body {
   box-shadow: 0 12px 32px rgba(37, 211, 102, 0.55);
 }
 
-/* ───── Utility classes ───── */
+/* ───── Utility Classes ───── */
 .gradient-text {
-  background: linear-gradient(135deg, #1565C0 0%, #29ABE2 100%);
+  background: linear-gradient(135deg, #1a3b8b 0%, #2d55bd 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .solar-gradient {
-  background: linear-gradient(135deg, #1565C0 0%, #0D3B6E 100%);
+  background: linear-gradient(135deg, #1a3b8b 0%, #2d55bd 100%);
 }
 
 .orange-gradient {
-  background: linear-gradient(135deg, #F5A623 0%, #E88B0A 100%);
+  background: linear-gradient(135deg, #F49222 0%, #f8c21a 100%);
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.7);
 }
-
 
 .testimonials-swiper .swiper-pagination-bullet {
   width: 8px;
@@ -176,6 +285,87 @@ body {
 .testimonials-swiper .swiper-pagination-bullet-active {
   width: 28px;
   border-radius: 999px;
-  background: #1565c0;
+  background: #1a3b8b;
   opacity: 1;
+}
+
+/* ───── Store UI Cards & Glass ───── */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.card:hover { box-shadow: var(--shadow-md); }
+
+.glass {
+  background: var(--gradient-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-glass-border);
+}
+
+.card-glass {
+  background: var(--gradient-card-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--color-card-glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ───── Gradient Utilities ───── */
+.gradient-primary { background: var(--gradient-primary); }
+.gradient-primary-soft { background: var(--gradient-primary-soft); }
+.gradient-danger { background: var(--gradient-danger); }
+.gradient-warning { background: var(--gradient-warning); }
+.gradient-success { background: var(--gradient-success); }
+.gradient-info { background: var(--gradient-info); }
+.gradient-secondary { background: var(--gradient-secondary); }
+.gradient-glass { background: var(--gradient-glass); }
+.gradient-card-glass { background: var(--gradient-card-glass); }
+
+.gradient-text-primary {
+  background: var(--gradient-primary);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* ───── Buttons ───── */
+.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--color-text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+}
+.btn-primary:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+.btn-danger { background: var(--gradient-danger); color: var(--color-text-inverse); box-shadow: var(--shadow-sm); transition: all 0.25s ease; }
+.btn-danger:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+.btn-warning { background: var(--gradient-warning); color: var(--color-text-inverse); box-shadow: var(--shadow-sm); transition: all 0.25s ease; }
+.btn-warning:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+.btn-success { background: var(--gradient-success); color: var(--color-text-inverse); box-shadow: var(--shadow-sm); transition: all 0.25s ease; }
+.btn-success:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+.btn-info { background: var(--gradient-info); color: var(--color-text-inverse); box-shadow: var(--shadow-sm); transition: all 0.25s ease; }
+.btn-info:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+/* ───── Linear Gradient Helpers (Tailwind Compatibility) ───── */
+.bg-linear-120 {
+  background-image: linear-gradient(120deg, var(--tw-gradient-stops));
+}
+.bg-linear-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+.bg-linear-to-br {
+  background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
+}
+.bg-linear-to-b {
+  background-image: linear-gradient(to bottom, var(--tw-gradient-stops));
+}
+.bg-linear-to-t {
+  background-image: linear-gradient(to top, var(--tw-gradient-stops));
+}
+.bg-gradient-bg-subtle {
+  background-color: var(--color-bg, #f8fafc);
 }

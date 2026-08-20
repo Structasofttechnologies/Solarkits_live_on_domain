@@ -13,104 +13,98 @@ import {
   FiTag,
 } from "react-icons/fi";
 
-// Product images
-import imgPanelMono from "../../assets/images/product_panel_mono.jpg";
-import imgInverter from "../../assets/images/product_inverter.jpg";
 import imgKit from "../../assets/images/product_solar_kit.jpg";
-import imgBattery from "../../assets/images/product_battery.jpg";
-import imgBifacial from "../../assets/images/product_bifacial.jpg";
-import imgChargeCtrl from "../../assets/images/product_charge_ctrl.jpg";
 
 const PRODUCTS = [
   {
     id: 1,
-    name: "Adani 550W Mono PERC Solar Panel",
-    category: "Solar Panel",
-    badge: "Bestseller",
-    badgeColor: "bg-orange-500 text-white",
+    name: "SolarKits 1kW Smart On-Grid Home Kit",
+    category: "On-Grid Solar Kit",
+    badge: "Subsidy Eligible",
+    badgeColor: "bg-green-500 text-white",
     rating: 4.8,
     reviews: 234,
-    price: 18500,
-    mrp: 22000,
-    discount: 16,
-    watt: "550W",
-    brand: "Adani Solar",
-    img: imgPanelMono,
+    price: 48000,
+    mrp: 65000,
+    discount: 26,
+    watt: "1kW Kit",
+    brand: "SolarKits Prime",
+    img: imgKit,
   },
   {
     id: 2,
-    name: "Solis 3kW On-Grid Hybrid Inverter",
-    category: "Inverter",
-    badge: "New Arrival",
+    name: "SolarKits 2kW Rooftop Solar Combo Kit",
+    category: "On-Grid Solar Kit",
+    badge: "PM Surya Ghar Ready",
     badgeColor: "bg-sky-500 text-white",
-    rating: 4.6,
-    reviews: 89,
-    price: 32000,
-    mrp: 38500,
-    discount: 17,
-    watt: "3kW",
-    brand: "Solis",
-    img: imgInverter,
+    rating: 4.9,
+    reviews: 189,
+    price: 95000,
+    mrp: 125000,
+    discount: 24,
+    watt: "2kW Kit",
+    brand: "SolarKits Prime",
+    img: imgKit,
   },
   {
     id: 3,
-    name: "SolarKits 3kW Complete Home Kit",
-    category: "Solar Kit",
-    badge: "🔥 Hot Deal",
+    name: "SolarKits 3kW Complete Home Combo Kit",
+    category: "On-Grid Solar Kit",
+    badge: "🔥 Bestseller",
     badgeColor: "bg-red-500 text-white",
     rating: 4.9,
-    reviews: 156,
+    reviews: 312,
     price: 145000,
     mrp: 195000,
     discount: 26,
-    watt: "3kW",
-    brand: "SolarKits",
+    watt: "3kW Kit",
+    brand: "SolarKits Prime",
     img: imgKit,
   },
   {
     id: 4,
-    name: "Exide 150Ah Tubular Solar Battery",
-    category: "Battery",
-    badge: "Subsidy Eligible",
-    badgeColor: "bg-green-500 text-white",
-    rating: 4.7,
-    reviews: 312,
-    price: 14200,
-    mrp: 17500,
-    discount: 19,
-    watt: "150Ah",
-    brand: "Exide",
-    img: imgBattery,
+    name: "SolarKits 5kW Heavy Duty Hybrid Solar Kit",
+    category: "Hybrid Solar Kit",
+    badge: "Battery Backup",
+    badgeColor: "bg-orange-500 text-white",
+    rating: 4.8,
+    reviews: 156,
+    price: 265000,
+    mrp: 340000,
+    discount: 22,
+    watt: "5kW Kit",
+    brand: "SolarKits Ultra",
+    img: imgKit,
   },
   {
     id: 5,
-    name: "Waaree 440W Bifacial Solar Module",
-    category: "Solar Panel",
-    badge: "Premium",
+    name: "SolarKits 10kW Commercial 3-Phase Kit",
+    category: "Commercial Solar Kit",
+    badge: "High ROI",
     badgeColor: "bg-blue-600 text-white",
     rating: 4.8,
-    reviews: 178,
-    price: 16800,
-    mrp: 20000,
-    discount: 16,
-    watt: "440W",
-    brand: "Waaree",
-    img: imgBifacial,
+    reviews: 98,
+    price: 490000,
+    mrp: 620000,
+    discount: 21,
+    watt: "10kW Kit",
+    brand: "SolarKits Pro",
+    img: imgKit,
   },
   {
     id: 6,
-    name: "EPEVER 40A MPPT Charge Controller",
-    category: "Accessory",
-    badge: "Value Pick",
+    name: "SolarKits Universal Complete Solar BOS Kit",
+    category: "Solar BOS Kit",
+    badge: "Plug & Play",
     badgeColor: "bg-purple-500 text-white",
-    rating: 4.5,
-    reviews: 92,
-    price: 4800,
-    mrp: 6500,
-    discount: 26,
-    watt: "40A",
-    brand: "EPEVER",
-    img: imgChargeCtrl,
+    rating: 4.7,
+    reviews: 142,
+    price: 18500,
+    mrp: 24000,
+    discount: 23,
+    watt: "Universal BOS",
+    brand: "SolarKits",
+    img: imgKit,
   },
 ];
 
@@ -242,12 +236,12 @@ export default function FeaturedProducts() {
             </span>
 
             <h2 className="font-heading text-3xl font-bold text-navy md:text-4xl">
-              Bestselling Products
+              Bestselling Solar Kits
             </h2>
 
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-gray-500 md:text-base">
-              Explore our most trusted solar products selected for performance,
-              durability and excellent value.
+              Explore our most trusted pre-configured solar combo kits selected for high performance,
+              durability and maximum subsidy benefits.
             </p>
           </div>
 
@@ -255,7 +249,7 @@ export default function FeaturedProducts() {
             href="#all-products"
             className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-primary-500 transition-colors hover:text-primary-700"
           >
-            View All Products
+            View All Solar Kits
             <FiTag className="text-base" />
           </a>
         </motion.div>

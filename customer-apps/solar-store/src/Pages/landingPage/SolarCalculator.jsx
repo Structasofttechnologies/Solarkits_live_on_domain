@@ -31,13 +31,13 @@ export default function SolarCalculator() {
           className="text-center mb-12"
         >
           <span className="inline-block bg-primary-50 text-primary-600 text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full mb-3">
-            Solar Sizing Guide
+            Solar Kit Sizing Guide
           </span>
           <h2 className="font-heading text-3xl md:text-4xl font-bold text-navy section-heading">
-            Find Your Perfect Solar System
+            Find Your Perfect Solar Kit
           </h2>
           <p className="text-gray-500 mt-4 max-w-xl mx-auto text-base">
-            Select your monthly electricity bill to find the right solar system size for you
+            Select your monthly electricity bill to calculate the right solar combo kit size for your home
           </p>
         </motion.div>
 

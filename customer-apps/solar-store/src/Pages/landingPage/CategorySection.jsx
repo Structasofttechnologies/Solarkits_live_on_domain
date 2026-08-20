@@ -11,50 +11,50 @@ import {
 const CATEGORIES = [
   {
     id: 1,
-    name: "Solar Panels",
-    desc: "High-efficiency monocrystalline, polycrystalline and bifacial solar panels.",
+    name: "On-Grid Solar Kits",
+    desc: "Grid-tied rooftop solar kits from 1kW to 10kW with net-metering & PM Surya Ghar subsidy.",
     icon: FiSun,
     color: "from-blue-500 via-blue-600 to-indigo-700",
     glow: "bg-cyan-300",
     shadow: "rgba(37, 99, 235, 0.25)",
-    count: "120+",
-    label: "Products",
+    count: "45+ Kits",
+    label: "On-Grid",
     href: "#products",
   },
   {
     id: 2,
-    name: "Solar Inverters",
-    desc: "Reliable on-grid, off-grid and hybrid inverters for every solar setup.",
+    name: "Off-Grid Solar Kits",
+    desc: "Battery-backed complete solar kits for 24x7 independent power without grid reliance.",
     icon: FiZap,
     color: "from-cyan-500 via-sky-600 to-blue-700",
     glow: "bg-sky-300",
     shadow: "rgba(14, 165, 233, 0.25)",
-    count: "80+",
-    label: "Products",
+    count: "30+ Kits",
+    label: "Off-Grid",
     href: "#products",
   },
   {
     id: 3,
-    name: "Complete Solar Kits",
-    desc: "Ready-to-install solar packages from 1kW to 10kW for homes and offices.",
+    name: "Hybrid Solar Kits",
+    desc: "Best of both: Grid connectivity with battery backup for uninterrupted power & maximum savings.",
     icon: FiPackage,
     color: "from-orange-400 via-orange-500 to-red-600",
     glow: "bg-yellow-300",
     shadow: "rgba(249, 115, 22, 0.25)",
-    count: "40+",
-    label: "Solar Kits",
-    href: "#kits",
+    count: "25+ Kits",
+    label: "Hybrid",
+    href: "#products",
   },
   {
     id: 4,
-    name: "Solar Accessories",
-    desc: "Cables, mounting structures, connectors, controllers and essential tools.",
+    name: "Solar BOS & Custom Kits",
+    desc: "Pre-wired AC/DC distribution boxes, lightning arrestors, earthing kits and custom combos.",
     icon: FiGrid,
     color: "from-slate-700 via-blue-900 to-slate-950",
     glow: "bg-blue-300",
     shadow: "rgba(15, 23, 42, 0.28)",
-    count: "200+",
-    label: "Items",
+    count: "50+ Kits",
+    label: "BOS & Custom",
     href: "#products",
   },
 ];
@@ -191,17 +191,17 @@ export default function CategorySection() {
           <div>
             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary-50 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary-600">
               <FiBox />
-              Browse Categories
+              Browse Solar Kit Categories
             </span>
 
             <h2 className="max-w-2xl font-heading text-3xl font-extrabold leading-tight text-navy md:text-4xl lg:text-5xl">
               Find the Right Solar
-              <span className="text-primary-500"> Solution</span>
+              <span className="text-primary-500"> Kit Solution</span>
             </h2>
           </div>
 
           <p className="max-w-md text-sm leading-7 text-gray-500 md:text-base">
-            Explore our curated range of solar products designed for homes,
+            Explore our certified range of complete solar kits designed for homes,
             businesses, farms and commercial projects.
           </p>
         </motion.div>

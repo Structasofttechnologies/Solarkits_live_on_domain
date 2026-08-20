@@ -16,8 +16,8 @@ const BRANDS = [
   {
     id: 1,
     name: "Adani Solar",
-    type: "Solar Panel",
-    description: "High-efficiency Mono PERC solar modules",
+    type: "Solar Kit Partner",
+    description: "Tier-1 high-efficiency Mono PERC solar modules",
     icon: <FiSun />,
     color: "from-orange-50 to-amber-100",
     iconColor: "bg-orange-500",
@@ -25,8 +25,8 @@ const BRANDS = [
   {
     id: 2,
     name: "Waaree",
-    type: "Solar Panel",
-    description: "Reliable mono and bifacial solar panels",
+    type: "Solar Kit Partner",
+    description: "Reliable mono and bifacial solar kit modules",
     icon: <FiSun />,
     color: "from-blue-50 to-cyan-100",
     iconColor: "bg-blue-500",
@@ -34,8 +34,8 @@ const BRANDS = [
   {
     id: 3,
     name: "Tata Power Solar",
-    type: "Solar Panel",
-    description: "Trusted residential and commercial modules",
+    type: "Solar Kit Partner",
+    description: "Trusted residential and commercial kit panels",
     icon: <FiSun />,
     color: "from-sky-50 to-blue-100",
     iconColor: "bg-sky-500",
@@ -43,8 +43,8 @@ const BRANDS = [
   {
     id: 4,
     name: "Vikram Solar",
-    type: "Solar Panel",
-    description: "Premium high-performance solar modules",
+    type: "Solar Kit Partner",
+    description: "Premium high-performance solar kit modules",
     icon: <FiSun />,
     color: "from-yellow-50 to-orange-100",
     iconColor: "bg-yellow-500",
@@ -52,8 +52,8 @@ const BRANDS = [
   {
     id: 5,
     name: "Luminous",
-    type: "Solar & Inverter",
-    description: "Complete home solar and inverter solutions",
+    type: "Solar Kit Partner",
+    description: "Complete rooftop solar kit power solutions",
     icon: <FiZap />,
     color: "from-amber-50 to-yellow-100",
     iconColor: "bg-amber-500",
@@ -61,8 +61,8 @@ const BRANDS = [
   {
     id: 6,
     name: "Loom Solar",
-    type: "Solar Panel",
-    description: "Advanced rooftop solar panel technology",
+    type: "Solar Kit Partner",
+    description: "Advanced rooftop solar kit technology",
     icon: <FiSun />,
     color: "from-green-50 to-emerald-100",
     iconColor: "bg-green-500",
@@ -70,8 +70,8 @@ const BRANDS = [
   {
     id: 7,
     name: "RenewSys",
-    type: "Solar Panel",
-    description: "Durable and efficient PV solar modules",
+    type: "Solar Kit Partner",
+    description: "Durable and efficient PV solar kit modules",
     icon: <FiSun />,
     color: "from-teal-50 to-cyan-100",
     iconColor: "bg-teal-500",
@@ -79,8 +79,8 @@ const BRANDS = [
   {
     id: 8,
     name: "Goldi Solar",
-    type: "Solar Panel",
-    description: "Quality-certified Indian solar modules",
+    type: "Solar Kit Partner",
+    description: "Quality-certified Indian solar kit modules",
     icon: <FiSun />,
     color: "from-yellow-50 to-amber-100",
     iconColor: "bg-yellow-600",
@@ -88,8 +88,8 @@ const BRANDS = [
   {
     id: 9,
     name: "Solis",
-    type: "Solar Inverter",
-    description: "Smart on-grid and hybrid solar inverters",
+    type: "Solar Kit Partner",
+    description: "Smart on-grid and hybrid solar kit power systems",
     icon: <FiCpu />,
     color: "from-sky-50 to-indigo-100",
     iconColor: "bg-indigo-500",
@@ -97,8 +97,8 @@ const BRANDS = [
   {
     id: 10,
     name: "Growatt",
-    type: "Solar Inverter",
-    description: "Intelligent residential solar inverters",
+    type: "Solar Kit Partner",
+    description: "Intelligent residential solar kit power units",
     icon: <FiCpu />,
     color: "from-green-50 to-lime-100",
     iconColor: "bg-lime-600",
@@ -106,8 +106,8 @@ const BRANDS = [
   {
     id: 11,
     name: "Microtek",
-    type: "Solar Inverter",
-    description: "Reliable solar PCU and home inverters",
+    type: "Solar Kit Partner",
+    description: "Reliable solar kit power conditioning units",
     icon: <FiZap />,
     color: "from-red-50 to-orange-100",
     iconColor: "bg-red-500",
@@ -115,8 +115,8 @@ const BRANDS = [
   {
     id: 12,
     name: "UTL Solar",
-    type: "Solar Inverter",
-    description: "Solar PCU, inverter and battery solutions",
+    type: "Solar Kit Partner",
+    description: "Complete off-grid and hybrid solar kit packages",
     icon: <FiCpu />,
     color: "from-purple-50 to-violet-100",
     iconColor: "bg-purple-500",
@@ -124,8 +124,8 @@ const BRANDS = [
   {
     id: 13,
     name: "Sungrow",
-    type: "Solar Inverter",
-    description: "Premium string and hybrid solar inverters",
+    type: "Solar Kit Partner",
+    description: "Premium string and commercial solar kit systems",
     icon: <FiCpu />,
     color: "from-blue-50 to-indigo-100",
     iconColor: "bg-blue-600",
@@ -133,8 +133,8 @@ const BRANDS = [
   {
     id: 14,
     name: "GoodWe",
-    type: "Solar Inverter",
-    description: "Efficient on-grid and storage inverters",
+    type: "Solar Kit Partner",
+    description: "Efficient on-grid and energy storage solar kits",
     icon: <FiZap />,
     color: "from-red-50 to-rose-100",
     iconColor: "bg-rose-500",
@@ -142,8 +142,8 @@ const BRANDS = [
   {
     id: 15,
     name: "Huawei Solar",
-    type: "Solar Inverter",
-    description: "Smart energy and inverter technology",
+    type: "Solar Kit Partner",
+    description: "Smart commercial and industrial solar kit solutions",
     icon: <FiCpu />,
     color: "from-pink-50 to-red-100",
     iconColor: "bg-pink-500",
@@ -151,8 +151,8 @@ const BRANDS = [
   {
     id: 16,
     name: "Delta",
-    type: "Solar Inverter",
-    description: "Industrial-grade solar inverter systems",
+    type: "Solar Kit Partner",
+    description: "Industrial-grade 3-phase solar kit systems",
     icon: <FiZap />,
     color: "from-cyan-50 to-blue-100",
     iconColor: "bg-cyan-600",
@@ -230,13 +230,11 @@ export default function CertificationsSection() {
           </span>
 
           <h2 className="font-heading text-3xl font-bold text-navy md:text-4xl">
-            Top Solar & Inverter Brands
+            Top Solar Kit Brand Partners
           </h2>
 
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-gray-500 md:text-base">
-            Explore solar panels and inverters from India&apos;s most trusted
-            manufacturers, selected for quality, efficiency and long-term
-            performance.
+            Explore certified Tier-1 component manufacturers integrated into SolarKits complete solar solutions, selected for quality, efficiency and long-term performance.
           </p>
         </motion.div>
 

@@ -1,21 +1,77 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import LandingPage from "./Pages/LandingPage";
+import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { Provider, useDispatch, useSelector } from "react-redux"
+import store from "./app/store"
+import Alert from "./components/Alert"
+import AuthDialog from "./components/AuthDialog"
+import { useEffect } from "react"
+import { checkAuth } from "./features/auth.slice"
+import { fetchCart } from "./features/slice"
+
+// Landing page (solar-store's own landing)
+import LandingPage from "./Pages/LandingPage"
+
+// Auth pages
+import Login from "./pages/Login"
+import SignUp from "./pages/SignUp"
+import ForgotPassword from "./pages/ForgotPassword"
+
+// Policy pages
+import PrivacyPolicy from "./pages/policies/PrivacyPolicy"
+import TermsOfService from "./pages/policies/TermsOfService"
+import RefundPolicy from "./pages/policies/RefundPolicy"
+import ShippingPolicy from "./pages/policies/ShippingPolicy"
+
+// Protected store board
+import Board from "./pages/Board"
 
 function AppContent() {
+  const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector(state => state.auth_slice);
+
+  useEffect(() => {
+    dispatch(checkAuth());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(fetchCart());
+    }
+  }, [isAuthenticated, dispatch]);
+
   return (
-    <Routes>
-      {/* Public landing page */}
-      <Route path="/" element={<LandingPage />} />
-    </Routes>
+    <>
+      <Alert />
+      <AuthDialog />
+      <Routes>
+        {/* Public landing page */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* Legal & Policy pages */}
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-of-service" element={<TermsOfService />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
+        <Route path="/shipping-policy" element={<ShippingPolicy />} />
+
+        {/* Auth routes */}
+        <Route path="/auth/signup" element={<SignUp />} />
+        <Route path="/auth/login" element={<Login />} />
+        <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+
+        {/* Protected store dashboard (Board handles all store routes) */}
+        <Route path="/*" element={<Board />} />
+      </Routes>
+    </>
   );
 }
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppContent />
-    </BrowserRouter>
-  );
+    <Provider store={store}>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </Provider>
+  )
 }
 
-export default App;
+export default App

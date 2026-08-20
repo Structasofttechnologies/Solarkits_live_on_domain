@@ -9,26 +9,26 @@ import logo from "../../assets/images/logo.png";
 
 const NAV_ITEMS = [
   {
-    label: "Solar Panels",
+    label: "On-Grid Solar Kits",
     href: "#products",
-    dropdown: ["Monocrystalline Panels", "Polycrystalline Panels", "Bifacial Panels", "Half-Cut Panels"],
+    dropdown: ["1kW On-Grid Kit", "2kW On-Grid Kit", "3kW On-Grid Kit", "5kW On-Grid Kit", "10kW On-Grid Kit"],
   },
   {
-    label: "Inverters",
+    label: "Off-Grid Solar Kits",
     href: "#products",
-    dropdown: ["On-Grid Inverters", "Off-Grid Inverters", "Hybrid Inverters", "Micro Inverters"],
+    dropdown: ["1kW Off-Grid Kit", "2kW Off-Grid Kit", "3kW Off-Grid Kit", "5kW Off-Grid Kit"],
   },
   {
-    label: "Accessories",
+    label: "Hybrid Solar Kits",
     href: "#products",
-    dropdown: ["Mounting Structures", "Solar Cables", "DC Combiner Box", "Solar Charge Controllers"],
+    dropdown: ["3kW Hybrid Kit", "5kW Hybrid Kit", "10kW Hybrid Kit", "Custom Hybrid Solutions"],
   },
   {
-    label: "Solar Kits",
+    label: "Commercial & BOS Kits",
     href: "#products",
-    dropdown: ["1kW Home Kit", "3kW Home Kit", "5kW Home Kit", "10kW Commercial Kit"],
+    dropdown: ["10kW–100kW Commercial Kits", "Solar BOS Kits", "Custom Combo Kits", "Preconfigured Kits"],
   },
-  { label: "🔥 Offers", href: "#offers", dropdown: null },
+  { label: "🔥 Subsidy Kits", href: "#subsidy", dropdown: null },
 ];
 
 export default function Navbar() {
@@ -166,6 +166,7 @@ export default function Navbar() {
 
               {/* Login */}
               <motion.button
+                onClick={() => navigate("/auth/login")}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 className="hidden md:flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold rounded-lg transition-all shadow-sm"
@@ -239,10 +240,16 @@ export default function Navbar() {
               </div>
 
               <div className="border-t border-gray-100 p-4 space-y-3 mt-2">
-                <button className="w-full py-3 bg-primary-50 text-primary-600 font-semibold rounded-xl text-sm hover:bg-primary-100 transition-all">
+                <button
+                  onClick={() => { setMenuOpen(false); navigate("/auth/login"); }}
+                  className="w-full py-3 bg-primary-50 text-primary-600 font-semibold rounded-xl text-sm hover:bg-primary-100 transition-all"
+                >
                   Sign In
                 </button>
-                <button className="w-full py-3 bg-primary-500 text-white font-semibold rounded-xl text-sm hover:bg-primary-600 transition-all shadow-sm">
+                <button
+                  onClick={() => { setMenuOpen(false); navigate("/auth/signup"); }}
+                  className="w-full py-3 bg-primary-500 text-white font-semibold rounded-xl text-sm hover:bg-primary-600 transition-all shadow-sm"
+                >
                   Create Account
                 </button>
               </div>

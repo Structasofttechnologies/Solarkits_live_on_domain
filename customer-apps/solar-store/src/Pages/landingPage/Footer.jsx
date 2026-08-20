@@ -6,7 +6,7 @@ import {
 import logo from "../../assets/images/logo.png";
 
 const FOOTER_LINKS = {
-  Shop: ["Solar Panels", "Solar Inverters", "Solar Batteries", "Solar Kits", "Mounting Structures", "Cables & Accessories"],
+  Shop: ["On-Grid Solar Kits", "Off-Grid Solar Kits", "Hybrid Solar Kits", "Commercial Solar Kits", "Solar BOS Kits", "Custom Combo Kits"],
   Support: ["How to Order", "Installation Guide", "Subsidy Guide", "EMI Options", "Solar Calculator", "Product Warranty"],
   Company: ["About SolarKits", "Franchise Partner", "Blog", "Careers", "Press", "Contact Us"],
   Policies: ["Privacy Policy", "Terms of Use", "Return Policy", "Refund Policy", "Shipping Policy", "Cookie Policy"],
