@@ -3,8 +3,8 @@ import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../../features/alert.slice";
 import { addToCart, syncCartWithBackend, getAvailableKitData, fetchShopHierarchy } from "../../features/slice";
-import Dropdown from "@/components/Dropdown";
-import Button from "@/components/Button";
+import Dropdown from "@/Components/Dropdown";
+import Button from "@/Components/Button";
 import {
   FiPackage,
   FiShield,

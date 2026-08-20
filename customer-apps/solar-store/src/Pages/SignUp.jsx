@@ -4,11 +4,11 @@ import { useNavigate, Link } from"react-router-dom";
 import { useDispatch } from"react-redux";
 import axios from"axios";
 import { FiEye, FiEyeOff, FiArrowRight, FiArrowLeft, FiPhone, FiMail, FiPackage, FiTrendingUp, FiShield, FiCheckCircle, FiInfo } from"react-icons/fi";
-import Button from"../components/Button";
-import CustomInput from"../components/CustomInput";
-import IconButton from"../components/IconButton";
-import DropdownWithSearchInput from"../components/DropdownWithSearchInput";
-import OTPInput from"../components/OTPInput";
+import Button from "../Components/Button";
+import CustomInput from "../Components/CustomInput";
+import IconButton from "../Components/IconButton";
+import DropdownWithSearchInput from "../Components/DropdownWithSearchInput";
+import OTPInput from "../Components/OTPInput";
 import { setAlert } from"../features/alert.slice";
 
 // Create axios instance with base URL

@@ -8,16 +8,16 @@ import {
 import { FaGem, FaBoxOpen, FaPallet, FaWarehouse } from "react-icons/fa";
 import { useSelector, useDispatch } from "react-redux";
 import axios from "axios";
-import BulkKitCard from "@/pages/bulk-buy/components/BulkKitCard";
-import Dialog from "@/components/Dialog";
-import SelectedBulkKitCard from "@/pages/bulk-buy/components/SelectedBulkKitCard";
-import Button from "@/components/Button";
-import IconButton from "@/components/IconButton";
-import Dropdown from "@/components/Dropdown";
-import CustomInput from "@/components/CustomInput";
+import BulkKitCard from "@/Pages/bulk-buy/components/BulkKitCard";
+import Dialog from "@/Components/Dialog";
+import SelectedBulkKitCard from "@/Pages/bulk-buy/components/SelectedBulkKitCard";
+import Button from "@/Components/Button";
+import IconButton from "@/Components/IconButton";
+import Dropdown from "@/Components/Dropdown";
+import CustomInput from "@/Components/CustomInput";
 import { useNavigate } from "react-router-dom";
 import { clearBulkCart } from "@/features/slice";
-import GstVerificationDialog from "@/components/GstVerificationDialog";
+import GstVerificationDialog from "@/Components/GstVerificationDialog";
 
 export default function BulkOrderCart() {
     const navigate = useNavigate();

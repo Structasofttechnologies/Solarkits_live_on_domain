@@ -8,14 +8,14 @@ import {
 } from 'react-icons/fi';
 import { FaGem, FaSolarPanel } from"react-icons/fa";
 import { useSelector } from"react-redux";
-import SelectedKitCard from"@/pages/dashboard/components/SelectedKitCard";
-import KitCard from"@/pages/dashboard/components/KitCard";
-import Dialog from"@/components/Dialog";
-import GstVerificationDialog from "@/components/GstVerificationDialog";
-import Button from"@/components/Button";
-import IconButton from"@/components/IconButton";
-import Dropdown from"@/components/Dropdown";
-import CustomInput from"@/components/CustomInput";
+import SelectedKitCard from "@/Pages/dashboard/components/SelectedKitCard";
+import KitCard from "@/Pages/dashboard/components/KitCard";
+import Dialog from "@/Components/Dialog";
+import GstVerificationDialog from "@/Components/GstVerificationDialog";
+import Button from "@/Components/Button";
+import IconButton from "@/Components/IconButton";
+import Dropdown from "@/Components/Dropdown";
+import CustomInput from "@/Components/CustomInput";
 import { useNavigate } from"react-router-dom";
 
 export default function PreConfiguredKitOrderCart() {

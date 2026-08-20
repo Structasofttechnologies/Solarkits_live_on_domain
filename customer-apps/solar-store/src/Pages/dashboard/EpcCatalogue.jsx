@@ -23,7 +23,7 @@ import {
   FiCheckCircle,
 } from "react-icons/fi";
 import { MdSolarPower, MdOutlineInventory2 } from "react-icons/md";
-import IndustryDashboardBanner from "@/components/IndustryDashboardBanner";
+import IndustryDashboardBanner from "@/Components/IndustryDashboardBanner";
 
 /* ─── Stock badge ─────────────────────────────────────────────────────────── */
 function StockBadge({ label }) {

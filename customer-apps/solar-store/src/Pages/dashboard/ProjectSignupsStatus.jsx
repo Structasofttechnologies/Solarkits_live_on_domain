@@ -30,9 +30,9 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import DropdownWithSearchInput from "@/components/DropdownWithSearchInput";
-import CustomInput from "@/components/CustomInput";
-import Button from "@/components/Button";
+import DropdownWithSearchInput from "@/Components/DropdownWithSearchInput";
+import CustomInput from "@/Components/CustomInput";
+import Button from "@/Components/Button";
 
 const ProjectSignupsStatus = () => {
   const [fromDate, setFromDate] = useState('2025-01-01');

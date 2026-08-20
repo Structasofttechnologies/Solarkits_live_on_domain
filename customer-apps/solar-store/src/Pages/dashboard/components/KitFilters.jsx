@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
-import Dropdown from "@/components/Dropdown";
-import Button from "@/components/Button";
+import Dropdown from "@/Components/Dropdown";
+import Button from "@/Components/Button";
 import { FiChevronDown, FiChevronUp, FiFilter } from "react-icons/fi";
 
 const options = {

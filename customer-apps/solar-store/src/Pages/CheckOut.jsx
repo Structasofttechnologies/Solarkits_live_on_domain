@@ -7,10 +7,10 @@ import {
 } from "react-icons/fi";
 import { clearCart } from "@/features/slice";
 import { setAlert } from "@/features/alert.slice";
-import Button from "@/components/Button";
-import Loader from "@/components/Loader";
-import CustomInput from "@/components/CustomInput";
-import GstVerificationDialog from "@/components/GstVerificationDialog";
+import Button from "@/Components/Button";
+import Loader from "@/Components/Loader";
+import CustomInput from "@/Components/CustomInput";
+import GstVerificationDialog from "@/Components/GstVerificationDialog";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 

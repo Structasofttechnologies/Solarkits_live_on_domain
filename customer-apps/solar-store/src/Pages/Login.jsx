@@ -4,9 +4,9 @@ import { useNavigate, Link } from"react-router-dom";
 import { useDispatch } from"react-redux";
 import { FiMail, FiPhone, FiEye, FiEyeOff, FiArrowRight, FiHome, FiPackage, FiTrendingUp, FiUser } from"react-icons/fi";
 import axios from"axios";
-import Button from"../components/Button";
-import CustomInput from"../components/CustomInput";
-import IconButton from"../components/IconButton";
+import Button from "../Components/Button";
+import CustomInput from "../Components/CustomInput";
+import IconButton from "../Components/IconButton";
 import { setAlert } from"../features/alert.slice";
 import { setUser } from"../features/auth.slice";
 

@@ -6,8 +6,8 @@ import {
    FaClock, FaLeaf, FaChevronDown, FaChevronUp
 } from"react-icons/fa";
 import { useDispatch, useSelector } from"react-redux";
-import Button from"@/components/Button";
-import IconButton from"@/components/IconButton";
+import Button from "@/Components/Button";
+import IconButton from "@/Components/IconButton";
 import {
   addToBulkCart,
   decreaseBulkQty,

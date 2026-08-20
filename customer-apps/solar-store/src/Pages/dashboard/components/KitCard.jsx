@@ -15,8 +15,8 @@ import {
   setShowAuthDialog,
   selectLiveStock,
 } from "@/features/slice";
-import Button from "@/components/Button";
-import IconButton from "@/components/IconButton";
+import Button from "@/Components/Button";
+import IconButton from "@/Components/IconButton";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 

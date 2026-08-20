@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
-import Drawer from "../components/Drawer";
-import Header from "../components/Header";
-import ProtectedRoute from "../components/ProtectedRoute";
-import LocationChangeCartWarning from "../components/LocationChangeCartWarning";
+import Drawer from "../Components/Drawer";
+import Header from "../Components/Header";
+import ProtectedRoute from "../Components/ProtectedRoute";
+import LocationChangeCartWarning from "../Components/LocationChangeCartWarning";
 import { Route, Routes, Navigate } from "react-router-dom";
 import Dashboard from "./dashboard/Dashboard";
 import PreconfiguredComboKit from "./dashboard/PreconfiguredComboKit";

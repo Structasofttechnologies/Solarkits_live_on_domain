@@ -6,9 +6,9 @@ import {
   FaWarehouse, FaTruckLoading
 } from "react-icons/fa";
 import { BsArrowRepeat } from "react-icons/bs";
-import Button from "@/components/Button";
-import CustomInput from "@/components/CustomInput";
-import MapLocationPicker from "@/components/MapLocationPicker";
+import Button from "@/Components/Button";
+import CustomInput from "@/Components/CustomInput";
+import MapLocationPicker from "@/Components/MapLocationPicker";
 
 
 

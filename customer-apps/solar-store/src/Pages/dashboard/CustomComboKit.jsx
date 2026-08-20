@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addCustomKitToCart, setShowAuthDialog, fetchShopHierarchy } from "@/features/slice";
-import Dropdown from"@/components/Dropdown";
-import Button from"@/components/Button";
+import Dropdown from "@/Components/Dropdown";
+import Button from "@/Components/Button";
 import { FiRefreshCw, FiInfo, FiShoppingCart } from"react-icons/fi";
 import { FaCalculator } from"react-icons/fa";
 

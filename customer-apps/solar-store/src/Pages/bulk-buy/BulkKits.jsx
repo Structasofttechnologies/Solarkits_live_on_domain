@@ -3,9 +3,9 @@ import { useSelector, useDispatch } from"react-redux";
 import BulkKitCard from"./components/BulkKitCard";
 import SelectedBulkKitCard from"./components/SelectedBulkKitCard";
 import BulkKitFilters, { options } from"./components/BulkKitFilters";
-import Dialog from"@/components/Dialog";
-import Button from"@/components/Button";
-import IconButton from"@/components/IconButton";
+import Dialog from "@/Components/Dialog";
+import Button from "@/Components/Button";
+import IconButton from "@/Components/IconButton";
 import {
     FiFilter,
     FiGrid,
@@ -19,7 +19,7 @@ import {
     FiTrendingUp,
     FiSliders,
 } from"react-icons/fi";
-import Dropdown from"@/components/Dropdown";
+import Dropdown from "@/Components/Dropdown";
 import { fetchShopHierarchy } from "../../features/slice";
 
 export default function BulkKits() {

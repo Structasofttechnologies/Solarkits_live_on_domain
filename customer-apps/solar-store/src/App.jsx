@@ -1,28 +1,28 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { Provider, useDispatch, useSelector } from "react-redux"
 import store from "./app/store"
-import Alert from "./components/Alert"
-import AuthDialog from "./components/AuthDialog"
+import Alert from "./Components/Alert"
+import AuthDialog from "./Components/AuthDialog"
 import { useEffect } from "react"
 import { checkAuth } from "./features/auth.slice"
 import { fetchCart } from "./features/slice"
 
 // Landing page (solar-store's own landing)
-import LandingPage from "./Pages/LandingPage"
+import LandingPage from "./Pages/LandingPage.jsx"
 
 // Auth pages
-import Login from "./pages/Login"
-import SignUp from "./pages/SignUp"
-import ForgotPassword from "./pages/ForgotPassword"
+import Login from "./Pages/Login"
+import SignUp from "./Pages/SignUp"
+import ForgotPassword from "./Pages/ForgotPassword"
 
 // Policy pages
-import PrivacyPolicy from "./pages/policies/PrivacyPolicy"
-import TermsOfService from "./pages/policies/TermsOfService"
-import RefundPolicy from "./pages/policies/RefundPolicy"
-import ShippingPolicy from "./pages/policies/ShippingPolicy"
+import PrivacyPolicy from "./Pages/policies/PrivacyPolicy"
+import TermsOfService from "./Pages/policies/TermsOfService"
+import RefundPolicy from "./Pages/policies/RefundPolicy"
+import ShippingPolicy from "./Pages/policies/ShippingPolicy"
 
 // Protected store board
-import Board from "./pages/Board"
+import Board from "./Pages/Board"
 
 function AppContent() {
   const dispatch = useDispatch();
