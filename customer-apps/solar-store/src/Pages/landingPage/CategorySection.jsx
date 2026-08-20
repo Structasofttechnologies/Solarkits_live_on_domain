@@ -14,9 +14,6 @@ const CATEGORIES = [
     name: "On-Grid Solar Kits",
     desc: "Grid-tied rooftop solar kits from 1kW to 10kW with net-metering & PM Surya Ghar subsidy.",
     icon: FiSun,
-    color: "from-blue-500 via-blue-600 to-indigo-700",
-    glow: "bg-cyan-300",
-    shadow: "rgba(37, 99, 235, 0.25)",
     count: "45+ Kits",
     label: "On-Grid",
     href: "#products",
@@ -26,9 +23,6 @@ const CATEGORIES = [
     name: "Off-Grid Solar Kits",
     desc: "Battery-backed complete solar kits for 24x7 independent power without grid reliance.",
     icon: FiZap,
-    color: "from-cyan-500 via-sky-600 to-blue-700",
-    glow: "bg-sky-300",
-    shadow: "rgba(14, 165, 233, 0.25)",
     count: "30+ Kits",
     label: "Off-Grid",
     href: "#products",
@@ -38,9 +32,6 @@ const CATEGORIES = [
     name: "Hybrid Solar Kits",
     desc: "Best of both: Grid connectivity with battery backup for uninterrupted power & maximum savings.",
     icon: FiPackage,
-    color: "from-orange-400 via-orange-500 to-red-600",
-    glow: "bg-yellow-300",
-    shadow: "rgba(249, 115, 22, 0.25)",
     count: "25+ Kits",
     label: "Hybrid",
     href: "#products",
@@ -50,9 +41,6 @@ const CATEGORIES = [
     name: "Solar Custom Kits",
     desc: "Pre-wired AC/DC distribution boxes, lightning arrestors, earthing kits and custom combos.",
     icon: FiGrid,
-    color: "from-slate-700 via-blue-900 to-slate-950",
-    glow: "bg-blue-300",
-    shadow: "rgba(15, 23, 42, 0.28)",
     count: "50+ Kits",
     label: "Custom Kits",
     href: "#products",
@@ -91,76 +79,53 @@ function CategoryCard({ category, index }) {
     <motion.a
       href={category.href}
       variants={cardVariants}
-      whileHover={{ y: -10 }}
+      whileHover={{ y: -8 }}
       whileTap={{ scale: 0.98 }}
-      className={`
-        group relative isolate flex min-h-[330px] overflow-hidden rounded-3xl
-        bg-gradient-to-br p-6 text-white md:p-7
-        ${category.color}
-      `}
-      style={{
-        boxShadow: `0 18px 45px ${category.shadow}`,
-      }}
+      className="group relative isolate flex min-h-[340px] flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:border-primary-200 hover:shadow-card md:p-7"
     >
-      {/* Decorative glow */}
-      <div
-        className={`pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-25 blur-3xl transition-all duration-500 group-hover:scale-150 group-hover:opacity-40 ${category.glow}`}
-      />
+      {/* Subtle decorative glow on hover */}
+      <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary-50 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
 
-      {/* Decorative rings */}
-      <div className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full border border-white/10" />
-      <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full border border-white/10" />
-
-      {/* Bottom texture */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.08]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
-          backgroundSize: "22px 22px",
-        }}
-      />
-
-      <div className="relative z-10 flex w-full flex-col">
+      <div className="relative z-10 flex h-full w-full flex-col">
         {/* Card top */}
         <div className="flex items-start justify-between">
-          <div className="grid h-16 w-16 place-items-center rounded-2xl border border-white/20 bg-white/15 text-3xl shadow-lg backdrop-blur-sm transition-all duration-300 group-hover:rotate-6 group-hover:scale-110 group-hover:bg-white/25">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl border border-primary-100 bg-primary-50 text-2xl text-primary-500 shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:bg-primary-500 group-hover:text-white">
             <Icon />
           </div>
 
-          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white/90 backdrop-blur-md">
+          <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-500 transition-colors group-hover:border-primary-200 group-hover:bg-primary-50 group-hover:text-primary-600">
             Category {String(index + 1).padStart(2, "0")}
           </span>
         </div>
 
         {/* Card content */}
-        <div className="mt-8">
-          <h3 className="font-heading text-2xl font-extrabold leading-tight md:text-[26px]">
+        <div className="mt-7">
+          <h3 className="font-heading text-xl font-extrabold leading-tight text-navy transition-colors group-hover:text-primary-600 md:text-2xl">
             {category.name}
           </h3>
 
-          <p className="mt-3 max-w-[280px] text-sm leading-6 text-white/75">
+          <p className="mt-3 text-sm leading-relaxed text-gray-500">
             {category.desc}
           </p>
         </div>
 
         {/* Card bottom */}
-        <div className="mt-auto flex items-end justify-between pt-8">
+        <div className="mt-auto flex items-end justify-between border-t border-gray-100 pt-6">
           <div>
-            <span className="block text-3xl font-extrabold leading-none">
+            <span className="block font-heading text-2xl font-extrabold text-navy">
               {category.count}
             </span>
 
-            <span className="mt-1 block text-xs font-semibold uppercase tracking-wider text-white/65">
+            <span className="mt-0.5 block text-xs font-semibold uppercase tracking-wider text-gray-400">
               {category.label}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/15 py-2 pl-4 pr-2 text-sm font-bold backdrop-blur-md transition-all duration-300 group-hover:bg-white group-hover:text-gray-900">
+          <div className="flex items-center gap-2 rounded-full border border-primary-100 bg-primary-50 py-2 pl-4 pr-2 text-xs font-bold text-primary-600 transition-all duration-300 group-hover:border-primary-500 group-hover:bg-primary-500 group-hover:text-white">
             Explore
 
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-gray-900 transition-transform duration-300 group-hover:rotate-45">
-              <FiArrowUpRight className="text-base" />
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-white text-primary-600 shadow-sm transition-all duration-300 group-hover:bg-white/20 group-hover:text-white group-hover:rotate-45">
+              <FiArrowUpRight className="text-sm" />
             </span>
           </div>
         </div>
