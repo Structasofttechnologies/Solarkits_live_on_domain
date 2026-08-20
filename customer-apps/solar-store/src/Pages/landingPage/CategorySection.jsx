@@ -47,14 +47,14 @@ const CATEGORIES = [
   },
   {
     id: 4,
-    name: "Solar BOS & Custom Kits",
+    name: "Solar Custom Kits",
     desc: "Pre-wired AC/DC distribution boxes, lightning arrestors, earthing kits and custom combos.",
     icon: FiGrid,
     color: "from-slate-700 via-blue-900 to-slate-950",
     glow: "bg-blue-300",
     shadow: "rgba(15, 23, 42, 0.28)",
     count: "50+ Kits",
-    label: "BOS & Custom",
+    label: "Custom Kits",
     href: "#products",
   },
 ];

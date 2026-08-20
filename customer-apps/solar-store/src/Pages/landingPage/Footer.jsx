@@ -1,160 +1,165 @@
 import { motion } from "framer-motion";
 import {
-  FiMail, FiPhone, FiMapPin, FiFacebook, FiTwitter,
-  FiInstagram, FiYoutube, FiLinkedin, FiArrowRight
+  FiArrowRight,
+  FiFacebook,
+  FiInstagram,
+  FiLinkedin,
+  FiMail,
+  FiMapPin,
+  FiPhone,
+  FiTwitter,
+  FiYoutube,
 } from "react-icons/fi";
 import logo from "../../assets/images/logo.png";
 
-const FOOTER_LINKS = {
-  Shop: ["On-Grid Solar Kits", "Off-Grid Solar Kits", "Hybrid Solar Kits", "Commercial Solar Kits", "Solar BOS Kits", "Custom Combo Kits"],
-  Support: ["How to Order", "Installation Guide", "Subsidy Guide", "EMI Options", "Solar Calculator", "Product Warranty"],
-  Company: ["About SolarKits", "Franchise Partner", "Blog", "Careers", "Press", "Contact Us"],
-  Policies: ["Privacy Policy", "Terms of Use", "Return Policy", "Refund Policy", "Shipping Policy", "Cookie Policy"],
-};
-
-const SOCIAL = [
-  { icon: <FiFacebook />, href: "#", label: "Facebook" },
-  { icon: <FiInstagram />, href: "#", label: "Instagram" },
-  { icon: <FiTwitter />, href: "#", label: "Twitter" },
-  { icon: <FiYoutube />, href: "#", label: "YouTube" },
-  { icon: <FiLinkedin />, href: "#", label: "LinkedIn" },
+const SHOP_LINKS = [
+  "On-Grid Solar Kits",
+  "Off-Grid Solar Kits",
+  "Hybrid Solar Kits",
+  "Commercial Solar Kits",
 ];
 
-const PAYMENT_ICONS = ["💳 Visa", "💳 Mastercard", "🏦 Net Banking", "📱 UPI", "📲 GPay", "🏷️ EMI"];
+const HELP_LINKS = ["About Us", "Contact Us", "Installation Guide", "Product Warranty"];
+const POLICY_LINKS = ["Privacy", "Terms", "Returns", "Shipping"];
+
+const SOCIALS = [
+  { Icon: FiFacebook, href: "#", label: "Facebook" },
+  { Icon: FiInstagram, href: "#", label: "Instagram" },
+  { Icon: FiTwitter, href: "#", label: "Twitter" },
+  { Icon: FiYoutube, href: "#", label: "YouTube" },
+  { Icon: FiLinkedin, href: "#", label: "LinkedIn" },
+];
+
+const FooterLink = ({ children }) => (
+  <a
+    href="#"
+    className="group inline-flex items-center gap-2 text-sm text-white/60 transition-colors hover:text-white"
+  >
+    <span className="h-px w-0 bg-accent transition-all duration-300 group-hover:w-3" />
+    {children}
+  </a>
+);
 
 export default function Footer() {
   return (
-    <footer className="bg-navy text-white">
-      {/* CTA Strip */}
-      <div className="bg-primary-500 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div>
-            <h3 className="font-heading font-bold text-xl text-white mb-1">
-              Ready to Go Solar? Get a Free Quote!
-            </h3>
-            <p className="text-white/75 text-sm">Our solar experts will help you design the perfect system</p>
-          </div>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="Enter your pincode"
-              className="px-4 py-3 bg-white/15 border border-white/30 rounded-xl text-white placeholder-white/60 text-sm focus:outline-none focus:border-white/60 min-w-[180px]"
-            />
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex items-center gap-2 px-5 py-3 orange-gradient text-white font-bold rounded-xl text-sm shadow-md"
-            >
-              Get Quote <FiArrowRight />
-            </motion.button>
+    <footer className="relative overflow-hidden bg-navy text-white">
+      <div className="pointer-events-none absolute -right-28 top-24 h-72 w-72 rounded-full bg-primary-500/10 blur-3xl" />
+
+      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+        {/* Compact quote card */}
+        <div className="relative overflow-hidden rounded-3xl bg-primary-500 px-6 py-7 shadow-2xl shadow-black/15 md:px-9">
+          <div className="absolute -right-12 -top-20 h-52 w-52 rounded-full border-[36px] border-white/10" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-xl">
+              <span className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-white/70">
+                Free solar consultation
+              </span>
+              <h3 className="font-heading text-2xl font-bold md:text-3xl">
+                Ready to switch to solar?
+              </h3>
+              <p className="mt-2 text-sm text-white/75">
+                Share your pincode and our expert will suggest the right solar kit.
+              </p>
+            </div>
+
+            <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                aria-label="Pincode"
+                placeholder="Enter 6-digit pincode"
+                className="min-w-0 flex-1 rounded-xl border border-white/25 bg-white px-4 py-3.5 text-sm text-navy outline-none placeholder:text-slate-400 focus:ring-4 focus:ring-white/20"
+              />
+              <motion.button
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-accent px-5 py-3.5 text-sm font-bold text-white shadow-lg transition-colors hover:bg-accent-500"
+              >
+                Get free quote <FiArrowRight />
+              </motion.button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main footer body */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8">
-          {/* Brand column */}
-          <div className="col-span-2 md:col-span-3 lg:col-span-2">
-            {/* Logo */}
-            <div className="bg-white inline-flex px-3 py-2 rounded-xl mb-5">
+        {/* Main footer: only essential sections */}
+        <div className="grid gap-10 py-12 md:grid-cols-2 lg:grid-cols-12 lg:gap-8 lg:py-16">
+          <div className="lg:col-span-5">
+            <div className="mb-5 inline-flex rounded-xl bg-white px-3 py-2">
               <img src={logo} alt="SolarKits" className="h-8 w-auto" />
             </div>
-
-            <p className="text-white/65 text-sm leading-relaxed mb-5 max-w-xs">
-              SolarKits is India's trusted solar marketplace — connecting homeowners,
-              farmers & businesses with quality solar products and expert support.
+            <p className="max-w-md text-sm leading-7 text-white/60">
+              Quality solar kits, honest guidance and reliable support for homes,
+              farms and businesses across India.
             </p>
 
-            {/* Contact */}
-            <div className="space-y-2.5 mb-6">
-              <a href="tel:1800XXXXXXX" className="flex items-center gap-2.5 text-white/70 hover:text-white text-sm transition-colors">
-                <FiPhone className="text-accent flex-shrink-0" />
-                1800-XXX-XXXX (Mon–Sat, 9AM–6PM)
+            <div className="mt-6 grid gap-3 text-sm text-white/65 sm:grid-cols-2 lg:grid-cols-1">
+              <a href="tel:1800XXXXXXX" className="flex items-center gap-3 hover:text-white">
+                <FiPhone className="text-accent" /> 1800-XXX-XXXX
               </a>
-              <a href="mailto:support@solarkits.in" className="flex items-center gap-2.5 text-white/70 hover:text-white text-sm transition-colors">
-                <FiMail className="text-accent flex-shrink-0" />
-                support@solarkits.in
+              <a href="mailto:support@solarkits.in" className="flex items-center gap-3 hover:text-white">
+                <FiMail className="text-accent" /> support@solarkits.in
               </a>
-              <div className="flex items-start gap-2.5 text-white/70 text-sm">
-                <FiMapPin className="text-accent flex-shrink-0 mt-0.5" />
-                <span>SolarKits Pvt. Ltd., Mumbai, Maharashtra, India</span>
-              </div>
+              <p className="flex items-start gap-3 sm:col-span-2 lg:col-span-1">
+                <FiMapPin className="mt-1 shrink-0 text-accent" /> Mumbai, Maharashtra, India
+              </p>
             </div>
+          </div>
 
-            {/* Social */}
-            <div className="flex gap-2">
-              {SOCIAL.map((s) => (
-                <a
-                  key={s.label}
-                  href={s.href}
-                  aria-label={s.label}
-                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-accent/90 flex items-center justify-center text-white/70 hover:text-white transition-all duration-200"
-                >
-                  {s.icon}
+          <div className="lg:col-span-2">
+            <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-white">Solar kits</h4>
+            <nav className="flex flex-col items-start gap-3.5">
+              {SHOP_LINKS.map((link) => <FooterLink key={link}>{link}</FooterLink>)}
+            </nav>
+          </div>
+
+          <div className="lg:col-span-2">
+            <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-white">Help & company</h4>
+            <nav className="flex flex-col items-start gap-3.5">
+              {HELP_LINKS.map((link) => <FooterLink key={link}>{link}</FooterLink>)}
+            </nav>
+          </div>
+
+          <div className="md:col-span-2 lg:col-span-3">
+            <h4 className="text-xs font-bold uppercase tracking-[0.18em] text-white">Solar tips, once a week</h4>
+            <p className="mt-3 text-sm leading-6 text-white/55">
+              Useful tips, subsidy updates and offers. No spam.
+            </p>
+            <form className="mt-5 flex overflow-hidden rounded-xl border border-white/15 bg-white/5 focus-within:border-accent/70">
+              <input
+                type="email"
+                aria-label="Email address"
+                placeholder="Email address"
+                className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-white/35"
+              />
+              <button aria-label="Subscribe" className="m-1 grid w-11 place-items-center rounded-lg bg-accent text-white transition-colors hover:bg-accent-500">
+                <FiArrowRight />
+              </button>
+            </form>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {SOCIALS.map(({ Icon, href, label }) => (
+                <a key={label} href={href} aria-label={label} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/55 transition-all hover:-translate-y-0.5 hover:border-accent/50 hover:bg-accent hover:text-white">
+                  <Icon size={16} />
                 </a>
               ))}
             </div>
           </div>
-
-          {/* Links columns */}
-          {Object.entries(FOOTER_LINKS).map(([section, links]) => (
-            <div key={section}>
-              <h4 className="font-heading font-bold text-white text-sm mb-4 uppercase tracking-wider">
-                {section}
-              </h4>
-              <ul className="space-y-2.5">
-                {links.map((link) => (
-                  <li key={link}>
-                    <a
-                      href="#"
-                      className="text-white/55 hover:text-white text-sm transition-colors hover:translate-x-1 inline-block"
-                    >
-                      {link}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        {/* Newsletter */}
-        <div className="border-t border-white/10 mt-12 pt-10">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div>
-              <h4 className="font-heading font-bold text-white text-base mb-1">
-                📬 Subscribe to Solar Tips & Offers
-              </h4>
-              <p className="text-white/50 text-xs">Get weekly solar tips, subsidy updates & exclusive deals</p>
-            </div>
-            <div className="flex gap-2 w-full md:w-auto">
-              <input
-                type="email"
-                placeholder="Your email address"
-                className="flex-1 md:w-64 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 text-sm focus:outline-none focus:border-white/40 transition-all"
-              />
-              <button className="px-5 py-3 bg-accent hover:bg-accent-500 text-white font-bold rounded-xl text-sm transition-all flex-shrink-0">
-                Subscribe
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Bottom bar */}
-      <div className="border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-white/45 text-xs text-center md:text-left">
-            © {new Date().getFullYear()} SolarKits™ Pvt. Ltd. All rights reserved. | CIN: UXXXXXXMHXXXXPTCXXXXXX
-          </p>
-
-          {/* Payment methods */}
-          <div className="flex flex-wrap items-center gap-2">
-            {PAYMENT_ICONS.map((p) => (
-              <span key={p} className="text-[10px] text-white/45 bg-white/8 px-2 py-1 rounded-md">
-                {p}
-              </span>
+      {/* Slim legal/payment bar */}
+      <div className="border-t border-white/10 bg-black/10">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 text-xs text-white/45 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <span>© {new Date().getFullYear()} SolarKits™ Pvt. Ltd.</span>
+            <nav className="flex flex-wrap gap-x-4 gap-y-2">
+              {POLICY_LINKS.map((link) => <a key={link} href="#" className="hover:text-white">{link}</a>)}
+            </nav>
+          </div>
+          <div className="flex flex-wrap items-center gap-2" aria-label="Payment methods">
+            {['UPI', 'Visa', 'Mastercard', 'Net Banking', 'EMI'].map((method) => (
+              <span key={method} className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold tracking-wide text-white/55">{method}</span>
             ))}
           </div>
         </div>

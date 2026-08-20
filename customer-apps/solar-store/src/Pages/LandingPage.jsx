@@ -3,11 +3,7 @@ import Navbar from './landingPage/Navbar';
 import HeroSection from './landingPage/HeroSection';
 import CategorySection from './landingPage/CategorySection';
 import FeaturedProducts from './landingPage/FeaturedProducts';
-import SubsidyBanner from './landingPage/SubsidyBanner';
 import WhyChooseUs from './landingPage/WhyChooseUs';
-import StatsSection from './landingPage/StatsSection';
-import ProductRangeSection from './landingPage/ProductRangeSection';
-import SolarCalculator from './landingPage/SolarCalculator';
 import CertificationsSection from './landingPage/CertificationsSection';
 import TestimonialsSection from './landingPage/TestimonialsSection';
 import Footer from './landingPage/Footer';
@@ -27,28 +23,14 @@ function LandingPage() {
             {/* Bestselling Products */}
             <FeaturedProducts />
 
-            {/* PM Surya Ghar Subsidy */}
-            <SubsidyBanner />
-
             {/* Why Choose SolarKits */}
             <WhyChooseUs />
-
-            {/* Stats / Counter */}
-            <StatsSection />
-
-            {/* Full Product Range */}
-            <ProductRangeSection />
-
-            {/* Solar Calculator */}
-            <SolarCalculator />
 
             {/* Certifications & Brands */}
             <CertificationsSection />
 
             {/* Testimonials */}
             <TestimonialsSection />
-
-
 
             {/* Footer */}
             <Footer />

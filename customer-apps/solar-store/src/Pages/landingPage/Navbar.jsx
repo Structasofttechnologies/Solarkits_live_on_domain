@@ -28,7 +28,6 @@ const NAV_ITEMS = [
     href: "#products",
     dropdown: ["10kW–100kW Commercial Kits", "Solar BOS Kits", "Custom Combo Kits", "Preconfigured Kits"],
   },
-  { label: "🔥 Subsidy Kits", href: "#subsidy", dropdown: null },
 ];
 
 export default function Navbar() {
