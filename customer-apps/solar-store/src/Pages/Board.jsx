@@ -46,51 +46,24 @@ export default function Board() {
     )
   );
 
-  // Dynamic menu items based on whether user is Franchisee-onboarded EPC or direct customer/EPC
+  // Menu items for Direct EPC Solar Store
   const menuItems = useMemo(() => {
-    if (isFranchiseeEpc) {
-      // ── Franchisee Partner Onboarded EPC Menu ──
-      // Solar Combo Kit, Custom Combo Kit, and Solar BOS Kit are HIDDEN (these are for normal direct EPCs)
-      // Only Franchisee Product Catalogue, Bulk Buy, Request Order, Cart, Store Finder, Track Status & Settings are shown
-      return [
-        [
-          {
-            name: "Product Catalogue",
-            icon: <FaShoppingBag />,
-            path: "/epc-catalogue",
-            requiresAuth: true,
-          },
-        ],
-        [
-          { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
-          { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
-          { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
-        ],
-        [
-          { name: "Find Nearby Store", icon: <FaMapMarkerAlt />, path: "/store-locator" },
-          { name: "Track Order Status", icon: <MdListAlt />, path: "/track-status", requiresAuth: true },
-        ],
-        [{ name: "Settings", icon: <MdSettings />, path: "/settings", requiresAuth: true }]
-      ];
-    } else {
-      // ── Normal Direct EPC / Guest Customer Menu ──
-      return [
-        [
-          { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
-          { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
-          { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
-          { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
-          { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
-          { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
-        ],
-        [
-          { name: "Find Nearby Store", icon: <FaMapMarkerAlt />, path: "/store-locator" },
-          { name: "Track Order Status", icon: <MdListAlt />, path: "/track-status", requiresAuth: true },
-        ],
-        [{ name: "Settings", icon: <MdSettings />, path: "/settings", requiresAuth: true }]
-      ];
-    }
-  }, [isFranchiseeEpc]);
+    return [
+      [
+        { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
+        { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
+        { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
+        { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
+        { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
+        { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
+      ],
+      [
+        { name: "Find Nearby Store", icon: <FaMapMarkerAlt />, path: "/store-locator" },
+        { name: "Track Order Status", icon: <MdListAlt />, path: "/track-status", requiresAuth: true },
+      ],
+      [{ name: "Settings", icon: <MdSettings />, path: "/settings", requiresAuth: true }]
+    ];
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -143,54 +116,18 @@ export default function Board() {
 
         <main className="flex-1 p-4 overflow-y-auto scrollbar-hover">
           <Routes>
-            <Route
-              path="/dashboard/*"
-              element={
-                isFranchiseeEpc ? (
-                  <ProtectedRoute><EpcCatalogue /></ProtectedRoute>
-                ) : (
-                  <PreconfiguredComboKit />
-                )
-              }
-            />
+            {/* Default and Dashboard routes directly open Solar Combo Kit */}
+            <Route path="/" element={<PreconfiguredComboKit />} />
+            <Route path="/dashboard" element={<PreconfiguredComboKit />} />
+            <Route path="/dashboard/*" element={<PreconfiguredComboKit />} />
 
-            {/* Franchisee Product Catalogue */}
-            <Route
-              path="/epc-catalogue"
-              element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>}
-            />
+            {/* Direct EPC Store Kit Routes */}
+            <Route path="/preconfigured-combo-kit" element={<PreconfiguredComboKit />} />
+            <Route path="/custom-combo-kit" element={<ProtectedRoute><CustomComboKit /></ProtectedRoute>} />
+            <Route path="/solar-bos-kit" element={<ProtectedRoute><SolarBosKit /></ProtectedRoute>} />
 
-            {/* Normal EPC Kit Routes (Redirect if Franchisee EPC) */}
-            <Route
-              path="/preconfigured-combo-kit"
-              element={
-                isFranchiseeEpc ? (
-                  <Navigate to="/epc-catalogue" replace />
-                ) : (
-                  <PreconfiguredComboKit />
-                )
-              }
-            />
-            <Route
-              path="/custom-combo-kit"
-              element={
-                isFranchiseeEpc ? (
-                  <Navigate to="/epc-catalogue" replace />
-                ) : (
-                  <ProtectedRoute><CustomComboKit /></ProtectedRoute>
-                )
-              }
-            />
-            <Route
-              path="/solar-bos-kit"
-              element={
-                isFranchiseeEpc ? (
-                  <Navigate to="/epc-catalogue" replace />
-                ) : (
-                  <ProtectedRoute><SolarBosKit /></ProtectedRoute>
-                )
-              }
-            />
+            {/* Franchisee Product Catalogue (optional fallback) */}
+            <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />
 
             <Route path="/bulk-buy" element={<ProtectedRoute><BulkBuy /></ProtectedRoute>} />
             <Route path="/request-order" element={<ProtectedRoute><BulkOrderCart /></ProtectedRoute>} />
@@ -200,6 +137,7 @@ export default function Board() {
             <Route path="/stores" element={<StoreLocatorPage />} />
             <Route path="/checkout" element={<ProtectedRoute><CheckOut /></ProtectedRoute>} />
             <Route path="/track-status" element={<ProtectedRoute><ProjectOrderStatus /></ProtectedRoute>} />
+            <Route path="*" element={<PreconfiguredComboKit />} />
           </Routes>
         </main>
       </div>

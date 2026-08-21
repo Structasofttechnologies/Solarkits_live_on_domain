@@ -221,8 +221,8 @@ export default function Login() {
           message: response.data.message ||"Login successful! Welcome back."
         }));
 
-        // Redirect to product catalogue
-        navigate("/epc-catalogue");
+        // Redirect to Solar Combo Kit page
+        navigate("/preconfigured-combo-kit");
       }
     } catch (error) {
       // Handle request cancellation
@@ -322,7 +322,7 @@ export default function Login() {
         dispatch(setUser(user));
         sessionStorage.setItem('user', JSON.stringify(user));
         dispatch(setAlert({ type:"success", message:"Direct Login successful! Welcome back." }));
-        navigate("/epc-catalogue");
+        navigate("/preconfigured-combo-kit");
       }
     } catch (error) {
       const msg = error.response?.data?.message || "Login failed. Please check credentials.";
