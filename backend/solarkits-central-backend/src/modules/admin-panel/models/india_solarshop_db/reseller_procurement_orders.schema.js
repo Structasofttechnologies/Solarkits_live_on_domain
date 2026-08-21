@@ -8,7 +8,7 @@ const { india_solarshop_db } = require('../../config/databases');
 const procurementItemSchema = new mongoose.Schema({
   scope_type:       { type: String, enum: ['product', 'kit'], required: true },
   product_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'products', default: null },
-  kit_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'warehouse_combo_kits', default: null },
+  kit_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_combo_kits', default: null },
   item_name:        { type: String, required: true },
   quantity:         { type: Number, required: true, min: 1 },
   unit_price_paise: { type: Number, required: true, min: 0 }, // Integer paise

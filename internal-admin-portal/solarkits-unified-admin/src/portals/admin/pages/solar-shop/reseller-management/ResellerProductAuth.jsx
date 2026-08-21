@@ -51,12 +51,11 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   const [form, setForm] = useState({
     reseller_id:      defaultResellerId || (resellers[0]?.id || ""),
     industry_type_id: "",
-    scope_type:       "product",
+    scope_type:       "kit",
     category_id:      "",
     subcategory_id:   "",
     system_type_id:   "",
     project_range_id: "",
-    product_id:       "",
     kit_id:           "",
     is_authorized:    true,
     override_reason:  "",
@@ -67,7 +66,6 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   const [subcategories, setSubcategories] = useState([]);
   const [systemTypes, setSystemTypes] = useState([]);
   const [projectRanges, setProjectRanges] = useState([]);
-  const [products, setProducts] = useState([]);
   const [kits, setKits] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -90,7 +88,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   useEffect(() => {
     if (!form.industry_type_id) {
       setCategories([]);
-      setForm((prev) => ({ ...prev, category_id: "", subcategory_id: "", system_type_id: "", product_id: "", kit_id: "" }));
+      setForm((prev) => ({ ...prev, category_id: "", subcategory_id: "", system_type_id: "", kit_id: "" }));
       return;
     }
     axios.get(`${API_BASE}/project-types/get-categories?unique_id=${MODULE_UID}&req_for=view&industry_type_id=${form.industry_type_id}`, { headers: authHeaderObj() })
@@ -104,7 +102,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   useEffect(() => {
     if (!form.category_id) {
       setSubcategories([]);
-      setForm((prev) => ({ ...prev, subcategory_id: "", system_type_id: "", product_id: "", kit_id: "" }));
+      setForm((prev) => ({ ...prev, subcategory_id: "", system_type_id: "", kit_id: "" }));
       return;
     }
     axios.get(`${API_BASE}/project-types/get-subcategories?unique_id=${MODULE_UID}&req_for=view&category_id=${form.category_id}`, { headers: authHeaderObj() })
@@ -118,7 +116,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   useEffect(() => {
     if (!form.subcategory_id) {
       setSystemTypes([]);
-      setForm((prev) => ({ ...prev, system_type_id: "", project_range_id: "", product_id: "", kit_id: "" }));
+      setForm((prev) => ({ ...prev, system_type_id: "", project_range_id: "", kit_id: "" }));
       return;
     }
     axios.get(`${API_BASE}/project-types/get-subcategory-types?unique_id=${MODULE_UID}&req_for=view&subcategory_id=${form.subcategory_id}`, { headers: authHeaderObj() })
@@ -141,41 +139,14 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
       .catch((e) => console.error(e));
   }, [form.system_type_id]);
 
-  // Load products when scope is product
+  // Load kits on mount or when scope is kit
   useEffect(() => {
-    if (form.scope_type === "product") {
-      axios.get(`${API_BASE}/products/get-products?req_for=view&unique_id=ADM_SKU`, { headers: authHeaderObj() })
-        .then((res) => {
-          if (res.data?.status === "success") setProducts(res.data.data);
-        })
-        .catch((e) => console.error(e));
-    }
-  }, [form.scope_type]);
-
-  // Load kits when scope is kit
-  useEffect(() => {
-    if (form.scope_type === "kit") {
-      axios.get(`${API_BASE}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`, { headers: authHeaderObj() })
-        .then((res) => {
-          if (res.data?.status === "success") setKits(res.data.data);
-        })
-        .catch((e) => console.error(e));
-    }
-  }, [form.scope_type]);
-
-  // Filter products based on cascading dropdown selections
-  const filteredProducts = products.filter((p) => {
-    if (form.industry_type_id && p.industry_type_id && (p.industry_type_id?._id || p.industry_type_id) !== form.industry_type_id) {
-      return false;
-    }
-    if (form.category_id && p.category_id && (p.category_id?._id || p.category_id) !== form.category_id) {
-      return false;
-    }
-    if (form.subcategory_id && p.subcategory_id && (p.subcategory_id?._id || p.subcategory_id) !== form.subcategory_id) {
-      return false;
-    }
-    return true;
-  });
+    axios.get(`${API_BASE}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`, { headers: authHeaderObj() })
+      .then((res) => {
+        if (res.data?.status === "success") setKits(res.data.data);
+      })
+      .catch((e) => console.error(e));
+  }, []);
 
   // Filter combo kits based on 5 cascading dropdown selections
   const filteredKits = kits.filter((k) => {
@@ -207,7 +178,6 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
         scope_type:      form.scope_type,
         category_id:     form.category_id || undefined,
         subcategory_id:  form.subcategory_id || undefined,
-        product_id:      form.scope_type === "product" ? form.product_id : undefined,
         kit_id:          form.scope_type === "kit" ? form.kit_id : undefined,
         is_authorized:   form.is_authorized,
         override_reason: form.override_reason.trim() || undefined,
@@ -216,7 +186,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
 
       const res = await apiFetch("post", `/assign/${form.reseller_id}?req_for=add&unique_id=${MODULE_UID}`, payload);
       if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: "Product authorization rule saved!" }));
+        dispatch(setAlert({ type: "success", message: "Kit authorization rule saved successfully!" }));
         onAssigned(form.reseller_id);
         onClose();
       } else {
@@ -233,7 +203,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-2xl overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-border">
-          <h3 className="text-lg font-semibold text-text-primary">Add Product Authorization Rule</h3>
+          <h3 className="text-lg font-semibold text-text-primary">Add Solar Kit Authorization Rule</h3>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
             <FiXCircle size={18} />
           </button>
@@ -242,14 +212,14 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {/* Select Reseller */}
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Reseller <span className="text-danger">*</span></label>
+            <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Franchisee / Reseller <span className="text-danger">*</span></label>
             <select
               className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               value={form.reseller_id}
               onChange={(e) => setForm({ ...form, reseller_id: e.target.value })}
               required
             >
-              <option value="">Select Reseller...</option>
+              <option value="">Select Franchisee...</option>
               {resellers.map((r) => (
                 <option key={r.id} value={r.id}>{r.business_name} ({r.email})</option>
               ))}
@@ -281,7 +251,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
             </div>
           </div>
 
-          {/* Target Scope Level: ONLY 3 OPTIONS (All, Specific Product, Combo Kit) */}
+          {/* Target Scope Level: ONLY Solar Kits and Combo Kits */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1.5">Target Scope Level <span className="text-danger">*</span></label>
             <select
@@ -289,17 +259,16 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
               value={form.scope_type}
               onChange={(e) => setForm({ ...form, scope_type: e.target.value })}
             >
-              <option value="all">All Catalog Products & Kits</option>
-              <option value="product">Specific Product (SKU) Scope</option>
               <option value="kit">Combo Kit Scope</option>
+              <option value="all">All Solar Kits & Combo Kits</option>
             </select>
           </div>
 
           {/* 5 Cascading Filter Bar (Industry Type, Category, Subcategory, System Type, Project Range) */}
-          {["product", "kit"].includes(form.scope_type) && (
+          {form.scope_type === "kit" && (
             <div className="p-4 rounded-xl bg-surface-hover/60 border border-border space-y-3">
               <span className="text-xs font-bold text-text-primary uppercase tracking-wider block">
-                Catalog & Combo Kit Cascading Filters
+                Combo Kit Cascading Filters
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -386,27 +355,6 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
             </div>
           )}
 
-          {/* Product Picker */}
-          {form.scope_type === "product" && (
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">Specific Product <span className="text-danger">*</span></label>
-              <select
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-semibold"
-                value={form.product_id}
-                onChange={(e) => setForm({ ...form, product_id: e.target.value })}
-                required
-              >
-                <option value="">Select Product...</option>
-                {filteredProducts.map((p) => (
-                  <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
-                ))}
-              </select>
-              <span className="text-[11px] text-text-muted mt-1 block">
-                Showing {filteredProducts.length} products matching selected filters.
-              </span>
-            </div>
-          )}
-
           {/* Kit Picker */}
           {form.scope_type === "kit" && (
             <div>
@@ -431,7 +379,7 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1.5">Override Reason / Notes</label>
             <textarea
-              placeholder="e.g. Approved premium catalog access for high-volume dealer"
+              placeholder="e.g. Approved combo kit access for high-volume district franchise"
               className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
               rows={2}
               value={form.override_reason}
@@ -501,14 +449,14 @@ function EditStockModal({ rule, resellerId, onClose, onUpdated }) {
 
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Product</label>
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Solar Combo Kit</label>
             <div className="p-3 bg-bg border border-border rounded-xl font-semibold text-text-primary text-sm">
-              {rule.product?.name || rule.product?.sku_code || "Product Scope"}
+              {rule.kit?.kit_name || (rule.kit?.kit_code ? `Kit: ${rule.kit.kit_code}` : (rule.product?.name || "Combo Kit Scope"))}
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Stock Quantity (Units)</label>
+            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Allocated Kit Stock (Units)</label>
             <input
               type="number"
               min="0"
@@ -518,7 +466,7 @@ function EditStockModal({ rule, resellerId, onClose, onUpdated }) {
               onChange={(e) => setStockQty(e.target.value)}
               placeholder="e.g. 100, 200..."
             />
-            <p className="text-xs text-text-muted mt-1">Set available inventory count. Stock turns Out of Stock when quantity reaches 0.</p>
+            <p className="text-xs text-text-muted mt-1">Set available inventory count for this franchise kit. Kit turns Out of Stock when quantity reaches 0.</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
@@ -601,7 +549,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
     try {
       const res = await apiFetch("post", `/seed-dummy/${selectedResellerId}?req_for=add&unique_id=${MODULE_UID}`);
       if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: res.data?.message || "Dummy product auth rules seeded successfully!" }));
+        dispatch(setAlert({ type: "success", message: res.data?.message || "Dummy kit authorization rules seeded successfully!" }));
         fetchRules();
       } else {
         dispatch(setAlert({ type: "error", message: res.data?.message || "Seeding failed" }));
@@ -619,11 +567,11 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-            <FiPackage className="text-primary" size={24} />
-            Product Authorization Matrix
+            <FiBox className="text-primary" size={24} />
+            Solar Kit & Combo Kit Authorization Matrix
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Manage product catalog whitelists, category access permissions, and SKU blacklists per franchisee
+            Manage solar combo kit authorizations, whitelist kits, and exclusive franchise equipment allocations
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -631,7 +579,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             onClick={handleSeedDummy}
             disabled={seeding || !selectedResellerId}
             className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/20 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
-            title="Seed 5-6 dummy product authorization rules for testing"
+            title="Seed dummy solar kit authorization rules for testing"
           >
             {seeding ? <FiLoader className="animate-spin" size={16} /> : <FiZap size={16} />}
             Seed Dummy Rules
@@ -641,7 +589,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30"
           >
             <FiPlus size={16} />
-            Add Authorization Rule
+            Add Kit Authorization Rule
           </button>
         </div>
       </div>
@@ -665,14 +613,14 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-text-muted gap-3">
             <FiLoader className="animate-spin" size={20} />
-            <span className="text-sm">Loading product authorization rules...</span>
+            <span className="text-sm">Loading kit authorization rules...</span>
           </div>
         ) : rules.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-14 h-14 rounded-full bg-surface-hover flex items-center justify-center">
-              <FiPackage size={24} className="text-text-muted" />
+              <FiBox size={24} className="text-text-muted" />
             </div>
-            <p className="text-sm text-text-muted">No explicit product authorization rules configured for this franchisee</p>
+            <p className="text-sm text-text-muted">No explicit kit authorization rules configured for this franchisee</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -692,12 +640,12 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
               <tbody className="divide-y divide-border">
                 <AnimatePresence>
                   {rules.map((r) => {
-                    const ScopeIcon = SCOPE_ICONS[r.scope_type] || FiPackage;
-                    let targetName = "All Catalog Items";
-                    if (r.scope_type === "product") {
+                    const ScopeIcon = SCOPE_ICONS[r.scope_type] || FiBox;
+                    let targetName = "All Solar Kits & Combo Kits";
+                    if (r.scope_type === "kit") {
+                      targetName = r.kit?.name || r.kit?.kit_name || (r.kit?.kit_code ? `Kit: ${r.kit.kit_code}` : "Combo Kit Scope");
+                    } else if (r.scope_type === "product") {
                       targetName = r.product?.name || (r.product?.sku_code ? `SKU: ${r.product.sku_code}` : "Product Scope");
-                    } else if (r.scope_type === "kit") {
-                      targetName = r.kit?.kit_name || (r.kit?.kit_code ? `Kit: ${r.kit.kit_code}` : "Combo Kit Scope");
                     } else if (r.scope_type === "subcategory") {
                       targetName = r.subcategory?.name || "Subcategory Scope";
                     } else if (r.scope_type === "category") {
@@ -717,7 +665,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                         <td className="px-5 py-3.5">
                           <span className="font-semibold text-text-primary capitalize flex items-center gap-1.5">
                             <ScopeIcon size={14} className="text-primary" />
-                            {r.scope_type}
+                            {r.scope_type === 'kit' ? 'Combo Kit' : r.scope_type === 'all' ? 'All Kits' : r.scope_type}
                           </span>
                         </td>
                         <td className="px-5 py-3.5">
@@ -727,7 +675,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                           <AuthStatusBadge isAuthorized={r.is_authorized} />
                         </td>
                         <td className="px-4 py-3.5 text-center font-medium">
-                          {r.scope_type === "product" ? (
+                          {r.scope_type === "kit" || r.scope_type === "product" ? (
                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                               stockQty > 10
                                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
@@ -753,11 +701,11 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {r.scope_type === "product" && r.status === "active" && (
+                            {(r.scope_type === "kit" || r.scope_type === "product") && r.status === "active" && (
                               <button
                                 onClick={() => setStockModalRule(r)}
                                 className="p-2 rounded-lg text-primary hover:text-primary-hover hover:bg-primary-soft transition-colors"
-                                title="Edit / Refill Stock Quantity"
+                                title="Edit / Refill Kit Stock Quantity"
                               >
                                 <FiEdit3 size={16} />
                               </button>

@@ -63,7 +63,7 @@ const list_reseller_listings = async (req, res) => {
 
     const rows = await ResellerListing.find(filter)
       .populate({ path: 'product_id', model: Product, select: 'name sku_code description image base_price_paise min_margin_paise max_margin_paise specifications' })
-      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code base_price' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code base_price_cached selling_price_cached kit_image description' })
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
       .populate({ path: 'brand_id', model: Brand, select: 'name logo' })

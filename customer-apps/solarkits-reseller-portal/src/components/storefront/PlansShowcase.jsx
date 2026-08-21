@@ -170,7 +170,7 @@ export default function PlansShowcase() {
                     </p>
                   </div>
 
-                  {/* Territory & Margin Metrics */}
+                  {/* Territory, Warehouse & Order Type Metrics Grid */}
                   <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                     <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
                       <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Territory Quota</span>
@@ -185,6 +185,26 @@ export default function PlansShowcase() {
                         {commission}% - {commission + dealerMargin}%
                       </span>
                     </div>
+
+                    <div className="p-2.5 sm:p-3 rounded-xl bg-sky-50/70 border border-sky-100 text-center">
+                      <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Warehouse Req.</span>
+                      <span className="text-xs sm:text-sm font-black text-[#0575B8]">
+                        {p.warehouse_required
+                          ? `${p.warehouse_count || 1} WH (${Number(p.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)`
+                          : "Zero WH Req."}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 sm:p-3 rounded-xl bg-purple-50/70 border border-purple-100 text-center">
+                      <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Order Type</span>
+                      <span className="text-xs sm:text-sm font-black text-purple-700">
+                        {p.order_type_allowed === "po_order"
+                          ? "PO Order Only"
+                          : p.order_type_allowed === "loose_order"
+                          ? "Loose Order Only"
+                          : "PO & Loose Orders"}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Feature Highlights Checklist */}
@@ -195,7 +215,41 @@ export default function PlansShowcase() {
                     <ul className="space-y-2 sm:space-y-2.5 text-xs text-slate-700">
                       <li className="flex items-center gap-2">
                         <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
-                        <span><strong>{territoryCount} {scopeLevel}</strong> exclusive territory</span>
+                        <span><strong>{territoryCount} {scopeLevel}</strong> exclusive territory allocation</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
+                        <span>
+                          <strong>MOQ Capacity:</strong> Up to {Number(p.moq_capacity_kw || 10000).toLocaleString("en-IN")} kW ({p.moq_kits_count || 1} Kit MOQ)
+                        </span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
+                        <span>
+                          <strong>Project Types:</strong> {p.project_types_display || p.moq_project_type || "All Project Categories (Residential / Commercial)"}
+                        </span>
+                      </li>
+                      {p.combo_kits_display && p.combo_kits_display !== "All Admin Combo Kits" && (
+                        <li className="flex items-center gap-2">
+                          <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
+                          <span>
+                            <strong>Covered Kits:</strong> {p.combo_kits_display}
+                          </span>
+                        </li>
+                      )}
+                      <li className="flex items-center gap-2">
+                        <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
+                        <span>
+                          <strong>Warehouse:</strong> {p.warehouse_required
+                            ? `${p.warehouse_count || 1} Hub (${Number(p.warehouse_space_sqft || 0).toLocaleString("en-IN")} sq ft space)`
+                            : "No mandatory warehouse setup needed"}
+                        </span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
+                        <span>
+                          <strong>Order Fulfillment:</strong> {p.order_type_allowed === "po_order" ? "Purchase Order (PO)" : p.order_type_allowed === "loose_order" ? "Loose on-demand dispatch" : "Both Bulk PO & Loose Kit Orders"}
+                        </span>
                       </li>
                       <li className="flex items-center gap-2">
                         <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
@@ -204,14 +258,6 @@ export default function PlansShowcase() {
                       <li className="flex items-center gap-2">
                         <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
                         <span>Pre-qualified <strong>EPC Buyer Leads</strong> allocated</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
-                        <span><strong>Digital Wallet</strong> with T+0 Auto-Settlement</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
-                        <span>48-Hour Priority Dispatch from hub</span>
                       </li>
                     </ul>
                   </div>

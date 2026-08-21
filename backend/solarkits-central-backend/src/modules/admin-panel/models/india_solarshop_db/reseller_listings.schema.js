@@ -28,7 +28,8 @@ const schema = new mongoose.Schema({
   },
   kit_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'warehouse_combo_kits',
+    // Bug fix: model is registered as 'pc_combo_kits' (see combo_kits.schema.js line 51)
+    ref: 'pc_combo_kits',
     default: null,
   },
 

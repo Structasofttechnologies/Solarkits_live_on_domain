@@ -137,28 +137,49 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     };
   }, [showPerksTooltip]);
 
-  const currentVariant = kit.variants?.[selectedVariant] || kit.variants?.[0];
+  const currentVariant = useMemo(() => {
+    if (kit.variants && kit.variants.length > 0) {
+      return kit.variants[selectedVariant] || kit.variants[0];
+    }
+    const ourP = Number(kit.ourPrice || kit.selling_price_inr || kit.price || kit.discounted_price || kit.mrp || 0);
+    const mktP = Number(kit.marketPrice || kit.mrp || (ourP > 0 ? Math.round(ourP * 1.15) : 0));
+    const gstR = Number(kit.gstRate || (kit.taxes_and_charges_inr ? 13.8 : 13.8));
+    const cap = kit.capacityKW || (kit.wattage ? (kit.wattage >= 100 ? (kit.wattage / 1000) : kit.wattage) : 0.55);
+    return {
+      productTier: kit.productTier || kit.tier || kit.sku_code || "Tier-1 High Efficiency",
+      ourPrice: ourP,
+      marketPrice: mktP,
+      gstRate: gstR,
+      availableStock: kit.availableStock ?? kit.stock_quantity ?? 999,
+      inStock: kit.inStock !== false,
+      capacityKW: cap,
+      tierColor: kit.tierColor || null,
+      tierBenefits: kit.tierBenefits || ["Verified Tier-1 Quality", "Factory Direct Supply"],
+      includedDeliveryCharge: kit.includedDeliveryCharge || 0,
+      image: kit.kitImage || kit.image_url || kit.image || kit.product_image || DEFAULT_KIT_IMAGE,
+    };
+  }, [kit, selectedVariant]);
 
   // Memoize the type class function for usageType
   const getUsageTypeClass = useCallback(() => {
-    return"bg-primary/5 dark:bg-primary/10 dark:bg-primary/15 text-primary dark:text-info border border-primary/15 dark:border-info/20";
+    return "bg-primary/5 dark:bg-primary/10 dark:bg-primary/15 text-primary dark:text-info border border-primary/15 dark:border-info/20";
   }, []);
 
   // Memoize tier styling and icon
   const getTierConfig = useCallback((tier, color) => {
-    const tierLabel = tier ||"Standard Upgrade";
+    const tierLabel = tier || "Standard Upgrade";
     // Use custom color if provided (from dynamic DB config)
     const hasCustomColor = !!color;
     return {
-      text: hasCustomColor ?"" :"text-primary dark:text-info",
-      border: hasCustomColor ?"" :"border-primary/15 dark:border-info/20",
-      icon: <FaAward className={hasCustomColor ?"" :"text-primary dark:text-info"} style={hasCustomColor ? { color } : undefined} />,
+      text: hasCustomColor ? "" : "text-primary dark:text-info",
+      border: hasCustomColor ? "" : "border-primary/15 dark:border-info/20",
+      icon: <FaAward className={hasCustomColor ? "" : "text-primary dark:text-info"} style={hasCustomColor ? { color } : undefined} />,
       label: tierLabel,
-      bg: hasCustomColor ?"" :"bg-primary/5 dark:bg-primary/10",
-      badgeBg: hasCustomColor ?"" :"bg-primary/5 dark:bg-primary/10",
-      badgeText: hasCustomColor ?"" :"text-primary dark:text-info",
-      accent:"primary",
-      gradient:"from-primary to-primary",
+      bg: hasCustomColor ? "" : "bg-primary/5 dark:bg-primary/10",
+      badgeBg: hasCustomColor ? "" : "bg-primary/5 dark:bg-primary/10",
+      badgeText: hasCustomColor ? "" : "text-primary dark:text-info",
+      accent: "primary",
+      gradient: "from-primary to-primary",
       customColor: color || null,
     };
   }, []);
@@ -264,23 +285,72 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
 
   // Memoize formatted prices
   const formattedPrices = useMemo(() => {
-    const gstRate = currentVariant?.gstRate || 13.8;
-    const gstIncludedAmount = currentVariant?.ourPrice - Math.round(currentVariant?.ourPrice / (1 + (gstRate / 100)));
+    const ourPriceNum = Number(currentVariant?.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
+    const marketPriceNum = Number(currentVariant?.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
+    const gstRate = Number(currentVariant?.gstRate || kit?.gstRate || 13.8);
+    const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
+      ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
+      : 0;
+
     return {
-      marketPrice: currentVariant?.marketPrice?.toLocaleString("en-IN"),
-      ourPrice: currentVariant?.ourPrice?.toLocaleString("en-IN"),
-      gstIncluded: gstIncludedAmount?.toLocaleString("en-IN"),
-      gstRate
+      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
+      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0",
+      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0",
+      gstRate: !isNaN(gstRate) ? gstRate : 13.8
     };
-  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, currentVariant?.gstRate]);
+  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, currentVariant?.gstRate, kit]);
+
+  // Dynamic capacity & display values
+  const displayCapacity = useMemo(() => {
+    if (kit?.capacityKW !== undefined && kit.capacityKW !== null && kit.capacityKW !== "") {
+      return `${kit.capacityKW} kW`;
+    }
+    if (currentVariant?.capacityKW !== undefined && currentVariant.capacityKW !== null && currentVariant.capacityKW !== "") {
+      return `${currentVariant.capacityKW} kW`;
+    }
+    if (kit?.wattage) {
+      return kit.wattage >= 100 ? `${(kit.wattage / 1000).toFixed(2)} kW` : `${kit.wattage} kW`;
+    }
+    return "0.55 kW";
+  }, [kit?.capacityKW, currentVariant?.capacityKW, kit?.wattage]);
+
+  const displayImage = useMemo(() => {
+    return resolveImageUrl(
+      kit?.kitImage ||
+      kit?.image_url ||
+      kit?.image ||
+      kit?.product_image ||
+      currentVariant?.image ||
+      kit?.panel?.panelImage ||
+      DEFAULT_KIT_IMAGE
+    );
+  }, [kit, currentVariant]);
+
+  const displayDescription = useMemo(() => {
+    return kit?.description || kit?.summary || currentVariant?.description || "High-efficiency Tier-1 Solar PV Module engineered for rooftop and ground mount installations.";
+  }, [kit?.description, kit?.summary, currentVariant?.description]);
+
+  const displayKitName = useMemo(() => {
+    return kit?.kitName || kit?.title || kit?.name || "Solar Module";
+  }, [kit?.kitName, kit?.title, kit?.name]);
+
+  const generationEstimateDisplay = useMemo(() => {
+    if (kit?.generationEstimateKWhPerYear && !isNaN(kit.generationEstimateKWhPerYear)) {
+      return Number(kit.generationEstimateKWhPerYear).toLocaleString("en-IN");
+    }
+    const capNum = parseFloat(displayCapacity) || 0.55;
+    return Math.round(capNum * 4 * 365).toLocaleString("en-IN");
+  }, [kit?.generationEstimateKWhPerYear, displayCapacity]);
 
   // Use backend-computed discount percent (showcase price vs our price)
   // Falls back to frontend calculation if field is missing (backwards compat)
   const discountPercentage = useMemo(() => {
     if (currentVariant?.discountPercent !== undefined) return currentVariant.discountPercent;
-    if (!currentVariant?.marketPrice || !currentVariant?.ourPrice) return 0;
-    return Math.round(((currentVariant.marketPrice - currentVariant.ourPrice) / currentVariant.marketPrice) * 100);
-  }, [currentVariant?.discountPercent, currentVariant?.marketPrice, currentVariant?.ourPrice]);
+    const mkt = Number(currentVariant?.marketPrice || kit?.marketPrice || 0);
+    const our = Number(currentVariant?.ourPrice || kit?.ourPrice || 0);
+    if (!mkt || !our || mkt <= our) return 0;
+    return Math.round(((mkt - our) / mkt) * 100);
+  }, [currentVariant?.discountPercent, currentVariant?.marketPrice, currentVariant?.ourPrice, kit]);
 
   // Cart calculations for total and savings
   const cartCalculations = useMemo(() => {
@@ -442,8 +512,8 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
           </button>
         )}
         <img
-          src={resolveImageUrl(kit?.kitImage)}
-          alt={kit?.kitName || "Solar Kit"}
+          src={displayImage}
+          alt={displayKitName}
           className="w-full h-full p-2 object-contain transition-transform duration-500 group-hover:scale-110"
           loading="lazy"
           onError={(e) => {
@@ -458,17 +528,17 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       {/* Text Details */}
       <div className="flex-1 flex flex-col">
         <h3 className={`font-bold text-text-primary mb-1.5 line-clamp-1 leading-tight group-hover:text-primary dark:group-hover:text-info transition-colors ${compact ? 'text-base' : 'text-lg'}`}>
-          {kit?.kitName}
+          {displayKitName}
         </h3>
         <p className="text-text-secondary text-xs line-clamp-2 leading-relaxed mb-4">
-          {kit?.description}
+          {displayDescription}
         </p>
 
         {/* Dynamic Capacity Badge & Warranty Info Row */}
         <div className="flex items-center gap-2 mb-4">
           <div className="flex items-center gap-1.5 bg-primary/5 dark:bg-primary/10 dark:bg-primary/15 text-primary dark:text-info border border-primary/10 dark:border-info/10 text-xs font-bold px-2.5 py-1 rounded-lg">
             <FaBolt className="text-[10px]" />
-            <span>{kit.capacityKW} kW</span>
+            <span>{displayCapacity}</span>
           </div>
           {kit.warrantyYears && (
             <div className="flex items-center gap-1.5 bg-primary/5 dark:bg-primary/10 dark:bg-primary/15 text-primary dark:text-info border border-primary/10 dark:border-info/10 text-xs font-bold px-2.5 py-1 rounded-lg">
@@ -690,8 +760,8 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
         {/* Eco & Generation footer stats */}
         <div className="mt-4 flex justify-between items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
           <span className="flex items-center gap-1">
-            <FaClock className="text-primary/70 dark:text-info /70" />
-            {kit.generationEstimateKWhPerYear?.toLocaleString()} kWh/Yr
+            <FaClock className="text-primary/70 dark:text-info/70" />
+            {generationEstimateDisplay} kWh/Yr
           </span>
           <span className="flex items-center gap-1 text-primary dark:text-info">
             <FaLeaf />
@@ -715,7 +785,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       tabIndex={0}
       role="button"
       aria-pressed={isSelected}
-      aria-label={`Select ${kit.kitName} kit`}
+      aria-label={`Select ${displayKitName} kit`}
     >
       {/* Selection indicators */}
       {isSelected && (
@@ -769,8 +839,8 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
             </button>
           )}
           <img
-            src={resolveImageUrl(kit?.kitImage)}
-            alt={kit?.kitName || "Solar Kit"}
+            src={displayImage}
+            alt={displayKitName}
             className="w-full h-full p-2.5 object-contain transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
             onError={(e) => {
@@ -837,10 +907,10 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
 
               {/* Title & Desc */}
               <h3 className={`font-bold text-text-primary mb-1 line-clamp-1 leading-tight group-hover:text-primary dark:group-hover:text-info transition-colors ${compact ? 'text-base' : 'text-lg'}`}>
-                {kit?.kitName}
+                {displayKitName}
               </h3>
               <p className="text-text-secondary text-xs line-clamp-2 leading-relaxed mb-3">
-                {kit?.description}
+                {displayDescription}
               </p>
             </div>
 
@@ -851,7 +921,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               <div className="flex flex-wrap gap-2">
                 <span className="bg-blue-50/80 text-blue-700 border border-primary/20/80 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
                   <FaBolt size={10} />
-                  {kit.capacityKW} kW Capacity
+                  {displayCapacity} Capacity
                 </span>
                 {discountPercentage > 0 && (
                   <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-bold px-2 py-0.5 rounded-md">

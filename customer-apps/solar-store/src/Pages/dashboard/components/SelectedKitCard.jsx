@@ -119,7 +119,29 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
   const [isScrolling, setIsScrolling] = useState(false);
   const [startX, setStartX] = useState(0);
 
-  const currentVariant = kit?.variants?.[selectedVariant] || kit?.variants?.[0];
+  const currentVariant = useMemo(() => {
+    if (kit?.variants && kit.variants.length > 0) {
+      return kit.variants[selectedVariant] || kit.variants[0];
+    }
+    const ourP = Number(kit?.ourPrice || kit?.selling_price_inr || kit?.price || kit?.discounted_price || kit?.mrp || 0);
+    const mktP = Number(kit?.marketPrice || kit?.mrp || (ourP > 0 ? Math.round(ourP * 1.15) : 0));
+    const gstR = Number(kit?.gstRate || (kit?.taxes_and_charges_inr ? 13.8 : 13.8));
+    const cap = kit?.capacityKW || (kit?.wattage ? (kit.wattage >= 100 ? (kit.wattage / 1000) : kit.wattage) : 0.55);
+    return {
+      productTier: kit?.productTier || kit?.tier || kit?.sku_code || "Tier-1 High Efficiency",
+      ourPrice: ourP,
+      marketPrice: mktP,
+      gstRate: gstR,
+      availableStock: kit?.availableStock ?? kit?.stock_quantity ?? 999,
+      inStock: kit?.inStock !== false,
+      capacityKW: cap,
+      tierColor: kit?.tierColor || null,
+      tierBenefits: kit?.tierBenefits || ["Verified Tier-1 Quality", "Factory Direct Supply"],
+      includedDeliveryCharge: kit?.includedDeliveryCharge || 0,
+      image: kit?.kitImage || kit?.image_url || kit?.image || kit?.product_image || DEFAULT_KIT_IMAGE,
+    };
+  }, [kit, selectedVariant]);
+
   const cartItemId = kit ? (isCart && kit.cartItemId ? kit.cartItemId : `${kit.id}-${selectedVariant}`) : "";
   const cartItem = kit ? cart.find((item) => item.cartItemId === cartItemId) : null;
 
@@ -195,7 +217,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       return;
     }
     dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant }));
-  }, [dispatch, kit.id, selectedVariant, isAuthenticated]);
+  }, [dispatch, kit?.id, selectedVariant, isAuthenticated]);
 
   const handleDecreaseQty = useCallback(() => {
     if (cartItem?.qty > 1) {
@@ -216,15 +238,63 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
   }, []);
 
   // Memoize formatted prices and calculations
-  const formattedPrices = useMemo(() => ({
-    marketPrice: currentVariant?.marketPrice?.toLocaleString("en-IN"),
-    ourPrice: currentVariant?.ourPrice?.toLocaleString("en-IN")
-  }), [currentVariant?.marketPrice, currentVariant?.ourPrice]);
+  const formattedPrices = useMemo(() => {
+    const ourPriceNum = Number(currentVariant?.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
+    const marketPriceNum = Number(currentVariant?.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
+    return {
+      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
+      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0"
+    };
+  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, kit]);
 
   const discountPercentage = useMemo(() => {
-    if (!currentVariant?.marketPrice || !currentVariant?.ourPrice) return 0;
-    return Math.round(((currentVariant.marketPrice - currentVariant.ourPrice) / currentVariant.marketPrice) * 100);
-  }, [currentVariant?.marketPrice, currentVariant?.ourPrice]);
+    const mkt = Number(currentVariant?.marketPrice || kit?.marketPrice || 0);
+    const our = Number(currentVariant?.ourPrice || kit?.ourPrice || 0);
+    if (!mkt || !our || mkt <= our) return 0;
+    return Math.round(((mkt - our) / mkt) * 100);
+  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, kit]);
+
+  // Safe display variables
+  const displayKitName = useMemo(() => {
+    return kit?.kitName || kit?.title || kit?.name || "Solar Module";
+  }, [kit?.kitName, kit?.title, kit?.name]);
+
+  const displayImage = useMemo(() => {
+    return resolveImageUrl(
+      kit?.kitImage ||
+      kit?.image_url ||
+      kit?.image ||
+      kit?.product_image ||
+      currentVariant?.image ||
+      kit?.panel?.panelImage ||
+      DEFAULT_KIT_IMAGE
+    );
+  }, [kit, currentVariant]);
+
+  const displayDescription = useMemo(() => {
+    return kit?.description || kit?.summary || currentVariant?.description || "High-efficiency Tier-1 Solar PV Module engineered for rooftop and ground mount installations.";
+  }, [kit?.description, kit?.summary, currentVariant?.description]);
+
+  const displayCapacity = useMemo(() => {
+    if (kit?.capacityKW !== undefined && kit.capacityKW !== null && kit.capacityKW !== "") {
+      return `${kit.capacityKW} kW`;
+    }
+    if (currentVariant?.capacityKW !== undefined && currentVariant.capacityKW !== null && currentVariant.capacityKW !== "") {
+      return `${currentVariant.capacityKW} kW`;
+    }
+    if (kit?.wattage) {
+      return kit.wattage >= 100 ? `${(kit.wattage / 1000).toFixed(2)} kW` : `${kit.wattage} kW`;
+    }
+    return "0.55 kW";
+  }, [kit?.capacityKW, currentVariant?.capacityKW, kit?.wattage]);
+
+  const generationEstimateDisplay = useMemo(() => {
+    if (kit?.generationEstimateKWhPerYear && !isNaN(kit.generationEstimateKWhPerYear)) {
+      return Number(kit.generationEstimateKWhPerYear).toLocaleString("en-IN");
+    }
+    const capNum = parseFloat(displayCapacity) || 0.55;
+    return Math.round(capNum * 4 * 365).toLocaleString("en-IN");
+  }, [kit?.generationEstimateKWhPerYear, displayCapacity]);
 
   // Cart calculations
   const cartCalculations = useMemo(() => {
@@ -623,20 +693,22 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       </Dialog>
 
       {/* Kit Image */}
-      {kit.kitImage && (
-        <div className="mb-6 flex justify-center items-center bg-gradient-to-tr from-surface-hover/30 to-surface-hover/60 rounded-2xl p-2 border border-border w-full h-80 overflow-hidden group">
-          <img
-            src={kit.kitImage}
-            alt={kit.kitName}
-            className="w-full h-full object-contain transition-transform duration-500 hover:scale-110"
-            loading="lazy"
-          />
-        </div>
-      )}
+      <div className="mb-6 flex justify-center items-center bg-gradient-to-tr from-surface-hover/30 to-surface-hover/60 rounded-2xl p-2 border border-border w-full h-80 overflow-hidden group">
+        <img
+          src={displayImage}
+          alt={displayKitName}
+          className="w-full h-full object-contain transition-transform duration-500 hover:scale-110"
+          loading="lazy"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = DEFAULT_KIT_IMAGE;
+          }}
+        />
+      </div>
 
       {/* Kit Name */}
       <h2 className="text-2xl font-black text-text-primary text-center mb-2 tracking-tight">
-        {kit.kitName}
+        {displayKitName}
       </h2>
       {(kit.districtName || selectedDistrict?.name) && (
         <div className="flex justify-center mb-6">
@@ -651,21 +723,21 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       {/* Specs */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div className="lg:col-span-2 bg-surface-hover/60 border border-border p-4 rounded-2xl flex items-center border-l-4 border-l-primary">
-          <p className="text-xs md:text-sm text-text-secondary leading-relaxed font-medium">{kit.description}</p>
+          <p className="text-xs md:text-sm text-text-secondary leading-relaxed font-medium">{displayDescription}</p>
         </div>
         <div className="grid grid-cols-1 gap-2.5">
           <div className="flex items-center gap-3 p-3 bg-surface-hover/60 border border-border rounded-xl">
             <div className="p-2 rounded-lg bg-primary/10 text-primary"><FaBolt size={14} /></div>
             <div>
               <div className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Capacity</div>
-              <div className="text-sm font-black text-text-primary">{kit.capacityKW} kW</div>
+              <div className="text-sm font-black text-text-primary">{displayCapacity}</div>
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-surface-hover/60 border border-border rounded-xl">
             <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400"><FaSolarPanel size={14} /></div>
             <div>
               <div className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Annual Generation</div>
-              <div className="text-sm font-black text-text-primary">{kit.generationEstimateKWhPerYear?.toLocaleString("en-IN") || "-"} kWh</div>
+              <div className="text-sm font-black text-text-primary">{generationEstimateDisplay} kWh</div>
             </div>
           </div>
           {kit.warrantyYears && (

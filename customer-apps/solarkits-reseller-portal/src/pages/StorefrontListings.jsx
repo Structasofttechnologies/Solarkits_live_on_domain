@@ -302,7 +302,9 @@ export default function StorefrontListings() {
       ) : (
         <div className="space-y-6">
           {listings.map((item) => {
+            const isKit = item.item_type === "kit" || Boolean(item.kit_id);
             const p = item.product_id;
+            const k = item.kit_id;
             const costInr = (item.cost_price_paise / 100).toFixed(2);
             const minMarginInr = (item.min_margin_paise / 100).toFixed(2);
             const maxMarginInr = (item.max_margin_paise / 100).toFixed(2);
@@ -336,17 +338,22 @@ export default function StorefrontListings() {
               revoked: "Assignment Revoked",
             };
 
+            const displayTitle = item.title || p?.name || k?.name || k?.kit_name || (isKit ? "Solar Combo Kit" : "Solar Component");
+            const displaySku = p?.sku_code || k?.kit_code || (isKit ? "SKU-KIT" : "SKU-PROD");
+            const displayImage = item.image_url || p?.image || k?.kit_image || "/placeholder-solar.jpg";
+            const displayDesc = item.description || p?.description || k?.description || "High efficiency solar equipment configured for wholesale franchisee distribution.";
+
             return (
               <div
                 key={item._id}
                 className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center"
               >
-                {/* Product Image & Badges Column */}
+                {/* Product/Kit Image & Badges Column */}
                 <div className="lg:col-span-3 flex flex-col items-center">
                   <div className="w-full h-44 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 flex items-center justify-center p-3 relative">
                     <img
-                      src={item.image_url || p?.image || "/placeholder-solar.jpg"}
-                      alt={item.title || p?.name}
+                      src={displayImage}
+                      alt={displayTitle}
                       className="max-h-full max-w-full object-contain"
                       onError={(e) => {
                         e.target.onerror = null;
@@ -366,14 +373,21 @@ export default function StorefrontListings() {
                   </div>
                 </div>
 
-                {/* Product Details & Specs Column */}
+                {/* Product/Kit Details & Specs Column */}
                 <div className="lg:col-span-5 space-y-3">
                   <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      {isKit && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-extrabold tracking-wide uppercase">
+                          Combo Kit
+                        </span>
+                      )}
+                    </div>
                     <h2 className="text-lg font-black text-slate-900 leading-snug">
-                      {item.title || p?.name || "Solar Component"}
+                      {displayTitle}
                     </h2>
                     <p className="text-xs font-mono text-slate-400 font-semibold mt-0.5">
-                      SKU: {p?.sku_code || "SKU-PROD"}
+                      SKU: {displaySku}
                     </p>
                   </div>
 
@@ -402,7 +416,7 @@ export default function StorefrontListings() {
                   </div>
 
                   <p className="text-xs text-slate-600 font-medium line-clamp-2">
-                    {item.description || p?.description || "High efficiency solar equipment configured for wholesale franchisee distribution."}
+                    {displayDesc}
                   </p>
                 </div>
 

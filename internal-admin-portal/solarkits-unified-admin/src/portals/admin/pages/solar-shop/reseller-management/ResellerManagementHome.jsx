@@ -1,8 +1,16 @@
-import { FiUsers, FiTag, FiFileText, FiMapPin, FiPackage, FiDollarSign } from "react-icons/fi";
+import { FiUsers, FiTag, FiFileText, FiMapPin, FiPackage, FiDollarSign, FiInbox } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 const QUICK_LINKS = [
+  {
+    label: "Franchisee Leads",
+    description: "Inbound territory and franchise applications",
+    icon: FiInbox,
+    path: "/admin-panel/solar-shop/reseller-management/leads",
+    color: "text-danger",
+    bg: "bg-danger-soft",
+  },
   {
     label: "Franchisee Types",
     description: "Commission and Dealer mode configurations",

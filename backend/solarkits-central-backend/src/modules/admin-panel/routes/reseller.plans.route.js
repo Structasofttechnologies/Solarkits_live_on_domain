@@ -23,6 +23,16 @@ router.get(
   handler.list_reseller_plans
 );
 
+router.get(
+  '/config-options',
+  check_auth,
+  check_permissions([
+    { unique_code: 'RSL_PLAN', permissions: ['view'] },
+    { unique_code: 'RSL_MGMT', permissions: ['view'] },
+  ]),
+  handler.get_plan_config_options
+);
+
 router.post(
   '/add',
   check_auth,

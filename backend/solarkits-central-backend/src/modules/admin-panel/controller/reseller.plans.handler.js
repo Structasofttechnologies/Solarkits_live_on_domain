@@ -9,6 +9,7 @@
 
 const mongoose = require('mongoose');
 const { ResellerPlan, ResellerPlanSubscription } = require('../models/india_solarshop_db');
+const { ProjectType, ProjectCategory, ProjectSubcategory, WarehouseComboKit } = require('../models/core_db');
 const { logAudit } = require('../utils/audit.service');
 
 const slugify = (str) =>
@@ -34,28 +35,59 @@ const list_reseller_plans = async (req, res) => {
     if (active_only === 'true') query.is_active = true;
 
     const rows = await ResellerPlan.find(query)
+      .populate({ path: 'allowed_project_type_ids', model: ProjectType, select: 'name' })
+      .populate({ path: 'allowed_category_ids', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit, select: 'name capacity kit_code' })
       .sort({ sort_order: 1, name: 1 })
       .lean();
 
-    const data = rows.map((r) => ({
-      id:                        r._id,
-      name:                      r.name,
-      slug:                      r.slug,
-      territory_level:           r.territory_level,
-      one_time_fee:              r.one_time_fee,
-      currency:                  r.currency,
-      validity_value:            r.validity_value,
-      validity_unit:             r.validity_unit,
-      allowed_territories_count: r.allowed_territories_count,
-      renewal_rules:             r.renewal_rules,
-      allowed_project_types:     r.allowed_project_type_ids || [],
-      allowed_industry_types:    r.allowed_industry_type_ids || [],
-      allowed_categories:        r.allowed_category_ids || [],
-      description:               r.description,
-      sort_order:                r.sort_order,
-      is_active:                 r.is_active,
-      created_at:                r.created_at,
-    }));
+    const data = rows.map((r) => {
+      const projectTypesDisplay = Array.isArray(r.allowed_project_type_ids) && r.allowed_project_type_ids.length > 0
+        ? r.allowed_project_type_ids.map((pt) => (pt && pt.name ? pt.name : pt)).join(', ')
+        : (r.moq_project_type || 'All Project Types');
+
+      const comboKitsDisplay = Array.isArray(r.allowed_combo_kit_ids) && r.allowed_combo_kit_ids.length > 0
+        ? r.allowed_combo_kit_ids.map((ck) => (ck && ck.name ? ck.name : ck)).join(', ')
+        : 'All Admin Combo Kits';
+
+      return {
+        id:                        r._id,
+        name:                      r.name,
+        slug:                      r.slug,
+        territory_level:           r.territory_level,
+        one_time_fee:              r.one_time_fee,
+        currency:                  r.currency,
+        validity_value:            r.validity_value,
+        validity_unit:             r.validity_unit,
+        allowed_territories_count: r.allowed_territories_count,
+        renewal_rules:             r.renewal_rules,
+        allowed_project_types:     r.allowed_project_type_ids || [],
+        allowed_industry_types:    r.allowed_industry_type_ids || [],
+        allowed_categories:        r.allowed_category_ids || [],
+        allowed_combo_kits:        r.allowed_combo_kit_ids || [],
+        project_types_display:     projectTypesDisplay,
+        combo_kits_display:        comboKitsDisplay,
+
+        // ─── 1. Warehouse Requirements ─────────────────────────────────────────
+        warehouse_required:        r.warehouse_required ?? false,
+        warehouse_count:           r.warehouse_count ?? 0,
+        warehouse_space_sqft:      r.warehouse_space_sqft ?? 0,
+
+        // ─── 2. MOQ & Capacity Specifications ──────────────────────────────────
+        moq_capacity_kw:          r.moq_capacity_kw ?? 10000,
+        moq_kits_count:           r.moq_kits_count ?? 1,
+        moq_project_type:         projectTypesDisplay,
+        moq_description:          r.moq_description || null,
+
+        // ─── 3. Order Type Support ─────────────────────────────────────────────
+        order_type_allowed:       r.order_type_allowed || 'both',
+
+        description:               r.description,
+        sort_order:                r.sort_order,
+        is_active:                 r.is_active,
+        created_at:                r.created_at,
+      };
+    });
 
     return res.json({ status: 'success', data });
   } catch (error) {
@@ -82,6 +114,16 @@ const add_reseller_plan = async (req, res) => {
       allowed_project_type_ids,
       allowed_industry_type_ids,
       allowed_category_ids,
+      allowed_subcategory_ids,
+      allowed_combo_kit_ids,
+      warehouse_required,
+      warehouse_count,
+      warehouse_space_sqft,
+      moq_capacity_kw,
+      moq_kits_count,
+      moq_project_type,
+      moq_description,
+      order_type_allowed,
       description,
       sort_order,
     } = req.body;
@@ -116,6 +158,23 @@ const add_reseller_plan = async (req, res) => {
       allowed_project_type_ids:  Array.isArray(allowed_project_type_ids) ? allowed_project_type_ids : [],
       allowed_industry_type_ids: Array.isArray(allowed_industry_type_ids) ? allowed_industry_type_ids : [],
       allowed_category_ids:      Array.isArray(allowed_category_ids) ? allowed_category_ids : [],
+      allowed_subcategory_ids:   Array.isArray(allowed_subcategory_ids) ? allowed_subcategory_ids : [],
+      allowed_combo_kit_ids:     Array.isArray(allowed_combo_kit_ids) ? allowed_combo_kit_ids : [],
+      
+      // 1. Warehouse Requirements
+      warehouse_required:        Boolean(warehouse_required),
+      warehouse_count:           warehouse_count != null ? Math.max(0, Number(warehouse_count)) : 0,
+      warehouse_space_sqft:      warehouse_space_sqft != null ? Math.max(0, Number(warehouse_space_sqft)) : 0,
+
+      // 2. MOQ & Capacity Specifications
+      moq_capacity_kw:          moq_capacity_kw != null ? Math.max(0, Number(moq_capacity_kw)) : 10000,
+      moq_kits_count:           moq_kits_count != null ? Math.max(0, Number(moq_kits_count)) : 1,
+      moq_project_type:         moq_project_type ? moq_project_type.trim() : 'All Kit Types (Residential / Commercial / Industrial)',
+      moq_description:          moq_description ? moq_description.trim() : null,
+
+      // 3. Order Type Support
+      order_type_allowed:       ['po_order', 'loose_order', 'both'].includes(order_type_allowed) ? order_type_allowed : 'both',
+
       description:               description ? description.trim() : null,
       sort_order:                sort_order != null ? Number(sort_order) : 0,
       created_by:                req.user?.id || null,
@@ -191,6 +250,25 @@ const update_reseller_plan = async (req, res) => {
     if (Array.isArray(fields.allowed_project_type_ids)) updateData.allowed_project_type_ids = fields.allowed_project_type_ids;
     if (Array.isArray(fields.allowed_industry_type_ids)) updateData.allowed_industry_type_ids = fields.allowed_industry_type_ids;
     if (Array.isArray(fields.allowed_category_ids)) updateData.allowed_category_ids = fields.allowed_category_ids;
+    if (Array.isArray(fields.allowed_subcategory_ids)) updateData.allowed_subcategory_ids = fields.allowed_subcategory_ids;
+    if (Array.isArray(fields.allowed_combo_kit_ids)) updateData.allowed_combo_kit_ids = fields.allowed_combo_kit_ids;
+
+    // 1. Warehouse Requirements
+    if (fields.warehouse_required !== undefined) updateData.warehouse_required = Boolean(fields.warehouse_required);
+    if (fields.warehouse_count != null) updateData.warehouse_count = Math.max(0, Number(fields.warehouse_count));
+    if (fields.warehouse_space_sqft != null) updateData.warehouse_space_sqft = Math.max(0, Number(fields.warehouse_space_sqft));
+
+    // 2. MOQ & Capacity Specifications
+    if (fields.moq_capacity_kw != null) updateData.moq_capacity_kw = Math.max(0, Number(fields.moq_capacity_kw));
+    if (fields.moq_kits_count != null) updateData.moq_kits_count = Math.max(0, Number(fields.moq_kits_count));
+    if (fields.moq_project_type !== undefined) updateData.moq_project_type = fields.moq_project_type ? fields.moq_project_type.trim() : 'All Kit Types (Residential / Commercial / Industrial)';
+    if (fields.moq_description !== undefined) updateData.moq_description = fields.moq_description ? fields.moq_description.trim() : null;
+
+    // 3. Order Type Support
+    if (fields.order_type_allowed && ['po_order', 'loose_order', 'both'].includes(fields.order_type_allowed)) {
+      updateData.order_type_allowed = fields.order_type_allowed;
+    }
+
     if (fields.description !== undefined) updateData.description = fields.description ? fields.description.trim() : null;
     if (fields.sort_order != null) updateData.sort_order = Number(fields.sort_order);
     updateData.updated_by = req.user?.id || null;
@@ -294,10 +372,49 @@ const delete_reseller_plan = async (req, res) => {
   }
 };
 
+// ─── 6. GET PLAN CONFIG OPTIONS (Project Types & Admin Created Combo Kits) ─────
+/**
+ * GET /admin-api/resellers/plans/config-options
+ */
+const get_plan_config_options = async (req, res) => {
+  try {
+    const [projectTypes, categories, subcategories, comboKits] = await Promise.all([
+      ProjectType.find({ deleted_at: null }).sort({ name: 1 }).lean(),
+      ProjectCategory.find({ deleted_at: null }).sort({ sort_order: 1, name: 1 }).lean(),
+      ProjectSubcategory.find({ deleted_at: null }).sort({ name: 1 }).lean(),
+      WarehouseComboKit.find({ deleted_at: null, is_active: { $ne: false } })
+        .sort({ name: 1 })
+        .lean(),
+    ]);
+
+    return res.json({
+      status: 'success',
+      data: {
+        project_types: projectTypes.map((t) => ({ id: t._id, name: t.name })),
+        categories:    categories.map((c) => ({ id: c._id, name: c.name, industry_type_id: c.industry_type_id })),
+        subcategories: subcategories.map((sc) => ({ id: sc._id, name: sc.name, category_id: sc.category })),
+        combo_kits:    comboKits.map((k) => ({
+          id:                   k._id,
+          name:                 k.name || k.kit_name || 'Combo Kit',
+          kit_code:             k.kit_code || '',
+          capacity:             k.capacity || 0,
+          capacity_kw:          k.capacity || 0,
+          base_price_cached:    k.base_price_cached || 0,
+          selling_price_cached: k.selling_price_cached || 0,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.plans] get_plan_config_options error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to load configuration options' });
+  }
+};
+
 module.exports = {
   list_reseller_plans,
   add_reseller_plan,
   update_reseller_plan,
   toggle_reseller_plan_status,
   delete_reseller_plan,
+  get_plan_config_options,
 };

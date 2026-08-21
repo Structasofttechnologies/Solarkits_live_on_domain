@@ -94,19 +94,22 @@ async function settleOrderCommission({
     wallet = await ResellerWallet.create({ reseller_id: resellerId });
   }
 
-  const newBalancePaise = (wallet.available_balance_paise || 0) + netMarginPaise;
-  const newTotalEarnedPaise = (wallet.total_earned_paise || 0) + netMarginPaise;
-  const newTdsPaise = (wallet.tds_deducted_paise || 0) + tdsAmountPaise;
-  const newTcsPaise = (wallet.tcs_deducted_paise || 0) + tcsAmountPaise;
+  const newBalancePaise      = (wallet.available_balance_paise || 0) + netMarginPaise;
+  const newGrossEarnedPaise  = (wallet.gross_earned_paise || 0) + grossMarginPaise;
+  const newTotalEarnedPaise  = (wallet.total_earned_paise || 0) + netMarginPaise;
+  const newTdsPaise          = (wallet.tds_deducted_paise || 0) + tdsAmountPaise;
+  const newTcsPaise          = (wallet.tcs_deducted_paise || 0) + tcsAmountPaise;
 
+  // Phase R10: Update all paise fields atomically
   wallet.available_balance_paise = newBalancePaise;
-  wallet.total_earned_paise = newTotalEarnedPaise;
-  wallet.tds_deducted_paise = newTdsPaise;
-  wallet.tcs_deducted_paise = newTcsPaise;
+  wallet.gross_earned_paise      = newGrossEarnedPaise;
+  wallet.total_earned_paise      = newTotalEarnedPaise;
+  wallet.tds_deducted_paise      = newTdsPaise;
+  wallet.tcs_deducted_paise      = newTcsPaise;
 
-  // Sync backward-compatible INR fields
-  wallet.available_balance = newBalancePaise / 100;
-  wallet.total_earned = newTotalEarnedPaise / 100;
+  // Sync backward-compatible INR float fields (derived from paise)
+  wallet.available_balance = Math.round(newBalancePaise) / 100;
+  wallet.total_earned      = Math.round(newTotalEarnedPaise) / 100;
 
   await wallet.save();
 

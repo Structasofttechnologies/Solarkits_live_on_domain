@@ -22,6 +22,7 @@ const ResellerKyc = require('./reseller_kyc.schema');
 const ResellerPlan = require('./reseller_plans.schema');
 const ResellerPlanSubscription = require('./reseller_plan_subscriptions.schema');
 const ResellerAgreement = require('./reseller_agreements.schema');
+const FranchiseLead = require('./franchise_leads.schema');
 const GstVerificationLog = require('./gst_verification_logs.schema');
 const AuditLog = require('./audit_logs.schema');
 
@@ -78,6 +79,7 @@ module.exports = {
   ResellerPlan,
   ResellerPlanSubscription,
   ResellerAgreement,
+  FranchiseLead,
   GstVerificationLog,
   AuditLog,
   // --- Phase 3: Territory Management ---

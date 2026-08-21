@@ -35,7 +35,7 @@ const schema = new mongoose.Schema({
   },
   kit_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'warehouse_combo_kits',
+    ref: 'pc_combo_kits',
     default: null,
   },
   movement_type: {

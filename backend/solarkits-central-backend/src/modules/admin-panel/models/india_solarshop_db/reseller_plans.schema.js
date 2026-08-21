@@ -33,9 +33,29 @@ const schema = new mongoose.Schema({
     grace_period_days: { type: Number, default: 15 },
   },
 
-  allowed_project_type_ids:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_subcategories' }],
+  allowed_project_type_ids:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types' }],
   allowed_industry_type_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_industry_types' }],
   allowed_category_ids:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_categories' }],
+  allowed_subcategory_ids:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_subcategories' }],
+  allowed_combo_kit_ids:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'pc_comobo_kit' }],
+
+  // ─── 1. Warehouse Requirements ─────────────────────────────────────────────
+  warehouse_required:   { type: Boolean, default: false },
+  warehouse_count:      { type: Number, min: 0, default: 0 },
+  warehouse_space_sqft: { type: Number, min: 0, default: 0 },
+
+  // ─── 2. MOQ & Capacity Specifications (Project / Kit types) ───────────────────
+  moq_capacity_kw:      { type: Number, min: 0, default: 10000 },
+  moq_kits_count:       { type: Number, min: 0, default: 1 },
+  moq_project_type:     { type: String, default: 'All Kit Types (Residential / Commercial / Industrial)', trim: true },
+  moq_description:      { type: String, default: null, trim: true, maxlength: 1000 },
+
+  // ─── 3. Order Type Support ───────────────────────────────────────────────────
+  order_type_allowed: {
+    type: String,
+    enum: ['po_order', 'loose_order', 'both'],
+    default: 'both',
+  },
 
   description:     { type: String, default: null, trim: true, maxlength: 1000 },
   sort_order:      { type: Number, default: 0 },

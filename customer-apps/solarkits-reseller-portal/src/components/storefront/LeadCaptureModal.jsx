@@ -16,6 +16,7 @@ import {
   FiMessageSquare,
 } from "react-icons/fi";
 import { INDIAN_STATES_DISTRICTS } from "../../data/territoryData";
+import api from "../../services/api";
 
 export default function LeadCaptureModal({
   isOpen,
@@ -73,11 +74,41 @@ export default function LeadCaptureModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
 
-    // Save lead locally to ensure zero data loss & log CRM workflow
+    const payload = {
+      fullName: formData.fullName,
+      businessName: formData.businessName,
+      mobileNumber: formData.mobileNumber,
+      whatsappNumber: formData.whatsappNumber || formData.mobileNumber,
+      email: formData.email,
+      gstin: formData.gstin || null,
+      state: formData.state,
+      district: formData.district,
+      pincode: formData.pincode || null,
+      businessProfile: formData.businessType,
+      expectedOrderQty: formData.expectedOrderQty,
+      selectedSolution: formData.preferredFranchiseModel || formData.requiredKitConfig || "Header Fast Application",
+      notes: formData.notes || null,
+      consent: formData.consent,
+      source: "storefront_modal",
+    };
+
+    try {
+      // 1. Submit to Backend API
+      await api.post("/india/v1/reseller/leads/submit", payload);
+    } catch (err) {
+      console.warn("Backend lead submit note, trying fallback:", err);
+      try {
+        await api.post("/resellers/leads/submit", payload);
+      } catch (err2) {
+        console.warn("Fallback lead submit note:", err2);
+      }
+    }
+
+    // 2. Backup to localStorage for instant local sync
     try {
       const existingLeads = JSON.parse(localStorage.getItem("solarkits_crm_leads") || "[]");
       const newLead = {
@@ -93,10 +124,8 @@ export default function LeadCaptureModal({
       console.warn("CRM local storage note:", err);
     }
 
-    setTimeout(() => {
-      setSubmitting(false);
-      setSubmitted(true);
-    }, 900);
+    setSubmitting(false);
+    setSubmitted(true);
   };
 
   const getModalTitle = () => {

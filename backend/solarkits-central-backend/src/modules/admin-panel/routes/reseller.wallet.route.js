@@ -5,15 +5,18 @@
  * Unique permission code: RSL_WALLET
  * Prefix: /admin-api/reseller-mgmt/wallet
  *
- * Phase 7 — Reseller Management System
+ * Phase 7  — Reseller Management System (initial)
+ * Phase R10 — Added: mark-failed, export-payouts, payouts/:id detail endpoint.
  */
 
 const express = require('express');
 const router = express.Router();
 
-const check_auth = require('../middlewares/check.auth');
+const check_auth        = require('../middlewares/check.auth');
 const check_permissions = require('../middlewares/check.permissions');
-const handler = require('../controller/reseller.wallet.admin.handler');
+const handler           = require('../controller/reseller.wallet.admin.handler');
+
+// ─── Wallet Overview ─────────────────────────────────────────────────────────
 
 router.get(
   '/list',
@@ -22,19 +25,7 @@ router.get(
   handler.list_reseller_wallets
 );
 
-router.get(
-  '/payouts',
-  check_auth,
-  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
-  handler.list_payout_requests
-);
-
-router.put(
-  '/payouts/process/:id',
-  check_auth,
-  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['edit'] }]),
-  handler.process_payout_request
-);
+// ─── Ledger History ──────────────────────────────────────────────────────────
 
 router.get(
   '/ledger/:reseller_id',
@@ -43,10 +34,57 @@ router.get(
   handler.get_reseller_ledger_history
 );
 
+// ─── Payout Requests Queue ───────────────────────────────────────────────────
+
+router.get(
+  '/payouts',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
+  handler.list_payout_requests
+);
+
+// GET single payout with ledger entries
+router.get(
+  '/payouts/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
+  handler.get_payout_detail
+);
+
+// Process payout: mark as paid (with UTR) or reject (with reason)
+router.put(
+  '/payouts/process/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['edit'] }]),
+  handler.process_payout_request
+);
+
+// Mark a processing payout as failed (funds returned)
+router.put(
+  '/payouts/mark-failed/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['edit'] }]),
+  handler.mark_payout_failed
+);
+
+// ─── Reports & Export ────────────────────────────────────────────────────────
+
+router.get(
+  '/export-payouts',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
+  handler.export_payouts_csv
+);
+
+// ─── Commission Settlement ───────────────────────────────────────────────────
+
 router.post(
   '/settle-commission',
   check_auth,
-  check_permissions([{ unique_code: 'RSL_COMM_SETTLE', permissions: ['add', 'edit'] }, { unique_code: 'RSL_WALLET', permissions: ['edit'] }]),
+  check_permissions([
+    { unique_code: 'RSL_COMM_SETTLE', permissions: ['add', 'edit'] },
+    { unique_code: 'RSL_WALLET', permissions: ['edit'] },
+  ]),
   handler.settle_commission_manual
 );
 

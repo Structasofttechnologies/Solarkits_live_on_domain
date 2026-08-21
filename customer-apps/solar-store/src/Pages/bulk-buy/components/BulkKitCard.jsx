@@ -173,16 +173,21 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
 
   // Memoize formatted prices
   const formattedPrices = useMemo(() => {
-    const gstRate = currentVariant?.gstRate || 13.8;
-    const gstIncludedAmount = effectivePrices.ourPrice - Math.round(effectivePrices.ourPrice / (1 + (gstRate / 100)));
+    const ourPriceNum = Number(effectivePrices.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
+    const marketPriceNum = Number(effectivePrices.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
+    const gstRate = Number(currentVariant?.gstRate || kit?.gstRate || 13.8);
+    const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
+      ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
+      : 0;
+
     return {
-      marketPrice: effectivePrices.marketPrice?.toLocaleString("en-IN"),
-      ourPrice: effectivePrices.ourPrice?.toLocaleString("en-IN"),
-      regularPrice: effectivePrices.regularPrice?.toLocaleString("en-IN"),
-      totalPackPrice: effectivePrices.bulkPack?.totalPackPrice?.toLocaleString("en-IN") ||"",
-      gstIncluded: gstIncludedAmount?.toLocaleString("en-IN")
+      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
+      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0",
+      regularPrice: effectivePrices.regularPrice ? effectivePrices.regularPrice.toLocaleString("en-IN") : "",
+      totalPackPrice: effectivePrices.bulkPack?.totalPackPrice?.toLocaleString("en-IN") || "",
+      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0"
     };
-  }, [effectivePrices, currentVariant?.gstRate]);
+  }, [effectivePrices, currentVariant?.gstRate, kit]);
 
   // Calculate discount percentages — use backend-precomputed values where available
   // Total discount from showcase (MRP) to our bulk price

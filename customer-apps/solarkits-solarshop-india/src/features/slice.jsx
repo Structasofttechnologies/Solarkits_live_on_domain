@@ -165,30 +165,55 @@ const slice = createSlice({
         const cartItemId = payload.listing_id || payload.id || `item_${Date.now()}`;
         const exists = state.cart.find((c) => c.cartItemId === cartItemId || c.id === (payload.id || payload.listing_id));
 
+        const price = parseFloat(payload.selling_price_inr || payload.ourPrice || payload.price || payload.discounted_price || payload.mrp || 0);
+        const marketPrice = parseFloat(payload.marketPrice || payload.mrp || (price > 0 ? Math.round(price * 1.15) : price));
+        const img = payload.image_url || payload.image || payload.product_image || payload.kitImage || payload.panelImage || "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+        const cap = payload.capacityKW || payload.capacity_kw || (payload.wattage ? (payload.wattage >= 100 ? payload.wattage / 1000 : payload.wattage) : 0.55);
+        const desc = payload.description || payload.summary || `${payload.title || payload.name || "Solar Module"} with standard manufacturer warranty and Tier-1 efficiency.`;
+
         if (exists) {
           exists.qty += (payload.qty || 1);
         } else {
           state.cart.push({
             id: payload.id || payload.listing_id,
             cartItemId,
-            title: payload.title || payload.name,
-            kitName: payload.title || payload.name,
-            selling_price_inr: payload.selling_price_inr,
-            price_before_tax_inr: payload.price_before_tax_inr,
-            taxes_and_charges_inr: payload.taxes_and_charges_inr,
-            ourPrice: parseFloat(payload.selling_price_inr || 0),
-            marketPrice: parseFloat(payload.selling_price_inr || 0),
-            image_url: payload.image_url,
+            title: payload.title || payload.name || "Solar Module",
+            kitName: payload.title || payload.name || "Solar Module",
+            description: desc,
+            selling_price_inr: price,
+            price_before_tax_inr: payload.price_before_tax_inr || Math.round(price / 1.138),
+            taxes_and_charges_inr: payload.taxes_and_charges_inr || Math.max(0, Math.round(price - price / 1.138)),
+            ourPrice: price,
+            marketPrice: marketPrice,
+            kitImage: img,
+            image_url: img,
+            capacityKW: cap,
+            wattage: payload.wattage || (cap ? cap * 1000 : 550),
             is_catalogue_item: true,
             is_custom: true,
             qty: payload.qty || 1,
             availableStock: payload.stock_quantity || 99,
-            productTier: payload.sku_code || 'Standard',
+            productTier: payload.sku_code || payload.productTier || 'Tier-1 High Efficiency',
+            tierColor: '#0575B8',
+            tierBenefits: ['Verified Tier-1 Product', 'Direct Factory Warranty', 'Free Shipping Included'],
+            generationEstimateKWhPerYear: Math.round(cap * 4 * 365),
+            variants: [
+              {
+                productTier: payload.sku_code || payload.productTier || 'Standard Tier-1',
+                ourPrice: price,
+                marketPrice: marketPrice,
+                gstRate: 13.8,
+                capacityKW: cap,
+                availableStock: payload.stock_quantity || 99,
+                inStock: true,
+                image: img,
+              }
+            ]
           });
         }
         state.alert = {
           status: "success",
-          message: `${payload.title || payload.name} added to cart.`,
+          message: `${payload.title || payload.name || "Product"} added to cart.`,
           undoItem: null,
         };
         return;

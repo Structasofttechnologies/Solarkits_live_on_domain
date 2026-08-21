@@ -64,9 +64,36 @@ export default function PlansPortal() {
                 <p className="text-xs text-slate-600 font-medium">{p.description || "Standard partner plan"}</p>
 
                 <div className="space-y-2.5 text-xs font-bold pt-4 border-t border-slate-100">
-                  <div className="flex items-center gap-2 text-slate-800"><FiCheckCircle className="text-emerald-600" size={16} /> Default Commission: <span className="text-blue-700">{p.default_commission_rate}%</span></div>
-                  <div className="flex items-center gap-2 text-slate-800"><FiCheckCircle className="text-emerald-600" size={16} /> Dealer Margin: <span className="text-blue-700">{p.default_dealer_margin}%</span></div>
-                  <div className="flex items-center gap-2 text-slate-800"><FiCheckCircle className="text-emerald-600" size={16} /> Max Territory States: <span className="text-blue-700">{p.max_states_allowed || "Unlimited"}</span></div>
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                    <span>Territory Scope: <strong className="text-blue-700">{p.max_states_allowed || "District Level"}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                    <span>MOQ Capacity: <strong className="text-amber-600">Up to {Number(p.moq_capacity_kw || 10000).toLocaleString("en-IN")} kW</strong> ({p.moq_kits_count || 1} Kit MOQ)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                    <span>Project Types: <strong className="text-slate-700">{p.project_types_display || p.moq_project_type || "All Project Types"}</strong></span>
+                  </div>
+                  {p.combo_kits_display && p.combo_kits_display !== "All Admin Combo Kits" && (
+                    <div className="flex items-center gap-2 text-slate-800">
+                      <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                      <span>Combo Kits: <strong className="text-blue-700">{p.combo_kits_display}</strong></span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                    <span>Warehouse: <strong className="text-blue-700">{p.warehouse_required ? `${p.warehouse_count || 1} Hub (${Number(p.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)` : "No WH Required"}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                    <span>Order Type: <strong className="text-purple-700">{p.order_type_allowed === "po_order" ? "PO Order Only" : p.order_type_allowed === "loose_order" ? "Loose Order Only" : "PO & Loose Orders"}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={16} />
+                    <span>Margins: <strong className="text-blue-700">{p.default_commission_rate}% Comm. / {p.default_dealer_margin}% Dealer Margin</strong></span>
+                  </div>
                 </div>
               </div>
 

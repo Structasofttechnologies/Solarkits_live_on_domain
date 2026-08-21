@@ -4,6 +4,7 @@ import Loader from "@/components/Loader";
 import { PermissionGuard } from "../../../components/PermissionGuard";
 
 const ResellerManagementHome = lazy(() => import("./ResellerManagementHome"));
+const ResellerLeads = lazy(() => import("./ResellerLeads"));
 const ResellerTypes = lazy(() => import("./ResellerTypes"));
 const ResellerPlans = lazy(() => import("./ResellerPlans"));
 const ResellerList = lazy(() => import("./ResellerList"));
@@ -30,6 +31,18 @@ function ResellerManagement() {
           <PermissionGuard requiredUniqueId="RSL_MGMT">
             <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
               <ResellerManagementHome />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+
+      {/* Franchisee Application Leads */}
+      <Route
+        path="/leads"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Franchisee Leads..." />}>
+              <ResellerLeads moduleUniqueId="RSL_MGMT" />
             </Suspense>
           </PermissionGuard>
         }

@@ -48,7 +48,8 @@ const schema = new mongoose.Schema({
   },
   kit_id: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'warehouse_combo_kits',
+    // Bug fix: registered model name is 'pc_combo_kits', not 'warehouse_combo_kits'
+    ref: 'pc_combo_kits',
     default: null,
   },
   allowed_project_type_ids: [{

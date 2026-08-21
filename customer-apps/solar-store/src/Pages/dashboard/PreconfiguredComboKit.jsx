@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo, useRef } from"react";
-import { useSelector, useDispatch } from"react-redux";
-import KitCard from"./components/KitCard";
-import SelectedKitCard from"./components/SelectedKitCard";
-import KitFilters, { options } from"./components/KitFilters";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import KitCard from "./components/KitCard";
+import SelectedKitCard from "./components/SelectedKitCard";
+import KitFilters, { options } from "./components/KitFilters";
 import Dialog from "@/Components/Dialog";
 import Button from "@/Components/Button";
 import IconButton from "@/Components/IconButton";
@@ -19,7 +19,7 @@ import {
   FiTrendingUp,
   FiSliders,
   FiLayers,
-} from"react-icons/fi";
+} from "react-icons/fi";
 import Dropdown from "@/Components/Dropdown";
 import KitComparisonDrawer from "@/Components/storefront/KitComparisonDrawer";
 import { fetchShopHierarchy } from "../../features/slice";
@@ -114,7 +114,7 @@ export default function PreconfiguredComboKit() {
   }, [activeOffers]);
 
   useEffect(() => {
-    setSelectedKit(selected ? availableKits.find((k) => 
+    setSelectedKit(selected ? availableKits.find((k) =>
       String(k.id) === String(selected?.split('-')[0])
     ) : null);
   }, [selected, availableKits]);
@@ -123,31 +123,31 @@ export default function PreconfiguredComboKit() {
   const comboKitTypeOptions = useMemo(() => {
     let filteredKits = availableKits;
 
-    if (filters.category && filters.category !=="all") {
+    if (filters.category && filters.category !== "all") {
       filteredKits = filteredKits.filter(kit => kit.category?.toLowerCase() === filters.category.toLowerCase());
     }
-    if (filters.subCategory && filters.subCategory !=="all") {
+    if (filters.subCategory && filters.subCategory !== "all") {
       filteredKits = filteredKits.filter(kit => kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() || kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase());
     }
-    if (filters.systemType && filters.systemType !=="all") {
+    if (filters.systemType && filters.systemType !== "all") {
       filteredKits = filteredKits.filter(kit => kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() || kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase());
     }
-    if (filters.projectRange && filters.projectRange !=="all") {
+    if (filters.projectRange && filters.projectRange !== "all") {
       filteredKits = filteredKits.filter(kit => String(kit.projectRange?.id) === String(filters.projectRange));
     }
 
     const types = [...new Set(filteredKits
       .filter(kit => !kit.hasNoAssignedVariants)
-      .flatMap(kit => 
+      .flatMap(kit =>
         kit.variants?.map(v => v.productTier) || []
       ).filter(Boolean)
     )];
 
     return [
-      { value:"all", text:"All Combo Kit Types" },
-      ...types.map(type => ({ 
-        value: type.toLowerCase(), 
-        text: type 
+      { value: "all", text: "All Combo Kit Types" },
+      ...types.map(type => ({
+        value: type.toLowerCase(),
+        text: type
       }))
     ];
   }, [availableKits, filters.category, filters.subCategory, filters.systemType, filters.projectRange]);
@@ -172,7 +172,7 @@ export default function PreconfiguredComboKit() {
     });
 
     return [
-      { value:"all", text:"All Industry Types" },
+      { value: "all", text: "All Industry Types" },
       ...list
     ];
   }, [shopHierarchy, availableKits]);
@@ -213,7 +213,7 @@ export default function PreconfiguredComboKit() {
     });
 
     return [
-      { value:"all", text:"All Categories" },
+      { value: "all", text: "All Categories" },
       ...Array.from(catMap.values())
     ];
   }, [shopHierarchy, availableKits, filters.industryType]);
@@ -270,7 +270,7 @@ export default function PreconfiguredComboKit() {
     });
 
     return [
-      { value:"all", text:"All Sub-Categories" },
+      { value: "all", text: "All Sub-Categories" },
       ...Array.from(subsMap.values())
     ];
   }, [shopHierarchy, availableKits, filters.industryType, filters.category]);
@@ -329,7 +329,7 @@ export default function PreconfiguredComboKit() {
     });
 
     return [
-      { value:"all", text:"All System Types" },
+      { value: "all", text: "All System Types" },
       ...Array.from(typesMap.values())
     ];
   }, [shopHierarchy, availableKits, filters.industryType, filters.category, filters.subCategory]);
@@ -404,7 +404,7 @@ export default function PreconfiguredComboKit() {
     const uniqueRanges = Array.from(rangesMap.values()).sort((a, b) => (a.min || 0) - (b.min || 0));
 
     return [
-      { value:"all", text:"All Project Ranges" },
+      { value: "all", text: "All Project Ranges" },
       ...uniqueRanges.map(r => ({ value: r.value, text: r.text }))
     ];
   }, [shopHierarchy, availableKits, filters.industryType, filters.category, filters.subCategory, filters.systemType]);
@@ -429,30 +429,30 @@ export default function PreconfiguredComboKit() {
   };
 
   const mainFilterKeys = ["industryType", "category", "subCategory", "systemType", "projectRange"];
-  const subFilterKeys = ["comboKitType","pricePerKw"];
+  const subFilterKeys = ["comboKitType", "pricePerKw"];
 
   const clearAllFilters = () => {
     setFilters({
-      category:"all",
-      subCategory:"all",
-      systemType:"all",
-      subProjectType:"all",
-      comboKitType:"all",
-      projectRange:"all",
-      pricePerKw:"all",
-      panelBrand:"all",
-      panelTechnology:"all",
-      panelWattage:"all",
-      panelWarranty:"all",
-      panelEfficiency:"all",
-      inverterBrand:"all",
-      inverterType:"all",
-      inverterCapacity:"all",
-      inverterWarranty:"all",
-      inverterEfficiency:"all",
-      batteryBrand:"all",
-      batteryType:"all",
-      batteryCapacity:"all",
+      category: "all",
+      subCategory: "all",
+      systemType: "all",
+      subProjectType: "all",
+      comboKitType: "all",
+      projectRange: "all",
+      pricePerKw: "all",
+      panelBrand: "all",
+      panelTechnology: "all",
+      panelWattage: "all",
+      panelWarranty: "all",
+      panelEfficiency: "all",
+      inverterBrand: "all",
+      inverterType: "all",
+      inverterCapacity: "all",
+      inverterWarranty: "all",
+      inverterEfficiency: "all",
+      batteryBrand: "all",
+      batteryType: "all",
+      batteryCapacity: "all",
     });
     setSearchTerm("");
     setSelectedCapacity(null);
@@ -476,20 +476,20 @@ export default function PreconfiguredComboKit() {
 
   const clearMainFilters = () => {
     const newFilters = { ...filters };
-    mainFilterKeys.forEach((k) => (newFilters[k] ="all"));
+    mainFilterKeys.forEach((k) => (newFilters[k] = "all"));
     setFilters(newFilters);
   };
 
   const clearSubFilters = () => {
     const newFilters = { ...filters };
-    subFilterKeys.forEach((k) => (newFilters[k] ="all"));
+    subFilterKeys.forEach((k) => (newFilters[k] = "all"));
     setFilters(newFilters);
   };
 
   const clearProductFilters = () => {
     const newFilters = { ...filters };
     Object.keys(newFilters).forEach((k) => {
-      if (![...mainFilterKeys, ...subFilterKeys].includes(k)) newFilters[k] ="all";
+      if (![...mainFilterKeys, ...subFilterKeys].includes(k)) newFilters[k] = "all";
     });
     setFilters(newFilters);
   };
@@ -502,8 +502,8 @@ export default function PreconfiguredComboKit() {
   };
 
   const toggleTier = (tier) => {
-    setSelectedTiers(prev => 
-      prev.includes(tier) 
+    setSelectedTiers(prev =>
+      prev.includes(tier)
         ? prev.filter(t => t !== tier)
         : [...prev, tier]
     );
@@ -540,8 +540,8 @@ export default function PreconfiguredComboKit() {
 
     // Tier filter
     if (selectedTiers.length > 0) {
-      result = result.filter(k => 
-        k.variants?.some(v => 
+      result = result.filter(k =>
+        k.variants?.some(v =>
           selectedTiers.includes(v.productTier?.toLowerCase())
         )
       );
@@ -549,15 +549,15 @@ export default function PreconfiguredComboKit() {
 
     // Stock filter
     if (showInStockOnly) {
-      result = result.filter((k) => 
+      result = result.filter((k) =>
         k.variants?.some(v => v.inStock === true)
       );
     }
 
     // Apply other filters
     Object.entries(filters).forEach(([key, value]) => {
-      if (value ==="all") return;
-      
+      if (value === "all") return;
+
       result = result.filter((k) => {
         switch (key) {
           case "industryType": {
@@ -575,7 +575,7 @@ export default function PreconfiguredComboKit() {
             if (k.category_id && String(k.category_id) === String(value)) return true;
             return kitCat.includes(selCat) || selCat.includes(kitCat);
           }
-            
+
           case "subCategory": {
             const kitSub = (k.subCategory || k.usageType || "").toLowerCase();
             const selSub = value.toLowerCase();
@@ -583,114 +583,122 @@ export default function PreconfiguredComboKit() {
             if (k.subcategory_id && String(k.subcategory_id) === String(value)) return true;
             return kitSub.includes(selSub) || selSub.includes(kitSub);
           }
-            
+
           case "systemType": {
             const kitType = (k.projectType || k.inverter?.type || k.systemType || "").toLowerCase();
             const selType = value.toLowerCase();
             if (kitType === selType) return true;
             return kitType.includes(selType) || selType.includes(kitType);
           }
-            
+
           case "subProjectType":
             return k.subProjectType?.toLowerCase() === value.toLowerCase();
 
           case "comboKitType":
             if (k.hasNoAssignedVariants) return false;
             return k.variants?.some(v => v.productTier?.toLowerCase() === value);
-            
+
           case "pricePerKw": {
             const hasVariantInRange = k.variants?.some(v => {
               const pricePerKw = v.ourPrice / (k.capacityKW || 1);
-              const ranges = {"0-25000": [0, 25000],"25000-60000": [25000, 50000],"50000-75000": [50000, 75000],"75000-100000": [75000, 100000],"100000+": [100000, Infinity],
+              const ranges = {
+                "0-25000": [0, 25000], "25000-60000": [25000, 50000], "50000-75000": [50000, 75000], "75000-100000": [75000, 100000], "100000+": [100000, Infinity],
               };
               const [min, max] = ranges[value] || [0, Infinity];
               return pricePerKw >= min && pricePerKw <= max;
             });
             return hasVariantInRange;
           }
-          
+
           case "projectRange": {
             if (!k.projectRange) return false;
             return String(k.projectRange.id) === String(value) || String(k.projectRange.text) === String(value) || String(k.project_range_id) === String(value);
           }
 
           // Panel filters
-          case"panelBrand":
+          case "panelBrand":
             return k.panel?.brandName?.toLowerCase() === value;
-          case"panelTechnology":
+          case "panelTechnology":
             return k.panel?.technologyType?.toLowerCase() === value;
-          case"panelWattage": {
+          case "panelWattage": {
             const watt = k.panel?.wattPerPanel || 0;
             // Support exact numeric value (from dynamic options, e.g."550") or range (e.g."500-600")
             const numVal = parseFloat(value);
             if (!isNaN(numVal) && String(numVal) === value) {
               return watt === numVal;
             }
-            const ranges = {"under-300": [0, 300],"300-400": [300, 400],"400-500": [400, 500],"500-600": [500, 600],"600+": [600, Infinity],
+            const ranges = {
+              "under-300": [0, 300], "300-400": [300, 400], "400-500": [400, 500], "500-600": [500, 600], "600+": [600, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return watt >= min && watt <= max;
           }
-          case"panelWarranty": {
+          case "panelWarranty": {
             const warranty = k.panel?.warrantyYears || 0;
             // Support exact numeric value (from dynamic options, e.g."25") or range (e.g."20+")
             const numVal = parseFloat(value);
             if (!isNaN(numVal) && String(numVal) === value) {
               return warranty === numVal;
             }
-            const ranges = {"1-5": [1, 5],"5-10": [5, 10],"10-15": [10, 15],"15-20": [15, 20],"20+": [20, Infinity],
+            const ranges = {
+              "1-5": [1, 5], "5-10": [5, 10], "10-15": [10, 15], "15-20": [15, 20], "20+": [20, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return warranty >= min && warranty <= max;
           }
-          case"panelEfficiency": {
+          case "panelEfficiency": {
             const eff = k.panel?.efficiencyPercent || 0;
-            const ranges = {"under-15": [0, 15],"15-18": [15, 18],"18-20": [18, 20],"20-22": [20, 22],"22+": [22, Infinity],
+            const ranges = {
+              "under-15": [0, 15], "15-18": [15, 18], "18-20": [18, 20], "20-22": [20, 22], "22+": [22, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return eff >= min && eff <= max;
           }
 
           // Inverter filters
-          case"inverterBrand":
+          case "inverterBrand":
             return k.inverter?.brandName?.toLowerCase() === value;
-          case"inverterType":
+          case "inverterType":
             return k.inverter?.type?.toLowerCase() === value;
-          case"inverterCapacity": {
+          case "inverterCapacity": {
             const cap = k.inverter?.capacityKW || 0;
             // Support exact numeric value (from dynamic options, e.g."5") or range (e.g."3-5")
             const numVal = parseFloat(value);
             if (!isNaN(numVal) && String(numVal) === value) {
               return cap === numVal;
             }
-            const ranges = {"under-1": [0, 1],"1-3": [1, 3],"3-5": [3, 5],"5-10": [5, 10],"10+": [10, Infinity],
+            const ranges = {
+              "under-1": [0, 1], "1-3": [1, 3], "3-5": [3, 5], "5-10": [5, 10], "10+": [10, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return cap >= min && cap <= max;
           }
-          case"inverterWarranty": {
+          case "inverterWarranty": {
             const warranty = k.inverter?.warrantyYears || 0;
-            const ranges = {"1-5": [1, 5],"5-10": [5, 10],"10-15": [10, 15],"15-20": [15, 20],"20+": [20, Infinity],
+            const ranges = {
+              "1-5": [1, 5], "5-10": [5, 10], "10-15": [10, 15], "15-20": [15, 20], "20+": [20, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return warranty >= min && warranty <= max;
           }
-          case"inverterEfficiency": {
+          case "inverterEfficiency": {
             const eff = k.inverter?.efficiencyPercent || 0;
-            const ranges = {"under-15": [0, 15],"15-18": [15, 18],"18-20": [18, 20],"20-22": [20, 22],"22+": [22, Infinity],
+            const ranges = {
+              "under-15": [0, 15], "15-18": [15, 18], "18-20": [18, 20], "20-22": [20, 22], "22+": [22, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return eff >= min && eff <= max;
           }
 
           // Battery filters
-          case"batteryBrand":
+          case "batteryBrand":
             return k.battery?.brandName?.toLowerCase() === value;
-          case"batteryType":
+          case "batteryType":
             return k.battery?.type?.toLowerCase() === value;
-          case"batteryCapacity": {
+          case "batteryCapacity": {
             const cap = k.battery?.capacityKWh || 0;
-            const ranges = {"under-2": [0, 2],"2-5": [2, 5],"5-10": [5, 10],"10-20": [10, 20],"20+": [20, Infinity],
+            const ranges = {
+              "under-2": [0, 2], "2-5": [2, 5], "5-10": [5, 10], "10-20": [10, 20], "20+": [20, Infinity],
             };
             const [min, max] = ranges[value] || [0, Infinity];
             return cap >= min && cap <= max;
@@ -706,10 +714,10 @@ export default function PreconfiguredComboKit() {
   }, [availableKits, searchTerm, filters, showInStockOnly, selectedTiers, selectedCapacity]);
 
   const activeFiltersCount = useMemo(
-    () => Object.values(filters).filter((v) => v !=="all").length + 
-           (showInStockOnly ? 1 : 0) + 
-           selectedTiers.length +
-           (selectedCapacity !== null ? 1 : 0),
+    () => Object.values(filters).filter((v) => v !== "all").length +
+      (showInStockOnly ? 1 : 0) +
+      selectedTiers.length +
+      (selectedCapacity !== null ? 1 : 0),
     [filters, showInStockOnly, selectedTiers, selectedCapacity]
   );
 
@@ -738,7 +746,7 @@ export default function PreconfiguredComboKit() {
 
       const diff = currentY - startY;
       if (diff > 0) {
-        drawerRef.current.style.transform =`translateY(${diff}px)`;
+        drawerRef.current.style.transform = `translateY(${diff}px)`;
       }
     };
 
@@ -788,7 +796,7 @@ export default function PreconfiguredComboKit() {
               <div>
                 <h3 className="font-bold text-lg text-white">All Filters</h3>
                 <p className="text-sm text-white/80">
-                  {activeFiltersCount > 0 ?`${activeFiltersCount} active filters` : 'Adjust your search'}
+                  {activeFiltersCount > 0 ? `${activeFiltersCount} active filters` : 'Adjust your search'}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -848,11 +856,10 @@ export default function PreconfiguredComboKit() {
                     onChange={(e) => setShowInStockOnly(e.target.checked)}
                     className="hidden"
                   />
-                  <div className={`flex items-center justify-center w-5 h-5 border rounded-md transition-all ${
-                    showInStockOnly
-                      ?"bg-gradient-to-r from-primary to-primary-end border-primary text-white"
-                      :"border-border text-transparent"
-                  }`}>
+                  <div className={`flex items-center justify-center w-5 h-5 border rounded-md transition-all ${showInStockOnly
+                    ? "bg-gradient-to-r from-primary to-primary-end border-primary text-white"
+                    : "border-border text-transparent"
+                    }`}>
                     {showInStockOnly && <FiCheckSquare size={14} />}
                   </div>
                   <div className="flex-1">
@@ -899,9 +906,9 @@ export default function PreconfiguredComboKit() {
                     onChange={(val) => setFilters((prev) => ({
                       ...prev,
                       category: val,
-                      subCategory:"all",
-                      systemType:"all",
-                      projectRange:"all"
+                      subCategory: "all",
+                      systemType: "all",
+                      projectRange: "all"
                     }))}
                     className="w-full"
                   />
@@ -909,12 +916,12 @@ export default function PreconfiguredComboKit() {
                     label="Sub Category"
                     options={subCategoryOptions}
                     value={filters.subCategory}
-                    disabled={filters.category ==="all"}
+                    disabled={filters.category === "all"}
                     onChange={(val) => setFilters((prev) => ({
                       ...prev,
                       subCategory: val,
-                      systemType:"all",
-                      projectRange:"all"
+                      systemType: "all",
+                      projectRange: "all"
                     }))}
                     className="w-full"
                   />
@@ -922,11 +929,11 @@ export default function PreconfiguredComboKit() {
                     label="System Type"
                     options={systemTypeOptions}
                     value={filters.systemType}
-                    disabled={filters.category ==="all" || filters.subCategory ==="all"}
+                    disabled={filters.category === "all" || filters.subCategory === "all"}
                     onChange={(val) => setFilters((prev) => ({
                       ...prev,
                       systemType: val,
-                      projectRange:"all"
+                      projectRange: "all"
                     }))}
                     className="w-full"
                   />
@@ -934,7 +941,7 @@ export default function PreconfiguredComboKit() {
                     label="Project Range"
                     options={projectRangeOptions}
                     value={filters.projectRange}
-                    disabled={filters.category ==="all" || filters.subCategory ==="all" || filters.systemType ==="all"}
+                    disabled={filters.category === "all" || filters.subCategory === "all" || filters.systemType === "all"}
                     onChange={(val) => setFilters((prev) => ({
                       ...prev,
                       projectRange: val
@@ -959,8 +966,8 @@ export default function PreconfiguredComboKit() {
                   {subFilterKeys.map((key) => (
                     <Dropdown
                       key={key}
-                      label={key ==="comboKitType" ?"Combo Kit Type" : key.replace(/([A-Z])/g," $1").replace(/^./, str => str.toUpperCase())}
-                      options={key ==="comboKitType" ? getDropdownOptions(key) : options[key]}
+                      label={key === "comboKitType" ? "Combo Kit Type" : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())}
+                      options={key === "comboKitType" ? getDropdownOptions(key) : options[key]}
                       value={filters[key]}
                       onChange={(val) => setFilters((prev) => ({ ...prev, [key]: val }))}
                       className="w-full"
@@ -1031,72 +1038,18 @@ export default function PreconfiguredComboKit() {
             <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
               <span className="text-white font-semibold text-sm lg:text-base">
                 {finalKits.length} of {availableKits.length} kits
-                {showInStockOnly &&` (${inStockKitsCount} in stock)`}
+                {showInStockOnly && ` (${inStockKitsCount} in stock)`}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ─── Shop by System Capacity (kW) Quick Filter Strip ─── */}
-      <div className="bg-surface rounded-2xl p-5 sm:p-6 border border-border shadow-xs mb-6 text-center">
-        <span className="text-[11px] font-black uppercase tracking-wider text-primary">
-          ROOFTOP SIZING
-        </span>
-        <h2 className="text-xl sm:text-2xl font-black text-text-primary mt-1 font-heading">
-          Shop by System Capacity (kW)
-        </h2>
-        <p className="text-xs text-text-secondary mt-1 max-w-xl mx-auto mb-5">
-          Browse complete kits calibrated for your daily unit consumption and load requirements.
-        </p>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          {SYSTEM_CAPACITIES.map((c) => {
-            const isActive = selectedCapacity === c.kw;
-            return (
-              <button
-                key={c.kw}
-                type="button"
-                onClick={() => setSelectedCapacity(isActive ? null : c.kw)}
-                className={`
-                  p-4 rounded-2xl border transition-all text-center flex flex-col items-center justify-between cursor-pointer group
-                  ${isActive
-                    ? "bg-primary/10 border-primary ring-2 ring-primary/30 shadow-md transform -translate-y-0.5"
-                    : "bg-surface hover:bg-slate-50 dark:hover:bg-slate-800/60 border-border hover:border-primary/40 hover:shadow-xs"
-                  }
-                `}
-              >
-                <div className={`w-8 h-8 rounded-xl font-black text-xs flex items-center justify-center mb-2.5 transition-colors ${
-                  isActive
-                    ? "bg-primary text-white"
-                    : "bg-sky-50 dark:bg-sky-950/60 text-primary group-hover:bg-primary group-hover:text-white"
-                }`}>
-                  {c.kw}
-                </div>
-                <h4 className="font-black text-sm text-text-primary">
-                  {c.label}
-                </h4>
-                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
-                  {c.units}
-                </p>
-                <p className="text-[10px] text-text-muted mt-0.5 line-clamp-1">
-                  {c.note}
-                </p>
-                {isActive && (
-                  <span className="text-[9px] font-black text-primary mt-1.5 uppercase tracking-wide">
-                    ● Selected
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Active Offers Banners */}
       {activeOffers.length > 0 && (
         <div className="relative overflow-hidden rounded-xl mb-6 shadow-sm border border-border bg-surface">
-          <div 
+          <div
             className="flex transition-transform duration-500 ease-out"
             style={{ transform: `translateX(-${currentOfferIndex * 100}%)` }}
           >
@@ -1119,13 +1072,13 @@ export default function PreconfiguredComboKit() {
                 badgeText = "SPECIAL DISCOUNT";
               }
 
-              const formattedValue = offer.discount_type === 'percent' 
-                ? `${offer.discount_value}%` 
+              const formattedValue = offer.discount_type === 'percent'
+                ? `${offer.discount_value}%`
                 : `₹${offer.discount_value.toLocaleString("en-IN")}`;
 
               return (
-                <div 
-                  key={offer._id} 
+                <div
+                  key={offer._id}
                   className={`w-full shrink-0 bg-gradient-to-r ${bgGradient} text-white p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6`}
                 >
                   <div className="space-y-2 flex-1 text-left">
@@ -1136,7 +1089,7 @@ export default function PreconfiguredComboKit() {
                       {offer.offer_name}
                     </h2>
                     <p className="text-white/80 text-sm max-w-xl">
-                      {offer.offer_type === 'bundle' 
+                      {offer.offer_type === 'bundle'
                         ? `Save ${formattedValue} per kW on purchasing a minimum of ${offer.max_qty || 5} kits.`
                         : offer.offer_type === 'coupon'
                           ? `Use coupon code "${offer.coupon_code}" to get ${formattedValue} off on your order!`
@@ -1169,9 +1122,8 @@ export default function PreconfiguredComboKit() {
                 <button
                   key={idx}
                   onClick={() => setCurrentOfferIndex(idx)}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    currentOfferIndex === idx ? "bg-white w-4" : "bg-white/40"
-                  }`}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${currentOfferIndex === idx ? "bg-white w-4" : "bg-white/40"
+                    }`}
                 />
               ))}
             </div>
@@ -1222,18 +1174,18 @@ export default function PreconfiguredComboKit() {
               <div className="flex bg-surface-hover rounded-xl p-1 border border-border">
                 <IconButton
                   onClick={() => setViewMode("grid")}
-                  variant={viewMode ==="grid" ?"primary" :"ghost"}
+                  variant={viewMode === "grid" ? "primary" : "ghost"}
                   size="sm"
-                  className={`rounded-lg ${viewMode ==="grid" ?"shadow-sm" :""}`}
+                  className={`rounded-lg ${viewMode === "grid" ? "shadow-sm" : ""}`}
                   title="Grid View"
                 >
                   <FiGrid size={18} />
                 </IconButton>
                 <IconButton
                   onClick={() => setViewMode("list")}
-                  variant={viewMode ==="list" ?"primary" :"ghost"}
+                  variant={viewMode === "list" ? "primary" : "ghost"}
                   size="sm"
-                  className={`rounded-lg ${viewMode ==="list" ?"shadow-sm" :""}`}
+                  className={`rounded-lg ${viewMode === "list" ? "shadow-sm" : ""}`}
                   title="List View"
                 >
                   <FiList size={18} />
@@ -1243,10 +1195,10 @@ export default function PreconfiguredComboKit() {
               {/* In Stock Toggle */}
               <Button
                 onClick={() => setShowInStockOnly(!showInStockOnly)}
-                variant={showInStockOnly ?"success" :"secondary"}
+                variant={showInStockOnly ? "success" : "secondary"}
                 size="md"
                 leftIcon={showInStockOnly ? <FiCheckSquare size={18} /> : <FiSquare size={18} />}
-                className={showInStockOnly ?"bg-green-50 border-green-200 text-green-700" :""}
+                className={showInStockOnly ? "bg-green-50 border-green-200 text-green-700" : ""}
               >
                 <span className="flex">In Stock Only
                   {showInStockOnly && (
@@ -1270,16 +1222,16 @@ export default function PreconfiguredComboKit() {
               <div className="flex bg-surface-hover rounded-lg p-1 border border-border">
                 <IconButton
                   onClick={() => setViewMode("grid")}
-                  variant={viewMode ==="grid" ?"primary" :"ghost"}
+                  variant={viewMode === "grid" ? "primary" : "ghost"}
                   size="sm"
-                  className={`rounded-lg ${viewMode ==="grid" ?"shadow-sm" :""}`}
+                  className={`rounded-lg ${viewMode === "grid" ? "shadow-sm" : ""}`}
                 >
                   <FiGrid size={16} />
                 </IconButton>
                 <IconButton
                   onClick={() => setViewMode("list")}
-                  variant={viewMode ==="list" ?"primary" :"ghost"}
-                  className={`rounded-lg ${viewMode ==="list" ?"shadow-sm" :""}`}
+                  variant={viewMode === "list" ? "primary" : "ghost"}
+                  className={`rounded-lg ${viewMode === "list" ? "shadow-sm" : ""}`}
                   size="sm"
                 >
                   <FiList size={16} />
@@ -1288,11 +1240,11 @@ export default function PreconfiguredComboKit() {
 
               <Button
                 onClick={() => setShowInStockOnly(!showInStockOnly)}
-                variant={showInStockOnly ?"success" :"secondary"}
+                variant={showInStockOnly ? "success" : "secondary"}
                 size="md"
                 fullWidth
                 leftIcon={showInStockOnly ? <FiCheckSquare size={16} /> : <FiSquare size={16} />}
-                className={showInStockOnly ?"bg-green-50 border-green-200 text-green-700" :""}
+                className={showInStockOnly ? "bg-green-50 border-green-200 text-green-700" : ""}
               >
                 In Stock
               </Button>
@@ -1351,9 +1303,9 @@ export default function PreconfiguredComboKit() {
                   onChange={(val) => setFilters((prev) => ({
                     ...prev,
                     category: val,
-                    subCategory:"all",
-                    systemType:"all",
-                    projectRange:"all"
+                    subCategory: "all",
+                    systemType: "all",
+                    projectRange: "all"
                   }))}
                   className="w-full"
                 />
@@ -1405,8 +1357,8 @@ export default function PreconfiguredComboKit() {
                 {subFilterKeys.map((key) => (
                   <Dropdown
                     key={key}
-                    label={key ==="comboKitType" ?"Combo Kit Type" : key.replace(/([A-Z])/g," $1").replace(/^./, str => str.toUpperCase())}
-                    options={key ==="comboKitType" ? getDropdownOptions(key) : options[key]}
+                    label={key === "comboKitType" ? "Combo Kit Type" : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())}
+                    options={key === "comboKitType" ? getDropdownOptions(key) : options[key]}
                     value={filters[key]}
                     onChange={(val) => setFilters((prev) => ({ ...prev, [key]: val }))}
                     className="w-full"
@@ -1458,8 +1410,8 @@ export default function PreconfiguredComboKit() {
                 <h3 className="text-2xl font-semibold text-text-primary dark:text-info mb-2">No kits found</h3>
                 <p className="text-text-secondary mb-6 max-w-md mx-auto">
                   {showInStockOnly
-                    ?"No in-stock kits match your search criteria. Try adjusting your filters or showing all items."
-                    :"Try adjusting your search criteria or filters to find more options."
+                    ? "No in-stock kits match your search criteria. Try adjusting your filters or showing all items."
+                    : "Try adjusting your search criteria or filters to find more options."
                   }
                 </p>
                 <div className="flex gap-3 justify-center">
@@ -1473,7 +1425,7 @@ export default function PreconfiguredComboKit() {
                   )}
                 </div>
               </div>
-            ) : viewMode ==="grid" ? (
+            ) : viewMode === "grid" ? (
               <div className="grid xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                 {finalKits.map((kit) => (
                   <KitCard

@@ -30,7 +30,7 @@ const list_product_authorizations = async (req, res) => {
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
       .populate({ path: 'product_id', model: Product, select: 'name sku_code stock_quantity' })
-      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code' })
       .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name' })
       .populate({ path: 'assigned_by', model: CmsUser, select: 'name email' })
       .sort({ created_at: -1 })
@@ -247,6 +247,9 @@ const assign_product_authorization = async (req, res) => {
         });
       }
     } else if (scope_type === 'kit' && kit_id) {
+      // Load kit details
+      const kitObj = await WarehouseComboKit.findById(kit_id).lean();
+
       const existingListing = await ResellerListing.findOne({
         reseller_id: id,
         item_type: 'kit',
@@ -257,6 +260,39 @@ const assign_product_authorization = async (req, res) => {
         existingListing.assignment_status = targetIsAuthorized ? 'assigned' : 'revoked';
         await existingListing.save();
         listing = existingListing;
+      } else if (targetIsAuthorized && kitObj) {
+        // Bug fix: Create listing for kit if it doesn't exist yet
+        const kitCostPaise = kitObj.base_price_cached
+          ? Math.round(kitObj.base_price_cached * 100)
+          : (kitObj.selling_price_cached ? Math.round(kitObj.selling_price_cached * 100) : 100000);
+
+        listing = await ResellerListing.create({
+          reseller_id:      id,
+          item_type:        'kit',
+          kit_id,
+          title:            kitObj.name,            // schema field is 'name', not 'kit_name'
+          description:      kitObj.description || null,
+          image_url:        kitObj.kit_image || null,
+          stock_quantity:   100,
+          cost_price_paise:    kitCostPaise,
+          map_price_paise:     kitCostPaise,
+          selling_price_paise: kitCostPaise,
+          min_margin_paise:    0,
+          max_margin_paise:    500000000,
+          reseller_margin_paise: 0,
+          tax_rate_pct:     18,
+          taxes_and_charges_paise: 0,
+          assignment_status: 'assigned',
+          assigned_by:      req.user?.id || null,
+          assigned_at:      new Date(),
+          audit_history: [{
+            status:     'assigned',
+            actor_type: 'cms_user',
+            actor_id:   req.user?.id || null,
+            notes:      'Combo kit assigned to franchise partner by Super Admin',
+            timestamp:  new Date(),
+          }],
+        });
       }
     }
 

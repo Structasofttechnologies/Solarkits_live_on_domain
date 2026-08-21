@@ -712,7 +712,8 @@ const get_reseller_authorized_products = async (req, res) => {
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
       .populate({ path: 'product_id', model: Product, select: 'name sku_code base_price base_price_paise price' })
-      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kit_name kit_code base_price price' })
+      // Bug fix: combo kit schema field is 'name' (not 'kit_name'), 'base_price_cached' (not 'base_price')
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_code base_price_cached selling_price_cached kit_image description' })
       .lean();
 
     const listings = await ResellerListing.find({ reseller_id: req.reseller._id }).lean();
@@ -744,21 +745,30 @@ const get_reseller_authorized_products = async (req, res) => {
       } else if (r.scope_type === 'kit' && r.kit_id) {
         const k = r.kit_id;
         const listing = listingMap[k._id.toString()];
+        // Bug fix: use k.name (schema field), fall back to k.kit_name for legacy docs
+        const kitDisplayName = k.name || k.kit_name || 'Combo Kit';
+        const kitCode       = k.kit_code || 'KIT-SKU';
+        // Bug fix: use base_price_cached (schema field), not base_price
         const priceInr = listing?.cost_price_paise
           ? listing.cost_price_paise / 100
-          : (k.base_price || k.price || 5000);
+          : (k.base_price_cached || k.selling_price_cached || k.base_price || k.price || 5000);
         items.push({
           _id: k._id,
           id: k._id,
           scope_type: 'kit',
           is_kit: true,
-          name: k.kit_name,
-          kit_name: k.kit_name,
-          sku_code: k.kit_code || 'KIT-SKU',
-          kit_code: k.kit_code || 'KIT-SKU',
+          name:      kitDisplayName,
+          kit_name:  kitDisplayName,
+          sku_code:  kitCode,
+          kit_code:  kitCode,
           base_price: priceInr,
-          price: priceInr,
+          price:      priceInr,
           reseller_cost_inr: priceInr,
+          // Pass authorization rule metadata for the catalog UI
+          is_authorized: r.is_authorized,
+          source:        r.source,
+          category:      r.category_id,
+          subcategory:   r.subcategory_id,
         });
       }
     });
@@ -883,31 +893,67 @@ const get_active_types = async (req, res) => {
  */
 const get_active_plans = async (req, res) => {
   try {
+    const { ProjectType, ProjectCategory, WarehouseComboKit } = require('../../admin-panel/models/core_db');
+
     const plans = await ResellerPlan.find({ is_active: true, deleted_at: null })
+      .populate({ path: 'allowed_project_type_ids', model: ProjectType, select: 'name' })
+      .populate({ path: 'allowed_category_ids', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit, select: 'name capacity kit_code' })
       .sort({ sort_order: 1, one_time_fee: 1 })
       .lean();
 
     return res.status(200).json({
       status: 'success',
-      data: plans.map((p) => ({
-        id:                        p._id,
-        name:                      p.name,
-        plan_name:                 p.name,
-        slug:                      p.slug,
-        territory_level:           p.territory_level,
-        one_time_fee:              p.one_time_fee,
-        annual_fee:                p.one_time_fee,
-        currency:                  p.currency,
-        validity_value:            p.validity_value,
-        validity_unit:             p.validity_unit,
-        allowed_territories_count: p.allowed_territories_count,
-        max_states_allowed:        p.territory_level === 'district' ? `${p.allowed_territories_count} District(s)` : `${p.allowed_territories_count} State(s)`,
-        default_commission_rate:   p.territory_level === 'district' ? 8 : p.territory_level === 'state' ? 12 : 15,
-        default_dealer_margin:     p.territory_level === 'district' ? 5 : p.territory_level === 'state' ? 8 : 10,
-        description:               p.description,
-        is_popular:                p.sort_order === 2 || p.sort_order === 3,
-        is_active:                 p.is_active,
-      })),
+      data: plans.map((p) => {
+        const projectTypesDisplay = Array.isArray(p.allowed_project_type_ids) && p.allowed_project_type_ids.length > 0
+          ? p.allowed_project_type_ids.map((pt) => (pt && pt.name ? pt.name : pt)).join(', ')
+          : (p.moq_project_type || 'All Project Types (Residential / Commercial / Industrial)');
+
+        const comboKitsDisplay = Array.isArray(p.allowed_combo_kit_ids) && p.allowed_combo_kit_ids.length > 0
+          ? p.allowed_combo_kit_ids.map((ck) => (ck && ck.name ? ck.name : ck)).join(', ')
+          : 'All Admin Combo Kits';
+
+        return {
+          id:                        p._id,
+          name:                      p.name,
+          plan_name:                 p.name,
+          slug:                      p.slug,
+          territory_level:           p.territory_level,
+          one_time_fee:              p.one_time_fee,
+          annual_fee:                p.one_time_fee,
+          currency:                  p.currency,
+          validity_value:            p.validity_value,
+          validity_unit:             p.validity_unit,
+          allowed_territories_count: p.allowed_territories_count,
+          allowed_project_types:     p.allowed_project_type_ids || [],
+          allowed_categories:        p.allowed_category_ids || [],
+          allowed_combo_kits:        p.allowed_combo_kit_ids || [],
+          project_types_display:     projectTypesDisplay,
+          combo_kits_display:        comboKitsDisplay,
+          max_states_allowed:        p.territory_level === 'district' ? `${p.allowed_territories_count} District(s)` : `${p.allowed_territories_count} State(s)`,
+          default_commission_rate:   p.territory_level === 'district' ? 8 : p.territory_level === 'state' ? 12 : 15,
+          default_dealer_margin:     p.territory_level === 'district' ? 5 : p.territory_level === 'state' ? 8 : 10,
+          
+          // ─── 1. Warehouse Requirements ─────────────────────────────────────────
+          warehouse_required:        p.warehouse_required ?? false,
+          warehouse_count:           p.warehouse_count ?? 0,
+          warehouse_space_sqft:      p.warehouse_space_sqft ?? 0,
+
+          // ─── 2. MOQ & Capacity Specifications ──────────────────────────────────
+          moq_capacity_kw:          p.moq_capacity_kw ?? 10000,
+          moq_kits_count:           p.moq_kits_count ?? 1,
+          moq_project_type:         projectTypesDisplay,
+          moq_kit_name:             comboKitsDisplay,
+          moq_description:          p.moq_description || null,
+
+          // ─── 3. Order Type Support ─────────────────────────────────────────────
+          order_type_allowed:       p.order_type_allowed || 'both',
+
+          description:               p.description,
+          is_popular:                p.sort_order === 2 || p.sort_order === 3,
+          is_active:                 p.is_active,
+        };
+      }),
     });
   } catch (error) {
     console.error('[reseller.portal] get_active_plans error:', error);

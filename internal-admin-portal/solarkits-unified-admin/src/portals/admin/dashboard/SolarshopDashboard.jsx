@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText } from "react-icons/fi";
 
 // Phase 1: Reseller Management
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
@@ -106,6 +106,12 @@ const menus = [
             path: "/admin-panel/solar-shop/reseller-management",
             unique_id: "RSL_MGMT",
             subMenu: [
+                {
+                    name: "Franchisee Leads",
+                    icon: <FiFileText />,
+                    path: "/admin-panel/solar-shop/reseller-management/leads",
+                    unique_id: "RSL_MGMT"
+                },
                 {
                     name: "Franchisee Accounts",
                     icon: <FiUsers />,

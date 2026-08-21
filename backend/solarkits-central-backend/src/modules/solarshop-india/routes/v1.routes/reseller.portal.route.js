@@ -24,6 +24,9 @@ router.post('/auth/register', authRateLimiter, handler.register_reseller);
 router.post('/auth/login',    authRateLimiter, handler.login_reseller);
 router.post('/auth/logout', handler.logout_reseller);
 
+// ── Inbound Franchisee & Territory Application Leads ─────────────────────────
+router.post('/leads/submit', require('../../../admin-panel/controller/reseller.leads.handler').submit_lead);
+
 // ── GST Verification (Public format & adapter check) ──────────────────────────
 router.post('/gst/verify', gstRateLimiter, handler.verify_gstin);
 
@@ -39,12 +42,13 @@ router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_b
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);
 
-// Wallet & Ledger Routes
+// Wallet & Ledger Routes (Phase 7 + R10)
 const walletPortalHandler = require('../../../admin-panel/controller/reseller.wallet.portal.handler');
-router.get('/wallet/me', verify_reseller_auth, walletPortalHandler.get_my_wallet);
-router.get('/wallet/ledger', verify_reseller_auth, walletPortalHandler.get_my_ledger);
+router.get('/wallet/me',        verify_reseller_auth, walletPortalHandler.get_my_wallet);
+router.get('/wallet/breakdown', verify_reseller_auth, walletPortalHandler.get_wallet_breakdown);
+router.get('/wallet/ledger',    verify_reseller_auth, walletPortalHandler.get_my_ledger);
 router.post('/wallet/withdraw', verify_reseller_auth, walletPortalHandler.request_withdrawal);
-router.get('/wallet/payouts', verify_reseller_auth, walletPortalHandler.get_my_payouts);
+router.get('/wallet/payouts',   verify_reseller_auth, walletPortalHandler.get_my_payouts);
 
 // Procurement & Stock Inventory Routes
 const procurementHandler = require('../../../admin-panel/controller/reseller.procurement.handler');

@@ -32,7 +32,7 @@ const NAV_ITEMS = [
   { name: "My Listings", icon: FiTag, path: "/storefront-listings" },
   { name: "My Buyers", icon: FiUsers, path: "/epc-buyers" },
   { name: "Orders & Tracking", icon: FiShoppingCart, path: "/orders" },
-  { name: "Earnings & Payouts", icon: FiCreditCard, path: "/wallet" },
+  { name: "My Earnings", icon: FiCreditCard, path: "/wallet" },
 ];
 
 export default function DashboardLayout() {
