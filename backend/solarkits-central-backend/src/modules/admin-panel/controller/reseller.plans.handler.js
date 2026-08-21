@@ -82,6 +82,10 @@ const list_reseller_plans = async (req, res) => {
         // ─── 3. Order Type Support ─────────────────────────────────────────────
         order_type_allowed:       r.order_type_allowed || 'both',
 
+        // ─── 4. Company Fixed Franchisee Margins & Commissions ──────────────────
+        default_dealer_margin:   r.default_dealer_margin ?? 5,
+        default_commission_rate: r.default_commission_rate ?? 8,
+
         description:               r.description,
         sort_order:                r.sort_order,
         is_active:                 r.is_active,
@@ -174,6 +178,10 @@ const add_reseller_plan = async (req, res) => {
 
       // 3. Order Type Support
       order_type_allowed:       ['po_order', 'loose_order', 'both'].includes(order_type_allowed) ? order_type_allowed : 'both',
+
+      // 4. Fixed Dealer Margin & Commission
+      default_dealer_margin:   req.body.default_dealer_margin != null ? Number(req.body.default_dealer_margin) : 5,
+      default_commission_rate: req.body.default_commission_rate != null ? Number(req.body.default_commission_rate) : 8,
 
       description:               description ? description.trim() : null,
       sort_order:                sort_order != null ? Number(sort_order) : 0,
@@ -268,6 +276,10 @@ const update_reseller_plan = async (req, res) => {
     if (fields.order_type_allowed && ['po_order', 'loose_order', 'both'].includes(fields.order_type_allowed)) {
       updateData.order_type_allowed = fields.order_type_allowed;
     }
+
+    // 4. Fixed Dealer Margin & Commission
+    if (fields.default_dealer_margin != null) updateData.default_dealer_margin = Math.max(0, Number(fields.default_dealer_margin));
+    if (fields.default_commission_rate != null) updateData.default_commission_rate = Math.max(0, Number(fields.default_commission_rate));
 
     if (fields.description !== undefined) updateData.description = fields.description ? fields.description.trim() : null;
     if (fields.sort_order != null) updateData.sort_order = Number(fields.sort_order);

@@ -23,6 +23,7 @@ const GST_STATE_MAP = {
 export default function MyEpcBuyers() {
   const [buyers, setBuyers] = useState([]);
   const [territories, setTerritories] = useState([]);
+  const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
 
@@ -67,6 +68,14 @@ export default function MyEpcBuyers() {
             state_id: first.state_id || first.state?.id || "",
             district_id: first.district_id || first.district?.id || "",
           }));
+        }
+      })
+      .catch(() => {});
+
+    api.get('/india/v1/reseller/plans/my-subscription')
+      .then((res) => {
+        if (res.data?.status === "success" && res.data.data) {
+          setPlan(res.data.data.plan || res.data.data);
         }
       })
       .catch(() => {});
@@ -181,6 +190,36 @@ export default function MyEpcBuyers() {
         >
           <FiPlus size={18} /> Register New Buyer
         </button>
+      </div>
+
+      {/* Plan Scope & Territory Authorization Banner */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <FiShield size={20} />
+          </div>
+          <div>
+            <div className="text-xs font-black uppercase tracking-wider text-slate-500">
+              Franchisee Territory Onboarding Rights
+            </div>
+            <div className="text-sm font-bold text-slate-900 mt-0.5">
+              {plan ? (
+                <>
+                  <span className="text-blue-600 font-extrabold">{plan.name}</span> ({plan.territory_level?.toUpperCase()} Plan) — Authorized to onboard EPC Buyers across{" "}
+                  <span className="text-emerald-700 font-black">
+                    {territories.map((t) => t.location_name || t.state?.name || t.district?.name).join(", ") || "Authorized Territories"}
+                  </span>
+                </>
+              ) : (
+                "Authorized to onboard EPC Buyers across registered territories"
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shrink-0">
+          Total Onboarded: <span className="font-bold text-slate-900">{buyers.length} EPCs</span>
+        </div>
       </div>
 
       {/* EPC List Table */}

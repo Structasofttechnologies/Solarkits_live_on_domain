@@ -11,6 +11,20 @@ import IconButton from "@/Components/IconButton";
 import Dialog from "@/Components/Dialog";
 import { addToCart, decreaseQty, increaseQty, removeFromCart, setShowAuthDialog } from "@/features/slice";
 
+const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
+
+const resolveImageUrl = (url) => {
+  if (!url) return DEFAULT_KIT_IMAGE;
+  if (typeof url !== 'string') return DEFAULT_KIT_IMAGE;
+  if (url.includes("localhost:3001")) {
+    return url.replace("localhost:3001", "localhost:5000");
+  }
+  if (url.startsWith("/")) {
+    return `http://localhost:5000${url}`;
+  }
+  return url;
+};
+
 const ImageWithPlaceholder = ({ src, alt }) => {
   const [hasError, setHasError] = useState(!src || src.includes("default"));
 

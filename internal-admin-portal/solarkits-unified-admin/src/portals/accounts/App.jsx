@@ -8,7 +8,8 @@ import Alert from "./components/Alert";
 import Loader from "./components/Loader";
 import ProtectedRoutes from "./components/ProtectedRoutes";
 import { ms_conversion } from "./utils/msConversion.jsx";
-const Dashboard = lazy(() => import("./dashboard/Dashboard"))
+const Dashboard = lazy(() => import("./dashboard/Dashboard"));
+const SolarShopAccountsDashboard = lazy(() => import("./dashboard/SolarShopAccountsDashboard"));
 
 function AccountsPortalInner() {
   const dispatch = useDispatch();
@@ -25,6 +26,8 @@ function AccountsPortalInner() {
     <>
       <Routes>
         <Route path='/*' element={<ProtectedRoutes />} >
+          <Route path='solar-shop/*' element={<Suspense fallback={<Loader text="Loading Solar Shop Accounts..." />}><SolarShopAccountsDashboard /></Suspense>} />
+          <Route path='solar-shop-solarkits/*' element={<Suspense fallback={<Loader text="Loading Solar Shop Accounts..." />}><SolarShopAccountsDashboard /></Suspense>} />
           <Route path='*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
         </Route>
       </Routes>

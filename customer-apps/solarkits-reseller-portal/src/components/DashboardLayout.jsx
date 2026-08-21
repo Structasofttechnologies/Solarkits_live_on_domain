@@ -28,7 +28,6 @@ import logoImg from "@/assets/images/logo.png";
 const NAV_ITEMS = [
   { name: "Home", icon: FiHome, path: "/dashboard" },
   { name: "Browse Products", icon: FiPackage, path: "/catalog" },
-  { name: "Order Stock", icon: FiBox, path: "/procurement-inventory" },
   { name: "My Listings", icon: FiTag, path: "/storefront-listings" },
   { name: "My Buyers", icon: FiUsers, path: "/epc-buyers" },
   { name: "Orders & Tracking", icon: FiShoppingCart, path: "/orders" },

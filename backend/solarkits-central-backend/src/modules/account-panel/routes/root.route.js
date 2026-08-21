@@ -54,4 +54,8 @@ router.post('/accounts/suppliers', check_auth, accounts_handler.create_supplier)
 router.post('/accounts/gst/generate-otp', check_auth, accounts_handler.gst_generate_otp);
 router.post('/accounts/gst/submit-otp', check_auth, accounts_handler.gst_submit_otp);
 
+// Solar Shop Accounts Financial Management
+const solarshop_accounts_route = require('./solarshop.accounts.route');
+router.use('/accounts/solar-shop', solarshop_accounts_route);
+
 module.exports = router;

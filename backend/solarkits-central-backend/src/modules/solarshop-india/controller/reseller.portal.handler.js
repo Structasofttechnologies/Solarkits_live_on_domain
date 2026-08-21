@@ -931,8 +931,8 @@ const get_active_plans = async (req, res) => {
           project_types_display:     projectTypesDisplay,
           combo_kits_display:        comboKitsDisplay,
           max_states_allowed:        p.territory_level === 'district' ? `${p.allowed_territories_count} District(s)` : `${p.allowed_territories_count} State(s)`,
-          default_commission_rate:   p.territory_level === 'district' ? 8 : p.territory_level === 'state' ? 12 : 15,
-          default_dealer_margin:     p.territory_level === 'district' ? 5 : p.territory_level === 'state' ? 8 : 10,
+          default_commission_rate:   p.default_commission_rate != null ? p.default_commission_rate : (p.territory_level === 'district' ? 8 : p.territory_level === 'state' ? 12 : 15),
+          default_dealer_margin:     p.default_dealer_margin != null ? p.default_dealer_margin : (p.territory_level === 'district' ? 5 : p.territory_level === 'state' ? 8 : 10),
           
           // ─── 1. Warehouse Requirements ─────────────────────────────────────────
           warehouse_required:        p.warehouse_required ?? false,
