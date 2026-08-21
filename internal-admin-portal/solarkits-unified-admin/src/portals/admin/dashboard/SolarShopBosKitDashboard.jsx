@@ -32,6 +32,8 @@ const DealersAdminPage = lazy(() => import("../../boskit/pages/DealersAdminPage"
 // Operations & Fulfillment
 const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
 const WarehousePoConfig = lazy(() => import("../pages/solar-shop/po-orders/WarehousePoConfig"));
+const LooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/LooseOrders"));
+const WarehouseLooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/WarehouseLooseOrders"));
 const CompanyMargin = lazy(() => import("../pages/solar-shop/company-margin/CompanyMargin"));
 const WarehouseMarginConfig = lazy(() => import("../pages/solar-shop/company-margin/WarehouseMarginConfig"));
 const WarehouseKitActivations = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitActivations"));
@@ -114,6 +116,7 @@ const menus = [
             ]
         },
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop-bos-kits/po-orders", unique_id: "ADM_PO_ORDERS" },
+        { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop-bos-kits/loose-orders", unique_id: "ADM_PO_ORDERS" },
         { name: "Company Margin", icon: <FaCoins />, path: "/admin-panel/solar-shop-bos-kits/company-margin", unique_id: "ADM_CO_MARGIN" },
         { name: "Warehouse Kit Activations", icon: <FaToggleOn />, path: "/admin-panel/solar-shop-bos-kits/warehouse-kit-activations", unique_id: "ADM_WH_KIT_ACT" },
         {
@@ -526,6 +529,32 @@ export default function SolarShopBosKitDashboard() {
                                         element={
                                             <Suspense fallback={<Loader text="Loading Warehouse PO Config..." />}>
                                                 <WarehousePoConfig moduleUniqueId="ADM_PO_ORDERS" />
+                                            </Suspense>
+                                        }
+                                    />
+
+                                    {/* Loose Orders */}
+                                    <Route
+                                        path="/loose-orders"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
+                                                <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/loose-orders"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
+                                                <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/loose-orders/:warehouseId"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Warehouse Loose Order Configuration..." />}>
+                                                <WarehouseLooseOrders moduleUniqueId="ADM_PO_ORDERS" />
                                             </Suspense>
                                         }
                                     />

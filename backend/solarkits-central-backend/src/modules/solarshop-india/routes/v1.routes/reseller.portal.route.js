@@ -37,10 +37,16 @@ router.get('/authorized-products', verify_reseller_auth, handler.get_reseller_au
 router.post('/kyc/upload', verify_reseller_auth, kycDocUpload, handler.upload_kyc_document);
 router.post('/kyc/submit', verify_reseller_auth, handler.submit_kyc);
 router.get('/plans/list', handler.get_active_plans);
-router.post('/plans/subscribe', verify_reseller_auth, handler.subscribe_plan);
+router.post('/plans/subscribe',     verify_reseller_auth, handler.subscribe_plan);
+router.post('/plans/create-order',  verify_reseller_auth, handler.create_plan_razorpay_order);
+router.post('/plans/verify-payment', verify_reseller_auth, handler.verify_plan_payment);
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);
+
+// Bank Details Routes (commission payout account management)
+router.get('/profile/bank-details',  verify_reseller_auth, handler.get_reseller_bank_details);
+router.put('/profile/bank-details',  verify_reseller_auth, handler.update_reseller_bank_details);
 
 // Wallet & Ledger Routes (Phase 7 + R10)
 const walletPortalHandler = require('../../../admin-panel/controller/reseller.wallet.portal.handler');

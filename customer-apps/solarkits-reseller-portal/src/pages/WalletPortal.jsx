@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import api from "../services/api";
 import {
   FiDollarSign, FiClock, FiArrowUpRight, FiArrowDownLeft,
   FiCheckCircle, FiLoader, FiXCircle, FiAlertCircle,
   FiTrendingUp, FiMinusCircle, FiInfo, FiRefreshCw,
-  FiShield, FiFileText, FiPercent,
+  FiShield, FiFileText, FiPercent, FiEdit2, FiSend,
+  FiBriefcase, FiUser, FiHash, FiMapPin, FiSmartphone, FiX,
 } from "react-icons/fi";
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STATUS_CONFIG = {
   pending:    { label: "Pending Settlement", bg: "#fef3c7", text: "#92400e", icon: FiClock },
   processing: { label: "Processing",         bg: "#dbeafe", text: "#1e40af", icon: FiLoader },
@@ -30,7 +31,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ KPI Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge }) {
   return (
     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
@@ -56,12 +57,12 @@ function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge }) {
   );
 }
 
-// ─── Rupee Formatter ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Rupee Formatter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function fmt(val) {
-  return `₹${Number(val || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `â‚¹${Number(val || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// ─── Main Component: My Earnings ──────────────────────────────────────────────
+// â”€â”€â”€ Main Component: My Earnings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function WalletPortal() {
   const [wallet, setWallet] = useState(null);
   const [ledger, setLedger] = useState([]);
@@ -70,18 +71,51 @@ export default function WalletPortal() {
   const [activeTab, setActiveTab] = useState("ledger"); // "ledger" | "payouts"
   const [filterType, setFilterType] = useState("all");
 
-  // ── Fetch all data ──────────────────────────────────────────────────────────
+  // â”€â”€ Bank Details State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const [bankDetails, setBankDetails] = useState(null);
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    bank_name: "", account_holder_name: "", account_number: "",
+    ifsc_code: "", branch: "", upi_id: "",
+  });
+  const [bankFormErrors, setBankFormErrors] = useState({});
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankAlert, setBankAlert] = useState(null);
+
+  // â”€â”€ Withdrawal Request State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawError, setWithdrawError] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawAlert, setWithdrawAlert] = useState(null);
+
+  // â”€â”€ Fetch all data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchAll = useCallback(() => {
     setLoading(true);
     Promise.all([
       api.get("/india/v1/reseller/wallet/me"),
       api.get("/india/v1/reseller/wallet/ledger"),
       api.get("/india/v1/reseller/wallet/payouts"),
+      api.get("/india/v1/reseller/profile/bank-details"),
     ])
-      .then(([wRes, lRes, pRes]) => {
+      .then(([wRes, lRes, pRes, bRes]) => {
         if (wRes.data?.status === "success") setWallet(wRes.data.data);
         if (lRes.data?.status === "success") setLedger(lRes.data.data);
         if (pRes.data?.status === "success") setPayouts(pRes.data.data);
+        if (bRes.data?.status === "success") {
+          const bd = bRes.data.data;
+          setBankDetails(bd);
+          if (bd) {
+            setBankForm({
+              bank_name:           bd.bank_name || "",
+              account_holder_name: bd.account_holder_name || "",
+              account_number:      bd.account_number || "",
+              ifsc_code:           bd.ifsc_code || "",
+              branch:              bd.branch || "",
+              upi_id:              bd.upi_id || "",
+            });
+          }
+        }
       })
       .catch(() => { })
       .finally(() => setLoading(false));
@@ -89,7 +123,86 @@ export default function WalletPortal() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // ── Derived values ──────────────────────────────────────────────────────────
+  // â”€â”€ Bank Details: validate + save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const validateBankForm = () => {
+    const errors = {};
+    if (!bankForm.bank_name?.trim()) errors.bank_name = "Required";
+    if (!bankForm.account_holder_name?.trim()) errors.account_holder_name = "Required";
+    if (!bankForm.account_number?.trim()) errors.account_number = "Required";
+    if (!bankForm.ifsc_code?.trim()) errors.ifsc_code = "Required";
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (bankForm.ifsc_code && !ifscRegex.test(bankForm.ifsc_code.trim().toUpperCase())) {
+      errors.ifsc_code = "Invalid IFSC format. E.g. SBIN0001234";
+    }
+    setBankFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveBankDetails = async () => {
+    if (!validateBankForm()) return;
+    setSavingBank(true);
+    try {
+      const res = await api.put("/india/v1/reseller/profile/bank-details", {
+        bank_name:           bankForm.bank_name?.trim(),
+        account_number:      bankForm.account_number?.trim(),
+        ifsc_code:           bankForm.ifsc_code?.trim().toUpperCase(),
+        account_holder_name: bankForm.account_holder_name?.trim(),
+        branch:              bankForm.branch?.trim() || null,
+        upi_id:              bankForm.upi_id?.trim() || null,
+      });
+      if (res.data?.status === "success") {
+        setBankDetails(res.data.data);
+        setBankAlert({ type: "success", text: "Bank details saved successfully!" });
+        setTimeout(() => { setShowBankModal(false); setBankAlert(null); }, 1500);
+      }
+    } catch (err) {
+      setBankAlert({ type: "error", text: err.response?.data?.message || "Failed to save bank details" });
+    } finally {
+      setSavingBank(false);
+    }
+  };
+
+  // â”€â”€ Withdrawal Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const handleWithdrawRequest = async () => {
+    setWithdrawError("");
+    const amt = parseFloat(withdrawAmount);
+    if (!withdrawAmount || isNaN(amt) || amt <= 0) {
+      setWithdrawError("Enter a valid withdrawal amount");
+      return;
+    }
+    if (amt > (wallet?.available_balance || 0)) {
+      setWithdrawError("Amount exceeds your available balance");
+      return;
+    }
+    if (amt < 100) {
+      setWithdrawError("Minimum withdrawal amount is â‚¹100");
+      return;
+    }
+    if (!bankDetails?.account_number) {
+      setWithdrawError("Please save your bank account details first");
+      return;
+    }
+    setWithdrawing(true);
+    try {
+      const res = await api.post("/india/v1/reseller/wallet/withdraw", {
+        amount: amt,
+      });
+      if (res.data?.status === "success") {
+        setWithdrawAlert({ type: "success", text: `Withdrawal request of â‚¹${amt.toLocaleString("en-IN")} submitted! Admin will transfer within 3-5 business days.` });
+        setWithdrawAmount("");
+        fetchAll();
+        setTimeout(() => { setShowWithdrawModal(false); setWithdrawAlert(null); }, 3000);
+      } else {
+        setWithdrawError(res.data?.message || "Withdrawal request failed");
+      }
+    } catch (err) {
+      setWithdrawError(err.response?.data?.message || "Withdrawal request failed");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  // â”€â”€ Derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fd = wallet?.formula_breakdown || {};
   const grossEarned = fd.gross_earnings || wallet?.gross_earned || 0;
   const tdsDeducted = Math.abs(fd.minus_tds || -(wallet?.tds_deducted || 0));
@@ -108,7 +221,131 @@ export default function WalletPortal() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Bank Details Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {showBankModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <FiBriefcase className="text-blue-600" size={20} />
+                {bankDetails?.account_number ? "Update Bank Details" : "Add Bank Details"}
+              </h2>
+              <button onClick={() => setShowBankModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <FiX size={16} className="text-slate-500" />
+              </button>
+            </div>
+            {bankAlert && (
+              <div className={`p-3 rounded-xl text-xs font-bold ${
+                bankAlert.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              }`}>{bankAlert.text}</div>
+            )}
+            {/* Bank form fields */}
+            {[
+              { label: "Bank Name", key: "bank_name", placeholder: "e.g. State Bank of India", icon: <FiBriefcase size={13} />, required: true },
+              { label: "Account Holder Name", key: "account_holder_name", placeholder: "As per bank records", icon: <FiUser size={13} />, required: true },
+              { label: "Account Number", key: "account_number", placeholder: "Enter account number", icon: <FiHash size={13} />, required: true },
+              { label: "IFSC Code", key: "ifsc_code", placeholder: "e.g. SBIN0001234", icon: <FiHash size={13} />, required: true, upper: true },
+              { label: "Branch (Optional)", key: "branch", placeholder: "Branch name", icon: <FiMapPin size={13} /> },
+              { label: "UPI ID (Optional)", key: "upi_id", placeholder: "name@upi", icon: <FiSmartphone size={13} /> },
+            ].map(({ label, key, placeholder, icon, required, upper }) => (
+              <div key={key}>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                  {label} {required && <span className="text-red-500">*</span>}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{icon}</span>
+                  <input
+                    type="text"
+                    value={bankForm[key] || ""}
+                    onChange={(e) => setBankForm(prev => ({ ...prev, [key]: upper ? e.target.value.toUpperCase() : e.target.value }))}
+                    placeholder={placeholder}
+                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 ${
+                      bankFormErrors[key] ? "border-red-400 bg-red-50" : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  />
+                </div>
+                {bankFormErrors[key] && <p className="mt-1 text-[11px] text-red-600 font-semibold">{bankFormErrors[key]}</p>}
+              </div>
+            ))}
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowBankModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
+              <button
+                onClick={handleSaveBankDetails}
+                disabled={savingBank}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-60 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {savingBank ? <><FiLoader className="animate-spin" size={13} /> Saving...</> : "Save Bank Details"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ Withdrawal Request Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <FiSend className="text-blue-600" size={18} />
+                Request Withdrawal
+              </h2>
+              <button onClick={() => setShowWithdrawModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 cursor-pointer">
+                <FiX size={16} className="text-slate-500" />
+              </button>
+            </div>
+            {withdrawAlert && (
+              <div className={`p-3 rounded-xl text-xs font-bold ${
+                withdrawAlert.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+              }`}>{withdrawAlert.text}</div>
+            )}
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5">
+              <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Available Balance</p>
+              <p className="text-2xl font-black text-blue-900 mt-0.5">{fmt(wallet?.available_balance || 0)}</p>
+              {bankDetails?.account_number && (
+                <p className="text-[11px] text-blue-600 font-semibold mt-1.5">
+                  Will be transferred to: <span className="font-black">{bankDetails.bank_name}</span> A/C {bankDetails.account_number}
+                </p>
+              )}
+            </div>
+            {!bankDetails?.account_number && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">
+                âš ï¸ Please add your bank details first before requesting a withdrawal.
+              </div>
+            )}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase tracking-wider">
+                Withdrawal Amount (â‚¹)
+              </label>
+              <input
+                type="number"
+                min="100"
+                max={wallet?.available_balance || 0}
+                value={withdrawAmount}
+                onChange={(e) => { setWithdrawAmount(e.target.value); setWithdrawError(""); }}
+                placeholder="Enter amount (min â‚¹100)"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {withdrawError && <p className="mt-1 text-xs text-red-600 font-bold">{withdrawError}</p>}
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+              Admin Accounts team will process your request via NEFT/RTGS within 3â€“5 business days and enter the UTR reference upon completion.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowWithdrawModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
+              <button
+                onClick={handleWithdrawRequest}
+                disabled={withdrawing || !bankDetails?.account_number}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-60 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {withdrawing ? <><FiLoader className="animate-spin" size={13} /> Submitting...</> : <>Submit Request</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5">
@@ -119,19 +356,33 @@ export default function WalletPortal() {
             Real-time franchisee earnings summary, commission statements, TDS deductions, and payout history
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowWithdrawModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold text-xs transition-colors shadow-md shadow-blue-500/25 cursor-pointer"
+          >
+            <FiSend size={13} />
+            Request Withdrawal
+          </button>
+          <button
+            onClick={() => setShowBankModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            <FiBriefcase size={13} />
+            {bankDetails?.account_number ? "Bank Details" : "Add Bank"}
+          </button>
           <button
             onClick={fetchAll}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs transition-colors shadow-xs"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-xs transition-colors shadow-xs cursor-pointer"
             title="Refresh"
           >
             <FiRefreshCw size={14} className={loading ? "animate-spin text-blue-600" : "text-slate-500"} />
-            <span>Refresh Statement</span>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* ── Frozen Wallet Warning ─────────────────────────────────────────── */}
+      {/* â”€â”€ Frozen Wallet Warning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {wallet?.status === "frozen" && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 flex items-center gap-3 text-red-800 text-sm font-semibold">
           <FiAlertCircle className="shrink-0" size={20} />
@@ -139,7 +390,48 @@ export default function WalletPortal() {
         </div>
       )}
 
-      {/* ── KPI Cards (Gross, TDS, Net, Paid, Pending, Available) ──────────── */}
+      {/* â”€â”€ Bank Account Summary Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
+        bankDetails?.account_number
+          ? "bg-emerald-50 border-emerald-200"
+          : "bg-amber-50 border-amber-200"
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            bankDetails?.account_number ? "bg-emerald-100" : "bg-amber-100"
+          }`}>
+            <FiBriefcase size={18} className={bankDetails?.account_number ? "text-emerald-700" : "text-amber-700"} />
+          </div>
+          <div>
+            <p className={`text-xs font-extrabold uppercase tracking-wider ${bankDetails?.account_number ? "text-emerald-700" : "text-amber-700"}`}>
+              Commission Payout Bank Account
+            </p>
+            {bankDetails?.account_number ? (
+              <p className="text-sm font-bold text-slate-800 mt-0.5">
+                {bankDetails.bank_name} Â· A/C {bankDetails.account_number} Â· IFSC: {bankDetails.ifsc_code}
+                {bankDetails.account_holder_name && <span className="text-slate-500"> ({bankDetails.account_holder_name})</span>}
+              </p>
+            ) : (
+              <p className="text-sm font-semibold text-amber-800 mt-0.5">
+                âš ï¸ No bank account added yet â€” required for commission withdrawals
+              </p>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => setShowBankModal(true)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
+            bankDetails?.account_number
+              ? "bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              : "bg-amber-600 text-white hover:bg-amber-700"
+          }`}
+        >
+          <FiEdit2 size={12} />
+          {bankDetails?.account_number ? "Edit" : "Add Now"}
+        </button>
+      </div>
+
+      {/* â”€â”€ KPI Cards (Gross, TDS, Net, Paid, Pending, Available) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <KpiCard
           icon={FiTrendingUp}
@@ -203,7 +495,7 @@ export default function WalletPortal() {
         />
       </div>
 
-      {/* ── Balance Breakdown & Audit Summary ─────────────────────────────── */}
+      {/* â”€â”€ Balance Breakdown & Audit Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
           <div className="flex items-center gap-2">
@@ -218,12 +510,12 @@ export default function WalletPortal() {
               <span className="font-bold text-emerald-600 tabular-nums">+{fmt(grossEarned)}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-600 font-medium">− TDS Deduction (5% Sec. 194H)</span>
+              <span className="text-slate-600 font-medium">âˆ’ TDS Deduction (5% Sec. 194H)</span>
               <span className="font-bold text-red-500 tabular-nums">-{fmt(tdsDeducted)}</span>
             </div>
             {tcsDeducted > 0 && (
               <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-600 font-medium">− GST TCS (0.5% - 1%)</span>
+                <span className="text-slate-600 font-medium">âˆ’ GST TCS (0.5% - 1%)</span>
                 <span className="font-bold text-red-400 tabular-nums">-{fmt(tcsDeducted)}</span>
               </div>
             )}
@@ -232,11 +524,11 @@ export default function WalletPortal() {
               <span className="text-blue-700 tabular-nums font-black">{fmt(netEarned)}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-600 font-medium">− Completed / Paid Bank Payouts</span>
+              <span className="text-slate-600 font-medium">âˆ’ Completed / Paid Bank Payouts</span>
               <span className="font-bold text-slate-700 tabular-nums">-{fmt(totalPaid)}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-600 font-medium">− Pending / Held Payouts</span>
+              <span className="text-slate-600 font-medium">âˆ’ Pending / Held Payouts</span>
               <span className="font-bold text-amber-600 tabular-nums">-{fmt(pendingHolds)}</span>
             </div>
             <div className="flex justify-between py-2 font-black text-sm bg-blue-50 border border-blue-200 px-3 rounded-xl">
@@ -283,7 +575,7 @@ export default function WalletPortal() {
         </div>
       </div>
 
-      {/* ── Tabs: Transaction Ledger (History) & Settlement History ───────── */}
+      {/* â”€â”€ Tabs: Transaction Ledger (History) & Settlement History â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 px-6 py-3 gap-3 bg-slate-50/50">
           <div className="flex gap-2">
@@ -328,7 +620,7 @@ export default function WalletPortal() {
           )}
         </div>
 
-        {/* ── Transaction Ledger (History) ────────────────────────────────── */}
+        {/* â”€â”€ Transaction Ledger (History) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeTab === "ledger" && (
           loading ? (
             <div className="flex items-center justify-center py-16 text-slate-500 gap-2 text-sm font-semibold">
@@ -370,7 +662,7 @@ export default function WalletPortal() {
                                 hour: "2-digit",
                                 minute: "2-digit",
                               })
-                            : "—"}
+                            : "â€”"}
                         </td>
                         <td className="px-4 py-3.5 whitespace-nowrap">
                           <span
@@ -413,7 +705,7 @@ export default function WalletPortal() {
           )
         )}
 
-        {/* ── Settlement & Payout History ─────────────────────────────────── */}
+        {/* â”€â”€ Settlement & Payout History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         {activeTab === "payouts" && (
           loading ? (
             <div className="flex items-center justify-center py-16 text-slate-500 gap-2 text-sm font-semibold">
@@ -451,7 +743,7 @@ export default function WalletPortal() {
                         <td className="px-4 py-3.5 text-slate-700">
                           <div className="font-bold">{p.bank_details_snapshot?.bank_name || "Primary Bank Account"}</div>
                           <div className="text-[11px] text-slate-500 font-mono">
-                            A/C: {p.bank_details_snapshot?.account_number || "—"} · IFSC: {p.bank_details_snapshot?.ifsc_code || "—"}
+                            A/C: {p.bank_details_snapshot?.account_number || "â€”"} Â· IFSC: {p.bank_details_snapshot?.ifsc_code || "â€”"}
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-center">
@@ -463,14 +755,14 @@ export default function WalletPortal() {
                               {p.utr_reference || p.transaction_reference}
                             </span>
                           ) : (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-slate-400">â€”</span>
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right text-slate-500 whitespace-nowrap">
-                          {p.created_at ? new Date(p.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                          {p.created_at ? new Date(p.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "â€”"}
                         </td>
                         <td className="px-5 py-3.5 text-right text-slate-500 whitespace-nowrap font-bold">
-                          {p.processed_at ? new Date(p.processed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                          {p.processed_at ? new Date(p.processed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "â€”"}
                         </td>
                       </tr>
                     );

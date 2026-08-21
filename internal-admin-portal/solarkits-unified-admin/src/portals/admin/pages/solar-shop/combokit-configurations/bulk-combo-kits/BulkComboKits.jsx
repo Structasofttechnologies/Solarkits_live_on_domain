@@ -44,11 +44,24 @@ export default function BulkComboKits({ moduleUniqueId }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch active countries
-      const countriesRes = await axios.get(
-        `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId}&req_for=view`,
-        { headers: authHeaderObj() }
-      );
+      const isIndiaUrl = (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
+      const bulkEndpoint = isIndiaUrl ? "india/bulk-kit-settings" : "bulk-kit-settings";
+
+      // 1. Fetch countries, warehouses and bulk kit settings concurrently
+      const [countriesRes, warehousesRes, bulkRes] = await Promise.all([
+        axios.get(
+          `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId}&req_for=view`,
+          { headers: authHeaderObj() }
+        ),
+        axios.get(
+          `${API_URL}/warehouses?unique_id=${moduleUniqueId}&req_for=view`,
+          { headers: authHeaderObj() }
+        ),
+        axios.get(
+          `${API_URL}/solarshop/${bulkEndpoint}?unique_id=${moduleUniqueId}&req_for=view`,
+          { headers: authHeaderObj() }
+        ).catch(() => ({ data: { data: [] } }))
+      ]);
 
       const activeCountriesList = countriesRes.data?.countries || [];
       setActiveCountries(activeCountriesList);
@@ -90,39 +103,23 @@ export default function BulkComboKits({ moduleUniqueId }) {
         (c) => c.name.toLowerCase() === countryName?.toLowerCase()
       );
 
+      const allWarehouses = warehousesRes.data?.warehouses || [];
+      const countryWarehouses = currentCountryObj
+        ? allWarehouses.filter((w) => w.country_id === currentCountryObj.id)
+        : allWarehouses;
+
+      setWarehouses(countryWarehouses);
+      setBulkSettings(bulkRes.data?.data || []);
+
+      // Non-blocking fetch of states for dropdown filter
       if (currentCountryObj) {
-        // 2. Fetch states for active country
-        const statesRes = await axios.post(
+        axios.post(
           `${API_URL}/geolocation/active-states?unique_id=${moduleUniqueId}&req_for=view`,
           { country_id: currentCountryObj.id },
           { headers: authHeaderObj() }
-        );
-        setStates(statesRes.data?.states || []);
-
-        // 3. Fetch warehouses
-        const warehousesRes = await axios.get(
-          `${API_URL}/warehouses?unique_id=${moduleUniqueId}&req_for=view`,
-          { headers: authHeaderObj() }
-        );
-        const allWarehouses = warehousesRes.data?.warehouses || [];
-        const countryWarehouses = allWarehouses.filter(
-          (w) => w.country_id === currentCountryObj.id
-        );
-        setWarehouses(countryWarehouses);
-
-        // 4. Fetch bulk kit settings (to show configured counts)
-        try {
-          const isIndia = currentCountryObj.iso2?.toLowerCase() === "in";
-          const bulkEndpoint = isIndia ? "india/bulk-kit-settings" : "bulk-kit-settings";
-          const bulkRes = await axios.get(
-            `${API_URL}/solarshop/${bulkEndpoint}?unique_id=${moduleUniqueId}&req_for=view&country_id=${currentCountryObj.id}`,
-            { headers: authHeaderObj() }
-          );
-          setBulkSettings(bulkRes.data?.data || []);
-        } catch (bulkErr) {
-          console.error("Error fetching bulk kit settings:", bulkErr);
-          setBulkSettings([]);
-        }
+        ).then((statesRes) => {
+          setStates(statesRes.data?.states || []);
+        }).catch((err) => console.error("Error fetching states:", err));
       }
     } catch (error) {
       console.error("Error fetching bulk combo kit data:", error);

@@ -37,7 +37,7 @@ const get_user_data = async (req, res) => {
                         name: p.name,
                         url_prefix: p.url_prefix,
                         saas_products: mappedProducts
-                            .filter(mp => mp.saas_product_id)
+                            .filter(mp => mp.saas_product_id && mp.saas_product_id.is_active && !mp.saas_product_id.is_deleted)
                             .map(mp => ({
                                 id: mp.saas_product_id._id,
                                 name: mp.saas_product_id.name,
@@ -65,7 +65,7 @@ const get_user_data = async (req, res) => {
                                 name: p.panel_id.name,
                                 url_prefix: p.panel_id.url_prefix,
                                 saas_products: mappedProducts
-                                    .filter(mp => mp.saas_product_id && allowedIds.includes(mp.saas_product_id._id.toString()))
+                                    .filter(mp => mp.saas_product_id && mp.saas_product_id.is_active && !mp.saas_product_id.is_deleted && allowedIds.includes(mp.saas_product_id._id.toString()))
                                     .map(mp => ({
                                         id: mp.saas_product_id._id,
                                         name: mp.saas_product_id.name,

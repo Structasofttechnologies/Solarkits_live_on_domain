@@ -44,11 +44,19 @@ export default function PoOrders({ moduleUniqueId }) {
   const fetchCountriesAndSettings = async () => {
     setLoading(true);
     try {
-      // 1. Fetch active countries
-      const countriesRes = await axios.get(
-        `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId}&req_for=view`,
-        { headers: authHeaderObj() }
-      );
+      // 1. Concurrently fetch active countries, warehouses, and PO settings
+      const [countriesRes, warehousesRes, globalRes, indiaRes] = await Promise.all([
+        axios.get(
+          `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId}&req_for=view`,
+          { headers: authHeaderObj() }
+        ),
+        axios.get(
+          `${API_URL}/warehouses?unique_id=${moduleUniqueId}&req_for=view`,
+          { headers: authHeaderObj() }
+        ),
+        axios.get(`${API_URL}/solarshop/po-settings?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: [] } })),
+        axios.get(`${API_URL}/solarshop/india/po-settings?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: [] } }))
+      ]);
       
       const activeCountriesList = countriesRes.data?.countries || [];
       setActiveCountries(activeCountriesList);
@@ -79,35 +87,24 @@ export default function PoOrders({ moduleUniqueId }) {
         c => c.name.toLowerCase() === countryName?.toLowerCase()
       );
 
+      const allWarehouses = warehousesRes.data?.warehouses || [];
+      const countryWarehouses = currentCountryObj
+        ? allWarehouses.filter(w => w.country_id === currentCountryObj.id)
+        : allWarehouses;
+      setWarehouses(countryWarehouses);
+
+      const allSettings = [...(globalRes.data?.data || []), ...(indiaRes.data?.data || [])];
+      setSettings(allSettings);
+
+      // Non-blocking background fetch for states dropdown
       if (currentCountryObj) {
-        // 2. Fetch states for active country
-        const statesRes = await axios.post(
+        axios.post(
           `${API_URL}/geolocation/active-states?unique_id=${moduleUniqueId}&req_for=view`,
           { country_id: currentCountryObj.id },
           { headers: authHeaderObj() }
-        );
-        setStates(statesRes.data?.states || []);
-
-        // 3. Fetch warehouses
-        const warehousesRes = await axios.get(
-          `${API_URL}/warehouses?unique_id=${moduleUniqueId}&req_for=view`,
-          { headers: authHeaderObj() }
-        );
-        const allWarehouses = warehousesRes.data?.warehouses || [];
-        // Filter warehouses locally by current country
-        const countryWarehouses = allWarehouses.filter(
-          w => w.country_id === currentCountryObj.id
-        );
-        setWarehouses(countryWarehouses);
-
-        // 4. Fetch PO settings from both databases
-        const [globalRes, indiaRes] = await Promise.all([
-          axios.get(`${API_URL}/solarshop/po-settings?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: [] } })),
-          axios.get(`${API_URL}/solarshop/india/po-settings?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: [] } }))
-        ]);
-
-        const allSettings = [...(globalRes.data?.data || []), ...(indiaRes.data?.data || [])];
-        setSettings(allSettings);
+        ).then(statesRes => {
+          setStates(statesRes.data?.states || []);
+        }).catch(err => console.error("Error fetching states:", err));
       }
     } catch (error) {
       console.error("Error fetching PO settings data:", error);

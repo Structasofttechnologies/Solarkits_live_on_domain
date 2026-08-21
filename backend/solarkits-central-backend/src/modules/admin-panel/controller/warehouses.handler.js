@@ -169,7 +169,11 @@ const add_warehouse = async (req, res) => {
  */
 const get_warehouses = async (req, res) => {
   try {
-    const rows = await CompanyWarehouse.find({ deleted_at: null }).sort({ created_at: -1 });
+    const query = { deleted_at: null };
+    if (req.query.country_id && isValidObjectId(req.query.country_id)) {
+      query.level_0 = req.query.country_id;
+    }
+    const rows = await CompanyWarehouse.find(query).sort({ created_at: -1 }).lean();
     if (!rows.length) {
       return res.status(200).json({ status: "success", message: "Warehouses fetched successfully.", warehouses: [] });
     }
@@ -179,31 +183,31 @@ const get_warehouses = async (req, res) => {
     const level1_ids = [...new Set(rows.map(r => r.level_1).filter(Boolean))];
     const level2_ids = [...new Set(rows.map(r => r.level_2).filter(Boolean))];
 
-    // Bulk Geolocation Lookup
+    // Bulk Geolocation Lookup with lean queries
     const [countries, states, districts] = await Promise.all([
-      GeoLevel0.find({ _id: { $in: level0_ids } }),
-      GeoLevel1.find({ _id: { $in: level1_ids } }),
-      GeoLevel2.find({ _id: { $in: level2_ids } }).populate('cluster')
+      GeoLevel0.find({ _id: { $in: level0_ids } }).lean(),
+      GeoLevel1.find({ _id: { $in: level1_ids } }).lean(),
+      GeoLevel2.find({ _id: { $in: level2_ids } }).populate('cluster').lean()
     ]);
 
     const geoMap = {
       l0: Object.fromEntries(countries.map(c => [c._id.toString(), c.name])),
       l1: Object.fromEntries(states.map(s => [s._id.toString(), s.name])),
       l2: Object.fromEntries(districts.map(d => [d._id.toString(), d.name])),
-      l2Cluster: Object.fromEntries(districts.map(d => [d._id.toString(), d.cluster ? { id: d.cluster._id.toString(), name: d.cluster.name } : null]))
+      l2Cluster: Object.fromEntries(districts.map(d => [d._id.toString(), d.cluster ? { id: (d.cluster._id || d.cluster.id || d.cluster).toString(), name: d.cluster.name } : null]))
     };
 
     // Bulk Customer Details Lookup
     const allTypeIds = [...new Set(rows.flatMap(r => r.customer_types || []))];
-    const type_rows = await CompanyCustomersType.find({ _id: { $in: allTypeIds } });
+    const type_rows = await CompanyCustomersType.find({ _id: { $in: allTypeIds } }).lean();
     const typeMap = Object.fromEntries(type_rows.map(t => [t._id.toString(), t.type_name]));
 
-    // Bulk WarehouseUser, FieldStatus, and FieldData Lookup
+    // Bulk WarehouseUser, FieldStatus, and FieldData Lookup with lean queries
     const warehouse_ids = rows.map(r => r._id);
     const [warehouseUsers, allStatuses, allSavedData] = await Promise.all([
-      WarehouseUser.find({ warehouse_id: { $in: warehouse_ids } }),
-      CompanyWarehouseFieldStatus.find({ warehouse_id: { $in: warehouse_ids }, is_enabled: true }),
-      CompanyWarehouseFieldData.find({ warehouse_id: { $in: warehouse_ids } })
+      WarehouseUser.find({ warehouse_id: { $in: warehouse_ids } }).lean(),
+      CompanyWarehouseFieldStatus.find({ warehouse_id: { $in: warehouse_ids }, is_enabled: true }).lean(),
+      CompanyWarehouseFieldData.find({ warehouse_id: { $in: warehouse_ids } }).lean()
     ]);
 
     const userMap = Object.fromEntries(warehouseUsers.map(u => [u.warehouse_id.toString(), u]));

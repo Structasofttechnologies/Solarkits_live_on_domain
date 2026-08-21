@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -23,6 +23,8 @@ const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
 const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
 const WarehousePoConfig = lazy(() => import("../pages/solar-shop/po-orders/WarehousePoConfig"));
+const LooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/LooseOrders"));
+const WarehouseLooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/WarehouseLooseOrders"));
 const OrderManagementSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderManagementSettings"));
 const OffersManagement = lazy(() => import("../pages/solar-shop/order-management-settings/OffersManagement"));
 const CheckoutCartSettings = lazy(() => import("../pages/solar-shop/order-management-settings/CheckoutCartSettings"));
@@ -69,6 +71,7 @@ const menus = [
             ]
         },
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "ADM_PO_ORDERS" },
+        { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "ADM_PO_ORDERS" },
         { name: "Company Margin", icon: <FaCoins />, path: "/admin-panel/solar-shop/company-margin", unique_id: "ADM_CO_MARGIN" },
         { name: "Warehouse Kit Activations", icon: <FaToggleOn />, path: "/admin-panel/solar-shop/warehouse-kit-activations", unique_id: "ADM_WH_KIT_ACT" },
         {
@@ -172,7 +175,10 @@ const menus = [
 ];
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
-    if (!menu.unique_id) return false;
+    if (!menu.unique_id || menu.unique_id === "00000000") return true;
+    if (menu.name === "Loose Orders" || menu.unique_id === "ADM_LOOSE_ORDERS") {
+        return allowedUniqueIds.includes("ADM_PO_ORDERS") || allowedUniqueIds.includes("ADM_LOOSE_ORDERS");
+    }
     return allowedUniqueIds.includes(menu.unique_id);
 };
 
@@ -350,6 +356,16 @@ export default function SolarShopDashboard() {
                                         }
                                     />
                                     <Route
+                                        path="/loose-orders"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_PO_ORDERS">
+                                                <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
+                                                    <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
                                         path="/company-margin"
                                         element={
                                             <PermissionGuard requiredUniqueId="ADM_CO_MARGIN">
@@ -405,6 +421,26 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_PO_ORDERS">
                                                 <Suspense fallback={<Loader text="Loading Warehouse PO Configuration..." />}>
                                                     <WarehousePoConfig moduleUniqueId="ADM_PO_ORDERS" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/loose-orders"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_PO_ORDERS">
+                                                <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
+                                                    <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/loose-orders/:warehouseId"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_PO_ORDERS">
+                                                <Suspense fallback={<Loader text="Loading Warehouse Loose Order Configuration..." />}>
+                                                    <WarehouseLooseOrders moduleUniqueId="ADM_PO_ORDERS" />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

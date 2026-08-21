@@ -143,70 +143,63 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Active countries
-      const countriesRes = await axios.get(
-        `${API_URL}/geolocation/active-countries?unique_id=ADM_CO_MARGIN&req_for=view`,
-        { headers: authHeaderObj() }
-      );
+      const isIndia = (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
+      const marginEndpoint = isIndia ? "india/company-margins" : "company-margins";
+
+      // Concurrently fetch all independent resources
+      const [countriesRes, warehousesRes, comboRes, marginRes] = await Promise.all([
+        axios.get(
+          `${API_URL}/geolocation/active-countries?unique_id=ADM_CO_MARGIN&req_for=view`,
+          { headers: authHeaderObj() }
+        ),
+        axios.get(
+          `${API_URL}/warehouses?unique_id=ADM_CO_MARGIN&req_for=view`,
+          { headers: authHeaderObj() }
+        ),
+        axios.get(
+          `${API_URL}/combo-kits${isIndia ? "/india" : ""}/get-kits?unique_id=${moduleUniqueId}&req_for=view&is_custom=false`,
+          { headers: authHeaderObj() }
+        ).catch(() => ({ data: { data: [] } })),
+        axios.get(
+          `${API_URL}/solarshop/${marginEndpoint}/warehouse/${warehouseId}?unique_id=ADM_CO_MARGIN&req_for=view`,
+          { headers: authHeaderObj() }
+        ).catch(() => ({ data: { data: [] } })),
+        fetchBulkSettings(isIndia),
+        fetchKitActivations(),
+        fetchIndustryTypes()
+      ]);
+
       const activeCountries = countriesRes.data?.countries || [];
       const foundCountry = activeCountries.find(
         (c) => c.name.toLowerCase() === countryName?.toLowerCase()
       );
       setCountryObj(foundCountry);
 
-      // 2. Warehouse details
-      const warehousesRes = await axios.get(
-        `${API_URL}/warehouses?unique_id=ADM_CO_MARGIN&req_for=view`,
-        { headers: authHeaderObj() }
-      );
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const wh = allWarehouses.find((w) => w.id === warehouseId);
       setWarehouse(wh);
 
-      if (wh && foundCountry) {
-        const isIndia = foundCountry.iso2?.toLowerCase() === "in";
-
-        // 3. Fetch kits
-        const comboRes = await axios.get(
-          `${API_URL}/combo-kits${isIndia ? "/india" : ""}/get-kits?unique_id=${moduleUniqueId}&req_for=view&is_custom=false&country_id=${foundCountry.id}`,
-          { headers: authHeaderObj() }
-        );
-
-        // Deduplicate kits just in case
-        const fetchedKits = comboRes.data?.data || [];
-        const uniqueKits = [];
-        const seenIds = new Set();
-        for (const kit of fetchedKits) {
-          const kId = kit.id || kit._id;
-          if (kId && !seenIds.has(kId)) {
-            uniqueKits.push(kit);
-            seenIds.add(kId);
-          }
+      // Deduplicate kits
+      const fetchedKits = comboRes.data?.data || [];
+      const uniqueKits = [];
+      const seenIds = new Set();
+      for (const kit of fetchedKits) {
+        const kId = kit.id || kit._id;
+        if (kId && !seenIds.has(kId)) {
+          uniqueKits.push(kit);
+          seenIds.add(kId);
         }
-        setComboKits(uniqueKits);
-
-        // 4. Fetch company margins (to get standard margin)
-        const marginsMap = {};
-        try {
-          // Company-Margins module uses unique_id ADM_CO_MARGIN (not the bulk kit module ADM_BULK_COMBO)
-          const marginEndpoint = isIndia ? "india/company-margins" : "company-margins";
-          const marginRes = await axios.get(
-            `${API_URL}/solarshop/${marginEndpoint}/warehouse/${warehouseId}?unique_id=ADM_CO_MARGIN&req_for=view`,
-            { headers: authHeaderObj() }
-          );
-          (marginRes.data?.data || []).forEach((m) => {
-            if (m.combo_kit_id) {
-              marginsMap[m.combo_kit_id] = m;
-            }
-          });
-        } catch (e) {
-          console.warn("Could not fetch company-margin", e);
-        }
-        setWarehouseMargins(marginsMap);
-
-        // 5. Fetch bulk settings and kit activations in parallel
-        await Promise.all([fetchBulkSettings(isIndia), fetchKitActivations()]);
       }
+      setComboKits(uniqueKits);
+
+      // Populate margins map
+      const marginsMap = {};
+      (marginRes.data?.data || []).forEach((m) => {
+        if (m.combo_kit_id) {
+          marginsMap[m.combo_kit_id] = m;
+        }
+      });
+      setWarehouseMargins(marginsMap);
     } catch (error) {
       console.error("Error loading bulk combo kit config:", error);
       dispatch(setAlert({ type: "error", message: "Failed to load warehouse bulk kit configuration" }));
