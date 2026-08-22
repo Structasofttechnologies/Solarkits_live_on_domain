@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { useOutletContext, Link } from "react-router-dom";
+import { useOutletContext, Link, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import IndustryMediaShowcase from "../components/industry/IndustryMediaShowcase";
+import OnboardingChecklistWidget from "../components/OnboardingChecklistWidget";
 import {
   FiZap,
   FiShield,
@@ -13,17 +14,39 @@ import {
   FiPackage,
   FiShoppingBag,
   FiLayers,
+  FiMapPin,
 } from "react-icons/fi";
 
 export default function DashboardHome() {
   const { reseller } = useOutletContext();
-  const [buyers, setBuyers] = useState([]);
+  const [searchParams] = useSearchParams();
+  const isOnboardingQuery = searchParams.get("onboarding") === "true";
 
-  // Fetch buyers for stats (only once)
+  const [buyers, setBuyers] = useState([]);
+  const [territory, setTerritory] = useState(null);
+  const [activeSubscription, setActiveSubscription] = useState(null);
+
+  // Fetch buyers, territories & subscription
   useEffect(() => {
     api.get('/india/v1/reseller/epc-buyers/list')
       .then((res) => {
         if (res.data?.status === "success") setBuyers(res.data.data || []);
+      })
+      .catch(() => {});
+
+    api.get('/india/v1/reseller/territories')
+      .then((res) => {
+        if (res.data?.status === "success" && res.data.data?.length > 0) {
+          setTerritory(res.data.data[0]);
+        }
+      })
+      .catch(() => {});
+
+    api.get('/india/v1/reseller/auth/me')
+      .then((res) => {
+        if (res.data?.status === "success") {
+          setActiveSubscription(res.data.active_subscription || null);
+        }
       })
       .catch(() => {});
   }, []);
@@ -31,11 +54,43 @@ export default function DashboardHome() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto transition-opacity duration-300">
 
-      {/* ── 0. Commerce-first Welcome Banner ─────────────────────────────────── */}
+      {/* ── 0. Onboarding Success Alert (if just onboarded) ─────────────────── */}
+      {isOnboardingQuery && (
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 text-white flex items-center justify-center font-black shrink-0">
+              <FiCheckCircle size={28} />
+            </div>
+            <div>
+              <h3 className="text-base font-black tracking-tight">
+                🎉 Franchise Partnership Confirmed & Active!
+              </h3>
+              <p className="text-xs text-white/90 font-medium mt-0.5">
+                Your exclusive territory license is secured. Complete your business KYC below to begin procurement and onboarding regional EPC buyers.
+              </p>
+            </div>
+          </div>
+          {territory?.location_name && (
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 text-xs font-black shrink-0 border border-white/30">
+              <FiMapPin size={14} />
+              <span>{territory.location_name}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 1. Commerce-first Welcome Banner ─────────────────────────────────── */}
       <div className="rounded-3xl p-6 sm:p-8 border shadow-xs overflow-hidden relative" style={{ background: "var(--gradient-primary)", borderColor: "var(--color-border)" }}>
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="text-xs font-black text-white/70 uppercase tracking-widest">Reseller Portal</div>
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-black text-white/70 uppercase tracking-widest">Reseller Portal</div>
+              {territory?.location_name && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30">
+                  📍 {territory.location_name}
+                </span>
+              )}
+            </div>
             <h1 className="font-heading font-black text-2xl sm:text-3xl text-white tracking-tight">
               Welcome back, {reseller?.business_name || "Partner"}!
             </h1>
@@ -69,6 +124,13 @@ export default function DashboardHome() {
           </div>
         </div>
       </div>
+
+      {/* ── 2. Franchise Onboarding Journey Checklist Widget ─────────────────── */}
+      <OnboardingChecklistWidget
+        reseller={reseller}
+        territory={territory}
+        activeSubscription={activeSubscription}
+      />
 
       {/* ── 1. Industry Media Showcase (Selector -> Hero -> FilterBar -> Gallery -> Lightbox) ── */}
       <IndustryMediaShowcase

@@ -24,11 +24,17 @@ router.post('/auth/register', authRateLimiter, handler.register_reseller);
 router.post('/auth/login',    authRateLimiter, handler.login_reseller);
 router.post('/auth/logout', handler.logout_reseller);
 
+// ── Territory Availability & Exclusivity Verification ─────────────────────────
+router.get('/territory/availability', handler.check_territory_availability);
+
 // ── Inbound Franchisee & Territory Application Leads ─────────────────────────
 router.post('/leads/submit', require('../../../admin-panel/controller/reseller.leads.handler').submit_lead);
 
 // ── GST Verification (Public format & adapter check) ──────────────────────────
 router.post('/gst/verify', gstRateLimiter, handler.verify_gstin);
+
+// ── Public / Self-service Franchise Purchase & Onboarding ───────────────────
+router.post('/plans/purchase-and-onboard', handler.purchase_and_onboard);
 
 // ── Protected Reseller Endpoints ──────────────────────────────────────────────
 router.get('/auth/me', verify_reseller_auth, handler.get_reseller_me);
@@ -38,7 +44,7 @@ router.post('/kyc/upload', verify_reseller_auth, kycDocUpload, handler.upload_ky
 router.post('/kyc/submit', verify_reseller_auth, handler.submit_kyc);
 router.get('/plans/list', handler.get_active_plans);
 router.post('/plans/subscribe',     verify_reseller_auth, handler.subscribe_plan);
-router.post('/plans/create-order',  verify_reseller_auth, handler.create_plan_razorpay_order);
+router.post('/plans/create-order',  handler.create_plan_razorpay_order); // allows creating order for registration checkout
 router.post('/plans/verify-payment', verify_reseller_auth, handler.verify_plan_payment);
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);

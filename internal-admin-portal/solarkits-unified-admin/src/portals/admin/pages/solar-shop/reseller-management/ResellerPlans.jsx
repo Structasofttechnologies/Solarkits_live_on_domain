@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
@@ -26,6 +26,8 @@ import {
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
+import Dropdown from "@/components/Dropdown";
+import Button from "@/components/Button";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const MODULE_UID = "RSL_PLAN";
@@ -35,14 +37,14 @@ const apiFetch = (method, endpoint, data) =>
 
 const TERRITORY_LEVELS = [
   { value: "district", label: "District Level", icon: FiMapPin, color: "text-primary", bg: "bg-info-soft" },
-  { value: "state",    label: "State Level",    icon: FiMap,    color: "text-success", bg: "bg-success-soft" },
-  { value: "country",  label: "Country Level",  icon: FiGlobe,  color: "text-warning", bg: "bg-warning-soft" },
+  { value: "state", label: "State Level", icon: FiMap, color: "text-success", bg: "bg-success-soft" },
+  { value: "country", label: "Country Level", icon: FiGlobe, color: "text-warning", bg: "bg-warning-soft" },
 ];
 
 const ORDER_TYPES = [
-  { value: "both",        label: "Both (PO & Loose)", description: "Allows both bulk Purchase Orders & on-demand loose kits", icon: FiPackage },
-  { value: "po_order",    label: "PO Order Only",     description: "Strict Purchase Order fulfillment with scheduled lead-time", icon: FiFileText },
-  { value: "loose_order", label: "Loose Order Only",  description: "Direct individual kit / loose components on-demand dispatch", icon: FiTruck },
+  { value: "both", label: "Both (PO & Loose)", description: "Allows both bulk Purchase Orders & on-demand loose kits", icon: FiPackage },
+  { value: "po_order", label: "PO Order Only", description: "Strict Purchase Order fulfillment with scheduled lead-time", icon: FiFileText },
+  { value: "loose_order", label: "Loose Order Only", description: "Direct individual kit / loose components on-demand dispatch", icon: FiTruck },
 ];
 
 function TerritoryLevelBadge({ level }) {
@@ -137,48 +139,65 @@ function StatusBadge({ isActive }) {
 
 function FormModal({ mode, initial, onClose, onSaved }) {
   const dispatch = useDispatch();
-  const [configOptions, setConfigOptions] = useState({ project_types: [], categories: [], combo_kits: [] });
+  const [configOptions, setConfigOptions] = useState({
+    industry_types: [],
+    project_types: [],
+    categories: [],
+    subcategories: [],
+    system_types: [],
+    project_ranges: [],
+    combo_kits: [],
+  });
   const [loadingOptions, setLoadingOptions] = useState(true);
+
+  // Quick Filters State
+  const [filters, setFilters] = useState({
+    industryType: "all",
+    category: "all",
+    subCategory: "all",
+    systemType: "all",
+    projectRange: "all",
+  });
 
   // Normalize initial project type and combo kit IDs
   const initialProjectTypeIds = (initial?.allowed_project_types || initial?.allowed_project_type_ids || [])
     .map((pt) => (pt?._id ? pt._id : pt?.id ? pt.id : String(pt)));
-  
+
   const initialComboKitIds = (initial?.allowed_combo_kits || initial?.allowed_combo_kit_ids || [])
     .map((ck) => (ck?._id ? ck._id : ck?.id ? ck.id : String(ck)));
 
   const [form, setForm] = useState({
-    name:                      initial?.name                      || "",
-    territory_level:           initial?.territory_level           || "district",
-    one_time_fee:              initial?.one_time_fee              ?? 0,
-    validity_value:            initial?.validity_value            ?? 1,
-    validity_unit:             initial?.validity_unit             || "years",
+    name: initial?.name || "",
+    territory_level: initial?.territory_level || "district",
+    one_time_fee: initial?.one_time_fee ?? 0,
+    validity_value: initial?.validity_value ?? 1,
+    validity_unit: initial?.validity_unit || "years",
     allowed_territories_count: initial?.allowed_territories_count ?? 1,
-    
+
     // Project Configuration & Combo Kits
-    allowed_project_type_ids:  initialProjectTypeIds,
-    allowed_combo_kit_ids:     initialComboKitIds,
+    allowed_project_type_ids: initialProjectTypeIds,
+    allowed_combo_kit_ids: initialComboKitIds,
 
     // 1. Warehouse Requirements
-    warehouse_required:        initial?.warehouse_required        ?? false,
-    warehouse_count:           initial?.warehouse_count           ?? 0,
-    warehouse_space_sqft:      initial?.warehouse_space_sqft      ?? 0,
+    warehouse_required: initial?.warehouse_required ?? false,
+    warehouse_count: initial?.warehouse_count ?? 0,
+    warehouse_space_sqft: initial?.warehouse_space_sqft ?? 0,
 
     // 2. MOQ & Capacity Specifications
-    moq_capacity_kw:          initial?.moq_capacity_kw          ?? 10000,
-    moq_kits_count:           initial?.moq_kits_count           ?? 1,
-    moq_project_type:         initial?.moq_project_type         || "All Kit Types",
-    moq_description:          initial?.moq_description          || "",
+    moq_capacity_kw: initial?.moq_capacity_kw ?? 10000,
+    moq_kits_count: initial?.moq_kits_count ?? 1,
+    moq_project_type: initial?.moq_project_type || "All Kit Types",
+    moq_description: initial?.moq_description || "",
 
     // 3. Order Type Support
-    order_type_allowed:       initial?.order_type_allowed       || "both",
+    order_type_allowed: initial?.order_type_allowed || "both",
 
     // 4. Fixed Dealer Margin & Commission
-    default_dealer_margin:   initial?.default_dealer_margin   ?? 5,
+    default_dealer_margin: initial?.default_dealer_margin ?? 5,
     default_commission_rate: initial?.default_commission_rate ?? 8,
 
-    description:               initial?.description               || "",
-    sort_order:                initial?.sort_order                ?? 0,
+    description: initial?.description || "",
+    sort_order: initial?.sort_order ?? 0,
   });
   const [saving, setSaving] = useState(false);
 
@@ -195,14 +214,116 @@ function FormModal({ mode, initial, onClose, onSaved }) {
       .finally(() => setLoadingOptions(false));
   }, []);
 
+  const clearMainFilters = () => {
+    setFilters({
+      industryType: "all",
+      category: "all",
+      subCategory: "all",
+      systemType: "all",
+      projectRange: "all",
+    });
+  };
+
+  const industryTypeOptions = useMemo(() => {
+    const list = (configOptions.industry_types || []).map((ind) => ({
+      value: String(ind.id),
+      text: ind.name,
+    }));
+    return [{ value: "all", text: "All Industry Types" }, ...list];
+  }, [configOptions.industry_types]);
+
+  const categoryOptions = useMemo(() => {
+    let cats = configOptions.categories || [];
+    if (filters.industryType && filters.industryType !== "all") {
+      cats = cats.filter((c) => String(c.industry_type_id) === String(filters.industryType));
+    }
+    const list = cats.map((c) => ({
+      value: String(c.id),
+      text: c.name,
+    }));
+    return [{ value: "all", text: "All Categories" }, ...list];
+  }, [configOptions.categories, filters.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    let subs = configOptions.subcategories || [];
+    if (filters.category && filters.category !== "all") {
+      subs = subs.filter((s) => String(s.category_id) === String(filters.category));
+    } else if (filters.industryType && filters.industryType !== "all") {
+      const validCatIds = new Set(
+        (configOptions.categories || [])
+          .filter((c) => String(c.industry_type_id) === String(filters.industryType))
+          .map((c) => String(c.id))
+      );
+      subs = subs.filter((s) => validCatIds.has(String(s.category_id)));
+    }
+    const list = subs.map((s) => ({
+      value: String(s.id),
+      text: s.name,
+    }));
+    return [{ value: "all", text: "All Sub-Categories" }, ...list];
+  }, [configOptions.subcategories, configOptions.categories, filters.category, filters.industryType]);
+
+  const systemTypeOptions = useMemo(() => {
+    let types = configOptions.system_types || [];
+    if (filters.subCategory && filters.subCategory !== "all") {
+      types = types.filter((t) => String(t.subcategory_id) === String(filters.subCategory));
+    }
+    const list = types.map((t) => ({
+      value: String(t.id),
+      text: t.name,
+    }));
+    return [{ value: "all", text: "All System Types" }, ...list];
+  }, [configOptions.system_types, filters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    let ranges = configOptions.project_ranges || [];
+    if (filters.systemType && filters.systemType !== "all") {
+      ranges = ranges.filter((r) => String(r.subcategory_type_id) === String(filters.systemType));
+    }
+    const list = ranges.map((r) => ({
+      value: String(r.id),
+      text: r.label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
+    }));
+    return [{ value: "all", text: "All Project Ranges" }, ...list];
+  }, [configOptions.project_ranges, filters.systemType]);
+
+  const isFilterActive =
+    filters.industryType !== "all" ||
+    filters.category !== "all" ||
+    filters.subCategory !== "all" ||
+    filters.systemType !== "all" ||
+    filters.projectRange !== "all";
+
+  const filteredComboKits = useMemo(() => {
+    const allKits = configOptions.combo_kits || [];
+    return allKits.filter((kit) => {
+      if (filters.industryType !== "all" && kit.industry_type_id && String(kit.industry_type_id) !== String(filters.industryType)) {
+        return false;
+      }
+      if (filters.category !== "all" && kit.category_id && String(kit.category_id) !== String(filters.category)) {
+        return false;
+      }
+      if (filters.subCategory !== "all" && kit.subcategory_id && String(kit.subcategory_id) !== String(filters.subCategory)) {
+        return false;
+      }
+      if (filters.systemType !== "all" && kit.system_type_id && String(kit.system_type_id) !== String(filters.systemType)) {
+        return false;
+      }
+      if (filters.projectRange !== "all" && kit.project_range_id && String(kit.project_range_id) !== String(filters.projectRange)) {
+        return false;
+      }
+      return true;
+    });
+  }, [configOptions.combo_kits, filters]);
+
   const toggleProjectType = (typeId) => {
     setForm((prev) => {
       const exists = prev.allowed_project_type_ids.includes(typeId);
       const nextIds = exists
         ? prev.allowed_project_type_ids.filter((id) => id !== typeId)
         : [...prev.allowed_project_type_ids, typeId];
-      
-      const selectedNames = configOptions.project_types
+
+      const selectedNames = (configOptions.project_types || [])
         .filter((t) => nextIds.includes(t.id))
         .map((t) => t.name);
 
@@ -215,14 +336,15 @@ function FormModal({ mode, initial, onClose, onSaved }) {
   };
 
   const toggleAllProjectTypes = () => {
-    if (form.allowed_project_type_ids.length === configOptions.project_types.length) {
+    const allTypes = configOptions.project_types || [];
+    if (form.allowed_project_type_ids.length === allTypes.length) {
       setForm((prev) => ({ ...prev, allowed_project_type_ids: [], moq_project_type: "All Kit Types" }));
     } else {
-      const allIds = configOptions.project_types.map((t) => t.id);
+      const allIds = allTypes.map((t) => t.id);
       setForm((prev) => ({
         ...prev,
         allowed_project_type_ids: allIds,
-        moq_project_type: configOptions.project_types.map((t) => t.name).join(", "),
+        moq_project_type: allTypes.map((t) => t.name).join(", "),
       }));
     }
   };
@@ -241,12 +363,23 @@ function FormModal({ mode, initial, onClose, onSaved }) {
   };
 
   const toggleAllComboKits = () => {
-    if (form.allowed_combo_kit_ids.length === configOptions.combo_kits.length) {
-      setForm((prev) => ({ ...prev, allowed_combo_kit_ids: [] }));
-    } else {
-      const allIds = configOptions.combo_kits.map((k) => k.id);
-      setForm((prev) => ({ ...prev, allowed_combo_kit_ids: allIds }));
-    }
+    const targetKits = isFilterActive ? filteredComboKits : (configOptions.combo_kits || []);
+    const targetIds = targetKits.map((k) => k.id);
+    const allTargetSelected = targetIds.length > 0 && targetIds.every((id) => form.allowed_combo_kit_ids.includes(id));
+
+    setForm((prev) => {
+      if (allTargetSelected) {
+        return {
+          ...prev,
+          allowed_combo_kit_ids: prev.allowed_combo_kit_ids.filter((id) => !targetIds.includes(id)),
+        };
+      } else {
+        return {
+          ...prev,
+          allowed_combo_kit_ids: Array.from(new Set([...prev.allowed_combo_kit_ids, ...targetIds])),
+        };
+      }
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -260,37 +393,37 @@ function FormModal({ mode, initial, onClose, onSaved }) {
         : `/add?req_for=add&unique_id=${MODULE_UID}`;
       const payload = {
         ...(isEdit && { id: initial.id }),
-        name:                      form.name.trim(),
-        territory_level:           form.territory_level,
-        one_time_fee:              Number(form.one_time_fee),
-        validity_value:            Number(form.validity_value),
-        validity_unit:             form.validity_unit,
+        name: form.name.trim(),
+        territory_level: form.territory_level,
+        one_time_fee: Number(form.one_time_fee),
+        validity_value: Number(form.validity_value),
+        validity_unit: form.validity_unit,
         allowed_territories_count: Number(form.allowed_territories_count),
-        
+
         // Project Types & Combo Kits from Admin
-        allowed_project_type_ids:  form.allowed_project_type_ids,
-        allowed_combo_kit_ids:     form.allowed_combo_kit_ids,
+        allowed_project_type_ids: form.allowed_project_type_ids,
+        allowed_combo_kit_ids: form.allowed_combo_kit_ids,
 
         // 1. Warehouse Specs
-        warehouse_required:        Boolean(form.warehouse_required),
-        warehouse_count:           Number(form.warehouse_count || 0),
-        warehouse_space_sqft:      Number(form.warehouse_space_sqft || 0),
+        warehouse_required: Boolean(form.warehouse_required),
+        warehouse_count: Number(form.warehouse_count || 0),
+        warehouse_space_sqft: Number(form.warehouse_space_sqft || 0),
 
         // 2. MOQ & Capacity Specs
-        moq_capacity_kw:          Number(form.moq_capacity_kw || 10000),
-        moq_kits_count:           Number(form.moq_kits_count || 1),
-        moq_project_type:         form.moq_project_type.trim(),
-        moq_description:          form.moq_description.trim() || null,
+        moq_capacity_kw: Number(form.moq_capacity_kw || 10000),
+        moq_kits_count: Number(form.moq_kits_count || 1),
+        moq_project_type: form.moq_project_type.trim(),
+        moq_description: form.moq_description.trim() || null,
 
         // 3. Order Type Support
-        order_type_allowed:       form.order_type_allowed,
+        order_type_allowed: form.order_type_allowed,
 
         // 4. Fixed Dealer Margin & Commission
-        default_dealer_margin:   Number(form.default_dealer_margin || 0),
+        default_dealer_margin: Number(form.default_dealer_margin || 0),
         default_commission_rate: Number(form.default_commission_rate || 0),
 
-        description:               form.description.trim() || null,
-        sort_order:                Number(form.sort_order),
+        description: form.description.trim() || null,
+        sort_order: Number(form.sort_order),
       };
       const res = await apiFetch(isEdit ? "put" : "post", endpoint, payload);
       if (res.data?.status === "success") {
@@ -359,9 +492,8 @@ function FormModal({ mode, initial, onClose, onSaved }) {
                       key={t.value}
                       type="button"
                       onClick={() => setForm({ ...form, territory_level: t.value })}
-                      className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${
-                        sel ? "border-primary bg-info-soft text-primary" : "border-border bg-bg text-text-secondary hover:border-primary/30"
-                      }`}
+                      className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-semibold transition-all ${sel ? "border-primary bg-info-soft text-primary" : "border-border bg-bg text-text-secondary hover:border-primary/30"
+                        }`}
                     >
                       <Icon size={16} className={sel ? "text-primary" : "text-text-muted"} />
                       {t.label}
@@ -461,73 +593,119 @@ function FormModal({ mode, initial, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Section 2: Admin Project Configuration (Project Types) */}
+          {/* Section 2: Quick filter */}
           <div className="space-y-3 pt-3 border-t border-border">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <FiLayers size={14} /> Admin Project Types Configuration
-              </h4>
-              {configOptions.project_types?.length > 0 && (
-                <button
-                  type="button"
-                  onClick={toggleAllProjectTypes}
-                  className="text-[11px] text-primary font-bold hover:underline"
-                >
-                  {form.allowed_project_type_ids.length === configOptions.project_types.length
-                    ? "Deselect All"
-                    : "Select All Types"}
-                </button>
+              <div className="flex items-center gap-2">
+                <FiPackage className="text-primary dark:text-info" size={16} />
+                <h4 className="text-xs font-black uppercase tracking-wider text-text-primary dark:text-info">
+                  Assign Industry & Category wise Combo Kits
+                </h4>
+                {isFilterActive && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                    Filtered ({filteredComboKits.length} kits)
+                  </span>
+                )}
+              </div>
+              {isFilterActive && (
+                <Button onClick={clearMainFilters} variant="link" size="sm" className="text-xs font-semibold">
+                  Clear Filters
+                </Button>
               )}
             </div>
-            <p className="text-[11px] text-text-muted">
-              Select which Project Types (configured in Admin Master) apply to this franchisee plan:
-            </p>
-
-            {loadingOptions ? (
-              <div className="flex items-center gap-2 py-3 text-xs text-text-muted">
-                <FiLoader className="animate-spin" size={14} /> Loading admin project types...
-              </div>
-            ) : configOptions.project_types?.length === 0 ? (
-              <p className="text-xs text-text-muted italic">No project types found in Admin master.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {configOptions.project_types.map((pt) => {
-                  const isSelected = form.allowed_project_type_ids.includes(pt.id);
-                  return (
-                    <button
-                      key={pt.id}
-                      type="button"
-                      onClick={() => toggleProjectType(pt.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
-                        isSelected
-                          ? "bg-primary text-white border-primary shadow-xs"
-                          : "bg-bg text-text-secondary border-border hover:border-primary/40 hover:bg-surface-hover"
-                      }`}
-                    >
-                      {isSelected ? <FiCheck size={12} /> : null}
-                      <span>{pt.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <Dropdown
+                label="Industry Type"
+                options={industryTypeOptions}
+                value={filters.industryType}
+                onChange={(val) => setFilters((prev) => ({
+                  ...prev,
+                  industryType: val,
+                  category: "all",
+                  subCategory: "all",
+                  systemType: "all",
+                  projectRange: "all"
+                }))}
+                className="w-full"
+              />
+              <Dropdown
+                label="Category"
+                options={categoryOptions}
+                value={filters.category}
+                disabled={filters.industryType === "all" && categoryOptions.length <= 1}
+                onChange={(val) => setFilters((prev) => ({
+                  ...prev,
+                  category: val,
+                  subCategory: "all",
+                  systemType: "all",
+                  projectRange: "all"
+                }))}
+                className="w-full"
+              />
+              <Dropdown
+                label="Sub Category"
+                options={subCategoryOptions}
+                value={filters.subCategory}
+                disabled={filters.category === "all"}
+                onChange={(val) => setFilters((prev) => ({
+                  ...prev,
+                  subCategory: val,
+                  systemType: "all",
+                  projectRange: "all"
+                }))}
+                className="w-full"
+              />
+              <Dropdown
+                label="System Type"
+                options={systemTypeOptions}
+                value={filters.systemType}
+                disabled={filters.subCategory === "all"}
+                onChange={(val) => setFilters((prev) => ({
+                  ...prev,
+                  systemType: val,
+                  projectRange: "all"
+                }))}
+                className="w-full"
+              />
+              <Dropdown
+                label="Project Range"
+                options={projectRangeOptions}
+                value={filters.projectRange}
+                disabled={filters.systemType === "all"}
+                onChange={(val) => setFilters((prev) => ({
+                  ...prev,
+                  projectRange: val
+                }))}
+                className="w-full"
+              />
+            </div>
           </div>
 
           {/* Section 3: Admin Created Combo Kits */}
           <div className="space-y-3 pt-3 border-t border-border">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-black uppercase tracking-wider text-[#0575B8] flex items-center gap-1.5">
-                <FiBox size={14} /> Admin Created Combo Kits
-              </h4>
-              {configOptions.combo_kits?.length > 0 && (
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-[#0575B8] flex items-center gap-1.5">
+                  <FiBox size={14} /> Admin Created Combo Kits
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                  {form.allowed_combo_kit_ids.length} Selected
+                </span>
+                {isFilterActive && (
+                  <span className="text-[10px] text-text-muted">
+                    (Showing {filteredComboKits.length} of {configOptions.combo_kits?.length || 0})
+                  </span>
+                )}
+              </div>
+              {filteredComboKits.length > 0 && (
                 <button
                   type="button"
                   onClick={toggleAllComboKits}
-                  className="text-[11px] text-[#0575B8] font-bold hover:underline"
+                  className="text-[11px] text-[#0575B8] font-bold hover:underline cursor-pointer"
                 >
-                  {form.allowed_combo_kit_ids.length === configOptions.combo_kits.length
-                    ? "Deselect All"
-                    : "Select All Kits"}
+                  {filteredComboKits.every((k) => form.allowed_combo_kit_ids.includes(k.id))
+                    ? isFilterActive ? "Deselect Filtered" : "Deselect All"
+                    : isFilterActive ? "Select Filtered" : "Select All Kits"}
                 </button>
               )}
             </div>
@@ -536,29 +714,48 @@ function FormModal({ mode, initial, onClose, onSaved }) {
             </p>
 
             {loadingOptions ? (
-              <div className="flex items-center gap-2 py-3 text-xs text-text-muted">
-                <FiLoader className="animate-spin" size={14} /> Loading combo kits...
+              <div className="flex items-center gap-2 py-6 justify-center text-xs text-text-muted">
+                <FiLoader className="animate-spin" size={16} /> Loading combo kits...
               </div>
-            ) : configOptions.combo_kits?.length === 0 ? (
-              <p className="text-xs text-text-muted italic">No combo kits created yet in Admin Panel.</p>
+            ) : filteredComboKits.length === 0 ? (
+              <div className="py-6 text-center text-xs text-text-muted bg-surface-hover/40 rounded-xl border border-dashed border-border p-4">
+                <p className="font-medium">
+                  {configOptions.combo_kits?.length === 0
+                    ? "No combo kits created yet in Admin Panel."
+                    : "No combo kits match the selected quick filters."}
+                </p>
+                {isFilterActive && (
+                  <button
+                    type="button"
+                    onClick={clearMainFilters}
+                    className="mt-2 text-primary font-bold hover:underline cursor-pointer"
+                  >
+                    Reset Quick Filters
+                  </button>
+                )}
+              </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                {configOptions.combo_kits.map((kit) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                {filteredComboKits.map((kit) => {
                   const isSelected = form.allowed_combo_kit_ids.includes(kit.id);
                   return (
                     <button
                       key={kit.id}
                       type="button"
                       onClick={() => toggleComboKit(kit.id)}
-                      className={`p-2.5 rounded-xl text-left border text-xs transition-all flex items-center justify-between gap-2 ${
-                        isSelected
-                          ? "bg-sky-50 border-[#0575B8] text-[#0575B8] ring-1 ring-[#0575B8]"
-                          : "bg-bg border-border text-text-secondary hover:border-[#0575B8]/40 hover:bg-surface-hover"
-                      }`}
+                      className={`p-2.5 rounded-xl text-left border text-xs transition-all flex items-center justify-between gap-2 cursor-pointer ${isSelected
+                        ? "bg-sky-50 border-[#0575B8] text-[#0575B8] ring-1 ring-[#0575B8]"
+                        : "bg-bg border-border text-text-secondary hover:border-[#0575B8]/40 hover:bg-surface-hover"
+                        }`}
                     >
                       <div className="truncate">
                         <div className="font-bold truncate">{kit.name}</div>
-                        <div className="text-[10px] text-text-muted">{kit.capacity_kw ? `${kit.capacity_kw} kW capacity` : 'Standard Kit'}</div>
+                        <div className="text-[10px] text-text-muted flex items-center gap-1.5 mt-0.5">
+                          <span>{kit.capacity_kw ? `${kit.capacity_kw} kW` : 'Standard Kit'}</span>
+                          {kit.category_name && <span>• {kit.category_name}</span>}
+                          {kit.subcategory_name && <span>• {kit.subcategory_name}</span>}
+                          {kit.project_range_label && <span>• {kit.project_range_label}</span>}
+                        </div>
                       </div>
                       {isSelected && <FiCheck className="shrink-0 text-[#0575B8]" size={14} />}
                     </button>
@@ -693,11 +890,10 @@ function FormModal({ mode, initial, onClose, onSaved }) {
                     key={ot.value}
                     type="button"
                     onClick={() => setForm({ ...form, order_type_allowed: ot.value })}
-                    className={`flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all ${
-                      sel
-                        ? "border-purple-600 bg-purple-50/50 text-purple-900 shadow-sm"
-                        : "border-border bg-bg text-text-secondary hover:border-purple-300"
-                    }`}
+                    className={`flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all ${sel
+                      ? "border-purple-600 bg-purple-50/50 text-purple-900 shadow-sm"
+                      : "border-border bg-bg text-text-secondary hover:border-purple-300"
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <Icon size={16} className={sel ? "text-purple-600" : "text-text-muted"} />
@@ -887,9 +1083,8 @@ export default function ResellerPlans({ moduleUniqueId }) {
             <button
               key={lvl}
               onClick={() => setFilterLevel(lvl)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
-                filterLevel === lvl ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-              }`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${filterLevel === lvl ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                }`}
             >
               {lvl}
             </button>

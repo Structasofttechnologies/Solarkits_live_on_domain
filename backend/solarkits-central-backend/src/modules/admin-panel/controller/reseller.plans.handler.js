@@ -8,8 +8,16 @@
  */
 
 const mongoose = require('mongoose');
-const { ResellerPlan, ResellerPlanSubscription } = require('../models/india_solarshop_db');
-const { ProjectType, ProjectCategory, ProjectSubcategory, WarehouseComboKit } = require('../models/core_db');
+const { ResellerPlan, ResellerPlanSubscription, WarehouseComboKit: IndiaComboKit } = require('../models/india_solarshop_db');
+const {
+  ProjectType,
+  ProjectCategory,
+  ProjectSubcategory,
+  ProjectSubcategoryType,
+  ProjectRange,
+  IndustryType,
+  WarehouseComboKit,
+} = require('../models/core_db');
 const { logAudit } = require('../utils/audit.service');
 
 const slugify = (str) =>
@@ -390,30 +398,112 @@ const delete_reseller_plan = async (req, res) => {
  */
 const get_plan_config_options = async (req, res) => {
   try {
-    const [projectTypes, categories, subcategories, comboKits] = await Promise.all([
+    const [projectTypes, categories, subcategories, subcategoryTypes, projectRanges, industryTypes, kitsCore] = await Promise.all([
       ProjectType.find({ deleted_at: null }).sort({ name: 1 }).lean(),
-      ProjectCategory.find({ deleted_at: null }).sort({ sort_order: 1, name: 1 }).lean(),
-      ProjectSubcategory.find({ deleted_at: null }).sort({ name: 1 }).lean(),
+      ProjectCategory.find({ deleted_at: null, is_active: { $ne: false } }).sort({ sort_order: 1, name: 1 }).lean(),
+      ProjectSubcategory.find({ deleted_at: null, is_active: { $ne: false } }).sort({ name: 1 }).lean(),
+      ProjectSubcategoryType.find({ deleted_at: null, is_active: { $ne: false } })
+        .populate('type', 'name')
+        .populate('subcategory', 'name')
+        .lean(),
+      ProjectRange.find({ deleted_at: null, is_active: { $ne: false } })
+        .populate('unit_id', 'symbol name')
+        .lean(),
+      IndustryType.find({ deleted_at: null, is_active: { $ne: false } }).sort({ name: 1 }).lean(),
       WarehouseComboKit.find({ deleted_at: null, is_active: { $ne: false } })
+        .populate({
+          path: 'solar_kit_id',
+          select: 'name category_id subcategory_id type_id',
+          populate: [
+            { path: 'category_id', select: 'name industry_type_id' },
+            { path: 'subcategory_id', select: 'name' },
+            { path: 'type_id', populate: { path: 'type', model: 'sys_filter_types', select: 'name' } },
+          ],
+        })
+        .populate({
+          path: 'project_range_id',
+          select: 'min_value max_value unit_id',
+          populate: { path: 'unit_id', select: 'symbol name' },
+        })
         .sort({ name: 1 })
         .lean(),
     ]);
 
+    let kitsIndia = [];
+    if (IndiaComboKit) {
+      try {
+        kitsIndia = await IndiaComboKit.find({ deleted_at: null, is_active: { $ne: false } })
+          .populate({
+            path: 'solar_kit_id',
+            select: 'name category_id subcategory_id type_id',
+            populate: [
+              { path: 'category_id', select: 'name industry_type_id' },
+              { path: 'subcategory_id', select: 'name' },
+              { path: 'type_id', populate: { path: 'type', model: 'sys_filter_types', select: 'name' } },
+            ],
+          })
+          .populate({
+            path: 'project_range_id',
+            select: 'min_value max_value unit_id',
+            populate: { path: 'unit_id', select: 'symbol name' },
+          })
+          .sort({ name: 1 })
+          .lean();
+      } catch (e) {
+        // fallback
+      }
+    }
+
+    const kitsMap = new Map();
+    [...kitsCore, ...kitsIndia].forEach((k) => kitsMap.set(String(k._id), k));
+    const comboKits = Array.from(kitsMap.values());
+
     return res.json({
       status: 'success',
       data: {
-        project_types: projectTypes.map((t) => ({ id: t._id, name: t.name })),
-        categories:    categories.map((c) => ({ id: c._id, name: c.name, industry_type_id: c.industry_type_id })),
-        subcategories: subcategories.map((sc) => ({ id: sc._id, name: sc.name, category_id: sc.category })),
-        combo_kits:    comboKits.map((k) => ({
-          id:                   k._id,
-          name:                 k.name || k.kit_name || 'Combo Kit',
-          kit_code:             k.kit_code || '',
-          capacity:             k.capacity || 0,
-          capacity_kw:          k.capacity || 0,
-          base_price_cached:    k.base_price_cached || 0,
-          selling_price_cached: k.selling_price_cached || 0,
+        industry_types: industryTypes.map((i) => ({ id: i._id, name: i.name })),
+        project_types:  projectTypes.map((t) => ({ id: t._id, name: t.name })),
+        categories:     categories.map((c) => ({ id: c._id, name: c.name, industry_type_id: c.industry_type_id })),
+        subcategories:  subcategories.map((sc) => ({ id: sc._id, name: sc.name, category_id: sc.category })),
+        system_types:   subcategoryTypes.map((st) => ({
+          id:             st._id,
+          subcategory_id: st.subcategory?._id || st.subcategory,
+          type_id:        st.type?._id || st.type,
+          name:           st.type?.name || 'System Type',
         })),
+        project_ranges: projectRanges.map((pr) => ({
+          id:                  pr._id,
+          subcategory_type_id: pr.subcategory_type,
+          min_value:           pr.min_value,
+          max_value:           pr.max_value,
+          unit_symbol:         pr.unit_id?.symbol || 'kW',
+          label:               `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}`,
+        })),
+        combo_kits: comboKits.map((k) => {
+          const sk = k.solar_kit_id || {};
+          const cat = sk.category_id || {};
+          const sub = sk.subcategory_id || {};
+          const typeObj = sk.type_id || {};
+          const pr = k.project_range_id || {};
+          return {
+            id:                   k._id,
+            name:                 k.name || k.kit_name || 'Combo Kit',
+            kit_code:             k.kit_code || '',
+            capacity:             k.capacity || 0,
+            capacity_kw:          k.capacity || 0,
+            base_price_cached:    k.base_price_cached || 0,
+            selling_price_cached: k.selling_price_cached || 0,
+            industry_type_id:     cat.industry_type_id ? String(cat.industry_type_id) : null,
+            category_id:          cat._id ? String(cat._id) : (sk.category_id ? String(sk.category_id) : null),
+            category_name:        cat.name || '',
+            subcategory_id:       sub._id ? String(sub._id) : (sk.subcategory_id ? String(sk.subcategory_id) : null),
+            subcategory_name:     sub.name || '',
+            system_type_id:       typeObj._id ? String(typeObj._id) : (sk.type_id ? String(sk.type_id) : null),
+            system_type_name:     typeObj.type?.name || '',
+            project_range_id:     pr._id ? String(pr._id) : (k.project_range_id ? String(k.project_range_id) : null),
+            project_range_label:  pr.min_value !== undefined ? `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}` : '',
+          };
+        }),
       },
     });
   } catch (error) {

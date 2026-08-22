@@ -9,6 +9,7 @@ import Footer from "../components/storefront/Footer";
 
 // Interactive Overlays
 import LeadCaptureModal from "../components/storefront/LeadCaptureModal";
+import FranchisePurchaseModal from "../components/storefront/FranchisePurchaseModal";
 import KitDetailModal from "../components/storefront/KitDetailModal";
 import KitCompareDrawer from "../components/storefront/KitCompareDrawer";
 import MobileStickyBar from "../components/storefront/MobileStickyBar";
@@ -16,6 +17,10 @@ import MobileStickyBar from "../components/storefront/MobileStickyBar";
 import { SOLARKITS_DATA } from "../data/solarkitsData";
 
 export default function FranchiseLanding() {
+  // Franchise Purchase & Onboarding Journey Modal State
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
+  const [selectedPlanForPurchase, setSelectedPlanForPurchase] = useState(null);
+
   // Lead Capture Modal State
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   const [leadModalContext, setLeadModalContext] = useState({});
@@ -30,6 +35,11 @@ export default function FranchiseLanding() {
 
   // Filter override state passed from quick browse sections to Catalog
   const [filterOverride, setFilterOverride] = useState({});
+
+  const handleOpenPurchaseModal = useCallback((plan) => {
+    setSelectedPlanForPurchase(plan);
+    setPurchaseModalOpen(true);
+  }, []);
 
   const handleOpenLeadModal = useCallback((context = {}, actionType = "bulk_price") => {
     setLeadModalContext(context);
@@ -94,7 +104,10 @@ export default function FranchiseLanding() {
 
 
       {/* 9. Franchise Territory Opportunity */}
-      <FranchiseOpportunity onOpenLeadModal={handleOpenLeadModal} />
+      <FranchiseOpportunity
+        onOpenLeadModal={handleOpenLeadModal}
+        onOpenPurchaseModal={handleOpenPurchaseModal}
+      />
 
 
 
@@ -110,6 +123,13 @@ export default function FranchiseLanding() {
       <Footer onOpenLeadModal={handleOpenLeadModal} />
 
       {/* ── Interactive Overlays & Modals ─────────────────────────────── */}
+
+      {/* Franchise Buyer Territory Purchase & Onboarding Modal */}
+      <FranchisePurchaseModal
+        isOpen={purchaseModalOpen}
+        onClose={() => setPurchaseModalOpen(false)}
+        initialPlan={selectedPlanForPurchase}
+      />
 
       {/* Kit Detail Specifications Modal */}
       <KitDetailModal

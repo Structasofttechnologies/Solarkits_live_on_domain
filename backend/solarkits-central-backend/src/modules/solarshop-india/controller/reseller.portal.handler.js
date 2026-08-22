@@ -20,10 +20,11 @@ const {
   ResellerTerritory,
   GstVerificationLog,
 } = require('../../admin-panel/models/india_solarshop_db');
-const { GeoLevel0, GeoLevel1 } = require('../../admin-panel/models/geolocation_db');
+const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
 const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
 const { createRazorpayOrder, verifyPaymentSignature } = require('../../admin-panel/services/razorpay.service');
+const { assignTerritoryAtomic } = require('../../admin-panel/utils/territory.validator');
 const { logAudit } = require('../../admin-panel/utils/audit.service');
 const { generate_token } = require('../utils/jsonwebtoken');
 
@@ -1208,6 +1209,442 @@ const get_reseller_bank_details = async (req, res) => {
   }
 };
 
+// ─── 17. CHECK TERRITORY AVAILABILITY ──────────────────────────────────────────
+/**
+ * GET /api/india/v1/reseller/territory/availability
+ * Query: { territory_level, country_id?, country_name?, state_id?, state_name?, district_id?, district_name? }
+ */
+const check_territory_availability = async (req, res) => {
+  try {
+    const {
+      territory_level = 'district',
+      country_id, country_name,
+      state_id, state_name,
+      district_id, district_name,
+    } = req.query;
+
+    let targetCountryId = country_id;
+    let targetStateId = state_id;
+    let targetDistrictId = district_id;
+
+    // Resolve Country
+    if (!targetCountryId) {
+      const cQuery = country_name ? { name: new RegExp(`^${country_name.trim()}$`, 'i') } : { name: /india/i };
+      const cDoc = await GeoLevel0.findOne(cQuery).lean();
+      if (cDoc) targetCountryId = cDoc._id;
+    }
+
+    // Resolve State if territory_level is district or state
+    if (!targetStateId && state_name && state_name.trim()) {
+      const cleanState = state_name.trim();
+      const sDoc = await GeoLevel1.findOne({
+        name: new RegExp(cleanState.replace(/[^a-zA-Z0-9\s]/g, ''), 'i'),
+      }).lean();
+      if (sDoc) targetStateId = sDoc._id;
+    }
+
+    // Resolve District if territory_level is district
+    if (!targetDistrictId && district_name && district_name.trim()) {
+      const cleanDist = district_name.trim();
+      const dQuery = { name: new RegExp(cleanDist.replace(/[^a-zA-Z0-9\s]/g, ''), 'i') };
+      if (targetStateId) dQuery.level_1 = targetStateId;
+      const dDoc = await GeoLevel2.findOne(dQuery).lean();
+      if (dDoc) targetDistrictId = dDoc._id;
+    }
+
+    // Build conflict search query
+    const conflictQuery = {
+      territory_level,
+      status: 'active',
+      is_exclusive: true,
+      assignment_type: 'primary',
+    };
+
+    if (territory_level === 'district') {
+      if (targetDistrictId) {
+        conflictQuery.district_id = targetDistrictId;
+      } else {
+        conflictQuery.district_id = null;
+      }
+    } else if (territory_level === 'state') {
+      if (targetStateId) {
+        conflictQuery.state_id = targetStateId;
+      }
+    } else if (territory_level === 'country') {
+      if (targetCountryId) {
+        conflictQuery.country_id = targetCountryId;
+      }
+    }
+
+    let existingTerritory = null;
+    if (
+      (territory_level === 'district' && targetDistrictId) ||
+      (territory_level === 'state' && targetStateId) ||
+      (territory_level === 'country' && targetCountryId)
+    ) {
+      existingTerritory = await ResellerTerritory.findOne(conflictQuery)
+        .populate('reseller_id', 'business_name')
+        .lean();
+    }
+
+    const levelName = territory_level.charAt(0).toUpperCase() + territory_level.slice(1);
+    const locationDisplay = district_name
+      ? (state_name ? `${district_name}, ${state_name}` : district_name)
+      : state_name || country_name || 'India';
+
+    if (existingTerritory) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          is_available: false,
+          territory_level,
+          location_name: locationDisplay,
+          code: 'TERRITORY_RESERVED',
+          message: `${levelName} territory "${locationDisplay}" is already exclusively allocated to an authorized franchisee.`,
+          conflicting_reseller: existingTerritory.reseller_id ? {
+            business_name: existingTerritory.reseller_id.business_name,
+          } : null,
+        },
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        is_available: true,
+        territory_level,
+        location_name: locationDisplay,
+        country_id: targetCountryId,
+        state_id: targetStateId,
+        district_id: targetDistrictId,
+        message: `${levelName} territory "${locationDisplay}" is available for exclusive reservation (1 License policy).`,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] check_territory_availability error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to verify territory availability' });
+  }
+};
+
+// ─── 18. PURCHASE FRANCHISE & ONBOARD BUYER ──────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/plans/purchase-and-onboard
+ * Body: {
+ *   plan_id,
+ *   territory_level,
+ *   country_name?, country_id?,
+ *   state_name?, state_id?,
+ *   district_name?, district_id?,
+ *   business_name, contact_person, email, mobile, password,
+ *   gst_number?, pan_number?, address?,
+ *   bank_details?: { bank_name, account_number, ifsc_code, account_holder_name, branch, upi_id },
+ *   razorpay_order_id?, razorpay_payment_id?, razorpay_signature?,
+ *   is_sandbox_payment?
+ * }
+ */
+const purchase_and_onboard = async (req, res) => {
+  try {
+    const {
+      plan_id,
+      territory_level = 'district',
+      country_name, country_id,
+      state_name, state_id,
+      district_name, district_id,
+      business_name, contact_person, email, mobile, password,
+      gst_number, pan_number, aadhaar_masked, address,
+      bank_details,
+      razorpay_order_id, razorpay_payment_id, razorpay_signature,
+      is_sandbox_payment,
+    } = req.body;
+
+    if (!plan_id || !mongoose.Types.ObjectId.isValid(plan_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid plan_id is required' });
+    }
+
+    const plan = await ResellerPlan.findOne({ _id: plan_id, is_active: true, deleted_at: null });
+    if (!plan) {
+      return res.status(404).json({ status: 'error', message: 'Franchise plan not found or inactive' });
+    }
+
+    // Resolve Geolocation References
+    let resolvedCountryId = country_id;
+    let resolvedStateId = state_id;
+    let resolvedDistrictId = district_id;
+
+    if (!resolvedCountryId) {
+      const cQuery = country_name ? { name: new RegExp(`^${country_name.trim()}$`, 'i') } : { name: /india/i };
+      const cDoc = await GeoLevel0.findOne(cQuery).lean();
+      if (cDoc) resolvedCountryId = cDoc._id;
+    }
+
+    if (!resolvedStateId && state_name && state_name.trim()) {
+      const cleanState = state_name.trim();
+      let sDoc = await GeoLevel1.findOne({
+        name: new RegExp(cleanState.replace(/[^a-zA-Z0-9\s]/g, ''), 'i'),
+      }).lean();
+      if (sDoc) resolvedStateId = sDoc._id;
+      else {
+        sDoc = await GeoLevel1.create({ name: cleanState, level_0: resolvedCountryId });
+        resolvedStateId = sDoc._id;
+      }
+    }
+
+    if (!resolvedDistrictId && district_name && district_name.trim()) {
+      const cleanDist = district_name.trim();
+      let dDoc = await GeoLevel2.findOne({
+        name: new RegExp(cleanDist.replace(/[^a-zA-Z0-9\s]/g, ''), 'i'),
+        level_1: resolvedStateId,
+      }).lean();
+      if (dDoc) resolvedDistrictId = dDoc._id;
+      else {
+        dDoc = await GeoLevel2.create({ name: cleanDist, level_1: resolvedStateId, level_0: resolvedCountryId });
+        resolvedDistrictId = dDoc._id;
+      }
+    }
+
+    // 1. Strict Exclusivity Verification Check
+    const effectiveLevel = territory_level || plan.territory_level || 'district';
+    const conflictQuery = {
+      territory_level: effectiveLevel,
+      status: 'active',
+      is_exclusive: true,
+      assignment_type: 'primary',
+    };
+
+    if (effectiveLevel === 'district' && resolvedDistrictId) {
+      conflictQuery.district_id = resolvedDistrictId;
+    } else if (effectiveLevel === 'state' && resolvedStateId) {
+      conflictQuery.state_id = resolvedStateId;
+    } else if (effectiveLevel === 'country' && resolvedCountryId) {
+      conflictQuery.country_id = resolvedCountryId;
+    }
+
+    const existingExclusive = await ResellerTerritory.findOne(conflictQuery)
+      .populate('reseller_id', 'business_name email')
+      .lean();
+
+    if (existingExclusive) {
+      const levelTitle = effectiveLevel.charAt(0).toUpperCase() + effectiveLevel.slice(1);
+      return res.status(409).json({
+        status: 'error',
+        code: 'EXCLUSIVE_TERRITORY_CONFLICT',
+        message: `${levelTitle} territory is strictly exclusive and already assigned to another partner (${existingExclusive.reseller_id?.business_name || 'Active Franchisee'}). Please choose a different territory.`,
+      });
+    }
+
+    // 2. Razorpay Signature Verification (if live signature provided)
+    if (razorpay_order_id && razorpay_payment_id && razorpay_signature && !is_sandbox_payment) {
+      const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
+      if (!isValid) {
+        return res.status(400).json({ status: 'error', message: 'Invalid payment signature. Security verification failed!' });
+      }
+    }
+
+    // 3. Authenticate or Register Reseller
+    let reseller = null;
+    const cleanEmail = email ? email.trim().toLowerCase() : null;
+    const cleanMobile = mobile ? mobile.trim() : null;
+    const cleanGst = gst_number ? gst_number.trim().toUpperCase() : null;
+
+    if (req.reseller?._id) {
+      reseller = await Reseller.findById(req.reseller._id);
+    } else if (cleanEmail || cleanMobile) {
+      reseller = await Reseller.findOne({
+        $or: [
+          ...(cleanEmail ? [{ email: cleanEmail }] : []),
+          ...(cleanMobile ? [{ mobile: cleanMobile }] : []),
+        ],
+        deleted_at: null,
+      });
+    }
+
+    // If reseller does not exist, create new
+    if (!reseller) {
+      if (!business_name || !business_name.trim()) {
+        return res.status(400).json({ status: 'error', message: 'business_name is required' });
+      }
+      if (!cleanEmail) {
+        return res.status(400).json({ status: 'error', message: 'email is required' });
+      }
+      if (!cleanMobile) {
+        return res.status(400).json({ status: 'error', message: 'mobile is required' });
+      }
+      if (!password || password.length < 6) {
+        return res.status(400).json({ status: 'error', message: 'password must be at least 6 characters' });
+      }
+
+      let defaultType = await ResellerType.findOne({ is_active: true, deleted_at: null }).sort({ sort_order: 1 });
+      if (!defaultType) {
+        defaultType = await ResellerType.create({
+          name: 'Authorized Franchisee',
+          slug: 'authorized-franchisee',
+          commercial_mode: 'dealer',
+          is_active: true,
+        });
+      }
+
+      const password_hash = await bcrypt.hash(password, 10);
+      const resolvedAddress = {
+        city: district_name || address?.city || '',
+        state: state_name || address?.state || '',
+        country: country_name || 'India',
+        district_id: resolvedDistrictId,
+        state_id: resolvedStateId,
+        country_id: resolvedCountryId,
+        ...(address || {}),
+      };
+
+      reseller = await Reseller.create({
+        business_name: business_name.trim(),
+        contact_person: contact_person ? contact_person.trim() : business_name.trim(),
+        email: cleanEmail,
+        mobile: cleanMobile,
+        password_hash,
+        commercial_mode: defaultType.commercial_mode || 'dealer',
+        reseller_type_id: defaultType._id,
+        gst_number: cleanGst,
+        pan_number: pan_number ? pan_number.trim().toUpperCase() : null,
+        aadhaar_masked: aadhaar_masked ? aadhaar_masked.trim() : null,
+        address: resolvedAddress,
+        kyc_status: 'draft',
+        activation_status: 'active',
+        reseller_lifecycle_status: cleanGst ? 'gst_verified' : 'draft',
+      });
+    }
+
+    // 4. Update Bank Details if provided
+    if (bank_details && bank_details.account_number && bank_details.ifsc_code) {
+      reseller.bank_details = {
+        bank_name: bank_details.bank_name?.trim() || null,
+        account_number: bank_details.account_number?.trim(),
+        ifsc_code: bank_details.ifsc_code?.trim().toUpperCase(),
+        account_holder_name: bank_details.account_holder_name?.trim() || reseller.business_name,
+        branch: bank_details.branch?.trim() || null,
+        upi_id: bank_details.upi_id?.trim() || null,
+        updated_at: new Date(),
+      };
+    }
+
+    // 5. Create Plan Subscription
+    const startDate = new Date();
+    const expiryDate = new Date(startDate);
+    if (plan.validity_unit === 'months') {
+      expiryDate.setMonth(expiryDate.getMonth() + (plan.validity_value || 12));
+    } else {
+      expiryDate.setFullYear(expiryDate.getFullYear() + (plan.validity_value || 1));
+    }
+    const graceExpiryDate = new Date(expiryDate);
+    graceExpiryDate.setDate(graceExpiryDate.getDate() + (plan.renewal_rules?.grace_period_days || 15));
+
+    await ResellerPlanSubscription.updateMany(
+      { reseller_id: reseller._id, status: 'active' },
+      { $set: { status: 'cancelled' } }
+    );
+
+    const paymentRef = razorpay_payment_id || `PAY_${String(reseller._id).slice(-4)}_${Date.now()}`;
+    const subscription = await ResellerPlanSubscription.create({
+      reseller_id: reseller._id,
+      plan_id: plan._id,
+      start_date: startDate,
+      expiry_date: expiryDate,
+      grace_expiry_date: graceExpiryDate,
+      amount_paid: plan.one_time_fee || 0,
+      currency: plan.currency || 'INR',
+      payment_reference: paymentRef,
+      razorpay_order_id: razorpay_order_id || null,
+      status: 'active',
+    });
+
+    reseller.plan_subscription_id = subscription._id;
+    reseller.activation_status = 'active';
+    await reseller.save();
+
+    // 6. Atomically Assign Exclusive Territory
+    const assignmentResult = await assignTerritoryAtomic({
+      reseller_id: reseller._id,
+      territory_level: effectiveLevel,
+      country_id: resolvedCountryId,
+      state_id: resolvedStateId,
+      district_id: resolvedDistrictId,
+      assignment_type: 'primary',
+      exclusivity_scope: 'strict',
+      is_exclusive: true,
+      allowed_project_type_ids: plan.allowed_project_type_ids || [],
+      source: 'plan',
+      override_reason: 'Automated franchise plan territory purchase',
+      expiry_date: expiryDate,
+      req,
+    });
+
+    if (!assignmentResult.success) {
+      return res.status(409).json({
+        status: 'error',
+        code: assignmentResult.code || 'TERRITORY_ASSIGNMENT_FAILED',
+        message: assignmentResult.message || 'Territory could not be assigned exclusively.',
+      });
+    }
+
+    // 7. Ensure KYC Record Container Exists
+    let kyc = await ResellerKyc.findOne({ reseller_id: reseller._id });
+    if (!kyc) {
+      kyc = await ResellerKyc.create({
+        reseller_id: reseller._id,
+        status: 'draft',
+      });
+    }
+
+    // 8. Generate Auth JWT Token
+    const tokenPayload = {
+      id: reseller._id,
+      email: reseller.email,
+      business_name: reseller.business_name,
+      commercial_mode: reseller.commercial_mode,
+      role: 'reseller',
+      token_version: reseller.token_version,
+    };
+    const token = generate_token(tokenPayload);
+
+    // Set cookie
+    res.cookie('reseller_access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    const userData = {
+      id: reseller._id,
+      business_name: reseller.business_name,
+      contact_person: reseller.contact_person,
+      gst_number: reseller.gst_number,
+      pan_number: reseller.pan_number,
+      mobile: reseller.mobile,
+      email: reseller.email,
+      commercial_mode: reseller.commercial_mode,
+      address: reseller.address,
+      kyc_status: reseller.kyc_status,
+      activation_status: reseller.activation_status,
+      bank_details: reseller.bank_details,
+    };
+
+    return res.status(201).json({
+      status: 'success',
+      message: `Congratulations! Franchise plan "${plan.name}" confirmed and exclusive territory allocated.`,
+      data: {
+        token,
+        user: userData,
+        subscription,
+        territory: assignmentResult.territory,
+        kyc,
+        onboarding_next_step: '/dashboard?onboarding=true',
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] purchase_and_onboard error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Franchise purchase failed' });
+  }
+};
+
 module.exports = {
   register_reseller,
   login_reseller,
@@ -1227,6 +1664,8 @@ module.exports = {
   verify_plan_payment,
   update_reseller_bank_details,
   get_reseller_bank_details,
+  check_territory_availability,
+  purchase_and_onboard,
 };
 
 

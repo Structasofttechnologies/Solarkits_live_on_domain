@@ -111,7 +111,7 @@ schema.index({ reseller_id: 1, status: 1 });
 schema.index({ country_id: 1, state_id: 1, district_id: 1, status: 1 });
 schema.index({ source: 1, status: 1 });
 
-// Phase R3: Partial unique index to enforce race-safe district exclusivity
+// Partial unique indexes to enforce race-safe 1-to-1 franchise exclusivity per level
 schema.index(
   { district_id: 1, status: 1, assignment_type: 1 },
   {
@@ -122,6 +122,34 @@ schema.index(
       assignment_type: 'primary',
       territory_level: 'district',
       district_id: { $type: 'objectId' },
+    },
+  }
+);
+
+schema.index(
+  { state_id: 1, status: 1, assignment_type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: 'active',
+      is_exclusive: true,
+      assignment_type: 'primary',
+      territory_level: 'state',
+      state_id: { $type: 'objectId' },
+    },
+  }
+);
+
+schema.index(
+  { country_id: 1, status: 1, assignment_type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: 'active',
+      is_exclusive: true,
+      assignment_type: 'primary',
+      territory_level: 'country',
+      country_id: { $type: 'objectId' },
     },
   }
 );

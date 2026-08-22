@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { FiLoader, FiAlertCircle } from "react-icons/fi";
 import api from "../../services/api";
 
-export default function FranchiseOpportunity({ onOpenLeadModal }) {
+export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseModal }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,6 +33,11 @@ export default function FranchiseOpportunity({ onOpenLeadModal }) {
   }, []);
 
   const handlePlanClick = (plan) => {
+    if (typeof onOpenPurchaseModal === "function") {
+      onOpenPurchaseModal(plan);
+      return;
+    }
+
     if (typeof onOpenLeadModal === "function") {
       const priceDisplay =
         plan.one_time_fee === 0

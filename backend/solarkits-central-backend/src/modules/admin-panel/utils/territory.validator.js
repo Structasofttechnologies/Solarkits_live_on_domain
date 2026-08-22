@@ -142,36 +142,43 @@ async function assignTerritoryAtomic({
   const settings = await SolarShopSettings.findOne().lean();
   const globalMode = settings?.territory_exclusivity_mode || 'strict';
 
-  const isDistrictExclusive = (
-    territory_level === 'district' &&
-    district_id &&
-    is_exclusive &&
-    assignment_type === 'primary' &&
-    (exclusivity_scope === 'strict' || globalMode === 'strict')
-  );
+  const isExclusiveAssignment = is_exclusive && assignment_type === 'primary' && (exclusivity_scope === 'strict' || globalMode === 'strict');
 
-  // 2. Conflict Check
+  // 2. Conflict Check for district, state, or country
   let conflictingTerritory = null;
-  if (isDistrictExclusive) {
-    conflictingTerritory = await ResellerTerritory.findOne({
-      district_id: district_id,
-      territory_level: 'district',
+  if (isExclusiveAssignment) {
+    const conflictQuery = {
+      territory_level,
       assignment_type: 'primary',
       is_exclusive: true,
       status: 'active',
-    });
+    };
 
-    if (conflictingTerritory && String(conflictingTerritory.reseller_id) !== String(reseller_id)) {
-      // Conflict detected with a DIFFERENT reseller
-      if (!override_reason || !override_reason.trim()) {
-        const conflictingReseller = await Reseller.findById(conflictingTerritory.reseller_id).select('business_name email').lean();
-        return {
-          success: false,
-          code: 'EXCLUSIVE_DISTRICT_CONFLICT',
-          conflicting_reseller_id: conflictingTerritory.reseller_id,
-          conflicting_reseller_name: conflictingReseller?.business_name || 'Another Reseller',
-          message: `District is exclusively assigned to reseller "${conflictingReseller?.business_name || conflictingTerritory.reseller_id}". An explicit override_reason is required to replace this assignment.`,
-        };
+    if (territory_level === 'district' && district_id) {
+      conflictQuery.district_id = district_id;
+    } else if (territory_level === 'state' && state_id) {
+      conflictQuery.state_id = state_id;
+    } else if (territory_level === 'country' && country_id) {
+      conflictQuery.country_id = country_id;
+    }
+
+    if (conflictQuery.district_id || conflictQuery.state_id || conflictQuery.country_id) {
+      conflictingTerritory = await ResellerTerritory.findOne(conflictQuery);
+
+      if (conflictingTerritory && String(conflictingTerritory.reseller_id) !== String(reseller_id)) {
+        // Conflict detected with a DIFFERENT reseller
+        if (!override_reason || !override_reason.trim()) {
+          const conflictingReseller = await Reseller.findById(conflictingTerritory.reseller_id).select('business_name email').lean();
+          const levelName = territory_level.charAt(0).toUpperCase() + territory_level.slice(1);
+          return {
+            success: false,
+            code: 'EXCLUSIVE_TERRITORY_CONFLICT',
+            territory_level,
+            conflicting_reseller_id: conflictingTerritory.reseller_id,
+            conflicting_reseller_name: conflictingReseller?.business_name || 'Another Franchisee',
+            message: `${levelName} territory is exclusively assigned to reseller "${conflictingReseller?.business_name || conflictingTerritory.reseller_id}". An explicit override_reason is required to replace this assignment.`,
+          };
+        }
       }
     }
   }
@@ -272,8 +279,8 @@ async function assignTerritoryAtomic({
     if (error.code === 11000) {
       return {
         success: false,
-        code: 'EXCLUSIVE_DISTRICT_CONFLICT',
-        message: 'District is strictly exclusive and already assigned to another reseller (MongoDB partial index rejection).',
+        code: 'EXCLUSIVE_TERRITORY_CONFLICT',
+        message: `${territory_level.toUpperCase()} territory is strictly exclusive and already assigned to another reseller (MongoDB partial index rejection).`,
       };
     }
     throw error;
