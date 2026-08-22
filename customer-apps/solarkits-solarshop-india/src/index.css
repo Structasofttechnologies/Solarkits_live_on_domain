@@ -383,6 +383,12 @@ body {
 .landing-nav-link::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f8c21a,#e0ac10);border-radius:2px;transform:scaleX(0);transition:transform .25s ease}
 .landing-nav-link:hover{color:#f8c21a}
 .landing-nav-link:hover::after{transform:scaleX(1)}
-@media(max-width:768px){.landing-section{padding:64px 20px}.landing-hide-mobile{display:none!important}}
-
-@media(max-width:768px){.landing-show-mobile{display:flex!important}}.landing-show-mobile{display:none}
+@media (max-width: 1024px) {
+  .landing-section { padding: 64px 20px; }
+  .landing-hide-mobile { display: none !important; }
+  .landing-show-mobile { display: flex !important; }
+}
+@media (min-width: 1025px) {
+  .landing-show-mobile { display: none !important; }
+}
+.landing-show-mobile { display: none; }

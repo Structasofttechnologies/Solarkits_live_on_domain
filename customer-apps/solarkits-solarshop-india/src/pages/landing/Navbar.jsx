@@ -1,29 +1,73 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { FiMenu, FiX, FiArrowRight, FiChevronRight } from "react-icons/fi";
+import {
+  FiMenu,
+  FiX,
+  FiArrowRight,
+  FiChevronRight,
+  FiExternalLink,
+  FiShoppingBag,
+  FiUsers,
+  FiLayers,
+  FiCheckCircle,
+  FiHelpCircle,
+  FiHome,
+} from "react-icons/fi";
 import logo from "../../assets/images/logo.png";
 
-const NAV_LINKS = [
-  { label: "Home", href: "#hero" },
-  { label: "Products", href: "#products" },
-  { label: "Why Solar Kits", href: "#why-choose" },
+const NAV_SECTIONS = [
+  { label: "Home", href: "#hero", icon: FiHome },
+  { label: "Products", href: "#products", icon: FiLayers },
+  { label: "Why SolarKits", href: "#why-choose", icon: FiCheckCircle },
+  { label: "How It Works", href: "#how-it-works", icon: FiHelpCircle },
+];
+
+const EXTERNAL_LINKS = [
   {
-    label: "Become Franchise Partner",
-    href: "https://solarkits-reseller-portal.onrender.com",
+    label: "Solar Shop",
+    href: "https://solar-store-9r0g.onrender.com",
+    badge: "Store",
+    badgeColor: "#16a34a",
+    badgeBg: "#dcfce7",
+    icon: FiShoppingBag,
   },
-  { label: "Shop", href: "/solar-shop" },
+  {
+    label: "Become Franchisee",
+    href: "https://solarkits-reseller-portal.onrender.com",
+    badge: "Partner",
+    badgeColor: "#2563eb",
+    badgeBg: "#dbeafe",
+    icon: FiUsers,
+  },
 ];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("hero");
   const navigate = useNavigate();
 
+  // Scroll detection for backdrop styling & active section highlight
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+
+      // Simple active section detector
+      const sections = ["hero", "products", "why-choose", "how-it-works"];
+      const scrollPos = window.scrollY + 140;
+
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sections[i]);
+        if (el && el.offsetTop <= scrollPos) {
+          setActiveSection(sections[i]);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   // Lock scroll when mobile menu is open
@@ -41,33 +85,33 @@ export default function Navbar() {
   const handleNavClick = (href) => {
     setMenuOpen(false);
 
-    // Same-page section links such as #hero and #products.
     if (href.startsWith("#")) {
-      const section = document.querySelector(href);
+      const sectionId = href.substring(1);
+      const section = document.getElementById(sectionId);
 
       if (section) {
         section.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
+        setActiveSection(sectionId);
+      } else {
+        navigate(`/${href}`);
       }
-
       return;
     }
 
-    // Links belonging to another website.
     if (href.startsWith("http://") || href.startsWith("https://")) {
-      window.location.assign(href);
+      window.open(href, "_blank", "noopener,noreferrer");
       return;
     }
 
-    // Internal React Router pages such as /solar-shop.
     navigate(href);
   };
 
   return (
     <>
-      <motion.nav
+      <motion.header
         initial={{ y: -80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
@@ -77,185 +121,280 @@ export default function Navbar() {
           left: 0,
           right: 0,
           zIndex: 1000,
-          transition: "all 0.3s ease",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
           background: scrolled
             ? "rgba(255, 255, 255, 0.96)"
-            : "rgba(255, 255, 255, 0.88)",
-          backdropFilter: "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
+            : "rgba(255, 255, 255, 0.90)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          borderBottom: scrolled
+            ? "1px solid rgba(203, 213, 225, 0.8)"
+            : "1px solid rgba(226, 232, 240, 0.6)",
           boxShadow: scrolled
-            ? "0 4px 30px rgba(15, 23, 42, 0.08)"
-            : "0 2px 20px rgba(15, 23, 42, 0.04)",
-          borderBottom: "1px solid rgba(226, 232, 240, 0.8)",
+            ? "0 8px 30px rgba(15, 23, 42, 0.08)"
+            : "0 2px 14px rgba(15, 23, 42, 0.03)",
         }}
       >
         <div
           style={{
-            maxWidth: "1280px",
+            maxWidth: "1440px",
             margin: "0 auto",
-            padding: "0 20px",
+            padding: "0 28px",
+            height: "74px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            height: "72px",
+            gap: "20px",
           }}
         >
-          {/* Brand Logo with crisp white/light backing container */}
-          <motion.div
-            style={{ display: "flex", alignItems: "center", cursor: "pointer" }}
+          {/* Brand Logo */}
+          <div
             onClick={() => {
               setMenuOpen(false);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              cursor: "pointer",
+              userSelect: "none",
+              flexShrink: 0,
+            }}
           >
+            <img
+              src={logo}
+              alt="SolarKits India"
+              style={{
+                height: "36px",
+                width: "auto",
+                objectFit: "contain",
+                display: "block",
+                transition: "transform 0.2s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            />
+          </div>
+
+          {/* Desktop Center Navigation Menu */}
+          <nav
+            className="landing-hide-mobile hidden lg:flex items-center gap-1.5"
+            style={{
+              background: "rgba(241, 245, 249, 0.65)",
+              padding: "4px 6px",
+              borderRadius: "100px",
+              border: "1px solid rgba(226, 232, 240, 0.8)",
+            }}
+          >
+            {/* Main Section Anchor Links */}
+            {NAV_SECTIONS.map((link) => {
+              const isCurrent = activeSection === link.href.substring(1);
+              return (
+                <button
+                  key={link.label}
+                  onClick={() => handleNavClick(link.href)}
+                  style={{
+                    background: isCurrent ? "#ffffff" : "transparent",
+                    color: isCurrent ? "#1e40af" : "#475569",
+                    fontWeight: isCurrent ? 700 : 600,
+                    boxShadow: isCurrent
+                      ? "0 2px 8px rgba(15, 23, 42, 0.08)"
+                      : "none",
+                    border: "none",
+                    borderRadius: "100px",
+                    padding: "8px 16px",
+                    fontSize: "0.88rem",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    whiteSpace: "nowrap",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isCurrent) {
+                      e.currentTarget.style.color = "#0f172a";
+                      e.currentTarget.style.background = "rgba(255, 255, 255, 0.5)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isCurrent) {
+                      e.currentTarget.style.color = "#475569";
+                      e.currentTarget.style.background = "transparent";
+                    }
+                  }}
+                >
+                  {link.label}
+                </button>
+              );
+            })}
+
+            {/* Divider */}
             <div
               style={{
-                background: "#ffffff",
-                padding: "6px 12px",
-                borderRadius: "12px",
-                boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-                border: "1px solid rgba(226,232,240,0.8)",
-                display: "flex",
-                alignItems: "center",
+                width: "1px",
+                height: "20px",
+                background: "#cbd5e1",
+                margin: "0 2px",
               }}
-            >
-              <img
-                src={logo}
-                alt="SolarKits"
-                style={{
-                  height: "32px",
-                  objectFit: "contain",
-                  maxWidth: "130px",
-                }}
-              />
-            </div>
-          </motion.div>
+            />
 
-          {/* Desktop Nav Links */}
-          <div
-            style={{ display: "flex", gap: "32px", alignItems: "center" }}
-            className="landing-hide-mobile"
-          >
-            {NAV_LINKS.map((link) => (
+            {/* External Links inside Navigation Pill */}
+            {EXTERNAL_LINKS.map((link) => (
               <button
                 key={link.label}
                 onClick={() => handleNavClick(link.href)}
                 style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
+                  background: "transparent",
                   color: "#334155",
-                  fontSize: "0.95rem",
                   fontWeight: 600,
-                  fontFamily: "inherit",
-                  transition: "all 0.2s ease",
-                  padding: "6px 2px",
-                  position: "relative",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#1e40af")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#334155")}
-              >
-                {link.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Action Buttons & Mobile Trigger */}
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            {/* Desktop Action Buttons */}
-            <div
-              className="landing-hide-mobile"
-              style={{ display: "flex", gap: "12px", alignItems: "center" }}
-            >
-              <motion.button
-                onClick={() => navigate("/auth/login")}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                style={{
-                  padding: "10px 22px",
-                  background: "#f1f5f9",
-                  border: "1px solid #cbd5e1",
-                  color: "#1e293b",
-                  borderRadius: "10px",
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#e2e8f0";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#f1f5f9";
-                }}
-              >
-                Sign In
-              </motion.button>
-              <motion.button
-                onClick={() => navigate("/auth/signup")}
-                whileHover={{
-                  scale: 1.03,
-                  boxShadow: "0 8px 25px rgba(30, 64, 175, 0.25)",
-                }}
-                whileTap={{ scale: 0.97 }}
-                style={{
-                  padding: "10px 24px",
-                  background:
-                    "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
-                  color: "#ffffff",
-                  borderRadius: "10px",
-                  fontSize: "0.9rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
                   border: "none",
-                  boxShadow: "0 4px 14px rgba(30, 64, 175, 0.2)",
+                  borderRadius: "100px",
+                  padding: "8px 14px",
+                  fontSize: "0.88rem",
+                  cursor: "pointer",
                   fontFamily: "inherit",
-                  display: "flex",
+                  whiteSpace: "nowrap",
+                  display: "inline-flex",
                   alignItems: "center",
                   gap: "6px",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "#1e40af";
+                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.8)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "#334155";
+                  e.currentTarget.style.background = "transparent";
                 }}
               >
-                Get Started <FiArrowRight style={{ fontSize: "0.95rem" }} />
-              </motion.button>
-            </div>
+                <span>{link.label}</span>
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    color: link.badgeColor,
+                    background: link.badgeBg,
+                    padding: "2px 7px",
+                    borderRadius: "20px",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {link.badge}
+                </span>
+                <FiExternalLink style={{ fontSize: "0.75rem", opacity: 0.6 }} />
+              </button>
+            ))}
+          </nav>
 
-            {/* Mobile menu trigger */}
+          {/* Desktop Right Action Buttons */}
+          <div
+            className="landing-hide-mobile hidden lg:flex items-center gap-2.5 flex-shrink-0"
+          >
+            {/* Franchise Portal Action */}
             <motion.button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="landing-show-mobile"
-              whileTap={{ scale: 0.92 }}
-              aria-label="Toggle Navigation Menu"
+              onClick={() =>
+                window.open(
+                  "https://solarkits-reseller-portal.onrender.com",
+                  "_blank",
+                  "noopener,noreferrer"
+                )
+              }
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               style={{
+                padding: "9px 18px",
                 background: "#f8fafc",
                 border: "1px solid #cbd5e1",
-                color: "#0f172a",
+                color: "#1e293b",
                 borderRadius: "10px",
-                width: "42px",
-                height: "42px",
+                fontSize: "0.88rem",
+                fontWeight: 600,
                 cursor: "pointer",
+                fontFamily: "inherit",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                gap: "6px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#e2e8f0";
+                e.currentTarget.style.borderColor = "#94a3b8";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.borderColor = "#cbd5e1";
               }}
             >
-              {menuOpen ? (
-                <FiX style={{ fontSize: "1.4rem", color: "#1e40af" }} />
-              ) : (
-                <FiMenu style={{ fontSize: "1.4rem", color: "#0f172a" }} />
-              )}
+              <FiUsers style={{ color: "#2563eb", fontSize: "0.95rem" }} />
+              Partner Login
+            </motion.button>
+
+            {/* Primary Action Button */}
+            <motion.button
+              onClick={() => handleNavClick("#products")}
+              whileHover={{
+                scale: 1.03,
+                boxShadow: "0 8px 24px rgba(30, 64, 175, 0.28)",
+              }}
+              whileTap={{ scale: 0.97 }}
+              style={{
+                padding: "9px 22px",
+                background:
+                  "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
+                color: "#ffffff",
+                borderRadius: "10px",
+                fontSize: "0.88rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: "none",
+                boxShadow: "0 4px 14px rgba(30, 64, 175, 0.22)",
+                fontFamily: "inherit",
+                whiteSpace: "nowrap",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              Explore Kits <FiArrowRight style={{ fontSize: "0.9rem" }} />
             </motion.button>
           </div>
-        </div>
-      </motion.nav>
 
-      {/* Mobile Menu Drawer & Overlay */}
+          {/* Mobile Menu Button - STRICTLY hidden on desktop */}
+          <motion.button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="landing-show-mobile flex lg:hidden items-center justify-center"
+            whileTap={{ scale: 0.92 }}
+            aria-label="Toggle Mobile Navigation"
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #cbd5e1",
+              color: "#0f172a",
+              borderRadius: "10px",
+              width: "42px",
+              height: "42px",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+            }}
+          >
+            {menuOpen ? (
+              <FiX style={{ fontSize: "1.35rem", color: "#1e40af" }} />
+            ) : (
+              <FiMenu style={{ fontSize: "1.35rem", color: "#0f172a" }} />
+            )}
+          </motion.button>
+        </div>
+      </motion.header>
+
+      {/* Mobile Menu Drawer & Backdrop */}
       <AnimatePresence>
         {menuOpen && (
           <>
-            {/* Backdrop Overlay */}
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -265,120 +404,186 @@ export default function Navbar() {
               style={{
                 position: "fixed",
                 inset: 0,
-                background: "rgba(15, 23, 42, 0.4)",
-                backdropFilter: "blur(4px)",
+                background: "rgba(15, 23, 42, 0.5)",
+                backdropFilter: "blur(6px)",
                 zIndex: 998,
               }}
             />
 
-            {/* Mobile Menu Dropdown Card */}
+            {/* Floating Mobile Drawer Card */}
             <motion.div
-              initial={{ opacity: 0, y: -16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              initial={{ opacity: 0, y: -20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 320, damping: 28 }}
               style={{
                 position: "fixed",
-                top: "78px",
-                left: "12px",
-                right: "12px",
-                maxHeight: "calc(100vh - 96px)",
+                top: "84px",
+                left: "16px",
+                right: "16px",
+                maxHeight: "calc(100vh - 100px)",
                 overflowY: "auto",
                 zIndex: 999,
                 background: "#ffffff",
-                borderRadius: "16px",
-                boxShadow: "0 20px 40px rgba(15, 23, 42, 0.18)",
+                borderRadius: "20px",
+                boxShadow: "0 25px 50px -12px rgba(15, 23, 42, 0.25)",
                 padding: "20px",
-                border: "1px solid rgba(226, 232, 240, 0.9)",
+                border: "1px solid rgba(226, 232, 240, 0.95)",
               }}
             >
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-              >
-                {NAV_LINKS.map((link, i) => (
-                  <motion.button
-                    key={link.label}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => handleNavClick(link.href)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "100%",
-                      padding: "14px 16px",
-                      background: "#f8fafc",
-                      border: "1px solid #f1f5f9",
-                      borderRadius: "12px",
-                      color: "#1e293b",
-                      fontSize: "1rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      transition: "all 0.2s ease",
-                    }}
-                  >
-                    <span>{link.label}</span>
-                    <FiChevronRight
-                      style={{ color: "#94a3b8", fontSize: "1.1rem" }}
-                    />
-                  </motion.button>
-                ))}
+              {/* Section links */}
+              <div style={{ marginBottom: "16px" }}>
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    marginBottom: "8px",
+                    paddingLeft: "8px",
+                  }}
+                >
+                  Quick Navigation
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {NAV_SECTIONS.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <button
+                        key={link.label}
+                        onClick={() => handleNavClick(link.href)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          padding: "12px 14px",
+                          background: "#f8fafc",
+                          border: "1px solid #f1f5f9",
+                          borderRadius: "12px",
+                          color: "#1e293b",
+                          fontSize: "0.95rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <Icon style={{ color: "#3b82f6" }} />
+                          {link.label}
+                        </span>
+                        <FiChevronRight style={{ color: "#94a3b8" }} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div
-                style={{
-                  height: "1px",
-                  background: "#e2e8f0",
-                  margin: "20px 0 16px",
-                }}
-              />
+              {/* External Links */}
+              <div style={{ marginBottom: "20px" }}>
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    marginBottom: "8px",
+                    paddingLeft: "8px",
+                  }}
+                >
+                  Portals & Stores
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {EXTERNAL_LINKS.map((link) => {
+                    const Icon = link.icon;
+                    return (
+                      <button
+                        key={link.label}
+                        onClick={() => handleNavClick(link.href)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          width: "100%",
+                          padding: "12px 14px",
+                          background: "#f8fafc",
+                          border: "1px solid #f1f5f9",
+                          borderRadius: "12px",
+                          color: "#1e293b",
+                          fontSize: "0.95rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <Icon style={{ color: link.badgeColor }} />
+                          {link.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 700,
+                            color: link.badgeColor,
+                            background: link.badgeBg,
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                          }}
+                        >
+                          {link.badge}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-              {/* Action Buttons inside Mobile View */}
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
+              {/* Action Buttons */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <button
                   onClick={() => {
-                    navigate("/auth/login");
                     setMenuOpen(false);
+                    window.open(
+                      "https://solarkits-reseller-portal.onrender.com",
+                      "_blank",
+                      "noopener,noreferrer"
+                    );
                   }}
                   style={{
                     width: "100%",
-                    height: "48px",
+                    height: "46px",
                     background: "#f1f5f9",
                     border: "1px solid #cbd5e1",
                     color: "#0f172a",
                     borderRadius: "12px",
-                    fontSize: "0.98rem",
+                    fontSize: "0.92rem",
                     fontWeight: 600,
                     cursor: "pointer",
                     fontFamily: "inherit",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    gap: "8px",
                   }}
                 >
-                  Sign In
+                  <FiUsers style={{ color: "#2563eb" }} /> Partner Login
                 </button>
                 <button
                   onClick={() => {
-                    navigate("/auth/signup");
                     setMenuOpen(false);
+                    handleNavClick("#products");
                   }}
                   style={{
                     width: "100%",
-                    height: "48px",
+                    height: "46px",
                     background:
                       "linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)",
                     color: "#ffffff",
                     borderRadius: "12px",
-                    fontSize: "0.98rem",
+                    fontSize: "0.92rem",
                     fontWeight: 700,
                     cursor: "pointer",
                     border: "none",
@@ -390,7 +595,7 @@ export default function Navbar() {
                     gap: "8px",
                   }}
                 >
-                  Get Started <FiArrowRight style={{ fontSize: "1rem" }} />
+                  Explore Kits <FiArrowRight style={{ fontSize: "0.95rem" }} />
                 </button>
               </div>
             </motion.div>

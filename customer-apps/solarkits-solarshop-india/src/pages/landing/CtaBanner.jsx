@@ -1,10 +1,15 @@
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
 import { FiArrowRight, FiPhone } from "react-icons/fi";
 import { FaSolarPanel } from "react-icons/fa";
 
 export default function CtaBanner() {
-  const navigate = useNavigate();
+  const handleRegister = () => {
+    window.open("https://solarkits-reseller-portal.onrender.com", "_blank", "noopener,noreferrer");
+  };
+
+  const handleContact = () => {
+    window.location.href = "mailto:support@solarkits.in";
+  };
 
   return (
     <section
@@ -68,12 +73,7 @@ export default function CtaBanner() {
             letterSpacing: "-0.02em",
           }}
         >
-          Become Franchisee — Register Now{" "}
-          <span style={{
-            background: "linear-gradient(135deg, #f8c21a, #fde68a)",
-            backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent",
-          }}>
-          </span>
+          Become Franchisee — Register Now
         </motion.h2>
 
         {/* Subtext */}
@@ -88,8 +88,8 @@ export default function CtaBanner() {
             maxWidth: "600px", margin: "0 auto 44px",
           }}
         >
-          Join 5,000+ solar buyers already sourcing certified equipment from SolarKits.
-          Register today and get exclusive district-based deals in your area.
+          Join 5,000+ solar businesses and buyers sourcing certified equipment with SolarKits India.
+          Partner with us for district-level franchise supply and pan-India logistics.
         </motion.p>
 
         {/* Buttons */}
@@ -101,7 +101,7 @@ export default function CtaBanner() {
           style={{ display: "flex", gap: "14px", justifyContent: "center", flexWrap: "wrap" }}
         >
           <motion.button
-            onClick={() => navigate("/auth/signup")}
+            onClick={handleRegister}
             whileHover={{ scale: 1.05, boxShadow: "0 16px 48px rgba(248,194,26,0.6)" }}
             whileTap={{ scale: 0.97 }}
             style={{
@@ -114,10 +114,11 @@ export default function CtaBanner() {
               fontFamily: "inherit",
             }}
           >
-            Create Free Account <FiArrowRight />
+            Become a Partner <FiArrowRight />
           </motion.button>
 
           <motion.button
+            onClick={handleContact}
             whileHover={{ scale: 1.04, background: "rgba(255,255,255,0.25)" }}
             whileTap={{ scale: 0.97 }}
             style={{
@@ -131,7 +132,7 @@ export default function CtaBanner() {
               transition: "background 0.2s",
             }}
           >
-            <FiPhone /> Talk to an Expert
+            <FiPhone /> Contact Support
           </motion.button>
         </motion.div>
 
@@ -143,7 +144,7 @@ export default function CtaBanner() {
           transition={{ duration: 0.6, delay: 0.5 }}
           style={{ display: "flex", gap: "28px", justifyContent: "center", marginTop: "36px", flexWrap: "wrap" }}
         >
-          {["✓ Free Registration", "✓ No Minimum Order", "✓ GST Invoice Included", "✓ 24/7 Support"].map((item) => (
+          {["✓ Free Registration", "✓ No Minimum Order", "✓ GST Invoice Included", "✓ Pan-India Delivery"].map((item) => (
             <span key={item} style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.85rem", fontWeight: 500 }}>
               {item}
             </span>

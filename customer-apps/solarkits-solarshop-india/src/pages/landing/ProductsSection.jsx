@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
 import { FiArrowRight, FiPackage } from "react-icons/fi";
 
 const FALLBACK_CATEGORIES = [
@@ -13,6 +12,11 @@ const FALLBACK_CATEGORIES = [
 ];
 
 function ProductCard({ item, index, active }) {
+  const scrollToSteps = () => {
+    const el = document.getElementById("how-it-works");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 40 }}
@@ -60,21 +64,21 @@ function ProductCard({ item, index, active }) {
         {item.description}
       </p>
       <div
+        onClick={scrollToSteps}
         style={{ display: "flex", alignItems: "center", gap: "6px", color: "#1a3b8b", fontSize: "0.85rem", fontWeight: 700, transition: "gap 0.2s", cursor: "pointer" }}
         onMouseEnter={(e) => e.currentTarget.style.gap = "10px"}
         onMouseLeave={(e) => e.currentTarget.style.gap = "6px"}
       >
-        Browse Kits <FiArrowRight />
+        Learn How It Works <FiArrowRight />
       </div>
     </motion.div>
   );
 }
 
 export default function ProductsSection() {
-  const navigate = useNavigate();
   const sectionRef = useRef(null);
   const [active, setActive] = useState(false);
-  const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
+  const [categories] = useState(FALLBACK_CATEGORIES);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -84,6 +88,10 @@ export default function ProductsSection() {
     if (sectionRef.current) observer.observe(sectionRef.current);
     return () => observer.disconnect();
   }, []);
+
+  const handlePartnerPortal = () => {
+    window.open("https://solarkits-reseller-portal.onrender.com", "_blank", "noopener,noreferrer");
+  };
 
   return (
     <section
@@ -132,7 +140,7 @@ export default function ProductsSection() {
           style={{ textAlign: "center" }}
         >
           <motion.button
-            onClick={() => navigate("/auth/signup")}
+            onClick={handlePartnerPortal}
             whileHover={{ scale: 1.04, boxShadow: "0 12px 32px rgba(26,59,139,0.3)" }}
             whileTap={{ scale: 0.97 }}
             style={{
@@ -146,7 +154,7 @@ export default function ProductsSection() {
             }}
           >
             <FiPackage />
-            Browse All Solar Kits
+            Join Franchise Network
             <FiArrowRight />
           </motion.button>
         </motion.div>
