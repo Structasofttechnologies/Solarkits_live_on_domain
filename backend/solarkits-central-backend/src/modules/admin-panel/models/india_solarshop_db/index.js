@@ -56,6 +56,17 @@ const EpcWallet = require('./epc_wallets.schema');
 const EpcWalletLedger = require('./epc_wallet_ledgers.schema');
 const RazorpayWebhookLog = require('./razorpay_webhook_logs.schema');
 
+// --- Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance System ---
+const FranchiseeCommissionRule = require('./franchisee_commission_rules.schema');
+const FranchiseePlanPoSetting  = require('./franchisee_plan_po_settings.schema');
+const FranchiseeMoqRule        = require('./franchisee_moq_rules.schema');
+const FranchiseeKitTarget      = require('./franchisee_kit_targets.schema');
+const FranchiseeTargetProgress = require('./franchisee_target_progress.schema');
+const FpoOrder                 = require('./fpo_orders.schema');
+const FpoCommissionLedger      = require('./fpo_commission_ledgers.schema');
+const FranchiseeAlert          = require('./franchisee_alerts.schema');
+const FranchiseeAlertConfig    = require('./franchisee_alert_configs.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
@@ -105,6 +116,16 @@ module.exports = {
   EpcWallet,
   EpcWalletLedger,
   RazorpayWebhookLog,
+  // --- Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ---
+  FranchiseeCommissionRule,
+  FranchiseePlanPoSetting,
+  FranchiseeMoqRule,
+  FranchiseeKitTarget,
+  FranchiseeTargetProgress,
+  FpoOrder,
+  FpoCommissionLedger,
+  FranchiseeAlert,
+  FranchiseeAlertConfig,
 };
 
 

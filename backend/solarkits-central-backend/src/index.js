@@ -83,6 +83,16 @@ adminRouter.use('/reseller-mgmt/settings', require('./modules/admin-panel/routes
 // Industry Content Management System
 adminRouter.use('/industry-content', require('./modules/admin-panel/routes/industry.content.route'));
 adminRouter.use('/industry-themes', require('./modules/admin-panel/routes/industry.theme.route'));
+
+// ─── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ───────
+adminRouter.use('/franchisee/po-settings',      require('./modules/admin-panel/routes/franchisee.po.settings.route'));
+adminRouter.use('/franchisee/commission-rules', require('./modules/admin-panel/routes/franchisee.commission.rules.route'));
+adminRouter.use('/franchisee/moq-rules',        require('./modules/admin-panel/routes/franchisee.moq.rules.route'));
+adminRouter.use('/franchisee/kit-targets',      require('./modules/admin-panel/routes/franchisee.kit.targets.route'));
+adminRouter.use('/franchisee/po',               require('./modules/admin-panel/routes/franchisee.po.route'));
+adminRouter.use('/franchisee/performance',      require('./modules/admin-panel/routes/franchisee.performance.route'));
+adminRouter.use('/franchisee/goals',            require('./modules/admin-panel/routes/franchisee.goal.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 

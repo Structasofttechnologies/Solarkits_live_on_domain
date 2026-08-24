@@ -34,6 +34,7 @@ const ALLOWED_VIEW_MODULES = [
   { unique_code: 'RSL_MGMT',              permissions: ['view'] },
   { unique_code: 'RSL_PROD_AUTH',         permissions: ['view'] },
   { unique_code: 'RSL_PRODAUTH',          permissions: ['view'] },
+  { unique_code: 'FPO_MOQ',               permissions: ['view'] },
 ];
 
 const ALLOWED_ADD_MODULES = [

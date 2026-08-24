@@ -8,7 +8,7 @@
  */
 
 const mongoose = require('mongoose');
-const { ResellerPlan, ResellerPlanSubscription, WarehouseComboKit: IndiaComboKit } = require('../models/india_solarshop_db');
+const { ResellerPlan, ResellerPlanSubscription, FranchiseeCommissionRule, WarehouseComboKit: IndiaComboKit } = require('../models/india_solarshop_db');
 const {
   ProjectType,
   ProjectCategory,
@@ -91,8 +91,12 @@ const list_reseller_plans = async (req, res) => {
         order_type_allowed:       r.order_type_allowed || 'both',
 
         // ─── 4. Company Fixed Franchisee Margins & Commissions ──────────────────
-        default_dealer_margin:   r.default_dealer_margin ?? 5,
-        default_commission_rate: r.default_commission_rate ?? 8,
+        default_dealer_margin:      r.default_dealer_margin ?? 5,
+        commission_method:          r.commission_method || 'PERCENTAGE',
+        default_commission_rate:    r.default_commission_rate ?? 8,
+        fixed_amount_per_kit_paise: r.fixed_amount_per_kit_paise || 0,
+        min_eligible_quantity:      r.min_eligible_quantity || 0,
+        max_commission_paise:       r.max_commission_paise || null,
 
         description:               r.description,
         sort_order:                r.sort_order,
@@ -188,14 +192,42 @@ const add_reseller_plan = async (req, res) => {
       order_type_allowed:       ['po_order', 'loose_order', 'both'].includes(order_type_allowed) ? order_type_allowed : 'both',
 
       // 4. Fixed Dealer Margin & Commission
-      default_dealer_margin:   req.body.default_dealer_margin != null ? Number(req.body.default_dealer_margin) : 5,
-      default_commission_rate: req.body.default_commission_rate != null ? Number(req.body.default_commission_rate) : 8,
+      default_dealer_margin:      req.body.default_dealer_margin != null ? Number(req.body.default_dealer_margin) : 5,
+      commission_method:          ['PERCENTAGE', 'FIXED_PER_KIT'].includes(req.body.commission_method) ? req.body.commission_method : 'PERCENTAGE',
+      default_commission_rate:    req.body.default_commission_rate != null ? Number(req.body.default_commission_rate) : 8,
+      fixed_amount_per_kit_paise: req.body.fixed_amount_per_kit_paise != null ? Math.round(Number(req.body.fixed_amount_per_kit_paise)) : 0,
+      min_eligible_quantity:      req.body.min_eligible_quantity != null ? Number(req.body.min_eligible_quantity) : 0,
+      max_commission_paise:       req.body.max_commission_paise != null ? Math.round(Number(req.body.max_commission_paise)) : null,
 
       description:               description ? description.trim() : null,
       sort_order:                sort_order != null ? Number(sort_order) : 0,
       created_by:                req.user?.id || null,
       updated_by:                req.user?.id || null,
     });
+
+    // Auto-create/sync corresponding FranchiseeCommissionRule
+    try {
+      await FranchiseeCommissionRule.findOneAndUpdate(
+        { plan_id: doc._id, deleted_at: null },
+        {
+          plan_id:                    doc._id,
+          commission_method:          doc.commission_method,
+          commission_percentage:      doc.commission_method === 'PERCENTAGE' ? doc.default_commission_rate : null,
+          fixed_amount_per_kit_paise: doc.commission_method === 'FIXED_PER_KIT' ? doc.fixed_amount_per_kit_paise : null,
+          min_eligible_quantity:      doc.min_eligible_quantity || 0,
+          max_commission_paise:       doc.max_commission_paise || null,
+          calculation_stage:          'RETURN_PERIOD_COMPLETED',
+          settlement_rule:            'MONTHLY_BATCH',
+          is_active:                  true,
+          effective_from:             new Date(),
+          created_by:                 req.user?.id || null,
+          updated_by:                 req.user?.id || null,
+        },
+        { upsert: true, new: true }
+      );
+    } catch (commSyncErr) {
+      console.warn('[reseller.plans] Auto-sync FranchiseeCommissionRule warning:', commSyncErr.message);
+    }
 
     await logAudit({
       actor_type: 'cms_user',
@@ -287,7 +319,15 @@ const update_reseller_plan = async (req, res) => {
 
     // 4. Fixed Dealer Margin & Commission
     if (fields.default_dealer_margin != null) updateData.default_dealer_margin = Math.max(0, Number(fields.default_dealer_margin));
+    if (fields.commission_method && ['PERCENTAGE', 'FIXED_PER_KIT'].includes(fields.commission_method)) {
+      updateData.commission_method = fields.commission_method;
+    }
     if (fields.default_commission_rate != null) updateData.default_commission_rate = Math.max(0, Number(fields.default_commission_rate));
+    if (fields.fixed_amount_per_kit_paise != null) updateData.fixed_amount_per_kit_paise = Math.max(0, Math.round(Number(fields.fixed_amount_per_kit_paise)));
+    if (fields.min_eligible_quantity != null) updateData.min_eligible_quantity = Math.max(0, Number(fields.min_eligible_quantity));
+    if (fields.max_commission_paise !== undefined) {
+      updateData.max_commission_paise = fields.max_commission_paise != null ? Math.max(0, Math.round(Number(fields.max_commission_paise))) : null;
+    }
 
     if (fields.description !== undefined) updateData.description = fields.description ? fields.description.trim() : null;
     if (fields.sort_order != null) updateData.sort_order = Number(fields.sort_order);

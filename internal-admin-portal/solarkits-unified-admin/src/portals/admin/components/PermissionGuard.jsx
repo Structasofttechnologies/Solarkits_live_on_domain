@@ -13,7 +13,18 @@ export function PermissionGuard({ requiredUniqueId, children }) {
     return <Loader text="Checking permissions..." />;
   }
 
-  if (!requiredUniqueId || !allowedUniqueIds.includes(requiredUniqueId)) {
+  if (!requiredUniqueId) {
+    return <Navigate to="/admin-panel/home" replace />;
+  }
+
+  const idsToCheck = Array.isArray(requiredUniqueId) ? requiredUniqueId : [requiredUniqueId];
+  const hasPermission = idsToCheck.some((id) =>
+    allowedUniqueIds.includes(id) ||
+    allowedUniqueIds.includes("00000000") ||
+    (id.startsWith("FPO_") && allowedUniqueIds.includes("RSL_MGMT"))
+  );
+
+  if (!hasPermission) {
     return <Navigate to="/admin-panel/home" replace />;
   }
 

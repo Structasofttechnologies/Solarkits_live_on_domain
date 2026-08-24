@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers } from "react-icons/fi";
 
 // Phase 1: Reseller Management
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
@@ -134,6 +134,30 @@ const menus = [
                     unique_id: "RSL_PLAN"
                 },
                 {
+                    name: "PO Settings",
+                    icon: <FiSettings />,
+                    path: "/admin-panel/solar-shop/reseller-management/fpo/po-settings",
+                    unique_id: "FPO_SETTINGS"
+                },
+                {
+                    name: "MOQ & Increments",
+                    icon: <FiLayers />,
+                    path: "/admin-panel/solar-shop/reseller-management/fpo/moq-rules",
+                    unique_id: "FPO_MOQ"
+                },
+                {
+                    name: "Kit Targets & Goals",
+                    icon: <FiTarget />,
+                    path: "/admin-panel/solar-shop/reseller-management/fpo/kit-targets",
+                    unique_id: "FPO_TARGET"
+                },
+                {
+                    name: "Performance Tracker",
+                    icon: <FiBarChart2 />,
+                    path: "/admin-panel/solar-shop/reseller-management/fpo/performance",
+                    unique_id: "FPO_ANALYTICS"
+                },
+                {
                     name: "Territories",
                     icon: <FiMapPin />,
                     path: "/admin-panel/solar-shop/reseller-management/territories",
@@ -178,6 +202,9 @@ const isModuleAllowed = (menu, allowedUniqueIds) => {
     if (!menu.unique_id || menu.unique_id === "00000000") return true;
     if (menu.name === "Loose Orders" || menu.unique_id === "ADM_LOOSE_ORDERS") {
         return allowedUniqueIds.includes("ADM_PO_ORDERS") || allowedUniqueIds.includes("ADM_LOOSE_ORDERS");
+    }
+    if (menu.unique_id.startsWith("FPO_")) {
+        return allowedUniqueIds.includes(menu.unique_id) || allowedUniqueIds.includes("RSL_MGMT") || allowedUniqueIds.includes("00000000");
     }
     return allowedUniqueIds.includes(menu.unique_id);
 };

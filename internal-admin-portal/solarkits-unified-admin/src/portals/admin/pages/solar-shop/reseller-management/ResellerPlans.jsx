@@ -23,6 +23,8 @@ import {
   FiTruck,
   FiLayers,
   FiBox,
+  FiPercent,
+  FiDollarSign,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -194,7 +196,11 @@ function FormModal({ mode, initial, onClose, onSaved }) {
 
     // 4. Fixed Dealer Margin & Commission
     default_dealer_margin: initial?.default_dealer_margin ?? 5,
+    commission_method: initial?.commission_method || "PERCENTAGE",
     default_commission_rate: initial?.default_commission_rate ?? 8,
+    fixed_amount_per_kit_paise: initial?.fixed_amount_per_kit_paise != null ? initial.fixed_amount_per_kit_paise / 100 : 500,
+    min_eligible_quantity: initial?.min_eligible_quantity ?? 0,
+    max_commission_paise: initial?.max_commission_paise != null ? initial.max_commission_paise / 100 : "",
 
     description: initial?.description || "",
     sort_order: initial?.sort_order ?? 0,
@@ -420,7 +426,13 @@ function FormModal({ mode, initial, onClose, onSaved }) {
 
         // 4. Fixed Dealer Margin & Commission
         default_dealer_margin: Number(form.default_dealer_margin || 0),
+        commission_method: form.commission_method || "PERCENTAGE",
         default_commission_rate: Number(form.default_commission_rate || 0),
+        fixed_amount_per_kit_paise: form.commission_method === "FIXED_PER_KIT" && form.fixed_amount_per_kit_paise != null
+          ? Math.round(Number(form.fixed_amount_per_kit_paise) * 100)
+          : 0,
+        min_eligible_quantity: Number(form.min_eligible_quantity || 0),
+        max_commission_paise: form.max_commission_paise ? Math.round(Number(form.max_commission_paise) * 100) : null,
 
         description: form.description.trim() || null,
         sort_order: Number(form.sort_order),
@@ -550,25 +562,132 @@ function FormModal({ mode, initial, onClose, onSaved }) {
               </div>
             </div>
 
-            <div className="p-3.5 bg-sky-50/50 rounded-xl border border-sky-200">
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                Franchisee Commission Rate (%) <span className="text-danger">*</span>
+            {/* Commission Method & Rate / Fixed Amount */}
+            <div className="p-4 bg-slate-50 dark:bg-surface-hover/50 rounded-2xl border border-border space-y-3">
+              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider">
+                Franchisee Commission Rule <span className="text-danger">*</span>
               </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.1"
-                  min={0}
-                  max={100}
-                  className="w-full px-3 py-2 pr-8 rounded-xl border border-border bg-white text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="e.g. 8"
-                  value={form.default_commission_rate}
-                  onChange={(e) => setForm({ ...form, default_commission_rate: e.target.value })}
-                  required
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, commission_method: "PERCENTAGE" })}
+                  className={`p-3 rounded-xl border-2 text-left transition-all flex items-start gap-3 ${
+                    form.commission_method === "PERCENTAGE"
+                      ? "border-primary bg-info-soft text-primary shadow-sm"
+                      : "border-border bg-white dark:bg-surface text-text-secondary hover:border-primary/40"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary">
+                    <FiPercent size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-text-primary">Percentage (%)</p>
+                    <p className="text-[10px] text-text-muted">Order Amount × Rate%</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, commission_method: "FIXED_PER_KIT" })}
+                  className={`p-3 rounded-xl border-2 text-left transition-all flex items-start gap-3 ${
+                    form.commission_method === "FIXED_PER_KIT"
+                      ? "border-success bg-success-soft text-success shadow-sm"
+                      : "border-border bg-white dark:bg-surface text-text-secondary hover:border-success/40"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0 text-success">
+                    <FiPackage size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-text-primary">Fixed ₹ per Kit</p>
+                    <p className="text-[10px] text-text-muted">Delivered Kits × Fixed ₹</p>
+                  </div>
+                </button>
               </div>
-              <p className="text-[10px] text-text-muted mt-0.5">Fixed commission percentage credited to Franchisee on orders</p>
+
+              {form.commission_method === "PERCENTAGE" ? (
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Commission Rate (%) <span className="text-danger">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        max={100}
+                        className="w-full px-3 py-2 pr-8 rounded-xl border border-border bg-white dark:bg-surface text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="e.g. 8"
+                        value={form.default_commission_rate}
+                        onChange={(e) => setForm({ ...form, default_commission_rate: e.target.value })}
+                        required
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Max Commission Cap (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full px-3 py-2 rounded-xl border border-border bg-white dark:bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Leave empty = no cap"
+                      value={form.max_commission_paise}
+                      onChange={(e) => setForm({ ...form, max_commission_paise: e.target.value })}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Fixed Amount per Kit (₹) <span className="text-danger">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full px-3 py-2 pl-7 rounded-xl border border-border bg-white dark:bg-surface text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-success"
+                        placeholder="e.g. 500"
+                        value={form.fixed_amount_per_kit_paise}
+                        onChange={(e) => setForm({ ...form, fixed_amount_per_kit_paise: e.target.value })}
+                        required
+                      />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Min Eligible Qty (kits)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full px-3 py-2 rounded-xl border border-border bg-white dark:bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-success"
+                      placeholder="e.g. 0"
+                      value={form.min_eligible_quantity}
+                      onChange={(e) => setForm({ ...form, min_eligible_quantity: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Max Commission Cap (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full px-3 py-2 rounded-xl border border-border bg-white dark:bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-success"
+                      placeholder="Leave empty = no cap"
+                      value={form.max_commission_paise}
+                      onChange={(e) => setForm({ ...form, max_commission_paise: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1095,6 +1214,7 @@ export default function ResellerPlans({ moduleUniqueId }) {
                   <th className="text-left text-text-muted font-medium px-5 py-3.5">Plan Name</th>
                   <th className="text-left text-text-muted font-medium px-4 py-3.5">Scope Level</th>
                   <th className="text-right text-text-muted font-medium px-4 py-3.5">Fee</th>
+                  <th className="text-left text-text-muted font-medium px-4 py-3.5">Commission</th>
                   <th className="text-left text-text-muted font-medium px-4 py-3.5">Warehouse Req.</th>
                   <th className="text-left text-text-muted font-medium px-4 py-3.5">MOQ / Capacity</th>
                   <th className="text-left text-text-muted font-medium px-4 py-3.5">Order Type</th>
@@ -1126,6 +1246,17 @@ export default function ResellerPlans({ moduleUniqueId }) {
                         <div className="text-[11px] text-text-muted font-normal">
                           {plan.validity_value} {plan.validity_unit}
                         </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {plan.commission_method === "FIXED_PER_KIT" ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-success-soft text-success">
+                            <FiPackage size={11} /> ₹{((plan.fixed_amount_per_kit_paise || 0) / 100).toLocaleString("en-IN")} / kit
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-info-soft text-primary">
+                            <FiPercent size={11} /> {plan.default_commission_rate ?? 8}% Commission
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <WarehouseBadge

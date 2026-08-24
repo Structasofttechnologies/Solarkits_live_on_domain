@@ -1,0 +1,339 @@
+/**
+ * franchisee.goal.service.js
+ *
+ * Franchisee Kit Order Goal resolution and progress calculation.
+ *
+ * Target priority cascade (highest to lowest):
+ *   1. FRANCHISEE-specific override
+ *   2. DISTRICT-level target
+ *   3. STATE-level target
+ *   4. PLAN-level target
+ *   5. GLOBAL monthly target
+ *
+ * Calculation formula:
+ *   eligible_quantity = delivered_quantity - cancelled_quantity - returned_quantity
+ *   balance_quantity  = max(target_quantity - eligible_quantity, 0)
+ *   achievement_pct   = target_quantity > 0 ? (eligible_quantity / target_quantity) * 100 : 0
+ */
+
+const mongoose = require('mongoose');
+const {
+  FranchiseeKitTarget,
+  FranchiseeTargetProgress,
+  FpoOrder,
+  Reseller,
+  ResellerPlanSubscription,
+  ResellerTerritory,
+} = require('../models/india_solarshop_db');
+const { logAudit } = require('../utils/audit.service');
+
+const PERFORMANCE_THRESHOLDS = {
+  EXCEEDED:      120,
+  ACHIEVED:      100,
+  ON_TRACK:       75,
+  BEHIND:          1,
+  LOW_PERFORMANCE: 0,
+};
+
+/**
+ * Classify performance status from achievement percentage.
+ * Thresholds are currently hardcoded to defaults; they should come from admin config
+ * when franchisee_alert_configs is extended with threshold settings.
+ */
+function classifyPerformance(achievement_pct, target_quantity) {
+  if (!target_quantity || target_quantity === 0) return 'NO_TARGET';
+  if (achievement_pct === 0) return 'NOT_STARTED';
+  if (achievement_pct >= PERFORMANCE_THRESHOLDS.EXCEEDED) return 'EXCEEDED';
+  if (achievement_pct >= PERFORMANCE_THRESHOLDS.ACHIEVED) return 'ACHIEVED';
+  if (achievement_pct >= PERFORMANCE_THRESHOLDS.ON_TRACK) return 'ON_TRACK';
+  if (achievement_pct >= PERFORMANCE_THRESHOLDS.BEHIND) return 'BEHIND';
+  return 'LOW_PERFORMANCE';
+}
+
+/**
+ * Resolve the effective kit target for a franchisee for a given month/year.
+ * Follows the priority cascade: FRANCHISEE → DISTRICT → STATE → PLAN → GLOBAL.
+ *
+ * @param {object} params
+ * @param {string|ObjectId} params.franchisee_id
+ * @param {number} params.month - 1-12
+ * @param {number} params.year
+ * @returns {Promise<object|null>} The matching target doc or null
+ */
+async function resolveEffectiveTarget({ franchisee_id, month, year }) {
+  const now = new Date();
+  const baseQuery = {
+    target_month: month,
+    target_year:  year,
+    is_active:    true,
+    deleted_at:   null,
+    $or: [{ effective_from: null }, { effective_from: { $lte: now } }],
+    $and: [{ $or: [{ effective_until: null }, { effective_until: { $gte: now } }] }],
+  };
+
+  // 1. Franchisee-specific override
+  const franchiseeTarget = await FranchiseeKitTarget.findOne({
+    ...baseQuery,
+    target_type:   'FRANCHISEE',
+    franchisee_id: new mongoose.Types.ObjectId(franchisee_id),
+  }).lean();
+  if (franchiseeTarget) return franchiseeTarget;
+
+  // Fetch territory for state/district lookup
+  const territory = await ResellerTerritory.findOne({
+    reseller_id: franchisee_id,
+    deleted_at: null,
+  }).lean();
+
+  // 2. District-level target
+  if (territory?.district_id) {
+    const districtTarget = await FranchiseeKitTarget.findOne({
+      ...baseQuery,
+      target_type: 'DISTRICT',
+      district_id: territory.district_id,
+    }).lean();
+    if (districtTarget) return districtTarget;
+  }
+
+  // 3. State-level target
+  if (territory?.state_id) {
+    const stateTarget = await FranchiseeKitTarget.findOne({
+      ...baseQuery,
+      target_type: 'STATE',
+      state_id:    territory.state_id,
+    }).lean();
+    if (stateTarget) return stateTarget;
+  }
+
+  // 4. Plan-level target
+  const subscription = await ResellerPlanSubscription.findOne({
+    reseller_id: franchisee_id,
+    status: 'active',
+  })
+    .sort({ start_date: -1 })
+    .lean();
+
+  if (subscription?.plan_id) {
+    const planTarget = await FranchiseeKitTarget.findOne({
+      ...baseQuery,
+      target_type: 'PLAN',
+      plan_id:     subscription.plan_id,
+    }).lean();
+    if (planTarget) return planTarget;
+  }
+
+  // 5. Global fallback
+  const globalTarget = await FranchiseeKitTarget.findOne({
+    ...baseQuery,
+    target_type: 'GLOBAL',
+  }).lean();
+  return globalTarget || null;
+}
+
+/**
+ * Recalculate and upsert progress for a franchisee for the given month/year.
+ *
+ * @param {object} params
+ * @param {string|ObjectId} params.franchisee_id
+ * @param {number} params.month
+ * @param {number} params.year
+ * @param {string|ObjectId} [params.actor_id]
+ * @param {object} [params.req]
+ * @returns {Promise<object>} Updated progress record
+ */
+async function recalculateProgress({ franchisee_id, month, year, actor_id = null, req = null }) {
+  const target = await resolveEffectiveTarget({ franchisee_id, month, year });
+
+  // Aggregate quantities from delivered FPO orders in the period
+  const startDate = new Date(year, month - 1, 1);
+  const endDate   = new Date(year, month, 1);
+
+  const pipeline = [
+    {
+      $match: {
+        franchisee_id: new mongoose.Types.ObjectId(franchisee_id),
+        created_at: { $gte: startDate, $lt: endDate },
+        deleted_at: null,
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        approved_quantity:  {
+          $sum: {
+            $cond: [{ $in: ['$status', ['APPROVED', 'AWAITING_PAYMENT', 'PARTIALLY_PAID', 'PAID', 'STOCK_ALLOCATED', 'PROCESSING', 'PARTIALLY_DISPATCHED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED']] }, { $sum: '$items.quantity' }, 0],
+          },
+        },
+        paid_quantity: {
+          $sum: {
+            $cond: [{ $in: ['$status', ['PAID', 'STOCK_ALLOCATED', 'PROCESSING', 'PARTIALLY_DISPATCHED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED']] }, { $sum: '$items.quantity' }, 0],
+          },
+        },
+        dispatched_quantity: {
+          $sum: {
+            $cond: [{ $in: ['$status', ['DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED']] }, { $sum: '$items.quantity' }, 0],
+          },
+        },
+        delivered_quantity: {
+          $sum: {
+            $cond: [{ $in: ['$status', ['DELIVERED', 'COMPLETED']] }, { $sum: '$items.delivered_quantity' }, 0],
+          },
+        },
+        cancelled_quantity: { $sum: { $sum: '$items.cancelled_quantity' } },
+        returned_quantity:  { $sum: { $sum: '$items.returned_quantity' } },
+      },
+    },
+  ];
+
+  const [agg] = await FpoOrder.aggregate(pipeline);
+
+  const approved_quantity   = agg?.approved_quantity   || 0;
+  const paid_quantity       = agg?.paid_quantity        || 0;
+  const dispatched_quantity = agg?.dispatched_quantity  || 0;
+  const delivered_quantity  = agg?.delivered_quantity   || 0;
+  const cancelled_quantity  = agg?.cancelled_quantity   || 0;
+  const returned_quantity   = agg?.returned_quantity    || 0;
+
+  const target_quantity   = target?.target_quantity || 0;
+  const eligible_quantity = Math.max(0, delivered_quantity - cancelled_quantity - returned_quantity);
+  const balance_quantity  = Math.max(0, target_quantity - eligible_quantity);
+  const achievement_pct   = target_quantity > 0
+    ? Math.round((eligible_quantity / target_quantity) * 10000) / 100 // 2 decimal places
+    : 0;
+
+  const performance_status = classifyPerformance(achievement_pct, target_quantity);
+
+  const progressData = {
+    franchisee_id,
+    target_id:         target?._id || null,
+    target_month:      month,
+    target_year:       year,
+    target_quantity,
+    approved_quantity,
+    paid_quantity,
+    dispatched_quantity,
+    delivered_quantity,
+    cancelled_quantity,
+    returned_quantity,
+    eligible_quantity,
+    balance_quantity,
+    achievement_pct,
+    performance_status,
+    last_calculated_at: new Date(),
+  };
+
+  const progress = await FranchiseeTargetProgress.findOneAndUpdate(
+    { franchisee_id, target_year: year, target_month: month },
+    { $set: progressData },
+    { upsert: true, new: true }
+  );
+
+  return progress;
+}
+
+/**
+ * Get goal widget data for the franchisee dashboard.
+ *
+ * @param {string|ObjectId} franchisee_id
+ * @returns {Promise<object>}
+ */
+async function getGoalWidget(franchisee_id) {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year  = now.getFullYear();
+
+  // Current month progress
+  let progress = await FranchiseeTargetProgress.findOne({
+    franchisee_id,
+    target_year: year,
+    target_month: month,
+  }).lean();
+
+  if (!progress) {
+    // Recalculate on demand
+    progress = await recalculateProgress({ franchisee_id, month, year });
+    progress = progress.toObject ? progress.toObject() : progress;
+  }
+
+  // Previous month comparison
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear  = month === 1 ? year - 1 : year;
+  const prevProgress = await FranchiseeTargetProgress.findOne({
+    franchisee_id,
+    target_year: prevYear,
+    target_month: prevMonth,
+  }).lean();
+
+  // Days remaining in the month
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const daysRemaining = daysInMonth - now.getDate();
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString('en-IN', { month: 'long' });
+
+  return {
+    period:          `${monthName} ${year}`,
+    target_month:    month,
+    target_year:     year,
+    monthly_goal:    progress.target_quantity,
+    eligible_kits:   progress.eligible_quantity,
+    balance_kits:    progress.balance_quantity,
+    achievement_pct: progress.achievement_pct,
+    performance_status: progress.performance_status,
+    days_remaining:  Math.max(0, daysRemaining),
+    has_target:      (progress.target_quantity || 0) > 0,
+    previous_month: prevProgress ? {
+      month:           prevMonth,
+      year:            prevYear,
+      eligible_kits:   prevProgress.eligible_quantity,
+      achievement_pct: prevProgress.achievement_pct,
+      performance_status: prevProgress.performance_status,
+    } : null,
+  };
+}
+
+/**
+ * Get aggregated performance analytics for all franchisees (admin view).
+ *
+ * @param {object} filters
+ * @param {number} filters.month
+ * @param {number} filters.year
+ * @param {string} [filters.state_id]
+ * @param {string} [filters.district_id]
+ * @param {string} [filters.plan_id]
+ * @param {string} [filters.performance_status]
+ * @returns {Promise<Array>}
+ */
+async function getPerformanceAnalytics({ month, year, state_id, district_id, plan_id, performance_status }) {
+  const matchStage = { target_year: year, target_month: month };
+  if (performance_status) matchStage.performance_status = performance_status;
+
+  const rows = await FranchiseeTargetProgress.find(matchStage)
+    .populate({
+      path: 'franchisee_id',
+      select: 'business_name mobile email address plan_subscription_id reseller_lifecycle_status',
+      populate: {
+        path: 'plan_subscription_id',
+        select: 'plan_id status',
+        populate: { path: 'plan_id', select: 'name territory_level' },
+      },
+    })
+    .lean();
+
+  // Filter by state/district/plan on populated data
+  return rows.filter((r) => {
+    const f = r.franchisee_id;
+    if (!f) return false;
+    if (state_id && String(f.address?.state_id) !== String(state_id)) return false;
+    if (district_id && String(f.address?.district_id) !== String(district_id)) return false;
+    if (plan_id && f.plan_subscription_id?.plan_id && String(f.plan_subscription_id.plan_id._id) !== String(plan_id)) return false;
+    return true;
+  });
+}
+
+module.exports = {
+  resolveEffectiveTarget,
+  recalculateProgress,
+  classifyPerformance,
+  getGoalWidget,
+  getPerformanceAnalytics,
+};

@@ -58,8 +58,12 @@ const schema = new mongoose.Schema({
   },
 
   // ─── 4. Company Fixed Franchisee Margins & Commissions ──────────────────────
-  default_dealer_margin:   { type: Number, min: 0, default: 5 },
-  default_commission_rate: { type: Number, min: 0, default: 8 },
+  default_dealer_margin:      { type: Number, min: 0, default: 5 },
+  commission_method:          { type: String, enum: ['PERCENTAGE', 'FIXED_PER_KIT'], default: 'PERCENTAGE' },
+  default_commission_rate:    { type: Number, min: 0, default: 8 },
+  fixed_amount_per_kit_paise: { type: Number, min: 0, default: 0 },
+  min_eligible_quantity:      { type: Number, min: 0, default: 0 },
+  max_commission_paise:       { type: Number, min: 0, default: null },
 
   description:     { type: String, default: null, trim: true, maxlength: 1000 },
   sort_order:      { type: Number, default: 0 },

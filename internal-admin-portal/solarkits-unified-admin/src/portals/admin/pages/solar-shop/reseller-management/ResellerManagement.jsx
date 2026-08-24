@@ -16,6 +16,11 @@ const ResellerOrders = lazy(() => import("./ResellerOrders"));
 const ResellerWalletManager = lazy(() => import("./ResellerWalletManager"));
 const ResellerSettings = lazy(() => import("./ResellerSettings"));
 
+// ── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ─────────
+const FranchiseePOSettings         = lazy(() => import("./FranchiseePOSettings"));
+const FranchiseeMoqRules           = lazy(() => import("./FranchiseeMoqRules"));
+const FranchiseeKitTargets         = lazy(() => import("./FranchiseeKitTargets"));
+const FranchiseePerformanceTracker = lazy(() => import("./FranchiseePerformanceTracker"));
 
 /**
  * ResellerManagement router — top-level router for all reseller management sub-pages.
@@ -163,6 +168,48 @@ function ResellerManagement() {
           <PermissionGuard requiredUniqueId="RSL_SETTINGS">
             <Suspense fallback={<Loader text="Loading Reseller Settings..." />}>
               <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+
+      {/* ── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ── */}
+      <Route
+        path="/fpo/po-settings"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_SETTINGS">
+            <Suspense fallback={<Loader text="Loading PO Settings..." />}>
+              <FranchiseePOSettings />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/fpo/moq-rules"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_MOQ">
+            <Suspense fallback={<Loader text="Loading MOQ Rules..." />}>
+              <FranchiseeMoqRules />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/fpo/kit-targets"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_TARGET">
+            <Suspense fallback={<Loader text="Loading Kit Targets..." />}>
+              <FranchiseeKitTargets />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/fpo/performance"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_ANALYTICS">
+            <Suspense fallback={<Loader text="Loading Performance Tracker..." />}>
+              <FranchiseePerformanceTracker />
             </Suspense>
           </PermissionGuard>
         }

@@ -55,6 +55,15 @@ app.use('/resellers/plans',            require('./routes/reseller.plans.route'))
 app.use('/industry-content',  require('./routes/industry.content.route'));
 app.use('/industry-themes',   require('./routes/industry.theme.route'));
 
+// ─── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ───────
+app.use('/franchisee/po-settings',      require('./routes/franchisee.po.settings.route'));
+app.use('/franchisee/commission-rules', require('./routes/franchisee.commission.rules.route'));
+app.use('/franchisee/moq-rules',        require('./routes/franchisee.moq.rules.route'));
+app.use('/franchisee/kit-targets',      require('./routes/franchisee.kit.targets.route'));
+app.use('/franchisee/po',               require('./routes/franchisee.po.route'));
+app.use('/franchisee/performance',      require('./routes/franchisee.performance.route'));
+app.use('/franchisee/goals',            require('./routes/franchisee.goal.route'));
+
 // Force nodemon reload: variant config subdocument ID preservation
 app.listen(port, () =>
   console.log(`Server started on ${ipv4}:${port}`)

@@ -9,17 +9,25 @@ const check_permissions = (permissionChecks) => {
         return res.status(403).json({ status: "error", message: "User role not assigned. Access forbidden.", auth: false });
       }
 
-      if (!req.query.req_for || !req.query.unique_id) {
-        return res.status(400).json({ status: "error", message: "Missing required fields: req_for and unique_id", auth: false });
+      const checks = Array.isArray(permissionChecks) ? permissionChecks : [permissionChecks];
+      let req_for = req.query.req_for;
+      let unique_id = req.query.unique_id;
+
+      // If not explicitly provided in query, infer from route's permissionChecks definition
+      if (!req_for || !unique_id) {
+        if (checks.length > 0 && checks[0].unique_code) {
+          unique_id = unique_id || checks[0].unique_code;
+          req_for = req_for || (checks[0].permissions && checks[0].permissions[0]) || (checks[0].require_permissions && checks[0].require_permissions[0]) || 'view';
+        } else {
+          return res.status(400).json({ status: "error", message: "Missing required fields: req_for and unique_id", auth: false });
+        }
       }
-      const { req_for, unique_id } = req.query;
 
       if (!['view', 'add', 'edit', 'delete'].includes(req_for)) {
         return res.status(400).json({ status: "error", message: "Invalid req_for value. Must be one of: view, add, edit, delete.", auth: false });
       }
 
-      const checks = Array.isArray(permissionChecks) ? permissionChecks : [permissionChecks];
-      const relevantCheck = checks.find(check => check.unique_code === unique_id);
+      const relevantCheck = checks.find(check => check.unique_code === unique_id) || checks[0];
 
       if (!relevantCheck) {
         return res.status(403).json({ status: "error", message: "This module cannot be accessed for this request. Access forbidden.", auth: false });
