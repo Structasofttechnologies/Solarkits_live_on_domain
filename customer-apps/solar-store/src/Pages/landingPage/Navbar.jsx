@@ -24,7 +24,7 @@ const NAV_ITEMS = [
     dropdown: ["3kW Hybrid Kit", "5kW Hybrid Kit", "10kW Hybrid Kit", "Custom Hybrid Solutions"],
   },
   {
-    label: "Commercial & BOS Kits",
+    label: "Commercial Solar Kits",
     href: "#products",
     dropdown: ["10kW–100kW Commercial Kits", "Solar BOS Kits", "Custom Combo Kits", "Preconfigured Kits"],
   },
