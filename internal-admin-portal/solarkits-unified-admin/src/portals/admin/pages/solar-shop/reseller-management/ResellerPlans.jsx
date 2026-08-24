@@ -550,46 +550,25 @@ function FormModal({ mode, initial, onClose, onSaved }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-3 bg-sky-50/50 rounded-xl border border-sky-200">
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Company Fixed Dealer Margin (%) <span className="text-danger">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    max={100}
-                    className="w-full px-3 py-2 pr-8 rounded-xl border border-border bg-white text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="e.g. 5"
-                    value={form.default_dealer_margin}
-                    onChange={(e) => setForm({ ...form, default_dealer_margin: e.target.value })}
-                    required
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
-                </div>
-                <p className="text-[10px] text-text-muted mt-0.5">Fixed margin given to Franchisee per kit/product sold</p>
+            <div className="p-3.5 bg-sky-50/50 rounded-xl border border-sky-200">
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                Franchisee Commission Rate (%) <span className="text-danger">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={100}
+                  className="w-full px-3 py-2 pr-8 rounded-xl border border-border bg-white text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="e.g. 8"
+                  value={form.default_commission_rate}
+                  onChange={(e) => setForm({ ...form, default_commission_rate: e.target.value })}
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Company Commission Rate (%)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    max={100}
-                    className="w-full px-3 py-2 pr-8 rounded-xl border border-border bg-white text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="e.g. 8"
-                    value={form.default_commission_rate}
-                    onChange={(e) => setForm({ ...form, default_commission_rate: e.target.value })}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
-                </div>
-                <p className="text-[10px] text-text-muted mt-0.5">Referral & EPC partner commission rate</p>
-              </div>
+              <p className="text-[10px] text-text-muted mt-0.5">Fixed commission percentage credited to Franchisee on orders</p>
             </div>
           </div>
 
@@ -826,7 +805,7 @@ function FormModal({ mode, initial, onClose, onSaved }) {
           {/* Section 5: 2. MOQ & Capacity Specifications */}
           <div className="space-y-3 pt-3 border-t border-border">
             <h4 className="text-xs font-black uppercase tracking-wider text-warning flex items-center gap-1.5">
-              <FiZap size={14} /> 2. MOQ & Capacity Rules
+              <FiZap size={14} /> 2. PO Order & Capacity Rules
             </h4>
 
             <div className="grid grid-cols-2 gap-3">

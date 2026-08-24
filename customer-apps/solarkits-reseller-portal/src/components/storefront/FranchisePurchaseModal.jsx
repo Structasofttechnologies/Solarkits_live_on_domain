@@ -740,9 +740,9 @@ export default function FranchisePurchaseModal({
                     <p className="font-black text-blue-300 truncate">{territoryTitle}</p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
-                    <p className="text-[10px] text-slate-400 font-bold">Earning Margin</p>
+                    <p className="text-[10px] text-slate-400 font-bold">Commission Rate</p>
                     <p className="font-black text-amber-300">
-                      {plan?.default_dealer_margin || 5}% Dealer / {plan?.default_commission_rate || 8}% Comm.
+                      {plan?.default_commission_rate || 8}% Commission
                     </p>
                   </div>
                   <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 col-span-2 sm:col-span-1">

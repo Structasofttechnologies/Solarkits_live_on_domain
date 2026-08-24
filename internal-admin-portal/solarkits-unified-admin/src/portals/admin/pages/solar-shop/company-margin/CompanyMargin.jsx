@@ -96,7 +96,7 @@ export default function CompanyMargin({ moduleUniqueId }) {
         const allWarehouses = warehousesRes.data?.warehouses || [];
         // Filter warehouses locally by current country
         const countryWarehouses = allWarehouses.filter(
-          w => w.country_id === currentCountryObj.id
+          w => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString()
         );
         setWarehouses(countryWarehouses);
 
@@ -157,14 +157,15 @@ export default function CompanyMargin({ moduleUniqueId }) {
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter(w => {
-    if (stateFilter && w.state_id !== stateFilter) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster) !== clusterFilter) return false;
+    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
+    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
     return true;
   });
 
   // Table row payload aggregator
   const tableData = displayWarehouses.map(w => {
-    const marginObj = margins.find(m => (m.warehouse_id || m.warehouse?.id) === w.id);
+    const targetId = (w.id || w._id)?.toString();
+    const marginObj = margins.find(m => (m.warehouse_id || m.warehouse?.id || m.warehouse?._id)?.toString() === targetId);
     return {
       warehouse: w,
       margin: marginObj || null
@@ -173,7 +174,8 @@ export default function CompanyMargin({ moduleUniqueId }) {
 
   // Route navigation helper
   const handleConfigureMargins = (w) => {
-    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/company-margin/${w.id}`);
+    const targetId = w.id || w._id;
+    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/company-margin/${targetId}`);
   };
 
   // Metrics

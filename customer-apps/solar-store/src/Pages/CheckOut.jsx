@@ -228,7 +228,7 @@ export default function CheckOut() {
 
     cart.forEach((item) => {
       const itemValue = (item.qty * item.ourPrice);
-      const itemGstRate = Number(item.gstRate ?? fallbackRate);
+      const itemGstRate = Number(item.gstRate ?? item.pricing?.gstRate ?? fallbackRate);
       const itemTaxable = Math.round(itemValue / (1 + (itemGstRate / 100)));
       const itemGst = Math.max(0, itemValue - itemTaxable);
       taxable += itemTaxable;

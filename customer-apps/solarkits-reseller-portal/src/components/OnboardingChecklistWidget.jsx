@@ -90,7 +90,7 @@ export default function OnboardingChecklistWidget({ reseller, territory, activeS
     {
       id: "epc_onboarding",
       title: "Onboard Local EPC Buyers & Place Orders",
-      desc: "Register regional EPC solar contractors under your franchise to earn wholesale dealer margins on every project.",
+      desc: "Register regional EPC solar contractors under your franchise to earn direct commissions on every project.",
       completed: false,
       statusText: "Ready to Onboard",
       icon: FiUsers,

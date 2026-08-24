@@ -326,7 +326,7 @@ export default function ResellerOrders({ moduleUniqueId }) {
                     <th className="text-left text-text-muted font-medium px-5 py-3.5">Attributed Reseller</th>
                     <th className="text-left text-text-muted font-medium px-5 py-3.5">Commercial Mode</th>
                     <th className="text-right text-text-muted font-medium px-5 py-3.5">Order Amount</th>
-                    <th className="text-right text-text-muted font-medium px-5 py-3.5">Commission / Dealer Margin</th>
+                    <th className="text-right text-text-muted font-medium px-5 py-3.5">Commission Amount</th>
                     <th className="text-center text-text-muted font-medium px-4 py-3.5">Status</th>
                     <th className="text-center text-text-muted font-medium px-4 py-3.5">Actions</th>
                   </tr>

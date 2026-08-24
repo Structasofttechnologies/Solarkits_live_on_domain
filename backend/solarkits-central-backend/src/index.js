@@ -63,9 +63,6 @@ adminRouter.use('/combo-kits', require('./modules/admin-panel/routes/combo_kits.
 adminRouter.use('/combo-kit-variants', require('./modules/admin-panel/routes/combo_kit_variants.route'));
 adminRouter.use('/product-sku-prices', require('./modules/admin-panel/routes/product_sku_prices.route'));
 adminRouter.use('/price-requests', require('./modules/admin-panel/routes/price_requests.route'));
-adminRouter.use('/amc-plans', require('./modules/AMC-panel/routes/amc.routes'));
-adminRouter.use('/epc-plans', require('./modules/AMC-panel/routes/epc.routes'));
-adminRouter.use('/amc-auth', require('./modules/AMC-panel/routes/auth.login.routes'));
 adminRouter.use('/industry-types', require('./modules/admin-panel/routes/industry.types.route'));
 adminRouter.use('/reseller-mgmt/types', require('./modules/admin-panel/routes/reseller.types.route'));
 adminRouter.use('/reseller-mgmt/territories', require('./modules/admin-panel/routes/reseller.territory.route'));
@@ -88,9 +85,6 @@ adminRouter.use('/industry-content', require('./modules/admin-panel/routes/indus
 adminRouter.use('/industry-themes', require('./modules/admin-panel/routes/industry.theme.route'));
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
-app.use('/api/amc-plans', require('./modules/AMC-panel/routes/amc.routes'));
-app.use('/api/epc-plans', require('./modules/AMC-panel/routes/epc.routes'));
-app.use('/api/amc-auth', require('./modules/AMC-panel/routes/auth.login.routes'));
 
 // 3. Developer Panel routes
 const developerRouter = express.Router();
@@ -134,49 +128,6 @@ supplierRouter.use('/supplier', require('./modules/supplier-panel/routes/supplie
 supplierRouter.use('/plans', require('./modules/supplier-panel/routes/plans.route'));
 supplierRouter.use('/admin', require('./modules/supplier-panel/routes/admin.route'));
 app.use('/supplier-api', supplierRouter);
-
-// 9. website routes 
-const website_router = require('./modules/solarkits-website/routes/header.route');
-const about_router = require('./modules/solarkits-website/routes/about.route');
-const about_details_router = require('./modules/solarkits-website/routes/about_details.route');
-const contact_router = require('./modules/solarkits-website/routes/contact.route');
-const footer_router = require('./modules/solarkits-website/routes/footer.route');
-const erp_modules_router = require('./modules/solarkits-website/routes/erp_modules.route');
-const hero_section_router = require('./modules/solarkits-website/routes/hero_section.route');
-const erp_benefits_router = require('./modules/solarkits-website/routes/erp_benefits.route');
-const happy_users_router = require('./modules/solarkits-website/routes/happy_users.route');
-const key_features_router = require('./modules/solarkits-website/routes/key_features.route');
-const erp_screenshots_router = require('./modules/solarkits-website/routes/erp_screenshots.route');
-const services_router = require('./modules/solarkits-website/routes/services.route');
-const pricing_plans_router = require('./modules/solarkits-website/pricing-plans/pricingPlan.routes');
-const call_to_action_router = require('./modules/solarkits-website/routes/CallToActionRoutes');
-const solar_shop_router = require('./modules/solarkits-website/routes/solar_shop.route');
-const marketplace_router = require('./modules/solarkits-website/routes/marketplace.route');
-const dealer_app_router = require('./modules/solarkits-website/routes/dealer_app.route');
-const megawatt_router = require('./modules/solarkits-website/routes/megawatt.route');
-const amc_router = require('./modules/solarkits-website/routes/amc.route');
-const website_auth_router = require('./modules/solarkits-website/routes/auth.route');
-
-app.use("/api/website/v1", website_router);
-app.use("/api/website/v1/auth", website_auth_router);
-app.use("/api/website/v1/erp-modules", erp_modules_router);
-app.use("/api/website/v1/about-us", about_router);
-app.use("/api/website/v1/about-details", about_details_router);
-app.use("/api/website/v1/contact", contact_router);
-app.use("/api/website/v1/footer", footer_router);
-app.use("/api/website/v1/hero-section", hero_section_router);
-app.use("/api/website/v1/erp-benefits", erp_benefits_router);
-app.use("/api/website/v1/happy-users", happy_users_router);
-app.use("/api/website/v1/key-features", key_features_router);
-app.use("/api/website/v1/erp-screenshots", erp_screenshots_router);
-app.use("/api/website/v1/services", services_router);
-app.use("/api/website/v1/pricing-plans", pricing_plans_router);
-app.use("/api/website/v1/call-to-action", call_to_action_router);
-app.use("/api/website/v1/solar-shop", solar_shop_router);
-app.use("/api/website/v1/marketplace", marketplace_router);
-app.use("/api/website/v1/dealer-app", dealer_app_router);
-app.use("/api/website/v1/megawatt", megawatt_router);
-app.use("/api/website/v1/amc", amc_router);
 
 
 // Initialize Schedulers / Cron routines & Auto-seed demo accounts

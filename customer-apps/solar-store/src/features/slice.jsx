@@ -171,6 +171,10 @@ const slice = createSlice({
         const cap = payload.capacityKW || payload.capacity_kw || (payload.wattage ? (payload.wattage >= 100 ? payload.wattage / 1000 : payload.wattage) : 0.55);
         const desc = payload.description || payload.summary || `${payload.title || payload.name || "Solar Module"} with standard manufacturer warranty and Tier-1 efficiency.`;
 
+        const directGstRate = Number(payload.gst_rate_pct || payload.gst_rate || payload.gstRate || 18);
+        const itemTaxable = payload.price_before_tax_inr || (price > 0 ? Math.round(price / (1 + (directGstRate / 100))) : 0);
+        const itemTax = payload.taxes_and_charges_inr || Math.max(0, price - itemTaxable);
+
         if (exists) {
           exists.qty += (payload.qty || 1);
         } else {
@@ -181,10 +185,12 @@ const slice = createSlice({
             kitName: payload.title || payload.name || "Solar Module",
             description: desc,
             selling_price_inr: price,
-            price_before_tax_inr: payload.price_before_tax_inr || Math.round(price / 1.138),
-            taxes_and_charges_inr: payload.taxes_and_charges_inr || Math.max(0, Math.round(price - price / 1.138)),
+            price_before_tax_inr: itemTaxable,
+            taxes_and_charges_inr: itemTax,
             ourPrice: price,
             marketPrice: marketPrice,
+            gstRate: directGstRate,
+            gstIncluded: itemTax,
             kitImage: img,
             image_url: img,
             capacityKW: cap,
@@ -202,7 +208,8 @@ const slice = createSlice({
                 productTier: payload.sku_code || payload.productTier || 'Standard Tier-1',
                 ourPrice: price,
                 marketPrice: marketPrice,
-                gstRate: 13.8,
+                gstRate: directGstRate,
+                gstIncluded: itemTax,
                 capacityKW: cap,
                 availableStock: payload.stock_quantity || 99,
                 inStock: true,
@@ -245,6 +252,8 @@ const slice = createSlice({
         const cartItemId = generateCartItemId(kit.id, variantIndex, districtId);
         const exists = state.cart.find((c) => c.cartItemId === cartItemId);
 
+        const effectiveGstRate = Number(currentVariant.gstRate ?? kit.gstRate ?? kit.pricing?.gstRate ?? 13.8);
+
         const cartItem = {
           ...kit,
           ...currentVariant,
@@ -256,6 +265,8 @@ const slice = createSlice({
           tierBenefits: currentVariant.tierBenefits,
           marketPrice: currentVariant.marketPrice,
           ourPrice: currentVariant.ourPrice,
+          gstRate: effectiveGstRate,
+          gstIncluded: currentVariant.gstIncluded ?? (currentVariant.ourPrice - Math.round(currentVariant.ourPrice / (1 + (effectiveGstRate / 100)))),
           includedDeliveryCharge: currentVariant.includedDeliveryCharge,
           inStock: currentVariant.inStock,
           availableStock: liveAvailable,

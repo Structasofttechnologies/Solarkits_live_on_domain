@@ -105,7 +105,7 @@ export default function BulkComboKits({ moduleUniqueId }) {
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const countryWarehouses = currentCountryObj
-        ? allWarehouses.filter((w) => w.country_id === currentCountryObj.id)
+        ? allWarehouses.filter((w) => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString())
         : allWarehouses;
 
       setWarehouses(countryWarehouses);
@@ -124,10 +124,18 @@ export default function BulkComboKits({ moduleUniqueId }) {
     } catch (error) {
       console.error("Error fetching bulk combo kit data:", error);
       dispatch(
-        setAlert({ type: "error", message: "Failed to load bulk combo kit settings" })
+        setAlert({ type: "error", message: "Failed to load bulk combo kit configuration data" })
       );
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    await fetchData(true);
+    if (stateFilter && token) {
+      await fetchClustersForState(stateFilter);
     }
   };
 
@@ -144,39 +152,30 @@ export default function BulkComboKits({ moduleUniqueId }) {
     (c) => c.name.toLowerCase() === countryName?.toLowerCase()
   );
 
-  // 2. Fetch clusters for selected state filter
+  // Fetch clusters for selected state filter
   useEffect(() => {
-    const fetchClustersForFilter = async () => {
-      if (!stateFilter) {
-        setClusters([]);
-        setClusterFilter("");
-        return;
-      }
-      try {
-        const res = await axios.get(
-          `${API_URL}/geolocation/clusters/${stateFilter}?unique_id=${moduleUniqueId}&req_for=view`,
-          { headers: authHeaderObj() }
-        );
-        setClusters(res.data?.clusters || []);
-        setClusterFilter("");
-      } catch (err) {
-        console.error("Error fetching clusters:", err);
-      }
-    };
-    if (token) fetchClustersForFilter();
+    if (!stateFilter) {
+      setClusters([]);
+      setClusterFilter("");
+      return;
+    }
+    if (token) {
+      setClusterFilter("");
+      fetchClustersForState(stateFilter);
+    }
   }, [stateFilter, token]);
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter((w) => {
-    if (stateFilter && w.state_id !== stateFilter) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster) !== clusterFilter) return false;
+    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
+    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
     return true;
   });
 
   // Compute configured warehouse IDs from bulk settings
   const configuredWarehouseIds = [
     ...new Set(
-      bulkSettings.map((s) => s.warehouse_id?.toString()).filter(Boolean)
+      bulkSettings.map((s) => (s.warehouse_id || s.warehouse?.id || s.warehouse?._id)?.toString()).filter(Boolean)
     ),
   ];
   const configuredCount = configuredWarehouseIds.length;
@@ -185,10 +184,11 @@ export default function BulkComboKits({ moduleUniqueId }) {
   // Count total bulk-enabled kits across all warehouses
   const totalBulkEnabledKits = bulkSettings.filter((s) => s.is_bulk_enabled).length;
 
-  // Table row payload
+  // Table row payload aggregator
   const tableData = displayWarehouses.map((w) => {
+    const targetId = (w.id || w._id)?.toString();
     const warehouseBulkSettings = bulkSettings.filter(
-      (s) => (s.warehouse_id || s.warehouse?.id) === w.id
+      (s) => (s.warehouse_id || s.warehouse?.id || s.warehouse?._id)?.toString() === targetId
     );
     const enabledKits = warehouseBulkSettings.filter((s) => s.is_bulk_enabled).length;
     return { warehouse: w, enabledKits };
@@ -196,8 +196,9 @@ export default function BulkComboKits({ moduleUniqueId }) {
 
   // Route navigation helper
   const handleConfigureBulkKits = (w) => {
+    const targetId = w.id || w._id;
     navigate(
-      `/admin-panel/solar-shop/${countryName?.toLowerCase()}/combokit-configurations/bulk-combo-kits/${w.id}`
+      `/admin-panel/solar-shop/${countryName?.toLowerCase()}/combokit-configurations/bulk-combo-kits/${targetId}`
     );
   };
 

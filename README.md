@@ -68,10 +68,8 @@ SolarKits v2.0/
 │               ├── operation-management/   # Order dispatch, Logistics & Ticket routing
 │               ├── developer-panel/        # Dynamic module toggles, Health & Diagnostics
 │               ├── supplier-panel/         # Supplier onboarding, Brand catalog & Bids
-│               ├── AMC-panel/              # Annual Maintenance Contracts & EPC service plans
 │               ├── solarshop-india/        # B2B Store API, Cart & Razorpay Checkout Engine
-│               ├── boskit/                 # BOSKIT Platform (Distributor & Dealer engine)
-│               └── solarkits-website/      # Corporate Website CMS & Theming API
+│               └── boskit/                 # BOSKIT Platform (Distributor & Dealer engine)
 │
 ├── customer-apps/
 │   ├── solarkits-reseller-portal/          # Franchisee & Reseller Portal (React 19 + Tailwind v4 + Vite)

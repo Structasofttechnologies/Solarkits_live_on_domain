@@ -14,8 +14,8 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
   const isPathActive = (currentPath, itemPath) => {
     if (!itemPath) return false;
     
-    // Skip country slug normalization for global website config pages
-    if (currentPath.includes("/website-configuration/") || itemPath.includes("/website-configuration/")) {
+    // Skip country slug normalization for global industry content pages
+    if (currentPath.includes("/industry-content/") || itemPath.includes("/industry-content/")) {
       return currentPath === itemPath || currentPath.startsWith(itemPath + '/');
     }
 
@@ -25,12 +25,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
         "solar-shop",
         "solar-shop-solarkits",
         "solar-shop-bos-kits",
-        "solar-shop-boskits",
-        "diy-solar-projects",
-        "epc-project-management-erp",
-        "solar-amc-management",
-        "solar-installer-marketplace",
-        "solar-mega-watt-projects"
+        "solar-shop-boskits"
     ];
     for (const slug of slugs) {
         if (currentPath.includes(`/${slug}/`)) {
@@ -123,7 +118,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
 
   const getTargetPath = (path) => {
     if (!path) return "";
-    if (path.includes("/website-configuration/")) {
+    if (path.includes("/industry-content/")) {
       return path;
     }
     let targetPath = path;
@@ -131,12 +126,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
         "solar-shop",
         "solar-shop-solarkits",
         "solar-shop-bos-kits",
-        "solar-shop-boskits",
-        "diy-solar-projects",
-        "epc-project-management-erp",
-        "solar-amc-management",
-        "solar-installer-marketplace",
-        "solar-mega-watt-projects"
+        "solar-shop-boskits"
     ];
     for (const slug of slugs) {
         if (targetPath.includes(`/${slug}/`)) {

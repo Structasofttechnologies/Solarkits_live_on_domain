@@ -285,7 +285,8 @@ const get_warehouses = async (req, res) => {
       }
 
       return {
-        id: row.id,
+        id: (row._id || row.id)?.toString(),
+        _id: (row._id || row.id)?.toString(),
         warehouse_code: row.warehouse_code,
         warehouse_type: row.warehouse_type || null,
         images,
@@ -387,7 +388,8 @@ const get_warehouse = async (req, res) => {
       status: "success",
       message: "Warehouse fetched successfully.",
       warehouse: {
-        id: warehouse.id,
+        id: (warehouse._id || warehouse.id)?.toString(),
+        _id: (warehouse._id || warehouse.id)?.toString(),
         warehouse_code: warehouse.warehouse_code,
         warehouse_type: warehouse.warehouse_type || null,
         images,

@@ -42,8 +42,8 @@ const FAQ_CATEGORIES = {
   ],
   "B2B Pricing & Payouts": [
     {
-      q: "How are dealer margins and commissions paid out?",
-      a: "All wholesale margins and commission earnings are settled automatically via the Franchisee Digital Wallet (T+0). You can initiate direct NEFT/IMPS bank withdrawals to your registered current account anytime without threshold delays.",
+      q: "How are franchise commissions paid out?",
+      a: "All commission earnings are credited automatically to your Franchisee Earnings Wallet in real-time. Admin accounts team processes direct NEFT/RTGS settlements directly to your registered bank account.",
     },
     {
       q: "How fast is regional hub dispatch and what are the delivery charges?",

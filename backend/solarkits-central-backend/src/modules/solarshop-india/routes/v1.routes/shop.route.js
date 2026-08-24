@@ -15,8 +15,6 @@ const {
   gst_verify_otp,
   get_orders,
   update_order_address,
-  create_razorpay_order,
-  verify_razorpay_payment,
   get_bos_kits,
   save_bos_kits,
   create_or_update_bos_kit,
@@ -27,7 +25,7 @@ const {
   get_nearby_stores,
   get_shop_hierarchy,
 } = require("../../controller/v1.handlers/shop.handler");
-const { handleRazorpayWebhook } = require("../../controller/v1.handlers/razorpay.webhook.handler");
+
 const { verify_auth } = require("../../middlewares/auth");
 
 const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
@@ -60,10 +58,7 @@ router.get("/cart", verify_auth, get_cart);
 router.post("/cart", verify_auth, update_cart);
 router.get("/orders", verify_auth, get_orders);
 router.put("/orders/:id/address", verify_auth, update_order_address);
-router.post("/razorpay/create-order", verify_auth, create_razorpay_order);
-router.post("/razorpay/verify-payment", verify_auth, verify_razorpay_payment);
-// Razorpay webhook MUST use express.raw() — NOT express.json()
-router.post("/razorpay/webhook", express.raw({ type: '*/*' }), handleRazorpayWebhook);
+
 
 // ── EPC Industry Content Dashboard Routes ─────────────────────────────────────
 // These routes serve industry-aware content to authenticated EPC buyers.

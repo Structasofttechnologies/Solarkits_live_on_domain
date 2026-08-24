@@ -121,12 +121,12 @@ const menus = [
                     path: "/admin-panel/solar-shop/reseller-management/resellers",
                     unique_id: "RSL_MGMT"
                 },
-                {
-                    name: "Franchisee Types",
-                    icon: <FiTag />,
-                    path: "/admin-panel/solar-shop/reseller-management/types",
-                    unique_id: "RSL_TYPES"
-                },
+                // {
+                //     name: "Franchisee Types",
+                //     icon: <FiTag />,
+                //     path: "/admin-panel/solar-shop/reseller-management/types",
+                //     unique_id: "RSL_TYPES"
+                // },
                 {
                     name: "Franchisee Plans",
                     icon: <HiCube />,

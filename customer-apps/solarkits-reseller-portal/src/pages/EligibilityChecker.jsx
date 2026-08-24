@@ -490,9 +490,9 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold uppercase text-slate-400">Dealer Margin</p>
+                        <p className="text-[10px] font-bold uppercase text-slate-400">Commission Rate</p>
                         <p className="mt-0.5 text-xs font-black text-[#0575B8]">
-                          {selectedPlan.default_dealer_margin || 0}% margin / {selectedPlan.default_commission_rate || 0}% comm.
+                          {selectedPlan.default_commission_rate || 8}% Commission
                         </p>
                       </div>
                       <div>
@@ -574,7 +574,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600">
                           <FiCheck size={12} strokeWidth={3} />
                         </span>
-                        <span>Factory-direct equipment supply with {selectedPlan.default_dealer_margin || 0}% dealer wholesale margins</span>
+                        <span>Real-time earnings with {selectedPlan.default_commission_rate || 8}% direct franchisee commission on sales</span>
                       </li>
                     </ul>
                   </div>

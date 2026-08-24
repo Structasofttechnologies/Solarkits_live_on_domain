@@ -52,7 +52,7 @@ export default function Board() {
       [
         { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
         { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
-        { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
+        // { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
         { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
         { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
         { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
@@ -124,7 +124,7 @@ export default function Board() {
             {/* Direct EPC Store Kit Routes */}
             <Route path="/preconfigured-combo-kit" element={<PreconfiguredComboKit />} />
             <Route path="/custom-combo-kit" element={<ProtectedRoute><CustomComboKit /></ProtectedRoute>} />
-            <Route path="/solar-bos-kit" element={<ProtectedRoute><SolarBosKit /></ProtectedRoute>} />
+            {/* <Route path="/solar-bos-kit" element={<ProtectedRoute><SolarBosKit /></ProtectedRoute>} /> */}
 
             {/* Franchisee Product Catalogue (optional fallback) */}
             <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />

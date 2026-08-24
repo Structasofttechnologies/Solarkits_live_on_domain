@@ -98,7 +98,7 @@ export default function StorefrontListings() {
             My Product Listings &amp; Allocated Kits
           </h1>
           <p className="text-sm mt-1 text-slate-600">
-            Products and combo kits allocated automatically according to your subscribed franchisee plan with fixed company dealer margins.
+            Products and combo kits allocated automatically according to your subscribed franchisee plan with fixed company commission rates.
           </p>
         </div>
 
@@ -140,23 +140,15 @@ export default function StorefrontListings() {
               </h3>
             </div>
             <p className="text-xs text-blue-100 leading-relaxed">
-              Product prices and dealer profit margins are centrally configured by Company Management inside your <strong>{plan?.name || "Franchisee Partner Plan"}</strong>. 
-              As a Franchisee Partner, you earn a <strong>guaranteed {planDealerMarginPct}% dealer wholesale margin</strong> on every kit and component order fulfilled in your territory.
+              Product prices and commission rates are centrally configured by Company Management inside your <strong>{plan?.name || "Franchisee Partner Plan"}</strong>. 
+              As a Franchisee Partner, you earn a <strong>guaranteed {planCommissionPct}% commission</strong> on every kit and component order fulfilled in your territory.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 shrink-0 bg-white/10 p-3.5 rounded-2xl border border-white/10 text-center">
-            <div>
-              <div className="text-[10px] uppercase font-bold text-blue-200">Fixed Dealer Margin</div>
-              <div className="text-sm font-black text-emerald-400 mt-0.5">
-                {planDealerMarginPct}%
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase font-bold text-blue-200">Commission Rate</div>
-              <div className="text-sm font-black text-white mt-0.5">
-                {planCommissionPct}%
-              </div>
+          <div className="shrink-0 bg-white/10 p-3.5 px-6 rounded-2xl border border-white/10 text-center">
+            <div className="text-[10px] uppercase font-bold text-blue-200">Commission Rate</div>
+            <div className="text-lg font-black text-emerald-400 mt-0.5">
+              {planCommissionPct}%
             </div>
           </div>
         </div>

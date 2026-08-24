@@ -15,7 +15,7 @@ const {
   SolarShopSettings,
 } = require('../models/india_solarshop_db');
 const { logAudit } = require('../utils/audit.service');
-const { createRazorpayOrder } = require('./razorpay.service');
+
 
 /**
  * Generate a unique B2B procurement order number.
@@ -91,20 +91,6 @@ async function createProcurementOrder({
   const grandTotalPaise = subtotalPaise + taxTotalPaise + shippingFeePaise;
   const orderNumber = generateProcurementOrderNumber();
 
-  // Create Razorpay Order for Procurement if payment reference not pre-supplied
-  let razorpayOrderData = null;
-  if (!payment_reference && process.env.RAZORPAY_ID && process.env.RAZORPAY_KEY) {
-    try {
-      razorpayOrderData = await createRazorpayOrder({
-        amountPaise: grandTotalPaise,
-        receipt: orderNumber,
-        notes: { procurement_order_number: orderNumber, reseller_id: reseller._id.toString() },
-      });
-    } catch (rzpErr) {
-      console.warn('[createProcurementOrder] Razorpay order creation failed, fallback to pending order:', rzpErr.message);
-    }
-  }
-
   const order = await ResellerProcurementOrder.create({
     procurement_order_number: orderNumber,
     reseller_id: reseller._id,
@@ -117,7 +103,6 @@ async function createProcurementOrder({
     order_status: 'submitted',
     payment_status: payment_reference ? 'captured' : 'pending',
     payment_reference: payment_reference || null,
-    razorpay_order_id: razorpayOrderData?.order_id || null,
     created_by: actor_id,
   });
 
@@ -131,15 +116,7 @@ async function createProcurementOrder({
     req,
   });
 
-  return {
-    order,
-    razorpay_order: razorpayOrderData || {
-      order_id: order._id,
-      amount_paise: grandTotalPaise,
-      currency: 'INR',
-      key_id: process.env.RAZORPAY_ID,
-    },
-  };
+  return { order };
 }
 
 /**

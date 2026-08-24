@@ -175,7 +175,7 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
   const formattedPrices = useMemo(() => {
     const ourPriceNum = Number(effectivePrices.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
     const marketPriceNum = Number(effectivePrices.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
-    const gstRate = Number(currentVariant?.gstRate || kit?.gstRate || 13.8);
+    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
     const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
       ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
       : 0;
@@ -185,7 +185,8 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
       ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0",
       regularPrice: effectivePrices.regularPrice ? effectivePrices.regularPrice.toLocaleString("en-IN") : "",
       totalPackPrice: effectivePrices.bulkPack?.totalPackPrice?.toLocaleString("en-IN") || "",
-      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0"
+      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0",
+      gstRate: !isNaN(gstRate) ? gstRate : 13.8
     };
   }, [effectivePrices, currentVariant?.gstRate, kit]);
 

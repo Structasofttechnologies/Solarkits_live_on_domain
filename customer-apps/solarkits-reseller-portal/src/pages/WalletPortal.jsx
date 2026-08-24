@@ -1,20 +1,20 @@
-﻿import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import api from "../services/api";
 import {
-  FiDollarSign, FiClock, FiArrowUpRight, FiArrowDownLeft,
+  FiClock, FiArrowUpRight, FiArrowDownLeft,
   FiCheckCircle, FiLoader, FiXCircle, FiAlertCircle,
   FiTrendingUp, FiMinusCircle, FiInfo, FiRefreshCw,
   FiShield, FiFileText, FiPercent, FiEdit2, FiSend,
   FiBriefcase, FiUser, FiHash, FiMapPin, FiSmartphone, FiX,
 } from "react-icons/fi";
 
-// â”€â”€â”€ Status Badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  pending:    { label: "Pending Settlement", bg: "#fef3c7", text: "#92400e", icon: FiClock },
-  processing: { label: "Processing",         bg: "#dbeafe", text: "#1e40af", icon: FiLoader },
-  paid:       { label: "Paid to Bank",       bg: "#d1fae5", text: "#065f46", icon: FiCheckCircle },
-  rejected:   { label: "Rejected",          bg: "#fee2e2", text: "#991b1b", icon: FiXCircle },
-  failed:     { label: "Failed",            bg: "#fce7f3", text: "#9d174d", icon: FiAlertCircle },
+  pending: { label: "Pending Settlement", bg: "#fef3c7", text: "#92400e", icon: FiClock },
+  processing: { label: "Processing", bg: "#dbeafe", text: "#1e40af", icon: FiLoader },
+  paid: { label: "Paid to Bank", bg: "#d1fae5", text: "#065f46", icon: FiCheckCircle },
+  rejected: { label: "Rejected", bg: "#fee2e2", text: "#991b1b", icon: FiXCircle },
+  failed: { label: "Failed", bg: "#fce7f3", text: "#9d174d", icon: FiAlertCircle },
 };
 
 function StatusBadge({ status }) {
@@ -31,7 +31,7 @@ function StatusBadge({ status }) {
   );
 }
 
-// â”€â”€â”€ KPI Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge }) {
   return (
     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
@@ -57,12 +57,12 @@ function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge }) {
   );
 }
 
-// â”€â”€â”€ Rupee Formatter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Rupee Formatter ─────────────────────────────────────────────────────────
 function fmt(val) {
-  return `â‚¹${Number(val || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `₹${Number(val || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// â”€â”€â”€ Main Component: My Earnings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Component: My Earnings ──────────────────────────────────────────────
 export default function WalletPortal() {
   const [wallet, setWallet] = useState(null);
   const [ledger, setLedger] = useState([]);
@@ -71,7 +71,7 @@ export default function WalletPortal() {
   const [activeTab, setActiveTab] = useState("ledger"); // "ledger" | "payouts"
   const [filterType, setFilterType] = useState("all");
 
-  // â”€â”€ Bank Details State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Bank Details State ──────────────────────────────────────────────────────
   const [bankDetails, setBankDetails] = useState(null);
   const [showBankModal, setShowBankModal] = useState(false);
   const [bankForm, setBankForm] = useState({
@@ -82,14 +82,14 @@ export default function WalletPortal() {
   const [savingBank, setSavingBank] = useState(false);
   const [bankAlert, setBankAlert] = useState(null);
 
-  // â”€â”€ Withdrawal Request State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Withdrawal Request State ────────────────────────────────────────────────
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawError, setWithdrawError] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
   const [withdrawAlert, setWithdrawAlert] = useState(null);
 
-  // â”€â”€ Fetch all data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Fetch all data ──────────────────────────────────────────────────────────
   const fetchAll = useCallback(() => {
     setLoading(true);
     Promise.all([
@@ -107,12 +107,12 @@ export default function WalletPortal() {
           setBankDetails(bd);
           if (bd) {
             setBankForm({
-              bank_name:           bd.bank_name || "",
+              bank_name: bd.bank_name || "",
               account_holder_name: bd.account_holder_name || "",
-              account_number:      bd.account_number || "",
-              ifsc_code:           bd.ifsc_code || "",
-              branch:              bd.branch || "",
-              upi_id:              bd.upi_id || "",
+              account_number: bd.account_number || "",
+              ifsc_code: bd.ifsc_code || "",
+              branch: bd.branch || "",
+              upi_id: bd.upi_id || "",
             });
           }
         }
@@ -123,7 +123,7 @@ export default function WalletPortal() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // â”€â”€ Bank Details: validate + save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Bank Details: validate + save ──────────────────────────────────────────
   const validateBankForm = () => {
     const errors = {};
     if (!bankForm.bank_name?.trim()) errors.bank_name = "Required";
@@ -143,12 +143,12 @@ export default function WalletPortal() {
     setSavingBank(true);
     try {
       const res = await api.put("/india/v1/reseller/profile/bank-details", {
-        bank_name:           bankForm.bank_name?.trim(),
-        account_number:      bankForm.account_number?.trim(),
-        ifsc_code:           bankForm.ifsc_code?.trim().toUpperCase(),
+        bank_name: bankForm.bank_name?.trim(),
+        account_number: bankForm.account_number?.trim(),
+        ifsc_code: bankForm.ifsc_code?.trim().toUpperCase(),
         account_holder_name: bankForm.account_holder_name?.trim(),
-        branch:              bankForm.branch?.trim() || null,
-        upi_id:              bankForm.upi_id?.trim() || null,
+        branch: bankForm.branch?.trim() || null,
+        upi_id: bankForm.upi_id?.trim() || null,
       });
       if (res.data?.status === "success") {
         setBankDetails(res.data.data);
@@ -162,7 +162,7 @@ export default function WalletPortal() {
     }
   };
 
-  // â”€â”€ Withdrawal Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Withdrawal Request ──────────────────────────────────────────────────────
   const handleWithdrawRequest = async () => {
     setWithdrawError("");
     const amt = parseFloat(withdrawAmount);
@@ -175,7 +175,7 @@ export default function WalletPortal() {
       return;
     }
     if (amt < 100) {
-      setWithdrawError("Minimum withdrawal amount is â‚¹100");
+      setWithdrawError("Minimum withdrawal amount is ₹100");
       return;
     }
     if (!bankDetails?.account_number) {
@@ -188,7 +188,7 @@ export default function WalletPortal() {
         amount: amt,
       });
       if (res.data?.status === "success") {
-        setWithdrawAlert({ type: "success", text: `Withdrawal request of â‚¹${amt.toLocaleString("en-IN")} submitted! Admin will transfer within 3-5 business days.` });
+        setWithdrawAlert({ type: "success", text: `Withdrawal request of ₹${amt.toLocaleString("en-IN")} submitted! Admin will transfer within 3-5 business days.` });
         setWithdrawAmount("");
         fetchAll();
         setTimeout(() => { setShowWithdrawModal(false); setWithdrawAlert(null); }, 3000);
@@ -202,7 +202,7 @@ export default function WalletPortal() {
     }
   };
 
-  // â”€â”€ Derived values â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Derived values ──────────────────────────────────────────────────────────
   const fd = wallet?.formula_breakdown || {};
   const grossEarned = fd.gross_earnings || wallet?.gross_earned || 0;
   const tdsDeducted = Math.abs(fd.minus_tds || -(wallet?.tds_deducted || 0));
@@ -221,7 +221,7 @@ export default function WalletPortal() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* â”€â”€ Bank Details Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Bank Details Modal ───────────────────────────────────────────────── */}
       {showBankModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-in fade-in">
@@ -235,9 +235,8 @@ export default function WalletPortal() {
               </button>
             </div>
             {bankAlert && (
-              <div className={`p-3 rounded-xl text-xs font-bold ${
-                bankAlert.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              }`}>{bankAlert.text}</div>
+              <div className={`p-3 rounded-xl text-xs font-bold ${bankAlert.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}>{bankAlert.text}</div>
             )}
             {/* Bank form fields */}
             {[
@@ -259,9 +258,8 @@ export default function WalletPortal() {
                     value={bankForm[key] || ""}
                     onChange={(e) => setBankForm(prev => ({ ...prev, [key]: upper ? e.target.value.toUpperCase() : e.target.value }))}
                     placeholder={placeholder}
-                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 ${
-                      bankFormErrors[key] ? "border-red-400 bg-red-50" : "border-slate-200 hover:border-slate-300"
-                    }`}
+                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 ${bankFormErrors[key] ? "border-red-400 bg-red-50" : "border-slate-200 hover:border-slate-300"
+                      }`}
                   />
                 </div>
                 {bankFormErrors[key] && <p className="mt-1 text-[11px] text-red-600 font-semibold">{bankFormErrors[key]}</p>}
@@ -281,7 +279,7 @@ export default function WalletPortal() {
         </div>
       )}
 
-      {/* â”€â”€ Withdrawal Request Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Withdrawal Request Modal ─────────────────────────────────────────── */}
       {showWithdrawModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-5">
@@ -295,9 +293,8 @@ export default function WalletPortal() {
               </button>
             </div>
             {withdrawAlert && (
-              <div className={`p-3 rounded-xl text-xs font-bold ${
-                withdrawAlert.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              }`}>{withdrawAlert.text}</div>
+              <div className={`p-3 rounded-xl text-xs font-bold ${withdrawAlert.type === "error" ? "bg-red-50 text-red-700 border border-red-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                }`}>{withdrawAlert.text}</div>
             )}
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5">
               <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Available Balance</p>
@@ -310,12 +307,12 @@ export default function WalletPortal() {
             </div>
             {!bankDetails?.account_number && (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">
-                âš ï¸ Please add your bank details first before requesting a withdrawal.
+                ⚠️ Please add your bank details first before requesting a withdrawal.
               </div>
             )}
             <div>
               <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase tracking-wider">
-                Withdrawal Amount (â‚¹)
+                Withdrawal Amount (₹)
               </label>
               <input
                 type="number"
@@ -323,13 +320,13 @@ export default function WalletPortal() {
                 max={wallet?.available_balance || 0}
                 value={withdrawAmount}
                 onChange={(e) => { setWithdrawAmount(e.target.value); setWithdrawError(""); }}
-                placeholder="Enter amount (min â‚¹100)"
+                placeholder="Enter amount (min ₹100)"
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
               />
               {withdrawError && <p className="mt-1 text-xs text-red-600 font-bold">{withdrawError}</p>}
             </div>
             <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-              Admin Accounts team will process your request via NEFT/RTGS within 3â€“5 business days and enter the UTR reference upon completion.
+              Admin Accounts team will process your request via NEFT/RTGS within 3–5 business days and enter the UTR reference upon completion.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setShowWithdrawModal(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 cursor-pointer">Cancel</button>
@@ -345,7 +342,7 @@ export default function WalletPortal() {
         </div>
       )}
 
-      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5">
@@ -357,13 +354,6 @@ export default function WalletPortal() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => setShowWithdrawModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold text-xs transition-colors shadow-md shadow-blue-500/25 cursor-pointer"
-          >
-            <FiSend size={13} />
-            Request Withdrawal
-          </button>
           <button
             onClick={() => setShowBankModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
@@ -382,7 +372,7 @@ export default function WalletPortal() {
         </div>
       </div>
 
-      {/* â”€â”€ Frozen Wallet Warning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Frozen Wallet Warning ─────────────────────────────────────────── */}
       {wallet?.status === "frozen" && (
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 flex items-center gap-3 text-red-800 text-sm font-semibold">
           <FiAlertCircle className="shrink-0" size={20} />
@@ -390,16 +380,14 @@ export default function WalletPortal() {
         </div>
       )}
 
-      {/* â”€â”€ Bank Account Summary Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${
-        bankDetails?.account_number
-          ? "bg-emerald-50 border-emerald-200"
-          : "bg-amber-50 border-amber-200"
-      }`}>
+      {/* ── Bank Account Summary Card ─────────────────────────────────────── */}
+      <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${bankDetails?.account_number
+        ? "bg-emerald-50 border-emerald-200"
+        : "bg-amber-50 border-amber-200"
+        }`}>
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-            bankDetails?.account_number ? "bg-emerald-100" : "bg-amber-100"
-          }`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bankDetails?.account_number ? "bg-emerald-100" : "bg-amber-100"
+            }`}>
             <FiBriefcase size={18} className={bankDetails?.account_number ? "text-emerald-700" : "text-amber-700"} />
           </div>
           <div>
@@ -408,31 +396,30 @@ export default function WalletPortal() {
             </p>
             {bankDetails?.account_number ? (
               <p className="text-sm font-bold text-slate-800 mt-0.5">
-                {bankDetails.bank_name} Â· A/C {bankDetails.account_number} Â· IFSC: {bankDetails.ifsc_code}
+                {bankDetails.bank_name} · A/C {bankDetails.account_number} · IFSC: {bankDetails.ifsc_code}
                 {bankDetails.account_holder_name && <span className="text-slate-500"> ({bankDetails.account_holder_name})</span>}
               </p>
             ) : (
               <p className="text-sm font-semibold text-amber-800 mt-0.5">
-                âš ï¸ No bank account added yet â€” required for commission withdrawals
+                ⚠️ No bank account added yet — required for commission withdrawals
               </p>
             )}
           </div>
         </div>
         <button
           onClick={() => setShowBankModal(true)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${
-            bankDetails?.account_number
-              ? "bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-              : "bg-amber-600 text-white hover:bg-amber-700"
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer shrink-0 ${bankDetails?.account_number
+            ? "bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            : "bg-amber-600 text-white hover:bg-amber-700"
+            }`}
         >
           <FiEdit2 size={12} />
           {bankDetails?.account_number ? "Edit" : "Add Now"}
         </button>
       </div>
 
-      {/* â”€â”€ KPI Cards (Gross, TDS, Net, Paid, Pending, Available) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      {/* ── KPI Cards (Gross, TDS, Net, Paid, Pending) ────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <KpiCard
           icon={FiTrendingUp}
           iconBg="#d1fae5"
@@ -484,18 +471,9 @@ export default function WalletPortal() {
           sub="In settlement process"
           badge={pendingHolds > 0 ? { text: "Pending", bg: "bg-amber-100", color: "text-amber-800" } : null}
         />
-
-        <KpiCard
-          icon={FiDollarSign}
-          iconBg="#dbeafe"
-          iconColor="#2563eb"
-          label="Available Balance"
-          value={fmt(availBalance)}
-          sub="Ready for next settlement"
-        />
       </div>
 
-      {/* â”€â”€ Balance Breakdown & Audit Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Balance Breakdown & Audit Summary ─────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
           <div className="flex items-center gap-2">
@@ -510,12 +488,12 @@ export default function WalletPortal() {
               <span className="font-bold text-emerald-600 tabular-nums">+{fmt(grossEarned)}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-600 font-medium">âˆ’ TDS Deduction (5% Sec. 194H)</span>
+              <span className="text-slate-600 font-medium">− TDS Deduction (5% Sec. 194H)</span>
               <span className="font-bold text-red-500 tabular-nums">-{fmt(tdsDeducted)}</span>
             </div>
             {tcsDeducted > 0 && (
               <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-600 font-medium">âˆ’ GST TCS (0.5% - 1%)</span>
+                <span className="text-slate-600 font-medium">− GST TCS (0.5% - 1%)</span>
                 <span className="font-bold text-red-400 tabular-nums">-{fmt(tcsDeducted)}</span>
               </div>
             )}
@@ -524,11 +502,11 @@ export default function WalletPortal() {
               <span className="text-blue-700 tabular-nums font-black">{fmt(netEarned)}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-600 font-medium">âˆ’ Completed / Paid Bank Payouts</span>
+              <span className="text-slate-600 font-medium">− Completed / Paid Bank Payouts</span>
               <span className="font-bold text-slate-700 tabular-nums">-{fmt(totalPaid)}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100">
-              <span className="text-slate-600 font-medium">âˆ’ Pending / Held Payouts</span>
+              <span className="text-slate-600 font-medium">− Pending / Held Payouts</span>
               <span className="font-bold text-amber-600 tabular-nums">-{fmt(pendingHolds)}</span>
             </div>
             <div className="flex justify-between py-2 font-black text-sm bg-blue-50 border border-blue-200 px-3 rounded-xl">
@@ -575,27 +553,25 @@ export default function WalletPortal() {
         </div>
       </div>
 
-      {/* â”€â”€ Tabs: Transaction Ledger (History) & Settlement History â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Tabs: Transaction Ledger (History) & Settlement History ───────── */}
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 px-6 py-3 gap-3 bg-slate-50/50">
           <div className="flex gap-2">
             <button
               onClick={() => setActiveTab("ledger")}
-              className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                activeTab === "ledger"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
+              className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${activeTab === "ledger"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                }`}
             >
               Earnings &amp; Transaction History ({ledger.length})
             </button>
             <button
               onClick={() => setActiveTab("payouts")}
-              className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                activeTab === "payouts"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
+              className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${activeTab === "payouts"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                }`}
             >
               Settlement &amp; Payout History ({payouts.length})
             </button>
@@ -620,7 +596,7 @@ export default function WalletPortal() {
           )}
         </div>
 
-        {/* â”€â”€ Transaction Ledger (History) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Transaction Ledger (History) ────────────────────────────────── */}
         {activeTab === "ledger" && (
           loading ? (
             <div className="flex items-center justify-center py-16 text-slate-500 gap-2 text-sm font-semibold">
@@ -656,21 +632,20 @@ export default function WalletPortal() {
                         <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">
                           {l.created_at
                             ? new Date(l.created_at).toLocaleString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "â€”"}
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                            : "—"}
                         </td>
                         <td className="px-4 py-3.5 whitespace-nowrap">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold capitalize ${
-                              isCredit
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
-                            }`}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold capitalize ${isCredit
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-red-50 text-red-700 border border-red-200"
+                              }`}
                           >
                             {(l.transaction_type || "").replace(/_/g, " ")}
                           </span>
@@ -705,7 +680,7 @@ export default function WalletPortal() {
           )
         )}
 
-        {/* â”€â”€ Settlement & Payout History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Settlement & Payout History ─────────────────────────────────── */}
         {activeTab === "payouts" && (
           loading ? (
             <div className="flex items-center justify-center py-16 text-slate-500 gap-2 text-sm font-semibold">
@@ -743,7 +718,7 @@ export default function WalletPortal() {
                         <td className="px-4 py-3.5 text-slate-700">
                           <div className="font-bold">{p.bank_details_snapshot?.bank_name || "Primary Bank Account"}</div>
                           <div className="text-[11px] text-slate-500 font-mono">
-                            A/C: {p.bank_details_snapshot?.account_number || "â€”"} Â· IFSC: {p.bank_details_snapshot?.ifsc_code || "â€”"}
+                            A/C: {p.bank_details_snapshot?.account_number || "—"} · IFSC: {p.bank_details_snapshot?.ifsc_code || "—"}
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-center">
@@ -755,14 +730,14 @@ export default function WalletPortal() {
                               {p.utr_reference || p.transaction_reference}
                             </span>
                           ) : (
-                            <span className="text-slate-400">â€”</span>
+                            <span className="text-slate-400">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-right text-slate-500 whitespace-nowrap">
-                          {p.created_at ? new Date(p.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "â€”"}
+                          {p.created_at ? new Date(p.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </td>
                         <td className="px-5 py-3.5 text-right text-slate-500 whitespace-nowrap font-bold">
-                          {p.processed_at ? new Date(p.processed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "â€”"}
+                          {p.processed_at ? new Date(p.processed_at).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </td>
                       </tr>
                     );

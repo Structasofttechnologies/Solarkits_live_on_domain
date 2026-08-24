@@ -130,7 +130,7 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
         );
         const allWarehouses = warehousesRes.data?.warehouses || [];
         const countryWarehouses = allWarehouses.filter(
-          (w) => w.country_id === currentCountryObj.id
+          (w) => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString()
         );
         setWarehouses(countryWarehouses);
 
@@ -192,15 +192,16 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter((w) => {
-    if (stateFilter && w.state_id !== stateFilter) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster) !== clusterFilter) return false;
+    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
+    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
     return true;
   });
 
   // For each warehouse, compute activation stats
   const getWarehouseActivationStats = (warehouseId) => {
+    if (!warehouseId) return { totalCombos: 0, activeCombos: 0, totalCustomizes: 0, activeCustomizes: 0, isConfigured: false };
     const warehouseActivations = activations.filter(
-      (a) => a.warehouse_id?.toString() === warehouseId || a.warehouse_id?._id?.toString() === warehouseId
+      (a) => (a.warehouse_id?._id || a.warehouse_id)?.toString() === warehouseId.toString()
     );
 
     const comboKits = warehouseActivations.filter(
@@ -224,14 +225,15 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
 
   // Count stats
   const totalConfigured = displayWarehouses.filter(
-    (w) => getWarehouseActivationStats(w.id).isConfigured
+    (w) => getWarehouseActivationStats(w.id || w._id).isConfigured
   ).length;
   const totalNotConfigured = displayWarehouses.length - totalConfigured;
 
   // Route navigation helper
   const handleConfigure = (w) => {
+    const targetId = w.id || w._id;
     navigate(
-      `/admin-panel/solar-shop/${countryName?.toLowerCase()}/warehouse-kit-activations/${w.id}`
+      `/admin-panel/solar-shop/${countryName?.toLowerCase()}/warehouse-kit-activations/${targetId}`
     );
   };
 
@@ -442,7 +444,7 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
                 emptyMessage="No warehouses identified matching filters."
                 containerClassName="border-none shadow-none rounded-none bg-transparent"
                 renderRow={(warehouse) => {
-                  const stats = getWarehouseActivationStats(warehouse.id);
+                  const stats = getWarehouseActivationStats(warehouse.id || warehouse._id);
                   return (
                     <>
                       <td className="px-6 py-4">

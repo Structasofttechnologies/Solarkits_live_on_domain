@@ -294,45 +294,7 @@ export default function Navbar() {
           <div
             className="landing-hide-mobile hidden lg:flex items-center gap-2.5 flex-shrink-0"
           >
-            {/* Franchise Portal Action */}
-            <motion.button
-              onClick={() =>
-                window.open(
-                  "https://solarkits-reseller-portal.onrender.com",
-                  "_blank",
-                  "noopener,noreferrer"
-                )
-              }
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              style={{
-                padding: "9px 18px",
-                background: "#f8fafc",
-                border: "1px solid #cbd5e1",
-                color: "#1e293b",
-                borderRadius: "10px",
-                fontSize: "0.88rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                whiteSpace: "nowrap",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#e2e8f0";
-                e.currentTarget.style.borderColor = "#94a3b8";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#f8fafc";
-                e.currentTarget.style.borderColor = "#cbd5e1";
-              }}
-            >
-              <FiUsers style={{ color: "#2563eb", fontSize: "0.95rem" }} />
-              Partner Login
-            </motion.button>
+
 
             {/* Primary Action Button */}
             <motion.button
@@ -543,34 +505,6 @@ export default function Navbar() {
 
               {/* Action Buttons */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    window.open(
-                      "https://solarkits-reseller-portal.onrender.com",
-                      "_blank",
-                      "noopener,noreferrer"
-                    );
-                  }}
-                  style={{
-                    width: "100%",
-                    height: "46px",
-                    background: "#f1f5f9",
-                    border: "1px solid #cbd5e1",
-                    color: "#0f172a",
-                    borderRadius: "12px",
-                    fontSize: "0.92rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <FiUsers style={{ color: "#2563eb" }} /> Partner Login
-                </button>
                 <button
                   onClick={() => {
                     setMenuOpen(false);

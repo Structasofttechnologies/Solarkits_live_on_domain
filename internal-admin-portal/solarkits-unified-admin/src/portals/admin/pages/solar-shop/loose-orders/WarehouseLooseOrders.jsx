@@ -75,7 +75,7 @@ export default function WarehouseLooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDER
       setCountryObj(foundCountry);
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
-      const wh = allWarehouses.find((w) => w.id === warehouseId);
+      const wh = allWarehouses.find((w) => (w.id || w._id)?.toString() === warehouseId?.toString());
       setWarehouse(wh);
 
       if (settingsRes.data?.data) {

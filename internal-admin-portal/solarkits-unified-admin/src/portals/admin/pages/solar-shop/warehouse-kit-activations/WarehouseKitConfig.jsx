@@ -26,7 +26,7 @@ import { authHeaderObj } from "@/app/authHeader";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-export default function WarehouseKitConfig({ moduleUniqueId }) {
+export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }) {
   const { countryName, warehouseId } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -57,6 +57,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
 
   // GST configuration status from backend, keyed by kit ID
   const [gstConfigured, setGstConfigured] = useState({});
+  const [gstRates, setGstRates] = useState({});
 
   // Error info for save failures per kit
   const [saveErrors, setSaveErrors] = useState({});
@@ -82,6 +83,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
       const skuPriceMap = {};
       const marginMap = {};
       const gstMap = {};
+      const gstRateMap = {};
 
       const processKit = (a) => {
         const kitId = a.combo_kit_id?._id || a.combo_kit_id;
@@ -98,6 +100,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
           // Capture margin configuration status
           marginMap[kitId] = a.is_margin_configured ?? false;
           gstMap[kitId] = a.is_gst_configured ?? false;
+          gstRateMap[kitId] = a.gst_rate !== undefined && a.gst_rate !== null ? Number(a.gst_rate) : null;
         }
       };
 
@@ -108,6 +111,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
       setSkuPriceInfo(skuPriceMap);
       setMarginConfigured(marginMap);
       setGstConfigured(gstMap);
+      setGstRates(gstRateMap);
       setPendingToggles({});
       setSaveErrors({});
     } catch {
@@ -115,6 +119,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
       setSkuPriceInfo({});
       setMarginConfigured({});
       setGstConfigured({});
+      setGstRates({});
     }
   };
 
@@ -137,7 +142,7 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
       setCountryObj(foundCountry);
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
-      const wh = allWarehouses.find((w) => w.id === warehouseId);
+      const wh = allWarehouses.find((w) => (w.id || w._id)?.toString() === warehouseId?.toString());
       setWarehouse(wh);
 
       const fetchedCombos = comboRes.data?.data || [];
@@ -292,6 +297,10 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
   const getGstConfigured = (kitId) => {
     if (gstConfigured[kitId] === undefined) return null;
     return gstConfigured[kitId];
+  };
+
+  const getGstRate = (kitId) => {
+    return gstRates[kitId] ?? null;
   };
 
   // ─── Filter States (API-driven, cascading) ───────────────────────────────────
@@ -741,9 +750,36 @@ export default function WarehouseKitConfig({ moduleUniqueId }) {
                       <div className={`flex items-center gap-1.5 ${hasMissingGst ? 'text-danger' : 'text-success'}`}>
                         <FaPercentage size={9} />
                         <span className="text-[9px] font-bold">
-                          GST: {hasMissingGst ? 'Not configured in margin settings' : 'Configured ✓'}
+                          GST: {hasMissingGst ? 'Not configured in margin settings' : `Configured (${getGstRate(kitId) !== null ? `${getGstRate(kitId)}%` : 'Dynamic'}) ✓`}
                         </span>
+                        {hasMissingGst && (
+                          <span
+                            title="Go to Company Margin settings to configure GST for this kit"
+                            className="text-[8px] font-bold text-danger/70 italic ml-0.5"
+                          >
+                            (required to activate)
+                          </span>
+                        )}
                       </div>
+                      {hasMissingGst && (
+                        <div className="mt-0.5 pl-3 border-l-2 border-danger/30 space-y-1">
+                          <span className="text-[9px] font-black text-text-muted uppercase tracking-wider block">
+                            GST rate not set (for warehouse: {warehouse.warehouse_code || "N/A"}) — click to set:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/admin-panel/solar-shop/${countryName}/company-margin/${warehouseId}?combo_kit_id=${kitId}`)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-danger/10 text-danger hover:bg-danger/20 hover:scale-[1.02] border border-danger/20 rounded-md text-[9px] font-bold transition-all cursor-pointer"
+                            >
+                              <span className="underline">Configure GST & Margin</span>
+                              <span className="text-[8px] text-text-muted font-normal">
+                                ({kit.name || "This Kit"})
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Save Error */}

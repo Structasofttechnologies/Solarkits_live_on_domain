@@ -89,7 +89,7 @@ export default function PoOrders({ moduleUniqueId }) {
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const countryWarehouses = currentCountryObj
-        ? allWarehouses.filter(w => w.country_id === currentCountryObj.id)
+        ? allWarehouses.filter(w => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString())
         : allWarehouses;
       setWarehouses(countryWarehouses);
 
@@ -108,7 +108,7 @@ export default function PoOrders({ moduleUniqueId }) {
       }
     } catch (error) {
       console.error("Error fetching PO settings data:", error);
-      dispatch(setAlert({ type: "error", message: "Failed to load PO settings" }));
+      dispatch(setAlert({ type: "error", message: "Failed to load warehouse PO settings" }));
     } finally {
       setLoading(false);
     }
@@ -121,7 +121,6 @@ export default function PoOrders({ moduleUniqueId }) {
       setStateFilter("");
       setClusterFilter("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleUniqueId, token, countryName]);
 
   // Find current country object
@@ -129,7 +128,7 @@ export default function PoOrders({ moduleUniqueId }) {
     c => c.name.toLowerCase() === countryName?.toLowerCase()
   );
 
-  // Fetch clusters for selected state filter
+  // 2. Fetch clusters for selected state filter
   useEffect(() => {
     const fetchClustersForFilter = async () => {
       if (!stateFilter) {
@@ -155,14 +154,15 @@ export default function PoOrders({ moduleUniqueId }) {
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter(w => {
-    if (stateFilter && w.state_id !== stateFilter) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster) !== clusterFilter) return false;
+    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
+    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
     return true;
   });
 
   // Table row payload aggregator
   const tableData = displayWarehouses.map(w => {
-    const warehousePlans = settings.filter(s => (s.warehouse_id || s.warehouse?.id) === w.id);
+    const targetId = (w.id || w._id)?.toString();
+    const warehousePlans = settings.filter(s => (s.warehouse_id || s.warehouse?.id || s.warehouse?._id)?.toString() === targetId);
     return {
       warehouse: w,
       plans: warehousePlans
@@ -171,7 +171,8 @@ export default function PoOrders({ moduleUniqueId }) {
 
   // Route navigation helper
   const handleConfigurePO = (w) => {
-    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/po-orders/${w.id}`);
+    const targetId = w.id || w._id;
+    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/po-orders/${targetId}`);
   };
 
   // Metrics

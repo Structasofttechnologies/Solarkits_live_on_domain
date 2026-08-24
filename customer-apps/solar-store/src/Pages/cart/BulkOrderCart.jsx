@@ -281,7 +281,7 @@ export default function BulkOrderCart() {
             const kitsPerPack = bulkPack.kitsPerPack || 1;
             const pricePerKit = bulkPack.pricePerKitAfterDiscount || item.ourPrice;
             const itemValue = item.qty * pricePerKit * kitsPerPack;
-            const itemGstRate = Number(item.gstRate ?? fallbackRate);
+            const itemGstRate = Number(item.gstRate ?? item.pricing?.gstRate ?? fallbackRate);
             const itemTaxable = Math.round(itemValue / (1 + (itemGstRate / 100)));
             const itemGst = Math.max(0, itemValue - itemTaxable);
             taxable += itemTaxable;

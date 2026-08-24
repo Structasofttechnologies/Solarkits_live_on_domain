@@ -189,17 +189,16 @@ const adjust_inventory = async (req, res) => {
   }
 };
 
-const { verifyPaymentSignature } = require('../services/razorpay.service');
 const { ResellerListing, ResellerProductAuthorization } = require('../models/india_solarshop_db');
 
-// ─── 6. CONFIRM PROCUREMENT PAYMENT (Razorpay Callback) ─────────────────────
+// ─── 6. CONFIRM PROCUREMENT PAYMENT ──────────────────────────────────────────
 /**
  * POST /api/india/v1/reseller/procurement/confirm-payment
- * Body: { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature }
+ * Body: { order_id, payment_reference, razorpay_payment_id, razorpay_order_id }
  */
 const confirm_procurement_payment = async (req, res) => {
   try {
-    const { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+    const { order_id, payment_reference, razorpay_payment_id, razorpay_order_id } = req.body;
     if (!order_id || !mongoose.Types.ObjectId.isValid(order_id)) {
       return res.status(400).json({ status: 'error', message: 'Valid order_id is required' });
     }
@@ -209,17 +208,9 @@ const confirm_procurement_payment = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Procurement order not found' });
     }
 
-    // Verify signature if provided
-    if (razorpay_order_id && razorpay_payment_id && razorpay_signature) {
-      const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
-      if (!isValid) {
-        return res.status(400).json({ status: 'error', message: 'Invalid payment signature' });
-      }
-    }
-
     order.payment_status = 'captured';
     order.order_status = 'paid';
-    order.payment_reference = razorpay_payment_id || order.payment_reference;
+    order.payment_reference = payment_reference || razorpay_payment_id || order.payment_reference;
     order.razorpay_order_id = razorpay_order_id || order.razorpay_order_id;
     await order.save();
 

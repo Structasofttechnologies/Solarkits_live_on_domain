@@ -541,14 +541,19 @@ const review_epc_transfer = async (req, res) => {
   }
 };
 
-const { getGatewayStatus } = require('../services/razorpay.service');
 const { processOrderRefund } = require('../services/refund.service');
 const { RazorpayWebhookLog } = require('../models/india_solarshop_db');
 
 const get_razorpay_status = async (req, res) => {
   try {
-    const status = getGatewayStatus();
-    return res.json({ status: 'success', data: status });
+    return res.json({
+      status: 'success',
+      data: {
+        configured: false,
+        gateway: 'none',
+        message: 'Razorpay payment gateway is removed',
+      },
+    });
   } catch (error) {
     return res.status(500).json({ status: 'error', message: error.message });
   }

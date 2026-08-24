@@ -33,13 +33,9 @@ const Operations = lazy(() => import("../pages/dashboard/operations/Operations")
 const Settings = lazy(() => import("../pages/dashboard/settings/Settings"));
 const ManageUsers = lazy(() => import("../pages/dashboard/manage-users/ManageUsers"));
 const ProductConfigurations = lazy(() => import("../pages/dashboard/product-configurations/ProductConfigurations"));
-const AssignTasks = lazy(() => import("../pages/epc-project-management-erp/AssignTasks"));
 const Profile = lazy(() => import("../pages/Profile"));
 const AccountSettings = lazy(() => import("../pages/AccountSettings"));
 const CreateUsers = lazy(() => import("../pages/CreateUsers"));
-const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-configuration/WebsiteConfiguration"));
-const AmcPlans = lazy(() => import("../pages/solar-amc-management/AmcPlans"));
-const EpcPlans = lazy(() => import("../pages/epc-plans/EpcPlans"));
 const IndustryContentManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryContentManagement"));
 const IndustryTypeManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryTypeManagement"));
 const IndustryThemeConfig = lazy(() => import("../pages/dashboard/industry-content/IndustryThemeConfig"));
@@ -210,6 +206,8 @@ const menus = [
   ],
   [
 
+
+
     {
       name: "Industry CMS",
       icon: <FaIndustry />,
@@ -237,11 +235,6 @@ const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
   return (
     allowedUniqueIds.includes(menu.unique_id) ||
-    menu.unique_id === "ADM_WEBSITE_CFG" ||
-    menu.unique_id.startsWith("ADM_WEBSITE") ||
-    menu.unique_id === "ADM_PLANS" ||
-    menu.unique_id === "ADM_AMC_PLANS" ||
-    menu.unique_id === "ADM_EPC_PLANS" ||
     menu.unique_id.startsWith("ADM_INDUSTRY")
   );
 };
@@ -306,12 +299,8 @@ export default function Dashboard() {
     if (path.includes('/home')) return 'Home Dashboard';
     if (path.includes('/operations')) return 'Operations Management';
     if (path.includes('/settings')) return 'System Settings';
-    if (path.includes('/website-configuration')) return 'Website Configuration';
     if (path.includes('/manage-users')) return 'User Management';
     if (path.includes('/product-configurations')) return 'Product Configuration';
-    if (path.includes('/epc-plans')) return 'EPC Plans Management';
-    if (path.includes('/amc-plans')) return 'AMC Plans Management';
-    if (path.includes('/assign-tasks')) return 'Task Assignment';
     if (path.includes('/profile')) return 'My Profile';
     if (path.includes('/account-settings')) return 'Account Settings';
     return 'Dashboard';
@@ -410,38 +399,6 @@ export default function Dashboard() {
                     }
                   />
                   <Route
-                    path="/plans/amc-plans/*"
-                    element={
-                      <Suspense fallback={<Loader text="Loading AMC plans..." />}>
-                        <AmcPlans defaultCategory="All" />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/plans/epc-plans/*"
-                    element={
-                      <Suspense fallback={<Loader text="Loading EPC plans..." />}>
-                        <EpcPlans />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/amc-plans/*"
-                    element={
-                      <Suspense fallback={<Loader text="Loading AMC plans..." />}>
-                        <AmcPlans />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/website-configuration/*"
-                    element={
-                      <Suspense fallback={<Loader text="Loading website configuration..." />}>
-                        <WebsiteConfiguration />
-                      </Suspense>
-                    }
-                  />
-                  <Route
                     path="/industry-content/*"
                     element={
                       <Suspense fallback={<Loader text="Loading Industry CMS..." />}>
@@ -452,24 +409,6 @@ export default function Dashboard() {
                           <Route path="*" element={<IndustryContentManagement />} />
                         </Routes>
                       </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/website-configuration/industry-theme"
-                    element={
-                      <Suspense fallback={<Loader text="Loading Theme Configuration..." />}>
-                        <IndustryThemeConfig />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/assign-tasks/*"
-                    element={
-                      <PermissionGuard requiredUniqueId="ADM_ASSIGN_TASKS">
-                        <Suspense fallback={<Loader text="Loading assign tasks..." />}>
-                          <AssignTasks />
-                        </Suspense>
-                      </PermissionGuard>
                     }
                   />
                   <Route

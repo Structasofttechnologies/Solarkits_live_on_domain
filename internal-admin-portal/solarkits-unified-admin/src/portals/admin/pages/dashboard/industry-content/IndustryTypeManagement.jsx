@@ -286,7 +286,7 @@ export default function IndustryTypeManagement() {
 
                         {/* Theme Config */}
                         <Link
-                          to={`/admin-panel/website-configuration/industry-theme?industry_id=${item.id || item._id}`}
+                          to={`/admin-panel/industry-content/themes?industry_id=${item.id || item._id}`}
                           className="p-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors cursor-pointer"
                           title="Configure Design Theme"
                         >

@@ -26,7 +26,7 @@ const { calculateCheckoutPrice } = require('./reseller.pricing.service');
 const { calculateCurrentItemStock } = require('./reseller.procurement.service');
 const { logAudit } = require('../utils/audit.service');
 const { creditResellerMargin, creditEpcMargin } = require('./wallet.settlement.service');
-const { createRazorpayOrder } = require('./razorpay.service');
+
 
 /**
  * Generate a unique EPC buyer order number.
@@ -207,20 +207,6 @@ async function processEpcCheckout({
 
   const orderNumber = generateEpcOrderNumber();
 
-  // 5. Create Razorpay order if no payment reference yet
-  let razorpayOrderData = null;
-  if (!payment_reference && process.env.RAZORPAY_ID && process.env.RAZORPAY_KEY) {
-    try {
-      razorpayOrderData = await createRazorpayOrder({
-        amountPaise: totals.grand_total_paise,
-        receipt: orderNumber,
-        notes: { order_number: orderNumber, epc_id: epc_id.toString() },
-      });
-    } catch (rzpErr) {
-      console.warn('[processEpcCheckout] Razorpay order creation failed, fallback to pending order:', rzpErr.message);
-    }
-  }
-
   // 6. Create EpcOrder
   const epcOrder = await EpcOrder.create({
     order_number: orderNumber,
@@ -237,11 +223,11 @@ async function processEpcCheckout({
     order_status: 'pending',
     payment_status: payment_reference ? 'captured' : 'pending',
     payment_reference: payment_reference || null,
-    razorpay_order_id: razorpayOrderData?.order_id || null,
     is_end_customer_sale: Boolean(is_end_customer_sale),
     delivery_address,
     reservation_expires_at: expiresAt,
   });
+
 
   // 7. Hold stock reservation in ResellerInventoryLedger if reseller assigned
   if (targetResellerId) {
@@ -291,12 +277,6 @@ async function processEpcCheckout({
     order: epcOrder,
     reseller_id: targetResellerId,
     routing_source: route.routing_source,
-    razorpay_order: razorpayOrderData || {
-      order_id: epcOrder._id,
-      amount_paise: totals.grand_total_paise,
-      currency: 'INR',
-      key_id: process.env.RAZORPAY_ID,
-    },
   };
 }
 

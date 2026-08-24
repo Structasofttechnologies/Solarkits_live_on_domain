@@ -180,9 +180,9 @@ export default function PlansShowcase() {
                     </div>
 
                     <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
-                      <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Franchise Margin</span>
+                      <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Commission Rate</span>
                       <span className="text-xs sm:text-sm font-black text-emerald-600">
-                        {commission}% - {commission + dealerMargin}%
+                        {commission}%
                       </span>
                     </div>
 

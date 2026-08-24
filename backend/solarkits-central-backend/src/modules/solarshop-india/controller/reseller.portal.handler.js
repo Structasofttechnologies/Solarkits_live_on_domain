@@ -23,7 +23,7 @@ const {
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
 const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
-const { createRazorpayOrder, verifyPaymentSignature } = require('../../admin-panel/services/razorpay.service');
+
 const { assignTerritoryAtomic } = require('../../admin-panel/utils/territory.validator');
 const { logAudit } = require('../../admin-panel/utils/audit.service');
 const { generate_token } = require('../utils/jsonwebtoken');
@@ -935,7 +935,7 @@ const get_active_plans = async (req, res) => {
           max_states_allowed:        p.territory_level === 'district' ? `${p.allowed_territories_count} District(s)` : `${p.allowed_territories_count} State(s)`,
           default_commission_rate:   p.default_commission_rate != null ? p.default_commission_rate : (p.territory_level === 'district' ? 8 : p.territory_level === 'state' ? 12 : 15),
           default_dealer_margin:     p.default_dealer_margin != null ? p.default_dealer_margin : (p.territory_level === 'district' ? 5 : p.territory_level === 'state' ? 8 : 10),
-          
+
           // ─── 1. Warehouse Requirements ─────────────────────────────────────────
           warehouse_required:        p.warehouse_required ?? false,
           warehouse_count:           p.warehouse_count ?? 0,
@@ -963,179 +963,6 @@ const get_active_plans = async (req, res) => {
   }
 };
 
-// ─── 13. CREATE RAZORPAY ORDER FOR PLAN PURCHASE (Flow 1) ────────────────────
-/**
- * POST /api/india/v1/reseller/plans/create-order
- * Creates a server-side Razorpay order for franchisee plan subscription fee.
- * Optionally saves bank details during this step.
- */
-const create_plan_razorpay_order = async (req, res) => {
-  try {
-    const { plan_id, bank_details } = req.body;
-    const resellerId = req.reseller._id;
-
-    if (!plan_id || !mongoose.Types.ObjectId.isValid(plan_id)) {
-      return res.status(400).json({ status: 'error', message: 'Valid plan_id is required' });
-    }
-
-    const plan = await ResellerPlan.findOne({ _id: plan_id, is_active: true, deleted_at: null });
-    if (!plan) {
-      return res.status(404).json({ status: 'error', message: 'Plan not found or inactive' });
-    }
-
-    // Save bank details if provided at this step
-    if (bank_details && bank_details.account_number && bank_details.ifsc_code) {
-      await Reseller.findByIdAndUpdate(resellerId, {
-        $set: {
-          bank_details: {
-            bank_name:           bank_details.bank_name?.trim() || null,
-            account_number:      bank_details.account_number?.trim(),
-            ifsc_code:           bank_details.ifsc_code?.trim().toUpperCase(),
-            account_holder_name: bank_details.account_holder_name?.trim() || null,
-            branch:              bank_details.branch?.trim() || null,
-            upi_id:              bank_details.upi_id?.trim() || null,
-            updated_at:          new Date(),
-          },
-        },
-      });
-    }
-
-    // Amount in Paise — 100% goes to Admin Razorpay account
-    const amountInr    = Number(plan.one_time_fee || 0);
-    const amountPaise  = Math.round(amountInr * 100);
-
-    if (amountPaise <= 0) {
-      return res.status(400).json({ status: 'error', message: 'Plan fee must be greater than zero' });
-    }
-
-    const receiptId   = `PLAN_${String(resellerId).slice(-6)}_${Date.now()}`;
-    const razorpayOrder = await createRazorpayOrder({
-      amountPaise,
-      currency: plan.currency || 'INR',
-      receipt:  receiptId,
-      notes: {
-        flow_type:   'franchisee_plan_subscription',
-        reseller_id: resellerId.toString(),
-        plan_id:     plan._id.toString(),
-        plan_name:   plan.name,
-      },
-    });
-
-    return res.status(200).json({
-      status: 'success',
-      data: {
-        razorpay_order_id: razorpayOrder.order_id,
-        amount_paise:      razorpayOrder.amount_paise,
-        amount_inr:        razorpayOrder.amount_inr,
-        currency:          razorpayOrder.currency,
-        key_id:            process.env.RAZORPAY_ID,
-        plan: { id: plan._id, name: plan.name, fee: plan.one_time_fee },
-      },
-    });
-  } catch (error) {
-    console.error('[reseller.portal] create_plan_razorpay_order error:', error);
-    return res.status(500).json({ status: 'error', message: error.message || 'Failed to create plan order' });
-  }
-};
-
-// ─── 14. VERIFY PLAN PAYMENT & ACTIVATE SUBSCRIPTION (Flow 1) ────────────────
-/**
- * POST /api/india/v1/reseller/plans/verify-payment
- * HMAC-SHA256 verify → activate plan → optionally update bank details.
- */
-const verify_plan_payment = async (req, res) => {
-  try {
-    const {
-      plan_id,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      bank_details,
-    } = req.body;
-    const resellerId = req.reseller._id;
-
-    if (!plan_id || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return res.status(400).json({ status: 'error', message: 'All Razorpay signature fields are required' });
-    }
-
-    // 1. Cryptographic HMAC-SHA256 Signature Verification
-    const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
-    if (!isValid) {
-      return res.status(400).json({ status: 'error', message: 'Invalid payment signature. Security check failed!' });
-    }
-
-    const plan = await ResellerPlan.findById(plan_id);
-    if (!plan) {
-      return res.status(404).json({ status: 'error', message: 'Plan not found' });
-    }
-
-    // 2. Optionally save bank details (final snapshot at payment time)
-    if (bank_details && bank_details.account_number && bank_details.ifsc_code) {
-      await Reseller.findByIdAndUpdate(resellerId, {
-        $set: {
-          bank_details: {
-            bank_name:           bank_details.bank_name?.trim() || null,
-            account_number:      bank_details.account_number?.trim(),
-            ifsc_code:           bank_details.ifsc_code?.trim().toUpperCase(),
-            account_holder_name: bank_details.account_holder_name?.trim() || null,
-            branch:              bank_details.branch?.trim() || null,
-            upi_id:              bank_details.upi_id?.trim() || null,
-            updated_at:          new Date(),
-          },
-        },
-      });
-    }
-
-    // 3. Calculate Subscription Dates
-    const startDate = new Date();
-    const expiryDate = new Date(startDate);
-    if (plan.validity_unit === 'months') {
-      expiryDate.setMonth(expiryDate.getMonth() + (plan.validity_value || 12));
-    } else {
-      expiryDate.setFullYear(expiryDate.getFullYear() + (plan.validity_value || 1));
-    }
-    const graceExpiryDate = new Date(expiryDate);
-    const graceDays = plan.renewal_rules?.grace_period_days || 15;
-    graceExpiryDate.setDate(graceExpiryDate.getDate() + graceDays);
-
-    // 4. Cancel any existing active subscriptions
-    await ResellerPlanSubscription.updateMany(
-      { reseller_id: resellerId, status: 'active' },
-      { $set: { status: 'cancelled' } }
-    );
-
-    // 5. Create new subscription record
-    const subscription = await ResellerPlanSubscription.create({
-      reseller_id:       resellerId,
-      plan_id:           plan._id,
-      start_date:        startDate,
-      expiry_date:       expiryDate,
-      grace_expiry_date: graceExpiryDate,
-      amount_paid:       plan.one_time_fee,
-      currency:          plan.currency || 'INR',
-      payment_reference: razorpay_payment_id,
-      razorpay_order_id: razorpay_order_id,
-      status:            'active',
-    });
-
-    // 6. Activate reseller account
-    await Reseller.findByIdAndUpdate(resellerId, {
-      $set: {
-        plan_subscription_id: subscription._id,
-        activation_status:    'active',
-      },
-    });
-
-    return res.status(200).json({
-      status:  'success',
-      message: `Plan "${plan.name}" subscribed! Payment received in Admin account.`,
-      data:    subscription,
-    });
-  } catch (error) {
-    console.error('[reseller.portal] verify_plan_payment error:', error);
-    return res.status(500).json({ status: 'error', message: error.message || 'Plan verification failed' });
-  }
-};
 
 // ─── 15. UPDATE BANK DETAILS ──────────────────────────────────────────────────
 /**
@@ -1432,15 +1259,7 @@ const purchase_and_onboard = async (req, res) => {
       });
     }
 
-    // 2. Razorpay Signature Verification (if live signature provided)
-    if (razorpay_order_id && razorpay_payment_id && razorpay_signature && !is_sandbox_payment) {
-      const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
-      if (!isValid) {
-        return res.status(400).json({ status: 'error', message: 'Invalid payment signature. Security verification failed!' });
-      }
-    }
-
-    // 3. Authenticate or Register Reseller
+    // 2. Authenticate or Register Reseller
     let reseller = null;
     const cleanEmail = email ? email.trim().toLowerCase() : null;
     const cleanMobile = mobile ? mobile.trim() : null;
@@ -1660,8 +1479,6 @@ module.exports = {
   list_my_epc_buyers,
   get_active_types,
   get_active_plans,
-  create_plan_razorpay_order,
-  verify_plan_payment,
   update_reseller_bank_details,
   get_reseller_bank_details,
   check_territory_availability,

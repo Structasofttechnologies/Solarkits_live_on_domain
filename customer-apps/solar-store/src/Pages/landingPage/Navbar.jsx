@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   {
     label: "Commercial Solar Kits",
     href: "#products",
-    dropdown: ["10kW–100kW Commercial Kits", "Solar BOS Kits", "Custom Combo Kits", "Preconfigured Kits"],
+    dropdown: ["10kW–100kW Commercial Kits", "Custom Combo Kits", "Preconfigured Kits"],
   },
 ];
 

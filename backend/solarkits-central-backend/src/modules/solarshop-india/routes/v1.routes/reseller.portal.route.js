@@ -44,8 +44,7 @@ router.post('/kyc/upload', verify_reseller_auth, kycDocUpload, handler.upload_ky
 router.post('/kyc/submit', verify_reseller_auth, handler.submit_kyc);
 router.get('/plans/list', handler.get_active_plans);
 router.post('/plans/subscribe',     verify_reseller_auth, handler.subscribe_plan);
-router.post('/plans/create-order',  handler.create_plan_razorpay_order); // allows creating order for registration checkout
-router.post('/plans/verify-payment', verify_reseller_auth, handler.verify_plan_payment);
+
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);

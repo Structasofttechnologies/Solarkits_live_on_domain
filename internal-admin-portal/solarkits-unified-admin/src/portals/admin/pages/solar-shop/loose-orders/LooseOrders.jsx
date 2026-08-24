@@ -93,7 +93,7 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const countryWarehouses = currentCountryObj
-        ? allWarehouses.filter(w => w.country_id === currentCountryObj.id)
+        ? allWarehouses.filter(w => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString())
         : allWarehouses;
       setWarehouses(countryWarehouses);
 
@@ -111,16 +111,17 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
         }).catch(err => console.error("Error fetching states:", err));
       }
     } catch (error) {
-      console.error("Error fetching loose orders settings:", error);
-      dispatch(setAlert({ type: "error", message: "Failed to load loose orders settings" }));
+      console.error("Error fetching loose order settings data:", error);
+      dispatch(setAlert({ type: "error", message: "Failed to load warehouse loose order settings" }));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (token) {
+    if (moduleUniqueId && token) {
       fetchCountriesAndSettings();
+      // Reset filters when country changes
       setStateFilter("");
       setClusterFilter("");
     }
@@ -131,7 +132,7 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
     c => c.name.toLowerCase() === countryName?.toLowerCase()
   );
 
-  // Fetch clusters for selected state filter
+  // 2. Fetch clusters for selected state filter
   useEffect(() => {
     const fetchClustersForFilter = async () => {
       if (!stateFilter) {
@@ -157,14 +158,15 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter(w => {
-    if (stateFilter && w.state_id !== stateFilter) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster) !== clusterFilter) return false;
+    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
+    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
     return true;
   });
 
   // Table row payload aggregator
   const tableData = displayWarehouses.map(w => {
-    const warehouseSettings = settings.filter(s => (s.warehouse_id || s.warehouse?.id) === w.id);
+    const targetId = (w.id || w._id)?.toString();
+    const warehouseSettings = settings.filter(s => (s.warehouse_id || s.warehouse?.id || s.warehouse?._id)?.toString() === targetId);
     return {
       warehouse: w,
       settings: warehouseSettings,
@@ -174,7 +176,8 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
 
   // Route navigation helper
   const handleConfigureLooseOrders = (w) => {
-    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/loose-orders/${w.id}`);
+    const targetId = w.id || w._id;
+    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/loose-orders/${targetId}`);
   };
 
   // Metrics

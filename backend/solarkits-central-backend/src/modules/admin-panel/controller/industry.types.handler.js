@@ -1,15 +1,15 @@
-﻿/**
+/**
  * industry.types.handler.js
  *
  * Admin CRUD for industry types (sys_industry_types).
- * Phase 1 â€” Reseller Management System
- * Phase 2 â€” Industry Content Management (user assignments, extended fields)
+ * Phase 1 — Reseller Management System
+ * Phase 2 — Industry Content Management (user assignments, extended fields)
  */
 
 const mongoose = require('mongoose');
 const { IndustryType, ProjectTypeIndustryMap, ProjectSubcategory, UserIndustryMap } = require('../models/core_db');
 
-// â”€â”€â”€ Helper: generate slug from name â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helper: generate slug from name ─────────────────────────────────────────
 const slugify = (str) =>
   str
     .toLowerCase()
@@ -18,7 +18,7 @@ const slugify = (str) =>
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-// â”€â”€â”€ 1. LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 1. LIST ──────────────────────────────────────────────────────────────────
 const list_industry_types = async (req, res) => {
   try {
     const { active_only, for_resellers, for_epc } = req.query;
@@ -52,7 +52,7 @@ const list_industry_types = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ PUBLIC LIST (no auth â€” for reseller/EPC frontend) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── PUBLIC LIST (no auth — for reseller/EPC frontend) ────────────────────────
 const list_industry_types_public = async (req, res) => {
   try {
     const { audience } = req.query; // 'reseller' | 'epc'
@@ -72,7 +72,7 @@ const list_industry_types_public = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 2. ADD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 2. ADD ───────────────────────────────────────────────────────────────────
 const add_industry_type = async (req, res) => {
   try {
     const { name, code, description, sort_order, icon, cover_image, thumbnail, for_resellers, for_epc } = req.body;
@@ -127,7 +127,7 @@ const add_industry_type = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 3. UPDATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 3. UPDATE ────────────────────────────────────────────────────────────────
 const update_industry_type = async (req, res) => {
   try {
     const { id, name, code, description, sort_order, icon, cover_image, thumbnail, for_resellers, for_epc } = req.body;
@@ -183,7 +183,7 @@ const update_industry_type = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 4. ACTIVATE / DEACTIVATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 4. ACTIVATE / DEACTIVATE ─────────────────────────────────────────────────
 const toggle_industry_type_status = async (req, res) => {
   try {
     const { id, is_active } = req.body;
@@ -214,7 +214,7 @@ const toggle_industry_type_status = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 5. SOFT DELETE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 5. SOFT DELETE ───────────────────────────────────────────────────────────
 const delete_industry_type = async (req, res) => {
   try {
     const { id } = req.body;
@@ -270,7 +270,7 @@ const delete_industry_type = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 6. MAP: Link a project subcategory â†’ industry type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 6. MAP: Link a project subcategory → industry type ──────────────────────
 const map_industry_to_subcategory = async (req, res) => {
   try {
     const { project_subcategory_id, industry_type_id } = req.body;
@@ -307,7 +307,7 @@ const map_industry_to_subcategory = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 7. UNMAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 7. UNMAP ─────────────────────────────────────────────────────────────────
 const unmap_industry_from_subcategory = async (req, res) => {
   try {
     const { map_id } = req.body;
@@ -330,7 +330,7 @@ const unmap_industry_from_subcategory = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 8. GET MAPPINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 8. GET MAPPINGS ─────────────────────────────────────────────────────────
 const get_industry_mappings_for_subcategory = async (req, res) => {
   try {
     const { project_subcategory_id } = req.query;
@@ -364,7 +364,7 @@ const get_industry_mappings_for_subcategory = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 9. ASSIGN USER â†’ INDUSTRY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 9. ASSIGN USER → INDUSTRY ────────────────────────────────────────────────
 const assign_user_to_industry = async (req, res) => {
   try {
     const { user_type, user_id, industry_type_id, approval_status = 'APPROVED' } = req.body;
@@ -408,7 +408,7 @@ const assign_user_to_industry = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 10. REVOKE USER â†’ INDUSTRY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 10. REVOKE USER → INDUSTRY ───────────────────────────────────────────────
 const revoke_user_from_industry = async (req, res) => {
   try {
     const { user_type, user_id, industry_type_id } = req.body;
@@ -432,7 +432,7 @@ const revoke_user_from_industry = async (req, res) => {
   }
 };
 
-// â”€â”€â”€ 11. LIST USER INDUSTRY ASSIGNMENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── 11. LIST USER INDUSTRY ASSIGNMENTS ───────────────────────────────────────
 const list_user_industry_assignments = async (req, res) => {
   try {
     const { user_type, user_id, industry_type_id, approval_status } = req.query;

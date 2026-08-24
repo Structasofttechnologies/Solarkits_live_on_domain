@@ -162,7 +162,7 @@ export default function PreConfiguredKitOrderCart() {
 
         cart.forEach((kit) => {
             const itemValue = (kit.qty * kit.ourPrice);
-            const itemGstRate = Number(kit.gstRate ?? fallbackRate);
+            const itemGstRate = Number(kit.gstRate ?? kit.pricing?.gstRate ?? fallbackRate);
             const itemTaxable = Math.round(itemValue / (1 + (itemGstRate / 100)));
             const itemGst = Math.max(0, itemValue - itemTaxable);
             taxable += itemTaxable;

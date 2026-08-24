@@ -27,11 +27,6 @@ function OperationsPortalInner() {
     <>
       <Routes>
         <Route path='/*' element={<ProtectedRoutes />} >
-          <Route path='diy-solar-projects/*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
-          <Route path='epc-project-management-erp/*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
-          <Route path='solar-amc-management/*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
-          <Route path='solar-installer-marketplace/*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
-          <Route path='solar-mega-watt-projects/*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
           <Route path='solar-shop/*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
           <Route path='*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
         </Route>

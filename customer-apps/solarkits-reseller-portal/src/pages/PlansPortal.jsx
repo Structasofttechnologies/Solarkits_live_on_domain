@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import api from "../services/api";
 import {
@@ -9,7 +9,7 @@ import {
 
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_T8B85UkbvoXBOQ";
 
-// â”€â”€â”€ Load Razorpay Script â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Load Razorpay Script ──────────────────────────────────────────────────────
 function loadRazorpayScript() {
   return new Promise((resolve) => {
     if (window.Razorpay) return resolve(true);
@@ -21,7 +21,7 @@ function loadRazorpayScript() {
   });
 }
 
-// â”€â”€â”€ Bank Details Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Bank Details Form ────────────────────────────────────────────────────────
 function BankDetailsForm({ bankForm, setBankForm, errors }) {
   const field = (label, name, placeholder, icon, extra = {}) => (
     <div>
@@ -69,7 +69,7 @@ function BankDetailsForm({ bankForm, setBankForm, errors }) {
   );
 }
 
-// â”€â”€â”€ Plan Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Plan Card ────────────────────────────────────────────────────────────────
 function PlanCard({ plan, onSelect, isActive, activePlanId }) {
   const isCurrent = plan.id === activePlanId;
   return (
@@ -87,7 +87,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
         <div className={`absolute top-0 left-0 right-0 py-1.5 text-center text-[11px] font-black uppercase tracking-widest ${
           isCurrent ? "bg-emerald-500 text-white" : "bg-blue-600 text-white"
         }`}>
-          {isCurrent ? "âœ“ Current Plan" : "â­ Most Popular"}
+          {isCurrent ? "✓ Current Plan" : "⭐ Most Popular"}
         </div>
       )}
 
@@ -97,7 +97,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
           <h3 className="text-xl font-extrabold text-slate-900">{plan.plan_name}</h3>
           <div className="mt-2 flex items-baseline gap-1">
             <span className="text-3xl font-black text-blue-600">
-              â‚¹{(plan.annual_fee || 0).toLocaleString("en-IN")}
+              ₹{(plan.annual_fee || 0).toLocaleString("en-IN")}
             </span>
             <span className="text-sm text-slate-500 font-semibold">/year</span>
           </div>
@@ -113,7 +113,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
             ["MOQ Capacity", `${Number(plan.moq_capacity_kw || 10000).toLocaleString("en-IN")} kW (${plan.moq_kits_count || 1} Kit MOQ)`, "text-amber-600"],
             ["Project Types", plan.project_types_display || "All Types", "text-slate-700"],
             ["Order Types", plan.order_type_allowed === "po_order" ? "PO Order Only" : plan.order_type_allowed === "loose_order" ? "Loose Order Only" : "PO & Loose Orders", "text-purple-700"],
-            ["Margins", `${plan.default_commission_rate}% Comm. / ${plan.default_dealer_margin}% Dealer`, "text-emerald-700"],
+            ["Commission", `${plan.default_commission_rate || 8}% Fixed Commission`, "text-emerald-700"],
             ["Warehouse", plan.warehouse_required ? `${plan.warehouse_count || 1} Hub (${Number(plan.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)` : "No WH Required", "text-slate-700"],
           ].map(([label, value, color]) => (
             <div key={label} className="flex items-start gap-2 text-slate-700">
@@ -130,7 +130,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
       <div className="px-7 pb-7">
         {isCurrent ? (
           <div className="w-full py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-sm text-center">
-            âœ“ Active Plan
+            ✓ Active Plan
           </div>
         ) : (
           <button
@@ -142,7 +142,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
               boxShadow: plan.is_popular ? "0 4px 14px rgba(37,99,235,0.35)" : "0 4px 14px rgba(30,41,59,0.2)",
             }}
           >
-            {plan.is_popular ? "âš¡ Subscribe Now" : "Subscribe / Upgrade"}
+            {plan.is_popular ? "⚡ Subscribe Now" : "Subscribe / Upgrade"}
           </button>
         )}
       </div>
@@ -150,7 +150,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
   );
 }
 
-// â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function PlansPortal() {
   const { reseller } = useOutletContext();
   const [plans, setPlans] = useState([]);
@@ -202,14 +202,14 @@ export default function PlansPortal() {
     setTimeout(() => setAlertMsg(null), 5000);
   };
 
-  // â”€â”€ Step 1: User selects plan â†’ go to bank details form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Step 1: User selects plan → go to bank details form ─────────────────────
   const handleSelectPlan = (plan) => {
     setSelectedPlan(plan);
     setFormErrors({});
     setStep("bank");
   };
 
-  // â”€â”€ Step 2: Validate bank form â†’ proceed to payment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Step 2: Validate bank form → proceed to payment ─────────────────────────
   const validateBankForm = () => {
     const errors = {};
     if (!bankForm.bank_name?.trim()) errors.bank_name = "Bank Name is required";
@@ -224,7 +224,7 @@ export default function PlansPortal() {
     return Object.keys(errors).length === 0;
   };
 
-  // â”€â”€ Step 3: Proceed to Razorpay payment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Step 3: Proceed to Razorpay payment ──────────────────────────────────────
   const handleProceedToPayment = async () => {
     if (!validateBankForm()) return;
     setSubmitting(true);
@@ -263,7 +263,7 @@ export default function PlansPortal() {
         amount:      amount_paise,
         currency:    currency || "INR",
         name:        "SolarKits",
-        description: `${selectedPlan.plan_name} â€” Franchisee Plan Subscription`,
+        description: `${selectedPlan.plan_name} — Franchisee Plan Subscription`,
         order_id:    razorpay_order_id,
         prefill: {
           name:    reseller?.business_name || "",
@@ -278,7 +278,7 @@ export default function PlansPortal() {
         handler: async function (response) {
           setStep("paying");
           try {
-            // d. Verify payment signature on server â†’ activate plan
+            // d. Verify payment signature on server → activate plan
             const verifyRes = await api.post("/india/v1/reseller/plans/verify-payment", {
               plan_id:             selectedPlan.id,
               razorpay_order_id:   response.razorpay_order_id,
@@ -330,7 +330,7 @@ export default function PlansPortal() {
     }
   };
 
-  // â”€â”€â”€ Render: Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Loading ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24 gap-3 text-slate-500 font-bold">
@@ -340,7 +340,7 @@ export default function PlansPortal() {
     );
   }
 
-  // â”€â”€â”€ Render: Paying / Verifying â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Paying / Verifying ──────────────────────────────────────────────
   if (step === "paying") {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -353,7 +353,7 @@ export default function PlansPortal() {
     );
   }
 
-  // â”€â”€â”€ Render: Success â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Success ─────────────────────────────────────────────────────────
   if (step === "success" && successData) {
     return (
       <div className="max-w-lg mx-auto py-12">
@@ -362,7 +362,7 @@ export default function PlansPortal() {
             <FiCheckCircle className="text-emerald-600" size={38} />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-slate-900">Payment Successful! ðŸŽ‰</h2>
+            <h2 className="text-2xl font-black text-slate-900">Payment Successful! 🎉</h2>
             <p className="text-sm text-slate-600 mt-2 font-medium">
               Your <strong>{successData.plan_name}</strong> plan is now active.
               Commission payouts will be transferred to your registered bank account.
@@ -375,7 +375,7 @@ export default function PlansPortal() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Amount Paid</span>
-              <span className="font-black text-blue-700">â‚¹{Number(successData.amount_inr || 0).toLocaleString("en-IN")}</span>
+              <span className="font-black text-blue-700">₹{Number(successData.amount_inr || 0).toLocaleString("en-IN")}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Payment ID</span>
@@ -392,7 +392,7 @@ export default function PlansPortal() {
           </div>
           <div className="flex items-center gap-2 text-xs text-blue-700 font-bold justify-center">
             <FiShield size={13} />
-            100% payment secured via Razorpay â†’ SolarKits Admin Account
+            100% payment secured → SolarKits Admin Account
           </div>
           <button
             onClick={() => { setStep("plans"); setSuccessData(null); window.location.reload(); }}
@@ -405,7 +405,7 @@ export default function PlansPortal() {
     );
   }
 
-  // â”€â”€â”€ Render: Bank Details Form (Step 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Bank Details Form (Step 2) ──────────────────────────────────────
   if (step === "bank" && selectedPlan) {
     return (
       <div className="max-w-xl mx-auto space-y-6">
@@ -444,7 +444,7 @@ export default function PlansPortal() {
           </div>
           <div className="text-right">
             <p className="text-xs font-bold text-slate-500">Annual Fee</p>
-            <p className="text-2xl font-black text-blue-600">â‚¹{Number(selectedPlan.annual_fee || 0).toLocaleString("en-IN")}</p>
+            <p className="text-2xl font-black text-blue-600">₹{Number(selectedPlan.annual_fee || 0).toLocaleString("en-IN")}</p>
           </div>
         </div>
 
@@ -464,7 +464,7 @@ export default function PlansPortal() {
           <FiShield size={14} className="shrink-0 mt-0.5 text-amber-600" />
           <span>
             Bank details are securely stored and used <strong>only for commission payouts</strong> via manual NEFT/RTGS by our Accounts team. 
-            Payment of â‚¹{Number(selectedPlan.annual_fee || 0).toLocaleString("en-IN")} goes 100% to SolarKits Admin Razorpay account.
+            Payment of ₹{Number(selectedPlan.annual_fee || 0).toLocaleString("en-IN")} goes 100% to SolarKits Admin account.
           </span>
         </div>
 
@@ -479,14 +479,14 @@ export default function PlansPortal() {
           {submitting ? (
             <><FiLoader className="animate-spin" size={16} /> Creating Payment Order...</>
           ) : (
-            <><FiCreditCard size={16} /> Pay â‚¹{Number(selectedPlan.annual_fee || 0).toLocaleString("en-IN")} via Razorpay <FiChevronRight size={16} /></>
+            <><FiCreditCard size={16} /> Pay ₹{Number(selectedPlan.annual_fee || 0).toLocaleString("en-IN")} <FiChevronRight size={16} /></>
           )}
         </button>
       </div>
     );
   }
 
-  // â”€â”€â”€ Render: Plans List (Step 1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Plans List (Step 1) ─────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -514,7 +514,7 @@ export default function PlansPortal() {
       {/* Payment security note */}
       <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700">
         <FiShield size={14} className="text-blue-600 shrink-0" />
-        All payments flow 100% to SolarKits Admin via Razorpay. Commissions are transferred manually via NEFT/RTGS after verification.
+        All payments flow 100% to SolarKits Admin. Commissions are transferred manually via NEFT/RTGS after verification.
       </div>
 
       {/* Plans Grid */}

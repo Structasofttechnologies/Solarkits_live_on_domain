@@ -13,9 +13,8 @@
 const {
   EpcOrder,
   ResellerProcurementOrder,
-  RazorpayWebhookLog,
 } = require('../models/india_solarshop_db');
-const { createRazorpayRefund } = require('./razorpay.service');
+
 const { reverseOrderMargins } = require('./wallet.settlement.service');
 const { generateCreditNote } = require('./invoice.service');
 const { logAudit } = require('../utils/audit.service');
@@ -47,19 +46,6 @@ async function processOrderRefund({ orderType = 'epc', orderId, amountInr, reaso
 
   const isFullRefund = requestedRefundPaise === grandTotalPaise;
 
-  // Execute Razorpay refund if payment reference exists
-  let razorpayRefund = null;
-  if (order.payment_reference && !order.payment_reference.startsWith('pay_mock_')) {
-    try {
-      razorpayRefund = await createRazorpayRefund({
-        paymentId: order.payment_reference,
-        amountPaise: requestedRefundPaise,
-        notes: { order_id: orderId.toString(), reason: reason || 'Customer Refund' },
-      });
-    } catch (rzpErr) {
-      console.warn(`[refund.service] Razorpay refund API call failed for payment ${order.payment_reference} (continuing with internal order refund):`, rzpErr.message || rzpErr);
-    }
-  }
 
   // Update order status
   order.payment_status = isFullRefund ? 'refunded' : 'partially_refunded';
@@ -95,7 +81,6 @@ async function processOrderRefund({ orderType = 'epc', orderId, amountInr, reaso
     entity_id: orderId,
     after_snapshot: {
       refund_amount_paise: requestedRefundPaise,
-      razorpay_refund_id: razorpayRefund?.refund_id || null,
       payment_status: order.payment_status,
     },
   });
@@ -107,7 +92,6 @@ async function processOrderRefund({ orderType = 'epc', orderId, amountInr, reaso
     payment_status: order.payment_status,
     refund_amount_inr: (requestedRefundPaise / 100).toFixed(2),
     is_full_refund: isFullRefund,
-    razorpay_refund: razorpayRefund,
     credit_note: creditNote,
   };
 }

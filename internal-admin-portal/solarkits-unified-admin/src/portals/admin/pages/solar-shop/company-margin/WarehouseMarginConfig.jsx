@@ -104,7 +104,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
         { headers: authHeaderObj() }
       );
       const allWarehouses = warehousesRes.data?.warehouses || [];
-      const wh = allWarehouses.find(w => w.id === warehouseId);
+      const wh = allWarehouses.find(w => (w.id || w._id)?.toString() === warehouseId?.toString());
       setWarehouse(wh);
 
       if (wh && foundCountry) {
@@ -555,18 +555,37 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
             />
 
             {/* GST Rate */}
-            <CustomInput
-              label="GST Rate (%)"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value={dialogState.gst_rate}
-              onChange={(e) => setDialogState((prev) => ({ ...prev, gst_rate: e.target.value }))}
-              placeholder="13.8"
-              prefix={<FaPercent className="text-text-muted text-[10px]" />}
-              helperText="Leave blank to use the default shop GST fallback."
-            />
+            <div className="space-y-1.5">
+              <CustomInput
+                label="Product GST Rate (%) *"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={dialogState.gst_rate}
+                onChange={(e) => setDialogState((prev) => ({ ...prev, gst_rate: e.target.value }))}
+                placeholder="e.g. 13.8, 18, 12, 5"
+                prefix={<FaPercent className="text-text-muted text-[10px]" />}
+                helperText="Dynamic GST percentage applied specifically to this product in this warehouse."
+              />
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span className="text-[10px] text-text-muted font-bold">Quick Presets:</span>
+                {[5, 12, 13.8, 18, 28].map((rate) => (
+                  <button
+                    key={rate}
+                    type="button"
+                    onClick={() => setDialogState((prev) => ({ ...prev, gst_rate: String(rate) }))}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all ${
+                      Number(dialogState.gst_rate) === rate
+                        ? "bg-primary text-white border-primary shadow-xs scale-105"
+                        : "bg-surface-hover/80 text-text-secondary border-border hover:bg-surface-hover hover:text-text-primary"
+                    }`}
+                  >
+                    {rate}%
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="flex gap-3 pt-6 border-t border-border">
               <Button

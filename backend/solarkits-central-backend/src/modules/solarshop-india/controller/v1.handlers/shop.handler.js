@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { createRazorpayOrder, verifyPaymentSignature, getGatewayStatus } = require("../../../admin-panel/services/razorpay.service");
 const { processEpcCheckout, confirmEpcOrderPayment } = require("../../../admin-panel/services/epc.order.service");
 
 const CompanyWarehouse = require("../../models/india_core_db/company_warehouses.schema");
@@ -980,6 +979,10 @@ const get_combo_kits_by_district = async (req, res) => {
           unit: kit.project_range_id.unit?.symbol || "kW",
           text: `${kit.project_range_id.min_value} - ${kit.project_range_id.max_value} ${kit.project_range_id.unit?.symbol || "kW"}`
         } : null,
+        gstRate,
+        gstIncluded: standardPrice - Math.round(standardPrice / (1 + (gstRate / 100))),
+        ourPrice: standardPrice,
+        marketPrice: premiumPrice,
         pricing: {
           showcaseMargin,
           standardMargin,
@@ -1602,7 +1605,7 @@ const confirm_order = async (req, res) => {
         deleted_at: null
       }).lean();
       const standardMargin = marginDoc ? (marginDoc.standard_margin || 0) : 0;
-      const gstRate = marginDoc?.gst_rate ?? 13.8;
+      const gstRate = marginDoc?.gst_rate ?? item.gstRate ?? 13.8;
       const standardPrice = calculatePriceWithMarginAndGst(totalBasePrice, standardMargin, gstRate);
 
       // If additional price for variant exists
@@ -2382,80 +2385,6 @@ const update_order_address = async (req, res) => {
   }
 };
 
-const create_razorpay_order = async (req, res) => {
-  try {
-    const { items, delivery_address, is_end_customer_sale } = req.body;
-    const epcId = req.user?.id || req.user?._id;
-
-    if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, message: "Cart items are required." });
-    }
-
-    const result = await processEpcCheckout({
-      epc_id: epcId,
-      items,
-      delivery_address: delivery_address || {},
-      is_end_customer_sale: is_end_customer_sale !== false,
-      actor_id: epcId,
-      req,
-    });
-
-    return res.status(200).json({
-      success: true,
-      id: result.razorpay_order.order_id,
-      amount: result.razorpay_order.amount_paise,
-      currency: result.razorpay_order.currency || "INR",
-      key: process.env.RAZORPAY_ID,
-      internal_order_id: result.order._id,
-      order_number: result.order.order_number,
-    });
-  } catch (error) {
-    console.error('create_razorpay_order error:', error);
-    return res.status(500).json({ success: false, message: error.message || "Failed to create payment order." });
-  }
-};
-
-const verify_razorpay_payment = async (req, res) => {
-  try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, internal_order_id } = req.body;
-
-    if (!razorpay_payment_id) {
-      return res.status(400).json({ success: false, message: "razorpay_payment_id is required." });
-    }
-
-    // Enforce signature verification when Razorpay is configured.
-    // Previously, omitting razorpay_order_id + razorpay_signature bypassed
-    // verification entirely, allowing a crafted POST to confirm an order
-    // without a real payment.
-    const razorpayConfigured = !!(process.env.RAZORPAY_ID && process.env.RAZORPAY_KEY);
-    if (razorpayConfigured) {
-      if (!razorpay_order_id || !razorpay_signature) {
-        return res.status(400).json({
-          success: false,
-          message: "razorpay_order_id and razorpay_signature are required for payment verification."
-        });
-      }
-      const isValid = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
-      if (!isValid) {
-        return res.status(400).json({ success: false, message: "Payment signature verification failed." });
-      }
-    }
-
-    if (internal_order_id) {
-      await confirmEpcOrderPayment(internal_order_id, razorpay_payment_id, req.user?.id, req);
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Payment verified successfully.",
-      razorpay_payment_id,
-    });
-  } catch (error) {
-    console.error('verify_razorpay_payment error:', error);
-    return res.status(500).json({ success: false, message: error.message || "Payment verification failed." });
-  }
-};
-
 const CustomBosCatalog = require("../../models/india_solarshop_db/custom_bos_catalog.schema");
 const BosKit = require("../../models/india_solarshop_db/bos_kits.schema");
 
@@ -2965,8 +2894,6 @@ module.exports = {
   gst_verify_otp,
   get_orders,
   update_order_address,
-  create_razorpay_order,
-  verify_razorpay_payment,
   get_bos_kits,
   save_bos_kits,
   create_or_update_bos_kit,

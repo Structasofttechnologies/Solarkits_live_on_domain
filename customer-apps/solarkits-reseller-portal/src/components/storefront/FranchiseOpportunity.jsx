@@ -144,9 +144,9 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
             const territoryText =
               plan.max_states_allowed ||
               `${plan.allowed_territories_count || 1} Exclusive ${levelName}`;
-            const earningText = plan.default_dealer_margin
-              ? `${plan.default_dealer_margin}% Margin`
-              : "Wholesale Margin";
+            const earningText = plan.default_commission_rate
+              ? `${plan.default_commission_rate}% Commission`
+              : "Commission Payout";
             const btnText =
               plan.territory_level === "district"
                 ? "Reserve District"

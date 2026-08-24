@@ -176,7 +176,7 @@ export default function WarehouseBulkConfig({ moduleUniqueId }) {
       setCountryObj(foundCountry);
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
-      const wh = allWarehouses.find((w) => w.id === warehouseId);
+      const wh = allWarehouses.find((w) => (w.id || w._id)?.toString() === warehouseId?.toString());
       setWarehouse(wh);
 
       // Deduplicate kits

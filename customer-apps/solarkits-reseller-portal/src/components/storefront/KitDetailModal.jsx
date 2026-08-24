@@ -184,7 +184,7 @@ export default function KitDetailModal({
                 <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between text-xs">
                   <span className="text-slate-600 font-bold flex items-center gap-1.5">
                     <FiTrendingUp className="text-emerald-600" />
-                    Est. Realized Dealer Margin:
+                    Est. Realized Commission:
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-black">
                     +₹{marginAmount.toLocaleString("en-IN")} ({marginPercent}%)
