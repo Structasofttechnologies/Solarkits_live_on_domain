@@ -43,10 +43,10 @@ const VALID_STATUSES = [
 
 const statusHistorySchema = new mongoose.Schema(
   {
-    status:     { type: String, enum: VALID_STATUSES, required: true },
+    status: { type: String, enum: VALID_STATUSES, required: true },
     changed_by: { type: mongoose.Schema.Types.ObjectId, default: null },
     actor_type: { type: String, enum: ['cms_user', 'reseller', 'system'], default: 'system' },
-    note:       { type: String, default: null, maxlength: 1000 },
+    note: { type: String, default: null, maxlength: 1000 },
     changed_at: { type: Date, default: Date.now },
   },
   { _id: false }
@@ -54,44 +54,44 @@ const statusHistorySchema = new mongoose.Schema(
 
 const moqSnapshotSchema = new mongoose.Schema(
   {
-    moq:                { type: Number, default: null },
+    moq: { type: Number, default: null },
     increment_quantity: { type: Number, default: null },
-    max_quantity:       { type: Number, default: null },
-    rule_id:            { type: mongoose.Schema.Types.ObjectId, default: null },
+    max_quantity: { type: Number, default: null },
+    rule_id: { type: mongoose.Schema.Types.ObjectId, default: null },
   },
   { _id: false }
 );
 
 const poItemSchema = new mongoose.Schema(
   {
-    project_type_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types', default: null },
+    project_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types', default: null },
     project_type_name: { type: String, default: null },
-    kit_id:            { type: mongoose.Schema.Types.ObjectId, ref: 'pc_combo_kits', default: null },
-    product_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'products', default: null },
-    item_name:         { type: String, required: true },
-    item_code:         { type: String, default: null },
+    kit_id: { type: mongoose.Schema.Types.ObjectId, ref: 'pc_combo_kits', default: null },
+    product_id: { type: mongoose.Schema.Types.ObjectId, ref: 'products', default: null },
+    item_name: { type: String, required: true },
+    item_code: { type: String, default: null },
 
     // Ordered quantity
     quantity: { type: Number, required: true, min: 1 },
 
     // Snapshots at time of PO creation (immutable after submission)
-    moq_snapshot:        { type: moqSnapshotSchema, default: null },
-    unit_price_paise:    { type: Number, required: true, min: 0 },
-    gst_rate:            { type: Number, default: 0 },
-    tax_paise:           { type: Number, required: true, min: 0 },
-    total_price_paise:   { type: Number, required: true, min: 0 },
+    moq_snapshot: { type: moqSnapshotSchema, default: null },
+    unit_price_paise: { type: Number, required: true, min: 0 },
+    gst_rate: { type: Number, default: 0 },
+    tax_paise: { type: Number, required: true, min: 0 },
+    total_price_paise: { type: Number, required: true, min: 0 },
 
     // Commission snapshot (captured at submission)
-    commission_method:   { type: String, enum: ['PERCENTAGE', 'FIXED_PER_KIT'], default: null },
+    commission_method: { type: String, enum: ['PERCENTAGE', 'FIXED_PER_KIT'], default: null },
     commission_snapshot: { type: Number, default: 0 }, // paise per kit OR percentage * 100
 
     // Contribution flags
     contributes_to_target: { type: Boolean, default: true },
 
     // Post-delivery adjustments
-    returned_quantity:   { type: Number, default: 0, min: 0 },
-    cancelled_quantity:  { type: Number, default: 0, min: 0 },
-    delivered_quantity:  { type: Number, default: 0, min: 0 },
+    returned_quantity: { type: Number, default: 0, min: 0 },
+    cancelled_quantity: { type: Number, default: 0, min: 0 },
+    delivered_quantity: { type: Number, default: 0, min: 0 },
   },
   { _id: true }
 );
@@ -131,8 +131,8 @@ const schema = new mongoose.Schema(
 
     // ── Territory ─────────────────────────────────────────────────────────────
     territory_snapshot: { type: Object, default: null },
-    state_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_1', default: null },
-    district_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_2', default: null },
+    state_id: { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_1', default: null },
+    district_id: { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_2', default: null },
 
     // ── Classification ────────────────────────────────────────────────────────
     industry_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'sys_industry_types', default: null },
@@ -141,11 +141,11 @@ const schema = new mongoose.Schema(
     items: [poItemSchema],
 
     // ── Financials (integer Paise) ─────────────────────────────────────────────
-    subtotal_paise:     { type: Number, required: true, min: 0 },
-    tax_total_paise:    { type: Number, required: true, min: 0 },
+    subtotal_paise: { type: Number, required: true, min: 0 },
+    tax_total_paise: { type: Number, required: true, min: 0 },
     shipping_fee_paise: { type: Number, default: 0, min: 0 },
-    discount_paise:     { type: Number, default: 0, min: 0 },
-    grand_total_paise:  { type: Number, required: true, min: 0 },
+    discount_paise: { type: Number, default: 0, min: 0 },
+    grand_total_paise: { type: Number, required: true, min: 0 },
 
     // ── Payment ───────────────────────────────────────────────────────────────
     payment_terms: {
@@ -159,10 +159,10 @@ const schema = new mongoose.Schema(
       ],
       default: 'FULL_ADVANCE',
     },
-    advance_percentage:  { type: Number, default: 0 },
-    advance_paid_paise:  { type: Number, default: 0, min: 0 },
-    payment_reference:   { type: String, default: null },
-    razorpay_order_id:   { type: String, default: null },
+    advance_percentage: { type: Number, default: 0 },
+    advance_paid_paise: { type: Number, default: 0, min: 0 },
+    payment_reference: { type: String, default: null },
+    razorpay_order_id: { type: String, default: null },
     razorpay_payment_id: { type: String, default: null },
 
     // ── Status & History ──────────────────────────────────────────────────────
@@ -175,36 +175,36 @@ const schema = new mongoose.Schema(
 
     // ── Approval ─────────────────────────────────────────────────────────────
     requires_approval: { type: Boolean, default: true },
-    approved_by:       { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-    approved_at:       { type: Date, default: null },
-    rejected_by:       { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-    rejected_at:       { type: Date, default: null },
-    approval_notes:    { type: String, default: null, maxlength: 2000 },
+    approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    approved_at: { type: Date, default: null },
+    rejected_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    rejected_at: { type: Date, default: null },
+    approval_notes: { type: String, default: null, maxlength: 2000 },
 
     // ── Dispatch & Delivery ────────────────────────────────────────────────────
-    dispatch_date:   { type: Date, default: null },
-    delivery_date:   { type: Date, default: null },
+    dispatch_date: { type: Date, default: null },
+    delivery_date: { type: Date, default: null },
     expected_delivery_date: { type: Date, default: null },
 
     // ── Expiry ────────────────────────────────────────────────────────────────
     expires_at: { type: Date, default: null },
 
     // ── Commission ────────────────────────────────────────────────────────────
-    commission_rule_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'franchisee_commission_rules', default: null },
+    commission_rule_id: { type: mongoose.Schema.Types.ObjectId, ref: 'franchisee_commission_rules', default: null },
     commission_rule_snapshot: { type: Object, default: null },
-    commission_posted:        { type: Boolean, default: false },
-    commission_ledger_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'fpo_commission_ledgers', default: null },
-    total_commission_paise:   { type: Number, default: 0 },
+    commission_posted: { type: Boolean, default: false },
+    commission_ledger_id: { type: mongoose.Schema.Types.ObjectId, ref: 'fpo_commission_ledgers', default: null },
+    total_commission_paise: { type: Number, default: 0 },
 
     // ── Goal ─────────────────────────────────────────────────────────────────
-    goal_counted:       { type: Boolean, default: false },
-    goal_counted_qty:   { type: Number, default: 0 },
+    goal_counted: { type: Boolean, default: false },
+    goal_counted_qty: { type: Number, default: 0 },
 
     // ── Cancellation / Return ─────────────────────────────────────────────────
     cancellation_reason: { type: String, default: null, maxlength: 2000 },
-    amendment_reason:    { type: String, default: null, maxlength: 2000 },
-    cancelled_by:        { type: mongoose.Schema.Types.ObjectId, default: null },
-    cancelled_at:        { type: Date, default: null },
+    amendment_reason: { type: String, default: null, maxlength: 2000 },
+    cancelled_by: { type: mongoose.Schema.Types.ObjectId, default: null },
+    cancelled_at: { type: Date, default: null },
 
     // ── Audit ─────────────────────────────────────────────────────────────────
     created_by: { type: mongoose.Schema.Types.ObjectId, default: null },

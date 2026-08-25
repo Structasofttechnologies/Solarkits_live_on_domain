@@ -40,7 +40,7 @@ const schema = new mongoose.Schema(
     },
 
     // ── PO Enable / Disable ───────────────────────────────────────────────────
-    po_enabled: { type: Boolean, default: false },
+    po_enabled: { type: Boolean, default: true }, // Default TRUE — admin must explicitly disable
 
     // ── Quantity Limits ───────────────────────────────────────────────────────
     min_po_quantity: { type: Number, min: 0, default: 1 },
@@ -96,7 +96,7 @@ const schema = new mongoose.Schema(
     contributes_to_monthly_target: { type: Boolean, default: true },
 
     // ── Effective Period ──────────────────────────────────────────────────────
-    effective_from:  { type: Date, required: true },
+    effective_from:  { type: Date, required: true, default: Date.now }, // Bug fix: default prevents required-field errors
     effective_until: { type: Date, default: null },
 
     // ── Status & Audit ────────────────────────────────────────────────────────

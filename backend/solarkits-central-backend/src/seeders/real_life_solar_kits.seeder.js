@@ -59,9 +59,9 @@ async function seedSolarKitBlueprints() {
       {
         name: "5kW Residential Single Phase Premium On-Grid Kit",
         description: "Complete 5kW On-Grid solar architectural blueprint with Mono PERC panels, high-efficiency string inverter, ACDB/DCDB protection boxes, GI mounting structure, and lightning arrester.",
-        industryName: "Residential Solar Systems",
-        catName: "Rooftop Residential",
-        subCatName: "Single Phase Residential",
+        industryName: "Residential Solar",
+        catName: "Rooftop Grid-Tied & Hybrid Systems",
+        subCatName: "Single Phase Residential (1-Phase LT)",
         sysTypeName: "On-Grid (Net Metering)",
         baseComponents: [
           { tpl: "Solar Panel", st: "Mono PERC" },
@@ -91,10 +91,10 @@ async function seedSolarKitBlueprints() {
       {
         name: "10kW Three Phase Villa Hybrid Backup Kit",
         description: "Advanced 10kW Hybrid solar blueprint featuring high-voltage LFP Lithium battery storage, smart 3-phase hybrid inverter, and automated changeover switch gear.",
-        industryName: "Residential Solar Systems",
-        catName: "Rooftop Residential",
-        subCatName: "Three Phase Villa & Multi-Home",
-        sysTypeName: "Hybrid (High Voltage)",
+        industryName: "Residential Solar",
+        catName: "Rooftop Grid-Tied & Hybrid Systems",
+        subCatName: "Three Phase Villa & Large Homes (3-Phase LT)",
+        sysTypeName: "Hybrid (High Voltage Commercial/Villa ESS)",
         baseComponents: [
           { tpl: "Solar Panel", st: "TOPCon" },
           { tpl: "Inverter", st: "Hybrid" },
@@ -124,10 +124,10 @@ async function seedSolarKitBlueprints() {
       {
         name: "3kW Home Emergency Off-Grid Power Kit",
         description: "Compact 3kW Off-Grid standalone emergency solar power blueprint with MPPT charge controller and heavy-duty lead acid battery bank.",
-        industryName: "Residential Solar Systems",
-        catName: "Residential Off-Grid & Portable",
-        subCatName: "Home Emergency Backup",
-        sysTypeName: "Off-Grid Standalone",
+        industryName: "Residential Solar",
+        catName: "Rooftop Grid-Tied & Hybrid Systems",
+        subCatName: "Single Phase Residential (1-Phase LT)",
+        sysTypeName: "Off-Grid Standalone System",
         baseComponents: [
           { tpl: "Solar Panel", st: "Poly" },
           { tpl: "Inverter", st: "String" },
@@ -148,10 +148,10 @@ async function seedSolarKitBlueprints() {
       {
         name: "50kW Commercial LT On-Grid Rooftop Solution",
         description: "50kW LT Commercial rooftop blueprint engineered for commercial buildings, office parks, and educational institutes with dual-string inverters and net metering.",
-        industryName: "Commercial & Industrial Solar",
-        catName: "Commercial Rooftop & Carports",
-        subCatName: "LT Commercial Rooftop System",
-        sysTypeName: "On-Grid Commercial",
+        industryName: "Commercial & Industrial (C&I)",
+        catName: "Factory & Warehouse Metal Shed Solar",
+        subCatName: "Industrial Tin Shed (Trapezoidal / Klip-Lok Profile)",
+        sysTypeName: "Three-Phase String Inverter System (HT/LT)",
         baseComponents: [
           { tpl: "Solar Panel", st: "Bifacial" },
           { tpl: "Inverter", st: "String" }
@@ -181,10 +181,10 @@ async function seedSolarKitBlueprints() {
       {
         name: "500kW Industrial High Voltage Captive Solar Blueprint",
         description: "Industrial mega 500kW captive power blueprint for manufacturing plants, textile mills, and factories with central inverter integration and high-voltage protection.",
-        industryName: "Commercial & Industrial Solar",
-        catName: "Commercial Rooftop & Carports",
-        subCatName: "HT Industrial Plant",
-        sysTypeName: "Captive Solar Power Plant",
+        industryName: "Commercial & Industrial (C&I)",
+        catName: "Factory & Warehouse Metal Shed Solar",
+        subCatName: "Industrial Tin Shed (Trapezoidal / Klip-Lok Profile)",
+        sysTypeName: "Three-Phase String Inverter System (HT/LT)",
         baseComponents: [
           { tpl: "Solar Panel", st: "HJT" },
           { tpl: "Inverter", st: "Central" }

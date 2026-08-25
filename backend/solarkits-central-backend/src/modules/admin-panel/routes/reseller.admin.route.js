@@ -78,8 +78,23 @@ router.put(
   handler.review_epc_transfer
 );
 
+router.put(
+  '/fee-payment/verify/:id',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_MGMT', permissions: ['edit'] }, { unique_code: 'RSL_PLAN', permissions: ['edit'] }]),
+  handler.verify_fee_payment_receipt
+);
+
+router.put(
+  '/:id/fee-payment/verify',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_MGMT', permissions: ['edit'] }, { unique_code: 'RSL_PLAN', permissions: ['edit'] }]),
+  handler.verify_fee_payment_receipt
+);
+
 router.get('/razorpay/status', check_auth, handler.get_razorpay_status);
 router.post('/refunds/process', check_auth, handler.process_order_refund_admin);
 router.get('/webhook-logs', check_auth, handler.list_webhook_logs);
 
 module.exports = router;
+

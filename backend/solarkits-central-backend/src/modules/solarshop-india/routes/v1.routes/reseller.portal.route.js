@@ -45,13 +45,28 @@ router.post('/kyc/submit', verify_reseller_auth, handler.submit_kyc);
 router.get('/plans/list', handler.get_active_plans);
 router.post('/plans/subscribe',     verify_reseller_auth, handler.subscribe_plan);
 
+// ── Franchise Agreement Signing Routes ─────────────────────────────────────
+router.get('/agreement/current', verify_reseller_auth, handler.get_current_agreement);
+router.post('/agreement/sign',    verify_reseller_auth, kycDocUpload, handler.sign_agreement);
+
+// ── Offline Manual Fee Payment & Receipt Routes ───────────────────────────
+router.get('/fee-payment/info',           verify_reseller_auth, handler.get_fee_payment_info);
+router.post('/fee-payment/upload-receipt', verify_reseller_auth, kycDocUpload, handler.upload_manual_payment_receipt);
+
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);
 
+// ── Franchisee Self-Service PO Ordering Routes ─────────────────────────────
+router.get('/po/plan-settings', verify_reseller_auth, handler.get_my_plan_po_settings);
+router.get('/po/my-orders',     verify_reseller_auth, handler.list_my_po_orders);
+router.post('/po/create',       verify_reseller_auth, handler.create_my_po_order);
+router.get('/po/detail/:id',    verify_reseller_auth, handler.get_my_po_order_detail);
+
 // Bank Details Routes (commission payout account management)
 router.get('/profile/bank-details',  verify_reseller_auth, handler.get_reseller_bank_details);
 router.put('/profile/bank-details',  verify_reseller_auth, handler.update_reseller_bank_details);
+
 
 // Wallet & Ledger Routes (Phase 7 + R10)
 const walletPortalHandler = require('../../../admin-panel/controller/reseller.wallet.portal.handler');

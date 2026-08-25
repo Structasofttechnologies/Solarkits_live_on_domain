@@ -7,6 +7,129 @@ const {
 } = require('../services/reseller.pricing.service');
 const { logAudit } = require('../utils/audit.service');
 
+async function syncResellerListingsForReseller(resellerId) {
+  try {
+    const {
+      ResellerPlanSubscription,
+      FranchiseePlanPOSetting,
+      FranchiseePlanPoSetting,
+      ResellerProductAuthorization,
+      WarehouseComboKit,
+      ResellerListing,
+    } = require('../models/india_solarshop_db');
+    const { SolarKit } = require('../models/core_db');
+
+    // 1. Fetch active plan subscription
+    const activeSub = await ResellerPlanSubscription.findOne({
+      reseller_id: resellerId,
+      status: 'active',
+    }).populate('plan_id').sort({ start_date: -1 }).lean();
+
+    const activePlan = activeSub?.plan_id;
+    const authorizedKitIds = new Set();
+
+    if (activePlan) {
+      // Check PO Settings
+      const PlanPoModel = FranchiseePlanPOSetting || FranchiseePlanPoSetting;
+      const poSetting = PlanPoModel ? await PlanPoModel.findOne({
+        plan_id: activePlan._id,
+        is_active: true,
+      }).lean() : null;
+
+      const poKitIds = (poSetting?.allowed_combo_kit_ids || []).map(String);
+      const planKitIds = (activePlan.allowed_combo_kit_ids || []).map(String);
+      const combined = [...poKitIds, ...planKitIds];
+
+      if (combined.length > 0) {
+        combined.forEach((id) => authorizedKitIds.add(id));
+      } else {
+        // Fall back to category/subcategory/project type matching for plan
+        const planCatIds = (activePlan.allowed_category_ids || []).map(String);
+        const planSubcatIds = (activePlan.allowed_subcategory_ids || []).map(String);
+        const planProjectTypeIds = (activePlan.allowed_project_type_ids || []).map(String);
+
+        let comboKitQuery = { is_active: { $ne: false }, deleted_at: null };
+        if (planCatIds.length > 0 || planSubcatIds.length > 0 || planProjectTypeIds.length > 0) {
+          const defQuery = { deleted_at: null };
+          if (planCatIds.length > 0) defQuery.category_id = { $in: planCatIds };
+          if (planSubcatIds.length > 0) defQuery.subcategory_id = { $in: planSubcatIds };
+          if (planProjectTypeIds.length > 0) defQuery.type_id = { $in: planProjectTypeIds };
+
+          const matchingDefs = await SolarKit.find(defQuery).select('_id').lean();
+          const defIds = matchingDefs.map((d) => d._id);
+          comboKitQuery.solar_kit_id = { $in: defIds };
+        }
+        const kits = await WarehouseComboKit.find(comboKitQuery).select('_id').lean();
+        kits.forEach((k) => authorizedKitIds.add(String(k._id)));
+      }
+    }
+
+    // 2. Fetch explicit admin rules
+    const adminRules = await ResellerProductAuthorization.find({
+      reseller_id: resellerId,
+      status: 'active',
+    }).lean();
+
+    for (const r of adminRules) {
+      if (r.scope_type === 'kit' && r.kit_id) {
+        const kId = String(r.kit_id._id || r.kit_id);
+        if (r.is_authorized === false) {
+          authorizedKitIds.delete(kId);
+        } else {
+          authorizedKitIds.add(kId);
+        }
+      } else if (r.scope_type === 'category' || r.category_id || r.scope_type === 'all') {
+        if (r.is_authorized !== false) {
+          let catKitsQuery = { is_active: { $ne: false }, deleted_at: null };
+          if (r.category_id) {
+            const cId = r.category_id._id || r.category_id;
+            const matchingDefs = await SolarKit.find({ category_id: cId, deleted_at: null }).select('_id').lean();
+            const defIds = matchingDefs.map((d) => d._id);
+            catKitsQuery.$or = [
+              { category_id: cId },
+              { solar_kit_id: { $in: defIds } },
+            ];
+          }
+          const catKits = await WarehouseComboKit.find(catKitsQuery).select('_id').lean();
+          catKits.forEach((k) => authorizedKitIds.add(String(k._id)));
+        }
+      }
+    }
+
+    // 3. For each authorized kit, ensure ResellerListing exists
+    for (const kitId of authorizedKitIds) {
+      if (!mongoose.Types.ObjectId.isValid(kitId)) continue;
+      const existing = await ResellerListing.findOne({ reseller_id: resellerId, kit_id: kitId });
+      if (!existing) {
+        const kit = await WarehouseComboKit.findById(kitId).lean();
+        if (kit) {
+          const costPriceInr = kit.base_price_cached || kit.selling_price_cached || 5000;
+          const costPaise = Math.round(costPriceInr * 100);
+          await ResellerListing.create({
+            reseller_id: resellerId,
+            kit_id: kit._id,
+            scope_type: 'kit',
+            title: kit.name || kit.kit_name || 'Solar Combo Kit',
+            description: kit.description || 'Franchisee Plan Allocated Solar Kit',
+            cost_price_paise: costPaise,
+            selling_price_paise: costPaise,
+            margin_paise: 0,
+            stock_quantity: 100,
+            assignment_status: 'assigned',
+            is_published: true,
+            is_active: true,
+            category_id: kit.category_id || null,
+            subcategory_id: kit.subcategory_id || null,
+            brand_id: kit.brand_id || null,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[syncResellerListingsForReseller] error:', err);
+  }
+}
+
 // ─── 1. LIST RESELLER LISTINGS (Enhanced search & filters) ─────────────────────
 /**
  * GET /api/india/v1/reseller/listings OR /admin-api/reseller-mgmt/listings/:id
@@ -18,6 +141,9 @@ const list_reseller_listings = async (req, res) => {
     if (!resellerId || !mongoose.Types.ObjectId.isValid(resellerId)) {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
+
+    // Auto-sync listings for authorized kits
+    await syncResellerListingsForReseller(resellerId);
 
     const {
       search,

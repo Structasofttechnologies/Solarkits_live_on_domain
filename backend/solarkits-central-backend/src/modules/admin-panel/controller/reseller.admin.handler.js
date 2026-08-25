@@ -14,6 +14,7 @@ const {
   ResellerPlan,
   ResellerPlanSubscription,
   ResellerTerritory,
+  ResellerAgreement,
   AuditLog,
 } = require('../models/india_solarshop_db');
 const { CmsUser } = require('../models/user_db');
@@ -21,6 +22,7 @@ const { logAudit } = require('../utils/audit.service');
 const { evaluateActivationReadiness } = require('../services/reseller.activation.service');
 const { performGstVerification } = require('../services/gst.verification.service');
 const { listEpcTransferRequests, reviewEpcTransferRequest } = require('../utils/epc.reseller.service');
+const { syncGstDerivedTerritoryForReseller } = require('../utils/territory.validator');
 
 // ─── 1. LIST RESELLERS ────────────────────────────────────────────────────────
 /**
@@ -65,6 +67,7 @@ const list_resellers = async (req, res) => {
     const data = rows.map((r) => ({
       id:                r._id,
       business_name:     r.business_name,
+      contact_person:    r.contact_person,
       gst_number:        r.gst_number,
       pan_number:        r.pan_number,
       aadhaar_masked:    r.aadhaar_masked,
@@ -75,7 +78,11 @@ const list_resellers = async (req, res) => {
       address:           r.address,
       kyc_status:        r.kyc_status,
       agreement_status:  r.agreement_status,
+      fee_payment_status: r.fee_payment_status || 'pending_payment',
+      fee_payment_utr:    r.fee_payment_utr,
+      fee_payment_receipt_url: r.fee_payment_receipt_url,
       activation_status: r.activation_status,
+      reseller_lifecycle_status: r.reseller_lifecycle_status || 'draft',
       is_active:         r.is_active,
       created_at:        r.created_at,
     }));
@@ -107,12 +114,15 @@ const get_reseller_detail = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
 
-    const [reseller, kyc, subscription, auditLogs, territories] = await Promise.all([
+    await syncGstDerivedTerritoryForReseller(id);
+
+    const [reseller, kyc, subscription, agreement, auditLogs, territories] = await Promise.all([
       Reseller.findOne({ _id: id, deleted_at: null })
         .populate('reseller_type_id', 'name slug commercial_mode description')
         .lean(),
       ResellerKyc.findOne({ reseller_id: id }).lean(),
-      ResellerPlanSubscription.findOne({ reseller_id: id, status: 'active' }).populate('plan_id').lean(),
+      ResellerPlanSubscription.findOne({ reseller_id: id }).populate('plan_id').sort({ created_at: -1 }).lean(),
+      ResellerAgreement.findOne({ reseller_id: id }).sort({ created_at: -1 }).lean(),
       AuditLog.find({ entity_id: id }).sort({ created_at: -1 }).limit(50).lean(),
       ResellerTerritory.find({ reseller_id: id, status: 'active' })
         .populate('state_id', 'name iso_code')
@@ -136,7 +146,11 @@ const get_reseller_detail = async (req, res) => {
         reseller: {
           id:                reseller._id,
           business_name:     reseller.business_name,
+          contact_person:    reseller.contact_person,
           gst_number:        reseller.gst_number,
+          gst_legal_name:    reseller.gst_legal_name,
+          gst_trade_name:    reseller.gst_trade_name,
+          gst_verified_at:   reseller.gst_verified_at,
           pan_number:        reseller.pan_number,
           aadhaar_masked:    reseller.aadhaar_masked,
           mobile:            reseller.mobile,
@@ -146,14 +160,26 @@ const get_reseller_detail = async (req, res) => {
           address:           reseller.address,
           kyc_status:        reseller.kyc_status,
           agreement_status:  reseller.agreement_status,
+          agreement_signed_at: reseller.agreement_signed_at || agreement?.signed_at || null,
+          agreement_signer_name: reseller.agreement_signer_name || agreement?.signer_name || null,
+          fee_payment_status: reseller.fee_payment_status || subscription?.payment_status || 'pending_payment',
+          fee_payment_utr:    reseller.fee_payment_utr || subscription?.utr_number || null,
+          fee_payment_amount: reseller.fee_payment_amount || subscription?.amount_paid || null,
+          fee_payment_date:   reseller.fee_payment_date || subscription?.payment_date || null,
+          fee_payment_receipt_url: reseller.fee_payment_receipt_url || subscription?.receipt_url || null,
+          fee_payment_verified_at: reseller.fee_payment_verified_at || subscription?.verified_at || null,
+          fee_payment_remarks: reseller.fee_payment_remarks || subscription?.verification_remarks || null,
           activation_status: reseller.activation_status,
+          reseller_lifecycle_status: reseller.reseller_lifecycle_status || 'draft',
           is_email_verified:  reseller.is_email_verified,
           is_mobile_verified: reseller.is_mobile_verified,
           is_active:         reseller.is_active,
           created_at:        reseller.created_at,
         },
         kyc: kyc || null,
+        agreement: agreement || null,
         active_subscription: subscription || null,
+        subscription: subscription || null,
         territories: territories.map((t) => ({
           id:                t._id,
           scope_level:       t.territory_level,
@@ -179,6 +205,7 @@ const get_reseller_detail = async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
+
 
 // ─── 3. REVIEW KYC (Verify / Reject / Request Resubmission) ──────────────────
 /**
@@ -407,6 +434,7 @@ const verify_gstin_admin = async (req, res) => {
           reseller_lifecycle_status: 'gst_verified',
         },
       });
+      await syncGstDerivedTerritoryForReseller(reseller_id);
     }
 
     return res.json({ status: 'success', data: result });
@@ -588,6 +616,125 @@ const list_webhook_logs = async (req, res) => {
   }
 };
 
+const verify_fee_payment_receipt = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, remarks } = req.body;
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
+    }
+
+    if (!['approve', 'reject'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'decision must be "approve" or "reject"' });
+    }
+
+    const reseller = await Reseller.findOne({ _id: id, deleted_at: null });
+    if (!reseller) {
+      return res.status(404).json({ status: 'error', message: 'Reseller not found' });
+    }
+
+    let subscription = await ResellerPlanSubscription.findOne({ reseller_id: id }).sort({ created_at: -1 });
+
+    const adminId = req.user?.id || null;
+    const cleanRemarks = remarks ? remarks.trim() : null;
+
+    if (decision === 'approve') {
+      if (subscription) {
+        subscription.payment_status = 'verified';
+        subscription.status = 'active';
+        subscription.verified_by = adminId;
+        subscription.verified_at = new Date();
+        subscription.verification_remarks = cleanRemarks || 'Payment receipt approved by Admin.';
+        await subscription.save();
+      }
+
+      reseller.fee_payment_status = 'verified';
+      reseller.fee_payment_verified_at = new Date();
+      reseller.fee_payment_verified_by = adminId;
+      reseller.fee_payment_remarks = cleanRemarks || 'Payment receipt verified and approved';
+      reseller.activation_status = 'active';
+      reseller.is_active = true;
+      reseller.reseller_lifecycle_status = 'active';
+      await reseller.save();
+
+      // Ensure assigned territories are active
+      await ResellerTerritory.updateMany(
+        { reseller_id: id },
+        { $set: { status: 'active' } }
+      );
+
+      await logAudit({
+        actor_type: 'cms_user',
+        actor_id: adminId,
+        action: 'RESELLER_FEE_RECEIPT_VERIFIED_ACTIVATED',
+        entity_type: 'resellers',
+        entity_id: reseller._id,
+        after_snapshot: {
+          reseller_id: reseller._id,
+          fee_payment_status: 'verified',
+          activation_status: 'active',
+          remarks: cleanRemarks,
+        },
+        req,
+      });
+
+      return res.json({
+        status: 'success',
+        message: `Fee payment receipt verified successfully! Franchise partner "${reseller.business_name}" is now 100% active.`,
+        data: {
+          reseller_id: reseller._id,
+          fee_payment_status: 'verified',
+          activation_status: 'active',
+          reseller_lifecycle_status: 'active',
+        },
+      });
+    } else {
+      // Reject receipt
+      if (subscription) {
+        subscription.payment_status = 'rejected';
+        subscription.status = 'pending_payment';
+        subscription.verified_by = adminId;
+        subscription.verified_at = new Date();
+        subscription.verification_remarks = cleanRemarks || 'Payment receipt rejected by Admin.';
+        await subscription.save();
+      }
+
+      reseller.fee_payment_status = 'rejected';
+      reseller.fee_payment_remarks = cleanRemarks || 'Payment receipt rejected. Please re-upload valid UTR/receipt document.';
+      reseller.reseller_lifecycle_status = 'fee_payment_pending';
+      await reseller.save();
+
+      await logAudit({
+        actor_type: 'cms_user',
+        actor_id: adminId,
+        action: 'RESELLER_FEE_RECEIPT_REJECTED',
+        entity_type: 'resellers',
+        entity_id: reseller._id,
+        after_snapshot: {
+          reseller_id: reseller._id,
+          fee_payment_status: 'rejected',
+          remarks: cleanRemarks,
+        },
+        req,
+      });
+
+      return res.json({
+        status: 'success',
+        message: 'Payment receipt rejected. Partner has been flagged to re-upload receipt.',
+        data: {
+          reseller_id: reseller._id,
+          fee_payment_status: 'rejected',
+          reseller_lifecycle_status: 'fee_payment_pending',
+        },
+      });
+    }
+  } catch (error) {
+    console.error('[reseller.admin] verify_fee_payment_receipt error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
 module.exports = {
   list_resellers,
   get_reseller_detail,
@@ -601,4 +748,6 @@ module.exports = {
   get_razorpay_status,
   process_order_refund_admin,
   list_webhook_logs,
+  verify_fee_payment_receipt,
 };
+

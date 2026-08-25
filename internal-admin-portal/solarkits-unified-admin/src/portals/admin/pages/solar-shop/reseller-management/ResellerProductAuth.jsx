@@ -150,19 +150,25 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
 
   // Filter combo kits based on 5 cascading dropdown selections
   const filteredKits = kits.filter((k) => {
-    if (form.industry_type_id && (k.industry_type_id?._id || k.industry_type_id) !== form.industry_type_id) {
-      // Allow loose match if kit doesn't store direct industry_type_id
-    }
-    if (form.category_id && k.category_id && (k.category_id?._id || k.category_id) !== form.category_id) {
+    const kitCatId = k.category_id?._id || k.category_id || k.solar_kit_id?.category_id?._id || k.solar_kit_id?.category_id;
+    const kitSubcatId = k.subcategory_id?._id || k.subcategory_id || k.solar_kit_id?.subcategory_id?._id || k.solar_kit_id?.subcategory_id;
+    const kitTypeId = k.project_type_id?._id || k.project_type_id || k.type_id?._id || k.type_id || k.solar_kit_id?.type_id?._id || k.solar_kit_id?.type_id;
+    const kitRangeId = k.project_range_id?._id || k.project_range_id;
+    const kitIndId = k.industry_type_id?._id || k.industry_type_id || k.solar_kit_id?.industry_type_id?._id || k.solar_kit_id?.industry_type_id;
+
+    if (form.industry_type_id && kitIndId && String(kitIndId) !== String(form.industry_type_id)) {
       return false;
     }
-    if (form.subcategory_id && k.subcategory_id && (k.subcategory_id?._id || k.subcategory_id) !== form.subcategory_id) {
+    if (form.category_id && kitCatId && String(kitCatId) !== String(form.category_id)) {
       return false;
     }
-    if (form.system_type_id && k.project_type_id && (k.project_type_id?._id || k.project_type_id) !== form.system_type_id) {
+    if (form.subcategory_id && kitSubcatId && String(kitSubcatId) !== String(form.subcategory_id)) {
       return false;
     }
-    if (form.project_range_id && k.project_range_id && (k.project_range_id?._id || k.project_range_id) !== form.project_range_id) {
+    if (form.system_type_id && kitTypeId && String(kitTypeId) !== String(form.system_type_id)) {
+      return false;
+    }
+    if (form.project_range_id && kitRangeId && String(kitRangeId) !== String(form.project_range_id)) {
       return false;
     }
     return true;

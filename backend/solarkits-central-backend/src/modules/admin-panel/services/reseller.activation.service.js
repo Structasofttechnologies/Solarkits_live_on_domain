@@ -67,6 +67,11 @@ async function evaluateActivationReadiness(resellerId) {
       passed: Boolean(agreement || reseller.agreement_status === 'signed'),
       details: agreement ? `Signed on ${agreement.signed_at}` : 'No signed agreement found',
     },
+    fee_payment_verified: {
+      required: Boolean(settings.activation_require_active_plan),
+      passed: Boolean(reseller.fee_payment_status === 'verified' || subscription?.status === 'active' || subscription?.payment_status === 'verified'),
+      details: reseller.fee_payment_status === 'verified' ? `Verified (UTR: ${reseller.fee_payment_utr || 'Approved'})` : 'Payment receipt not yet approved',
+    },
     active_plan: {
       required: Boolean(settings.activation_require_active_plan),
       passed: Boolean(subscription),
@@ -112,15 +117,17 @@ function computeNextLifecycleStatus(reseller, kyc, agreement, territories) {
   if (reseller.activation_status === 'active') return 'active';
 
   if (!reseller.gst_verified_at) return 'gst_verification_pending';
+  if (reseller.agreement_status !== 'signed' && !agreement) return 'agreement_pending';
+  if (reseller.fee_payment_status === 'pending_payment') return 'fee_payment_pending';
+  if (reseller.fee_payment_status === 'receipt_uploaded') return 'payment_verification_pending';
   if (reseller.kyc_status === 'draft') return 'kyc_pending';
   if (reseller.kyc_status === 'submitted') return 'kyc_submitted';
   if (reseller.kyc_status === 'resubmission_required') return 'kyc_resubmission_required';
   if (reseller.kyc_status === 'rejected') return 'kyc_rejected';
 
   if (reseller.kyc_status === 'verified') {
-    if (reseller.agreement_status !== 'signed' && !agreement) return 'agreement_pending';
     if (!territories || territories.length === 0) return 'territory_pending';
-    return 'kyc_verified';
+    return 'active';
   }
 
   return reseller.reseller_lifecycle_status || 'draft';
@@ -130,3 +137,4 @@ module.exports = {
   evaluateActivationReadiness,
   computeNextLifecycleStatus,
 };
+

@@ -75,6 +75,7 @@ adminRouter.use('/resellers/plans', require('./modules/admin-panel/routes/resell
 adminRouter.use('/reseller-mgmt/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/resellers/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/reseller-mgmt', require('./modules/admin-panel/routes/reseller.admin.route'));
+adminRouter.use('/resellers', require('./modules/admin-panel/routes/reseller.admin.route'));
 adminRouter.use('/reseller-mgmt/procurement', require('./modules/admin-panel/routes/reseller.procurement.route'));
 adminRouter.use('/reseller-mgmt/pricing-rules', require('./modules/admin-panel/routes/reseller.pricing.route'));
 adminRouter.use('/reseller-mgmt/analytics', require('./modules/admin-panel/routes/reseller.analytics.route'));

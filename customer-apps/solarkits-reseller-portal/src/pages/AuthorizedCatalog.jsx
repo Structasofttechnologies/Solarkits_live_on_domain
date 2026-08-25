@@ -166,8 +166,22 @@ export default function AuthorizedCatalog() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center text-xs font-mono font-bold text-slate-600 capitalize">
-                        {(r.source || "admin_override").replace(/_/g, " ")}
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold ${
+                          r.source === "admin_override"
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                            : r.source === "admin_assigned"
+                            ? "bg-blue-100 text-blue-800 border border-blue-200"
+                            : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                        }`}>
+                          {r.source === "admin_override"
+                            ? "Admin Override"
+                            : r.source === "admin_assigned"
+                            ? "Admin Assigned"
+                            : r.source === "plan_default" || !r.source
+                            ? "Plan Default"
+                            : r.source.replace(/_/g, " ")}
+                        </span>
                       </td>
                     </tr>
                   );

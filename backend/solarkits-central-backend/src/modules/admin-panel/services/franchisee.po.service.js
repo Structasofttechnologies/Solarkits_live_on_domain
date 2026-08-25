@@ -171,6 +171,7 @@ async function createPoDraft({ franchisee_id, items, idempotency_key, payment_te
       item_name:            item.item_name,
       item_code:            item.item_code || null,
       quantity:             item.quantity,
+      epc_allocations:      Array.isArray(item.epc_allocations) ? item.epc_allocations : [],
       moq_snapshot: moq_rule ? {
         moq:                moq_rule.moq,
         increment_quantity: moq_rule.increment_quantity,

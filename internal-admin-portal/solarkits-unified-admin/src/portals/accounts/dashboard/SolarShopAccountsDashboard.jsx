@@ -12,6 +12,7 @@ const FranchisePlanPurchases = lazy(() => import("../pages/solar-shop/FranchiseP
 const DirectEpcTransactions = lazy(() => import("../pages/solar-shop/DirectEpcTransactions"));
 const FranchiseCommissionTracking = lazy(() => import("../pages/solar-shop/FranchiseCommissionTracking"));
 const OnboardedEpcPurchases = lazy(() => import("../pages/solar-shop/OnboardedEpcPurchases"));
+const FranchiseePoOrdersAccounts = lazy(() => import("../pages/solar-shop/FranchiseePoOrdersAccounts"));
 const Profile = lazy(() => import("../pages/Profile"));
 const AccountSettings = lazy(() => import("../pages/AccountSettings"));
 
@@ -21,6 +22,11 @@ const solarShopMenus = [
       name: "Accounts Dashboard",
       icon: <FaHome />,
       path: "/account-panel/solar-shop/home",
+    },
+    {
+      name: "Franchisee PO Orders",
+      icon: <MdReceipt />,
+      path: "/account-panel/solar-shop/franchisee-po-orders",
     },
     {
       name: "Franchise Plan Purchases",
@@ -107,6 +113,14 @@ export default function SolarShopAccountsDashboard() {
                     element={
                       <Suspense fallback={<Loader text="Loading solar shop accounts dashboard..." />}>
                         <SolarShopAccountsHome />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/franchisee-po-orders/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading franchisee PO orders..." />}>
+                        <FranchiseePoOrdersAccounts />
                       </Suspense>
                     }
                   />

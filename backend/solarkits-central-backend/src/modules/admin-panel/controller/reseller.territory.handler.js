@@ -12,7 +12,7 @@ const mongoose = require('mongoose');
 const { Reseller, ResellerTerritory, TerritoryAssignmentHistory } = require('../models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { CmsUser } = require('../models/user_db');
-const { validateResellerTerritoryAccess, assignTerritoryAtomic } = require('../utils/territory.validator');
+const { validateResellerTerritoryAccess, assignTerritoryAtomic, syncGstDerivedTerritoryForReseller } = require('../utils/territory.validator');
 const { logAudit } = require('../utils/audit.service');
 
 // ─── 1. LIST RESELLER TERRITORIES ─────────────────────────────────────────────
@@ -28,7 +28,16 @@ const list_reseller_territories = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
 
-    const query = isAll ? {} : { reseller_id: id };
+    if (isAll) {
+      const resellers = await Reseller.find({ deleted_at: null }).select('_id address').lean();
+      for (const r of resellers) {
+        await syncGstDerivedTerritoryForReseller(r._id);
+      }
+    } else {
+      await syncGstDerivedTerritoryForReseller(id);
+    }
+
+    const query = isAll ? { status: 'active' } : { reseller_id: id, status: 'active' };
     const rows = await ResellerTerritory.find(query)
       .sort({ created_at: -1 })
       .lean();

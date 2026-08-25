@@ -14,6 +14,8 @@ const check_permissions = require('../middlewares/check.permissions');
 const handler = require('../controller/reseller.leads.handler');
 
 router.post('/submit', handler.submit_lead);
+router.post('/gst-otp/generate', handler.generate_lead_gst_otp);
+router.post('/gst-otp/verify', handler.verify_lead_gst_otp);
 
 router.get(
   '/list',
@@ -33,6 +35,26 @@ router.post(
     { unique_code: 'RSL_PLAN', permissions: ['add'] },
   ]),
   handler.add_manual_lead
+);
+
+router.post(
+  '/:id/approve',
+  check_auth,
+  check_permissions([
+    { unique_code: 'RSL_MGMT', permissions: ['edit', 'add'] },
+    { unique_code: 'RSL_PLAN', permissions: ['edit', 'add'] },
+  ]),
+  handler.approve_lead_as_franchisee
+);
+
+router.post(
+  '/approve',
+  check_auth,
+  check_permissions([
+    { unique_code: 'RSL_MGMT', permissions: ['edit', 'add'] },
+    { unique_code: 'RSL_PLAN', permissions: ['edit', 'add'] },
+  ]),
+  handler.approve_lead_as_franchisee
 );
 
 router.put(
@@ -76,3 +98,4 @@ router.delete(
 );
 
 module.exports = router;
+

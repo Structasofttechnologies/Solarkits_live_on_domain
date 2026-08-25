@@ -28,6 +28,8 @@ import {
   FiSliders,
   FiClock,
   FiLock,
+  FiGrid,
+  FiList,
 } from "react-icons/fi";
 import { useDispatch } from "react-redux";
 import { authHeaderObj } from "@/app/authHeader";
@@ -110,6 +112,10 @@ export default function FranchiseePOSettings() {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+
+  // View Modes (1. Card View, 2. Table View)
+  const [planOverviewViewMode, setPlanOverviewViewMode] = useState("card"); // Level 1 View: "card" | "table"
+  const [planPoViewMode, setPlanPoViewMode] = useState("card"); // Level 2 View: "card" | "table"
 
   // Level 1: Plan Cards Filter & Search
   const [searchPlan, setSearchPlan] = useState("");
@@ -218,7 +224,7 @@ export default function FranchiseePOSettings() {
     return map;
   }, [selectedPlan, activePlanSettings, editingId]);
 
-  // Filtered settings for Grid View in Level 2
+  // Filtered settings for Grid/Table View in Level 2
   const filteredActivePlanSettings = useMemo(() => {
     return activePlanSettings.filter((s) => {
       // Status filter
@@ -260,7 +266,7 @@ export default function FranchiseePOSettings() {
     });
   }, [activePlanSettings, statusFilter, industryFilter, searchSetting]);
 
-  // Filtered Plans for Level 1 Cards View
+  // Filtered Plans for Level 1 Cards/Table View
   const filteredPlans = useMemo(() => {
     return plans.filter((p) => {
       // Territory filter
@@ -358,19 +364,25 @@ export default function FranchiseePOSettings() {
   const modalFilteredComboKits = useMemo(() => {
     const allKits = configOptions.combo_kits || [];
     return allKits.filter((kit) => {
-      if (modalFilters.industryType !== "all" && kit.industry_type_id && String(kit.industry_type_id) !== String(modalFilters.industryType)) {
+      const kitCatId = kit.category_id?._id || kit.category_id || kit.solar_kit_id?.category_id?._id || kit.solar_kit_id?.category_id;
+      const kitSubcatId = kit.subcategory_id?._id || kit.subcategory_id || kit.solar_kit_id?.subcategory_id?._id || kit.solar_kit_id?.subcategory_id;
+      const kitTypeId = kit.project_type_id?._id || kit.project_type_id || kit.type_id?._id || kit.type_id || kit.system_type_id?._id || kit.system_type_id || kit.solar_kit_id?.type_id?._id || kit.solar_kit_id?.type_id;
+      const kitRangeId = kit.project_range_id?._id || kit.project_range_id;
+      const kitIndId = kit.industry_type_id?._id || kit.industry_type_id || kit.solar_kit_id?.industry_type_id?._id || kit.solar_kit_id?.industry_type_id;
+
+      if (modalFilters.industryType !== "all" && kitIndId && String(kitIndId) !== String(modalFilters.industryType)) {
         return false;
       }
-      if (modalFilters.category !== "all" && kit.category_id && String(kit.category_id) !== String(modalFilters.category)) {
+      if (modalFilters.category !== "all" && kitCatId && String(kitCatId) !== String(modalFilters.category)) {
         return false;
       }
-      if (modalFilters.subCategory !== "all" && kit.subcategory_id && String(kit.subcategory_id) !== String(modalFilters.subCategory)) {
+      if (modalFilters.subCategory !== "all" && kitSubcatId && String(kitSubcatId) !== String(modalFilters.subCategory)) {
         return false;
       }
-      if (modalFilters.systemType !== "all" && kit.system_type_id && String(kit.system_type_id) !== String(modalFilters.systemType)) {
+      if (modalFilters.systemType !== "all" && kitTypeId && String(kitTypeId) !== String(modalFilters.systemType)) {
         return false;
       }
-      if (modalFilters.projectRange !== "all" && kit.project_range_id && String(kit.project_range_id) !== String(modalFilters.projectRange)) {
+      if (modalFilters.projectRange !== "all" && kitRangeId && String(kitRangeId) !== String(modalFilters.projectRange)) {
         return false;
       }
       if (kitSearchQuery.trim()) {
@@ -591,7 +603,7 @@ export default function FranchiseePOSettings() {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* ══════════════════════════════════════════════════════════════════════════
-          LEVEL 1: ALL FRANCHISE PLANS OVERVIEW (CARDS VIEW)
+          LEVEL 1: ALL FRANCHISE PLANS OVERVIEW (CARDS / TABLE VIEW)
           ══════════════════════════════════════════════════════════════════════════ */}
       {!selectedPlan ? (
         <div className="space-y-6">
@@ -650,7 +662,7 @@ export default function FranchiseePOSettings() {
             </div>
           </div>
 
-          {/* Filter and Search Bar for Plan Cards */}
+          {/* Filter and Search Bar for Level 1 */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface p-3.5 rounded-2xl border border-border">
             <div className="relative flex-1 max-w-md">
               <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={15} />
@@ -662,30 +674,63 @@ export default function FranchiseePOSettings() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              {[
-                { value: "all", label: "All Territories" },
-                { value: "district", label: "District" },
-                { value: "state", label: "State" },
-                { value: "country", label: "Country" },
-              ].map((t) => (
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Territory Filters */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                {[
+                  { value: "all", label: "All Territories" },
+                  { value: "district", label: "District" },
+                  { value: "state", label: "State" },
+                  { value: "country", label: "Country" },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setTerritoryFilter(t.value)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      territoryFilter === t.value
+                        ? "bg-primary text-white shadow-xs"
+                        : "bg-surface-hover/80 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* View Switcher: Card View vs Table View */}
+              <div className="flex items-center bg-bg p-1 rounded-xl border border-border shrink-0">
                 <button
-                  key={t.value}
                   type="button"
-                  onClick={() => setTerritoryFilter(t.value)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                    territoryFilter === t.value
-                      ? "bg-primary text-white shadow-xs"
-                      : "bg-surface-hover/80 text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                  onClick={() => setPlanOverviewViewMode("card")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    planOverviewViewMode === "card"
+                      ? "bg-surface text-primary shadow-xs border border-border"
+                      : "text-text-muted hover:text-text-primary"
                   }`}
+                  title="Card View"
                 >
-                  {t.label}
+                  <FiGrid size={14} />
+                  <span>Card View</span>
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setPlanOverviewViewMode("table")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    planOverviewViewMode === "table"
+                      ? "bg-surface text-primary shadow-xs border border-border"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                  title="Table View"
+                >
+                  <FiList size={14} />
+                  <span>Table View</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Franchise Plans Cards Grid */}
+          {/* Franchise Plans Presentation (Card View / Table View) */}
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 space-y-3">
               <FiLoader className="animate-spin text-primary" size={36} />
@@ -699,7 +744,115 @@ export default function FranchiseePOSettings() {
                 No plans matched your filter criteria. Try resetting the search or territory filter.
               </p>
             </div>
+          ) : planOverviewViewMode === "table" ? (
+            /* 1. LEVEL 1 TABLE VIEW */
+            <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-surface-hover/70 border-b border-border text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3.5">Franchise Plan Name</th>
+                      <th className="px-4 py-3.5">Territory Level</th>
+                      <th className="px-4 py-3.5">Plan Fee</th>
+                      <th className="px-4 py-3.5">Validity</th>
+                      <th className="px-4 py-3.5">PO Settings Configured</th>
+                      <th className="px-4 py-3.5 text-center">PO Ordering</th>
+                      <th className="px-4 py-3.5 text-center">Plan Status</th>
+                      <th className="px-4 py-3.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredPlans.map((plan) => {
+                      const planId = String(plan.id || plan._id);
+                      const planSettings = planSettingsMap[planId] || [];
+                      const poCount = planSettings.length;
+                      const activeCount = planSettings.filter((s) => s.is_active).length;
+                      const poEnabled = planSettings.some((s) => s.po_enabled && s.is_active);
+
+                      return (
+                        <tr
+                          key={planId}
+                          onClick={() => setSelectedPlan(plan)}
+                          className="hover:bg-surface-hover/40 transition-colors cursor-pointer"
+                        >
+                          <td className="px-4 py-3.5">
+                            <div className="font-bold text-text-primary text-sm flex items-center gap-1.5">
+                              <FiBox className="text-primary" /> {plan.name}
+                            </div>
+                            {plan.slug && (
+                              <span className="text-[11px] text-text-muted font-mono">#{plan.slug}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            <TerritoryLevelBadge level={plan.territory_level} />
+                          </td>
+                          <td className="px-4 py-3.5 font-bold text-text-primary whitespace-nowrap">
+                            {plan.one_time_fee
+                              ? `₹${Number(plan.one_time_fee).toLocaleString("en-IN")}`
+                              : "Free"}
+                          </td>
+                          <td className="px-4 py-3.5 text-text-secondary capitalize whitespace-nowrap">
+                            {plan.validity_value
+                              ? `${plan.validity_value} ${plan.validity_unit || "Months"}`
+                              : "Lifetime"}
+                          </td>
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            {poCount > 0 ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                <FiCheckCircle size={12} /> {poCount} Setting{poCount > 1 ? "s" : ""} ({activeCount} Active)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                <FiAlertTriangle size={12} /> Not Configured
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                                poEnabled
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-surface-hover text-text-muted"
+                              }`}
+                            >
+                              {poEnabled ? <FiCheck size={11} /> : <FiX size={11} />}
+                              {poEnabled ? "Enabled" : "Disabled"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                plan.is_active !== false
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-surface-hover text-text-muted"
+                              }`}
+                            >
+                              {plan.is_active !== false ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPlan(plan);
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary-hover transition-all cursor-pointer shadow-xs"
+                            >
+                              <FiSettings size={13} />
+                              <span>Manage PO Settings</span>
+                              <FiChevronRight size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : (
+            /* 2. LEVEL 1 CARD VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {filteredPlans.map((plan) => {
                 const planId = String(plan.id || plan._id);
@@ -830,7 +983,7 @@ export default function FranchiseePOSettings() {
         </div>
       ) : (
         /* ══════════════════════════════════════════════════════════════════════════
-           LEVEL 2: SELECTED PLAN'S PO SETTINGS MANAGEMENT & GRID VIEW
+           LEVEL 2: SELECTED PLAN'S PO SETTINGS MANAGEMENT (CARD / TABLE VIEW)
            ══════════════════════════════════════════════════════════════════════════ */
         <div className="space-y-6">
           {/* Top Breadcrumb Navigation */}
@@ -929,7 +1082,7 @@ export default function FranchiseePOSettings() {
             </div>
           </div>
 
-          {/* Search and Filters Bar for Grid View */}
+          {/* Search, Filters and View Type Bar for Level 2 */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-surface p-3.5 rounded-2xl border border-border">
             <div className="relative flex-1 max-w-md">
               <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={15} />
@@ -941,7 +1094,7 @@ export default function FranchiseePOSettings() {
               />
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
               {/* Industry Filter Dropdown */}
               <select
                 className="px-3 py-2 rounded-xl border border-border bg-bg text-xs font-semibold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
@@ -966,10 +1119,40 @@ export default function FranchiseePOSettings() {
                 <option value="active">Active Only</option>
                 <option value="inactive">Inactive Only</option>
               </select>
+
+              {/* View Switcher: Card View vs Table View */}
+              <div className="flex items-center bg-bg p-1 rounded-xl border border-border shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setPlanPoViewMode("card")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    planPoViewMode === "card"
+                      ? "bg-surface text-primary shadow-xs border border-border"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                  title="Card View"
+                >
+                  <FiGrid size={14} />
+                  <span>Card View</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlanPoViewMode("table")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    planPoViewMode === "table"
+                      ? "bg-surface text-primary shadow-xs border border-border"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                  title="Table View"
+                >
+                  <FiList size={14} />
+                  <span>Table View</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* PO Settings Grid View for Selected Plan */}
+          {/* PO Settings Presentation (Card View / Table View) */}
           {filteredActivePlanSettings.length === 0 ? (
             <div className="text-center py-16 bg-surface/50 rounded-2xl border border-dashed border-border p-8">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary mx-auto flex items-center justify-center mb-3">
@@ -989,7 +1172,199 @@ export default function FranchiseePOSettings() {
                 </Button>
               )}
             </div>
+          ) : planPoViewMode === "table" ? (
+            /* 1. LEVEL 2 TABLE VIEW */
+            <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-surface-hover/70 border-b border-border text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3.5">Target Scope & Products</th>
+                      <th className="px-4 py-3.5">PO Ordering</th>
+                      <th className="px-4 py-3.5 text-center">Min PO Qty</th>
+                      <th className="px-4 py-3.5 text-center">Max PO Qty</th>
+                      <th className="px-4 py-3.5 text-center">PO Expiry</th>
+                      <th className="px-4 py-3.5 text-center">Max Line Items</th>
+                      <th className="px-4 py-3.5">Validity Range</th>
+                      <th className="px-4 py-3.5 text-center">Status</th>
+                      <th className="px-4 py-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredActivePlanSettings.map((s, idx) => {
+                      const settingId = s._id || s.id || idx;
+                      const kits = s.allowed_combo_kit_ids || [];
+                      const industries = s.allowed_industry_type_ids || [];
+                      const categories = s.allowed_category_ids || [];
+
+                      return (
+                        <tr
+                          key={settingId}
+                          className="hover:bg-surface-hover/40 transition-colors"
+                        >
+                          {/* Target Scope & Products */}
+                          <td className="px-4 py-3.5 max-w-xs">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {industries.length > 0 ? (
+                                  industries.map((ind) => (
+                                    <span
+                                      key={ind._id || ind.id || ind}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20"
+                                    >
+                                      🏢 {ind.name || "Industry"}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-surface-hover text-text-muted border border-border">
+                                    All Industries
+                                  </span>
+                                )}
+
+                                {categories.length > 0 &&
+                                  categories.map((cat) => (
+                                    <span
+                                      key={cat._id || cat.id || cat}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-surface-hover text-text-secondary border border-border"
+                                    >
+                                      {cat.name || "Category"}
+                                    </span>
+                                  ))}
+                              </div>
+
+                              <div className="text-[11px] text-text-primary font-medium">
+                                {kits.length === 0 ? (
+                                  <span className="text-text-muted italic">All Plan Kits in Scope</span>
+                                ) : (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="font-bold text-primary">{kits.length} Kits Mapped:</span>
+                                    <span
+                                      className="text-text-secondary truncate max-w-[220px]"
+                                      title={kits.map((k) => k.name || k.kit_code).join(", ")}
+                                    >
+                                      {kits.map((k) => k.name || k.kit_code).join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* PO Enabled Badge */}
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                s.po_enabled
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                              }`}
+                            >
+                              {s.po_enabled ? <FiCheck size={11} /> : <FiX size={11} />}
+                              {s.po_enabled ? "Enabled" : "Disabled"}
+                            </span>
+                          </td>
+
+                          {/* Min PO Qty */}
+                          <td className="px-4 py-3.5 text-center font-bold text-text-primary whitespace-nowrap">
+                            {s.min_po_quantity || 1} kits
+                          </td>
+
+                          {/* Max PO Qty */}
+                          <td className="px-4 py-3.5 text-center font-bold text-text-primary whitespace-nowrap">
+                            {s.max_po_quantity ? (
+                              `${s.max_po_quantity} kits`
+                            ) : (
+                              <span className="text-text-muted font-normal">Unlimited</span>
+                            )}
+                          </td>
+
+                          {/* PO Expiry Window */}
+                          <td className="px-4 py-3.5 text-center font-bold text-primary whitespace-nowrap">
+                            {s.po_validity_days != null ? `${s.po_validity_days} Days` : "30 Days"}
+                          </td>
+
+                          {/* Max Line Items */}
+                          <td className="px-4 py-3.5 text-center font-bold text-text-primary whitespace-nowrap">
+                            {s.max_line_items || 50} Items
+                          </td>
+
+                          {/* Validity Range */}
+                          <td className="px-4 py-3.5 whitespace-nowrap text-text-secondary text-[11px]">
+                            <div className="font-semibold text-text-primary">
+                              {s.effective_from
+                                ? new Date(s.effective_from).toLocaleDateString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })
+                                : "—"}
+                            </div>
+                            <div className="text-[10px] text-text-muted">
+                              {s.effective_until
+                                ? `to ${new Date(s.effective_until).toLocaleDateString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}`
+                                : "Open-ended"}
+                            </div>
+                          </td>
+
+                          {/* Rule Status */}
+                          <td className="px-4 py-3.5 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                s.is_active
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-surface-hover text-text-muted"
+                              }`}
+                            >
+                              {s.is_active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(s)}
+                                title="Edit this PO Setting"
+                                className="p-1.5 rounded-lg hover:bg-primary/10 text-primary transition-colors cursor-pointer"
+                              >
+                                <FiEdit2 size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggle(s)}
+                                title={s.is_active ? "Deactivate" : "Activate"}
+                                className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
+                              >
+                                {s.is_active ? (
+                                  <FiToggleRight size={22} className="text-emerald-600" />
+                                ) : (
+                                  <FiToggleLeft size={22} className="text-text-muted" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(s._id || s.id)}
+                                title="Delete"
+                                className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <FiTrash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : (
+            /* 2. LEVEL 2 CARD VIEW (GRID) */
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredActivePlanSettings.map((s, idx) => {
                 const settingId = s._id || s.id || idx;

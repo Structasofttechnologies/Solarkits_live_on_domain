@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useOutletContext, Link, useSearchParams } from "react-router-dom";
 import api from "../services/api";
 import IndustryMediaShowcase from "../components/industry/IndustryMediaShowcase";
-import OnboardingChecklistWidget from "../components/OnboardingChecklistWidget";
 import {
   FiZap,
   FiShield,
@@ -18,7 +17,7 @@ import {
 } from "react-icons/fi";
 
 export default function DashboardHome() {
-  const { reseller } = useOutletContext();
+  const { reseller, refreshUser } = useOutletContext();
   const [searchParams] = useSearchParams();
   const isOnboardingQuery = searchParams.get("onboarding") === "true";
 
@@ -27,7 +26,7 @@ export default function DashboardHome() {
   const [activeSubscription, setActiveSubscription] = useState(null);
 
   // Fetch buyers, territories & subscription
-  useEffect(() => {
+  const fetchDashboardData = () => {
     api.get('/india/v1/reseller/epc-buyers/list')
       .then((res) => {
         if (res.data?.status === "success") setBuyers(res.data.data || []);
@@ -49,6 +48,10 @@ export default function DashboardHome() {
         }
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   return (
@@ -92,7 +95,7 @@ export default function DashboardHome() {
               )}
             </div>
             <h1 className="font-heading font-black text-2xl sm:text-3xl text-white tracking-tight">
-              Welcome back, {reseller?.business_name || "Partner"}!
+              Welcome back, {reseller?.contact_person || reseller?.business_name || "Partner"}!
             </h1>
             <p className="text-xs sm:text-sm text-white/80 font-medium">
               {reseller?.kyc_status === "verified"
@@ -125,12 +128,7 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* ── 2. Franchise Onboarding Journey Checklist Widget ─────────────────── */}
-      <OnboardingChecklistWidget
-        reseller={reseller}
-        territory={territory}
-        activeSubscription={activeSubscription}
-      />
+
 
       {/* ── 1. Industry Media Showcase (Selector -> Hero -> FilterBar -> Gallery -> Lightbox) ── */}
       <IndustryMediaShowcase

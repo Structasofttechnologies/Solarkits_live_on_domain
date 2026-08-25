@@ -1755,6 +1755,9 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         k.name?.toLowerCase().includes(kitsSearch.toLowerCase()) ||
         k.solar_kit_id?.name?.toLowerCase().includes(kitsSearch.toLowerCase());
 
+      const kitInd = k.solar_kit_id?.category_id?.industry_type_id?._id || k.solar_kit_id?.category_id?.industry_type_id || "";
+      const matchInd = !selectedIndustryType || String(kitInd) === selectedIndustryType;
+
       const matchCat = !selectedCategory ||
         String(k.solar_kit_id?.category_id?._id || k.solar_kit_id?.category_id?.id) === selectedCategory;
 
@@ -1767,9 +1770,9 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       const matchRange = !selectedProjectRange ||
         String(k.project_range_id?._id || k.project_range_id?.id) === selectedProjectRange;
 
-      return matchSearch && matchCat && matchSub && matchType && matchRange;
+      return matchSearch && matchInd && matchCat && matchSub && matchType && matchRange;
     });
-  }, [configuredKits, kitsSearch, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
+  }, [configuredKits, kitsSearch, selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
 
   // Pagination State & Calculations
   const [currentPage, setCurrentPage] = useState(1);

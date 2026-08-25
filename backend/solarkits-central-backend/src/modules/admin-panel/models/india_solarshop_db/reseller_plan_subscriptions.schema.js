@@ -25,9 +25,30 @@ const schema = new mongoose.Schema({
   currency:          { type: String, default: 'INR', uppercase: true },
   payment_reference: { type: String, default: null, trim: true },
 
+  // ── Manual Offline Payment & Receipt Verification ─────────────────
+  payment_method: {
+    type: String,
+    enum: ['offline_manual', 'bank_transfer', 'upi', 'cheque', 'gateway_sandbox', 'gateway_razorpay'],
+    default: 'offline_manual',
+  },
+  payment_status: {
+    type: String,
+    enum: ['pending_payment', 'receipt_uploaded', 'verified', 'rejected'],
+    default: 'pending_payment',
+  },
+  receipt_url:          { type: String, default: null, trim: true },
+  receipt_filename:     { type: String, default: null, trim: true },
+  receipt_uploaded_at:  { type: Date, default: null },
+  utr_number:           { type: String, default: null, trim: true },
+  payment_date:         { type: Date, default: null },
+  sender_bank_name:     { type: String, default: null, trim: true },
+  verified_by:          { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+  verified_at:          { type: Date, default: null },
+  verification_remarks: { type: String, default: null, trim: true },
+
   status: {
     type: String,
-    enum: ['active', 'expired', 'cancelled', 'grace'],
+    enum: ['pending_payment', 'pending_verification', 'active', 'expired', 'cancelled', 'grace', 'rejected'],
     default: 'active',
   },
   renewed_from_subscription_id: {

@@ -119,6 +119,7 @@ module.exports = {
   // --- Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ---
   FranchiseeCommissionRule,
   FranchiseePlanPoSetting,
+  FranchiseePlanPOSetting: FranchiseePlanPoSetting,
   FranchiseeMoqRule,
   FranchiseeKitTarget,
   FranchiseeTargetProgress,

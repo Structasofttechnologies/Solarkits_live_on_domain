@@ -65,8 +65,13 @@ const getDocUrl = (storageKey) => {
   if (storageKey.startsWith("http://") || storageKey.startsWith("https://")) {
     return storageKey;
   }
-  const cleanPath = storageKey.replace(/\\/g, "/").replace(/^public\//, "");
-  const serverBase = API_BASE.replace(/\/admin-api$|\/api$/, "");
+  // If it's a Cloudinary public_id or wrapped in uploads path
+  if (storageKey.includes("solarkits/solarkits-admin-panel-backend/")) {
+    const publicId = storageKey.replace(/^\/?(?:uploads\/kyc\/)+/, "").replace(/^\/+/, "");
+    return `https://res.cloudinary.com/dggmbagax/image/upload/${publicId}`;
+  }
+  const cleanPath = storageKey.replace(/\\/g, "/").replace(/^\/+/, "").replace(/^public\//, "");
+  const serverBase = (API_BASE || "").replace(/\/admin-api$|\/api$/, "");
   return `${serverBase}/${cleanPath.startsWith("uploads/") ? cleanPath : "uploads/" + cleanPath}`;
 };
 
@@ -238,6 +243,36 @@ export default function ResellerDetail() {
     }
   };
 
+  // ── Fee Payment Receipt Verification Handler ─────────────────────────────
+  const [paymentRemarks, setPaymentRemarks] = useState("");
+  const [verifyingPayment, setVerifyingPayment] = useState(false);
+
+  const handleVerifyFeePayment = async (decision) => {
+    setVerifyingPayment(true);
+    try {
+      const res = await axios.put(
+        `${API_BASE}/resellers/${id}/fee-payment/verify?req_for=edit&unique_id=${MODULE_UID}`,
+        { decision, remarks: paymentRemarks.trim() },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success" || res.data?.success) {
+        dispatch(
+          setAlert({
+            type: "success",
+            message: res.data?.message || `Fee payment receipt ${decision}ed successfully!`,
+          })
+        );
+        fetchDetail();
+      } else {
+        dispatch(setAlert({ type: "error", message: res.data?.message || "Failed to update receipt." }));
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Receipt verification failed." }));
+    } finally {
+      setVerifyingPayment(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 space-y-6 animate-pulse">
@@ -252,7 +287,7 @@ export default function ResellerDetail() {
           <div className="w-32 h-10 rounded-xl bg-surface-hover" />
         </div>
         <div className="flex gap-2 border-b border-border pb-2">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="w-32 h-10 rounded-t-xl bg-surface-hover" />
           ))}
         </div>
@@ -309,12 +344,13 @@ export default function ResellerDetail() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-border gap-1">
+      <div className="flex border-b border-border gap-1 overflow-x-auto">
         {[
-          { id: "kyc",          label: "KYC Documents",    icon: FiShield },
-          { id: "profile",      label: "Business Profile", icon: FiUser },
-          { id: "subscription", label: "Plan & Territory", icon: FiFileText },
-          { id: "audit",        label: "Audit Trail",      icon: FiClock },
+          { id: "kyc",          label: "KYC Documents",          icon: FiShield },
+          { id: "payment",      label: "Fee Payment & Receipt",  icon: FiCreditCard },
+          { id: "profile",      label: "Business & Agreement",   icon: FiUser },
+          { id: "subscription", label: "Plan & Territory",       icon: FiFileText },
+          { id: "audit",        label: "Audit Trail",            icon: FiClock },
         ].map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -322,7 +358,7 @@ export default function ResellerDetail() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 active ? "border-primary text-primary bg-info-soft/40 rounded-t-xl" : "border-transparent text-text-muted hover:text-text-primary"
               }`}
             >
@@ -332,6 +368,7 @@ export default function ResellerDetail() {
           );
         })}
       </div>
+
 
       {/* Tab Content Container */}
       <div className="bg-surface rounded-2xl border border-border p-6 shadow-sm">
@@ -451,10 +488,251 @@ export default function ResellerDetail() {
         )}
 
         {/* ════════════════════════════════════════════
-            2. BUSINESS PROFILE TAB
+            2. FEE PAYMENT & RECEIPT TAB
+        ════════════════════════════════════════════ */}
+        {activeTab === "payment" && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-4">
+              <div>
+                <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  <FiCreditCard className="text-primary" /> Offline Franchise Fee Payment & Receipt Verification
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Verify manual bank transfer receipt slip & UTR before activating partner's exclusive commercial rights
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
+                  reseller.fee_payment_status === "verified"
+                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                    : reseller.fee_payment_status === "receipt_uploaded"
+                    ? "bg-amber-100 text-amber-800 border-amber-300"
+                    : reseller.fee_payment_status === "rejected"
+                    ? "bg-rose-100 text-rose-800 border-rose-300"
+                    : "bg-slate-100 text-slate-700 border-slate-300"
+                }`}>
+                  {reseller.fee_payment_status === "verified"
+                    ? "✓ Verified & Active"
+                    : reseller.fee_payment_status === "receipt_uploaded"
+                    ? "⏱ Receipt Uploaded (Pending Review)"
+                    : reseller.fee_payment_status === "rejected"
+                    ? "✕ Receipt Rejected"
+                    : "Payment Pending"}
+                </span>
+              </div>
+            </div>
+
+            {/* Grid 1: Transaction Info + Franchise Agreement Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Transaction & Bank Transfer Details */}
+              <div className="p-5 rounded-2xl border border-border bg-bg space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
+                    <FiCreditCard size={16} /> Manual Payment Details
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-surface px-2 py-0.5 rounded border border-border">
+                    Offline Transfer
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Bank UTR / Ref No.</span>
+                    <span className="font-black font-mono text-sm text-text-primary">
+                      {reseller.fee_payment_utr || "Not Provided"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Amount Paid</span>
+                    <span className="font-black text-sm text-emerald-600">
+                      ₹{Number(reseller.fee_payment_amount || 50000).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Payment Date</span>
+                    <span className="font-semibold text-text-primary">
+                      {reseller.fee_payment_date ? new Date(reseller.fee_payment_date).toLocaleDateString() : "—"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Verification Status</span>
+                    <span className="font-bold text-text-primary capitalize">
+                      {reseller.fee_payment_status || "pending_payment"}
+                    </span>
+                  </div>
+                </div>
+
+                {reseller.fee_payment_remarks && (
+                  <div className="p-3 rounded-xl bg-surface border border-border text-xs">
+                    <span className="text-text-muted text-[10px] font-bold uppercase block">Verification Remarks</span>
+                    <p className="text-text-primary font-medium mt-0.5">{reseller.fee_payment_remarks}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Digital Franchise Agreement Details */}
+              <div className="p-5 rounded-2xl border border-border bg-bg space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
+                    <FiFileText size={16} /> Digital Franchise Agreement
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                    reseller.agreement_status === "signed"
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                      : "bg-amber-100 text-amber-800 border border-amber-200"
+                  }`}>
+                    {reseller.agreement_status === "signed" ? "✓ Digitally Signed" : "Pending Signature"}
+                  </span>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Signatory Legal Name</span>
+                    <span className="font-bold text-text-primary">
+                      {reseller.agreement_signer_name || reseller.contact_person || reseller.business_name}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-text-muted block text-[11px] font-semibold">Signed Timestamp</span>
+                    <span className="font-semibold text-text-secondary">
+                      {reseller.agreement_signed_at ? new Date(reseller.agreement_signed_at).toLocaleString() : "Awaiting Partner Execution"}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-border text-[11px] text-text-muted">
+                    Franchise Agreement terms include regional distribution exclusivity, pre-engineered kit wholesale margins, and factory warranty coverage.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid 2: Uploaded Receipt Preview & Document Link */}
+            <div className="p-5 rounded-2xl border border-border bg-bg space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
+                  <FiEye size={16} /> Uploaded Bank Payment Receipt Slip
+                </div>
+                {reseller.fee_payment_receipt_url && (
+                  <a
+                    href={getDocUrl(reseller.fee_payment_receipt_url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                  >
+                    <FiExternalLink size={12} /> Open in New Tab
+                  </a>
+                )}
+              </div>
+
+              {reseller.fee_payment_receipt_url ? (
+                <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-xl bg-surface border border-border">
+                  <div className="w-40 h-40 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                    <img
+                      src={getDocUrl(reseller.fee_payment_receipt_url)}
+                      alt="Payment Slip Preview"
+                      className="w-full h-full object-contain hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "https://placehold.co/300x300?text=Payment+Receipt+PDF";
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-3 flex-1 text-xs">
+                    <div>
+                      <h4 className="font-bold text-text-primary text-sm">Payment Receipt Document</h4>
+                      <p className="text-text-muted font-mono text-[11px] mt-0.5 truncate max-w-md">
+                        {reseller.fee_payment_receipt_url}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setViewDoc({
+                            name: `Payment Receipt - ${reseller.business_name}`,
+                            url: getDocUrl(reseller.fee_payment_receipt_url),
+                          })
+                        }
+                        className="px-4 py-2 rounded-xl bg-primary text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:bg-primary-hover"
+                      >
+                        <FiEye size={14} /> Full View 👁️
+                      </button>
+                      <a
+                        href={getDocUrl(reseller.fee_payment_receipt_url)}
+                        download
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 border border-slate-300"
+                      >
+                        <FiExternalLink size={14} /> Download Receipt
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-10 text-center text-xs text-text-muted font-semibold bg-surface rounded-xl border border-dashed border-border">
+                  No payment slip uploaded yet by the partner.
+                </div>
+              )}
+            </div>
+
+            {/* Grid 3: Admin Review Decision Controls */}
+            <div className="p-5 rounded-2xl border border-border bg-gradient-to-br from-surface to-bg space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-text-primary uppercase tracking-wider">
+                <FiCheckCircle size={16} className="text-emerald-600" /> Admin Receipt Verification & Account Activation
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-secondary mb-1">
+                  Verification Remarks / Notes (Sent to Partner)
+                </label>
+                <textarea
+                  rows={2}
+                  value={paymentRemarks}
+                  onChange={(e) => setPaymentRemarks(e.target.value)}
+                  placeholder="e.g. Verified transaction against SolarKits HDFC Bank statement. All details matched."
+                  className="w-full px-3.5 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={verifyingPayment}
+                  onClick={() => handleVerifyFeePayment("reject")}
+                  className="px-5 py-2.5 rounded-xl bg-danger-soft text-danger hover:bg-danger hover:text-white border border-danger/20 font-bold text-xs flex items-center gap-1.5 transition-all disabled:opacity-50"
+                >
+                  <FiXCircle size={15} />
+                  <span>Reject Payment Slip</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={verifyingPayment}
+                  onClick={() => handleVerifyFeePayment("approve")}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-50"
+                >
+                  {verifyingPayment ? <FiLoader className="animate-spin" /> : <FiCheckCircle size={15} />}
+                  <span>Approve Receipt & Activate Franchise Partner</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════
+            3. BUSINESS PROFILE TAB
         ════════════════════════════════════════════ */}
         {activeTab === "profile" && (
           <div className="space-y-6">
+
             <div className="border-b border-border pb-4">
               <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
                 <FiUser className="text-primary" /> Reseller Business Profile

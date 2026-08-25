@@ -63,9 +63,14 @@ export default function StorefrontListings() {
     fetchData();
   }, [fetchData]);
 
-  // Derived margin rates from plan
-  const planDealerMarginPct = plan?.default_dealer_margin ?? (plan?.territory_level === "state" ? 8 : plan?.territory_level === "country" ? 10 : 5);
-  const planCommissionPct = plan?.default_commission_rate ?? (plan?.territory_level === "state" ? 12 : plan?.territory_level === "country" ? 15 : 8);
+  // Derived commission and margin rates directly from franchise plan
+  const commissionMethod = plan?.commission_method || "PERCENTAGE";
+  const commissionRatePct = plan?.default_commission_rate ?? plan?.default_dealer_margin ?? 8;
+  const fixedAmountPerKit = (plan?.fixed_amount_per_kit_paise && plan.fixed_amount_per_kit_paise > 0)
+    ? (plan.fixed_amount_per_kit_paise / 100)
+    : 0;
+  const isFixedPerKit = commissionMethod === "FIXED_PER_KIT" && fixedAmountPerKit > 0;
+  const commissionLabel = isFixedPerKit ? `₹${fixedAmountPerKit.toLocaleString('en-IN')} / kit` : `${commissionRatePct}%`;
 
   // Filter listings by kit/product type
   const filteredListings = listings.filter((item) => {
@@ -90,7 +95,7 @@ export default function StorefrontListings() {
             </span>
             {plan && (
               <span className="text-xs font-extrabold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                <FiShield size={12} /> {plan.name} ({planDealerMarginPct}% Fixed Margin)
+                <FiShield size={12} /> {plan.name} ({commissionLabel} Fixed Commission)
               </span>
             )}
           </div>
@@ -141,14 +146,14 @@ export default function StorefrontListings() {
             </div>
             <p className="text-xs text-blue-100 leading-relaxed">
               Product prices and commission rates are centrally configured by Company Management inside your <strong>{plan?.name || "Franchisee Partner Plan"}</strong>. 
-              As a Franchisee Partner, you earn a <strong>guaranteed {planCommissionPct}% commission</strong> on every kit and component order fulfilled in your territory.
+              As a Franchisee Partner, you earn a <strong>guaranteed {commissionLabel} commission</strong> on every kit and component order fulfilled in your territory.
             </p>
           </div>
 
           <div className="shrink-0 bg-white/10 p-3.5 px-6 rounded-2xl border border-white/10 text-center">
             <div className="text-[10px] uppercase font-bold text-blue-200">Commission Rate</div>
             <div className="text-lg font-black text-emerald-400 mt-0.5">
-              {planCommissionPct}%
+              {commissionLabel}
             </div>
           </div>
         </div>
@@ -245,7 +250,7 @@ export default function StorefrontListings() {
               : (p?.base_price || k?.base_price_cached || 1000);
 
             // Fixed Plan Dealer Margin in INR
-            const marginInr = (costInr * planDealerMarginPct) / 100;
+            const marginInr = isFixedPerKit ? fixedAmountPerKit : ((costInr * commissionRatePct) / 100);
             const subtotalWithMargin = costInr + marginInr;
             const taxRate = item.tax_rate_pct || 18;
             const taxAmount = (subtotalWithMargin * taxRate) / 100;
@@ -345,10 +350,10 @@ export default function StorefrontListings() {
                     </span>
                   </div>
 
-                  {/* Fixed Margin from Plan */}
+                  {/* Fixed Margin/Commission from Plan */}
                   <div className="flex items-center justify-between text-xs py-1">
                     <span className="text-slate-600 font-bold flex items-center gap-1">
-                      <FiShield className="text-emerald-600" /> Plan Margin ({planDealerMarginPct}%):
+                      <FiShield className="text-emerald-600" /> Plan Commission ({commissionLabel}):
                     </span>
                     <span className="font-extrabold text-emerald-600 font-mono text-sm">
                       +₹{marginInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

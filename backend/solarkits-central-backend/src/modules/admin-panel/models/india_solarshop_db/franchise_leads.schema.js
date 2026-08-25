@@ -14,6 +14,13 @@ const schema = new mongoose.Schema({
   email:              { type: String, required: true, trim: true, lowercase: true, maxlength: 150 },
   gstin:              { type: String, default: null, trim: true, uppercase: true, maxlength: 20 },
 
+  // ── GST-Linked Mobile & Identity Verification (QuickeKYC) ───────────
+  gst_verified:       { type: Boolean, default: false },
+  gst_legal_name:     { type: String, default: null, trim: true, maxlength: 300 },
+  gst_trade_name:     { type: String, default: null, trim: true, maxlength: 300 },
+  quickekyc_request_id: { type: String, default: null, trim: true },
+  gst_verified_at:    { type: Date, default: null },
+
   // ── Geographic Territory Requested ─────────────────────────────────
   state:              { type: String, required: true, trim: true },
   district:           { type: String, required: true, trim: true },
@@ -40,12 +47,14 @@ const schema = new mongoose.Schema({
   // ── CRM Pipeline & Admin Review Status ──────────────────────────────
   status: {
     type: String,
+    enum: ['NEW', 'GST_VERIFIED', 'CONTACTED', 'IN_REVIEW', 'APPROVED_CONVERTED', 'REJECTED'],
     default: 'NEW',
     index: true,
   },
-  admin_remarks:      { type: String, default: null, trim: true, maxlength: 1000 },
-  reviewed_by:        { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-  reviewed_at:        { type: Date, default: null },
+  admin_remarks:         { type: String, default: null, trim: true, maxlength: 1000 },
+  reviewed_by:           { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+  reviewed_at:           { type: Date, default: null },
+  agreement_id:          { type: mongoose.Schema.Types.ObjectId, ref: 'reseller_agreements', default: null },
   converted_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
 
   // ── Metadata ────────────────────────────────────────────────────────
@@ -62,7 +71,9 @@ const schema = new mongoose.Schema({
 schema.index({ status: 1, created_at: -1 });
 schema.index({ mobile_number: 1, email: 1 });
 schema.index({ state: 1, district: 1 });
+schema.index({ gstin: 1 });
 
 schema.virtual('id').get(function () { return this._id.toHexString(); });
 
 module.exports = india_solarshop_db.model('franchise_leads', schema);
+

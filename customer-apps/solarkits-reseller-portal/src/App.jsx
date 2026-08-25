@@ -14,6 +14,9 @@ import ProcurementInventory from "./pages/ProcurementInventory";
 import StorefrontListings from "./pages/StorefrontListings";
 import MyEpcBuyers from "./pages/MyEpcBuyers";
 import EligibilityChecker from "./pages/EligibilityChecker";
+import PoOrder from "./pages/PoOrder";
+import LooseOrder from "./pages/LooseOrder";
+import OnboardingPortal from "./pages/OnboardingPortal";
 
 export default function App() {
   return (
@@ -30,9 +33,10 @@ export default function App() {
         <Route path="/eligibility" element={<EligibilityChecker />} />
         <Route path="/revenue-potential" element={<FranchiseLanding />} />
 
-        {/* Partner Auth Routes */}
+        {/* Partner Auth & Onboarding Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/onboarding" element={<OnboardingPortal />} />
 
         {/* Dashboard Layout & Protected Pages */}
         <Route element={<DashboardLayout />}>
@@ -46,6 +50,8 @@ export default function App() {
           <Route path="/epc-buyers" element={<MyEpcBuyers />} />
           <Route path="/orders" element={<MyOrders />} />
           <Route path="/wallet" element={<WalletPortal />} />
+          <Route path='/po-order' element={<PoOrder />} />
+          <Route path='/loose-order' element={<LooseOrder />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

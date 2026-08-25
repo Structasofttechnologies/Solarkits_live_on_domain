@@ -59,6 +59,22 @@ function AssignTerritoryModal({ resellers = [], onClose, onAssigned }) {
   const [districts, setDistricts] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  // Auto pre-fill address from selected reseller
+  useEffect(() => {
+    if (!form.reseller_id) return;
+    const sel = (resellers || []).find((r) => r.id === form.reseller_id || r._id === form.reseller_id);
+    if (sel && sel.address) {
+      const addr = sel.address;
+      setForm((f) => ({
+        ...f,
+        country_id: addr.country_id || f.country_id,
+        state_id: addr.state_id || f.state_id,
+        district_id: addr.district_id || f.district_id,
+        territory_level: addr.district_id ? "district" : addr.state_id ? "state" : f.territory_level,
+      }));
+    }
+  }, [form.reseller_id, resellers]);
+
   // Fetch Countries
   useEffect(() => {
     axios.get(`${API_BASE}/geolocation/get-countries`, { headers: authHeaderObj() })

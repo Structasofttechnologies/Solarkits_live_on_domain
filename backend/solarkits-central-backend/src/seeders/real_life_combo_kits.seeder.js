@@ -179,7 +179,15 @@ async function seedComboKitsAndSkus() {
     const ranges = await ProjectRange.find({ deleted_at: null }).lean();
 
     const getBlueprint = (nameStr) => blueprints.find(b => b.name.toLowerCase().includes(nameStr.toLowerCase())) || blueprints[0];
-    const getRange = (minKW) => ranges.find(r => r.min_value <= minKW && r.max_value >= minKW) || (ranges[0] ? ranges[0]._id : null);
+    const getRange = (bp, minKW) => {
+      if (!bp || !bp.type_id) return null;
+      const typeIdStr = bp.type_id.toString();
+      const matchingForType = ranges.filter(r => (r.subcategory_type?.toString() === typeIdStr || r.subcategory_type_id?.toString() === typeIdStr));
+      const exact = matchingForType.find(r => r.min_value <= minKW && r.max_value >= minKW);
+      if (exact) return exact._id;
+      if (matchingForType.length > 0) return matchingForType[0]._id;
+      return null;
+    };
 
     // 6. Seed Localized Combo Kits
     console.log("☀️ Seeding Localized Combo Kits...");
@@ -385,7 +393,7 @@ async function seedComboKitsAndSkus() {
       if (!item.blueprint) continue;
 
       const bp = item.blueprint;
-      const rangeId = getRange(item.capacity);
+      const rangeId = getRange(bp, item.capacity);
 
       const kDoc = await ComboKit.create({
         name: item.name,

@@ -12,10 +12,20 @@ const schema = new mongoose.Schema({
     ref: 'resellers',
     required: true,
   },
+  lead_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'franchise_leads',
+    default: null,
+  },
   agreement_number: {
     type: String,
     required: true,
     unique: true,
+    trim: true,
+  },
+  title: {
+    type: String,
+    default: 'SolarKits Authorized Franchise Partner Agreement',
     trim: true,
   },
   version: {
@@ -27,6 +37,15 @@ const schema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'generated', 'signed', 'expired', 'revoked'],
     default: 'pending',
+  },
+  territory_scope: {
+    type: String,
+    default: null,
+    trim: true,
+  },
+  agreement_content: {
+    type: String,
+    default: null,
   },
   pdf_storage_key: {
     type: String,
@@ -43,6 +62,11 @@ const schema = new mongoose.Schema({
   signer_name: {
     type: String,
     default: null,
+  },
+  signer_designation: {
+    type: String,
+    default: 'Authorized Signatory / Proprietor',
+    trim: true,
   },
   expires_at: {
     type: Date,

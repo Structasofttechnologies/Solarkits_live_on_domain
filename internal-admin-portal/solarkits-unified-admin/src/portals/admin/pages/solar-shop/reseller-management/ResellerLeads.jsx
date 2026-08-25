@@ -28,6 +28,7 @@ import {
   FiSend,
   FiRefreshCw,
   FiLoader,
+  FiShield,
 } from "react-icons/fi";
 import { FaWhatsapp, FaBuilding } from "react-icons/fa";
 import { authHeaderObj } from "@/app/authHeader";
@@ -149,9 +150,10 @@ const INITIAL_DEMO_LEADS = [
 const STATUS_CONFIG = {
   ALL: { label: "All Leads", color: "bg-surface-hover text-text-primary" },
   NEW: { label: "New Lead", bg: "bg-danger-soft", text: "text-danger", border: "border-danger/20", icon: FiAlertCircle },
+  GST_VERIFIED: { label: "GST Verified", bg: "bg-primary-soft", text: "text-primary", border: "border-primary/20", icon: FiShield },
   CONTACTED: { label: "Contacted", bg: "bg-info-soft", text: "text-info", border: "border-info/20", icon: FiClock },
   IN_REVIEW: { label: "In Review", bg: "bg-warning-soft", text: "text-warning", border: "border-warning/20", icon: FiClock },
-  APPROVED_CONVERTED: { label: "Converted", bg: "bg-success-soft", text: "text-success", border: "border-success/20", icon: FiCheckCircle },
+  APPROVED_CONVERTED: { label: "Approved & Converted", bg: "bg-success-soft", text: "text-success", border: "border-success/20", icon: FiCheckCircle },
   REJECTED: { label: "Rejected", bg: "bg-surface-hover", text: "text-text-muted", border: "border-border", icon: FiXCircle },
 };
 
@@ -194,6 +196,12 @@ export default function ResellerLeads() {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
 
+  // Approval Modal State
+  const [approveLead, setApproveLead] = useState(null);
+  const [approvalPassword, setApprovalPassword] = useState("SolarKits@2026");
+  const [approvalCommercialMode, setApprovalCommercialMode] = useState("commission");
+  const [approving, setApproving] = useState(false);
+
   // Load leads from localStorage + demo seeds as initial cache
   const [leads, setLeads] = useState(() => {
     try {
@@ -209,6 +217,7 @@ export default function ResellerLeads() {
     }
     return INITIAL_DEMO_LEADS;
   });
+
 
   // Fetch leads from backend API
   const fetchLeads = useCallback(async () => {
@@ -345,6 +354,49 @@ export default function ResellerLeads() {
       dispatch(setAlert({ type: "info", message: "Lead removed from system" }));
     }
   };
+
+  // ── Lead Approval as Franchise Partner ──────────────────────────────────
+  const handleConfirmApproval = async (e) => {
+    e.preventDefault();
+    if (!approveLead) return;
+
+    setApproving(true);
+    try {
+      const leadId = approveLead.id || approveLead._id;
+      const res = await axios.post(
+        `${API_BASE}/resellers/leads/${leadId}/approve?req_for=edit&unique_id=${MODULE_UID}`,
+        {
+          password: approvalPassword || "SolarKits@2026",
+          commercial_mode: approvalCommercialMode || "commission",
+        },
+        { headers: authHeaderObj() }
+      );
+
+      if (res.data?.status === "success" || res.data?.success) {
+        dispatch(
+          setAlert({
+            type: "success",
+            message: `Franchise Partner approved! Account provisioned & agreement generated for "${approveLead.fullName}".`,
+          })
+        );
+        handleStatusChange(leadId, "APPROVED_CONVERTED");
+        setApproveLead(null);
+        fetchLeads();
+      } else {
+        dispatch(setAlert({ type: "error", message: res.data?.message || "Failed to approve lead." }));
+      }
+    } catch (err) {
+      dispatch(
+        setAlert({
+          type: "error",
+          message: err.response?.data?.message || "Lead approval failed. Please try again.",
+        })
+      );
+    } finally {
+      setApproving(false);
+    }
+  };
+
 
   // Manual Add Form Submit
   const handleCreateLead = async (e) => {
@@ -755,10 +807,23 @@ export default function ResellerLeads() {
                                 <span>{lead.businessName || "Individual Applicant"}</span>
                               </div>
 
-                              {lead.gstin && (
-                                <div className="text-[10px] text-text-muted font-mono bg-bg px-1.5 py-0.5 rounded border border-border inline-block">
-                                  GST: {lead.gstin}
-                                </div>
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                {lead.gstin && (
+                                  <div className="text-[10px] text-text-muted font-mono bg-bg px-1.5 py-0.5 rounded border border-border inline-block">
+                                    GST: {lead.gstin}
+                                  </div>
+                                )}
+                                {lead.gst_verified && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                    <FiShield size={10} className="text-emerald-600" />
+                                    <span>QuickeKYC Verified</span>
+                                  </span>
+                                )}
+                              </div>
+                              {lead.gst_legal_name && (
+                                <p className="text-[10px] text-emerald-800 font-medium truncate max-w-[220px]">
+                                  {lead.gst_legal_name}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -850,6 +915,7 @@ export default function ResellerLeads() {
                             className={`px-2.5 py-1 rounded-full text-xs font-bold border focus:outline-none transition-all cursor-pointer ${statusCfg.bg} ${statusCfg.text} ${statusCfg.border}`}
                           >
                             <option value="NEW">New Lead</option>
+                            <option value="GST_VERIFIED">GST Verified</option>
                             <option value="CONTACTED">Contacted</option>
                             <option value="IN_REVIEW">In Review</option>
                             <option value="APPROVED_CONVERTED">Converted</option>
@@ -865,6 +931,18 @@ export default function ResellerLeads() {
                         {/* Actions */}
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {lead.status !== "APPROVED_CONVERTED" && (
+                              <button
+                                type="button"
+                                onClick={() => setApproveLead(lead)}
+                                title="Approve as Franchise Partner"
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1"
+                              >
+                                <FiCheckCircle size={13} />
+                                <span>Approve</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => setSelectedLead(lead)}
@@ -887,6 +965,7 @@ export default function ResellerLeads() {
                       </motion.tr>
                     );
                   })}
+
                 </AnimatePresence>
               </tbody>
             </table>
@@ -1070,18 +1149,136 @@ export default function ResellerLeads() {
                   <span>Delete Application</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedLead(null)}
-                  className="px-5 py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover transition"
-                >
-                  Close Detail
-                </button>
+                <div className="flex items-center gap-2">
+                  {selectedLead.status !== "APPROVED_CONVERTED" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = selectedLead;
+                        setSelectedLead(null);
+                        setApproveLead(target);
+                      }}
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      <FiCheckCircle size={15} />
+                      <span>Approve as Franchise Partner</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLead(null)}
+                    className="px-5 py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover transition"
+                  >
+                    Close Detail
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── APPROVE AS FRANCHISE PARTNER MODAL ─────────────────────────── */}
+      <AnimatePresence>
+        {approveLead && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-surface rounded-3xl shadow-2xl border border-border w-full max-w-lg overflow-hidden flex flex-col p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                    <FiCheckCircle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-text-primary">
+                      Approve Franchise Partner Application
+                    </h3>
+                    <p className="text-xs text-text-muted">Step 4: Formal Onboarding Approval</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setApproveLead(null)}
+                  className="p-2 rounded-xl text-text-muted hover:bg-surface-hover"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-bg border border-border text-xs space-y-1.5">
+                <p><strong>Applicant Name:</strong> {approveLead.fullName}</p>
+                <p><strong>Business Name:</strong> {approveLead.businessName || "Individual"}</p>
+                <p><strong>GSTIN:</strong> {approveLead.gstin || "N/A"}</p>
+                {approveLead.gst_verified && (
+                  <p className="text-emerald-700 font-bold flex items-center gap-1">
+                    <FiCheckCircle size={12} /> QuickeKYC Authenticated: {approveLead.gst_legal_name || "Verified"}
+                  </p>
+                )}
+                <p><strong>Target Territory:</strong> {approveLead.district ? `${approveLead.district}, ${approveLead.state}` : approveLead.state}</p>
+              </div>
+
+              <form onSubmit={handleConfirmApproval} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-text-secondary mb-1">
+                    Initial Partner Login Password
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={approvalPassword}
+                    onChange={(e) => setApprovalPassword(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <p className="text-[10px] text-text-muted mt-0.5">Partner will use this password to log in at the Reseller Portal.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-text-secondary mb-1">
+                    Commercial Mode
+                  </label>
+                  <select
+                    value={approvalCommercialMode}
+                    onChange={(e) => setApprovalCommercialMode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="commission">Commission Settlement Mode</option>
+                    <option value="upfront_discount">Upfront Wholesale Margin Discount Mode</option>
+                  </select>
+                </div>
+
+                <div className="p-3 rounded-xl bg-info-soft/30 border border-info/20 text-[11px] text-text-secondary leading-relaxed">
+                  ✓ Automatically provisions Reseller Account in the system.<br />
+                  ✓ Generates official Franchise Partner Agreement in <strong>pending signature</strong> status.<br />
+                  ✓ Enables the partner to sign the agreement & upload offline fee payment receipt.
+                </div>
+
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setApproveLead(null)}
+                    className="px-4 py-2 rounded-xl border border-border text-text-secondary text-xs font-bold hover:bg-surface-hover"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={approving}
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                  >
+                    {approving ? <FiLoader className="animate-spin" /> : <FiCheckCircle />}
+                    <span>Confirm & Approve Franchise Partner</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
 
       {/* ── ADD MANUAL LEAD MODAL ────────────────────────────────────────── */}
       <AnimatePresence>

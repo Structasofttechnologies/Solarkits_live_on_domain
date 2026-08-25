@@ -15,6 +15,7 @@ const {
   TerritoryAssignmentHistory,
   SolarShopSettings,
 } = require('../models/india_solarshop_db');
+const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { logAudit } = require('./audit.service');
 
 /**
@@ -287,8 +288,176 @@ async function assignTerritoryAtomic({
   }
 }
 
+/**
+ * Auto-sync or create GST-derived territory assignment for a reseller
+ * based on their registered address (state_id & district_id), city/state strings, or GST details.
+ */
+async function syncGstDerivedTerritoryForReseller(resellerId) {
+  try {
+    const mongoose = require('mongoose');
+    if (!resellerId || !mongoose.Types.ObjectId.isValid(resellerId)) return null;
+
+    const reseller = await Reseller.findOne({ _id: resellerId, deleted_at: null });
+    if (!reseller) return null;
+
+    // Check if reseller already has active explicit admin/plan territory assignment
+    const activeTerritories = await ResellerTerritory.find({
+      reseller_id: resellerId,
+      status: 'active',
+    });
+
+    const explicitAssignment = activeTerritories.find(
+      (t) => t.source === 'admin_override' || t.source === 'admin_assigned' || t.source === 'plan'
+    );
+
+    // If explicit admin or plan assignment exists, keep it as primary
+    if (explicitAssignment) {
+      return explicitAssignment;
+    }
+
+    let districtId = reseller.address?.district_id || null;
+    let stateId    = reseller.address?.state_id || null;
+    let countryId  = reseller.address?.country_id || null;
+    let addressUpdated = false;
+
+    // 1. If districtId is missing, attempt to resolve from address city/district strings
+    if (!districtId) {
+      const districtSearchTerm = reseller.address?.city || reseller.address?.district || reseller.district || null;
+      if (districtSearchTerm && typeof districtSearchTerm === 'string' && districtSearchTerm.trim()) {
+        const distDoc = await GeoLevel2.findOne({
+          name: new RegExp(`^${districtSearchTerm.trim()}$`, 'i'),
+          is_active: { $ne: false },
+        }).lean();
+        if (distDoc) {
+          districtId = distDoc._id;
+          if (!stateId && distDoc.level_1) {
+            stateId = distDoc.level_1;
+          }
+        }
+      }
+    }
+
+    // 2. If stateId is missing, attempt to resolve from address state/gst_state_name strings
+    if (!stateId) {
+      const stateSearchTerm = reseller.address?.state || reseller.address?.gst_state_name || reseller.gst_state || reseller.state || null;
+      if (stateSearchTerm && typeof stateSearchTerm === 'string' && stateSearchTerm.trim()) {
+        const cleanState = stateSearchTerm.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+        if (cleanState) {
+          const stateDoc = await GeoLevel1.findOne({
+            name: new RegExp(cleanState, 'i'),
+            is_active: { $ne: false },
+          }).lean();
+          if (stateDoc) {
+            stateId = stateDoc._id;
+            if (!countryId && stateDoc.level_0) {
+              countryId = stateDoc.level_0;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Resolve parent state_id from district_id if missing
+    if (districtId && !stateId) {
+      const distDoc = await GeoLevel2.findById(districtId).lean();
+      if (distDoc && distDoc.level_1) {
+        stateId = distDoc.level_1;
+      }
+    }
+
+    // 4. Resolve parent country_id from state_id if missing
+    if (stateId && !countryId) {
+      const stateDoc = await GeoLevel1.findById(stateId).lean();
+      if (stateDoc && stateDoc.level_0) {
+        countryId = stateDoc.level_0;
+      }
+    }
+
+    // 5. Default country to India if missing
+    if (!countryId) {
+      let indiaCountry = await GeoLevel0.findOne({ name: /india/i }).lean();
+      if (!indiaCountry) indiaCountry = await GeoLevel0.findOne().lean();
+      if (indiaCountry) countryId = indiaCountry._id;
+    }
+
+    // If stateId or districtId was newly resolved, update reseller.address in database
+    if (reseller.address) {
+      if (districtId && String(reseller.address.district_id) !== String(districtId)) {
+        reseller.address.district_id = districtId;
+        addressUpdated = true;
+      }
+      if (stateId && String(reseller.address.state_id) !== String(stateId)) {
+        reseller.address.state_id = stateId;
+        addressUpdated = true;
+      }
+      if (countryId && String(reseller.address.country_id) !== String(countryId)) {
+        reseller.address.country_id = countryId;
+        addressUpdated = true;
+      }
+      if (addressUpdated) {
+        await reseller.save();
+      }
+    }
+
+    // Determine target territory level: district > state > country
+    let territoryLevel = null;
+    if (districtId) {
+      territoryLevel = 'district';
+    } else if (stateId) {
+      territoryLevel = 'state';
+    } else if (countryId) {
+      territoryLevel = 'country';
+    }
+
+    if (!territoryLevel || !countryId) return null;
+
+    // Check if an existing gst_derived entry exists
+    const existingGstTerritory = activeTerritories.find((t) => t.source === 'gst_derived');
+
+    if (existingGstTerritory) {
+      const levelMatches = existingGstTerritory.territory_level === territoryLevel;
+      const districtMatches = String(existingGstTerritory.district_id || '') === String(districtId || '');
+      const stateMatches = String(existingGstTerritory.state_id || '') === String(stateId || '');
+      const countryMatches = String(existingGstTerritory.country_id || '') === String(countryId || '');
+
+      if (levelMatches && districtMatches && stateMatches && countryMatches) {
+        return existingGstTerritory; // Already fully up to date
+      }
+
+      existingGstTerritory.territory_level = territoryLevel;
+      existingGstTerritory.country_id = countryId;
+      existingGstTerritory.state_id = stateId || null;
+      existingGstTerritory.district_id = districtId || null;
+      existingGstTerritory.override_reason = `Auto-updated from GST registered address boundary (${territoryLevel.toUpperCase()})`;
+      await existingGstTerritory.save();
+      return existingGstTerritory;
+    }
+
+    // Create new GST-derived territory entry
+    const newGstTerritory = await ResellerTerritory.create({
+      reseller_id: resellerId,
+      territory_level: territoryLevel,
+      country_id: countryId,
+      state_id: stateId || null,
+      district_id: districtId || null,
+      source: 'gst_derived',
+      status: 'active',
+      is_exclusive: false,
+      assignment_type: 'primary',
+      override_reason: `Auto-assigned from GST registered address boundary (${territoryLevel.toUpperCase()})`,
+    });
+
+    return newGstTerritory;
+  } catch (err) {
+    console.warn('[syncGstDerivedTerritoryForReseller] error:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   validateResellerTerritoryAccess,
   validateEpcResellerTerritoryMatch,
   assignTerritoryAtomic,
+  syncGstDerivedTerritoryForReseller,
 };
+

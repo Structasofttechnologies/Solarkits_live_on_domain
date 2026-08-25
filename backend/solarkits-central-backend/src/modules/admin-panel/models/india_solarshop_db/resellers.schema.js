@@ -73,15 +73,21 @@ const schema = new mongoose.Schema({
     type: String,
     enum: [
       'draft',
+      'lead_captured',
       'gst_verification_pending',
       'gst_verified',
+      'admin_review',
+      'approved',
+      'agreement_pending',
+      'agreement_signed',
+      'fee_payment_pending',
+      'payment_verification_pending',
       'kyc_pending',
       'kyc_submitted',
       'kyc_under_review',
       'kyc_rejected',
       'kyc_resubmission_required',
       'kyc_verified',
-      'agreement_pending',
       'territory_pending',
       'active',
       'suspended',
@@ -98,14 +104,32 @@ const schema = new mongoose.Schema({
   gst_verified_at:         { type: Date,   default: null },
   gst_verification_log_id: { type: mongoose.Schema.Types.ObjectId, ref: 'gst_verification_logs', default: null },
 
-  // ── Phase R2: Operations Contact ─────────────────────────────────────────
+  // ── Operations Contact ───────────────────────────────────────────────────
   contact_person: { type: String, default: null, trim: true, maxlength: 150 },
 
+  // ── Franchise Agreement Status ───────────────────────────────────────────
   agreement_status: {
     type: String,
     enum: ['pending', 'generated', 'signed', 'expired', 'revoked'],
     default: 'pending',
   },
+  agreement_signed_at: { type: Date, default: null },
+  agreement_signer_name: { type: String, default: null },
+
+  // ── Manual Fee Payment & Receipt Details ─────────────────────────────────
+  fee_payment_status: {
+    type: String,
+    enum: ['pending_payment', 'receipt_uploaded', 'verified', 'rejected'],
+    default: 'pending_payment',
+  },
+  fee_payment_utr:            { type: String, default: null, trim: true },
+  fee_payment_amount:         { type: Number, default: null },
+  fee_payment_date:           { type: Date, default: null },
+  fee_payment_receipt_url:    { type: String, default: null, trim: true },
+  fee_payment_verified_at:    { type: Date, default: null },
+  fee_payment_verified_by:    { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+  fee_payment_remarks:        { type: String, default: null, trim: true },
+
   activation_status: {
     type: String,
     enum: ['pending', 'active', 'suspended', 'terminated'],

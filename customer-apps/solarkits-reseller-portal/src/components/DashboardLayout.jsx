@@ -29,6 +29,14 @@ const NAV_ITEMS = [
   { name: "Home", icon: FiHome, path: "/dashboard" },
   { name: "Browse Products", icon: FiPackage, path: "/catalog" },
   { name: "My Listings", icon: FiTag, path: "/storefront-listings" },
+  {
+    name: "My Orders",
+    icon: FiShoppingCart,
+    children: [
+      { name: "PO Orders", icon: FiBox, path: "/po-order" },
+      { name: "Loose Orders", icon: FiTag, path: "/loose-order" },
+    ],
+  },
   { name: "My Buyers", icon: FiUsers, path: "/epc-buyers" },
   { name: "Orders & Tracking", icon: FiShoppingCart, path: "/orders" },
   { name: "My Earnings", icon: FiCreditCard, path: "/wallet" },
@@ -50,10 +58,30 @@ export default function DashboardLayout() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
   const [isDark, setIsDark] = useState(() => localStorage.getItem("reseller_theme") === "dark");
+  const [expandedMenus, setExpandedMenus] = useState({ "My Orders": true, "MyOrders": true });
   const notifRef = useRef(null);
   const userMenuRef = useRef(null);
 
   const token = localStorage.getItem("reseller_token");
+
+  // Auto-expand menu if active path is inside a submenu
+  useEffect(() => {
+    NAV_ITEMS.forEach((item) => {
+      if (item.children) {
+        const hasActiveChild = item.children.some((child) => child.path === location.pathname);
+        if (hasActiveChild) {
+          setExpandedMenus((prev) => ({ ...prev, [item.name]: true }));
+        }
+      }
+    });
+  }, [location.pathname]);
+
+  const toggleSubMenu = (menuName) => {
+    setExpandedMenus((prev) => ({
+      ...prev,
+      [menuName]: !prev[menuName],
+    }));
+  };
 
   // Theme management
   useEffect(() => {
@@ -103,9 +131,11 @@ export default function DashboardLayout() {
           }
         }
       })
-      .catch(() => {
-        localStorage.removeItem("reseller_token");
-        navigate("/login");
+      .catch((err) => {
+        if (err.response?.status === 401) {
+          localStorage.removeItem("reseller_token");
+          navigate("/login");
+        }
       });
   }, [token, navigate]);
 
@@ -125,12 +155,30 @@ export default function DashboardLayout() {
     navigate("/login");
   };
 
+  // Redirect unactivated partners out of the dashboard layout to the standalone Onboarding portal
+  if (reseller && reseller.activation_status !== "active") {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   const filteredNav = NAV_ITEMS.filter(
     (item) => !(item.path === "/kyc" && reseller?.kyc_status === "verified")
   );
 
-  const avatarUrl = reseller?.business_name
-    ? `https://ui-avatars.com/api/?name=${encodeURIComponent(reseller.business_name)}&background=1a3b8b&color=ffffff`
+  const getInitials = (name) => {
+    if (!name) return "FP";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const primaryName = reseller?.contact_person || reseller?.business_name || "Franchise Partner";
+  const companyName = reseller?.business_name || "Partner Enterprise";
+  const userInitials = getInitials(primaryName);
+
+  const avatarUrl = primaryName
+    ? `https://ui-avatars.com/api/?name=${encodeURIComponent(primaryName)}&background=1a3b8b&color=ffffff&bold=true`
     : null;
 
   return (
@@ -161,8 +209,8 @@ export default function DashboardLayout() {
             exit={{ x: isMobile ? "-100%" : 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className={`flex flex-col shrink-0 shadow-lg ${isMobile
-                ? "fixed top-0 left-0 h-screen z-50 w-64"
-                : "h-screen w-60"
+              ? "fixed top-0 left-0 h-screen z-50 w-64"
+              : "h-screen w-60"
               }`}
             style={{
               background: "var(--color-surface)",
@@ -185,18 +233,24 @@ export default function DashboardLayout() {
                   style={{ background: "var(--color-bg)" }}
                 >
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black text-white shrink-0 shadow-sm"
                     style={{ background: "var(--gradient-primary)" }}
                   >
-                    {reseller.business_name?.charAt(0)?.toUpperCase() || "R"}
+                    {userInitials}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div
-                      className="text-xs font-bold truncate"
+                      className="text-xs font-black truncate"
                       style={{ color: "var(--color-text-primary)" }}
+                      title={primaryName}
                     >
-                      {reseller.business_name}
+                      {primaryName}
                     </div>
+                    {reseller.contact_person && reseller.business_name && (
+                      <div className="text-[10px] text-slate-500 font-medium truncate">
+                        {companyName}
+                      </div>
+                    )}
                     <div
                       className="text-[10px] font-semibold flex items-center gap-1 mt-0.5"
                       style={{
@@ -226,23 +280,137 @@ export default function DashboardLayout() {
             {/* Navigation */}
             <div className="flex-1 overflow-y-auto scrollbar-hover py-2">
               <ul className="px-2 space-y-1">
-                {filteredNav.map((item) => {
-                  const Icon = item.icon;
+                {filteredNav.map((item, idx) => {
+                  const itemKey = item.path || item.name || `nav-${idx}`;
+
+                  // Nested Accordion Menu
+                  if (item.children && Array.isArray(item.children)) {
+                    const Icon = item.icon || FiShoppingCart;
+                    const isAnyChildActive = item.children.some((c) => location.pathname === c.path);
+                    const isOpen = Boolean(expandedMenus[item.name]);
+
+                    return (
+                      <li key={itemKey} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleSubMenu(item.name)}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                            isAnyChildActive ? "text-primary font-bold bg-primary/10" : ""
+                          }`}
+                          style={
+                            !isAnyChildActive
+                              ? {
+                                  color: "var(--color-text-secondary)",
+                                  background: "transparent",
+                                }
+                              : {}
+                          }
+                          onMouseEnter={(e) => {
+                            if (!isAnyChildActive) {
+                              e.currentTarget.style.background = "var(--color-surface-hover)";
+                              e.currentTarget.style.color = "var(--color-text-primary)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isAnyChildActive) {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.color = "var(--color-text-secondary)";
+                            }
+                          }}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Icon
+                              size={17}
+                              style={{ color: isAnyChildActive ? "var(--color-primary)" : "var(--color-text-muted)" }}
+                            />
+                            <span>{item.name}</span>
+                          </div>
+                          <FiChevronDown
+                            size={15}
+                            className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                            style={{ color: "var(--color-text-muted)" }}
+                          />
+                        </button>
+
+                        {/* Sub-menu items */}
+                        <AnimatePresence initial={false}>
+                          {isOpen && (
+                            <motion.ul
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="pl-3 pr-1 space-y-1 overflow-hidden"
+                            >
+                              {item.children.map((child, cIdx) => {
+                                const ChildIcon = child.icon || FiBox;
+                                const isChildActive = location.pathname === child.path;
+                                const childKey = child.path || child.name || `child-${cIdx}`;
+
+                                return (
+                                  <li key={childKey}>
+                                    <Link
+                                      to={child.path}
+                                      onClick={() => isMobile && setSidebarOpen(false)}
+                                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${
+                                        isChildActive ? "btn-primary text-white" : ""
+                                      }`}
+                                      style={
+                                        !isChildActive
+                                          ? {
+                                              color: "var(--color-text-secondary)",
+                                              background: "transparent",
+                                            }
+                                          : {}
+                                      }
+                                      onMouseEnter={(e) => {
+                                        if (!isChildActive) {
+                                          e.currentTarget.style.background = "var(--color-surface-hover)";
+                                          e.currentTarget.style.color = "var(--color-text-primary)";
+                                        }
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        if (!isChildActive) {
+                                          e.currentTarget.style.background = "transparent";
+                                          e.currentTarget.style.color = "var(--color-text-secondary)";
+                                        }
+                                      }}
+                                    >
+                                      <ChildIcon
+                                        size={14}
+                                        style={isChildActive ? { color: "white" } : { color: "var(--color-primary)" }}
+                                      />
+                                      <span>{child.name}</span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </motion.ul>
+                          )}
+                        </AnimatePresence>
+                      </li>
+                    );
+                  }
+
+                  // Regular Flat Menu Item
+                  const Icon = item.icon || FiBox;
                   const isActive = location.pathname === item.path;
+
                   return (
-                    <li key={item.path}>
+                    <li key={itemKey}>
                       <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                         <Link
                           to={item.path}
                           onClick={() => isMobile && setSidebarOpen(false)}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${isActive ? "btn-primary text-white" : ""
-                            }`}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                            isActive ? "btn-primary text-white" : ""
+                          }`}
                           style={
                             !isActive
                               ? {
-                                color: "var(--color-text-secondary)",
-                                background: "transparent",
-                              }
+                                  color: "var(--color-text-secondary)",
+                                  background: "transparent",
+                                }
                               : {}
                           }
                           onMouseEnter={(e) => {
@@ -490,22 +658,22 @@ export default function DashboardLayout() {
                 >
                   <img
                     src={avatarUrl}
-                    alt={reseller.business_name}
+                    alt={primaryName}
                     className="w-9 h-9 rounded-full"
                     style={{ border: "2px solid var(--color-border)" }}
                   />
                   <div className="hidden sm:block text-left">
                     <p
-                      className="text-sm font-semibold leading-tight"
+                      className="text-sm font-extrabold leading-tight"
                       style={{ color: "var(--color-text-primary)" }}
                     >
-                      {reseller.business_name}
+                      {primaryName}
                     </p>
                     <p
-                      className="text-xs leading-tight truncate max-w-[140px]"
+                      className="text-xs leading-tight truncate max-w-[150px] font-medium"
                       style={{ color: "var(--color-text-secondary)" }}
                     >
-                      {reseller.email}
+                      {reseller.contact_person && reseller.business_name ? reseller.business_name : reseller.email}
                     </p>
                   </div>
                   <FiChevronDown
@@ -530,12 +698,17 @@ export default function DashboardLayout() {
                       }}
                     >
                       {/* Header Profile Info */}
-                      <div className="px-4 py-3 border-b" style={{ borderColor: "var(--color-border)" }}>
-                        <div className="font-bold text-xs" style={{ color: "var(--color-text-primary)" }}>
-                          {reseller.business_name}
+                      <div className="px-4 py-3 border-b space-y-1" style={{ borderColor: "var(--color-border)" }}>
+                        <div className="font-extrabold text-xs text-slate-900 flex items-center justify-between">
+                          <span>{primaryName}</span>
                         </div>
-                        <div className="text-[11px] truncate" style={{ color: "var(--color-text-secondary)" }}>
-                          {reseller.email}
+                        {reseller.contact_person && reseller.business_name && (
+                          <div className="text-[11px] font-bold text-[#0575B8] truncate">
+                            🏢 {reseller.business_name}
+                          </div>
+                        )}
+                        <div className="text-[11px] truncate text-slate-500 font-medium">
+                          ✉️ {reseller.email}
                         </div>
                         <div className="mt-2 flex items-center gap-1.5">
                           <span
@@ -617,7 +790,7 @@ export default function DashboardLayout() {
 
         {/* Page Body */}
         <main className="flex-1 p-6 overflow-y-auto scrollbar-hover" style={{ background: "var(--color-bg)" }}>
-          <Outlet context={{ reseller }} />
+          <Outlet context={{ reseller, refreshUser: fetchMe }} />
         </main>
       </div>
     </div>

@@ -36,7 +36,11 @@ export default function Login() {
         const reseller = res.data.user || res.data.data?.reseller;
         localStorage.setItem("reseller_token", token);
         localStorage.setItem("reseller_user", JSON.stringify(reseller));
-        navigate("/dashboard");
+        if (reseller?.activation_status === "active") {
+          navigate("/dashboard");
+        } else {
+          navigate("/onboarding");
+        }
       } else {
         setError(res.data?.message || "Login failed");
       }
@@ -49,7 +53,7 @@ export default function Login() {
 
   const handleFillDemo = () => {
     setEmail("structasoftadmin@gmail.com");
-    setPassword("structasoftadmin@gmail.com");
+    setPassword("Password@123");
   };
 
   return (
@@ -128,7 +132,7 @@ export default function Login() {
             </div>
             <div>
               <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>Pass: </span>
-              structasoftadmin@gmail.com
+              Password@123
             </div>
           </div>
           <button

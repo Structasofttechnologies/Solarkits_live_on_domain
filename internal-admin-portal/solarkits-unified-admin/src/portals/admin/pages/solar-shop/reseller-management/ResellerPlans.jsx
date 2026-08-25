@@ -303,19 +303,25 @@ function FormModal({ mode, initial, onClose, onSaved }) {
   const filteredComboKits = useMemo(() => {
     const allKits = configOptions.combo_kits || [];
     return allKits.filter((kit) => {
-      if (filters.industryType !== "all" && kit.industry_type_id && String(kit.industry_type_id) !== String(filters.industryType)) {
+      const kitCatId = kit.category_id?._id || kit.category_id || kit.solar_kit_id?.category_id?._id || kit.solar_kit_id?.category_id;
+      const kitSubcatId = kit.subcategory_id?._id || kit.subcategory_id || kit.solar_kit_id?.subcategory_id?._id || kit.solar_kit_id?.subcategory_id;
+      const kitTypeId = kit.project_type_id?._id || kit.project_type_id || kit.type_id?._id || kit.type_id || kit.system_type_id?._id || kit.system_type_id || kit.solar_kit_id?.type_id?._id || kit.solar_kit_id?.type_id;
+      const kitRangeId = kit.project_range_id?._id || kit.project_range_id;
+      const kitIndId = kit.industry_type_id?._id || kit.industry_type_id || kit.solar_kit_id?.industry_type_id?._id || kit.solar_kit_id?.industry_type_id;
+
+      if (filters.industryType !== "all" && kitIndId && String(kitIndId) !== String(filters.industryType)) {
         return false;
       }
-      if (filters.category !== "all" && kit.category_id && String(kit.category_id) !== String(filters.category)) {
+      if (filters.category !== "all" && kitCatId && String(kitCatId) !== String(filters.category)) {
         return false;
       }
-      if (filters.subCategory !== "all" && kit.subcategory_id && String(kit.subcategory_id) !== String(filters.subCategory)) {
+      if (filters.subCategory !== "all" && kitSubcatId && String(kitSubcatId) !== String(filters.subCategory)) {
         return false;
       }
-      if (filters.systemType !== "all" && kit.system_type_id && String(kit.system_type_id) !== String(filters.systemType)) {
+      if (filters.systemType !== "all" && kitTypeId && String(kitTypeId) !== String(filters.systemType)) {
         return false;
       }
-      if (filters.projectRange !== "all" && kit.project_range_id && String(kit.project_range_id) !== String(filters.projectRange)) {
+      if (filters.projectRange !== "all" && kitRangeId && String(kitRangeId) !== String(filters.projectRange)) {
         return false;
       }
       return true;
