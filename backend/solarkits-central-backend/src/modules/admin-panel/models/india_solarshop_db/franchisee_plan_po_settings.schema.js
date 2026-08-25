@@ -54,6 +54,8 @@ const schema = new mongoose.Schema(
     allowed_industry_type_ids:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_industry_types' }],
     allowed_project_type_ids:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types' }],
     allowed_category_ids:       [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_categories' }],
+    allowed_subcategory_ids:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_subcategories' }],
+    allowed_combo_kit_ids:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'pc_comobo_kit' }],
     allowed_product_ids:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'products' }],
     allowed_territory_levels:   [{ type: String, enum: ['district', 'state', 'country'] }],
 
@@ -111,12 +113,10 @@ const schema = new mongoose.Schema(
   }
 );
 
-// One active PO settings record per plan at a time
-schema.index(
-  { plan_id: 1, effective_from: 1 },
-  { unique: true, partialFilterExpression: { deleted_at: null } }
-);
+// Indexes for efficient querying by plan and status
+schema.index({ plan_id: 1, effective_from: 1 });
 schema.index({ plan_id: 1, is_active: 1 });
+schema.index({ plan_id: 1, created_at: -1 });
 
 schema.virtual('id').get(function () { return this._id; });
 

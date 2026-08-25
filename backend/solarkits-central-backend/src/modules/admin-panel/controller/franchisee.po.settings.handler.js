@@ -8,6 +8,7 @@
 
 const mongoose = require('mongoose');
 const { FranchiseePlanPoSetting, ResellerPlan } = require('../models/india_solarshop_db');
+const { WarehouseComboKit, ProjectType, IndustryType, ProjectCategory, ProjectSubcategory } = require('../models/core_db');
 const { logAudit } = require('../utils/audit.service');
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
@@ -20,6 +21,11 @@ const list_po_settings = async (req, res) => {
 
     const rows = await FranchiseePlanPoSetting.find(query)
       .populate('plan_id', 'name territory_level')
+      .populate({ path: 'allowed_project_type_ids', model: ProjectType, select: 'name' })
+      .populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit, select: 'name capacity capacity_kw kit_code' })
+      .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name' })
+      .populate({ path: 'allowed_category_ids', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'allowed_subcategory_ids', model: ProjectSubcategory, select: 'name' })
       .sort({ created_at: -1 })
       .lean();
 
@@ -34,7 +40,8 @@ const list_po_settings = async (req, res) => {
 const add_po_settings = async (req, res) => {
   try {
     const { plan_id, po_enabled, min_po_quantity, max_po_quantity, allow_mixed_project_types, max_line_items,
-      allowed_industry_type_ids, allowed_project_type_ids, allowed_category_ids, allowed_product_ids,
+      allowed_industry_type_ids, allowed_project_type_ids, allowed_category_ids, allowed_subcategory_ids,
+      allowed_combo_kit_ids, allowed_product_ids,
       allowed_territory_levels, po_validity_days, requires_approval, payment_terms, advance_percentage,
       credit_period_eligible, credit_period_days, cancellation_rules, amendment_rules,
       contributes_to_monthly_target, effective_from, effective_until } = req.body;
@@ -49,6 +56,25 @@ const add_po_settings = async (req, res) => {
     const plan = await ResellerPlan.findOne({ _id: plan_id, deleted_at: null }).lean();
     if (!plan) return res.status(404).json({ status: 'error', message: 'Reseller plan not found' });
 
+    // Validate that combo kits are not already assigned to another PO setting under the same plan
+    if (Array.isArray(allowed_combo_kit_ids) && allowed_combo_kit_ids.length > 0) {
+      const duplicateDoc = await FranchiseePlanPoSetting.findOne({
+        plan_id,
+        deleted_at: null,
+        allowed_combo_kit_ids: { $in: allowed_combo_kit_ids },
+      }).populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit, select: 'name kit_code' }).lean();
+
+      if (duplicateDoc) {
+        const conflictedKit = (duplicateDoc.allowed_combo_kit_ids || []).find((k) =>
+          allowed_combo_kit_ids.map(String).includes(String(k._id || k.id || k))
+        );
+        return res.status(400).json({
+          status: 'error',
+          message: `The product/combo kit "${conflictedKit?.name || 'Selected product'}" is already configured in another PO setting for this plan. Each product can only have one active PO setting per plan.`,
+        });
+      }
+    }
+
     const doc = await FranchiseePlanPoSetting.create({
       plan_id,
       po_enabled:                  Boolean(po_enabled),
@@ -59,6 +85,8 @@ const add_po_settings = async (req, res) => {
       allowed_industry_type_ids:   Array.isArray(allowed_industry_type_ids) ? allowed_industry_type_ids : [],
       allowed_project_type_ids:    Array.isArray(allowed_project_type_ids) ? allowed_project_type_ids : [],
       allowed_category_ids:        Array.isArray(allowed_category_ids) ? allowed_category_ids : [],
+      allowed_subcategory_ids:     Array.isArray(allowed_subcategory_ids) ? allowed_subcategory_ids : [],
+      allowed_combo_kit_ids:       Array.isArray(allowed_combo_kit_ids) ? allowed_combo_kit_ids : [],
       allowed_product_ids:         Array.isArray(allowed_product_ids) ? allowed_product_ids : [],
       allowed_territory_levels:    Array.isArray(allowed_territory_levels) ? allowed_territory_levels : [],
       po_validity_days:            po_validity_days != null ? Number(po_validity_days) : 30,
@@ -97,9 +125,30 @@ const update_po_settings = async (req, res) => {
     const doc = await FranchiseePlanPoSetting.findOne({ _id: id, deleted_at: null });
     if (!doc) return res.status(404).json({ status: 'error', message: 'PO settings not found' });
 
+    // Validate that combo kits are not already assigned to another PO setting under the same plan
+    if (Array.isArray(fields.allowed_combo_kit_ids) && fields.allowed_combo_kit_ids.length > 0) {
+      const duplicateDoc = await FranchiseePlanPoSetting.findOne({
+        plan_id: doc.plan_id,
+        _id: { $ne: doc._id },
+        deleted_at: null,
+        allowed_combo_kit_ids: { $in: fields.allowed_combo_kit_ids },
+      }).populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit, select: 'name kit_code' }).lean();
+
+      if (duplicateDoc) {
+        const conflictedKit = (duplicateDoc.allowed_combo_kit_ids || []).find((k) =>
+          fields.allowed_combo_kit_ids.map(String).includes(String(k._id || k.id || k))
+        );
+        return res.status(400).json({
+          status: 'error',
+          message: `The product/combo kit "${conflictedKit?.name || 'Selected product'}" is already configured in another PO setting for this plan. Each product can only have one active PO setting per plan.`,
+        });
+      }
+    }
+
     const before = doc.toObject();
     const allowed = ['po_enabled', 'min_po_quantity', 'max_po_quantity', 'allow_mixed_project_types',
       'max_line_items', 'allowed_industry_type_ids', 'allowed_project_type_ids', 'allowed_category_ids',
+      'allowed_subcategory_ids', 'allowed_combo_kit_ids',
       'allowed_product_ids', 'allowed_territory_levels', 'po_validity_days', 'requires_approval',
       'payment_terms', 'advance_percentage', 'credit_period_eligible', 'credit_period_days',
       'cancellation_rules', 'amendment_rules', 'contributes_to_monthly_target', 'effective_from', 'effective_until', 'is_active'];

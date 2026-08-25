@@ -4,7 +4,7 @@ import { MdMenu, MdSettings, MdLogin, MdLogout } from "react-icons/md";
 import { FaWarehouse, FaLock, FaExclamationTriangle } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { HiUser, HiUserAdd } from "react-icons/hi";
-import { FiSun, FiMoon, FiShoppingCart, FiTrash2, FiChevronRight, FiMapPin, FiUsers } from "react-icons/fi";
+import { FiSun, FiMoon, FiShoppingCart, FiTrash2, FiChevronRight, FiMapPin, FiUsers, FiBriefcase, FiExternalLink } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "@/features/auth.slice";
@@ -230,7 +230,24 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
       )}
 
       {/* Right side - Actions */}
-      <div className="flex items-center space-x-2.5 sm:space-x-3">
+      <div className="flex items-center space-x-2 sm:space-x-2.5">
+        {/* Become Franchise Partner */}
+        <button
+          onClick={() => {
+            const url = (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"))
+              ? "http://localhost:5178"
+              : "https://solarkits-reseller-portal.onrender.com";
+            window.open(url, "_blank", "noopener,noreferrer");
+          }}
+          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 text-xs font-bold shadow-xs transition-colors cursor-pointer"
+          title="Join as an Authorized Franchisee & Reseller Partner"
+        >
+          <FiBriefcase size={13} className="text-amber-600 dark:text-amber-400" />
+          <span className="hidden lg:inline">Become Franchise Partner</span>
+          <span className="lg:hidden">Franchise</span>
+          <FiExternalLink size={11} className="opacity-70" />
+        </button>
+
         {/* Find Nearby Store */}
         <button
           onClick={() => navigate("/store-locator")}

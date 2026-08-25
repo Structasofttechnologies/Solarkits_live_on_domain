@@ -216,7 +216,7 @@ function BrandCard({ brand }) {
 
 export default function CertificationsSection() {
   return (
-    <section className="overflow-hidden bg-white py-16 md:py-20">
+    <section id="brands" className="overflow-hidden bg-white py-16 md:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

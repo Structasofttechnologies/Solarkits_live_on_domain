@@ -208,10 +208,19 @@ body {
 }
 
 /* ───── Marquee / Ticker ───── */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 .marquee-inner {
   display: flex;
   width: max-content;
-  animation: marquee 30s linear infinite;
+  animation: marquee 35s linear infinite;
 }
 
 .marquee-inner:hover {
