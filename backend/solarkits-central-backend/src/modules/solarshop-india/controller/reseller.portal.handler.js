@@ -1834,42 +1834,55 @@ const get_my_plan_po_settings = async (req, res) => {
     const plan = subscription.plan_id;
     const planId = plan?._id || plan?.id || plan;
 
-    // Resolve PO Settings for this plan
+    // Resolve active PO Settings for this plan
     const poSettingsList = await FranchiseePlanPoSetting.find({
       plan_id: planId,
       is_active: true,
+      po_enabled: { $ne: false },
       deleted_at: null,
     })
       .populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit })
       .lean();
 
-    // Collect all authorized combo kits
+    // Collect combo kits explicitly configured in active PO settings for this plan
     let comboKits = [];
     if (poSettingsList.length > 0) {
       poSettingsList.forEach((s) => {
-        if (Array.isArray(s.allowed_combo_kit_ids) && s.allowed_combo_kit_ids.length > 0) {
-          comboKits.push(...s.allowed_combo_kit_ids);
+        if (s.po_enabled !== false && Array.isArray(s.allowed_combo_kit_ids)) {
+          s.allowed_combo_kit_ids.forEach((k) => {
+            if (k && (k._id || k.id)) {
+              comboKits.push({
+                ...k,
+                po_setting_id: s._id,
+                min_po_quantity: s.min_po_quantity ?? 1,
+                max_po_quantity: s.max_po_quantity ?? null,
+                po_validity_days: s.po_validity_days ?? 30,
+              });
+            }
+          });
         }
       });
     }
 
-    // If no specific kits selected in settings, fallback in order:
-    //   1. Plan's own allowed_combo_kit_ids (plan-specific)
-    //   2. All active kits (last resort — logged as warning)
+    // Fall back to Plan's own allowed_combo_kit_ids only if no kits configured in PO settings
     if (comboKits.length === 0) {
-      // ✅ FIX Bug #4: Use plan's allowed_combo_kit_ids first — NOT all kits
-      // Previous: showed ALL warehouse kits regardless of plan → kits from different plans mixed
-      const planKitIds = plan?.allowed_combo_kit_ids || [];
+      const planKitIds = (plan?.allowed_combo_kit_ids || []).filter(Boolean);
       if (planKitIds.length > 0) {
-        comboKits = await WarehouseComboKit.find({
+        const foundKits = await WarehouseComboKit.find({
           _id: { $in: planKitIds },
           is_active: { $ne: false },
           deleted_at: null,
         }).lean();
-      } else {
-        // True last resort: no plan kits configured — show all (admin should configure plan kits)
-        console.warn(`[get_my_plan_po_settings] Plan ${plan?._id} has no allowed_combo_kit_ids — showing all kits`);
-        comboKits = await WarehouseComboKit.find({ is_active: { $ne: false }, deleted_at: null }).lean();
+        const defSetting = poSettingsList[0];
+        foundKits.forEach((k) => {
+          comboKits.push({
+            ...k,
+            po_setting_id: defSetting?._id || null,
+            min_po_quantity: defSetting?.min_po_quantity ?? 1,
+            max_po_quantity: defSetting?.max_po_quantity ?? null,
+            po_validity_days: defSetting?.po_validity_days ?? 30,
+          });
+        });
       }
     }
 
@@ -1877,7 +1890,10 @@ const get_my_plan_po_settings = async (req, res) => {
     const uniqueKitsMap = new Map();
     comboKits.forEach((k) => {
       if (k && (k._id || k.id)) {
-        uniqueKitsMap.set(String(k._id || k.id), k);
+        const kId = String(k._id || k.id);
+        if (!uniqueKitsMap.has(kId)) {
+          uniqueKitsMap.set(kId, k);
+        }
       }
     });
     const uniqueKits = Array.from(uniqueKitsMap.values());

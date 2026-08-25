@@ -121,9 +121,33 @@ async function createPoDraft({ franchisee_id, items, idempotency_key, payment_te
   const plan_id = subscription.plan_id;
 
   // PO settings check
-  const po_settings = await resolveEffectivePoSettings(plan_id);
-  if (!po_settings) throw new Error('PO ordering is not enabled for your current plan.');
-  if (!po_settings.po_enabled) throw new Error('PO ordering is disabled for your current plan.');
+  const allPlanPoSettings = await FranchiseePlanPoSetting.find({
+    plan_id,
+    is_active: true,
+    po_enabled: true,
+    deleted_at: null,
+  }).lean();
+
+  if (!allPlanPoSettings || allPlanPoSettings.length === 0) {
+    throw new Error('PO ordering is not enabled for your current plan.');
+  }
+
+  const po_settings = allPlanPoSettings[0];
+
+  // Validate that items are authorized under the plan's PO settings
+  const authorizedKitIds = new Set();
+  allPlanPoSettings.forEach((s) => {
+    (s.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
+  });
+  (subscription.plan_id?.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
+
+  if (authorizedKitIds.size > 0) {
+    for (const item of items) {
+      if (item.kit_id && !authorizedKitIds.has(String(item.kit_id))) {
+        throw new Error(`The selected product "${item.item_name || 'Solar Kit'}" is not assigned for Purchase Orders under your franchise plan.`);
+      }
+    }
+  }
 
   // Validate all items
   if (!Array.isArray(items) || items.length === 0) throw new Error('PO must contain at least one item.');

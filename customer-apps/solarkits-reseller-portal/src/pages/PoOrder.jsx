@@ -117,10 +117,30 @@ export default function PoOrder() {
     ) || null;
   }, [planData, selectedKitId]);
 
-  // MOQ & PO Limits for Active Plan
-  const minPoQty = planData?.po_settings?.min_po_quantity || 1;
-  const maxPoQty = planData?.po_settings?.max_po_quantity || 0; // 0 = unlimited
-  const validityDays = planData?.po_settings?.po_validity_days || 30;
+  // Active PO Setting matching selected kit
+  const activePoSetting = useMemo(() => {
+    if (!planData) return null;
+    if (selectedKit?.po_setting_id && planData.po_settings_list) {
+      const match = planData.po_settings_list.find(
+        (s) => String(s._id || s.id) === String(selectedKit.po_setting_id)
+      );
+      if (match) return match;
+    }
+    if (selectedKitId && planData.po_settings_list) {
+      const match = planData.po_settings_list.find((s) =>
+        (s.allowed_combo_kit_ids || []).some(
+          (k) => String(k._id || k.id || k) === String(selectedKitId)
+        )
+      );
+      if (match) return match;
+    }
+    return planData.po_settings || null;
+  }, [planData, selectedKit, selectedKitId]);
+
+  // MOQ & PO Limits for Active Plan / Selected Kit
+  const minPoQty = selectedKit?.min_po_quantity ?? (activePoSetting?.min_po_quantity ?? (planData?.po_settings?.min_po_quantity || 1));
+  const maxPoQty = selectedKit?.max_po_quantity ?? (activePoSetting?.max_po_quantity ?? (planData?.po_settings?.max_po_quantity || 0)); // 0 = unlimited
+  const validityDays = selectedKit?.po_validity_days ?? (activePoSetting?.po_validity_days ?? (planData?.po_settings?.po_validity_days || 30));
 
   // Total Allocated Quantity
   const totalAllocatedQty = useMemo(() => {
@@ -702,34 +722,42 @@ export default function PoOrder() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
                     1. Select Solar Combo Kit / Product <span className="text-danger">*</span>
                   </label>
-                  <select
-                    value={selectedKitId}
-                    onChange={(e) => setSelectedKitId(e.target.value)}
-                    className="w-full px-3.5 py-3 rounded-xl text-xs font-bold border transition-all cursor-pointer"
-                    style={{
-                      background: "var(--color-surface)",
-                      borderColor: "var(--color-border)",
-                      color: "var(--color-text-primary)",
-                    }}
-                  >
-                    {planData?.combo_kits?.map((kit) => {
-                      const kitId = kit._id || kit.id;
-                      const price =
-                        kit.dealer_price ||
-                        kit.base_price_cached ||
-                        kit.selling_price_cached ||
-                        kit.price_with_tax ||
-                        kit.unit_price ||
-                        kit.price ||
-                        kit.base_price ||
-                        0;
-                      return (
-                        <option key={kitId} value={kitId}>
-                          {kit.name || kit.kit_name || "Solar Kit"} {kit.capacity ? `(${kit.capacity} kW)` : ""} — ₹{price.toLocaleString("en-IN")}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {(!planData?.combo_kits || planData.combo_kits.length === 0) ? (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center gap-2">
+                      <FiAlertCircle size={16} className="shrink-0" />
+                      <span>No products are assigned for Purchase Orders under your plan. Please contact admin to assign products in Plan PO Settings.</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedKitId}
+                      onChange={(e) => setSelectedKitId(e.target.value)}
+                      className="w-full px-3.5 py-3 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+                      style={{
+                        background: "var(--color-surface)",
+                        borderColor: "var(--color-border)",
+                        color: "var(--color-text-primary)",
+                      }}
+                    >
+                      {planData.combo_kits.map((kit) => {
+                        const kitId = kit._id || kit.id;
+                        const price =
+                          kit.dealer_price ||
+                          kit.base_price_cached ||
+                          kit.selling_price_cached ||
+                          kit.price_with_tax ||
+                          kit.unit_price ||
+                          kit.price ||
+                          kit.base_price ||
+                          0;
+                        const cap = kit.capacity_kw || kit.capacity;
+                        return (
+                          <option key={kitId} value={kitId}>
+                            {kit.name || kit.kit_name || "Solar Kit"} {cap ? `(${cap} kW)` : ""} — ₹{price.toLocaleString("en-IN")}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  )}
                 </div>
 
                 {/* Section 2: EPC Buyer Allocation Matrix */}

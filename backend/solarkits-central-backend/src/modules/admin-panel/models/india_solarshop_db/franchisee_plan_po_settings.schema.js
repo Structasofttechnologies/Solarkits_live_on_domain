@@ -55,7 +55,7 @@ const schema = new mongoose.Schema(
     allowed_project_type_ids:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types' }],
     allowed_category_ids:       [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_categories' }],
     allowed_subcategory_ids:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_subcategories' }],
-    allowed_combo_kit_ids:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'pc_comobo_kit' }],
+    allowed_combo_kit_ids:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'pc_combo_kits' }],
     allowed_product_ids:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'products' }],
     allowed_territory_levels:   [{ type: String, enum: ['district', 'state', 'country'] }],
 

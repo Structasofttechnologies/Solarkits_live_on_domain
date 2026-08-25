@@ -7,8 +7,8 @@
  */
 
 const mongoose = require('mongoose');
-const { FranchiseePlanPoSetting, ResellerPlan } = require('../models/india_solarshop_db');
-const { WarehouseComboKit, ProjectType, IndustryType, ProjectCategory, ProjectSubcategory } = require('../models/core_db');
+const { FranchiseePlanPoSetting, ResellerPlan, WarehouseComboKit } = require('../models/india_solarshop_db');
+const { ProjectType, IndustryType, ProjectCategory, ProjectSubcategory } = require('../models/core_db');
 const { logAudit } = require('../utils/audit.service');
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
