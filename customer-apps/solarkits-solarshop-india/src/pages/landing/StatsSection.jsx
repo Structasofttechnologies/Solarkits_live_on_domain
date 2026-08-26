@@ -1,32 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
-const STATS = [
-  { value: 5000, suffix: "+", label: "Kits Supplied", icon: "☀️", color: "#1a3b8b", bg: "#eff6ff" },
-  { value: 28, suffix: "", label: "States Covered", icon: "🗺️", color: "#0d9488", bg: "#f0fdfa" },
-  { value: 50, prefix: "₹", suffix: "Cr+", label: "Client Savings", icon: "💰", color: "#d97706", bg: "#fffbeb" },
+const DEFAULT_STATS = [
+  { value: "10,000+", label: "Kits Delivered", sub: "Pan-India", icon: "☀️", color: "#1a3b8b", bg: "#eff6ff" },
+  { value: "50 MW+", label: "Clean Power Generated", sub: "Equivalent to 40,000 tons CO2 offset", icon: "⚡", color: "#0d9488", bg: "#f0fdfa" },
+  { value: "18,000+", label: "Pincodes Covered", sub: "Door-to-door insurance", icon: "🗺️", color: "#d97706", bg: "#fffbeb" },
+  { value: "4.9 / 5", label: "Customer Rating", sub: "Based on 2,500+ verified reviews", icon: "⭐", color: "#7c3aed", bg: "#f5f3ff" },
 ];
 
-function useCountUp(end, duration = 2000, active) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    let raf;
-    const startTime = performance.now();
-    const step = (now) => {
-      const progress = Math.min((now - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.floor(eased * end));
-      if (progress < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [end, duration, active]);
-  return count;
-}
-
 function StatCard({ stat, index, active }) {
-  const count = useCountUp(stat.value, 2000 + index * 150, active);
+  const iconList = ["☀️", "⚡", "🗺️", "⭐", "🏆", "📦"];
+  const colorList = ["#1a3b8b", "#0d9488", "#d97706", "#7c3aed", "#2563eb", "#059669"];
+  const bgList = ["#eff6ff", "#f0fdfa", "#fffbeb", "#f5f3ff", "#eff6ff", "#ecfdf5"];
+
+  const icon = stat.icon || iconList[index % iconList.length];
+  const color = stat.color || colorList[index % colorList.length];
+  const bg = stat.bg || bgList[index % bgList.length];
 
   return (
     <motion.div
@@ -45,43 +34,58 @@ function StatCard({ stat, index, active }) {
         overflow: "hidden",
         cursor: "default",
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-6px)"; e.currentTarget.style.boxShadow = `0 16px 48px ${stat.color}22`; e.currentTarget.style.borderColor = `${stat.color}30`; }}
-      onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.07)"; e.currentTarget.style.borderColor = "#f1f5f9"; }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translateY(-6px)";
+        e.currentTarget.style.boxShadow = `0 16px 48px ${color}22`;
+        e.currentTarget.style.borderColor = `${color}30`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.07)";
+        e.currentTarget.style.borderColor = "#f1f5f9";
+      }}
     >
       {/* Top accent bar */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: "4px",
-        background: `linear-gradient(90deg, ${stat.color}, ${stat.color}80)`,
+        background: `linear-gradient(90deg, ${color}, ${color}80)`,
       }} />
 
       {/* Icon circle */}
       <div style={{
         width: "60px", height: "60px", borderRadius: "16px",
-        background: stat.bg, margin: "0 auto 16px",
+        background: bg, margin: "0 auto 16px",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: "1.8rem",
       }}>
-        {stat.icon}
+        {icon}
       </div>
 
       {/* Number */}
       <div style={{
         fontSize: "clamp(2.2rem, 3.5vw, 3rem)", fontWeight: 900,
-        color: stat.color, lineHeight: 1, marginBottom: "8px",
+        color: color, lineHeight: 1, marginBottom: "8px",
         fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.02em",
       }}>
-        {stat.prefix || ""}{count.toLocaleString()}{stat.suffix}
+        {stat.value || stat.val}
       </div>
 
       {/* Label */}
-      <div style={{ color: "#64748b", fontSize: "0.9rem", fontWeight: 600 }}>
+      <div style={{ color: "#0f172a", fontSize: "0.95rem", fontWeight: 700, marginBottom: "4px" }}>
         {stat.label}
       </div>
+
+      {/* Sublabel */}
+      {stat.sub && (
+        <div style={{ color: "#64748b", fontSize: "0.78rem", fontWeight: 500 }}>
+          {stat.sub}
+        </div>
+      )}
     </motion.div>
   );
 }
 
-export default function StatsSection() {
+export default function StatsSection({ statsConfig }) {
   const sectionRef = useRef(null);
   const [active, setActive] = useState(false);
 
@@ -93,6 +97,11 @@ export default function StatsSection() {
     if (sectionRef.current) observer.observe(sectionRef.current);
     return () => observer.disconnect();
   }, []);
+
+  const badgeText = statsConfig?.badge_text || "OUR IMPACT";
+  const heading = statsConfig?.heading || "Trusted by Solar Businesses Across India";
+  const subtitle = statsConfig?.subtitle || "Numbers that reflect our commitment to affordable, reliable solar solutions";
+  const items = statsConfig?.items && statsConfig.items.length > 0 ? statsConfig.items : DEFAULT_STATS;
 
   return (
     <section
@@ -118,7 +127,7 @@ export default function StatsSection() {
             padding: "5px 14px", marginBottom: "16px",
           }}>
             <span style={{ color: "#1d4ed8", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>
-              OUR IMPACT
+              {badgeText}
             </span>
           </div>
           <h2 style={{
@@ -126,21 +135,21 @@ export default function StatsSection() {
             color: "#0f172a", fontFamily: "'Outfit', sans-serif",
             marginBottom: "12px", lineHeight: 1.2,
           }}>
-            Trusted by Solar Businesses Across India
+            {heading}
           </h2>
-          <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "500px", margin: "0 auto" }}>
-            Numbers that reflect our commitment to affordable, reliable solar solutions
+          <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "540px", margin: "0 auto" }}>
+            {subtitle}
           </p>
         </motion.div>
 
         {/* Stats Grid */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: "20px",
         }}>
-          {STATS.map((stat, i) => (
-            <StatCard key={stat.label} stat={stat} index={i} active={active} />
+          {items.map((stat, i) => (
+            <StatCard key={stat.label || i} stat={stat} index={i} active={active} />
           ))}
         </div>
       </div>

@@ -54,4 +54,7 @@ module.exports = {
   IndustryTheme: require('./industry_theme.schema'),
   UserIndustryMap: require('./user_industry_map.schema'),
   IndustryContentAnalytics: require('./industry_content_analytics.schema'),
+
+  // --- Website Landing Page CMS ---
+  WebsiteContent: require('./website_content.schema'),
 };

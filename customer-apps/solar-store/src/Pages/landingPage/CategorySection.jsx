@@ -73,11 +73,14 @@ const cardVariants = {
 };
 
 function CategoryCard({ category, index }) {
-  const Icon = category.icon;
+  let Icon = category.icon || FiSun;
+  if (category.icon_type === "zap") Icon = FiZap;
+  else if (category.icon_type === "package") Icon = FiPackage;
+  else if (category.icon_type === "grid") Icon = FiGrid;
 
   return (
     <motion.a
-      href={category.href}
+      href={category.href || "#products"}
       variants={cardVariants}
       whileHover={{ y: -8 }}
       whileTap={{ scale: 0.98 }}
@@ -134,7 +137,17 @@ function CategoryCard({ category, index }) {
   );
 }
 
-export default function CategorySection() {
+export default function CategorySection({ categoriesConfig }) {
+  if (categoriesConfig && categoriesConfig.enabled === false) return null;
+
+  const badgeText = categoriesConfig?.badge_text || "Browse Solar Kit Categories";
+  const heading = categoriesConfig?.heading || "Find the Right Solar";
+  const highlightHeading = categoriesConfig?.highlight_heading || "Kit Solution";
+  const subtitle = categoriesConfig?.subtitle || "Explore our certified range of complete solar kits designed for homes, businesses, farms and commercial projects.";
+  const items = categoriesConfig?.items && categoriesConfig.items.length > 0 ? categoriesConfig.items : CATEGORIES;
+  const note1 = categoriesConfig?.quality_note_1 || "All products are quality verified";
+  const note2 = categoriesConfig?.quality_note_2 || "Pan-India delivery and installation support";
+
   return (
     <section
       id="categories"
@@ -156,18 +169,17 @@ export default function CategorySection() {
           <div>
             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary-50 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary-600">
               <FiBox />
-              Browse Solar Kit Categories
+              {badgeText}
             </span>
 
             <h2 className="max-w-2xl font-heading text-3xl font-extrabold leading-tight text-navy md:text-4xl lg:text-5xl">
-              Find the Right Solar
-              <span className="text-primary-500"> Kit Solution</span>
+              {heading}{" "}
+              <span className="text-primary-500">{highlightHeading}</span>
             </h2>
           </div>
 
           <p className="max-w-md text-sm leading-7 text-gray-500 md:text-base">
-            Explore our certified range of complete solar kits designed for homes,
-            businesses, farms and commercial projects.
+            {subtitle}
           </p>
         </motion.div>
 
@@ -179,9 +191,9 @@ export default function CategorySection() {
           viewport={{ once: true, amount: 0.12 }}
           className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4"
         >
-          {CATEGORIES.map((category, index) => (
+          {items.map((category, index) => (
             <CategoryCard
-              key={category.id}
+              key={category.id || index}
               category={category}
               index={index}
             />
@@ -198,13 +210,13 @@ export default function CategorySection() {
         >
           <span className="flex items-center gap-2 text-sm font-medium text-gray-500">
             <span className="h-2 w-2 rounded-full bg-green-500" />
-            All products are quality verified
+            {note1}
           </span>
 
           <span className="hidden text-gray-300 sm:block">•</span>
 
           <span className="text-sm font-medium text-gray-500">
-            Pan-India delivery and installation support
+            {note2}
           </span>
         </motion.div>
       </div>

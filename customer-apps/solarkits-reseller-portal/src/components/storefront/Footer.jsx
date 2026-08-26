@@ -11,13 +11,29 @@ import {
 } from "react-icons/fi";
 import logoImg from "../../assets/images/logo.png";
 
-export default function Footer({ onOpenLeadModal }) {
+export default function Footer({ onOpenLeadModal, footerConfig }) {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const brandTitle = footerConfig?.brand_title || "Solarkits Platform";
+  const brandSubtitle = footerConfig?.brand_subtitle || "B2B Franchise Network";
+  const description = footerConfig?.description || "India's primary B2B ready-to-sell solar platform and franchise opportunity. Sourcing certified On-Grid, Off-Grid, and Hybrid Solarkits for solar dealers, EPC contractors, and regional distributors.";
+  const badges = footerConfig?.badges && footerConfig.badges.length > 0 ? footerConfig.badges : ["ALMM / DCR Certified", "100% GST ITC Claim"];
+  
+  const deskTitle = footerConfig?.contact?.desk_title || "National B2B Partner Desk";
+  const address = footerConfig?.contact?.address || "SolarKits Tech Park, Phase-1 Central Logistics Hub, Pune, Maharashtra 411045";
+  const phone = footerConfig?.contact?.phone || "+91 (020) 6789-SOLAR / 1800-SOLAR-KIT";
+  const email = footerConfig?.contact?.email || "franchise@solarkits.in | b2b@solarkits.in";
+  const whatsappNum = footerConfig?.contact?.whatsapp_number || "919876543210";
+  const whatsappBtnText = footerConfig?.contact?.whatsapp_button_text || "WhatsApp B2B";
+  const callbackBtnText = footerConfig?.contact?.callback_button_text || "Request Callback";
+  
+  const disclaimer = footerConfig?.disclaimer || "Regulatory & Statutory Disclaimer: Solarkits is a registered B2B e-commerce platform and equipment fulfillment provider for authorized dealers, EPC contractors, and franchisees. Revenue figures, margins, and generation estimates shown on this website are illustrative and depend on territory, sales volume, product mix, margins, operating costs, and business performance. Solarkits does not guarantee revenue or profit. PM Surya Ghar Muft Bijli Yojana subsidies are disbursed directly by the Government of India / State DISCOMs subject to applicant eligibility and DISCOM technical feasibility.";
+  const copyright = footerConfig?.copyright_text || "© 2026 Solarkits Platform India. All Rights Reserved. Position: One-Stop Solar Business Platform.";
+
   const handleWhatsApp = () => {
-    window.open("https://wa.me/919876543210?text=Hello%20SolarKits,%20I%20want%20to%20inquire%20about%20Solarkits.", "_blank");
+    window.open(`https://wa.me/${whatsappNum}?text=Hello%20SolarKits,%20I%20want%20to%20inquire%20about%20Solarkits.`, "_blank");
   };
 
   return (
@@ -42,31 +58,27 @@ export default function Footer({ onOpenLeadModal }) {
               />
               <div className="flex flex-col border-l border-slate-300 pl-2.5">
                 <span className="text-xs font-black tracking-wider uppercase text-[#0575B8]">
-                  Solarkits Platform
+                  {brandTitle}
                 </span>
                 <span className="text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase">
-                  B2B Franchise Network
+                  {brandSubtitle}
                 </span>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-normal">
-              India's primary B2B ready-to-sell solar platform and franchise opportunity. Sourcing certified On-Grid, Off-Grid, and Hybrid Solarkits for solar dealers, EPC contractors, and regional distributors.
+              {description}
             </p>
 
-            <div className="flex items-center gap-2 pt-1">
-              <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
-                <FiCheckCircle size={12} className="text-emerald-600" />
-                ALMM / DCR Certified
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-sky-50 border border-sky-200 text-[#0575B8] text-[10px] font-bold flex items-center gap-1">
-                <FiShield size={12} />
-                100% GST ITC Claim
-              </span>
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
+              {badges.map((b, i) => (
+                <span key={i} className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                  <FiCheckCircle size={12} className="text-emerald-600" />
+                  {b}
+                </span>
+              ))}
             </div>
           </div>
-
-
 
           {/* Col 3: Franchise & Territory Navigation (2.5 Cols) */}
           <div className="lg:col-span-2 space-y-3">
@@ -89,7 +101,6 @@ export default function Footer({ onOpenLeadModal }) {
                   Franchise Plans
                 </a>
               </li>
-
               <li>
                 <a href="#dealer-support" className="hover:text-[#0575B8] transition-colors">
                   Dealer & EPC Support
@@ -104,22 +115,22 @@ export default function Footer({ onOpenLeadModal }) {
           </div>
 
           {/* Col 4: B2B Support & Contact (3 Cols) */}
-          <div className="lg:col-span-3 space-y-3">
+          <div className="lg:col-span-6 md:lg:col-span-6 space-y-3">
             <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              National B2B Partner Desk
+              {deskTitle}
             </h4>
             <div className="space-y-2.5 text-xs text-slate-600">
               <div className="flex items-start gap-2.5">
                 <FiMapPin className="text-[#0575B8] shrink-0 mt-0.5" size={14} />
-                <span>SolarKits Tech Park, Phase-1 Central Logistics Hub, Pune, Maharashtra 411045</span>
+                <span>{address}</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <FiPhone className="text-emerald-600 shrink-0" size={14} />
-                <span>+91 (020) 6789-SOLAR / 1800-SOLAR-KIT</span>
+                <span>{phone}</span>
               </div>
               <div className="flex items-center gap-2.5">
                 <FiMail className="text-[#F49222] shrink-0" size={14} />
-                <span>franchise@solarkits.in | b2b@solarkits.in</span>
+                <span>{email}</span>
               </div>
             </div>
 
@@ -129,14 +140,14 @@ export default function Footer({ onOpenLeadModal }) {
                 className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
               >
                 <FiMessageSquare />
-                <span>WhatsApp B2B</span>
+                <span>{whatsappBtnText}</span>
               </button>
 
               <button
                 onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Footer Consultation" }, "bulk_price")}
                 className="px-3.5 py-2 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
               >
-                Request Callback
+                {callbackBtnText}
               </button>
             </div>
           </div>
@@ -146,12 +157,12 @@ export default function Footer({ onOpenLeadModal }) {
         {/* Bottom Legal & Statutory Disclaimers */}
         <div className="pt-8 space-y-4 text-slate-500 text-[11px] leading-relaxed">
           <p>
-            <strong>Regulatory & Statutory Disclaimer:</strong> Solarkits is a registered B2B e-commerce platform and equipment fulfillment provider for authorized dealers, EPC contractors, and franchisees. Revenue figures, margins, and generation estimates shown on this website are illustrative and depend on territory, sales volume, product mix, margins, operating costs, and business performance. Solarkits does not guarantee revenue or profit. PM Surya Ghar Muft Bijli Yojana subsidies are disbursed directly by the Government of India / State DISCOMs subject to applicant eligibility and DISCOM technical feasibility.
+            {disclaimer}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200 text-slate-600 text-xs">
             <div>
-              © 2026 Solarkits Platform India. All Rights Reserved. Position: One-Stop Solar Business Platform.
+              {copyright}
             </div>
 
             <div className="flex items-center gap-4">

@@ -5,6 +5,16 @@ import { refreshAccessToken, logout as authLogout } from "./auth.slice";
 import { fetchUserModules } from "./modules.slice";
 import { resolveApiUrl, getAuthPortalUrl } from "@/utils/resolveApiUrl";
 
+const safeParse = (key, fallback = null) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === 'null' || raw === 'undefined') return fallback;
+    return JSON.parse(raw) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const getUserData = createAsyncThunk(
   "user/getUserData",
   async (_, { rejectWithValue, dispatch, getState }) => {
@@ -14,15 +24,16 @@ export const getUserData = createAsyncThunk(
       } catch (identErr) {
         console.warn('refreshAccessToken failed', identErr);
       }
-      const token = getState().auth?.token;
+      const token = getState().auth?.token || safeParse('login', null)?.token;
 
       if (!token) {
         dispatch(setAlert({ type: "error", message: "No token found" }));
         return rejectWithValue("No token found");
       }
 
-      const res = await axios.get(`${resolveApiUrl(import.meta.env.VITE_API_URL, 'http://localhost:5176/admin-api')}/user-data`, {
-        headers: { Authorization: token },
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const res = await axios.get(`${resolveApiUrl(import.meta.env.VITE_API_URL, 'http://localhost:5000/admin-api')}/user-data`, {
+        headers: { Authorization: authHeader },
         timeout: 7000,
       });
 
@@ -43,12 +54,14 @@ export const getUserData = createAsyncThunk(
       // If backend explicitly says auth:false or returns 401, treat as unauthenticated
       if (status === 401 || resp?.auth === false || /Unauthorized/i.test(msg)) {
         try {
-          await axios.post(`${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5176/auth-api')}/logout`, {}, { withCredentials: true, timeout: 4000 });
+          await axios.post(`${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5000/auth-api')}/logout`, {}, { withCredentials: true, timeout: 4000 });
         } catch (logoutErr) {
           console.warn('logout cleanup failed', logoutErr?.message || logoutErr);
         }
 
         dispatch(authLogout());
+        localStorage.removeItem('login');
+        localStorage.removeItem('user');
         window.location.href = getAuthPortalUrl();
         return rejectWithValue('Unauthorized');
       }
@@ -59,12 +72,14 @@ export const getUserData = createAsyncThunk(
   }
 );
 
+const initialUser = safeParse('user', null);
+
 const userSlice = createSlice({
   name: "user",
   initialState: {
-    user: null,
+    user: initialUser,
     loading: false,
-    auth: false,
+    auth: !!initialUser,
   },
   reducers: {
     logoutUser: (state) => {
@@ -81,6 +96,7 @@ const userSlice = createSlice({
         state.user = action.payload;
         state.auth = true;
         state.loading = false;
+        localStorage.setItem('user', JSON.stringify(action.payload));
       })
       .addCase(getUserData.rejected, (state, action) => {
         state.loading = false;

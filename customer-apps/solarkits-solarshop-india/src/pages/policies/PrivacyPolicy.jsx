@@ -1,15 +1,58 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FiArrowLeft, FiShield, FiLock, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
+import { FiArrowLeft, FiShield, FiAlertTriangle } from "react-icons/fi";
 import Navbar from "../landing/Navbar";
 import FooterSection from "../landing/FooterSection";
+import { getWebsiteLandingContent } from "../../services/websiteContentService";
+
+const FALLBACK_POLICY = {
+  title: "Privacy Policy",
+  last_updated: "August 2026",
+  notice_box:
+    "Important Platform Note: Solarkits.in operates strictly as an E-Commerce Supply Marketplace for solar panels, combo kits, BOS equipment, and solar products. We DO NOT provide on-site installation, EPC engineering, or labor services. All products are supplied directly to your delivery address for independent assembly or local installation.",
+  sections: [
+    {
+      id: 1,
+      heading: "1. Information We Collect",
+      content:
+        "Solarkits.in collects customer information strictly necessary to process online e-commerce purchases, dispatch solar panel orders, issue GST tax invoices, and facilitate logistics across India. This includes full name, company name, GSTIN (optional for tax claims), email address, phone number, shipping and billing address.",
+    },
+    {
+      id: 2,
+      heading: "2. How We Use Your Data",
+      content:
+        "Your personal information is used exclusively for: processing solar panel & BOS product orders, issuing official tax-compliant invoices, coordinating warehouse logistics, freight dispatch, tracking notifications, and enabling manufacturer warranty validation.",
+    },
+    {
+      id: 3,
+      heading: "3. Data Security & Payment Protection",
+      content:
+        "Solarkits.in employs industry-standard 256-bit SSL encryption. All online payments are securely processed through PCI-DSS compliant payment gateways (Razorpay/Bank Transfer). Solarkits does not store your credit card, debit card, or net-banking credentials on our servers.",
+    },
+    {
+      id: 4,
+      heading: "4. Contact Privacy Compliance",
+      content:
+        "If you have questions regarding your personal data or wish to update your account preferences, please reach out to our team at support@solarkits.in.",
+    },
+  ],
+};
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
+  const [policyData, setPolicyData] = useState(FALLBACK_POLICY);
 
   useEffect(() => {
     window.scrollTo(0, 0);
     document.title = "Privacy Policy — Solarkits.in";
+
+    getWebsiteLandingContent()
+      .then((data) => {
+        if (data && data.policies && data.policies.privacy_policy) {
+          setPolicyData(data.policies.privacy_policy);
+        }
+      })
+      .catch((err) => console.warn("Could not load dynamic Privacy Policy:", err));
   }, []);
 
   return (
@@ -45,61 +88,35 @@ export default function PrivacyPolicy() {
             <FiShield /> LEGAL & COMPLIANCE
           </div>
           <h1 style={{ fontSize: "2.4rem", fontWeight: 800, color: "#0f172a", marginBottom: "12px", fontFamily: "'Outfit', sans-serif" }}>
-            Privacy Policy
+            {policyData.title || "Privacy Policy"}
           </h1>
           <p style={{ color: "#64748b", fontSize: "0.95rem" }}>
-            Last Updated: August 2026 • Applies to all buyers, customers, and EPC partners on Solarkits.in.
+            Last Updated: {policyData.last_updated || "August 2026"} • Applies to all buyers, customers, and EPC partners on Solarkits.in.
           </p>
         </div>
 
         {/* Notice Box: E-Commerce & No Installation Disclaimer */}
-        <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "16px", padding: "20px 24px", marginBottom: "32px", display: "flex", gap: "16px", alignItems: "flex-start" }}>
-          <FiAlertTriangle style={{ color: "#b45309", fontSize: "1.5rem", flexShrink: 0, marginTop: "2px" }} />
-          <div style={{ fontSize: "0.92rem", color: "#92400e", lineHeight: 1.6 }}>
-            <strong>Important Platform Note:</strong> Solarkits.in operates strictly as an <strong>E-Commerce Supply Marketplace</strong> for solar panels, combo kits, BOS equipment, and solar products. <strong>We DO NOT provide on-site installation, EPC engineering, or labor services.</strong> All products are supplied directly to your delivery address for independent assembly or local installation.
+        {policyData.notice_box && (
+          <div style={{ background: "#fffbeb", border: "1px solid #fef3c7", borderRadius: "16px", padding: "20px 24px", marginBottom: "32px", display: "flex", gap: "16px", alignItems: "flex-start" }}>
+            <FiAlertTriangle style={{ color: "#b45309", fontSize: "1.5rem", flexShrink: 0, marginTop: "2px" }} />
+            <div style={{ fontSize: "0.92rem", color: "#92400e", lineHeight: 1.6 }}>
+              {policyData.notice_box}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Policy Content Sections */}
+        {/* Dynamic Policy Content Sections */}
         <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "20px", padding: "40px", lineHeight: 1.8, fontSize: "1rem", color: "#334155" }}>
-          <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: "12px" }}>
-            1. Information We Collect
-          </h2>
-          <p style={{ marginBottom: "20px" }}>
-            Solarkits.in ("Solarkits", "We", "Us") collects customer information strictly necessary to process online e-commerce purchases, dispatch solar panel orders, issue GST tax invoices, and facilitate logistics across India.
-          </p>
-          <ul style={{ paddingLeft: "20px", marginBottom: "28px" }}>
-            <li><strong>Account & Buyer Information:</strong> Full name, company name, GSTIN (optional for tax claims), email address, phone number, shipping and billing address.</li>
-            <li><strong>Transactional Data:</strong> Order history, selected solar combo kits, component quantities, and payment gateway confirmation IDs.</li>
-            <li><strong>Platform Analytics:</strong> IP address, browser specs, and session telemetry to maintain e-commerce platform security.</li>
-          </ul>
-
-          <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "#0f172a", marginBottom: "12px" }}>
-            2. How We Use Your Data
-          </h2>
-          <p style={{ marginBottom: "20px" }}>
-            Your personal information is used exclusively for:
-          </p>
-          <ul style={{ paddingLeft: "20px", marginBottom: "28px" }}>
-            <li>Processing solar panel & BOS product orders and issuing official tax-compliant invoices.</li>
-            <li>Coordinating warehouse logistics, freight dispatch, and delivery tracking notifications.</li>
-            <li>Enabling manufacturer warranty validation for Tier-1 solar panels & grid inverters.</li>
-            <li>Ensuring secure payments and preventing fraudulent online transactions.</li>
-          </ul>
-
-          <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "#0f172a", marginBottom: "12px" }}>
-            3. Data Security & Payment Protection
-          </h2>
-          <p style={{ marginBottom: "28px" }}>
-            Solarkits.in employs industry-standard 256-bit SSL encryption. All online payments are securely processed through PCI-DSS compliant payment gateways (Razorpay/Bank Transfer). Solarkits does not store your credit card, debit card, or net-banking credentials on our servers.
-          </p>
-
-          <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "#0f172a", marginBottom: "12px" }}>
-            4. Contact Privacy Compliance
-          </h2>
-          <p style={{ margin: 0 }}>
-            If you have questions regarding your personal data or wish to update your account preferences, please reach out to our team at <strong>support@solarkits.in</strong>.
-          </p>
+          {(policyData.sections || []).map((sec, idx) => (
+            <div key={sec.id || idx} style={{ marginBottom: idx === policyData.sections.length - 1 ? 0 : "32px" }}>
+              <h2 style={{ fontSize: "1.35rem", fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: "12px" }}>
+                {sec.heading}
+              </h2>
+              <div style={{ whiteSpace: "pre-line", color: "#334155", lineHeight: 1.8 }}>
+                {sec.content}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

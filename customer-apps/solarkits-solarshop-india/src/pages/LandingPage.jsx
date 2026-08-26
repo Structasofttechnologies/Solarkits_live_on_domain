@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "./landing/Navbar";
 import HeroSection from "./landing/HeroSection";
 import StatsSection from "./landing/StatsSection";
@@ -8,9 +8,10 @@ import HowItWorks from "./landing/HowItWorks";
 import TestimonialsSection from "./landing/TestimonialsSection";
 import CtaBanner from "./landing/CtaBanner";
 import FooterSection from "./landing/FooterSection";
+import { getWebsiteLandingContent } from "../services/websiteContentService";
 
 // Ticker / Marquee bar — trusted brands
-const TICKER_ITEMS = [
+const DEFAULT_TICKER = [
   "⚡ BIS Certified Products",
   "☀️ Tier-1 Solar Panels",
   "🔋 Lithium & Lead-Acid Batteries",
@@ -23,8 +24,9 @@ const TICKER_ITEMS = [
   "🛡️ MNRE Approved Brands",
 ];
 
-function TickerBar() {
-  const items = [...TICKER_ITEMS, ...TICKER_ITEMS];
+function TickerBar({ tickerItems }) {
+  const list = tickerItems && tickerItems.length > 0 ? tickerItems : DEFAULT_TICKER;
+  const items = [...list, ...list];
 
   return (
     <div style={{
@@ -80,8 +82,18 @@ function TickerBar() {
 }
 
 export default function LandingPage() {
+  const [dynamicContent, setDynamicContent] = useState(null);
+
   useEffect(() => {
     document.title = "SolarKits India — Buy Certified Solar Kits Online";
+
+    getWebsiteLandingContent()
+      .then((data) => {
+        if (data) {
+          setDynamicContent(data);
+        }
+      })
+      .catch((err) => console.warn("Dynamic content load error:", err));
   }, []);
 
   return (
@@ -90,31 +102,31 @@ export default function LandingPage() {
       <Navbar />
 
       {/* Hero — Full viewport */}
-      <HeroSection />
+      <HeroSection heroConfig={dynamicContent?.hero} />
 
       {/* Scrolling ticker below hero */}
-      <TickerBar />
+      <TickerBar tickerItems={dynamicContent?.ticker?.items} />
 
       {/* Stats — Social proof numbers */}
-      <StatsSection />
+      <StatsSection statsConfig={dynamicContent?.stats} />
 
       {/* Products — Kit categories */}
-      <ProductsSection />
+      <ProductsSection productsConfig={dynamicContent?.products} />
 
       {/* Why Choose — Feature grid */}
-      <WhyChooseSection />
+      <WhyChooseSection whyChooseConfig={dynamicContent?.why_choose} />
 
       {/* How It Works — 4-step process */}
-      <HowItWorks />
+      <HowItWorks howItWorksConfig={dynamicContent?.how_it_works} />
 
       {/* Testimonials — Customer carousel */}
-      <TestimonialsSection />
+      <TestimonialsSection testimonialsConfig={dynamicContent?.testimonials} />
 
       {/* CTA Banner — Conversion */}
-      <CtaBanner />
+      <CtaBanner ctaConfig={dynamicContent?.cta_banner} />
 
       {/* Footer */}
-      <FooterSection />
+      <FooterSection footerConfig={dynamicContent?.footer} />
     </div>
   );
 }

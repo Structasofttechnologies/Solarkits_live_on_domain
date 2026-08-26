@@ -1,6 +1,6 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import logo from "../../assets/images/logo.png";
-import { FiLinkedin, FiTwitter, FiFacebook, FiInstagram } from "react-icons/fi";
+import { FiLinkedin, FiTwitter, FiFacebook, FiInstagram, FiPhone, FiMail, FiMapPin } from "react-icons/fi";
 
 const SOCIAL_ICONS = [
   { icon: FiLinkedin, label: "LinkedIn", color: "#0077b5" },
@@ -13,12 +13,17 @@ const POLICY_LINKS = [
   { label: "Privacy Policy", path: "/privacy-policy" },
   { label: "User Policy & Terms", path: "/terms-of-service" },
   { label: "Refund & Cancellation", path: "/refund-policy" },
-  // { label: "Shipping & Delivery", path: "/shipping-policy" },
 ];
 
-export default function FooterSection() {
+export default function FooterSection({ footerConfig }) {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
+
+  const description =
+    footerConfig?.description ||
+    "India's premier e-commerce platform supplying certified, pre-engineered solar combo kits, inverters, and BOS hardware.";
+  const copyrightText =
+    footerConfig?.copyright_text || `© ${currentYear} SolarKits Technologies Pvt. Ltd. All rights reserved.`;
 
   return (
     <footer
@@ -94,9 +99,47 @@ export default function FooterSection() {
               margin: 0,
             }}
           >
-            INDIA'S PREMIER B2B SOLAR MARKETPLACE
+            INDIA'S PREMIER SOLAR KITS MARKETPLACE
+          </p>
+          <p
+            style={{
+              maxWidth: "600px",
+              color: "rgba(255, 255, 255, 0.65)",
+              fontSize: "0.88rem",
+              lineHeight: 1.6,
+              marginTop: "10px",
+            }}
+          >
+            {description}
           </p>
         </div>
+
+        {/* Contact info bar if configured */}
+        {(footerConfig?.phone || footerConfig?.email) && (
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              alignItems: "center",
+              margin: "12px 0 20px 0",
+              fontSize: "0.85rem",
+              color: "rgba(255, 255, 255, 0.75)",
+            }}
+          >
+            {footerConfig?.phone && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <FiPhone style={{ color: "#fbbf24" }} /> {footerConfig.phone}
+              </span>
+            )}
+            {footerConfig?.email && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <FiMail style={{ color: "#60a5fa" }} /> {footerConfig.email}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* GIANT GRADIENT SVG "SOLARKITS" TEXT */}
         <div
@@ -248,7 +291,7 @@ export default function FooterSection() {
               margin: 0,
             }}
           >
-            © {currentYear} SolarKits Technologies Pvt. Ltd. All rights reserved.
+            {copyrightText}
           </p>
         </div>
       </div>

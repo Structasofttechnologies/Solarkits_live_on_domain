@@ -39,6 +39,7 @@ const CreateUsers = lazy(() => import("../pages/CreateUsers"));
 const IndustryContentManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryContentManagement"));
 const IndustryTypeManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryTypeManagement"));
 const IndustryThemeConfig = lazy(() => import("../pages/dashboard/industry-content/IndustryThemeConfig"));
+const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-configuration/WebsiteConfiguration"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 /* ===================== MENU CONFIG ===================== */
@@ -202,6 +203,32 @@ const menus = [
           unique_id: "ADM_PRICE_REQS"
         }
       ]
+    },
+    {
+      name: "Website Configurations",
+      icon: <FaGlobe />,
+      path: "/admin-panel/website-configurations",
+      unique_id: "ADM_WEBSITE_CONFIG",
+      subMenu: [
+        {
+          name: "SolarKits Website",
+          icon: <HiCube />,
+          path: "/admin-panel/website-configurations/solar-kits",
+          unique_id: "ADM_WEBSITE_SOLARKITS"
+        },
+        {
+          name: "Franchise Website",
+          icon: <FaFileContract />,
+          path: "/admin-panel/website-configurations/franchise",
+          unique_id: "ADM_WEBSITE_FRANCHISE"
+        },
+        {
+          name: "Solar Store Website",
+          icon: <FaStore />,
+          path: "/admin-panel/website-configurations/solar-store",
+          unique_id: "ADM_WEBSITE_SOLARSTORE"
+        }
+      ]
     }
   ],
   [
@@ -235,7 +262,8 @@ const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
   return (
     allowedUniqueIds.includes(menu.unique_id) ||
-    menu.unique_id.startsWith("ADM_INDUSTRY")
+    menu.unique_id.startsWith("ADM_INDUSTRY") ||
+    menu.unique_id.startsWith("ADM_WEBSITE")
   );
 };
 
@@ -301,6 +329,8 @@ export default function Dashboard() {
     if (path.includes('/settings')) return 'System Settings';
     if (path.includes('/manage-users')) return 'User Management';
     if (path.includes('/product-configurations')) return 'Product Configuration';
+    if (path.includes('/website-configurations') || path.includes('/website-configuration')) return 'Website Configurations';
+    if (path.includes('/industry-content')) return 'Industry CMS';
     if (path.includes('/profile')) return 'My Profile';
     if (path.includes('/account-settings')) return 'Account Settings';
     return 'Dashboard';
@@ -396,6 +426,22 @@ export default function Dashboard() {
                           <ProductConfigurations moduleUniqueId="ADM_PROD_CFG" />
                         </Suspense>
                       </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/website-configurations/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading Website Configurations..." />}>
+                        <WebsiteConfiguration />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/website-configuration/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading Website Configurations..." />}>
+                        <WebsiteConfiguration />
+                      </Suspense>
                     }
                   />
                   <Route

@@ -6,6 +6,23 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+// Attach Authorization header from localStorage if available
+api.interceptors.request.use(
+  (config) => {
+    try {
+      const raw = localStorage.getItem('login');
+      const token = raw ? (JSON.parse(raw)?.token || raw) : null;
+      if (token && !config.headers.Authorization) {
+        config.headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+    } catch (e) {
+      // ignore JSON parse errors
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Safe JSON parser — never crashes on bad/null data
 const safeParse = (key, fallback = null) => {
   try {

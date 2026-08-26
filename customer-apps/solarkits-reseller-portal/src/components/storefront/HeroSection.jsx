@@ -16,8 +16,11 @@ export function extractYouTubeId(urlOrId) {
   return match ? match[1] : "";
 }
 
-export default function HeroSection() {
-  const videoId = extractYouTubeId(DEFAULT_YOUTUBE_SOURCE);
+export default function HeroSection({ videoConfig }) {
+  if (videoConfig && videoConfig.enabled === false) return null;
+
+  const rawSource = videoConfig?.youtube_url || videoConfig?.video_id || DEFAULT_YOUTUBE_SOURCE;
+  const videoId = extractYouTubeId(rawSource) || "EE_lzTCuOH0";
 
   if (!videoId) return null;
 

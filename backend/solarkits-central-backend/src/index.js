@@ -12,13 +12,33 @@ const port = process.env.PORT || 5000;
 const ipv4 = process.env.IPV4 || 'http://localhost';
 
 // CORS Configuration
-const FRONTEND_URLS = (process.env.FRONTEND_URLS || '')
+const rawOrigins = `${process.env.FRONTEND_URLS || ''},${process.env.CORS_ORIGIN || ''}`;
+const FRONTEND_URLS = rawOrigins
   .split(',')
   .map(url => url.trim())
   .filter(Boolean);
 
 app.use(cors({
-  origin: FRONTEND_URLS.length ? FRONTEND_URLS : true,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    
+    // Check exact whitelist or pattern matches
+    const isWhitelisted =
+      FRONTEND_URLS.includes(origin) ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('192.168.') ||
+      origin.endsWith('.onrender.com') ||
+      origin.includes('solar-store') ||
+      origin.includes('solarkits');
+
+    if (isWhitelisted) {
+      return callback(null, true);
+    }
+    
+    return callback(null, true);
+  },
   credentials: true,
 }));
 
@@ -84,6 +104,9 @@ adminRouter.use('/reseller-mgmt/settings', require('./modules/admin-panel/routes
 // Industry Content Management System
 adminRouter.use('/industry-content', require('./modules/admin-panel/routes/industry.content.route'));
 adminRouter.use('/industry-themes', require('./modules/admin-panel/routes/industry.theme.route'));
+// Website Landing Pages Content Management System
+adminRouter.use('/website-content', require('./modules/admin-panel/routes/website.content.route'));
+adminRouter.use('/website-configurations', require('./modules/admin-panel/routes/website.content.route'));
 
 // ─── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ───────
 adminRouter.use('/franchisee/po-settings',      require('./modules/admin-panel/routes/franchisee.po.settings.route'));

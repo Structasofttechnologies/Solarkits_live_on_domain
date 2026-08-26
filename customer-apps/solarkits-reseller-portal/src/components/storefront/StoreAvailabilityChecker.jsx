@@ -16,12 +16,16 @@ import {
   checkTerritoryAvailability,
 } from "../../data/territoryData";
 
-export default function StoreAvailabilityChecker({ onOpenLeadModal }) {
+export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailabilityConfig }) {
   const [selectedState, setSelectedState] = useState("Maharashtra");
   const [selectedDistrict, setSelectedDistrict] = useState("Pune");
   const [pincode, setPincode] = useState("");
   const [result, setResult] = useState(null);
   const [checking, setChecking] = useState(false);
+
+  const badgeText = storeAvailabilityConfig?.badge_text || "Live Territory Availability Checker";
+  const heading = storeAvailabilityConfig?.heading || "Check Franchise Availability in Your District or Pincode";
+  const subtitle = storeAvailabilityConfig?.subtitle || "We grant protected territorial dealership rights per revenue district. Check your area status to secure exclusive regional wholesale distribution.";
 
   // Sync districts when state changes
   useEffect(() => {
@@ -51,19 +55,16 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal }) {
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-xs">
             <FiMapPin className="text-[#0575B8]" size={14} />
             <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
-              Live Territory Availability Checker
+              {badgeText}
             </span>
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Check Franchise Availability in Your{" "}
-            <span className="text-[#F49222]">
-              District or Pincode
-            </span>
+            {heading}
           </h2>
 
           <p className="text-xs sm:text-base text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
-            We grant protected territorial dealership rights per revenue district. Check your area status to secure exclusive regional wholesale distribution.
+            {subtitle}
           </p>
         </div>
 

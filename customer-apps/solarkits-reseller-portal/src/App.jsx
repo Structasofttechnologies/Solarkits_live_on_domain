@@ -5,7 +5,7 @@ import Register from "./pages/Register";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardHome from "./pages/DashboardHome";
 import KycWorkspace from "./pages/KycWorkspace";
-import PlansPortal from "./pages/PlansPortal";
+// import PlansPortal from "./pages/PlansPortal";
 import MyTerritories from "./pages/MyTerritories";
 import AuthorizedCatalog from "./pages/AuthorizedCatalog";
 import MyOrders from "./pages/MyOrders";
@@ -42,7 +42,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/dashboard" element={<DashboardHome />} />
           <Route path="/kyc" element={<KycWorkspace />} />
-          <Route path="/plans" element={<PlansPortal />} />
+          {/* <Route path="/plans" element={<PlansPortal />} /> */}
           <Route path="/territories" element={<MyTerritories />} />
           <Route path="/catalog" element={<AuthorizedCatalog />} />
           <Route path="/procurement-inventory" element={<ProcurementInventory />} />

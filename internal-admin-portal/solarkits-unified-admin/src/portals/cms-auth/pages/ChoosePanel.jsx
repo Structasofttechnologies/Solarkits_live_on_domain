@@ -1,4 +1,4 @@
-﻿// pages/ChoosePanel.jsx — Premium Portal Selection
+// pages/ChoosePanel.jsx — Premium Portal Selection
 import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -30,8 +30,18 @@ export default function ChoosePanel() {
     }
   }, [isAuthenticated, navigate]);
 
+  const isExternalPanel = (url_prefix) => {
+    return url_prefix?.startsWith('/epc-panel') || 
+           url_prefix?.startsWith('/solarshop-india') || 
+           url_prefix?.startsWith('/supplier-panel');
+  };
+
   const handleSelectPanel = (url_prefix) => {
-    window.location.replace(`${url_prefix}/`);
+    if (isExternalPanel(url_prefix)) {
+      window.location.href = getPanelUrl(url_prefix);
+    } else {
+      navigate(`${url_prefix}/`);
+    }
   };
 
   const handleLogout = async () => {
@@ -100,8 +110,6 @@ export default function ChoosePanel() {
       return `http://${hostname}:${externalPortMap[url_prefix]}${url_prefix}/`;
     }
 
-    // All internal staff panels (admin, accounts, operations, warehouse, developer)
-    // are merged in this single app — return relative path!
     return `${url_prefix}/`;
   };
 
@@ -153,9 +161,12 @@ export default function ChoosePanel() {
           {allowed_panels.map((panel) => {
             const meta = getPanelMeta(panel.slug);
             return (
-              <a
+              <div
                 key={panel.id}
-                href={getPanelUrl(panel.url_prefix)}
+                onClick={() => handleSelectPanel(panel.url_prefix)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleSelectPanel(panel.url_prefix)}
                 className="group relative cursor-pointer flex flex-col justify-between p-6 md:p-8 rounded-3xl card-glass border border-border/40 hover:border-primary/50 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1.5 overflow-hidden"
               >
                 {/* Background decorative gradient */}
@@ -210,7 +221,7 @@ export default function ChoosePanel() {
                     </span>
                   </div>
                 </div>
-              </a>
+              </div>
             );
           })}
         </div>

@@ -27,15 +27,23 @@ export const fetchUserModules = createAsyncThunk(
         return rejectWithValue("Unauthorized");
       }
 
-      const token = getState().auth?.token;
+      const rawToken = getState().auth?.token;
+      let token = rawToken;
+      if (!token) {
+        try {
+          const raw = localStorage.getItem('login');
+          token = raw ? (JSON.parse(raw)?.token || raw) : null;
+        } catch (e) {}
+      }
 
       if (!token) {
         dispatch(setAlert({ type: "error", message: "No token found" }));
         return rejectWithValue("No token found");
       }
 
-      const res = await axios.get(`${resolveApiUrl(import.meta.env.VITE_API_URL, 'http://localhost:5176/admin-api')}/user-modules`, {
-        headers: { Authorization: token },
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      const res = await axios.get(`${resolveApiUrl(import.meta.env.VITE_API_URL, 'http://localhost:5000/admin-api')}/user-modules`, {
+        headers: { Authorization: authHeader },
         timeout: 7000,
       });
 

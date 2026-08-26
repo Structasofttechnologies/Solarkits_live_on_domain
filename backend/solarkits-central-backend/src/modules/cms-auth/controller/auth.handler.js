@@ -445,29 +445,83 @@ const login = async (req, res) => {
 const identify_user_panel = async (req, res) => {
   const clearCookie = () => res.clearCookie('refresh_token', cookieOptions);
   try {
-    const { refresh_token } = req.cookies;
-    if (!refresh_token) return res.status(401).json({ status: 'error', message: 'Authentication token not found.', auth: false });
+    const rawAuth = req.headers['authorization'] || req.headers['x-access-token'];
+    const authHeaderToken = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth) : null;
+    const refreshToken = req.cookies?.refresh_token || req.headers['x-refresh-token'] || req.body?.refresh_token;
 
-    const decoded = jwt.decode_token(refresh_token);
-    if (!decoded?.user?.id || decoded.user.token_version === undefined) {
-      clearCookie(); return res.status(401).json({ status: 'error', message: 'Invalid or expired refresh token.', auth: false });
+    let tokenToVerify = refreshToken;
+    let expectedType = 'refresh';
+
+    if (!tokenToVerify && authHeaderToken) {
+      tokenToVerify = authHeaderToken;
+      expectedType = 'any';
     }
-    if (decoded.user.token_type !== 'refresh') {
-      clearCookie(); return res.status(401).json({ status: 'error', message: 'Invalid token type.', auth: false });
+
+    if (!tokenToVerify) {
+      return res.status(401).json({ status: 'error', message: 'Authentication token not found.', auth: false });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.decode_token(tokenToVerify);
+    } catch (err) {
+      if (tokenToVerify === refreshToken && authHeaderToken) {
+        try {
+          decoded = jwt.decode_token(authHeaderToken);
+          expectedType = 'any';
+        } catch (e2) {
+          clearCookie();
+          return res.status(401).json({ status: 'error', message: 'Invalid or expired token.', auth: false });
+        }
+      } else {
+        clearCookie();
+        return res.status(401).json({ status: 'error', message: 'Invalid or expired token.', auth: false });
+      }
+    }
+
+    if (!decoded?.user?.id || decoded.user.token_version === undefined) {
+      clearCookie();
+      return res.status(401).json({ status: 'error', message: 'Invalid token structure.', auth: false });
+    }
+
+    if (expectedType === 'refresh' && decoded.user.token_type !== 'refresh' && decoded.user.token_type !== 'access') {
+      clearCookie();
+      return res.status(401).json({ status: 'error', message: 'Invalid token type.', auth: false });
     }
 
     const userDoc = await CmsUser.findById(decoded.user.id).lean();
-    if (!userDoc) { clearCookie(); return res.status(401).json({ status: 'error', message: 'User not found.', auth: false }); }
+    if (!userDoc) {
+      clearCookie();
+      return res.status(401).json({ status: 'error', message: 'User not found.', auth: false });
+    }
     if (userDoc.token_version !== decoded.user.token_version) {
-      clearCookie(); return res.status(401).json({ status: 'error', message: 'Session expired. Please log in again.', auth: false });
+      clearCookie();
+      return res.status(401).json({ status: 'error', message: 'Session expired. Please log in again.', auth: false });
+    }
+    if (!userDoc.is_active || userDoc.is_deleted) {
+      clearCookie();
+      return res.status(403).json({ status: 'error', message: 'Your account is inactive or deleted.', auth: false });
     }
 
     const url_prefix = await _get_url_prefix(userDoc._id);
     const detailedPayload = await _get_detailed_auth_response(userDoc);
-    return res.status(200).json({ status: 'success', message: 'User identified successfully.', auth: true, url_prefix: url_prefix || null, ...detailedPayload });
+    const token = jwt.generate_token(
+      { user: { id: userDoc._id.toString(), token_version: userDoc.token_version, token_type: 'access' } },
+      process.env.AUTH_JWT_ACCESS_EXPIRES || '17m'
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'User identified successfully.',
+      auth: true,
+      token,
+      url_prefix: url_prefix || null,
+      ...detailedPayload
+    });
   } catch (error) {
     console.error('Error in identify_user_panel:', error);
-    clearCookie(); return res.status(500).json({ message: 'Internal server error.', auth: false });
+    clearCookie();
+    return res.status(500).json({ message: 'Internal server error.', auth: false });
   }
 };
 
@@ -475,21 +529,57 @@ const identify_user_panel = async (req, res) => {
 const refresh_access_token = async (req, res) => {
   const clearCookie = () => res.clearCookie('refresh_token', cookieOptions);
   try {
-    const { refresh_token } = req.cookies;
-    if (!refresh_token) return res.status(401).json({ message: 'Authentication token not found.', auth: false });
+    const rawAuth = req.headers['authorization'] || req.headers['x-access-token'];
+    const authHeaderToken = rawAuth ? (rawAuth.startsWith('Bearer ') ? rawAuth.slice(7) : rawAuth) : null;
+    const refreshToken = req.cookies?.refresh_token || req.headers['x-refresh-token'] || req.body?.refresh_token;
 
-    const decoded = jwt.decode_token(refresh_token);
-    if (!decoded?.user?.id || decoded.user.token_version === undefined) {
-      clearCookie(); return res.status(401).json({ message: 'Invalid or expired refresh token.', auth: false });
+    let tokenToVerify = refreshToken;
+    let expectedType = 'refresh';
+
+    if (!tokenToVerify && authHeaderToken) {
+      tokenToVerify = authHeaderToken;
+      expectedType = 'any';
     }
-    if (decoded.user.token_type !== 'refresh') {
-      clearCookie(); return res.status(401).json({ message: 'Invalid token type.', auth: false });
+
+    if (!tokenToVerify) {
+      return res.status(401).json({ message: 'Authentication token not found.', auth: false });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.decode_token(tokenToVerify);
+    } catch (err) {
+      if (tokenToVerify === refreshToken && authHeaderToken) {
+        try {
+          decoded = jwt.decode_token(authHeaderToken);
+          expectedType = 'any';
+        } catch (e2) {
+          clearCookie();
+          return res.status(401).json({ message: 'Invalid or expired token.', auth: false });
+        }
+      } else {
+        clearCookie();
+        return res.status(401).json({ message: 'Invalid or expired token.', auth: false });
+      }
+    }
+
+    if (!decoded?.user?.id || decoded.user.token_version === undefined) {
+      clearCookie();
+      return res.status(401).json({ message: 'Invalid token structure.', auth: false });
     }
 
     const user = await CmsUser.findById(decoded.user.id).lean();
-    if (!user) { clearCookie(); return res.status(401).json({ message: 'User not found.', auth: false }); }
+    if (!user) {
+      clearCookie();
+      return res.status(401).json({ message: 'User not found.', auth: false });
+    }
     if (user.token_version !== decoded.user.token_version) {
-      clearCookie(); return res.status(401).json({ message: 'Session expired. Please log in again.', auth: false });
+      clearCookie();
+      return res.status(401).json({ message: 'Session expired. Please log in again.', auth: false });
+    }
+    if (!user.is_active || user.is_deleted) {
+      clearCookie();
+      return res.status(403).json({ message: 'Your account is inactive or deleted.', auth: false });
     }
 
     const url_prefix = await _get_url_prefix(user._id);
@@ -508,7 +598,8 @@ const refresh_access_token = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in refresh_access_token:', error);
-    clearCookie(); return res.status(500).json({ message: 'Internal server error.', auth: false });
+    clearCookie();
+    return res.status(500).json({ message: 'Internal server error.', auth: false });
   }
 };
 

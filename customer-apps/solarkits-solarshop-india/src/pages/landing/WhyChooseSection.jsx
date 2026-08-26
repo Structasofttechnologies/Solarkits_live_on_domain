@@ -1,16 +1,17 @@
 import { useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FiCheckCircle, FiTruck, FiAward, FiHeadphones, FiShield, FiZap } from "react-icons/fi";
+import { FiAward, FiTruck, FiZap, FiShield, FiDollarSign, FiTool } from "react-icons/fi";
 
-const FEATURES = [
-  { icon: FiAward, title: "BIS & MNRE Certified", description: "Every product is certified by BIS and MNRE. Only government-approved manufacturers in our catalog.", color: "#1a3b8b", bg: "#eff6ff" },
-  { icon: FiZap, title: "Bulk Purchase Rate", description: "Direct tie-ups with tier-1 manufacturers mean factory-direct pricing without any middlemen markup.", color: "#d97706", bg: "#fffbeb" },
-  { icon: FiTruck, title: "Pan-India Delivery", description: "We deliver to 28+ states. Orders before 2 PM ship the same day with real-time tracking.", color: "#0d9488", bg: "#f0fdfa" },
-  { icon: FiHeadphones, title: "Save On GST", description: "Certified solar engineers available before and after purchase via WhatsApp and phone support.", color: "#7c3aed", bg: "#f5f3ff" },
-
+const DEFAULT_FEATURES = [
+  { icon: FiAward, title: "Pre-Engineered & Pre-Wired", description: "Every kit is pre-configured with perfectly matched panels, inverters, and protection hardware for rapid installation.", color: "#1a3b8b", bg: "#eff6ff" },
+  { icon: FiShield, title: "100% Genuine Tier-1 Hardware", description: "Direct supply from ALMM-approved and MNRE-certified manufacturers with official warranty cards.", color: "#0d9488", bg: "#f0fdfa" },
+  { icon: FiTruck, title: "Transit Insured Pan-India Logistics", description: "Safe door-to-door delivery with 100% transit insurance across 18,000+ pincodes in India.", color: "#d97706", bg: "#fffbeb" },
+  { icon: FiDollarSign, title: "Full 12% GST ITC Claim", description: "All purchases come with official GST invoices allowing businesses and EPCs to claim full input tax credit.", color: "#7c3aed", bg: "#f5f3ff" },
+  { icon: FiZap, title: "Subsidies & DBT Pre-Verification", description: "All DCR kits are pre-verified for PM Surya Ghar and PM-KUSUM direct bank transfer subsidies.", color: "#15803d", bg: "#f0fdf4" },
+  { icon: FiTool, title: "Technical Engineering Support", description: "Dedicated solar engineering desk for single line diagrams (SLD), sizing assistance, and DISCOM documentation.", color: "#dc2626", bg: "#fff1f2" },
 ];
 
-export default function WhyChooseSection() {
+export default function WhyChooseSection({ whyChooseConfig }) {
   const sectionRef = useRef(null);
   const [active, setActive] = useState(false);
 
@@ -22,6 +23,15 @@ export default function WhyChooseSection() {
     if (sectionRef.current) observer.observe(sectionRef.current);
     return () => observer.disconnect();
   }, []);
+
+  const badgeText = whyChooseConfig?.badge_text || "WHY CHOOSE US";
+  const heading = whyChooseConfig?.heading || "Everything You Need to Go Solar — All in One Platform";
+  const subtitle = whyChooseConfig?.subtitle || "SolarKits is more than a marketplace. We're your end-to-end partner in the solar journey.";
+  const items = whyChooseConfig?.items && whyChooseConfig.items.length > 0 ? whyChooseConfig.items : DEFAULT_FEATURES;
+
+  const iconOptions = [FiAward, FiShield, FiTruck, FiDollarSign, FiZap, FiTool];
+  const colorOptions = ["#1a3b8b", "#0d9488", "#d97706", "#7c3aed", "#15803d", "#dc2626"];
+  const bgOptions = ["#eff6ff", "#f0fdfa", "#fffbeb", "#f5f3ff", "#f0fdf4", "#fff1f2"];
 
   return (
     <section
@@ -41,67 +51,70 @@ export default function WhyChooseSection() {
           style={{ textAlign: "center", marginBottom: "64px" }}
         >
           <div style={{ display: "inline-block", background: "#dcfce7", border: "1px solid #86efac", borderRadius: "50px", padding: "5px 14px", marginBottom: "16px" }}>
-            <span style={{ color: "#15803d", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>WHY CHOOSE US</span>
+            <span style={{ color: "#15803d", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>
+              {badgeText}
+            </span>
           </div>
           <h2 style={{
             fontSize: "clamp(1.8rem, 3vw, 2.6rem)", fontWeight: 800, color: "#0f172a",
             fontFamily: "'Outfit', sans-serif", marginBottom: "16px", lineHeight: 1.2,
           }}>
-            Everything You Need to Go Solar —{" "}
-            <span style={{ background: "linear-gradient(135deg, #f8c21a, #f59e0b)", backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
-              All in One Platform
-            </span>
+            {heading}
           </h2>
           <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "540px", margin: "0 auto", lineHeight: 1.7 }}>
-            SolarKits is more than a marketplace. We're your end-to-end partner in the solar journey.
+            {subtitle}
           </p>
         </motion.div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-          {FEATURES.map((feature, i) => {
-            const Icon = feature.icon;
+          {items.map((feat, i) => {
+            const IconComponent = feat.icon || iconOptions[i % iconOptions.length];
+            const color = feat.color || colorOptions[i % colorOptions.length];
+            const bg = feat.bg || bgOptions[i % bgOptions.length];
+
             return (
               <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: active ? 1 : 0, y: active ? 0 : 40 }}
-                transition={{ duration: 0.6, delay: i * 0.07, ease: "easeOut" }}
+                key={feat.title || i}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: active ? 1 : 0, y: active ? 0 : 30 }}
+                transition={{ duration: 0.5, delay: i * 0.08, ease: "easeOut" }}
                 style={{
                   background: "#fff",
-                  borderRadius: "20px", padding: "32px",
-                  boxShadow: "0 2px 16px rgba(0,0,0,0.06)",
+                  borderRadius: "16px",
+                  padding: "28px",
                   border: "1.5px solid #f1f5f9",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
                   transition: "all 0.3s ease",
-                  cursor: "default",
+                  display: "flex",
+                  gap: "18px",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-6px)";
-                  e.currentTarget.style.boxShadow = `0 20px 50px ${feature.color}18`;
-                  e.currentTarget.style.borderColor = `${feature.color}30`;
+                  e.currentTarget.style.borderColor = `${color}40`;
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = `0 12px 36px ${color}15`;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 2px 16px rgba(0,0,0,0.06)";
                   e.currentTarget.style.borderColor = "#f1f5f9";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 12px rgba(0,0,0,0.04)";
                 }}
               >
                 <div style={{
-                  width: "56px", height: "56px", borderRadius: "16px",
-                  background: feature.bg, border: `1px solid ${feature.color}20`,
+                  width: "50px", height: "50px", borderRadius: "14px",
+                  background: bg, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  marginBottom: "20px", transition: "transform 0.3s",
-                }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1) rotate(5deg)"}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1) rotate(0deg)"}
-                >
-                  <Icon style={{ fontSize: "1.5rem", color: feature.color }} />
+                  color: color, fontSize: "1.3rem",
+                }}>
+                  <IconComponent />
                 </div>
-                <h3 style={{ color: "#0f172a", fontSize: "1.05rem", fontWeight: 700, marginBottom: "10px", fontFamily: "'Outfit', sans-serif" }}>
-                  {feature.title}
-                </h3>
-                <p style={{ color: "#64748b", fontSize: "0.875rem", lineHeight: 1.75 }}>
-                  {feature.description}
-                </p>
+                <div>
+                  <h3 style={{ color: "#0f172a", fontSize: "1rem", fontWeight: 700, marginBottom: "8px", fontFamily: "'Outfit', sans-serif" }}>
+                    {feat.title}
+                  </h3>
+                  <p style={{ color: "#64748b", fontSize: "0.875rem", lineHeight: 1.6, margin: 0 }}>
+                    {feat.desc || feat.description}
+                  </p>
+                </div>
               </motion.div>
             );
           })}

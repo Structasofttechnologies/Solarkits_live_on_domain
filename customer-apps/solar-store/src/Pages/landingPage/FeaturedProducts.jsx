@@ -110,20 +110,28 @@ const PRODUCTS = [
 
 function ProductCard({ product }) {
   const [wished, setWished] = useState(false);
+  const price = Number(product.price) || 0;
+  const mrp = Number(product.mrp) || price;
+  const discount = product.discount || (mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0);
+  const savings = mrp > price ? mrp - price : 0;
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-md transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl">
       {/* Product image */}
       <div className="relative h-[300px] overflow-hidden bg-gradient-to-b from-gray-50 to-white sm:h-[330px]">
-        <span
-          className={`absolute left-4 top-4 z-20 rounded-full px-3 py-1.5 text-xs font-bold shadow-sm ${product.badgeColor}`}
-        >
-          {product.badge}
-        </span>
+        {product.badge && (
+          <span
+            className={`absolute left-4 top-4 z-20 rounded-full px-3 py-1.5 text-xs font-bold shadow-sm ${product.badgeColor || "bg-orange-500 text-white"}`}
+          >
+            {product.badge}
+          </span>
+        )}
 
-        <span className="absolute right-16 top-4 z-20 rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-500">
-          {product.discount}% OFF
-        </span>
+        {discount > 0 && (
+          <span className="absolute right-16 top-4 z-20 rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-500">
+            {discount}% OFF
+          </span>
+        )}
 
         <button
           type="button"
@@ -142,7 +150,7 @@ function ProductCard({ product }) {
         </button>
 
         <img
-          src={product.img}
+          src={product.img || imgKit}
           alt={product.name}
           loading="lazy"
           className="h-full w-full object-contain p-7 transition-transform duration-500 group-hover:scale-110"
@@ -162,7 +170,7 @@ function ProductCard({ product }) {
       {/* Product information */}
       <div className="flex flex-1 flex-col p-6">
         <p className="mb-2 text-xs font-bold uppercase tracking-wider text-primary-500">
-          {product.brand} • {product.category}
+          {product.brand ? `${product.brand} • ` : ""}{product.category || "Solar Kit"}
         </p>
 
         <h3 className="mb-3 min-h-[56px] text-lg font-bold leading-snug text-gray-900">
@@ -171,18 +179,18 @@ function ProductCard({ product }) {
 
         <div className="mb-4 flex items-center justify-between">
           <span className="rounded-full bg-primary-50 px-3 py-1 text-xs font-bold text-primary-600">
-            {product.watt}
+            {product.watt || "Complete Kit"}
           </span>
 
           <div className="flex items-center gap-1.5">
             <FiStar className="fill-orange-400 text-orange-400" />
 
             <span className="text-sm font-bold text-gray-700">
-              {product.rating}
+              {product.rating || 4.8}
             </span>
 
             <span className="text-xs text-gray-400">
-              ({product.reviews})
+              ({product.reviews || 120})
             </span>
           </div>
         </div>
@@ -190,18 +198,21 @@ function ProductCard({ product }) {
         <div className="mb-5 border-t border-gray-100 pt-4">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-2xl font-extrabold text-navy">
-              ₹{product.price.toLocaleString("en-IN")}
+              ₹{price.toLocaleString("en-IN")}
             </span>
 
-            <span className="text-sm text-gray-400 line-through">
-              ₹{product.mrp.toLocaleString("en-IN")}
-            </span>
+            {mrp > price && (
+              <span className="text-sm text-gray-400 line-through">
+                ₹{mrp.toLocaleString("en-IN")}
+              </span>
+            )}
           </div>
 
-          <p className="mt-1 text-xs font-medium text-green-600">
-            You save ₹
-            {(product.mrp - product.price).toLocaleString("en-IN")}
-          </p>
+          {savings > 0 && (
+            <p className="mt-1 text-xs font-medium text-green-600">
+              You save ₹{savings.toLocaleString("en-IN")}
+            </p>
+          )}
         </div>
 
         <button
@@ -216,7 +227,16 @@ function ProductCard({ product }) {
   );
 }
 
-export default function FeaturedProducts() {
+export default function FeaturedProducts({ productsConfig }) {
+  if (productsConfig && productsConfig.enabled === false) return null;
+
+  const badgeText = productsConfig?.badge_text || "Most Popular";
+  const heading = productsConfig?.heading || "Bestselling Solar Kits";
+  const subtitle = productsConfig?.subtitle || "Explore our most trusted pre-configured solar combo kits selected for high performance, durability and maximum subsidy benefits.";
+  const viewAllText = productsConfig?.view_all_text || "View All Solar Kits";
+  const viewAllHref = productsConfig?.view_all_href || "#all-products";
+  const items = productsConfig?.items && productsConfig.items.length > 0 ? productsConfig.items : PRODUCTS;
+
   return (
     <section
       id="products"
@@ -232,24 +252,23 @@ export default function FeaturedProducts() {
         >
           <div>
             <span className="mb-3 inline-block rounded-full bg-primary-50 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-primary-600">
-              Most Popular
+              {badgeText}
             </span>
 
             <h2 className="font-heading text-3xl font-bold text-navy md:text-4xl">
-              Bestselling Solar Kits
+              {heading}
             </h2>
 
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-gray-500 md:text-base">
-              Explore our most trusted pre-configured solar combo kits selected for high performance,
-              durability and maximum subsidy benefits.
+              {subtitle}
             </p>
           </div>
 
           <a
-            href="#all-products"
+            href={viewAllHref}
             className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-primary-500 transition-colors hover:text-primary-700"
           >
-            View All Solar Kits
+            {viewAllText}
             <FiTag className="text-base" />
           </a>
         </motion.div>
@@ -261,6 +280,7 @@ export default function FeaturedProducts() {
           transition={{ duration: 0.6 }}
         >
           <Swiper
+            key={items.map((p, i) => `${p.id || i}-${p.name}-${p.price}`).join('_')}
             modules={[Autoplay]}
             autoplay={{
               delay: 3500,
@@ -268,7 +288,7 @@ export default function FeaturedProducts() {
               pauseOnMouseEnter: true,
             }}
             navigation={false}
-            loop
+            loop={items.length > 2}
             grabCursor
             spaceBetween={24}
             slidesPerView={1}
@@ -284,8 +304,8 @@ export default function FeaturedProducts() {
             }}
             className="!overflow-visible pb-8"
           >
-            {PRODUCTS.map((product) => (
-              <SwiperSlide key={product.id} className="h-auto">
+            {items.map((product, idx) => (
+              <SwiperSlide key={product.id || idx} className="h-auto">
                 <ProductCard product={product} />
               </SwiperSlide>
             ))}

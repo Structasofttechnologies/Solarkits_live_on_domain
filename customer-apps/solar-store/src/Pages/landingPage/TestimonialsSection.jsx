@@ -209,7 +209,17 @@ function TestimonialCard({ testimonial }) {
   );
 }
 
-export default function TestimonialsSection() {
+export default function TestimonialsSection({ testimonialsConfig }) {
+  if (testimonialsConfig && testimonialsConfig.enabled === false) return null;
+
+  const badgeText = testimonialsConfig?.badge_text || "Customer Stories";
+  const heading = testimonialsConfig?.heading || "Loved by Solar Customers";
+  const subtitle = testimonialsConfig?.subtitle || "Real experiences from families and businesses that switched to clean, affordable solar energy.";
+  const overallRating = testimonialsConfig?.overall_rating || "4.8";
+  const reviewCount = testimonialsConfig?.review_count || "Based on 2,400+ reviews";
+  const platforms = testimonialsConfig?.platforms && testimonialsConfig.platforms.length > 0 ? testimonialsConfig.platforms : PLATFORM_RATINGS;
+  const items = testimonialsConfig?.items && testimonialsConfig.items.length > 0 ? testimonialsConfig.items : TESTIMONIALS;
+
   return (
     <section id="testimonials" className="relative overflow-hidden bg-solarbg py-16 md:py-24">
       {/* Background decoration */}
@@ -227,16 +237,15 @@ export default function TestimonialsSection() {
         >
           <span className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary-50 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-primary-600">
             <FiStar className="fill-primary-500" />
-            Customer Stories
+            {badgeText}
           </span>
 
           <h2 className="font-heading text-3xl font-extrabold text-navy md:text-4xl lg:text-5xl">
-            Loved by Solar Customers
+            {heading}
           </h2>
 
           <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-gray-500 md:text-base">
-            Real experiences from families and businesses that switched to
-            clean, affordable solar energy.
+            {subtitle}
           </p>
         </motion.div>
 
@@ -251,7 +260,7 @@ export default function TestimonialsSection() {
           <div className="flex flex-col items-center gap-8 lg:flex-row">
             <div className="flex-shrink-0 text-center lg:w-52">
               <div className="font-heading text-6xl font-extrabold leading-none text-navy">
-                4.8
+                {overallRating}
               </div>
 
               <div className="my-2 flex justify-center">
@@ -259,20 +268,20 @@ export default function TestimonialsSection() {
               </div>
 
               <p className="text-xs font-medium text-gray-400">
-                Based on 2,400+ reviews
+                {reviewCount}
               </p>
             </div>
 
             <div className="hidden h-24 w-px bg-gray-200 lg:block" />
 
             <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {PLATFORM_RATINGS.map((item) => (
+              {platforms.map((item, idx) => (
                 <div
-                  key={item.platform}
+                  key={item.platform || idx}
                   className="rounded-2xl border border-gray-100 bg-white p-4 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
                 >
                   <p
-                    className={`mx-auto mb-2 w-fit rounded-full px-3 py-1 text-xs font-bold ${item.color}`}
+                    className={`mx-auto mb-2 w-fit rounded-full px-3 py-1 text-xs font-bold ${item.color || "bg-blue-50 text-blue-600"}`}
                   >
                     {item.platform}
                   </p>
@@ -296,8 +305,9 @@ export default function TestimonialsSection() {
 
         {/* Testimonials slider */}
         <Swiper
+          key={items.map((t, i) => `${t.id || i}-${t.name}`).join('_')}
           modules={[Autoplay, Pagination]}
-          loop
+          loop={items.length > 2}
           grabCursor
           speed={800}
           autoplay={{
@@ -327,8 +337,8 @@ export default function TestimonialsSection() {
           }}
           className="testimonials-swiper !overflow-visible !pb-14"
         >
-          {TESTIMONIALS.map((testimonial) => (
-            <SwiperSlide key={testimonial.id} className="h-auto">
+          {items.map((testimonial, idx) => (
+            <SwiperSlide key={testimonial.id || idx} className="h-auto">
               <TestimonialCard testimonial={testimonial} />
             </SwiperSlide>
           ))}

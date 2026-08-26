@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import PageHeader from "@/components/PageHeader";
 import CustomTable from "@/components/CustomTable";
 import Button from "@/components/Button";
@@ -13,7 +13,7 @@ import { authHeaderObj } from "@/app/authHeader";
 import UniversalMap from "@/components/UniversalMap";
 import { useLoadScript } from "@react-google-maps/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5176/admin-api";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/admin-api";
 const SUPPLIER_API = `${API_URL}/suppliers`;
 
 const STATUS_BADGE = {
@@ -248,7 +248,7 @@ export default function Suppliers({ moduleUniqueId }) {
     const fetch_district_boundary = async (districtId, districtName, stateName, countryName) => {
         if (boundaryCache[districtId]) return boundaryCache[districtId];
         try {
-            const ADMIN_API = import.meta.env.VITE_API_URL || "http://localhost:5176/admin-api";
+            const ADMIN_API = import.meta.env.VITE_API_URL || "http://localhost:5000/admin-api";
             const res = await axios.post(
                 `${ADMIN_API}/geolocation/district?unique_id=${moduleUniqueId}&req_for=view`,
                 { district: districtName, state: stateName, country: countryName || "India" },

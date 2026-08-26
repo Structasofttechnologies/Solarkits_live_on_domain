@@ -2,20 +2,20 @@ import { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FiChevronLeft, FiChevronRight, FiStar } from "react-icons/fi";
 
-const TESTIMONIALS = [
-  { name: "Rajesh Patel", company: "Homeowner & Solar Customer", city: "Ahmedabad, Gujarat", initials: "RP", color: "#1a3b8b", bg: "#eff6ff", rating: 5, text: "SolarKits has transformed how I buy solar equipment online. The combo kits are BIS certified, and the district-based pricing is a game-changer. Delivery was right on time and checkout was seamless." },
-  { name: "Sunita Verma", company: "Solar Buyer", city: "Jaipur, Rajasthan", initials: "SV", color: "#0d9488", bg: "#f0fdfa", rating: 5, text: "I ordered a 5kW hybrid solar kit from SolarKits. Saved 18% compared to local suppliers, and the live inventory feature helped me track availability and delivery perfectly." },
-  { name: "Arjun Menon", company: "Residential Buyer", city: "Kochi, Kerala", initials: "AM", color: "#15803d", bg: "#f0fdf4", rating: 5, text: "The solar combo kit builder is incredibly easy to use. I configured my residential solar setup easily, and the support team guided us through subsidy options." },
-  { name: "Priya Sharma", company: "Solar Contractor", city: "Pune, Maharashtra", initials: "PS", color: "#7c3aed", bg: "#f5f3ff", rating: 5, text: "Finally a solar e-commerce platform that actually understands customer needs! The order tracking, GST invoicing, and secure payment options make purchasing solar products so much faster than traditional channels." },
-  { name: "Mohammed Iqbal", company: "Solar Installation Owner", city: "Hyderabad, Telangana", initials: "MI", color: "#d97706", bg: "#fffbeb", rating: 5, text: "Purchased Tier-1 solar panels and accessories for my site. Excellent product quality, competitive pricing, and the support team was super responsive on WhatsApp." },
-  { name: "Deepa Nair", company: "Solar Shop Customer", city: "Chennai, Tamil Nadu", initials: "DN", color: "#dc2626", bg: "#fff1f2", rating: 5, text: "The location-based inventory system is brilliant! I could check stock for my specific district before placing the order. Accurate delivery timelines and great service!" },
+const DEFAULT_TESTIMONIALS = [
+  { name: "Rajesh Kulkarni", role: "Homeowner", city: "Pune, Maharashtra", initials: "RK", color: "#1a3b8b", bg: "#eff6ff", rating: 5, quote: "SolarKits delivered the entire package in 3 days. The pre-wired ACDB/DCDB boxes saved our local electrician half a day of work. My electricity bill is down from ₹3,200 to ₹150!" },
+  { name: "Anand Verma", role: "Commercial EPC Contractor", city: "Jaipur, Rajasthan", initials: "AV", color: "#0d9488", bg: "#f0fdfa", rating: 5, quote: "Ordering turnkey kits with proper GST invoices is a game changer for our business. DCR panels passed DISCOM inspection on the first attempt." },
+  { name: "Balwinder Singh", role: "Farm House Owner", city: "Ludhiana, Punjab", initials: "BS", color: "#15803d", bg: "#f0fdf4", rating: 5, quote: "The hybrid system with lithium battery provides 24x7 continuous power even during local grid cuts. Excellent build quality and very responsive support." },
+  { name: "Priya Sharma", role: "Solar Contractor", city: "Pune, Maharashtra", initials: "PS", color: "#7c3aed", bg: "#f5f3ff", rating: 5, quote: "Finally a solar e-commerce platform that actually understands customer needs! The order tracking, GST invoicing, and secure payment options make purchasing solar products so much faster." },
 ];
 
-export default function TestimonialsSection() {
+export default function TestimonialsSection({ testimonialsConfig }) {
   const sectionRef = useRef(null);
   const [active, setActive] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  const testimonials = testimonialsConfig?.items && testimonialsConfig.items.length > 0 ? testimonialsConfig.items : DEFAULT_TESTIMONIALS;
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -27,16 +27,24 @@ export default function TestimonialsSection() {
   }, []);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || testimonials.length <= 3) return;
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % TESTIMONIALS.length);
+      setCurrentIndex((prev) => (prev + 1) % testimonials.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [isPaused]);
+  }, [isPaused, testimonials.length]);
 
-  const visibleItems = Array.from({ length: 3 }, (_, i) =>
-    TESTIMONIALS[(currentIndex + i) % TESTIMONIALS.length]
+  const visibleCount = Math.min(3, testimonials.length);
+  const visibleItems = Array.from({ length: visibleCount }, (_, i) =>
+    testimonials[(currentIndex + i) % testimonials.length]
   );
+
+  const badgeText = testimonialsConfig?.badge_text || "CUSTOMER STORIES";
+  const heading = testimonialsConfig?.heading || "Trusted by Homeowners & Solar Businesses";
+  const subtitle = testimonialsConfig?.subtitle || "Hear what customers across India say about their SolarKits delivery and power performance.";
+
+  const colors = ["#1a3b8b", "#0d9488", "#15803d", "#7c3aed", "#d97706", "#dc2626"];
+  const bgs = ["#eff6ff", "#f0fdfa", "#f0fdf4", "#f5f3ff", "#fffbeb", "#fff1f2"];
 
   return (
     <section
@@ -57,122 +65,116 @@ export default function TestimonialsSection() {
           style={{ textAlign: "center", marginBottom: "64px" }}
         >
           <div style={{ display: "inline-block", background: "#fce7f3", border: "1px solid #fbcfe8", borderRadius: "50px", padding: "5px 14px", marginBottom: "16px" }}>
-            <span style={{ color: "#be185d", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>CUSTOMER STORIES</span>
+            <span style={{ color: "#be185d", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>
+              {badgeText}
+            </span>
           </div>
           <h2 style={{
             fontSize: "clamp(1.8rem, 3vw, 2.6rem)", fontWeight: 800, color: "#0f172a",
             fontFamily: "'Outfit', sans-serif", marginBottom: "16px", lineHeight: 1.2,
           }}>
-            Trusted by Customers{" "}
-            <span style={{ background: "linear-gradient(135deg, #1a3b8b, #3b82f6)", backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
-              Across India
-            </span>
+            {heading}
           </h2>
-          <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "500px", margin: "0 auto", lineHeight: 1.7 }}>
-            Real feedback from customers and buyers who purchase solar products with SolarKits.
+          <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "540px", margin: "0 auto", lineHeight: 1.7 }}>
+            {subtitle}
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: active ? 1 : 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
+        {/* Carousel Grid */}
+        <div
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px", marginBottom: "40px" }}
         >
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "40px" }}>
-            <AnimatePresence mode="sync">
-              {visibleItems.map((t, i) => (
+          <AnimatePresence mode="popLayout">
+            {visibleItems.map((item, i) => {
+              const color = item.color || colors[i % colors.length];
+              const bg = item.bg || bgs[i % bgs.length];
+              const initials = item.initials || (item.name ? item.name.split(" ").map(n => n[0]).join("").slice(0, 2) : "SK");
+
+              return (
                 <motion.div
-                  key={`${t.name}-${currentIndex}`}
+                  key={item.name + i}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.4, delay: i * 0.05 }}
+                  transition={{ duration: 0.5, delay: i * 0.08 }}
                   style={{
-                    background: "#fff", borderRadius: "20px", padding: "28px",
-                    boxShadow: "0 4px 24px rgba(0,0,0,0.07)",
+                    background: "#fff",
+                    borderRadius: "20px",
+                    padding: "32px",
                     border: "1.5px solid #f1f5f9",
-                    transition: "all 0.3s ease",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+                    display: "flex", flexDirection: "column",
+                    justifyContent: "space-between",
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = `0 16px 48px ${t.color}18`; e.currentTarget.style.borderColor = `${t.color}30`; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 24px rgba(0,0,0,0.07)"; e.currentTarget.style.borderColor = "#f1f5f9"; }}
                 >
-                  {/* Stars */}
-                  <div style={{ display: "flex", gap: "3px", marginBottom: "14px" }}>
-                    {Array.from({ length: t.rating }).map((_, si) => (
-                      <FiStar key={si} style={{ color: "#f8c21a", fill: "#f8c21a", fontSize: "0.9rem" }} />
-                    ))}
+                  <div>
+                    {/* Stars */}
+                    <div style={{ display: "flex", gap: "3px", marginBottom: "16px" }}>
+                      {Array.from({ length: item.rating || 5 }).map((_, s) => (
+                        <FiStar key={s} style={{ fill: "#f59e0b", color: "#f59e0b", fontSize: "1rem" }} />
+                      ))}
+                    </div>
+
+                    {/* Quote text */}
+                    <p style={{ color: "#334155", fontSize: "0.92rem", lineHeight: 1.7, marginBottom: "24px", fontStyle: "italic" }}>
+                      "{item.quote || item.text || item.review}"
+                    </p>
                   </div>
-                  {/* Quote */}
-                  <p style={{ color: "#374151", fontSize: "0.9rem", lineHeight: 1.75, marginBottom: "20px", fontStyle: "italic" }}>
-                    "{t.text}"
-                  </p>
-                  {/* Author */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+
+                  {/* Customer info */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
                     <div style={{
-                      width: "44px", height: "44px", borderRadius: "50%",
-                      background: t.bg, border: `2px solid ${t.color}30`,
+                      width: "46px", height: "46px", borderRadius: "14px",
+                      background: bg, color: color,
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      color: t.color, fontSize: "0.85rem", fontWeight: 700, flexShrink: 0,
+                      fontWeight: 800, fontSize: "0.95rem", flexShrink: 0,
                     }}>
-                      {t.initials}
+                      {initials}
                     </div>
                     <div>
-                      <div style={{ color: "#0f172a", fontSize: "0.9rem", fontWeight: 700 }}>{t.name}</div>
-                      <div style={{ color: "#94a3b8", fontSize: "0.78rem" }}>{t.company}</div>
-                      <div style={{ color: t.color, fontSize: "0.75rem", fontWeight: 600, marginTop: "2px" }}>📍 {t.city}</div>
+                      <div style={{ color: "#0f172a", fontWeight: 700, fontSize: "0.95rem" }}>
+                        {item.name}
+                      </div>
+                      <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
+                        {item.role || item.company} • {item.city}
+                      </div>
                     </div>
                   </div>
                 </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
 
-          {/* Navigation */}
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "16px" }}>
+        {/* Carousel controls */}
+        {testimonials.length > 3 && (
+          <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
             <button
-              onClick={() => setCurrentIndex((prev) => (prev - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)}
+              onClick={() => setCurrentIndex((prev) => (prev - 1 + testimonials.length) % testimonials.length)}
               style={{
-                width: "40px", height: "40px", borderRadius: "50%",
-                background: "#f8faff", border: "1.5px solid #e2e8f0",
-                color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", fontSize: "1.1rem", transition: "all 0.2s",
+                width: "44px", height: "44px", borderRadius: "50%",
+                background: "#f1f5f9", border: "none", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#1e293b", transition: "all 0.2s",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; e.currentTarget.style.borderColor = "#93c5fd"; e.currentTarget.style.color = "#1a3b8b"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#f8faff"; e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.color = "#64748b"; }}
             >
-              <FiChevronLeft />
+              <FiChevronLeft size={20} />
             </button>
-            <div style={{ display: "flex", gap: "8px" }}>
-              {TESTIMONIALS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentIndex(i)}
-                  style={{
-                    width: i === currentIndex ? "24px" : "8px", height: "8px",
-                    borderRadius: "50px",
-                    background: i === currentIndex ? "#1a3b8b" : "#cbd5e1",
-                    border: "none", cursor: "pointer", transition: "all 0.3s ease", padding: 0,
-                  }}
-                />
-              ))}
-            </div>
             <button
-              onClick={() => setCurrentIndex((prev) => (prev + 1) % TESTIMONIALS.length)}
+              onClick={() => setCurrentIndex((prev) => (prev + 1) % testimonials.length)}
               style={{
-                width: "40px", height: "40px", borderRadius: "50%",
-                background: "#f8faff", border: "1.5px solid #e2e8f0",
-                color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", fontSize: "1.1rem", transition: "all 0.2s",
+                width: "44px", height: "44px", borderRadius: "50%",
+                background: "#f1f5f9", border: "none", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#1e293b", transition: "all 0.2s",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; e.currentTarget.style.borderColor = "#93c5fd"; e.currentTarget.style.color = "#1a3b8b"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#f8faff"; e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.color = "#64748b"; }}
             >
-              <FiChevronRight />
+              <FiChevronRight size={20} />
             </button>
           </div>
-        </motion.div>
+        )}
       </div>
     </section>
   );

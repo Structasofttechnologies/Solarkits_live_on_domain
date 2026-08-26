@@ -1,11 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Navbar from "../components/storefront/Navbar";
 import HeroSection from "../components/storefront/HeroSection";
 import FranchiseOpportunity from "../components/storefront/FranchiseOpportunity";
 import StoreAvailabilityChecker from "../components/storefront/StoreAvailabilityChecker";
- import TestimonialsProof from "../components/storefront/TestimonialsProof";
+import TestimonialsProof from "../components/storefront/TestimonialsProof";
 import FaqContactSection from "../components/storefront/FaqContactSection";
 import Footer from "../components/storefront/Footer";
+import { getFranchiseLandingContent } from "../services/franchiseLandingService";
 
 // Interactive Overlays
 import LeadCaptureModal from "../components/storefront/LeadCaptureModal";
@@ -17,6 +18,17 @@ import MobileStickyBar from "../components/storefront/MobileStickyBar";
 import { SOLARKITS_DATA } from "../data/solarkitsData";
 
 export default function FranchiseLanding() {
+  // Dynamic Landing Content State
+  const [dynamicContent, setDynamicContent] = useState(null);
+
+  useEffect(() => {
+    getFranchiseLandingContent()
+      .then((data) => {
+        if (data) setDynamicContent(data);
+      })
+      .catch((err) => console.warn("Dynamic content load error:", err));
+  }, []);
+
   // Franchise Purchase & Onboarding Journey Modal State
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [selectedPlanForPurchase, setSelectedPlanForPurchase] = useState(null);
@@ -95,32 +107,34 @@ export default function FranchiseLanding() {
       <Navbar onOpenLeadModal={handleOpenLeadModal} />
 
       {/* 1. Hero Section */}
-      <HeroSection onOpenLeadModal={handleOpenLeadModal} />
-
+      <HeroSection onOpenLeadModal={handleOpenLeadModal} videoConfig={dynamicContent?.video} />
 
       {/* 11. Store Availability Checker */}
-      <StoreAvailabilityChecker onOpenLeadModal={handleOpenLeadModal} />
+      <StoreAvailabilityChecker
+        onOpenLeadModal={handleOpenLeadModal}
+        storeAvailabilityConfig={dynamicContent?.store_availability}
+      />
 
-
-
-      {/* 9. Franchise Territory Opportunity */}
+      {/* 9. Franchise Territory Opportunity (Plans are kept dynamic per user request) */}
       <FranchiseOpportunity
         onOpenLeadModal={handleOpenLeadModal}
         onOpenPurchaseModal={handleOpenPurchaseModal}
       />
 
-
-
-     
-
       {/* 14. Testimonials or Verified Business Proof */}
-      <TestimonialsProof />
+      <TestimonialsProof testimonialsConfig={dynamicContent?.testimonials} />
 
       {/* 15. Frequently Asked Questions & Final Consultation */}
-      <FaqContactSection onOpenLeadModal={handleOpenLeadModal} />
+      <FaqContactSection
+        onOpenLeadModal={handleOpenLeadModal}
+        faqConfig={dynamicContent?.faq}
+      />
 
       {/* 16. Storefront Footer */}
-      <Footer onOpenLeadModal={handleOpenLeadModal} />
+      <Footer
+        onOpenLeadModal={handleOpenLeadModal}
+        footerConfig={dynamicContent?.footer}
+      />
 
       {/* ── Interactive Overlays & Modals ─────────────────────────────── */}
 

@@ -24,6 +24,9 @@ router.post('/auth/register', authRateLimiter, handler.register_reseller);
 router.post('/auth/login',    authRateLimiter, handler.login_reseller);
 router.post('/auth/logout', handler.logout_reseller);
 
+// ── Dynamic Landing Page CMS Content ──────────────────────────────────────────
+router.get('/landing-content', require('../../../admin-panel/controller/website.content.handler').get_public_franchise_content);
+
 // ── Territory Availability & Exclusivity Verification ─────────────────────────
 router.get('/territory/availability', handler.check_territory_availability);
 

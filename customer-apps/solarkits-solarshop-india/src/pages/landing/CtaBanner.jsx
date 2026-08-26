@@ -2,14 +2,20 @@ import { motion } from "framer-motion";
 import { FiArrowRight, FiPhone } from "react-icons/fi";
 import { FaSolarPanel } from "react-icons/fa";
 
-export default function CtaBanner() {
+export default function CtaBanner({ ctaConfig }) {
   const handleRegister = () => {
-    window.open("https://solarkits-reseller-portal.onrender.com", "_blank", "noopener,noreferrer");
+    window.open("http://localhost:5178", "_blank", "noopener,noreferrer");
   };
 
   const handleContact = () => {
-    window.location.href = "mailto:support@solarkits.in";
+    window.location.href = `mailto:${ctaConfig?.email || "support@solarkits.in"}`;
   };
+
+  const badgeText = ctaConfig?.badge_text || "GET STARTED TODAY";
+  const heading = ctaConfig?.heading || "Ready to Power Your Home with Clean Solar Energy?";
+  const subtitle = ctaConfig?.subtitle || "Get pre-configured solar kits delivered directly to your doorstep. Free sizing assistance from certified solar engineers.";
+  const buttonText = ctaConfig?.button_text || "Request Free Consultation";
+  const phone = ctaConfig?.phone || "+91 (020) 6789-SOLAR";
 
   return (
     <section
@@ -58,98 +64,70 @@ export default function CtaBanner() {
             boxShadow: "0 12px 36px rgba(248,194,26,0.5)",
           }}
         >
-          <FaSolarPanel style={{ fontSize: "2rem", color: "#0f172a" }} />
+          <FaSolarPanel style={{ color: "#1a3b8b", fontSize: "2rem" }} />
         </motion.div>
 
+        {/* Badge */}
+        <div style={{ display: "inline-block", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "50px", padding: "5px 16px", marginBottom: "20px" }}>
+          <span style={{ color: "#f8c21a", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.1em" }}>
+            {badgeText}
+          </span>
+        </div>
+
         {/* Headline */}
-        <motion.h2
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.7, delay: 0.1 }}
-          style={{
-            fontSize: "clamp(2rem, 4vw, 3.2rem)", fontWeight: 900, color: "#fff",
-            fontFamily: "'Outfit', sans-serif", marginBottom: "20px", lineHeight: 1.15,
-            letterSpacing: "-0.02em",
-          }}
-        >
-          Become Franchisee — Register Now
-        </motion.h2>
+        <h2 style={{
+          fontSize: "clamp(2rem, 4vw, 3.2rem)", fontWeight: 900,
+          color: "#ffffff", fontFamily: "'Outfit', sans-serif",
+          marginBottom: "20px", lineHeight: 1.15,
+        }}>
+          {heading}
+        </h2>
 
-        {/* Subtext */}
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          style={{
-            color: "rgba(255,255,255,0.78)", fontSize: "1.1rem",
-            lineHeight: 1.7, marginBottom: "44px",
-            maxWidth: "600px", margin: "0 auto 44px",
-          }}
-        >
-          Join 5,000+ solar businesses and buyers sourcing certified equipment with SolarKits India.
-          Partner with us for district-level franchise supply and pan-India logistics.
-        </motion.p>
+        {/* Subtitle */}
+        <p style={{
+          color: "rgba(255,255,255,0.8)", fontSize: "clamp(1rem, 1.5vw, 1.2rem)",
+          maxWidth: "620px", margin: "0 auto 44px", lineHeight: 1.7,
+        }}>
+          {subtitle}
+        </p>
 
-        {/* Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          style={{ display: "flex", gap: "14px", justifyContent: "center", flexWrap: "wrap" }}
-        >
+        {/* Actions */}
+        <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
           <motion.button
             onClick={handleRegister}
-            whileHover={{ scale: 1.05, boxShadow: "0 16px 48px rgba(248,194,26,0.6)" }}
+            whileHover={{ scale: 1.04, boxShadow: "0 16px 40px rgba(248,194,26,0.5)" }}
             whileTap={{ scale: 0.97 }}
             style={{
-              padding: "16px 40px",
+              padding: "16px 36px",
               background: "linear-gradient(135deg, #f8c21a, #f59e0b)",
-              color: "#0f172a", borderRadius: "12px",
-              fontSize: "1.05rem", fontWeight: 800, cursor: "pointer", border: "none",
-              boxShadow: "0 8px 28px rgba(248,194,26,0.4)",
+              color: "#1a3b8b", borderRadius: "14px",
+              fontSize: "1.05rem", fontWeight: 900, cursor: "pointer", border: "none",
+              boxShadow: "0 8px 28px rgba(248,194,26,0.35)",
               display: "inline-flex", alignItems: "center", gap: "10px",
               fontFamily: "inherit",
             }}
           >
-            Become a Partner <FiArrowRight />
+            {buttonText} <FiArrowRight />
           </motion.button>
 
           <motion.button
             onClick={handleContact}
-            whileHover={{ scale: 1.04, background: "rgba(255,255,255,0.25)" }}
+            whileHover={{ scale: 1.04, background: "rgba(255,255,255,0.2)" }}
             whileTap={{ scale: 0.97 }}
             style={{
-              padding: "16px 36px",
-              background: "rgba(255,255,255,0.12)",
-              color: "#fff", borderRadius: "12px",
-              fontSize: "1rem", fontWeight: 600, cursor: "pointer",
-              border: "1.5px solid rgba(255,255,255,0.35)",
-              display: "inline-flex", alignItems: "center", gap: "10px",
-              fontFamily: "inherit", backdropFilter: "blur(8px)",
-              transition: "background 0.2s",
+              padding: "16px 32px",
+              background: "rgba(255,255,255,0.1)",
+              border: "1.5px solid rgba(255,255,255,0.3)",
+              color: "#ffffff", borderRadius: "14px",
+              fontSize: "1.05rem", fontWeight: 700, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: "8px",
+              fontFamily: "inherit",
+              backdropFilter: "blur(8px)",
             }}
           >
-            <FiPhone /> Contact Support
+            <FiPhone /> {phone}
           </motion.button>
-        </motion.div>
-
-        {/* Trust indicators */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          style={{ display: "flex", gap: "28px", justifyContent: "center", marginTop: "36px", flexWrap: "wrap" }}
-        >
-          {["✓ Free Registration", "✓ No Minimum Order", "✓ GST Invoice Included", "✓ Pan-India Delivery"].map((item) => (
-            <span key={item} style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.85rem", fontWeight: 500 }}>
-              {item}
-            </span>
-          ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

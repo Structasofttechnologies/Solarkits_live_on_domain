@@ -214,7 +214,16 @@ function BrandCard({ brand }) {
   );
 }
 
-export default function CertificationsSection() {
+export default function CertificationsSection({ brandsConfig }) {
+  if (brandsConfig && brandsConfig.enabled === false) return null;
+
+  const badgeText = brandsConfig?.badge_text || "Our Brand Partners";
+  const heading = brandsConfig?.heading || "Top Solar Kit Brand Partners";
+  const subtitle = brandsConfig?.subtitle || "Explore certified Tier-1 component manufacturers integrated into SolarKits complete solar solutions, selected for quality, efficiency and long-term performance.";
+  const ctaLabel = brandsConfig?.cta_label || "Explore All Brands";
+  const ctaHref = brandsConfig?.cta_href || "#all-brands";
+  const items = brandsConfig?.items && brandsConfig.items.length > 0 ? brandsConfig.items : BRANDS;
+
   return (
     <section id="brands" className="overflow-hidden bg-white py-16 md:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
@@ -226,15 +235,15 @@ export default function CertificationsSection() {
           className="mb-12 text-center"
         >
           <span className="mb-3 inline-block rounded-full bg-primary-50 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-primary-600">
-            Our Brand Partners
+            {badgeText}
           </span>
 
           <h2 className="font-heading text-3xl font-bold text-navy md:text-4xl">
-            Top Solar Kit Brand Partners
+            {heading}
           </h2>
 
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-gray-500 md:text-base">
-            Explore certified Tier-1 component manufacturers integrated into SolarKits complete solar solutions, selected for quality, efficiency and long-term performance.
+            {subtitle}
           </p>
         </motion.div>
 
@@ -245,8 +254,9 @@ export default function CertificationsSection() {
           transition={{ duration: 0.6 }}
         >
           <Swiper
+            key={items.map((b, i) => `${b.id || i}-${b.name}`).join('_')}
             modules={[Autoplay]}
-            loop
+            loop={items.length > 3}
             grabCursor
             speed={900}
             spaceBetween={24}
@@ -276,8 +286,8 @@ export default function CertificationsSection() {
             }}
             className="!overflow-visible pb-10"
           >
-            {BRANDS.map((brand) => (
-              <SwiperSlide key={brand.id} className="h-auto">
+            {items.map((brand, idx) => (
+              <SwiperSlide key={brand.id || idx} className="h-auto">
                 <BrandCard brand={brand} />
               </SwiperSlide>
             ))}
@@ -286,10 +296,10 @@ export default function CertificationsSection() {
 
         <div className="mt-4 text-center">
           <a
-            href="#all-brands"
+            href={ctaHref}
             className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-7 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:-translate-y-0.5 hover:bg-primary-600 hover:shadow-lg"
           >
-            Explore All Brands
+            {ctaLabel}
             <FiArrowRight />
           </a>
         </div>

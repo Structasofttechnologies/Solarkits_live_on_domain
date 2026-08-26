@@ -31,7 +31,15 @@ const TESTIMONIALS = [
   },
 ];
 
-export default function TestimonialsProof() {
+export default function TestimonialsProof({ testimonialsConfig }) {
+  if (testimonialsConfig && testimonialsConfig.enabled === false) return null;
+
+  const badgeText = testimonialsConfig?.badge_text || "Verified Business Proof";
+  const heading = testimonialsConfig?.heading || "Trusted by 1,200+ Dealers, EPCs & Solar Entrepreneurs";
+  const highlightHeading = testimonialsConfig?.highlight_heading || "Solar Entrepreneurs";
+  const subtitle = testimonialsConfig?.subtitle || "Real feedback from verified solar businesses operating with Solarkits turnkey solutions across India.";
+  const items = testimonialsConfig?.items && testimonialsConfig.items.length > 0 ? testimonialsConfig.items : TESTIMONIALS;
+
   return (
     <section id="testimonials" className="py-16 sm:py-24 bg-slate-50 text-slate-900 border-t border-slate-200/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -41,27 +49,31 @@ export default function TestimonialsProof() {
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-xs">
             <FiCheckCircle className="text-emerald-600" size={14} />
             <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-emerald-800">
-              Verified Business Proof
+              {badgeText}
             </span>
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-            Trusted by 1,200+ Dealers, EPCs &{" "}
-            <span className="text-[#0575B8]">
-              Solar Entrepreneurs
-            </span>
+            {heading.includes(highlightHeading) ? (
+              <>
+                {heading.replace(highlightHeading, "")}{" "}
+                <span className="text-[#0575B8]">{highlightHeading}</span>
+              </>
+            ) : (
+              heading
+            )}
           </h2>
 
           <p className="text-xs sm:text-base text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
-            Real feedback from verified solar businesses operating with Solarkits turnkey solutions across India.
+            {subtitle}
           </p>
         </div>
 
         {/* Testimonials Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-10 sm:pt-14">
-          {TESTIMONIALS.map((t, idx) => (
+          {items.map((t, idx) => (
             <motion.div
-              key={t.name}
+              key={t.name || idx}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -72,12 +84,12 @@ export default function TestimonialsProof() {
                 {/* Rating Stars & Badge */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 text-amber-400">
-                    {Array.from({ length: t.rating }).map((_, i) => (
+                    {Array.from({ length: t.rating || 5 }).map((_, i) => (
                       <FiStar key={i} size={14} className="fill-current" />
                     ))}
                   </div>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-black uppercase">
-                    {t.verifiedGst}
+                    {t.verified_badge || t.verifiedGst || "GST Verified"}
                   </span>
                 </div>
 

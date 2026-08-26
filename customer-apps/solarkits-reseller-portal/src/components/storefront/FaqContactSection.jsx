@@ -56,9 +56,32 @@ const FAQ_CATEGORIES = {
   ],
 };
 
-export default function FaqContactSection({ onOpenLeadModal }) {
-  const [activeCategory, setActiveCategory] = useState("Complete SolarKits");
+export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
+  if (faqConfig && faqConfig.enabled === false) return null;
+
+  // Normalize categories if array or object
+  const categoriesMap = (faqConfig?.categories && Array.isArray(faqConfig.categories))
+    ? faqConfig.categories.reduce((acc, c) => {
+        if (c.name) acc[c.name] = c.items || [];
+        return acc;
+      }, {})
+    : (faqConfig?.categories || FAQ_CATEGORIES);
+
+  const categoryNames = Object.keys(categoriesMap).length > 0 ? Object.keys(categoriesMap) : Object.keys(FAQ_CATEGORIES);
+
+  const [activeCategory, setActiveCategory] = useState(categoryNames[0] || "Complete SolarKits");
   const [openIndex, setOpenIndex] = useState(0);
+
+  const badgeText = faqConfig?.badge_text || "Frequently Asked Questions";
+  const heading = faqConfig?.heading || "Everything You Need to Know About Solarkits & Dealerships";
+  const highlightHeading = faqConfig?.highlight_heading || "Solarkits & Dealerships";
+
+  const deskBadge = faqConfig?.consultation_desk?.badge_text || "Priority B2B Desk";
+  const deskTitle = faqConfig?.consultation_desk?.title || "Request Partner Consultation";
+  const deskSubtitle = faqConfig?.consultation_desk?.subtitle || "Have questions regarding state distribution or container pricing? Our team will call back within 2 hours.";
+  const whatsappNum = faqConfig?.consultation_desk?.whatsapp_number || "919876543210";
+  const whatsappBtnText = faqConfig?.consultation_desk?.whatsapp_button_text || "Chat Directly on WhatsApp";
+  const submitBtnText = faqConfig?.consultation_desk?.submit_button_text || "Request Callback Now →";
 
   const [formData, setFormData] = useState({
     name: "",
@@ -111,8 +134,10 @@ export default function FaqContactSection({ onOpenLeadModal }) {
   };
 
   const handleWhatsApp = () => {
-    window.open("https://wa.me/919876543210?text=Hello%20SolarKits,%20I%20have%20an%20inquiry%20regarding%20franchise%20and%20kit%20procurement.", "_blank");
+    window.open(`https://wa.me/${whatsappNum}?text=Hello%20SolarKits,%20I%20have%20an%20inquiry%20regarding%20franchise%20and%20kit%20procurement.`, "_blank");
   };
+
+  const currentQuestions = categoriesMap[activeCategory] || categoriesMap[categoryNames[0]] || [];
 
   return (
     <section id="faq-section" className="py-16 sm:py-24 bg-white text-slate-900 relative border-t border-slate-100">
@@ -126,21 +151,25 @@ export default function FaqContactSection({ onOpenLeadModal }) {
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 shadow-xs">
                 <FiHelpCircle className="text-[#0575B8]" size={14} />
                 <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
-                  Frequently Asked Questions
+                  {badgeText}
                 </span>
               </div>
 
               <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight">
-                Everything You Need to Know About{" "}
-                <span className="text-[#F49222]">
-                  Solarkits & Dealerships
-                </span>
+                {heading.includes(highlightHeading) ? (
+                  <>
+                    {heading.replace(highlightHeading, "")}{" "}
+                    <span className="text-[#F49222]">{highlightHeading}</span>
+                  </>
+                ) : (
+                  heading
+                )}
               </h2>
             </div>
 
             {/* Category Switcher Tabs */}
             <div className="flex gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
-              {Object.keys(FAQ_CATEGORIES).map((cat) => (
+              {categoryNames.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => {
@@ -160,11 +189,11 @@ export default function FaqContactSection({ onOpenLeadModal }) {
 
             {/* Accordion */}
             <div className="space-y-3 pt-2">
-              {FAQ_CATEGORIES[activeCategory].map((faq, idx) => {
+              {currentQuestions.map((faq, idx) => {
                 const isOpen = openIndex === idx;
                 return (
                   <div
-                    key={faq.q}
+                    key={faq.q || idx}
                     className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden transition-all"
                   >
                     <button
@@ -203,13 +232,13 @@ export default function FaqContactSection({ onOpenLeadModal }) {
             <div className="rounded-3xl bg-slate-50 border border-slate-200 p-6 sm:p-8 shadow-xl space-y-5">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-wider text-[#0575B8] bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-100">
-                  Priority B2B Desk
+                  {deskBadge}
                 </span>
                 <h3 className="text-xl font-black text-slate-900 mt-2">
-                  Request Partner Consultation
+                  {deskTitle}
                 </h3>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
-                  Have questions regarding state distribution or container pricing? Our team will call back within 2 hours.
+                  {deskSubtitle}
                 </p>
               </div>
 

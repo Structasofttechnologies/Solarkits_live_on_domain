@@ -17,7 +17,6 @@ function App() {
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms-of-service" element={<TermsOfService />} />
         <Route path="/refund-policy" element={<RefundPolicy />} />
-        <Route path="/shipping-policy" element={<ShippingPolicy />} />
 
         {/* Fallback all other routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

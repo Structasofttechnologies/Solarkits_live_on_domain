@@ -55,7 +55,14 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.5 } },
 };
 
-export default function WhyChooseUs() {
+export default function WhyChooseUs({ whyChooseConfig }) {
+  if (whyChooseConfig && whyChooseConfig.enabled === false) return null;
+
+  const badgeText = whyChooseConfig?.badge_text || "Why SolarKits?";
+  const heading = whyChooseConfig?.heading || "The SolarKits Advantage";
+  const subtitle = whyChooseConfig?.subtitle || "We don't just sell solar — we deliver a complete, worry-free solar experience";
+  const items = whyChooseConfig?.items && whyChooseConfig.items.length > 0 ? whyChooseConfig.items : FEATURES;
+
   return (
     <section className="py-16 md:py-24 bg-white" id="why-choose">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -67,13 +74,13 @@ export default function WhyChooseUs() {
           className="text-center mb-12"
         >
           <span className="inline-block bg-primary-50 text-primary-600 text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full mb-3">
-            Why SolarKits?
+            {badgeText}
           </span>
           <h2 className="font-heading text-3xl md:text-4xl font-bold text-navy section-heading">
-            The SolarKits Advantage
+            {heading}
           </h2>
           <p className="text-gray-500 mt-4 text-base max-w-xl mx-auto">
-            We don't just sell solar — we deliver a complete, worry-free solar experience
+            {subtitle}
           </p>
         </motion.div>
 
@@ -85,15 +92,15 @@ export default function WhyChooseUs() {
           viewport={{ once: true }}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
         >
-          {FEATURES.map((feat) => (
+          {items.map((feat, idx) => (
             <motion.div
-              key={feat.title}
+              key={feat.title || idx}
               variants={item}
               whileHover={{ y: -6 }}
-              className={`rounded-2xl border p-6 ${feat.color} transition-all duration-300 hover:shadow-card`}
+              className={`rounded-2xl border p-6 ${feat.color || "bg-blue-50 border-blue-100"} transition-all duration-300 hover:shadow-card`}
             >
-              <div className={`w-12 h-12 ${feat.iconBg} rounded-xl flex items-center justify-center text-2xl mb-4`}>
-                {feat.emoji}
+              <div className={`w-12 h-12 ${feat.iconBg || "bg-primary-100"} rounded-xl flex items-center justify-center text-2xl mb-4`}>
+                {feat.emoji || "🏅"}
               </div>
               <h3 className="font-heading font-bold text-navy text-lg mb-2">{feat.title}</h3>
               <p className="text-gray-500 text-sm leading-relaxed">{feat.desc}</p>

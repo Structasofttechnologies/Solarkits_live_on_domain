@@ -13,29 +13,34 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
 
   const isPathActive = (currentPath, itemPath) => {
     if (!itemPath) return false;
-    
-    // Skip country slug normalization for global industry content pages
-    if (currentPath.includes("/industry-content/") || itemPath.includes("/industry-content/")) {
+
+    // Skip country slug normalization for global industry content and website configuration pages
+    if (
+      currentPath.includes("/industry-content/") ||
+      itemPath.includes("/industry-content/") ||
+      currentPath.includes("/website-configuration") ||
+      itemPath.includes("/website-configuration")
+    ) {
       return currentPath === itemPath || currentPath.startsWith(itemPath + '/');
     }
 
     // Normalize current path by removing the country name segment if present
     let normalizedCurrent = currentPath;
     const slugs = [
-        "solar-shop",
-        "solar-shop-solarkits",
-        "solar-shop-bos-kits",
-        "solar-shop-boskits"
+      "solar-shop",
+      "solar-shop-solarkits",
+      "solar-shop-bos-kits",
+      "solar-shop-boskits"
     ];
     for (const slug of slugs) {
-        if (currentPath.includes(`/${slug}/`)) {
-            normalizedCurrent = currentPath.replace(new RegExp(`/${slug}/[^/]+`), `/${slug}`);
-            break;
-        }
+      if (currentPath.includes(`/${slug}/`)) {
+        normalizedCurrent = currentPath.replace(new RegExp(`/${slug}/[^/]+`), `/${slug}`);
+        break;
+      }
     }
 
     if (normalizedCurrent === itemPath) return true;
-    
+
     if (normalizedCurrent.startsWith(itemPath + '/')) {
       const remaining = normalizedCurrent.slice(itemPath.length + 1);
       const firstSubSegment = remaining.split('/')[0];
@@ -118,23 +123,23 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
 
   const getTargetPath = (path) => {
     if (!path) return "";
-    if (path.includes("/industry-content/")) {
+    if (path.includes("/industry-content/") || path.includes("/website-configuration")) {
       return path;
     }
     let targetPath = path;
     const slugs = [
-        "solar-shop",
-        "solar-shop-solarkits",
-        "solar-shop-bos-kits",
-        "solar-shop-boskits"
+      "solar-shop",
+      "solar-shop-solarkits",
+      "solar-shop-bos-kits",
+      "solar-shop-boskits"
     ];
     for (const slug of slugs) {
-        if (targetPath.includes(`/${slug}/`)) {
-            const storedCountry = localStorage.getItem('selected_country_admin');
-            if (storedCountry) {
-                targetPath = targetPath.replace(`/${slug}/`, `/${slug}/${storedCountry.toLowerCase()}/`);
-            }
+      if (targetPath.includes(`/${slug}/`)) {
+        const storedCountry = localStorage.getItem('selected_country_admin');
+        if (storedCountry) {
+          targetPath = targetPath.replace(`/${slug}/`, `/${slug}/${storedCountry.toLowerCase()}/`);
         }
+      }
     }
     return targetPath;
   };
@@ -249,8 +254,8 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
             exit={{ x: isMobile ? "-100%" : 0 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
             className={`shadow-xl flex flex-col transition-colors duration-300 ${isMobile
-                ? "fixed top-0 left-0 h-screen z-1000 bg-surface w-72"
-                : "h-screen w-64 bg-surface border-r border-border shrink-0"
+              ? "fixed top-0 left-0 h-screen z-1000 bg-surface w-72"
+              : "h-screen w-64 bg-surface border-r border-border shrink-0"
               }`}
           >
             {/* Logo */}

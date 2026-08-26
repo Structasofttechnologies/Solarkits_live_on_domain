@@ -9,17 +9,28 @@ export const api = axios.create({
 
 export const refreshAccessToken = createAsyncThunk(
   'auth/refreshAccessToken',
-  async (_, { rejectWithValue }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/auth/refresh-access-token`, {}, {
+      const localToken = getState()?.auth?.token || safeParse('login', null)?.token;
+      const headers = {};
+      if (localToken) {
+        headers['Authorization'] = localToken.startsWith('Bearer ') ? localToken : `Bearer ${localToken}`;
+      }
+
+      const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/auth-api'}/refresh-access-token`, {}, {
+        headers,
         withCredentials: true,
-        timeout: ms_conversion('5s'),
+        timeout: ms_conversion('7s'),
       });
       const { token, url_prefix } = res.data || {};
+      if (token) {
+        localStorage.setItem('login', JSON.stringify({ token }));
+      }
       return { token: token || null, url_prefix: url_prefix || null };
     } catch (err) {
       const message = err.response?.data?.message || err.message || 'Failed to refresh access token';
-      if (err.response?.data?.auth === false || err.response?.status === 401) {
+      const localToken = safeParse('login', null)?.token;
+      if (!localToken && (err.response?.data?.auth === false || err.response?.status === 401)) {
         const publicPaths = ["/login", "/verify", "/forgot-password", "/set-passcode"];
         const targetLogin = '/login';
         if (window.location.pathname !== targetLogin && !publicPaths.includes(window.location.pathname)) {

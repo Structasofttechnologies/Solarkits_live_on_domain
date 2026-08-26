@@ -726,7 +726,7 @@ export default function DashboardLayout() {
 
                       {/* Shifted Account Links */}
                       <div className="py-1">
-                        <Link
+                        {/* <Link
                           to="/plans"
                           onClick={() => setShowUserMenu(false)}
                           className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold transition-colors"
@@ -736,7 +736,7 @@ export default function DashboardLayout() {
                         >
                           <FiZap size={15} className="text-blue-600" />
                           <span>Subscription Plans</span>
-                        </Link>
+                        </Link> */}
 
                         <Link
                           to="/territories"

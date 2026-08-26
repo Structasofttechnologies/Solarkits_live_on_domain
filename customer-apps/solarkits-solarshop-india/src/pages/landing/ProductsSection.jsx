@@ -2,13 +2,43 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { FiArrowRight, FiPackage } from "react-icons/fi";
 
-const FALLBACK_CATEGORIES = [
-  { icon: "🏠", name: "Residential Kits", description: "1kW to 10kW systems — ideal for homes with premium panels and inverters.", tag: "Most Popular", tagColor: "#1a3b8b", tagBg: "#eff6ff" },
-  { icon: "🏭", name: "Commercial Kits", description: "High-capacity systems for offices, factories, and large establishments.", tag: "Best Value", tagColor: "#0d9488", tagBg: "#f0fdfa" },
-  { icon: "🌾", name: "Agricultural Kits", description: "Solar pump sets and agri-grade systems designed for rural deployment.", tag: "Subsidy Ready", tagColor: "#15803d", tagBg: "#f0fdf4" },
-  { icon: "⚡", name: "Hybrid Systems", description: "Grid-tied + battery backup for uninterrupted power supply anytime.", tag: "New", tagColor: "#7c3aed", tagBg: "#f5f3ff" },
-  { icon: "🔋", name: "Off-Grid Kits", description: "Complete standalone solar kits for remote areas without grid access.", tag: "Popular", tagColor: "#d97706", tagBg: "#fffbeb" },
-  { icon: "📦", name: "Custom Combo Kits", description: "Mix and match panels, inverters, and batteries to build your perfect kit.", tag: "Flexible", tagColor: "#dc2626", tagBg: "#fff1f2" },
+const DEFAULT_PRODUCTS = [
+  {
+    icon: "🏠",
+    name: "On-Grid Rooftop Solar Kits",
+    description: "Grid-tied solar systems with high-efficiency TopCon mono panels and net-metering smart inverters. Save up to ₹78,000 with government subsidy.",
+    tag: "PM Surya Ghar Ready",
+    tagColor: "#1a3b8b",
+    tagBg: "#eff6ff",
+    price: "Starting at ₹48,000",
+  },
+  {
+    icon: "🔋",
+    name: "Off-Grid Solar Battery Kits",
+    description: "Independent standalone power systems with tubular or lithium battery storage for zero grid reliance and remote power.",
+    tag: "24x7 Independence",
+    tagColor: "#d97706",
+    tagBg: "#fffbeb",
+    price: "Starting at ₹65,000",
+  },
+  {
+    icon: "⚡",
+    name: "Hybrid Solar Storage Kits",
+    description: "The ultimate power security combining grid export capability with seamless battery backup during blackouts.",
+    tag: "Maximum Resilience",
+    tagColor: "#7c3aed",
+    tagBg: "#f5f3ff",
+    price: "Starting at ₹1,45,000",
+  },
+  {
+    icon: "📦",
+    name: "Custom BOS & Mounting Kits",
+    description: "Pre-wired IP65 ACDB/DCDB boxes, UV-rated 4/6sqmm cables, chemical earthing electrodes, and elevated HDGI structures.",
+    tag: "Plug & Play BOS",
+    tagColor: "#dc2626",
+    tagBg: "#fff1f2",
+    price: "Starting at ₹18,500",
+  },
 ];
 
 function ProductCard({ item, index, active }) {
@@ -16,6 +46,14 @@ function ProductCard({ item, index, active }) {
     const el = document.getElementById("how-it-works");
     if (el) el.scrollIntoView({ behavior: "smooth" });
   };
+
+  const icons = ["🏠", "🔋", "⚡", "📦", "🏭", "🌾"];
+  const colors = ["#1a3b8b", "#d97706", "#7c3aed", "#dc2626", "#0d9488", "#15803d"];
+  const bgs = ["#eff6ff", "#fffbeb", "#f5f3ff", "#fff1f2", "#f0fdfa", "#f0fdf4"];
+
+  const icon = item.icon || icons[index % icons.length];
+  const tagColor = item.tagColor || colors[index % colors.length];
+  const tagBg = item.tagBg || bgs[index % bgs.length];
 
   return (
     <motion.div
@@ -30,7 +68,8 @@ function ProductCard({ item, index, active }) {
         border: "1.5px solid #f1f5f9",
         transition: "all 0.3s ease",
         cursor: "default",
-        display: "flex", flexDirection: "column",
+        display: "flex",
+        flexDirection: "column",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-6px)";
@@ -45,24 +84,29 @@ function ProductCard({ item, index, active }) {
     >
       {item.tag && (
         <div style={{
-          display: "inline-block", background: item.tagBg,
-          border: `1px solid ${item.tagColor}30`,
+          display: "inline-block", background: tagBg,
+          border: `1px solid ${tagColor}30`,
           borderRadius: "50px", padding: "3px 12px",
           marginBottom: "14px",
           fontSize: "0.72rem", fontWeight: 700,
-          color: item.tagColor, letterSpacing: "0.04em",
+          color: tagColor, letterSpacing: "0.04em",
           alignSelf: "flex-start",
         }}>
           {item.tag}
         </div>
       )}
-      <div style={{ fontSize: "2.8rem", marginBottom: "14px", lineHeight: 1 }}>{item.icon}</div>
+      <div style={{ fontSize: "2.8rem", marginBottom: "14px", lineHeight: 1 }}>{icon}</div>
       <h3 style={{ color: "#0f172a", fontSize: "1.05rem", fontWeight: 700, marginBottom: "10px", fontFamily: "'Outfit', sans-serif" }}>
         {item.name}
       </h3>
       <p style={{ color: "#64748b", fontSize: "0.875rem", lineHeight: 1.7, marginBottom: "20px", flex: 1 }}>
-        {item.description}
+        {item.desc || item.description}
       </p>
+      {item.price && (
+        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1a3b8b", marginBottom: "16px" }}>
+          {item.price}
+        </div>
+      )}
       <div
         onClick={scrollToSteps}
         style={{ display: "flex", alignItems: "center", gap: "6px", color: "#1a3b8b", fontSize: "0.85rem", fontWeight: 700, transition: "gap 0.2s", cursor: "pointer" }}
@@ -75,10 +119,9 @@ function ProductCard({ item, index, active }) {
   );
 }
 
-export default function ProductsSection() {
+export default function ProductsSection({ productsConfig }) {
   const sectionRef = useRef(null);
   const [active, setActive] = useState(false);
-  const [categories] = useState(FALLBACK_CATEGORIES);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -90,8 +133,13 @@ export default function ProductsSection() {
   }, []);
 
   const handlePartnerPortal = () => {
-    window.open("https://solarkits-reseller-portal.onrender.com", "_blank", "noopener,noreferrer");
+    window.open("http://localhost:5178", "_blank", "noopener,noreferrer");
   };
+
+  const badgeText = productsConfig?.badge_text || "COMPLETE SOLAR PACKAGES";
+  const heading = productsConfig?.heading || "Solar Kits for Every Need & Scale";
+  const subtitle = productsConfig?.subtitle || "From small homes to large commercial installations — browse our complete range of pre-configured and custom solar combo kits.";
+  const items = productsConfig?.items && productsConfig.items.length > 0 ? productsConfig.items : DEFAULT_PRODUCTS;
 
   return (
     <section
@@ -111,25 +159,24 @@ export default function ProductsSection() {
           style={{ textAlign: "center", marginBottom: "64px" }}
         >
           <div style={{ display: "inline-block", background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: "50px", padding: "5px 14px", marginBottom: "16px" }}>
-            <span style={{ color: "#1d4ed8", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>OUR CATALOG</span>
+            <span style={{ color: "#1d4ed8", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.1em" }}>
+              {badgeText}
+            </span>
           </div>
           <h2 style={{
             fontSize: "clamp(1.8rem, 3vw, 2.6rem)", fontWeight: 800, color: "#0f172a",
             fontFamily: "'Outfit', sans-serif", marginBottom: "16px", lineHeight: 1.2,
           }}>
-            Solar Kits for Every{" "}
-            <span style={{ background: "linear-gradient(135deg, #1a3b8b, #3b82f6)", backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" }}>
-              Need & Scale
-            </span>
+            {heading}
           </h2>
           <p style={{ color: "#64748b", fontSize: "1rem", maxWidth: "540px", margin: "0 auto", lineHeight: 1.7 }}>
-            From small homes to large commercial installations — browse our complete range of pre-configured and custom solar combo kits.
+            {subtitle}
           </p>
         </motion.div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "48px" }}>
-          {categories.map((item, i) => (
-            <ProductCard key={item.name} item={item} index={i} active={active} />
+          {items.map((item, i) => (
+            <ProductCard key={item.name || i} item={item} index={i} active={active} />
           ))}
         </div>
 
@@ -154,7 +201,7 @@ export default function ProductsSection() {
             }}
           >
             <FiPackage />
-            Join Franchise Network
+            Join Franchise & Partner Network
             <FiArrowRight />
           </motion.button>
         </motion.div>

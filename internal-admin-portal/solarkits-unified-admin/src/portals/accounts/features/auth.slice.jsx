@@ -2,20 +2,41 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { ms_conversion } from "@/utils/msConversion";
 
+const safeParse = (key, fallback = null) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === 'null' || raw === 'undefined') return fallback;
+    return JSON.parse(raw) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const refreshAccessToken = createAsyncThunk(
     'auth/refreshAccessToken',
-    async (_, { rejectWithValue }) => {
+    async (_, { rejectWithValue, getState }) => {
         try {
-            const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL}/refresh-access-token`, {}, {
+            const localToken = getState()?.auth?.token || safeParse('login', null)?.token;
+            const headers = {};
+            if (localToken) {
+                headers['Authorization'] = localToken.startsWith('Bearer ') ? localToken : `Bearer ${localToken}`;
+            }
+
+            const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5000/auth-api'}/refresh-access-token`, {}, {
+                headers,
                 withCredentials: true,
                 timeout: ms_conversion('7s'),
             });
 
             const { token, url_prefix } = res.data || {};
+            if (token) {
+                localStorage.setItem('login', JSON.stringify({ token }));
+            }
             return { token: token || null, url_prefix: url_prefix || null };
         } catch (err) {
             const message = err.response?.data?.message || err.message || 'Failed to refresh access token';
-            if (err.response?.data?.auth === false || err.response?.status === 401) {
+            const localToken = safeParse('login', null)?.token;
+            if (!localToken && (err.response?.data?.auth === false || err.response?.status === 401)) {
                 window.location.href = '/login';
             }
             return rejectWithValue(message);
@@ -47,13 +68,16 @@ export const logout = createAsyncThunk(
     'auth/logout',
     async (_, { rejectWithValue, dispatch }) => {
         try {
-            const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL}/logout`, {}, {
+            const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL || 'http://localhost:5000/auth-api'}/logout`, {}, {
                 withCredentials: true,
             });
 
             if (res.data?.status === 'success') {
                 dispatch({ type: 'user/logoutUser' });
                 dispatch({ type: 'auth/clearAuth' });
+                localStorage.removeItem('login');
+                localStorage.removeItem('user');
+                localStorage.removeItem('allowed_panels');
                 return res.data;
             }
 
@@ -65,10 +89,12 @@ export const logout = createAsyncThunk(
     }
 );
 
+const initialToken = safeParse('login', null)?.token || null;
+
 const initialState = {
-    token: null,
-    url_prefix: null,
-    expiresAt: null,
+    token: initialToken,
+    url_prefix: localStorage.getItem('url_prefix') || null,
+    expiresAt: initialToken ? Date.now() + 14 * 60 * 1000 : null,
     status: 'idle',
     error: null,
 };
@@ -83,6 +109,7 @@ const authSlice = createSlice({
             state.expiresAt = null;
             state.status = 'idle';
             state.error = null;
+            localStorage.removeItem('login');
         }
     },
     extraReducers: (builder) => {
@@ -95,14 +122,12 @@ const authSlice = createSlice({
                 state.token = action.payload.token || null;
                 state.url_prefix = action.payload.url_prefix || null;
                 state.error = null;
-                const EXPIRE_MS = 1 * 25 * 1000;
+                const EXPIRE_MS = 14 * 60 * 1000;
                 state.expiresAt = state.token ? Date.now() + EXPIRE_MS : null;
             })
             .addCase(refreshAccessToken.rejected, (state, action) => {
                 state.status = 'failed';
                 state.error = action.payload || action.error?.message;
-                state.token = null;
-                state.expiresAt = null;
             });
         builder
             .addCase(logout.pending, (state) => {

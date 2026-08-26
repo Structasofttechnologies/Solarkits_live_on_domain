@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './landingPage/Navbar';
 import HeroSection from './landingPage/HeroSection';
 import CategorySection from './landingPage/CategorySection';
@@ -7,37 +7,53 @@ import WhyChooseUs from './landingPage/WhyChooseUs';
 import CertificationsSection from './landingPage/CertificationsSection';
 import TestimonialsSection from './landingPage/TestimonialsSection';
 import Footer from './landingPage/Footer';
+import { getStoreLandingContent } from '../services/storeLandingService';
 
 function LandingPage() {
+    const [dynamicContent, setDynamicContent] = useState(null);
+
+    useEffect(() => {
+        getStoreLandingContent()
+            .then((data) => {
+                if (data) {
+                    const sections = data.sections || data;
+                    setDynamicContent(sections);
+                }
+            })
+            .catch((err) => console.warn('Dynamic store content load error:', err));
+    }, []);
+
+    const whatsappNumber = dynamicContent?.footer?.floating_whatsapp?.number || "919876543210";
+
     return (
         <div className="min-h-screen bg-solarbg">
             {/* Navigation */}
             <Navbar />
 
             {/* Hero Carousel */}
-            <HeroSection />
+            <HeroSection heroConfig={dynamicContent?.hero} />
 
             {/* Product Categories */}
-            <CategorySection />
+            <CategorySection categoriesConfig={dynamicContent?.categories} />
 
             {/* Bestselling Products */}
-            <FeaturedProducts />
+            <FeaturedProducts productsConfig={dynamicContent?.featured_products} />
 
             {/* Why Choose SolarKits */}
-            <WhyChooseUs />
+            <WhyChooseUs whyChooseConfig={dynamicContent?.why_choose} />
 
             {/* Certifications & Brands */}
-            <CertificationsSection />
+            <CertificationsSection brandsConfig={dynamicContent?.brands} />
 
             {/* Testimonials */}
-            <TestimonialsSection />
+            <TestimonialsSection testimonialsConfig={dynamicContent?.testimonials} />
 
             {/* Footer */}
-            <Footer />
+            <Footer footerConfig={dynamicContent?.footer} />
 
             {/* WhatsApp Floating Button */}
             <a
-                href="https://wa.me/91XXXXXXXXXX"
+                href={`https://wa.me/${whatsappNumber}?text=Hello%20SolarKits,%20I%20have%20an%20inquiry%20regarding%20solar%20kits.`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="whatsapp-float"

@@ -40,7 +40,22 @@ const FooterLink = ({ children }) => (
   </a>
 );
 
-export default function Footer() {
+export default function Footer({ footerConfig }) {
+  const boxBadge = footerConfig?.consultation_box?.badge || "Free solar consultation";
+  const boxHeading = footerConfig?.consultation_box?.heading || "Ready to switch to solar?";
+  const boxSubtitle = footerConfig?.consultation_box?.subtitle || "Share your pincode and our expert will suggest the right solar kit.";
+  const boxBtn = footerConfig?.consultation_box?.button_text || "Get free quote";
+
+  const description = footerConfig?.description || "Quality solar kits, honest guidance and reliable support for homes, farms and businesses across India.";
+  const phone = footerConfig?.phone || "1800-SOLAR-KIT";
+  const email = footerConfig?.email || "support@solarkits.in";
+  const address = footerConfig?.address || "Mumbai, Maharashtra, India";
+
+  const shopLinks = footerConfig?.shop_links && footerConfig.shop_links.length > 0 ? footerConfig.shop_links : SHOP_LINKS;
+  const helpLinks = footerConfig?.help_links && footerConfig.help_links.length > 0 ? footerConfig.help_links : HELP_LINKS;
+  const policyLinks = footerConfig?.policy_links && footerConfig.policy_links.length > 0 ? footerConfig.policy_links : POLICY_LINKS;
+  const copyright = footerConfig?.copyright_text || `© ${new Date().getFullYear()} SolarKits™ Pvt. Ltd. All Rights Reserved.`;
+
   return (
     <footer className="relative overflow-hidden bg-navy text-white">
       <div className="pointer-events-none absolute -right-28 top-24 h-72 w-72 rounded-full bg-primary-500/10 blur-3xl" />
@@ -52,13 +67,13 @@ export default function Footer() {
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-xl">
               <span className="mb-2 block text-xs font-bold uppercase tracking-[0.2em] text-white/70">
-                Free solar consultation
+                {boxBadge}
               </span>
               <h3 className="font-heading text-2xl font-bold md:text-3xl">
-                Ready to switch to solar?
+                {boxHeading}
               </h3>
               <p className="mt-2 text-sm text-white/75">
-                Share your pincode and our expert will suggest the right solar kit.
+                {boxSubtitle}
               </p>
             </div>
 
@@ -76,7 +91,7 @@ export default function Footer() {
                 whileTap={{ scale: 0.98 }}
                 className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-accent px-5 py-3.5 text-sm font-bold text-white shadow-lg transition-colors hover:bg-accent-500"
               >
-                Get free quote <FiArrowRight />
+                {boxBtn} <FiArrowRight />
               </motion.button>
             </div>
           </div>
@@ -89,19 +104,18 @@ export default function Footer() {
               <img src={logo} alt="SolarKits" className="h-8 w-auto" />
             </div>
             <p className="max-w-md text-sm leading-7 text-white/60">
-              Quality solar kits, honest guidance and reliable support for homes,
-              farms and businesses across India.
+              {description}
             </p>
 
             <div className="mt-6 grid gap-3 text-sm text-white/65 sm:grid-cols-2 lg:grid-cols-1">
-              <a href="tel:1800XXXXXXX" className="flex items-center gap-3 hover:text-white">
-                <FiPhone className="text-accent" /> 1800-XXX-XXXX
+              <a href={`tel:${phone}`} className="flex items-center gap-3 hover:text-white">
+                <FiPhone className="text-accent" /> {phone}
               </a>
-              <a href="mailto:support@solarkits.in" className="flex items-center gap-3 hover:text-white">
-                <FiMail className="text-accent" /> support@solarkits.in
+              <a href={`mailto:${email}`} className="flex items-center gap-3 hover:text-white">
+                <FiMail className="text-accent" /> {email}
               </a>
               <p className="flex items-start gap-3 sm:col-span-2 lg:col-span-1">
-                <FiMapPin className="mt-1 shrink-0 text-accent" /> Mumbai, Maharashtra, India
+                <FiMapPin className="mt-1 shrink-0 text-accent" /> {address}
               </p>
             </div>
           </div>
@@ -109,14 +123,22 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-white">Solar kits</h4>
             <nav className="flex flex-col items-start gap-3.5">
-              {SHOP_LINKS.map((link) => <FooterLink key={link}>{link}</FooterLink>)}
+              {shopLinks.map((link, idx) => (
+                <FooterLink key={typeof link === "string" ? link : link.label || idx}>
+                  {typeof link === "string" ? link : link.label}
+                </FooterLink>
+              ))}
             </nav>
           </div>
 
           <div className="lg:col-span-2">
             <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-white">Help & company</h4>
             <nav className="flex flex-col items-start gap-3.5">
-              {HELP_LINKS.map((link) => <FooterLink key={link}>{link}</FooterLink>)}
+              {helpLinks.map((link, idx) => (
+                <FooterLink key={typeof link === "string" ? link : link.label || idx}>
+                  {typeof link === "string" ? link : link.label}
+                </FooterLink>
+              ))}
             </nav>
           </div>
 
@@ -152,9 +174,13 @@ export default function Footer() {
       <div className="border-t border-white/10 bg-black/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 text-xs text-white/45 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <span>© {new Date().getFullYear()} SolarKits™ Pvt. Ltd.</span>
+            <span>{copyright}</span>
             <nav className="flex flex-wrap gap-x-4 gap-y-2">
-              {POLICY_LINKS.map((link) => <a key={link} href="#" className="hover:text-white">{link}</a>)}
+              {policyLinks.map((link, idx) => (
+                <a key={typeof link === "string" ? link : link.label || idx} href="#" className="hover:text-white">
+                  {typeof link === "string" ? link : link.label}
+                </a>
+              ))}
             </nav>
           </div>
           <div className="flex flex-wrap items-center gap-2" aria-label="Payment methods">

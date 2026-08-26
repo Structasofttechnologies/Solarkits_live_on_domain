@@ -41,24 +41,34 @@ const SLIDES = [
   },
 ];
 
-export default function HeroSection() {
+export default function HeroSection({ heroConfig }) {
+  if (heroConfig && heroConfig.enabled === false) return null;
+
+  const slides = heroConfig?.slides && heroConfig.slides.length > 0 ? heroConfig.slides : SLIDES;
+  const trustBadges = heroConfig?.trust_badges && heroConfig.trust_badges.length > 0 ? heroConfig.trust_badges : ["✅ BIS Certified", "📋 GST Invoice", "🚚 Free Delivery", "⭐ 4.8 Rating"];
+  const stats = heroConfig?.stats && heroConfig.stats.length > 0 ? heroConfig.stats : [
+    { val: "10,000+", label: "Happy Customers" },
+    { val: "50 MW+", label: "Installed Capacity" },
+  ];
+
   return (
     <section id="hero" className="relative w-full">
       <Swiper
+        key={slides.map((s, i) => `${s.id || i}-${s.title}`).join('_')}
         modules={[Autoplay, Pagination, EffectFade]}
         effect="fade"
         autoplay={{ delay: 5000, disableOnInteraction: false, pauseOnMouseEnter: false }}
         pagination={{ clickable: true }}
-        loop
+        loop={slides.length > 1}
         speed={800}
         className="w-full h-[520px] md:h-[600px] lg:h-[680px]"
       >
-        {SLIDES.map((slide) => (
-          <SwiperSlide key={slide.id}>
-            <div className={`relative w-full h-full bg-gradient-to-r ${slide.bg}`}>
+        {slides.map((slide, idx) => (
+          <SwiperSlide key={slide.id || idx}>
+            <div className={`relative w-full h-full bg-gradient-to-r ${slide.bg || "from-navy via-primary-700 to-primary-500"}`}>
               {/* Background image */}
               <img
-                src={slide.image}
+                src={slide.image || heroImg}
                 alt="Solar Home"
                 className="absolute inset-0 w-full h-full object-cover object-center opacity-30"
               />
@@ -68,21 +78,23 @@ export default function HeroSection() {
               {/* Content */}
               <div className="relative z-10 h-full max-w-7xl mx-auto px-6 flex items-center">
                 <motion.div
-                  key={slide.id}
+                  key={slide.id || idx}
                   initial={{ opacity: 0, x: -40 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.7, ease: "easeOut" }}
                   className="max-w-xl"
                 >
                   {/* Tag */}
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/25 text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-5"
-                  >
-                    {slide.tag}
-                  </motion.div>
+                  {slide.tag && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.15 }}
+                      className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/25 text-white text-sm font-semibold px-4 py-1.5 rounded-full mb-5"
+                    >
+                      {slide.tag}
+                    </motion.div>
+                  )}
 
                   {/* Title */}
                   <motion.h1
@@ -111,19 +123,23 @@ export default function HeroSection() {
                     transition={{ delay: 0.45 }}
                     className="flex flex-wrap gap-4"
                   >
-                    <a
-                      href={slide.cta1.href}
-                      className="flex items-center gap-2 px-6 py-3.5 bg-accent hover:bg-accent-600 text-white font-bold text-base rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 group"
-                    >
-                      {slide.cta1.label}
-                      <FiArrowRight className="group-hover:translate-x-1 transition-transform" />
-                    </a>
-                    <a
-                      href={slide.cta2.href}
-                      className="flex items-center gap-2 px-6 py-3.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white font-semibold text-base rounded-xl border border-white/30 transition-all duration-300"
-                    >
-                      {slide.cta2.label}
-                    </a>
+                    {slide.cta1 && slide.cta1.label && (
+                      <a
+                        href={slide.cta1.href || "#products"}
+                        className="flex items-center gap-2 px-6 py-3.5 bg-accent hover:bg-accent-600 text-white font-bold text-base rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 group"
+                      >
+                        {slide.cta1.label}
+                        <FiArrowRight className="group-hover:translate-x-1 transition-transform" />
+                      </a>
+                    )}
+                    {slide.cta2 && slide.cta2.label && (
+                      <a
+                        href={slide.cta2.href || "#calculator"}
+                        className="flex items-center gap-2 px-6 py-3.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white font-semibold text-base rounded-xl border border-white/30 transition-all duration-300"
+                      >
+                        {slide.cta2.label}
+                      </a>
+                    )}
                   </motion.div>
 
                   {/* Trust badges */}
@@ -133,7 +149,7 @@ export default function HeroSection() {
                     transition={{ delay: 0.6 }}
                     className="flex flex-wrap items-center gap-4 mt-8"
                   >
-                    {["✅ BIS Certified", "📋 GST Invoice", "🚚 Free Delivery", "⭐ 4.8 Rating"].map((b) => (
+                    {trustBadges.map((b) => (
                       <span key={b} className="text-white/70 text-xs font-medium">{b}</span>
                     ))}
                   </motion.div>
@@ -146,18 +162,15 @@ export default function HeroSection() {
 
       {/* Floating stat cards */}
       <div className="hidden lg:flex absolute bottom-8 right-8 z-20 gap-4">
-        {[
-          { icon: <FiSun className="text-accent text-xl" />, val: "10,000+", label: "Happy Customers" },
-          { icon: <FiZap className="text-sky-solar text-xl" />, val: "50 MW+", label: "Installed Capacity" },
-        ].map((s) => (
+        {stats.map((s, idx) => (
           <motion.div
-            key={s.label}
+            key={s.label || idx}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
             className="glass-card rounded-2xl px-5 py-3 flex items-center gap-3 shadow-card"
           >
-            {s.icon}
+            {idx === 0 ? <FiSun className="text-accent text-xl" /> : <FiZap className="text-sky-solar text-xl" />}
             <div>
               <div className="text-navy font-extrabold text-lg leading-none">{s.val}</div>
               <div className="text-gray-500 text-xs mt-0.5">{s.label}</div>
