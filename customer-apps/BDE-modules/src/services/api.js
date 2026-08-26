@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/bde/v1';
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+// Normalize: dynamically ensure it routes to the BDE API endpoint (/api/bde/v1)
+const getApiBase = () => {
+  const base = rawApiUrl.replace(/\/+$/, '');
+  if (base.endsWith('/bde/v1') || base.endsWith('/bde')) {
+    return base;
+  }
+  return `${base}/bde/v1`;
+};
+
+const API_BASE = getApiBase();
 
 const api = axios.create({
   baseURL: API_BASE,
