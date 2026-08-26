@@ -120,6 +120,63 @@ const schema = new mongoose.Schema({
   activation_require_territory_assigned:  { type: Boolean, default: true },
   activation_require_product_auth:        { type: Boolean, default: true },
 
+  // ── Franchise Master Agreement Content & Template ──────────────────────────
+  franchise_agreement_title: {
+    type: String,
+    default: 'SolarKits Authorized Franchise Partner Agreement',
+    trim: true,
+  },
+  franchise_agreement_version: {
+    type: String,
+    default: '2.0',
+    trim: true,
+  },
+  franchise_agreement_template: {
+    type: String,
+    default: `SOLARKITS AUTHORIZED FRANCHISE PARTNER AGREEMENT
+
+This Franchise Distribution & Commercial Channel Agreement ("Agreement") is formally entered into and effective as of {{AGREEMENT_DATE}} by and between:
+
+1. THE COMPANY:
+SolarKits Clean Energy Solutions Private Limited, having its corporate fulfillment center and technology office in India (hereinafter referred to as the "Company" or "SolarKits").
+
+2. THE FRANCHISE PARTNER:
+{{BUSINESS_NAME}}, represented by authorized signatory {{PARTNER_NAME}}, having registered commercial premises at {{TERRITORY}}, with GSTIN: {{GSTIN}} (hereinafter referred to as the "Franchise Partner" or "Franchisee").
+
+RECITALS & PURPOSE:
+WHEREAS the Company is engaged in the manufacturing, assembly, and turnkey supply of pre-engineered Solar BOS Combo Kits, mono PERC / TopCon panels, on-grid/hybrid inverters, module mounting structures, and associated electrical accessories.
+WHEREAS the Franchise Partner desires to obtain authorized distribution, retail demonstration, and local EPC contractor procurement fulfillment rights for the Designated Territory of {{TERRITORY}}.
+
+NOW THEREFORE, the parties mutually agree as follows:
+
+CLAUSE 1 — APPOINTMENT & TERRITORY AUTHORIZATION
+1.1 The Company hereby authorizes the Franchise Partner as an Official SolarKits Franchisee for the designated territory of {{TERRITORY}}.
+1.2 The Franchise Partner is authorized to promote, stock, distribute, and supply turnkey SolarKits Combo Packages to local EPC contractors, solar installers, commercial clients, and residential end-users.
+
+CLAUSE 2 — COMMERCIAL TERMS, PRICING & MARGINS
+2.1 Franchise Partner shall receive guaranteed factory-direct wholesale pricing, exclusive bundle margin slabs, and procurement discounts across all pre-engineered kits.
+2.2 The Commercial Model assigned to Franchise Partner is {{COMMERCIAL_MODE}}.
+2.3 Margin settlements and incentive payouts shall be governed by platform settlement policies and credited to Franchise Partner's dedicated wallet.
+
+CLAUSE 3 — QUALITY ASSURANCE & WARRANTY
+3.1 Franchise Partner covenants to supply only genuine SolarKits certified modules, inverters, and BOS accessories.
+3.2 All components carry standard manufacturer warranties (25-year panel performance, 5/10-year inverter replacement warranty).
+
+CLAUSE 4 — REGISTRATION & ONE-TIME FEE SETTLEMENT
+4.1 Franchise onboarding requires digital signature of this Agreement and verification of the franchise fee settlement.
+4.2 Upon verification, full operational platform access, priority stock allocation, and regional lead routing will be unlocked immediately.
+
+CLAUSE 5 — TERM, RENEWAL & TERMINATION
+5.1 This Agreement is valid for a period of 12 (twelve) months from the date of activation and shall renew annually based on minimum order quantity (MOQ) targets and mutual agreement.
+5.2 Either party may terminate this agreement with 30 days written notice in case of breach of quality compliance or exclusivity guidelines.
+
+CLAUSE 6 — GOVERNING LAW & JURISDICTION
+6.1 This Agreement shall be governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the competent courts in India.
+
+[DIGITAL EXECUTION DECLARATION]
+By digitally signing below, the Franchise Partner certifies that they have read, understood, and accept all terms and conditions of this Franchise Agreement.`,
+  },
+
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
 }, {

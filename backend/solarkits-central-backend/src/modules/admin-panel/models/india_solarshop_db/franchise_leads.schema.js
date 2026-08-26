@@ -42,6 +42,7 @@ const schema = new mongoose.Schema({
 
   // ── Applicant Requirements & Terms ──────────────────────────────────
   notes:              { type: String, default: null, trim: true, maxlength: 1000 },
+  shop_photos:        { type: [String], default: [] },
   consent_agreed:     { type: Boolean, required: true, default: true },
 
   // ── CRM Pipeline & Admin Review Status ──────────────────────────────

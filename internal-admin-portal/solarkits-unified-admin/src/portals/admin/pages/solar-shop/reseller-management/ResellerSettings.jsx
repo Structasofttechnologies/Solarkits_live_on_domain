@@ -12,6 +12,12 @@ import {
   FiMapPin,
   FiCheckCircle,
   FiXCircle,
+  FiFileText,
+  FiEye,
+  FiCode,
+  FiBook,
+  FiCopy,
+  FiCheck,
 } from "react-icons/fi";
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -64,6 +70,49 @@ function FieldRow({ label, hint, children }) {
   );
 }
 
+const DEFAULT_MASTER_AGREEMENT_TEMPLATE = `SOLARKITS AUTHORIZED FRANCHISE PARTNER AGREEMENT
+
+This Franchise Distribution & Commercial Channel Agreement ("Agreement") is formally entered into and effective as of {{AGREEMENT_DATE}} by and between:
+
+1. THE COMPANY:
+SolarKits Clean Energy Solutions Private Limited, having its corporate fulfillment center and technology office in India (hereinafter referred to as the "Company" or "SolarKits").
+
+2. THE FRANCHISE PARTNER:
+{{BUSINESS_NAME}}, represented by authorized signatory {{PARTNER_NAME}}, having registered commercial premises at {{TERRITORY}}, with GSTIN: {{GSTIN}} (hereinafter referred to as the "Franchise Partner" or "Franchisee").
+
+RECITALS & PURPOSE:
+WHEREAS the Company is engaged in the manufacturing, assembly, and turnkey supply of pre-engineered Solar BOS Combo Kits, mono PERC / TopCon panels, on-grid/hybrid inverters, module mounting structures, and associated electrical accessories.
+WHEREAS the Franchise Partner desires to obtain authorized distribution, retail demonstration, and local EPC contractor procurement fulfillment rights for the Designated Territory of {{TERRITORY}}.
+
+NOW THEREFORE, the parties mutually agree as follows:
+
+CLAUSE 1 — APPOINTMENT & TERRITORY AUTHORIZATION
+1.1 The Company hereby authorizes the Franchise Partner as an Official SolarKits Franchisee for the designated territory of {{TERRITORY}}.
+1.2 The Franchise Partner is authorized to promote, stock, distribute, and supply turnkey SolarKits Combo Packages to local EPC contractors, solar installers, commercial clients, and residential end-users.
+
+CLAUSE 2 — COMMERCIAL TERMS, PRICING & MARGINS
+2.1 Franchise Partner shall receive guaranteed factory-direct wholesale pricing, exclusive bundle margin slabs, and procurement discounts across all pre-engineered kits.
+2.2 The Commercial Model assigned to Franchise Partner is {{COMMERCIAL_MODE}}.
+2.3 Margin settlements and incentive payouts shall be governed by platform settlement policies and credited to Franchise Partner's dedicated wallet.
+
+CLAUSE 3 — QUALITY ASSURANCE & WARRANTY
+3.1 Franchise Partner covenants to supply only genuine SolarKits certified modules, inverters, and BOS accessories.
+3.2 All components carry standard manufacturer warranties (25-year panel performance, 5/10-year inverter replacement warranty).
+
+CLAUSE 4 — REGISTRATION & ONE-TIME FEE SETTLEMENT
+4.1 Franchise onboarding requires digital signature of this Agreement and verification of the franchise fee settlement.
+4.2 Upon verification, full operational platform access, priority stock allocation, and regional lead routing will be unlocked immediately.
+
+CLAUSE 5 — TERM, RENEWAL & TERMINATION
+5.1 This Agreement is valid for a period of 12 (twelve) months from the date of activation and shall renew annually based on minimum order quantity (MOQ) targets and mutual agreement.
+5.2 Either party may terminate this agreement with 30 days written notice in case of breach of quality compliance or exclusivity guidelines.
+
+CLAUSE 6 — GOVERNING LAW & JURISDICTION
+6.1 This Agreement shall be governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the competent courts in India.
+
+[DIGITAL EXECUTION DECLARATION]
+By digitally signing below, the Franchise Partner certifies that they have read, understood, and accept all terms and conditions of this Franchise Agreement.`;
+
 export default function ResellerSettings({ moduleUniqueId }) {
   const [settings, setSettings] = useState(null);
   const [original, setOriginal] = useState(null);
@@ -72,6 +121,7 @@ export default function ResellerSettings({ moduleUniqueId }) {
   const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState("");
   const [toast, setToast] = useState(null);
+  const [showAgreementPreview, setShowAgreementPreview] = useState(false);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -166,11 +216,11 @@ export default function ResellerSettings({ moduleUniqueId }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-black text-text-primary flex items-center gap-2">
-            <FiSettings className="text-primary" size={22} />
-            Franchisee Platform Settings
+            <FiFileText className="text-primary" size={22} />
+            Franchise Agreement Settings
           </h1>
           <p className="text-xs text-text-muted mt-1">
-            Platform-wide configuration for Solarshop franchisee operations.
+            Master Franchise Agreement Template, clauses & dynamic placeholder configuration.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -207,7 +257,8 @@ export default function ResellerSettings({ moduleUniqueId }) {
         </div>
       )}
 
-      {/* ─── Razorpay Gateway Integration Status Card ──────────────────────── */}
+      {/* ─── Razorpay Gateway & Other Platform Settings (Hidden for now as requested) ── */}
+      {/*
       {rzpStatus && (
         <div className="bg-bg-card border border-border rounded-2xl p-5 shadow-sm">
           <SectionHeader icon={FiShield} title="Razorpay Payment Gateway Status" subtitle="Gateway health & credential status (Key Secret is securely masked)" />
@@ -238,19 +289,12 @@ export default function ResellerSettings({ moduleUniqueId }) {
         </div>
       )}
 
-      {/* ─── 1. Checkout & Cart ────────────────────────────────────────────── */}
       <div className="bg-bg-card border border-border rounded-2xl p-5">
         <SectionHeader icon={FiClock} title="Checkout & Cart" subtitle="Timer and cart expiry configuration" />
-        <FieldRow
-          label="Enable Checkout Timer"
-          hint="Auto-releases reserved stock when customer doesn't complete payment in time."
-        >
+        <FieldRow label="Enable Checkout Timer" hint="Auto-releases reserved stock when customer doesn't complete payment in time.">
           <Toggle value={!!settings.enable_checkout_timer} onChange={(v) => handleChange("enable_checkout_timer", v)} />
         </FieldRow>
-        <FieldRow
-          label="Checkout Timer Duration (minutes)"
-          hint="How many minutes a cart reservation stays active."
-        >
+        <FieldRow label="Checkout Timer Duration (minutes)" hint="How many minutes a cart reservation stays active.">
           <input
             type="number"
             min={5}
@@ -260,10 +304,7 @@ export default function ResellerSettings({ moduleUniqueId }) {
             className="w-24 px-3 py-1.5 rounded-lg border border-border bg-bg text-xs text-text-primary text-center font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </FieldRow>
-        <FieldRow
-          label="Combo Kit Bulk Panels Limit"
-          hint="Maximum number of panels allowed in a single bulk combo kit."
-        >
+        <FieldRow label="Combo Kit Bulk Panels Limit" hint="Maximum number of panels allowed in a single bulk combo kit.">
           <input
             type="number"
             min={1}
@@ -275,7 +316,6 @@ export default function ResellerSettings({ moduleUniqueId }) {
         </FieldRow>
       </div>
 
-      {/* ─── 2. GST & Financials ────────────────────────────────────────────── */}
       <div className="bg-bg-card border border-border rounded-2xl p-5">
         <SectionHeader icon={FiPercent} title="GST & Financials" subtitle="Tax rates and payment gateway charges" />
         <FieldRow label="GST Rate (%)" hint="Applied to all Solarshop transactions.">
@@ -313,13 +353,9 @@ export default function ResellerSettings({ moduleUniqueId }) {
         </FieldRow>
       </div>
 
-      {/* ─── 3. Territory & Settlement Policy ──────────────────────────────── */}
       <div className="bg-bg-card border border-border rounded-2xl p-5">
         <SectionHeader icon={FiMapPin} title="Territory & Settlement Policy" subtitle="Exclusivity rules and payout triggers" />
-        <FieldRow
-          label="Territory Exclusivity Mode"
-          hint="⚠️ Policy-sensitive. 'Strict' = one franchisee per territory. 'Open' = shared territories."
-        >
+        <FieldRow label="Territory Exclusivity Mode" hint="⚠️ Policy-sensitive. 'Strict' = one franchisee per territory. 'Open' = shared territories.">
           <select
             value={settings.territory_exclusivity_mode ?? "strict"}
             onChange={(e) => handleChange("territory_exclusivity_mode", e.target.value)}
@@ -329,10 +365,7 @@ export default function ResellerSettings({ moduleUniqueId }) {
             <option value="open">Open (Shared)</option>
           </select>
         </FieldRow>
-        <FieldRow
-          label="Settlement Trigger"
-          hint="⚠️ Policy-sensitive. When franchisee wallet gets credited after an order."
-        >
+        <FieldRow label="Settlement Trigger" hint="⚠️ Policy-sensitive. When franchisee wallet gets credited after an order.">
           <select
             value={settings.settlement_trigger ?? "delivery_plus_window"}
             onChange={(e) => handleChange("settlement_trigger", e.target.value)}
@@ -355,7 +388,6 @@ export default function ResellerSettings({ moduleUniqueId }) {
         </FieldRow>
       </div>
 
-      {/* ─── 4. EPC GST Re-verify Policy ────────────────────────────────────── */}
       <div className="bg-bg-card border border-border rounded-2xl p-5">
         <SectionHeader icon={FiShield} title="EPC GST Re-verification" subtitle="When to force EPC to re-verify GST" />
         <FieldRow label="GST Re-verify Policy" hint="When EPC businesses must re-verify their GST registration.">
@@ -383,7 +415,6 @@ export default function ResellerSettings({ moduleUniqueId }) {
         )}
       </div>
 
-      {/* ─── 5. Franchisee Activation Requirements ────────────────────────────── */}
       <div className="bg-bg-card border border-border rounded-2xl p-5">
         <SectionHeader
           icon={FiCheckCircle}
@@ -402,6 +433,144 @@ export default function ResellerSettings({ moduleUniqueId }) {
             <Toggle value={!!settings[key]} onChange={(v) => handleChange(key, v)} />
           </FieldRow>
         ))}
+      </div>
+      */}
+
+      {/* ─── 6. Franchise Partner Master Agreement Template & Legal Content ──────── */}
+      <div className="bg-bg-card border border-border rounded-2xl p-5 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <SectionHeader
+            icon={FiFileText}
+            title="Franchise Master Legal Agreement Template"
+            subtitle="Configure terms, distribution rights & legal clauses shown to Franchise Partners for signing"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAgreementPreview(!showAgreementPreview)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs font-semibold text-text-primary hover:bg-surface-hover transition cursor-pointer"
+            >
+              <FiEye size={13} className="text-primary" />
+              <span>{showAgreementPreview ? "Hide Preview" : "Live Preview"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChange("franchise_agreement_template", DEFAULT_MASTER_AGREEMENT_TEMPLATE)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition cursor-pointer"
+            >
+              <FiRefreshCw size={12} />
+              <span>Load Default 2026 Template</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-text-secondary mb-1">
+              Agreement Title
+            </label>
+            <input
+              type="text"
+              value={settings.franchise_agreement_title || "SolarKits Authorized Franchise Partner Agreement"}
+              onChange={(e) => handleChange("franchise_agreement_title", e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl border border-border bg-bg text-xs font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-secondary mb-1">
+              Agreement Version / Revision
+            </label>
+            <input
+              type="text"
+              value={settings.franchise_agreement_version || "2.0"}
+              onChange={(e) => handleChange("franchise_agreement_version", e.target.value)}
+              placeholder="e.g. 2.0 (2026 Reconciled)"
+              className="w-full px-3.5 py-2 rounded-xl border border-border bg-bg text-xs font-bold text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+        </div>
+
+        {/* Dynamic Placeholders Tag Helper */}
+        <div className="p-3.5 rounded-xl bg-bg border border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider flex items-center gap-1">
+              <FiCode size={13} className="text-primary" /> Supported Dynamic Tags (Click to copy):
+            </span>
+            <span className="text-[10px] text-text-muted">Tags are automatically replaced with partner data</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { tag: "{{BUSINESS_NAME}}", desc: "Partner Company Name" },
+              { tag: "{{PARTNER_NAME}}", desc: "Signatory Person Name" },
+              { tag: "{{TERRITORY}}", desc: "Assigned District / State" },
+              { tag: "{{GSTIN}}", desc: "Partner GSTIN Number" },
+              { tag: "{{COMMERCIAL_MODE}}", desc: "Commercial Model Type" },
+              { tag: "{{AGREEMENT_DATE}}", desc: "Current / Sign Date" },
+              { tag: "{{AGREEMENT_NUMBER}}", desc: "Auto Agreement Serial #" },
+              { tag: "{{EMAIL}}", desc: "Registered Email" },
+              { tag: "{{MOBILE}}", desc: "Registered Mobile" },
+            ].map(({ tag, desc }) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(tag);
+                  showToast("success", `Copied ${tag} to clipboard`);
+                }}
+                title={desc}
+                className="px-2.5 py-1 rounded-lg bg-surface border border-border text-[11px] font-mono text-primary hover:border-primary hover:bg-primary/5 transition flex items-center gap-1 cursor-pointer"
+              >
+                <span>{tag}</span>
+                <span className="text-[9px] text-text-muted">({desc})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Agreement Textarea */}
+        <div>
+          <label className="block text-xs font-bold text-text-secondary mb-1.5 flex items-center justify-between">
+            <span>Master Agreement Full Legal Text & Clauses</span>
+            <span className="text-[10px] text-text-muted">Supports formatted text & clauses</span>
+          </label>
+          <textarea
+            rows={14}
+            value={settings.franchise_agreement_template || DEFAULT_MASTER_AGREEMENT_TEMPLATE}
+            onChange={(e) => handleChange("franchise_agreement_template", e.target.value)}
+            placeholder="Write standard master franchise distribution agreement text..."
+            className="w-full px-4 py-3 rounded-2xl border border-border bg-bg text-xs text-text-primary font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
+          />
+        </div>
+
+        {/* Live Preview Drawer */}
+        {showAgreementPreview && (
+          <div className="p-5 rounded-2xl bg-surface border border-primary/30 shadow-md space-y-3">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
+                  Partner Portal Preview
+                </span>
+                <h4 className="text-sm font-bold text-text-primary mt-1">
+                  {settings.franchise_agreement_title || "SolarKits Authorized Franchise Partner Agreement"} (v{settings.franchise_agreement_version || "2.0"})
+                </h4>
+              </div>
+              <span className="text-xs font-mono text-text-muted">Demo Agreement: SK-FRN-AGR-2026-DEMO01</span>
+            </div>
+
+            <div className="h-64 overflow-y-auto p-4 rounded-xl bg-bg border border-border text-xs text-text-primary font-sans leading-relaxed whitespace-pre-wrap">
+              {(settings.franchise_agreement_template || DEFAULT_MASTER_AGREEMENT_TEMPLATE)
+                .replace(/\{\{AGREEMENT_DATE\}\}/g, new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }))
+                .replace(/\{\{AGREEMENT_NUMBER\}\}/g, "SK-FRN-AGR-2026-DEMO01")
+                .replace(/\{\{BUSINESS_NAME\}\}/g, "Apex Solar Clean Energy LLP")
+                .replace(/\{\{PARTNER_NAME\}\}/g, "Ramesh Chandra (Managing Partner)")
+                .replace(/\{\{TERRITORY\}\}/g, "Ahmedabad, Gujarat")
+                .replace(/\{\{GSTIN\}\}/g, "24AAACS1234F1Z8")
+                .replace(/\{\{COMMERCIAL_MODE\}\}/g, "Commission Settlement Mode")
+                .replace(/\{\{EMAIL\}\}/g, "partner@apexsolar.com")
+                .replace(/\{\{MOBILE\}\}/g, "+91 9876543210")}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ─── Reason Box (for policy-sensitive changes) ─────────────────────── */}

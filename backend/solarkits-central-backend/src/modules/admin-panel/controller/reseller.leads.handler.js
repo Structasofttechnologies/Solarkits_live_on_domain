@@ -18,9 +18,11 @@ const {
   ResellerPlanSubscription,
   ResellerTerritory,
   ResellerKyc,
+  SolarShopSettings,
 } = require('../models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { logAudit } = require('../utils/audit.service');
+const { sendFranchisePartnerCredentialsEmail } = require('../utils/nodemailer');
 
 // ─── 0. QUICKEKYC GST-LINKED MOBILE OTP VERIFICATION ────────────────────────
 /**
@@ -270,6 +272,9 @@ const submit_lead = async (req, res) => {
       selected_solution,
       plan_id,
       notes,
+      shop_photos,
+      shopPhotos,
+      photos,
       consent,
       consent_agreed,
       gst_verified,
@@ -295,6 +300,14 @@ const submit_lead = async (req, res) => {
     const targetDistrict = (district || 'General').trim();
     const isGstVerified = Boolean(gst_verified);
 
+    const photosList = Array.isArray(shop_photos)
+      ? shop_photos
+      : Array.isArray(shopPhotos)
+      ? shopPhotos
+      : Array.isArray(photos)
+      ? photos
+      : [];
+
     const newLead = await FranchiseLead.create({
       full_name: name,
       business_name: company,
@@ -315,6 +328,7 @@ const submit_lead = async (req, res) => {
       selected_solution: selectedSolution || selected_solution || 'Header Fast Application',
       plan_id: plan_id && mongoose.Types.ObjectId.isValid(plan_id) ? plan_id : null,
       notes: (notes || '').trim() || null,
+      shop_photos: photosList,
       consent_agreed: consent !== undefined ? Boolean(consent) : (consent_agreed !== undefined ? Boolean(consent_agreed) : true),
       status: isGstVerified ? 'GST_VERIFIED' : 'NEW',
       source: source || 'storefront_modal',
@@ -432,6 +446,7 @@ const list_leads = async (req, res) => {
       selectedSolution: r.selected_solution,
       plan_id: r.plan_id,
       notes: r.notes,
+      shop_photos: r.shop_photos || [],
       consent: r.consent_agreed,
       status: r.status,
       adminRemarks: r.admin_remarks,
@@ -632,6 +647,18 @@ const approve_lead_as_franchisee = async (req, res) => {
         }
       }
     } else {
+      if (lead.email) {
+        reseller.email = lead.email.toLowerCase().trim();
+      }
+      if (lead.full_name) {
+        reseller.contact_person = lead.full_name;
+      }
+      if (lead.business_name) {
+        reseller.business_name = lead.business_name;
+      }
+      if (lead.mobile_number) {
+        reseller.mobile = lead.mobile_number.trim();
+      }
       reseller.password_hash = password_hash;
       reseller.agreement_status = 'pending';
       reseller.fee_payment_status = 'pending_payment';
@@ -653,21 +680,77 @@ const approve_lead_as_franchisee = async (req, res) => {
     let agreement = await ResellerAgreement.findOne({ reseller_id: reseller._id, status: { $in: ['pending', 'generated', 'signed'] } });
     if (!agreement) {
       const agreementNumber = `SK-FRN-AGR-${new Date().getFullYear()}-${String(reseller._id).slice(-6).toUpperCase()}`;
-      const termsContent = `
-1. PARTIES: This Franchise Partner Agreement is entered into between SolarKits Clean Energy Solutions ("Company") and ${reseller.business_name} ("Franchise Partner").
-2. TERRITORY: The Franchise Partner is authorized to distribute and procure SolarKits combo bundles and components within the designated territory of ${lead.district || 'General'}, ${lead.state || 'India'}.
-3. COMMERCIAL MODEL: Franchise Partner operates under the ${defaultType.name} model with factory-direct pricing, wholesale discounts, and margin protection.
-4. COMPLIANCE & QUALITY: Franchise Partner agrees to maintain solar installation standards, warranty compliance, and genuine BOS kit accessories.
-5. FEE & ACTIVATION: Upon digital execution of this agreement and verification of manual fee payment, full operational platform access will be activated.
-      `.trim();
+      
+      const settings = await SolarShopSettings.findOne().lean();
+      const template = settings?.franchise_agreement_template || `SOLARKITS AUTHORIZED FRANCHISE PARTNER AGREEMENT
+
+This Franchise Distribution & Commercial Channel Agreement ("Agreement") is formally entered into and effective as of {{AGREEMENT_DATE}} by and between:
+
+1. THE COMPANY:
+SolarKits Clean Energy Solutions Private Limited, having its corporate fulfillment center and technology office in India (hereinafter referred to as the "Company" or "SolarKits").
+
+2. THE FRANCHISE PARTNER:
+{{BUSINESS_NAME}}, represented by authorized signatory {{PARTNER_NAME}}, having registered commercial premises at {{TERRITORY}}, with GSTIN: {{GSTIN}} (hereinafter referred to as the "Franchise Partner" or "Franchisee").
+
+RECITALS & PURPOSE:
+WHEREAS the Company is engaged in the manufacturing, assembly, and turnkey supply of pre-engineered Solar BOS Combo Kits, mono PERC / TopCon panels, on-grid/hybrid inverters, module mounting structures, and associated electrical accessories.
+WHEREAS the Franchise Partner desires to obtain authorized distribution, retail demonstration, and local EPC contractor procurement fulfillment rights for the Designated Territory of {{TERRITORY}}.
+
+NOW THEREFORE, the parties mutually agree as follows:
+
+CLAUSE 1 — APPOINTMENT & TERRITORY AUTHORIZATION
+1.1 The Company hereby authorizes the Franchise Partner as an Official SolarKits Franchisee for the designated territory of {{TERRITORY}}.
+1.2 The Franchise Partner is authorized to promote, stock, distribute, and supply turnkey SolarKits Combo Packages to local EPC contractors, solar installers, commercial clients, and residential end-users.
+
+CLAUSE 2 — COMMERCIAL TERMS, PRICING & MARGINS
+2.1 Franchise Partner shall receive guaranteed factory-direct wholesale pricing, exclusive bundle margin slabs, and procurement discounts across all pre-engineered kits.
+2.2 The Commercial Model assigned to Franchise Partner is {{COMMERCIAL_MODE}}.
+2.3 Margin settlements and incentive payouts shall be governed by platform settlement policies and credited to Franchise Partner's dedicated wallet.
+
+CLAUSE 3 — QUALITY ASSURANCE & WARRANTY
+3.1 Franchise Partner covenants to supply only genuine SolarKits certified modules, inverters, and BOS accessories.
+3.2 All components carry standard manufacturer warranties (25-year panel performance, 5/10-year inverter replacement warranty).
+
+CLAUSE 4 — REGISTRATION & ONE-TIME FEE SETTLEMENT
+4.1 Franchise onboarding requires digital signature of this Agreement and verification of the franchise fee settlement.
+4.2 Upon verification, full operational platform access, priority stock allocation, and regional lead routing will be unlocked immediately.
+
+CLAUSE 5 — TERM, RENEWAL & TERMINATION
+5.1 This Agreement is valid for a period of 12 (twelve) months from the date of activation and shall renew annually based on minimum order quantity (MOQ) targets and mutual agreement.
+5.2 Either party may terminate this agreement with 30 days written notice in case of breach of quality compliance or exclusivity guidelines.
+
+CLAUSE 6 — GOVERNING LAW & JURISDICTION
+6.1 This Agreement shall be governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the competent courts in India.
+
+[DIGITAL EXECUTION DECLARATION]
+By digitally signing below, the Franchise Partner certifies that they have read, understood, and accept all terms and conditions of this Franchise Agreement.`;
+
+      const formattedDate = new Date().toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+      const territory = `${lead.district ? lead.district + ', ' : ''}${lead.state || 'India'}`;
+      const commMode = (reseller.commercial_mode === 'upfront_discount' ? 'Upfront Wholesale Margin Discount Mode' : 'Commission Settlement Mode');
+
+      const termsContent = template
+        .replace(/\{\{AGREEMENT_DATE\}\}/g, formattedDate)
+        .replace(/\{\{AGREEMENT_NUMBER\}\}/g, agreementNumber)
+        .replace(/\{\{BUSINESS_NAME\}\}/g, reseller.business_name || lead.business_name || 'Solar Enterprise')
+        .replace(/\{\{PARTNER_NAME\}\}/g, reseller.contact_person || lead.full_name || 'Authorized Signatory')
+        .replace(/\{\{TERRITORY\}\}/g, territory)
+        .replace(/\{\{GSTIN\}\}/g, reseller.gst_number || lead.gstin || 'Not Provided / Application Pending')
+        .replace(/\{\{COMMERCIAL_MODE\}\}/g, commMode)
+        .replace(/\{\{EMAIL\}\}/g, reseller.email || lead.email || '')
+        .replace(/\{\{MOBILE\}\}/g, reseller.mobile || lead.mobile_number || '');
 
       agreement = await ResellerAgreement.create({
         reseller_id: reseller._id,
         lead_id: lead._id,
         agreement_number: agreementNumber,
-        title: 'SolarKits Authorized Franchise Partner Agreement',
-        version: '1.0',
-        territory_scope: `${lead.district ? lead.district + ', ' : ''}${lead.state}`,
+        title: settings?.franchise_agreement_title || 'SolarKits Authorized Franchise Partner Agreement',
+        version: settings?.franchise_agreement_version || '2.0',
+        territory_scope: territory,
         agreement_content: termsContent,
         status: 'pending',
         created_by: req.user?.id || null,
@@ -727,9 +810,30 @@ const approve_lead_as_franchisee = async (req, res) => {
       req,
     });
 
+    // 6. Send Login Credentials Email to the partner's registered email
+    const recipientEmail = (lead.email || reseller.email || '').trim().toLowerCase();
+    let emailSent = false;
+    if (recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@inbound.solarkits.in')) {
+      try {
+        const portalUrl = process.env.RESELLER_PORTAL_URL || 'http://localhost:5174/login';
+        emailSent = await sendFranchisePartnerCredentialsEmail({
+          to: recipientEmail,
+          fullName: lead.full_name,
+          businessName: reseller.business_name,
+          email: recipientEmail,
+          password: rawPassword,
+          territory: `${lead.district ? lead.district + ', ' : ''}${lead.state}`,
+          agreementNumber: agreement.agreement_number,
+          portalLoginUrl: portalUrl,
+        });
+      } catch (mailErr) {
+        console.error('[reseller.leads] Failed to send credentials email:', mailErr.message || mailErr);
+      }
+    }
+
     return res.json({
       status: 'success',
-      message: `Franchise lead approved! Partner account generated with Agreement #${agreement.agreement_number}`,
+      message: `Franchise lead approved! Partner account generated with Agreement #${agreement.agreement_number}${emailSent ? ' and login credentials emailed to ' + recipientEmail : ''}.`,
       data: {
         lead_id: lead._id,
         reseller_id: reseller._id,
@@ -739,6 +843,7 @@ const approve_lead_as_franchisee = async (req, res) => {
         email: reseller.email,
         mobile: reseller.mobile,
         default_password: rawPassword,
+        email_sent: emailSent,
       },
     });
   } catch (error) {

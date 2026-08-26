@@ -26,9 +26,39 @@ import {
   FiRefreshCw,
   FiLock,
   FiHash,
+  FiUploadCloud,
+  FiImage,
+  FiTrash2,
+  FiCamera,
+  FiEye,
+  FiMaximize2,
+  FiPlus,
 } from "react-icons/fi";
 import api from "../../services/api";
 import { INDIAN_STATES_DISTRICTS } from "../../data/territoryData";
+
+const SAMPLE_SHOP_PHOTOS = [
+  {
+    title: "Front Storefront & Signboard",
+    url: "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=900&auto=format&fit=crop&q=80",
+    tag: "Exterior / Signboard",
+  },
+  {
+    title: "In-Store Display & Counter",
+    url: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=900&auto=format&fit=crop&q=80",
+    tag: "Showroom / Interior",
+  },
+  {
+    title: "Warehouse & Kit Storage",
+    url: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=900&auto=format&fit=crop&q=80",
+    tag: "Storage / Inventory",
+  },
+  {
+    title: "Partner Office & Discussion Room",
+    url: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&auto=format&fit=crop&q=80",
+    tag: "Commercial Office",
+  },
+];
 
 export default function FranchisePurchaseModal({
   isOpen,
@@ -37,7 +67,7 @@ export default function FranchisePurchaseModal({
 }) {
   const navigate = useNavigate();
 
-  // Multi-step state: 1 = Territory & Plan, 2 = GST & Mobile Verification, 3 = Review & Submit, 4 = Success Roadmap
+  // Multi-step state: 1 = Territory & Plan, 2 = GST & Mobile Verification, 3 = Upload Shop Photos, 4 = Review & Submit, 5 = Success Roadmap
   const [step, setStep] = useState(1);
 
   // Selected plan state
@@ -83,6 +113,11 @@ export default function FranchisePurchaseModal({
     consent: true,
   });
   const [formErrors, setFormErrors] = useState({});
+
+  // ── Step 3: Shop Photos Upload State ─────────────────────────────────────────
+  const [shopPhotos, setShopPhotos] = useState([]);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [previewPhotoModal, setPreviewPhotoModal] = useState(null);
 
   // ── Submission State ────────────────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -304,6 +339,71 @@ export default function FranchisePurchaseModal({
     setMobileErrorMsg("");
   };
 
+  // ── Step 3: Photo Upload Handlers ────────────────────────────────────────────
+  const compressAndReadImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = image.width;
+          let height = image.height;
+          const maxDimension = 1200;
+
+          if (width > height && width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(image, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          resolve(dataUrl);
+        };
+        image.onerror = () => resolve(readerEvent.target.result);
+        image.src = readerEvent.target.result;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPhotoUploading(true);
+
+    try {
+      const processed = [];
+      for (const file of files) {
+        if (file.type.startsWith("image/")) {
+          const dataUrl = await compressAndReadImage(file);
+          if (dataUrl) processed.push(dataUrl);
+        }
+      }
+      setShopPhotos((prev) => [...prev, ...processed].slice(0, 6));
+    } catch (err) {
+      console.warn("Photo upload error:", err);
+    } finally {
+      setPhotoUploading(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleRemovePhoto = (indexToRemove) => {
+    setShopPhotos((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleAddSamplePhotos = () => {
+    setShopPhotos(SAMPLE_SHOP_PHOTOS.map((p) => p.url));
+  };
+
   // ── Validation for Step 2 ───────────────────────────────────────────────────
   const validateStep2 = () => {
     const errs = {};
@@ -347,6 +447,7 @@ export default function FranchisePurchaseModal({
       gst_trade_name: gstTradeName || null,
       pan_number: gstPan || null,
       mobile_verified: mobileVerified,
+      shop_photos: shopPhotos,
       quickekyc_request_id: `QK-REQ-${Date.now()}`,
       territoryLevel,
       actionType: "franchise_apply",
@@ -356,7 +457,7 @@ export default function FranchisePurchaseModal({
       const res = await api.post("/india/v1/reseller/leads/submit", payload);
       const leadData = res.data?.data || { id: `LEAD-${Date.now()}` };
       setSubmissionSuccessData(leadData);
-      setStep(4);
+      setStep(5);
     } catch (err) {
       // Fallback lead ID
       setSubmissionSuccessData({
@@ -365,7 +466,7 @@ export default function FranchisePurchaseModal({
         state: selectedState,
         district: selectedDistrict,
       });
-      setStep(4);
+      setStep(5);
     } finally {
       setSubmitting(false);
     }
@@ -393,7 +494,7 @@ export default function FranchisePurchaseModal({
                   Franchise Partner Onboarding
                 </h3>
                 <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#0575B8] text-white shadow-xs">
-                  {step === 4 ? "Complete" : `Step ${step} of 3`}
+                  {step === 5 ? "Complete" : `Step ${step} of 4`}
                 </span>
               </div>
               <p className="text-sm text-slate-600 font-medium mt-0.5">
@@ -413,16 +514,17 @@ export default function FranchisePurchaseModal({
 
         {/* ── Spacious Progressive Step Indicator Bar ──────────────────────── */}
         <div className="px-6 sm:px-8 py-3.5 bg-slate-50 border-b border-slate-200">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-2.5">
             {[
               { num: "1", title: "Territory Selection", active: step === 1, done: step > 1 },
               { num: "2", title: "GST & Mobile Verification", active: step === 2, done: step > 2 },
-              { num: "3", title: "Review & Submit", active: step === 3, done: step > 3 },
-              { num: "4", title: "Admin Approval", active: step === 4, done: step === 4 },
+              { num: "3", title: "Shop Photos", active: step === 3, done: step > 3 },
+              { num: "4", title: "Review & Submit", active: step === 4, done: step > 4 },
+              { num: "5", title: "Admin Approval", active: step === 5, done: step === 5 },
             ].map((stg) => (
               <div
                 key={stg.num}
-                className={`px-3.5 py-2.5 rounded-xl border flex items-center gap-2.5 transition-all ${
+                className={`px-3 py-2 rounded-xl border flex items-center gap-2 transition-all ${
                   stg.active
                     ? "bg-[#0575B8] text-white border-[#0575B8] shadow-sm ring-2 ring-blue-500/20"
                     : stg.done
@@ -431,7 +533,7 @@ export default function FranchisePurchaseModal({
                 }`}
               >
                 <div
-                  className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
+                  className={`w-5 h-5 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
                     stg.active
                       ? "bg-white text-[#0575B8]"
                       : stg.done
@@ -883,9 +985,183 @@ export default function FranchisePurchaseModal({
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════ */}
-          {/* STEP 3: REVIEW & SUBMIT APPLICATION FOR ADMIN REVIEW               */}
+          {/* STEP 3: UPLOAD YOUR SHOP & COMMERCIAL PREMISES PHOTOS               */}
           {/* ═══════════════════════════════════════════════════════════════════ */}
           {step === 3 && (
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
+              {/* Header Box */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50/70 border border-blue-200 flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#0575B8] text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <FiCamera size={24} />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-base font-black text-slate-900">
+                      Upload Your Shop / Storefront Photos
+                    </h4>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#0575B8] text-white">
+                      Recommended 4 - 5 Photos
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    Upload clear photos of your retail shop, showroom, warehouse, or commercial office. This helps the SolarKits regional onboarding team quickly verify your operational readiness and expedite franchise allocation.
+                  </p>
+                </div>
+              </div>
+
+              {/* Guidance Suggested Photos 4-Card Grid */}
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2.5">
+                  Suggested Photo Perspectives:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { tag: "1. Shop Front", desc: "Main entrance & Signboard", icon: "🏬" },
+                    { tag: "2. Showroom", desc: "Interior display & counter", icon: "🏪" },
+                    { tag: "3. Warehouse", desc: "Kit storage & inventory area", icon: "📦" },
+                    { tag: "4. Office Desk", desc: "Customer consultation desk", icon: "💼" },
+                  ].map((guide, idx) => (
+                    <div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center gap-2.5">
+                      <span className="text-xl shrink-0">{guide.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{guide.tag}</p>
+                        <p className="text-[11px] text-slate-500 truncate">{guide.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Upload Drop Area */}
+              <div className="p-6 rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/30 hover:bg-blue-50/60 transition text-center space-y-3">
+                <input
+                  type="file"
+                  id="shop-photo-file-input"
+                  multiple
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                <div className="w-14 h-14 rounded-2xl bg-[#0575B8]/10 text-[#0575B8] flex items-center justify-center mx-auto shadow-xs">
+                  {photoUploading ? (
+                    <FiLoader className="animate-spin" size={28} />
+                  ) : (
+                    <FiUploadCloud size={28} />
+                  )}
+                </div>
+
+                <div className="space-y-1 max-w-md mx-auto">
+                  <p className="text-sm font-bold text-slate-900">
+                    Click to browse or drag & drop shop photos here
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Supports JPG, PNG, WEBP files (Max 10MB per photo). Upload 4 - 5 photos of your shop.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                  <label
+                    htmlFor="shop-photo-file-input"
+                    className="px-6 py-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+                  >
+                    <FiPlus size={16} />
+                    <span>Choose Photos From Device</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleAddSamplePhotos}
+                    className="px-4 py-2.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-[#0575B8] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FiImage size={15} />
+                    <span>Load 4 Demo Photos</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Uploaded Gallery Grid */}
+              {shopPhotos.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <FiImage className="text-[#0575B8]" size={16} />
+                      <span>Uploaded Shop Photos ({shopPhotos.length} / 5)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShopPhotos([])}
+                      className="text-xs font-bold text-red-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <FiTrash2 size={13} /> Remove All
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                    {shopPhotos.map((photoUrl, index) => (
+                      <div
+                        key={index}
+                        className="group relative aspect-4/3 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm"
+                      >
+                        <img
+                          src={photoUrl}
+                          alt={`Shop Photo ${index + 1}`}
+                          className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+
+                        {/* Top index pill */}
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-white text-[10px] font-bold">
+                          Photo {index + 1}
+                        </div>
+
+                        {/* Hover Overlay */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPhotoModal(photoUrl)}
+                            className="w-9 h-9 rounded-xl bg-white/90 text-slate-900 hover:bg-white flex items-center justify-center shadow-md cursor-pointer transition transform hover:scale-110"
+                            title="View Photo Fullscreen"
+                          >
+                            <FiMaximize2 size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePhoto(index)}
+                            className="w-9 h-9 rounded-xl bg-red-600 text-white hover:bg-red-700 flex items-center justify-center shadow-md cursor-pointer transition transform hover:scale-110"
+                            title="Remove Photo"
+                          >
+                            <FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {shopPhotos.length < 6 && (
+                      <label
+                        htmlFor="shop-photo-file-input"
+                        className="aspect-4/3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#0575B8] bg-slate-50 hover:bg-blue-50/40 transition flex flex-col items-center justify-center gap-1.5 cursor-pointer text-slate-500 hover:text-[#0575B8]"
+                      >
+                        <FiPlus size={24} />
+                        <span className="text-xs font-bold">Add More</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                  <FiInfo size={16} className="text-[#0575B8] shrink-0" />
+                  <span>
+                    No photos uploaded yet. You can click <strong>Choose Photos</strong> or <strong>Load 4 Demo Photos</strong> to add shop photos before proceeding.
+                  </span>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* STEP 4: REVIEW & SUBMIT APPLICATION FOR ADMIN REVIEW               */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {step === 4 && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
               <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white space-y-2 shadow-md">
                 <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#F49222] text-slate-950">
@@ -912,11 +1188,33 @@ export default function FranchisePurchaseModal({
                     {gstInput || "N/A"} {gstPan ? `• PAN: ${gstPan}` : ""}
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                   <span className="text-slate-500 font-medium">QuickeKYC Authentication:</span>
                   <span className="font-bold text-emerald-600">
                     {gstVerified ? `✓ Verified Taxpayer (${gstLegalName || "Active"})` : "Pending"}
                   </span>
+                </div>
+
+                {/* Shop Photos Review Thumbnail Bar */}
+                <div className="pt-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-slate-500 font-medium">Shop Photos Attached:</span>
+                    <span className="font-bold text-slate-900">
+                      {shopPhotos.length > 0 ? `${shopPhotos.length} Photos Attached ✓` : "None Attached"}
+                    </span>
+                  </div>
+                  {shopPhotos.length > 0 && (
+                    <div className="flex items-center gap-2 overflow-x-auto py-1">
+                      {shopPhotos.map((url, i) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt={`Thumbnail ${i + 1}`}
+                          className="w-14 h-14 rounded-xl object-cover border border-slate-300 shrink-0 shadow-xs"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -926,7 +1224,7 @@ export default function FranchisePurchaseModal({
                 <div className="space-y-1">
                   <p className="font-bold text-base">No Immediate Online Payment Required</p>
                   <p className="text-sm text-amber-900 leading-relaxed">
-                    Upon submission, the SolarKits Admin team will review your application. Once approved, you will sign the digital franchise agreement and complete offline fee payment in verbal discussion with your Account Manager.
+                    Upon submission, the SolarKits Admin team will review your application and shop photos. Once approved, you will sign the digital franchise agreement and complete offline fee payment in verbal discussion with your Account Manager.
                   </p>
                 </div>
               </div>
@@ -938,15 +1236,15 @@ export default function FranchisePurchaseModal({
                   onChange={(e) => setForm({ ...form, consent: e.target.checked })}
                   className="mt-1 rounded border-slate-300 text-[#0575B8] focus:ring-[#0575B8]"
                 />
-                <span>I confirm that all business information and territory preferences provided are accurate and authorize SolarKits to process my franchise request.</span>
+                <span>I confirm that all business information, territory preferences, and shop photos provided are accurate and authorize SolarKits to process my franchise request.</span>
               </label>
             </motion.div>
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════ */}
-          {/* STEP 4: SUBMISSION SUCCESS & NEXT STEPS ROADMAP                     */}
+          {/* STEP 5: SUBMISSION SUCCESS & NEXT STEPS ROADMAP                     */}
           {/* ═══════════════════════════════════════════════════════════════════ */}
-          {step === 4 && (
+          {step === 5 && (
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6 text-center py-4">
               <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-lg">
                 <FiCheckCircle size={44} />
@@ -977,8 +1275,8 @@ export default function FranchisePurchaseModal({
                       1
                     </div>
                     <div>
-                      <p className="font-bold text-slate-900">Admin Eligibility Review</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Admin team reviews your territory request within 24 hours.</p>
+                      <p className="font-bold text-slate-900">Admin Eligibility & Shop Verification</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Admin team reviews your territory request & shop photos within 24 hours.</p>
                     </div>
                   </div>
 
@@ -1038,7 +1336,7 @@ export default function FranchisePurchaseModal({
         </div>
 
         {/* ── Modal Navigation Buttons Footer ──────────────────────────────── */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="px-6 sm:px-8 py-4 sm:py-5 border-t border-slate-200 bg-slate-50/90 flex items-center justify-between">
             <button
               type="button"
@@ -1051,7 +1349,7 @@ export default function FranchisePurchaseModal({
             </button>
 
             <div className="flex items-center gap-3">
-              {step < 3 ? (
+              {step < 4 ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1079,6 +1377,40 @@ export default function FranchisePurchaseModal({
             </div>
           </div>
         )}
+
+        {/* ── Lightbox Preview Modal for Full Size Photo ───────────────────── */}
+        <AnimatePresence>
+          {previewPhotoModal && (
+            <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="relative max-w-3xl max-h-[85vh] bg-slate-900 rounded-2xl overflow-hidden border border-slate-700 flex flex-col"
+              >
+                <div className="p-4 bg-slate-950 flex items-center justify-between border-b border-slate-800 text-white">
+                  <span className="text-sm font-bold flex items-center gap-2">
+                    <FiImage className="text-[#0575B8]" /> Full Size Shop Photo
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPhotoModal(null)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition cursor-pointer"
+                  >
+                    <FiX size={18} />
+                  </button>
+                </div>
+                <div className="p-2 flex items-center justify-center overflow-auto bg-black/50">
+                  <img
+                    src={previewPhotoModal}
+                    alt="Full Preview"
+                    className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
+                  />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

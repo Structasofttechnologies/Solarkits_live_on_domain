@@ -188,8 +188,8 @@ const menus = [
                     unique_id: "RSL_WALLET"
                 },
                 {
-                    name: "Franchisee Settings",
-                    icon: <FiSettings />,
+                    name: "Agreement Settings",
+                    icon: <FiFileText />,
                     path: "/admin-panel/solar-shop/reseller-management/settings",
                     unique_id: "RSL_SETTINGS"
                 },

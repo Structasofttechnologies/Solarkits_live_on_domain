@@ -396,12 +396,12 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
       {/* ── MODAL 1: Digital Franchise Agreement Signing ───────────────────── */}
       <AnimatePresence>
         {agreementModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-slate-200 rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 sm:p-8 text-slate-900 relative my-6"
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="bg-white border border-slate-200 rounded-3xl max-w-5xl w-full max-h-[94vh] overflow-y-auto shadow-2xl p-6 sm:p-9 text-slate-900 relative my-4 flex flex-col space-y-6"
             >
               <button
                 onClick={() => setAgreementModalOpen(false)}
@@ -410,130 +410,179 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                 <FiX size={20} />
               </button>
 
-              <div className="space-y-5">
-                <div className="border-b border-slate-100 pb-3">
+              {/* Official Agreement Header */}
+              <div className="border-b border-slate-200 pb-4">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
                   <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-[#0575B8] border border-blue-200">
-                    Step 3 • Franchise Agreement Execution
+                    Step 3 • Legal Agreement Execution
                   </span>
-                  <h3 className="text-2xl font-black text-slate-900 mt-2">
-                    SolarKits Authorized Franchise Partner Agreement
-                  </h3>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Agreement No: <strong className="font-mono">{agreementData?.agreement_number || "SK-FRN-AGR-2026-ACTIVE"}</strong>
-                  </p>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                    Agreement No: <strong className="font-mono">{agreementData?.agreement_number || "SK-FRN-AGR-2026"}</strong>
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Version: v{agreementData?.version || "2.0"}
+                  </span>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                  {agreementData?.title || "SolarKits Authorized Franchise Partner Agreement"}
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                  Official Commercial Contract between SolarKits Clean Energy Solutions Private Limited and Franchise Partner.
+                </p>
+              </div>
+
+              {/* Parties & Commercial Overview Summary Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Franchise Entity</p>
+                  <p className="font-bold text-slate-900 mt-0.5 truncate">{reseller?.business_name || "Solar Enterprise"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Signatory Person</p>
+                  <p className="font-bold text-slate-900 mt-0.5 truncate">{reseller?.contact_person || signerName || "Authorized Partner"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">GSTIN</p>
+                  <p className="font-mono font-bold text-[#0575B8] mt-0.5">{reseller?.gst_number || reseller?.gstin || "Pending / Inbound"}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Territory Scope</p>
+                  <p className="font-bold text-slate-900 mt-0.5 truncate">{agreementData?.territory_scope || reseller?.address?.city || reseller?.address?.state || "Assigned Territory"}</p>
+                </div>
+              </div>
+
+              {/* Large-Format Agreement Text Reader (High Readability) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <FiFileText className="text-[#0575B8]" size={14} />
+                    <span>Official Agreement Terms & Legal Clauses (Scroll to read complete document)</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400">Standard Legal Text</span>
                 </div>
 
-                {/* Agreement Terms Scrollbox */}
-                <div className="h-64 overflow-y-auto p-5 rounded-2xl bg-slate-50 border border-slate-200 text-sm text-slate-700 space-y-3 font-sans leading-relaxed">
-                  <div className="font-bold text-slate-900 text-base border-b pb-1.5">
-                    STANDARD FRANCHISE & REGIONAL DISTRIBUTION CLAUSES
-                  </div>
-                  <p>
-                    <strong>1. APPOINTMENT & EXCLUSIVITY:</strong> SolarKits Clean Energy Solutions Private Limited ("Company") hereby authorizes <strong>{reseller?.business_name}</strong> ("Franchise Partner") as an authorized regional partner for distribution, combo kit marketing, and EPC contractor allocation.
-                  </p>
-                  <p>
-                    <strong>2. TERRITORY RIGHTS:</strong> Franchise Partner is granted commercial operation rights in the assigned geographical territory: <strong>{reseller?.address?.city || reseller?.address?.state || "Assigned District"}</strong>. Company guarantees protected pricing and EPC contractor alignment within this boundary.
-                  </p>
-                  <p>
-                    <strong>3. WHOLESALE PRICING & MARGINS:</strong> The Franchisee receives factory-direct distributor margins on SolarKits Combo Kits, inverters, structure packages, and BOS components.
-                  </p>
-                  <p>
-                    <strong>4. MANUAL FEE PAYMENT TERMS:</strong> The franchise enrollment requires a one-time manual fee settlement. Account activation is finalized immediately upon administrative confirmation of the uploaded bank payment receipt.
-                  </p>
-                  <p>
-                    <strong>5. TERM & RENEWAL:</strong> This Agreement shall remain in force for a period of 12 months from the date of activation and shall be automatically renewable subject to performance targets.
-                  </p>
-                </div>
-
-                {isAgreementSigned ? (
-                  <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm space-y-1">
-                    <div className="flex items-center gap-2 font-bold text-base">
-                      <FiCheckCircle className="text-emerald-600" size={20} />
-                      <span>Agreement Already Digitally Signed</span>
+                <div className="h-80 sm:h-96 overflow-y-auto p-6 sm:p-8 rounded-2xl bg-slate-50/90 border border-slate-200 text-xs sm:text-sm text-slate-800 space-y-4 font-sans leading-relaxed shadow-inner whitespace-pre-wrap selection:bg-blue-100">
+                  {agreementData?.agreement_content || (
+                    <div className="space-y-3">
+                      <p className="font-bold text-slate-900 text-base border-b pb-2">
+                        SOLARKITS AUTHORIZED FRANCHISE PARTNER AGREEMENT
+                      </p>
+                      <p>
+                        <strong>1. APPOINTMENT & EXCLUSIVITY:</strong> SolarKits Clean Energy Solutions Private Limited ("Company") hereby authorizes <strong>{reseller?.business_name}</strong> ("Franchise Partner") as an authorized regional partner for distribution, combo kit marketing, and EPC contractor allocation.
+                      </p>
+                      <p>
+                        <strong>2. TERRITORY RIGHTS:</strong> Franchise Partner is granted commercial operation rights in the assigned geographical territory: <strong>{reseller?.address?.city || reseller?.address?.state || "Assigned District"}</strong>. Company guarantees protected pricing and EPC contractor alignment within this boundary.
+                      </p>
+                      <p>
+                        <strong>3. WHOLESALE PRICING & MARGINS:</strong> The Franchisee receives factory-direct distributor margins on SolarKits Combo Kits, inverters, structure packages, and BOS components.
+                      </p>
+                      <p>
+                        <strong>4. MANUAL FEE PAYMENT TERMS:</strong> The franchise enrollment requires a one-time manual fee settlement. Account activation is finalized immediately upon administrative confirmation of the uploaded bank payment receipt.
+                      </p>
+                      <p>
+                        <strong>5. TERM & RENEWAL:</strong> This Agreement shall remain in force for a period of 12 months from the date of activation and shall be automatically renewable subject to performance targets.
+                      </p>
                     </div>
-                    <p>Signed by: <strong>{reseller?.agreement_signer_name || signerName}</strong></p>
-                    <p>Signed on: <strong>{new Date(reseller?.agreement_signed_at || Date.now()).toLocaleString()}</strong></p>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSignAgreement} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                          Full Legal Signatory Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={signerName}
-                          onChange={(e) => setSignerName(e.target.value)}
-                          placeholder="e.g. Ramesh Chandra"
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
-                        />
-                      </div>
+                  )}
+                </div>
+              </div>
 
-                      <div>
-                        <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                          Signatory Designation <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={signerDesignation}
-                          onChange={(e) => setSignerDesignation(e.target.value)}
-                          placeholder="e.g. Proprietor / Managing Director"
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
-                        />
-                      </div>
+              {/* Execution / Signatory Section */}
+              {isAgreementSigned ? (
+                <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2">
+                  <div className="flex items-center gap-2.5 font-black text-base sm:text-lg">
+                    <FiCheckCircle className="text-emerald-600 shrink-0" size={24} />
+                    <span>Franchise Partner Agreement Digitally Executed & Verified</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                    <p>Legal Signatory: <strong>{reseller?.agreement_signer_name || signerName}</strong></p>
+                    <p>Signatory Title: <strong>{reseller?.signer_designation || signerDesignation}</strong></p>
+                    <p>Timestamp: <strong>{new Date(reseller?.agreement_signed_at || Date.now()).toLocaleString()}</strong></p>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSignAgreement} className="space-y-4 pt-2 border-t border-slate-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs sm:text-sm font-bold text-slate-700 block mb-1.5">
+                        Full Legal Signatory Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={signerName}
+                        onChange={(e) => setSignerName(e.target.value)}
+                        placeholder="e.g. Ramesh Chandra"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      />
                     </div>
 
                     <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                        Upload Signed Agreement Copy (Optional PDF / Image Scan)
+                      <label className="text-xs sm:text-sm font-bold text-slate-700 block mb-1.5">
+                        Signatory Designation <span className="text-red-500">*</span>
                       </label>
                       <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => setAgreementFile(e.target.files?.[0] || null)}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-700 focus:outline-none"
+                        type="text"
+                        required
+                        value={signerDesignation}
+                        onChange={(e) => setSignerDesignation(e.target.value)}
+                        placeholder="e.g. Proprietor / Managing Director / Authorized Partner"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
                       />
                     </div>
+                  </div>
 
-                    <label className="flex items-start gap-2.5 text-sm text-slate-600 cursor-pointer select-none pt-1">
-                      <input
-                        type="checkbox"
-                        checked={consentAgreed}
-                        onChange={(e) => setConsentAgreed(e.target.checked)}
-                        className="mt-1 rounded text-[#0575B8] focus:ring-0"
-                      />
-                      <span>
-                        I confirm that I am the authorized representative of <strong>{reseller?.business_name}</strong> and agree to execute this Franchise Agreement digitally.
-                      </span>
+                  <div>
+                    <label className="text-xs sm:text-sm font-bold text-slate-700 block mb-1.5">
+                      Upload Signed Agreement Document (Optional PDF / Image Scan)
                     </label>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setAgreementFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-700 focus:outline-none"
+                    />
+                  </div>
 
-                    {agreementError && (
-                      <p className="text-sm font-bold text-red-600">{agreementError}</p>
-                    )}
+                  <label className="flex items-start gap-3 text-xs sm:text-sm text-slate-700 cursor-pointer select-none p-3.5 rounded-xl bg-blue-50/60 border border-blue-100">
+                    <input
+                      type="checkbox"
+                      checked={consentAgreed}
+                      onChange={(e) => setConsentAgreed(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded text-[#0575B8] focus:ring-0 cursor-pointer"
+                    />
+                    <span>
+                      I solemnly declare that I am the authorized legal representative of <strong>{reseller?.business_name}</strong>. I have read, understood, and hereby accept and digitally execute this Franchise Partner Agreement.
+                    </span>
+                  </label>
 
-                    <div className="flex items-center justify-end gap-3 pt-3">
-                      <button
-                        type="button"
-                        onClick={() => setAgreementModalOpen(false)}
-                        className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={signingLoading}
-                        className="px-7 py-3 rounded-xl bg-[#0575B8] hover:bg-[#045d93] text-white text-sm font-black flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
-                      >
-                        {signingLoading ? <FiLoader className="animate-spin" /> : <FiCheck size={18} />}
-                        <span>Digitally Sign & Proceed to Fee Payment</span>
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
+                  {agreementError && (
+                    <p className="text-sm font-bold text-red-600 bg-red-50 p-3 rounded-xl border border-red-200">{agreementError}</p>
+                  )}
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setAgreementModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold cursor-pointer transition"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={signingLoading}
+                      className="px-7 py-3 rounded-xl bg-[#0575B8] hover:bg-[#045d93] text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition"
+                    >
+                      {signingLoading ? <FiLoader className="animate-spin" /> : <FiCheck size={18} />}
+                      <span>Digitally Sign & Proceed to Fee Payment</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
             </motion.div>
           </div>
         )}

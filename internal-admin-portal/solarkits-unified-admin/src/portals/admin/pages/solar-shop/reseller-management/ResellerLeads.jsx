@@ -29,6 +29,10 @@ import {
   FiRefreshCw,
   FiLoader,
   FiShield,
+  FiImage,
+  FiCamera,
+  FiMaximize2,
+  FiInfo,
 } from "react-icons/fi";
 import { FaWhatsapp, FaBuilding } from "react-icons/fa";
 import { authHeaderObj } from "@/app/authHeader";
@@ -56,6 +60,12 @@ const INITIAL_DEMO_LEADS = [
     businessProfile: "Solar EPC Contractor",
     expectedOrderQty: "1 - 3 Kits / Month (Starter)",
     notes: "Looking for 550W Mono PERC DCR kits with 5kW-10kW On-grid inverters. Target MSEDCL rooftop scheme.",
+    shop_photos: [
+      "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=900&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=900&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=900&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&auto=format&fit=crop&q=80",
+    ],
     consent: true,
     status: "NEW",
     submittedAt: "2026-08-21T08:30:00.000Z",
@@ -77,6 +87,10 @@ const INITIAL_DEMO_LEADS = [
     businessProfile: "Solar Retailer",
     expectedOrderQty: "4 - 10 Kits / Month (Growth)",
     notes: "Requires exclusive district distribution rights for Surat & Navsari. Ready with commercial warehouse.",
+    shop_photos: [
+      "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=900&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=900&auto=format&fit=crop&q=80",
+    ],
     consent: true,
     status: "IN_REVIEW",
     submittedAt: "2026-08-20T14:15:00.000Z",
@@ -98,6 +112,10 @@ const INITIAL_DEMO_LEADS = [
     businessProfile: "Hardware & Electrical Distributor",
     expectedOrderQty: "10+ Kits / Month (Enterprise)",
     notes: "Interested in state master dealership and sub-dealer network deployment across Delhi-NCR.",
+    shop_photos: [
+      "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=900&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&auto=format&fit=crop&q=80",
+    ],
     consent: true,
     status: "APPROVED_CONVERTED",
     submittedAt: "2026-08-19T11:00:00.000Z",
@@ -119,6 +137,9 @@ const INITIAL_DEMO_LEADS = [
     businessProfile: "Rooftop Solar Installer",
     expectedOrderQty: "1 - 3 Kits / Month (Starter)",
     notes: "Interested in residential 3kW/5kW hybrid kits with Lithium battery storage.",
+    shop_photos: [
+      "https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=900&auto=format&fit=crop&q=80",
+    ],
     consent: true,
     status: "CONTACTED",
     submittedAt: "2026-08-18T16:45:00.000Z",
@@ -140,6 +161,7 @@ const INITIAL_DEMO_LEADS = [
     businessProfile: "Electrical Trader",
     expectedOrderQty: "1 - 3 Kits / Month (Starter)",
     notes: "Looking to expand retail shop with complete Solar Kits inventory.",
+    shop_photos: [],
     consent: true,
     status: "NEW",
     submittedAt: "2026-08-21T06:20:00.000Z",
@@ -258,6 +280,7 @@ export default function ResellerLeads() {
 
   // Selected lead for detail view modal
   const [selectedLead, setSelectedLead] = useState(null);
+  const [adminPhotoPreview, setAdminPhotoPreview] = useState(null);
 
   // Manual Add Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -373,10 +396,13 @@ export default function ResellerLeads() {
       );
 
       if (res.data?.status === "success" || res.data?.success) {
+        const emailNotice = res.data?.data?.email_sent
+          ? ` Login credentials emailed to "${approveLead.email || approveLead.mobileNumber}".`
+          : "";
         dispatch(
           setAlert({
             type: "success",
-            message: `Franchise Partner approved! Account provisioned & agreement generated for "${approveLead.fullName}".`,
+            message: `Franchise Partner approved! Account provisioned & agreement generated for "${approveLead.fullName}".${emailNotice}`,
           })
         );
         handleStatusChange(leadId, "APPROVED_CONVERTED");
@@ -819,6 +845,12 @@ export default function ResellerLeads() {
                                     <span>QuickeKYC Verified</span>
                                   </span>
                                 )}
+                                {lead.shop_photos && lead.shop_photos.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                    <FiCamera size={10} className="text-[#0575B8]" />
+                                    <span>{lead.shop_photos.length} Photos</span>
+                                  </span>
+                                )}
                               </div>
                               {lead.gst_legal_name && (
                                 <p className="text-[10px] text-emerald-800 font-medium truncate max-w-[220px]">
@@ -1122,6 +1154,52 @@ export default function ResellerLeads() {
                   </p>
                 </div>
 
+                {/* Shop & Commercial Premises Photos */}
+                <div className="p-4 rounded-2xl bg-bg border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                      <FiCamera className="text-primary" size={14} />
+                      <span>Shop & Commercial Premises Photos ({selectedLead.shop_photos?.length || 0})</span>
+                    </p>
+                    {selectedLead.shop_photos && selectedLead.shop_photos.length > 0 && (
+                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <FiCheckCircle size={12} /> {selectedLead.shop_photos.length} Photos Attached
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedLead.shop_photos && selectedLead.shop_photos.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {selectedLead.shop_photos.map((photoUrl, pIdx) => (
+                        <div
+                          key={pIdx}
+                          onClick={() => setAdminPhotoPreview(photoUrl)}
+                          className="group relative aspect-4/3 rounded-xl overflow-hidden border border-border bg-surface shadow-xs cursor-pointer"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={`Shop Photo ${pIdx + 1}`}
+                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-xs text-white text-[9px] font-bold">
+                            Photo {pIdx + 1}
+                          </div>
+                          <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-white/90 text-text-primary flex items-center justify-center shadow-md">
+                              <FiMaximize2 size={14} />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-surface border border-border text-xs text-text-muted flex items-center gap-2">
+                      <FiInfo size={14} className="text-text-muted" />
+                      <span>No shop photos were attached with this franchise lead submission.</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Admin Internal Notes */}
                 <div className="space-y-2">
                   <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider">
@@ -1250,10 +1328,11 @@ export default function ResellerLeads() {
                   </select>
                 </div>
 
-                <div className="p-3 rounded-xl bg-info-soft/30 border border-info/20 text-[11px] text-text-secondary leading-relaxed">
-                  ✓ Automatically provisions Reseller Account in the system.<br />
-                  ✓ Generates official Franchise Partner Agreement in <strong>pending signature</strong> status.<br />
-                  ✓ Enables the partner to sign the agreement & upload offline fee payment receipt.
+                <div className="p-3.5 rounded-xl bg-info-soft/40 border border-info/20 text-[11px] text-text-secondary leading-relaxed space-y-1">
+                  <p>✓ Automatically provisions Reseller Account in the system.</p>
+                  <p>✓ Emails partner login credentials (email & password) to <strong>{approveLead.email || 'registered email'}</strong>.</p>
+                  <p>✓ Generates official Franchise Partner Agreement in <strong>pending signature</strong> status.</p>
+                  <p>✓ Enables the partner to sign the agreement & upload offline fee payment receipt.</p>
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-2">
@@ -1492,6 +1571,40 @@ export default function ResellerLeads() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ADMIN FULL-SCREEN SHOP PHOTO LIGHTBOX ──────────────────────── */}
+      <AnimatePresence>
+        {adminPhotoPreview && (
+          <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative max-w-4xl max-h-[90vh] bg-surface rounded-2xl overflow-hidden border border-border shadow-2xl flex flex-col"
+            >
+              <div className="p-4 bg-bg flex items-center justify-between border-b border-border">
+                <span className="text-sm font-bold text-text-primary flex items-center gap-2">
+                  <FiCamera className="text-primary" /> Shop & Commercial Premises Inspection Photo
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAdminPhotoPreview(null)}
+                  className="p-1.5 rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-primary transition cursor-pointer"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+              <div className="p-3 flex items-center justify-center overflow-auto bg-black/40">
+                <img
+                  src={adminPhotoPreview}
+                  alt="Shop Inspection Full View"
+                  className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl"
+                />
+              </div>
             </motion.div>
           </div>
         )}

@@ -48,6 +48,9 @@ const get_platform_settings = async (req, res) => {
         activation_require_active_plan:     false,
         activation_require_territory_assigned:true,
         activation_require_product_auth:    true,
+        franchise_agreement_title:          'SolarKits Authorized Franchise Partner Agreement',
+        franchise_agreement_version:        '2.0',
+        franchise_agreement_template:       null,
         _is_default: true, // Flag to indicate no DB document exists yet
       };
     }
@@ -99,6 +102,9 @@ const ALLOWED_UPDATE_FIELDS = [
   'activation_require_active_plan',
   'activation_require_territory_assigned',
   'activation_require_product_auth',
+  'franchise_agreement_title',
+  'franchise_agreement_version',
+  'franchise_agreement_template',
 ];
 
 const update_platform_settings = async (req, res) => {

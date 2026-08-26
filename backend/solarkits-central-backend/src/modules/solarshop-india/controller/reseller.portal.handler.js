@@ -24,6 +24,7 @@ const {
   FranchiseePlanPoSetting,
   FpoOrder,
   WarehouseComboKit,
+  SolarShopSettings,
 } = require('../../admin-panel/models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
@@ -2162,26 +2163,87 @@ const get_current_agreement = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Reseller not found' });
     }
 
+    const settings = await SolarShopSettings.findOne().lean();
+    const masterTemplate = settings?.franchise_agreement_template || `SOLARKITS AUTHORIZED FRANCHISE PARTNER AGREEMENT
+
+This Franchise Distribution & Commercial Channel Agreement ("Agreement") is formally entered into and effective as of {{AGREEMENT_DATE}} by and between:
+
+1. THE COMPANY:
+SolarKits Clean Energy Solutions Private Limited, having its corporate fulfillment center and technology office in India (hereinafter referred to as the "Company" or "SolarKits").
+
+2. THE FRANCHISE PARTNER:
+{{BUSINESS_NAME}}, represented by authorized signatory {{PARTNER_NAME}}, having registered commercial premises at {{TERRITORY}}, with GSTIN: {{GSTIN}} (hereinafter referred to as the "Franchise Partner" or "Franchisee").
+
+RECITALS & PURPOSE:
+WHEREAS the Company is engaged in the manufacturing, assembly, and turnkey supply of pre-engineered Solar BOS Combo Kits, mono PERC / TopCon panels, on-grid/hybrid inverters, module mounting structures, and associated electrical accessories.
+WHEREAS the Franchise Partner desires to obtain authorized distribution, retail demonstration, and local EPC contractor procurement fulfillment rights for the Designated Territory of {{TERRITORY}}.
+
+NOW THEREFORE, the parties mutually agree as follows:
+
+CLAUSE 1 — APPOINTMENT & TERRITORY AUTHORIZATION
+1.1 The Company hereby authorizes the Franchise Partner as an Official SolarKits Franchisee for the designated territory of {{TERRITORY}}.
+1.2 The Franchise Partner is authorized to promote, stock, distribute, and supply turnkey SolarKits Combo Packages to local EPC contractors, solar installers, commercial clients, and residential end-users.
+
+CLAUSE 2 — COMMERCIAL TERMS, PRICING & MARGINS
+2.1 Franchise Partner shall receive guaranteed factory-direct wholesale pricing, exclusive bundle margin slabs, and procurement discounts across all pre-engineered kits.
+2.2 The Commercial Model assigned to Franchise Partner is {{COMMERCIAL_MODE}}.
+2.3 Margin settlements and incentive payouts shall be governed by platform settlement policies and credited to Franchise Partner's dedicated wallet.
+
+CLAUSE 3 — QUALITY ASSURANCE & WARRANTY
+3.1 Franchise Partner covenants to supply only genuine SolarKits certified modules, inverters, and BOS accessories.
+3.2 All components carry standard manufacturer warranties (25-year panel performance, 5/10-year inverter replacement warranty).
+
+CLAUSE 4 — REGISTRATION & ONE-TIME FEE SETTLEMENT
+4.1 Franchise onboarding requires digital signature of this Agreement and verification of the franchise fee settlement.
+4.2 Upon verification, full operational platform access, priority stock allocation, and regional lead routing will be unlocked immediately.
+
+CLAUSE 5 — TERM, RENEWAL & TERMINATION
+5.1 This Agreement is valid for a period of 12 (twelve) months from the date of activation and shall renew annually based on minimum order quantity (MOQ) targets and mutual agreement.
+5.2 Either party may terminate this agreement with 30 days written notice in case of breach of quality compliance or exclusivity guidelines.
+
+CLAUSE 6 — GOVERNING LAW & JURISDICTION
+6.1 This Agreement shall be governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the competent courts in India.
+
+[DIGITAL EXECUTION DECLARATION]
+By digitally signing below, the Franchise Partner certifies that they have read, understood, and accept all terms and conditions of this Franchise Agreement.`;
+
+    const agreementNumber = agreement?.agreement_number || `SK-FRN-AGR-${new Date().getFullYear()}-${String(resellerId).slice(-6).toUpperCase()}`;
+    const formattedDate = new Date(agreement?.created_at || Date.now()).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+    const territory = `${reseller.address?.city ? reseller.address.city + ', ' : ''}${reseller.address?.state || 'India'}`;
+    const commMode = (reseller.commercial_mode === 'upfront_discount' ? 'Upfront Wholesale Margin Discount Mode' : 'Commission Settlement Mode');
+
+    const renderTemplate = (rawText) => {
+      return (rawText || masterTemplate)
+        .replace(/\{\{AGREEMENT_DATE\}\}/g, formattedDate)
+        .replace(/\{\{AGREEMENT_NUMBER\}\}/g, agreementNumber)
+        .replace(/\{\{BUSINESS_NAME\}\}/g, reseller.business_name || 'Solar Enterprise')
+        .replace(/\{\{PARTNER_NAME\}\}/g, reseller.contact_person || 'Authorized Signatory')
+        .replace(/\{\{TERRITORY\}\}/g, territory)
+        .replace(/\{\{GSTIN\}\}/g, reseller.gst_number || 'Not Provided / Application Pending')
+        .replace(/\{\{COMMERCIAL_MODE\}\}/g, commMode)
+        .replace(/\{\{EMAIL\}\}/g, reseller.email || '')
+        .replace(/\{\{MOBILE\}\}/g, reseller.mobile || '');
+    };
+
     if (!agreement) {
-      const agreementNumber = `SK-FRN-AGR-${new Date().getFullYear()}-${String(resellerId).slice(-6).toUpperCase()}`;
-      const defaultContent = `
-1. PARTIES & APPOINTMENT: SolarKits Clean Energy Solutions ("Company") hereby appoints ${reseller.business_name} ("Franchise Partner") as an authorized regional channel partner.
-2. TERRITORIAL EXCLUSIVITY: Franchise Partner is granted commercial distribution rights within the assigned region: ${reseller.address?.city || reseller.address?.state || 'Designated Territory'}.
-3. WHOLESALE PRICING & MARGINS: Factory-direct distributor pricing and margin slabs apply across all pre-engineered combo kits and components.
-4. QUALITY & STANDARDS COMPLIANCE: Franchise Partner agrees to follow standard technical procedures, quality assurance, and genuine SolarKits system components.
-5. ACTIVATION & TERM: Agreement is effective upon execution and verified fee payment confirmation for 12 months with annual renewal options.
-      `.trim();
+      const termsContent = renderTemplate(masterTemplate);
 
       const created = await ResellerAgreement.create({
         reseller_id: resellerId,
         agreement_number: agreementNumber,
-        title: 'SolarKits Authorized Franchise Partner Agreement',
-        version: '1.0',
-        territory_scope: `${reseller.address?.city ? reseller.address.city + ', ' : ''}${reseller.address?.state || 'India'}`,
-        agreement_content: defaultContent,
+        title: settings?.franchise_agreement_title || 'SolarKits Authorized Franchise Partner Agreement',
+        version: settings?.franchise_agreement_version || '2.0',
+        territory_scope: territory,
+        agreement_content: termsContent,
         status: 'pending',
       });
       agreement = created.toObject();
+    } else if (agreement.agreement_content && agreement.agreement_content.includes('{{')) {
+      agreement.agreement_content = renderTemplate(agreement.agreement_content);
     }
 
     return res.json({
@@ -2194,8 +2256,12 @@ const get_current_agreement = async (req, res) => {
           contact_person: reseller.contact_person,
           email: reseller.email,
           mobile: reseller.mobile,
+          gstin: reseller.gst_number,
+          territory: territory,
           agreement_status: reseller.agreement_status,
           reseller_lifecycle_status: reseller.reseller_lifecycle_status,
+          agreement_signed_at: reseller.agreement_signed_at,
+          agreement_signer_name: reseller.agreement_signer_name,
         },
       },
     });
