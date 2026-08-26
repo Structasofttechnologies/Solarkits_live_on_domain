@@ -1079,12 +1079,12 @@ exports.list_bdes = async (req, res) => {
     }
 
     // Filter by State
-    if (state_id) {
+    if (state_id && mongoose.Types.ObjectId.isValid(state_id)) {
       query.state_id = new mongoose.Types.ObjectId(state_id);
     }
 
     // Filter by District
-    if (district_id) {
+    if (district_id && mongoose.Types.ObjectId.isValid(district_id)) {
       query.district_id = new mongoose.Types.ObjectId(district_id);
     }
 

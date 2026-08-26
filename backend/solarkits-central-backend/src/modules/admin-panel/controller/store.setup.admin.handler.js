@@ -126,11 +126,11 @@ const list_store_setups = async (req, res) => {
       ];
     }
 
-    if (state_id) query.state_id = state_id;
-    if (district_id) query.district_id = district_id;
-    if (plan_id) query.plan_id = plan_id;
-    if (bde_id) query.current_bde_id = bde_id;
-    if (assigned_employee_id) query.assigned_employee_id = assigned_employee_id;
+    if (state_id && mongoose.Types.ObjectId.isValid(state_id)) query.state_id = state_id;
+    if (district_id && mongoose.Types.ObjectId.isValid(district_id)) query.district_id = district_id;
+    if (plan_id && mongoose.Types.ObjectId.isValid(plan_id)) query.plan_id = plan_id;
+    if (bde_id && mongoose.Types.ObjectId.isValid(bde_id)) query.current_bde_id = bde_id;
+    if (assigned_employee_id && mongoose.Types.ObjectId.isValid(assigned_employee_id)) query.assigned_employee_id = assigned_employee_id;
     if (status) query.status = status;
 
     if (delay_status === 'delayed') {
