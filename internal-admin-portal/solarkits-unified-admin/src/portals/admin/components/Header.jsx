@@ -507,7 +507,7 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
                         <div className="hidden sm:block text-left">
                             <p className="text-sm font-semibold text-text-primary leading-tight">{user?.name}</p>
                             <p className="text-[10px] sm:text-xs bg-linear-120 from-primary/10 to-primary/5 text-primary px-2 py-0.5 rounded-full inline-block mt-0.5">
-                                {user?.role}
+                                {typeof user?.role === 'object' ? user?.role?.name : (user?.role || 'Admin')}
                             </p>
                         </div>
                     </button>

@@ -116,7 +116,7 @@ export default function Profile() {
                 <div className="flex-1 text-center md:text-left z-10 space-y-4">
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
                         <span className="px-4 py-1.5 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold rounded-lg uppercase tracking-[0.2em] border border-white/20">
-                            {user?.role || 'Developer'}
+                            {typeof user?.role === 'object' ? user?.role?.name : (user?.role || 'Accounts')}
                         </span>
                         <div className="flex items-center gap-2 px-3 py-1 bg-success/20 backdrop-blur-md border border-success/30 rounded-lg">
                             <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse"></span>
@@ -131,7 +131,7 @@ export default function Profile() {
                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-6 text-white/70">
                         <div className="flex items-center gap-2 text-sm font-medium">
                             <HiOfficeBuilding className="text-white/40" />
-                            <span>{user?.department || 'Engineering'}</span>
+                            <span>{typeof user?.department === 'object' ? user?.department?.name : (user?.department || user?.role?.department?.name || 'Accounts')}</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm font-medium">
                             <HiLocationMarker className="text-white/40" />
@@ -157,8 +157,8 @@ export default function Profile() {
                     </InfoSection>
 
                     <InfoSection title="Organizational Profile" icon={HiIdentification}>
-                        <DetailItem icon={HiOfficeBuilding} label="Department" value={user?.department} />
-                        <DetailItem icon={HiUser} label="Designation" value={user?.role} />
+                        <DetailItem icon={HiOfficeBuilding} label="Department" value={typeof user?.department === 'object' ? user?.department?.name : (user?.department || user?.role?.department?.name || 'Accounts')} />
+                        <DetailItem icon={HiUser} label="Designation" value={typeof user?.role === 'object' ? user?.role?.name : (user?.role || 'Accounts')} />
                         <DetailItem icon={HiShieldCheck} label="Account Tier" value={user?.level || 'Standard Access'} />
                     </InfoSection>
                 </div>

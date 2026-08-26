@@ -15,23 +15,28 @@ const ipv4 = process.env.IPV4 || 'http://localhost';
 const rawOrigins = `${process.env.FRONTEND_URLS || ''},${process.env.CORS_ORIGIN || ''}`;
 const FRONTEND_URLS = rawOrigins
   .split(',')
-  .map(url => url.trim())
+  .map(url => url.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
+
+    const cleanOrigin = origin.replace(/\/+$/, '');
     
     // Check exact whitelist or pattern matches
     const isWhitelisted =
-      FRONTEND_URLS.includes(origin) ||
-      origin.includes('localhost') ||
-      origin.includes('127.0.0.1') ||
-      origin.includes('192.168.') ||
-      origin.endsWith('.onrender.com') ||
-      origin.includes('solar-store') ||
-      origin.includes('solarkits');
+      FRONTEND_URLS.includes(cleanOrigin) ||
+      cleanOrigin.includes('localhost') ||
+      cleanOrigin.includes('127.0.0.1') ||
+      cleanOrigin.includes('192.168.') ||
+      cleanOrigin.endsWith('.onrender.com') ||
+      cleanOrigin.includes('.onrender.com') ||
+      cleanOrigin.includes('onrender.com') ||
+      cleanOrigin.includes('solar-store') ||
+      cleanOrigin.includes('solarkits') ||
+      cleanOrigin.includes('bde');
 
     if (isWhitelisted) {
       return callback(null, true);
