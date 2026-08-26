@@ -60,6 +60,9 @@ router.post('/agreement/sign',    verify_reseller_auth, kycDocUpload, handler.si
 router.get('/fee-payment/info',           verify_reseller_auth, handler.get_fee_payment_info);
 router.post('/fee-payment/upload-receipt', verify_reseller_auth, kycDocUpload, handler.upload_manual_payment_receipt);
 
+// ── Physical Store Setup & Verification Routes ─────────────────────────────
+router.get('/store-setup/my-setup', verify_reseller_auth, handler.get_my_store_setup);
+
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);

@@ -1,4 +1,5 @@
 import { FiUsers, FiTag, FiFileText, FiMapPin, FiPackage, FiDollarSign, FiInbox } from "react-icons/fi";
+import { FaStore, FaAward } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -10,6 +11,14 @@ const QUICK_LINKS = [
     path: "/admin-panel/solar-shop/reseller-management/leads",
     color: "text-danger",
     bg: "bg-danger-soft",
+  },
+  {
+    label: "Store Setup & Operations",
+    description: "Physical retail setup checklist, employee assignments & verification",
+    icon: FaStore,
+    path: "/admin-panel/solar-shop/reseller-management/store-setup",
+    color: "text-warning",
+    bg: "bg-warning-soft",
   },
   {
     label: "Franchisee Accounts",

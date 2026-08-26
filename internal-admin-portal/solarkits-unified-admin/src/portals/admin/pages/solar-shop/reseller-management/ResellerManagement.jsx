@@ -21,6 +21,7 @@ const FranchiseePOSettings         = lazy(() => import("./FranchiseePOSettings")
 const FranchiseeMoqRules           = lazy(() => import("./FranchiseeMoqRules"));
 const FranchiseeKitTargets         = lazy(() => import("./FranchiseeKitTargets"));
 const FranchiseePerformanceTracker = lazy(() => import("./FranchiseePerformanceTracker"));
+const StoreSetupManagement = lazy(() => import("../../dashboard/store-setup/StoreSetupManagement"));
 
 /**
  * ResellerManagement router — top-level router for all reseller management sub-pages.
@@ -210,6 +211,17 @@ function ResellerManagement() {
           <PermissionGuard requiredUniqueId="FPO_ANALYTICS">
             <Suspense fallback={<Loader text="Loading Performance Tracker..." />}>
               <FranchiseePerformanceTracker />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      {/* Franchisee Store Setup & Operations */}
+      <Route
+        path="/store-setup/*"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Setup Management..." />}>
+              <StoreSetupManagement />
             </Suspense>
           </PermissionGuard>
         }

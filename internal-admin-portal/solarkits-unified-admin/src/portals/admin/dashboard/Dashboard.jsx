@@ -1,4 +1,4 @@
-import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,6 +40,8 @@ const IndustryContentManagement = lazy(() => import("../pages/dashboard/industry
 const IndustryTypeManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryTypeManagement"));
 const IndustryThemeConfig = lazy(() => import("../pages/dashboard/industry-content/IndustryThemeConfig"));
 const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-configuration/WebsiteConfiguration"));
+const BdeManagement = lazy(() => import("../pages/dashboard/bde-management/BdeManagement"));
+const StoreSetupManagement = lazy(() => import("../pages/dashboard/store-setup/StoreSetupManagement"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 /* ===================== MENU CONFIG ===================== */
@@ -47,6 +49,74 @@ const NotFound = lazy(() => import("../pages/NotFound"));
 const menus = [
   [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/home", unique_id: "00000000" }],
   [
+    {
+      name: "BDE Management",
+      icon: <FaUserTie />,
+      path: "/admin-panel/bde-management",
+      unique_id: "ADM_BDE_MGMT",
+      subMenu: [
+        {
+          name: "BDE Dashboard",
+          icon: <FaHome />,
+          path: "/admin-panel/bde-management/dashboard",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "All BDEs",
+          icon: <FaUsers />,
+          path: "/admin-panel/bde-management/all",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "BDE Leads",
+          icon: <FaUsersCog />,
+          path: "/admin-panel/bde-management/leads",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "Attributed Franchisees",
+          icon: <FaStore />,
+          path: "/admin-panel/bde-management/franchisees",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "Territory Exceptions",
+          icon: <FaMapLocationDot />,
+          path: "/admin-panel/bde-management/territory-exceptions",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "Conversion Funnel",
+          icon: <FaCoins />,
+          path: "/admin-panel/bde-management/conversion-funnel",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "Create BDE",
+          icon: <FaUserPlus />,
+          path: "/admin-panel/bde-management/create",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "Territory Assignment",
+          icon: <FaMapLocationDot />,
+          path: "/admin-panel/bde-management/territory-assignment",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "Goal Assignment",
+          icon: <FaCoins />,
+          path: "/admin-panel/bde-management/goal-assignment",
+          unique_id: "ADM_BDE_MGMT",
+        },
+        {
+          name: "BDE Activity History",
+          icon: <FaFileContract />,
+          path: "/admin-panel/bde-management/activity-history",
+          unique_id: "ADM_BDE_MGMT",
+        },
+      ],
+    },
     {
       name: "Operations",
       icon: <MdEngineering />,
@@ -263,7 +333,8 @@ const isModuleAllowed = (menu, allowedUniqueIds) => {
   return (
     allowedUniqueIds.includes(menu.unique_id) ||
     menu.unique_id.startsWith("ADM_INDUSTRY") ||
-    menu.unique_id.startsWith("ADM_WEBSITE")
+    menu.unique_id.startsWith("ADM_WEBSITE") ||
+    menu.unique_id.startsWith("ADM_BDE")
   );
 };
 
@@ -325,6 +396,7 @@ export default function Dashboard() {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes('/home')) return 'Home Dashboard';
+    if (path.includes('/bde-management')) return 'BDE Management';
     if (path.includes('/operations')) return 'Operations Management';
     if (path.includes('/settings')) return 'System Settings';
     if (path.includes('/manage-users')) return 'User Management';
@@ -378,6 +450,20 @@ export default function Dashboard() {
                         </Suspense>
                       </PermissionGuard>
                     }
+                  />
+                  <Route
+                    path="/bde-management/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="ADM_BDE_MGMT">
+                        <Suspense fallback={<Loader text="Loading BDE Management..." />}>
+                          <BdeManagement moduleUniqueId="ADM_BDE_MGMT" />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/store-setup/*"
+                    element={<Navigate to="/admin-panel/solar-shop/reseller-management/store-setup" replace />}
                   />
                   <Route
                     path="/operations/*"

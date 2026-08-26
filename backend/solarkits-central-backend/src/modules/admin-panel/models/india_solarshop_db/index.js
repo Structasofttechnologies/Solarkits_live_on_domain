@@ -67,6 +67,30 @@ const FpoCommissionLedger      = require('./fpo_commission_ledgers.schema');
 const FranchiseeAlert          = require('./franchisee_alerts.schema');
 const FranchiseeAlertConfig    = require('./franchisee_alert_configs.schema');
 
+// --- Phase BDE: SolarKits BDE Management, KYC, Territory & Goal System ---
+const BDEProfile               = require('./bde_profiles.schema');
+const BDEKYC                   = require('./bde_kyc.schema');
+const BDETerritoryAssignment   = require('./bde_territory_assignments.schema');
+const BDEPlanAssignment        = require('./bde_plan_assignments.schema');
+const BDEGoal                  = require('./bde_goals.schema');
+const BDEActivityLog           = require('./bde_activity_logs.schema');
+const BDENotification          = require('./bde_notifications.schema');
+
+// --- Step 2: BDE Leads, Activities & Territory Exceptions ---
+const BDELead                  = require('./bde_leads.schema');
+const BDELeadActivity          = require('./bde_lead_activities.schema');
+const BDEFollowUp              = require('./bde_follow_ups.schema');
+const BDEReassignmentHistory   = require('./bde_reassignment_histories.schema');
+const TerritoryExceptionRequest = require('./territory_exception_requests.schema');
+
+// --- Step 3: Franchisee Store Setup, Operations & Expansion Planning ---
+const StoreSetup               = require('./store_setups.schema');
+const StoreSetupSetting        = require('./store_setup_settings.schema');
+const StoreSetupChecklist      = require('./store_setup_checklists.schema');
+const StoreSetupDelay          = require('./store_setup_delays.schema');
+const StoreSetupVerification   = require('./store_setup_verifications.schema');
+const ExpansionPlan            = require('./expansion_plans.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
@@ -78,7 +102,7 @@ module.exports = {
   BulkKitSetting,
   PurchaseOrder,
   OfferMaster,
-  SolarShopSettings, // Phase R1: Use SolarShopSettings (corrected casing) everywhere
+  SolarShopSettings,
   InventoryReservation,
   ComboBundleMaster,
   ComboKitVariant,
@@ -127,9 +151,36 @@ module.exports = {
   FpoCommissionLedger,
   FranchiseeAlert,
   FranchiseeAlertConfig,
+  // --- Phase BDE: SolarKits BDE System ---
+  BDEProfile,
+  BdeProfile: BDEProfile,
+  BDEKYC,
+  BdeKyc: BDEKYC,
+  BDETerritoryAssignment,
+  BdeTerritoryAssignment: BDETerritoryAssignment,
+  BDEPlanAssignment,
+  BdePlanAssignment: BDEPlanAssignment,
+  BDEGoal,
+  BdeGoal: BDEGoal,
+  BDEActivityLog,
+  BdeActivityLog: BDEActivityLog,
+  BDENotification,
+  BdeNotification: BDENotification,
+  // --- Step 2: BDE Leads, Activities & Reassignment ---
+  BDELead,
+  BdeLead: BDELead,
+  BDELeadActivity,
+  BdeLeadActivity: BDELeadActivity,
+  BDEFollowUp,
+  BdeFollowUp: BDEFollowUp,
+  BDEReassignmentHistory,
+  BdeReassignmentHistory: BDEReassignmentHistory,
+  TerritoryExceptionRequest,
+  // --- Step 3: Store Setup & Operations ---
+  StoreSetup,
+  StoreSetupSetting,
+  StoreSetupChecklist,
+  StoreSetupDelay,
+  StoreSetupVerification,
+  ExpansionPlan,
 };
-
-
-
-
-

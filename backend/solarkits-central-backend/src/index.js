@@ -117,6 +117,13 @@ adminRouter.use('/franchisee/po',               require('./modules/admin-panel/r
 adminRouter.use('/franchisee/performance',      require('./modules/admin-panel/routes/franchisee.performance.route'));
 adminRouter.use('/franchisee/goals',            require('./modules/admin-panel/routes/franchisee.goal.route'));
 
+// ─── Phase BDE: SolarKits BDE Management System ──────────────────────────────
+adminRouter.use('/bde-mgmt',                     require('./modules/admin-panel/routes/bde.admin.route'));
+adminRouter.use('/bde',                          require('./modules/admin-panel/routes/bde.admin.route'));
+
+// ─── Step 3: Franchisee Store Setup & Operations ─────────────────────────────
+adminRouter.use('/store-setup',                  require('./modules/admin-panel/routes/store.setup.admin.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 
@@ -147,6 +154,10 @@ app.use('/account-api', accountRouter);
 
 // 7. Solarshop India routes
 app.use('/api/india/v1', require('./modules/solarshop-india/routes/v1.routes'));
+
+// 7.1 BDE Self-Service Portal routes
+app.use('/api/bde/v1', require('./modules/solarshop-india/routes/v1.routes/bde.portal.route'));
+app.use('/api/bde', require('./modules/solarshop-india/routes/v1.routes/bde.portal.route'));
 
 // 10. BOSKIT Platform routes (Phase 2+)
 // All BOSKIT collections are registered when this module is required.

@@ -23,6 +23,8 @@ const { evaluateActivationReadiness } = require('../services/reseller.activation
 const { performGstVerification } = require('../services/gst.verification.service');
 const { listEpcTransferRequests, reviewEpcTransferRequest } = require('../utils/epc.reseller.service');
 const { syncGstDerivedTerritoryForReseller } = require('../utils/territory.validator');
+const { createStoreSetupForFranchisee } = require('../services/store.setup.service');
+const { syncLeadPipelineFromOnboarding } = require('../services/bde.lead.service');
 
 // ─── 1. LIST RESELLERS ────────────────────────────────────────────────────────
 /**
@@ -284,6 +286,13 @@ const review_kyc = async (req, res) => {
     reseller.kyc_status = targetKycStatus;
     reseller.updated_by = validAdminId;
     await reseller.save();
+
+    // Step 2: Sync BDE Lead pipeline
+    if (decision === 'verify') {
+      syncLeadPipelineFromOnboarding(reseller._id, 'admin_approved').catch((err) => console.error('[BDE Lead Sync Error]', err));
+    } else if (decision === 'reject') {
+      syncLeadPipelineFromOnboarding(reseller._id, 'rejected', { reason: note }).catch((err) => console.error('[BDE Lead Sync Error]', err));
+    }
 
     await logAudit({
       actor_type: 'cms_user',
@@ -663,6 +672,20 @@ const verify_fee_payment_receipt = async (req, res) => {
         { reseller_id: id },
         { $set: { status: 'active' } }
       );
+
+      // Step 3: Trigger automatic Store Setup creation if agreement is signed
+      try {
+        await createStoreSetupForFranchisee(reseller._id, adminId);
+      } catch (setupErr) {
+        console.error('[reseller.admin] Auto store setup creation error:', setupErr);
+      }
+
+      // Step 2: Sync BDE Lead stage to fee_paid
+      try {
+        await syncLeadPipelineFromOnboarding(reseller._id, 'fee_payment_verified');
+      } catch (syncErr) {
+        console.error('[reseller.admin] BDE Lead sync error on fee payment:', syncErr);
+      }
 
       await logAudit({
         actor_type: 'cms_user',

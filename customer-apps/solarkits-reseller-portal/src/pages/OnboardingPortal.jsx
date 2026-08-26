@@ -20,7 +20,12 @@ import {
   FiEye,
   FiExternalLink,
   FiZap,
+  FiUserCheck,
+  FiMapPin,
+  FiLayers,
+  FiTool,
 } from "react-icons/fi";
+import { FaStore, FaAward } from "react-icons/fa";
 import api from "../services/api";
 import logoImg from "@/assets/images/logo.png";
 
@@ -42,6 +47,10 @@ export default function OnboardingPortal() {
   // Modals & Active Action States
   const [agreementModalOpen, setAgreementModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [storeSetupModalOpen, setStoreSetupModalOpen] = useState(false);
+
+  // Store Setup Data State
+  const [storeSetupData, setStoreSetupData] = useState(null);
 
   // Agreement State
   const [agreementData, setAgreementData] = useState(null);
@@ -61,6 +70,17 @@ export default function OnboardingPortal() {
   const [receiptFile, setReceiptFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+
+  const fetchStoreSetup = useCallback(async () => {
+    try {
+      const res = await api.get("/india/v1/reseller/store-setup/my-setup");
+      if (res.data?.status === "success" && res.data?.data) {
+        setStoreSetupData(res.data.data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch store setup:", err);
+    }
+  }, []);
 
   const fetchMe = useCallback(async () => {
     if (!token) {
@@ -98,9 +118,13 @@ export default function OnboardingPortal() {
 
   useEffect(() => {
     fetchMe();
-    const interval = setInterval(fetchMe, 6000);
+    fetchStoreSetup();
+    const interval = setInterval(() => {
+      fetchMe();
+      fetchStoreSetup();
+    }, 6000);
     return () => clearInterval(interval);
-  }, [fetchMe]);
+  }, [fetchMe, fetchStoreSetup]);
 
   const loadAgreement = async () => {
     try {
@@ -219,6 +243,7 @@ export default function OnboardingPortal() {
       if (res.data?.status === "success") {
         setPaymentModalOpen(false);
         fetchMe();
+        fetchStoreSetup();
       } else {
         setUploadError(res.data?.message || "Failed to upload payment receipt.");
       }
@@ -235,7 +260,24 @@ export default function OnboardingPortal() {
   const isAgreementSigned = reseller?.agreement_status === "signed";
   const isReceiptUploaded = reseller?.fee_payment_status === "receipt_uploaded" || reseller?.fee_payment_status === "verified";
   const isReceiptVerified = reseller?.fee_payment_status === "verified";
-  const isAccountActive = reseller?.activation_status === "active";
+
+  // Store Setup Evaluation
+  const setup = storeSetupData?.setup;
+  const checklist = storeSetupData?.checklist || [];
+  const isStoreSetupCompleted = Boolean(
+    setup && (
+      setup.status === "admin_verified" ||
+      setup.status === "setup_completed" ||
+      setup.status === "operations_started"
+    )
+  );
+  const isStoreSetupInProgress = Boolean(isReceiptVerified && setup && !isStoreSetupCompleted);
+
+  // Operations Live Evaluation
+  const isAccountActive = Boolean(
+    reseller?.is_operational === true ||
+    (reseller?.activation_status === "active" && (isStoreSetupCompleted || setup?.status === "operations_started"))
+  );
 
   const completedStepsCount = [
     isGstVerified,
@@ -243,10 +285,11 @@ export default function OnboardingPortal() {
     isAgreementSigned,
     isReceiptUploaded,
     isReceiptVerified,
+    isStoreSetupCompleted,
     isAccountActive,
   ].filter(Boolean).length;
 
-  const progressPercent = Math.round((completedStepsCount / 6) * 100);
+  const progressPercent = Math.round((completedStepsCount / 7) * 100);
 
   const primaryName = reseller?.contact_person || reseller?.business_name || "Franchise Partner";
   const companyName = reseller?.business_name || "Partner Enterprise";
@@ -285,7 +328,7 @@ export default function OnboardingPortal() {
                 Partner Activation Workspace
               </span>
               <span className="text-xs font-bold text-slate-600">
-                Pre-Onboarding & Verification Pipeline
+                Pre-Onboarding, Store Setup & Verification Pipeline
               </span>
             </div>
           </div>
@@ -316,7 +359,6 @@ export default function OnboardingPortal() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Vibrant Bright Welcome Hero Banner */}
         <div className="p-6 sm:p-8 lg:p-10 rounded-3xl bg-gradient-to-r from-[#0575B8] via-[#0066A2] to-[#045D93] text-white shadow-xl relative overflow-hidden">
-          {/* Decorative ambient background accents */}
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
           <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-[#F49222]/30 blur-2xl" />
 
@@ -328,12 +370,16 @@ export default function OnboardingPortal() {
                 </span>
                 <span className="text-xs text-blue-100 font-semibold bg-white/15 px-3 py-1 rounded-full backdrop-blur-xs border border-white/20">
                   {isAccountActive
-                    ? "✓ All Steps Completed — Account 100% Active"
-                    : !isAgreementSigned
-                    ? "Step 3 Pending: Legal Agreement Execution Required"
-                    : !isReceiptUploaded
+                    ? "✓ All Steps Completed — Operations 100% Live"
+                    : isStoreSetupCompleted
+                    ? "Step 7 Pending: Final Launch & Operations Activation"
+                    : isReceiptVerified
+                    ? "Step 6 In Progress: Physical Store Setup & Inspection"
+                    : isReceiptUploaded
+                    ? "Step 5 Pending: Receipt Verification by Admin"
+                    : isAgreementSigned
                     ? "Step 4 Pending: Offline Payment Receipt Required"
-                    : "Step 5 Pending: Receipt Verification by Admin"}
+                    : "Step 3 Pending: Legal Agreement Execution Required"}
                 </span>
               </div>
 
@@ -348,8 +394,10 @@ export default function OnboardingPortal() {
 
               <p className="text-sm sm:text-base text-blue-50 max-w-2xl leading-relaxed font-medium">
                 {isAccountActive
-                  ? "Congratulations! Your franchise account is activated. You now have complete access to wholesale catalog ordering, EPC allocations, and commercial storefront tools."
-                  : "Complete your onboarding sequence step-by-step below. Full operational dashboard access will be unlocked immediately once admin verifies your payment receipt."}
+                  ? "Congratulations! Your franchise retail operations are fully active. You now have complete access to wholesale catalog ordering, distributor pricing, and customer allocations."
+                  : isStoreSetupInProgress
+                  ? "Fee payment confirmed! Complete your 16-step physical store setup & branding checklist with our assigned State Coordinator to unlock retail operations."
+                  : "Complete your onboarding sequence step-by-step below. Store setup record is initialized automatically upon fee payment confirmation."}
               </p>
             </div>
 
@@ -378,117 +426,106 @@ export default function OnboardingPortal() {
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                   />
                 </svg>
-                <span className="absolute text-sm font-black text-white">{completedStepsCount}/6</span>
+                <span className="absolute text-sm font-black text-white">{completedStepsCount}/7</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ── 6-Step Visual Pipeline Cards (Clean & Bright) ─────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        {/* ── 7-Step Visual Pipeline Cards (Complete Sequence) ──────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-3.5">
           {/* Step 1 */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 flex flex-col justify-between transition-all duration-200 ${
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
               isGstVerified
-                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs hover:shadow-sm"
+                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
                 : "border-slate-200 bg-white shadow-xs"
             }`}
           >
             <div>
-              <div className="flex items-center justify-between gap-1.5 mb-3">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black bg-emerald-600 text-white shadow-xs shrink-0">
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black bg-emerald-600 text-white shadow-xs shrink-0">
                   1
                 </span>
-                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300/80 whitespace-nowrap leading-none shrink-0 inline-flex items-center gap-1">
-                  <FiCheck size={11} className="stroke-[3]" /> VERIFIED
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap inline-flex items-center gap-1">
+                  <FiCheck size={10} className="stroke-[3]" /> VERIFIED
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 mb-1">
-                <FiShield size={18} className="text-emerald-600 shrink-0" />
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FiShield size={16} className="text-emerald-600 shrink-0" />
                 <span>Lead & GST</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">QuickeKYC Authenticated</p>
+              <p className="text-[11px] text-slate-600 font-medium">QuickeKYC Authenticated</p>
             </div>
-            <div className="mt-4 pt-2.5 border-t border-emerald-200/80 text-[11px] font-bold text-emerald-800 truncate">
-              GSTIN: {reseller?.gst_number || "24AAACS1234F1Z8"}
+            <div className="mt-3 pt-2 border-t border-emerald-200 text-[10px] font-bold text-emerald-800 truncate">
+              GST: {reseller?.gst_number || "24AAACS1234F1Z8"}
             </div>
           </div>
 
           {/* Step 2 */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 flex flex-col justify-between transition-all duration-200 ${
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
               isApproved
-                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs hover:shadow-sm"
+                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
                 : "border-slate-200 bg-white shadow-xs"
             }`}
           >
             <div>
-              <div className="flex items-center justify-between gap-1.5 mb-3">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black bg-emerald-600 text-white shadow-xs shrink-0">
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black bg-emerald-600 text-white shadow-xs shrink-0">
                   2
                 </span>
-                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300/80 whitespace-nowrap leading-none shrink-0 inline-flex items-center gap-1">
-                  <FiCheck size={11} className="stroke-[3]" /> APPROVED
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap inline-flex items-center gap-1">
+                  <FiCheck size={10} className="stroke-[3]" /> APPROVED
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 mb-1">
-                <FiCheckCircle size={18} className="text-emerald-600 shrink-0" />
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FiCheckCircle size={16} className="text-emerald-600 shrink-0" />
                 <span>Admin Review</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">Eligibility Confirmed</p>
+              <p className="text-[11px] text-slate-600 font-medium">Eligibility Confirmed</p>
             </div>
-            <div className="mt-4 pt-2.5 border-t border-emerald-200/80 text-[11px] font-bold text-emerald-800 truncate">
+            <div className="mt-3 pt-2 border-t border-emerald-200 text-[10px] font-bold text-emerald-800 truncate">
               Model: {reseller?.commercial_mode || "Commission"}
             </div>
           </div>
 
           {/* Step 3 */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 flex flex-col justify-between transition-all duration-200 ${
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
               isAgreementSigned
-                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs hover:shadow-sm"
-                : "border-[#0575B8] bg-gradient-to-b from-blue-50/90 via-blue-50/40 to-white text-blue-950 ring-4 ring-blue-500/15 shadow-md shadow-blue-500/10"
+                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
+                : "border-[#0575B8] bg-blue-50/70 text-blue-950 ring-2 ring-blue-500/20 shadow-md"
             }`}
           >
             <div>
-              <div className="flex items-center justify-between gap-1.5 mb-3">
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 shadow-xs ${
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
                   isAgreementSigned ? "bg-emerald-600 text-white" : "bg-[#0575B8] text-white"
                 }`}>
                   3
                 </span>
-                <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap leading-none shrink-0 inline-flex items-center gap-1.5 shadow-2xs ${
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${
                   isAgreementSigned 
-                    ? "bg-emerald-100/90 text-emerald-800 border border-emerald-300/80" 
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
                     : "bg-[#0575B8] text-white"
                 }`}>
-                  {isAgreementSigned ? (
-                    <>
-                      <FiCheck size={11} className="stroke-[3]" /> SIGNED
-                    </>
-                  ) : (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
-                      ACTION REQUIRED
-                    </>
-                  )}
+                  {isAgreementSigned ? <><FiCheck size={10} /> SIGNED</> : "ACTION REQUIRED"}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 mb-1">
-                <FiFileText size={18} className={isAgreementSigned ? "text-emerald-600 shrink-0" : "text-[#0575B8] shrink-0"} />
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FiFileText size={16} className={isAgreementSigned ? "text-emerald-600" : "text-[#0575B8]"} />
                 <span>Agreement Signing</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                {isAgreementSigned ? `Signed: ${reseller?.agreement_signer_name || primaryName}` : "Unique Legal Agreement"}
+              <p className="text-[11px] text-slate-600 font-medium">
+                {isAgreementSigned ? "Signed" : "Legal Contract"}
               </p>
             </div>
-            <div className="mt-4">
+            <div className="mt-3">
               <button
                 onClick={() => setAgreementModalOpen(true)}
-                className={`w-full py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                  isAgreementSigned
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                    : "bg-[#0575B8] hover:bg-[#045D93] text-white shadow-md shadow-blue-500/25 active:scale-[0.98]"
+                className={`w-full py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer ${
+                  isAgreementSigned ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#0575B8] hover:bg-[#045D93] text-white"
                 }`}
               >
                 <span>{isAgreementSigned ? "View Agreement" : "Sign Agreement →"}</span>
@@ -498,64 +535,52 @@ export default function OnboardingPortal() {
 
           {/* Step 4 */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 flex flex-col justify-between transition-all duration-200 ${
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
               isReceiptUploaded
-                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs hover:shadow-sm"
+                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
                 : isAgreementSigned
-                ? "border-amber-400/90 bg-amber-50/80 text-amber-950 ring-4 ring-amber-400/20 shadow-md"
+                ? "border-amber-400 bg-amber-50 text-amber-950 ring-2 ring-amber-400/20 shadow-md"
                 : "border-slate-200 bg-white/70 text-slate-400 opacity-60"
             }`}
           >
             <div>
-              <div className="flex items-center justify-between gap-1.5 mb-3">
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 shadow-xs ${
-                  isReceiptUploaded ? "bg-emerald-600 text-white" : isAgreementSigned ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-500 border border-slate-200"
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                  isReceiptUploaded ? "bg-emerald-600 text-white" : isAgreementSigned ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   4
                 </span>
-                <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap leading-none shrink-0 inline-flex items-center gap-1 ${
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${
                   isReceiptUploaded 
-                    ? "bg-emerald-100/90 text-emerald-800 border border-emerald-300/80" 
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
                     : isAgreementSigned 
                     ? "bg-amber-100 text-amber-900 border border-amber-300" 
-                    : "bg-slate-100 text-slate-500 border border-slate-200/80"
+                    : "bg-slate-100 text-slate-500"
                 }`}>
-                  {isReceiptUploaded ? (
-                    <>
-                      <FiCheck size={11} className="stroke-[3]" /> TRANSFERRED
-                    </>
-                  ) : isAgreementSigned ? (
-                    "PAYMENT PENDING"
-                  ) : (
-                    <>
-                      <FiLock size={10} /> LOCKED
-                    </>
-                  )}
+                  {isReceiptUploaded ? <><FiCheck size={10} /> TRANSFERRED</> : isAgreementSigned ? "PAYMENT PENDING" : <><FiLock size={9} /> LOCKED</>}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 mb-1">
-                <FiCreditCard size={18} className={isReceiptUploaded ? "text-emerald-600 shrink-0" : "text-amber-700 shrink-0"} />
-                <span>Offline Fee Payment</span>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FiCreditCard size={16} className={isReceiptUploaded ? "text-emerald-600" : "text-amber-700"} />
+                <span>Offline Fee</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                {isReceiptUploaded ? `UTR: ${reseller?.fee_payment_utr || "Recorded"}` : "Verbal AM Discussion"}
+              <p className="text-[11px] text-slate-600 font-medium">
+                {isReceiptUploaded ? `UTR: ${reseller?.fee_payment_utr || "Recorded"}` : "Bank Transfer"}
               </p>
             </div>
-            <div className="mt-4">
+            <div className="mt-3">
               {isAgreementSigned ? (
                 <button
                   onClick={() => setPaymentModalOpen(true)}
-                  className={`w-full py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                    isReceiptUploaded
-                      ? "bg-slate-800 hover:bg-slate-900 text-white"
-                      : "bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 active:scale-[0.98]"
+                  className={`w-full py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer ${
+                    isReceiptUploaded ? "bg-slate-800 hover:bg-slate-900 text-white" : "bg-amber-600 hover:bg-amber-700 text-white"
                   }`}
                 >
-                  <span>{isReceiptUploaded ? "View Payment Info" : "Upload Receipt & Pay →"}</span>
+                  <span>{isReceiptUploaded ? "Payment Info" : "Upload Receipt →"}</span>
                 </button>
               ) : (
-                <div className="text-center py-1.5 px-2 rounded-xl bg-slate-100/80 text-xs font-bold text-slate-400 flex items-center justify-center gap-1">
-                  <FiLock size={12} /> Complete Step 3 First
+                <div className="text-center py-1 px-2 rounded-xl bg-slate-100 text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1">
+                  <FiLock size={10} /> Step 3 First
                 </div>
               )}
             </div>
@@ -563,113 +588,160 @@ export default function OnboardingPortal() {
 
           {/* Step 5 */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 flex flex-col justify-between transition-all duration-200 ${
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
               isReceiptVerified
-                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs hover:shadow-sm"
+                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
                 : isReceiptUploaded
-                ? "border-sky-400 bg-sky-50 text-sky-950 ring-4 ring-sky-400/20 shadow-md"
+                ? "border-sky-400 bg-sky-50 text-sky-950 ring-2 ring-sky-400/20 shadow-md"
                 : "border-slate-200 bg-white/70 text-slate-400 opacity-60"
             }`}
           >
             <div>
-              <div className="flex items-center justify-between gap-1.5 mb-3">
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 shadow-xs ${
-                  isReceiptVerified ? "bg-emerald-600 text-white" : isReceiptUploaded ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-500 border border-slate-200"
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                  isReceiptVerified ? "bg-emerald-600 text-white" : isReceiptUploaded ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   5
                 </span>
-                <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap leading-none shrink-0 inline-flex items-center gap-1 ${
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${
                   isReceiptVerified 
-                    ? "bg-emerald-100/90 text-emerald-800 border border-emerald-300/80" 
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
                     : isReceiptUploaded 
                     ? "bg-sky-100 text-sky-900 border border-sky-300" 
-                    : "bg-slate-100 text-slate-500 border border-slate-200/80"
+                    : "bg-slate-100 text-slate-500"
                 }`}>
-                  {isReceiptVerified ? (
-                    <>
-                      <FiCheck size={11} className="stroke-[3]" /> VERIFIED
-                    </>
-                  ) : isReceiptUploaded ? (
-                    "UNDER REVIEW"
-                  ) : (
-                    <>
-                      <FiLock size={10} /> LOCKED
-                    </>
-                  )}
+                  {isReceiptVerified ? <><FiCheck size={10} /> CONFIRMED</> : isReceiptUploaded ? "UNDER REVIEW" : <><FiLock size={9} /> LOCKED</>}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 mb-1">
-                <FiUploadCloud size={18} className={isReceiptVerified ? "text-emerald-600 shrink-0" : "text-sky-600 shrink-0"} />
-                <span>Receipt Verification</span>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FiUploadCloud size={16} className={isReceiptVerified ? "text-emerald-600" : "text-sky-600"} />
+                <span>Fee Verified</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                {isReceiptVerified ? "Confirmed by Admin" : isReceiptUploaded ? "Under Admin Review" : "Upload Slip First"}
+              <p className="text-[11px] text-slate-600 font-medium">
+                {isReceiptVerified ? "Payment Confirmed" : isReceiptUploaded ? "Admin Reviewing" : "Slip Pending"}
               </p>
             </div>
-            <div className="mt-4">
+            <div className="mt-3">
               {isReceiptUploaded ? (
                 <button
                   onClick={() => setPaymentModalOpen(true)}
-                  className="w-full py-2 px-3 rounded-xl bg-sky-700 hover:bg-sky-800 text-white text-xs font-black flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer active:scale-[0.98]"
+                  className="w-full py-1.5 px-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer"
                 >
-                  <span>Upload Update / Slip</span>
+                  <span>Slip Details</span>
                 </button>
               ) : (
-                <div className="text-center py-1.5 px-2 rounded-xl bg-slate-100/80 text-xs font-bold text-slate-400 flex items-center justify-center gap-1">
-                  <FiLock size={12} /> Locked
+                <div className="text-center py-1 px-2 rounded-xl bg-slate-100 text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1">
+                  <FiLock size={10} /> Locked
                 </div>
               )}
             </div>
           </div>
 
-          {/* Step 6 */}
+          {/* Step 6: Physical Store Setup & Inspection (NEW CRITICAL STAGE) */}
           <div
-            className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 flex flex-col justify-between transition-all duration-200 ${
-              isAccountActive
-                ? "border-emerald-400 bg-emerald-100/90 text-emerald-950 shadow-md ring-4 ring-emerald-500/20"
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
+              isStoreSetupCompleted
+                ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
+                : isStoreSetupInProgress
+                ? "border-amber-500 bg-amber-50/90 text-amber-950 ring-3 ring-amber-500/25 shadow-lg shadow-amber-500/10"
                 : "border-slate-200 bg-white/70 text-slate-400 opacity-60"
             }`}
           >
             <div>
-              <div className="flex items-center justify-between gap-1.5 mb-3">
-                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 shadow-xs ${
-                  isAccountActive ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500 border border-slate-200"
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                  isStoreSetupCompleted ? "bg-emerald-600 text-white" : isStoreSetupInProgress ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-500"
                 }`}>
                   6
                 </span>
-                <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full whitespace-nowrap leading-none shrink-0 inline-flex items-center gap-1 ${
-                  isAccountActive ? "bg-emerald-600 text-white shadow-xs" : "bg-slate-100 text-slate-500 border border-slate-200/80"
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${
+                  isStoreSetupCompleted 
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
+                    : isStoreSetupInProgress 
+                    ? "bg-amber-100 text-amber-900 border border-amber-300 font-black" 
+                    : "bg-slate-100 text-slate-500"
                 }`}>
-                  {isAccountActive ? (
-                    <>
-                      <FiCheckCircle size={11} /> 100% ACTIVE
-                    </>
+                  {isStoreSetupCompleted ? (
+                    <><FiCheck size={10} /> VERIFIED</>
+                  ) : isStoreSetupInProgress ? (
+                    setup?.status === "admin_verification_pending" ? "INSPECTION DONE" : `SETUP (${setup?.progress_percentage || 0}%)`
                   ) : (
-                    <>
-                      <FiLock size={10} /> LOCKED
-                    </>
+                    <><FiLock size={9} /> LOCKED</>
                   )}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 mb-1">
-                <FiShoppingBag size={18} className={isAccountActive ? "text-emerald-700 shrink-0" : "text-slate-400 shrink-0"} />
-                <span>Operations Start</span>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FaStore size={16} className={isStoreSetupCompleted ? "text-emerald-600" : isStoreSetupInProgress ? "text-amber-600" : "text-slate-400"} />
+                <span>Store Setup</span>
               </div>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                {isAccountActive ? "Wholesale Ordering Unlocked" : "Full Access Pending"}
+              <p className="text-[11px] text-slate-600 font-medium">
+                {isStoreSetupCompleted
+                  ? "Store Verified & Ready"
+                  : isStoreSetupInProgress
+                  ? `${setup?.completed_activities || 0}/${setup?.total_activities || 16} Checklist Steps`
+                  : "Physical Store Checklist"}
               </p>
             </div>
-            <div className="mt-4">
+            <div className="mt-3">
+              {isReceiptVerified ? (
+                <button
+                  onClick={() => setStoreSetupModalOpen(true)}
+                  className={`w-full py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer ${
+                    isStoreSetupCompleted
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 active:scale-[0.98]"
+                  }`}
+                >
+                  <span>{isStoreSetupCompleted ? "View Store Record" : "Track Store Setup →"}</span>
+                </button>
+              ) : (
+                <div className="text-center py-1 px-2 rounded-xl bg-slate-100 text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1">
+                  <FiLock size={10} /> Locked
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Step 7: Operations Start */}
+          <div
+            className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
+              isAccountActive
+                ? "border-emerald-400 bg-emerald-100/90 text-emerald-950 shadow-md ring-3 ring-emerald-500/20"
+                : "border-slate-200 bg-white/70 text-slate-400 opacity-60"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between gap-1 mb-2.5">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                  isAccountActive ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"
+                }`}>
+                  7
+                </span>
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${
+                  isAccountActive ? "bg-emerald-600 text-white shadow-xs" : "bg-slate-100 text-slate-500"
+                }`}>
+                  {isAccountActive ? <><FiCheckCircle size={10} /> 100% ACTIVE</> : <><FiLock size={9} /> LOCKED</>}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                <FiShoppingBag size={16} className={isAccountActive ? "text-emerald-700" : "text-slate-400"} />
+                <span>Operations Start</span>
+              </div>
+              <p className="text-[11px] text-slate-600 font-medium">
+                {isAccountActive ? "Retail Ordering Live" : "Awaiting Store Setup"}
+              </p>
+            </div>
+            <div className="mt-3">
               {isAccountActive ? (
                 <Link
                   to="/dashboard"
-                  className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer animate-bounce"
+                  className="w-full py-1.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black flex items-center justify-center gap-1 shadow-md transition-all cursor-pointer animate-bounce"
                 >
-                  <span>Go to Dashboard →</span>
+                  <span>Dashboard →</span>
                 </Link>
               ) : (
-                <div className="text-center py-1.5 px-2 rounded-xl bg-slate-100/80 text-xs font-bold text-slate-400 flex items-center justify-center gap-1">
-                  <FiLock size={12} /> Locked
+                <div className="text-center py-1 px-2 rounded-xl bg-slate-100 text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1">
+                  <FiLock size={10} /> Locked
                 </div>
               )}
             </div>
@@ -684,16 +756,22 @@ export default function OnboardingPortal() {
                 <span>Current Onboarding Stage:</span>
                 <span className="text-[#0575B8]">
                   {isAccountActive
-                    ? "Phase 4: Operations Live"
-                    : !isAgreementSigned
-                    ? "Phase 2: Agreement Review & Execution"
-                    : !isReceiptUploaded
-                    ? "Phase 2: Offline Payment & Receipt Submission"
-                    : "Phase 3: Administrative Receipt Verification"}
+                    ? "Phase 5: Operations Live & Active Retailer"
+                    : isStoreSetupCompleted
+                    ? "Phase 4: Store Verified — Final Activation Pending"
+                    : isStoreSetupInProgress
+                    ? "Phase 4: Physical Store Setup & Inspection"
+                    : isReceiptUploaded
+                    ? "Phase 3: Administrative Receipt Verification"
+                    : isAgreementSigned
+                    ? "Phase 2: Offline Fee Payment & Receipt Submission"
+                    : "Phase 1: Legal Agreement Review & Execution"}
                 </span>
               </h2>
               <p className="text-sm text-slate-500 mt-1 font-medium">
-                Each step must be completed in order. Once Admin verifies your uploaded receipt, you will gain full access to the operational franchise dashboard.
+                {isStoreSetupInProgress
+                  ? "Fee payment confirmed! Complete your 16-step physical store checklist with your assigned state coordinator to get verified."
+                  : "Each step must be completed in order. Once store setup is verified by Admin, you will gain full access to live retail ordering."}
               </p>
             </div>
 
@@ -742,8 +820,10 @@ export default function OnboardingPortal() {
 
             {/* Action 2: Fee Payment & Receipt */}
             <div className={`p-6 rounded-3xl border-2 transition-all flex flex-col justify-between ${
-              isReceiptUploaded
+              isReceiptVerified
                 ? "border-emerald-200 bg-emerald-50/50 shadow-xs"
+                : isReceiptUploaded
+                ? "border-sky-400 bg-sky-50/60 shadow-md ring-2 ring-sky-400/20"
                 : isAgreementSigned
                 ? "border-amber-400 bg-amber-50/60 shadow-md ring-2 ring-amber-400/20"
                 : "border-slate-200 bg-slate-50 opacity-60"
@@ -751,16 +831,20 @@ export default function OnboardingPortal() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-black text-base text-slate-900 flex items-center gap-2">
-                    <FiCreditCard size={18} className="text-amber-700" /> Step 4: Fee Payment
+                    <FiCreditCard size={18} className="text-amber-700" /> Step 4 & 5: Fee Payment
                   </span>
                   <span className={`text-xs font-black px-3 py-1 rounded-full ${
-                    isReceiptUploaded ? "bg-emerald-100 text-emerald-800" : isAgreementSigned ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-slate-200 text-slate-600"
+                    isReceiptVerified ? "bg-emerald-100 text-emerald-800" : isReceiptUploaded ? "bg-sky-100 text-sky-900 border border-sky-300" : isAgreementSigned ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-slate-200 text-slate-600"
                   }`}>
-                    {isReceiptUploaded ? "✓ Submitted" : isAgreementSigned ? "Pending Upload" : "Locked"}
+                    {isReceiptVerified ? "✓ Fee Verified" : isReceiptUploaded ? "Under Review" : isAgreementSigned ? "Pending Upload" : "Locked"}
                   </span>
                 </div>
                 <p className="text-slate-600 mb-5 leading-relaxed font-medium">
-                  Payment details are discussed verbally with your Account Manager. Upload your bank UTR and transfer receipt slip.
+                  {isReceiptVerified
+                    ? "Franchise fee verified! Store setup workflow is now initialized."
+                    : isReceiptUploaded
+                    ? "Payment slip submitted. Admin is confirming your transaction."
+                    : "Payment details are discussed verbally with your Account Manager. Upload your bank UTR and transfer receipt slip."}
                 </p>
               </div>
               <button
@@ -773,33 +857,42 @@ export default function OnboardingPortal() {
               </button>
             </div>
 
-            {/* Action 3: Admin Review & Activation */}
+            {/* Action 3: Physical Store Setup & Go-Live */}
             <div className={`p-6 rounded-3xl border-2 transition-all flex flex-col justify-between ${
               isAccountActive
                 ? "border-emerald-300 bg-emerald-50/60 shadow-xs"
-                : isReceiptUploaded
-                ? "border-sky-400 bg-sky-50/60 shadow-md ring-2 ring-sky-400/20"
+                : isStoreSetupInProgress
+                ? "border-amber-500 bg-amber-50/60 shadow-md ring-2 ring-amber-500/20"
+                : isStoreSetupCompleted
+                ? "border-emerald-300 bg-emerald-50/60 shadow-xs"
                 : "border-slate-200 bg-slate-50 opacity-60"
             }`}>
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-black text-base text-slate-900 flex items-center gap-2">
-                    <FiCheckCircle size={18} className="text-emerald-700" /> Step 5 & 6: Activation
+                    <FaStore size={18} className="text-amber-600" /> Step 6 & 7: Store Setup & Launch
                   </span>
                   <span className={`text-xs font-black px-3 py-1 rounded-full ${
-                    isAccountActive ? "bg-emerald-100 text-emerald-800" : isReceiptUploaded ? "bg-sky-100 text-sky-900 border border-sky-300" : "bg-slate-200 text-slate-600"
+                    isAccountActive
+                      ? "bg-emerald-100 text-emerald-800"
+                      : isStoreSetupCompleted
+                      ? "bg-emerald-100 text-emerald-800"
+                      : isStoreSetupInProgress
+                      ? "bg-amber-100 text-amber-900 border border-amber-300 font-bold"
+                      : "bg-slate-200 text-slate-600"
                   }`}>
-                    {isAccountActive ? "✓ Active" : isReceiptUploaded ? "In Review" : "Pending Steps"}
+                    {isAccountActive ? "✓ Active" : isStoreSetupCompleted ? "✓ Verified" : isStoreSetupInProgress ? "In Progress" : "Pending Steps"}
                   </span>
                 </div>
                 <p className="text-slate-600 mb-5 leading-relaxed font-medium">
                   {isAccountActive
-                    ? "Admin verification confirmed. Your franchise partner privileges are 100% active."
-                    : isReceiptUploaded
-                    ? "Receipt submitted! The SolarKits admin team is verifying your payment slip to grant go-live access."
-                    : "Awaiting agreement execution and payment receipt upload before admin verification."}
+                    ? "Admin verification confirmed. Your franchise partner retail privileges are 100% active."
+                    : isStoreSetupInProgress
+                    ? `Physical store execution in progress (${setup?.progress_percentage || 0}% completed). Assigned Coordinator: ${setup?.assigned_employee_name || 'State Coordinator'}.`
+                    : "Complete agreement execution and fee payment confirmation to initialize store setup."}
                 </p>
               </div>
+
               {isAccountActive ? (
                 <Link
                   to="/dashboard"
@@ -808,9 +901,17 @@ export default function OnboardingPortal() {
                   <FiShoppingBag size={16} />
                   <span>Enter Dashboard</span>
                 </Link>
+              ) : isReceiptVerified ? (
+                <button
+                  onClick={() => setStoreSetupModalOpen(true)}
+                  className="w-full py-3 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow-md shadow-amber-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <FaStore size={16} />
+                  <span>View Store Setup Checklist →</span>
+                </button>
               ) : (
                 <div className="w-full py-3 px-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-center border border-slate-200">
-                  {isReceiptUploaded ? "⏳ Verification in Progress" : "🔒 Awaiting Steps"}
+                  🔒 Awaiting Payment Verification
                 </div>
               )}
             </div>
@@ -876,7 +977,7 @@ export default function OnboardingPortal() {
                 </div>
               </div>
 
-              {/* Large-Format Agreement Text Reader (High Readability) */}
+              {/* Agreement Text Reader */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
@@ -899,122 +1000,136 @@ export default function OnboardingPortal() {
                         <strong>2. TERRITORY:</strong> Operations are granted within assigned territory: <strong>{reseller?.address?.city || reseller?.address?.state || "Assigned District"}</strong>.
                       </p>
                       <p>
-                        <strong>3. COMMERCIAL MARGINS:</strong> Partner receives direct factory margins on pre-engineered turnkey Combo Kits, solar panels, and mounting accessories.
+                        <strong>3. STORE SETUP:</strong> The partner agrees to execute physical retail branding and display standards as specified by SolarKits within the allowed setup SLA.
                       </p>
                       <p>
-                        <strong>4. MANUAL PAYMENT VERIFICATION:</strong> Account activation is completed upon admin verification of the offline fee payment receipt.
+                        <strong>4. COMMERCIAL TERMS & CONFIDENTIALITY:</strong> Minimum order quantities, price lists, and margin schedules shall apply as per active franchise plan.
                       </p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Execution / Signatory Section */}
-              {isAgreementSigned ? (
-                <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-2">
-                  <div className="flex items-center gap-2.5 font-black text-base sm:text-lg">
-                    <FiCheckCircle className="text-emerald-600 shrink-0" size={24} />
-                    <span>Franchise Partner Agreement Digitally Executed & Verified</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
-                    <p>Legal Signatory: <strong>{reseller?.agreement_signer_name || primaryName}</strong></p>
-                    <p>Signatory Title: <strong>{reseller?.signer_designation || signerDesignation}</strong></p>
-                    <p>Timestamp: <strong>{new Date(reseller?.agreement_signed_at || Date.now()).toLocaleString()}</strong></p>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleSignAgreement} className="space-y-4 pt-2 border-t border-slate-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Signing Controls */}
+              {!isAgreementSigned ? (
+                <form onSubmit={handleSignAgreement} className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                  <h4 className="text-sm font-black text-slate-900">Execution Signatory Details</h4>
+
+                  {agreementError && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                      <FiAlertCircle size={16} />
+                      <span>{agreementError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <label className="text-xs sm:text-sm font-bold text-slate-700 block mb-1.5">
-                        Full Legal Signatory Name <span className="text-red-500">*</span>
-                      </label>
+                      <label className="block font-bold text-slate-700 mb-1">Legal Signatory Full Name *</label>
                       <input
                         type="text"
                         required
                         value={signerName}
                         onChange={(e) => setSignerName(e.target.value)}
-                        placeholder="e.g. Ramesh Chandra"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        placeholder="e.g. Rajesh Kumar"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-[#0575B8]"
                       />
                     </div>
-
                     <div>
-                      <label className="text-xs sm:text-sm font-bold text-slate-700 block mb-1.5">
-                        Signatory Designation <span className="text-red-500">*</span>
-                      </label>
+                      <label className="block font-bold text-slate-700 mb-1">Signatory Legal Title / Designation *</label>
                       <input
                         type="text"
                         required
                         value={signerDesignation}
                         onChange={(e) => setSignerDesignation(e.target.value)}
-                        placeholder="e.g. Proprietor / Managing Director / Authorized Partner"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        placeholder="e.g. Proprietor / Managing Director"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-[#0575B8]"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs sm:text-sm font-bold text-slate-700 block mb-1.5">
-                      Upload Signed Agreement Document (Optional PDF / Image Scan)
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Attach Signed Physical Copy (Optional)
                     </label>
                     <input
                       type="file"
-                      accept="image/*,application/pdf"
+                      accept=".pdf,.jpg,.jpeg,.png"
                       onChange={(e) => setAgreementFile(e.target.files?.[0] || null)}
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-700 focus:outline-none"
+                      className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-[#0575B8] hover:file:bg-blue-200"
                     />
                   </div>
 
-                  <label className="flex items-start gap-3 text-xs sm:text-sm text-slate-700 cursor-pointer select-none p-3.5 rounded-xl bg-blue-50/60 border border-blue-100">
+                  <div className="flex items-start gap-2 pt-2">
                     <input
                       type="checkbox"
+                      id="agreementConsent"
                       checked={consentAgreed}
                       onChange={(e) => setConsentAgreed(e.target.checked)}
-                      className="mt-1 h-4 w-4 rounded text-[#0575B8] focus:ring-0 cursor-pointer"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0575B8] focus:ring-[#0575B8]"
                     />
-                    <span>
-                      I solemnly declare that I am the authorized legal representative of <strong>{companyName}</strong>. I have read, understood, and hereby accept and digitally execute this Franchise Partner Agreement.
-                    </span>
-                  </label>
+                    <label htmlFor="agreementConsent" className="text-xs text-slate-700 font-medium cursor-pointer">
+                      I confirm that I am authorized to execute this agreement on behalf of <strong>{companyName}</strong>, and I agree to all clauses and terms.
+                    </label>
+                  </div>
 
-                  {agreementError && (
-                    <p className="text-sm font-bold text-red-600 bg-red-50 p-3 rounded-xl border border-red-200">{agreementError}</p>
-                  )}
-
-                  <div className="flex items-center justify-end gap-3 pt-2">
+                  <div className="flex items-center justify-end gap-3 pt-3">
                     <button
                       type="button"
                       onClick={() => setAgreementModalOpen(false)}
-                      className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold cursor-pointer transition"
+                      className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={signingLoading}
-                      className="px-7 py-3 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition"
+                      className="px-6 py-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white font-black text-xs shadow-md flex items-center gap-2"
                     >
-                      {signingLoading ? <FiLoader className="animate-spin" /> : <FiCheck size={18} />}
-                      <span>Digitally Sign & Proceed to Fee Payment</span>
+                      {signingLoading ? (
+                        <>
+                          <FiLoader className="animate-spin" size={16} />
+                          <span>Signing Document...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiCheck size={16} />
+                          <span>Execute & Sign Agreement</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
+              ) : (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-900">
+                  <div className="flex items-center gap-2">
+                    <FiCheckCircle size={20} className="text-emerald-600" />
+                    <div>
+                      <p className="font-black">Agreement Successfully Signed & Executed</p>
+                      <p className="text-emerald-700">Signatory: {reseller?.agreement_signer_name || primaryName}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setAgreementModalOpen(false)}
+                    className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
               )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* ── MODAL 2: Offline Payment & Receipt Upload (Bright Amber Notice) ── */}
+      {/* ── MODAL 2: Fee Payment & Receipt Upload ─────────────────────────── */}
       <AnimatePresence>
         {paymentModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-slate-200 rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 sm:p-8 text-slate-900 relative my-6"
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full max-h-[94vh] overflow-y-auto shadow-2xl p-6 sm:p-8 text-slate-900 relative my-4 space-y-5"
             >
               <button
                 onClick={() => setPaymentModalOpen(false)}
@@ -1023,151 +1138,272 @@ export default function OnboardingPortal() {
                 <FiX size={20} />
               </button>
 
-              <div className="space-y-5">
-                <div className="border-b border-slate-100 pb-3">
+              <div className="border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
-                    Step 4 & 5 • Offline Manual Fee Payment
+                    Step 4 • Fee Payment Submission
                   </span>
-                  <h3 className="text-2xl font-black text-slate-900 mt-2">
-                    Franchise Fee Payment & Receipt Submission
-                  </h3>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Submit your transaction reference number (UTR) and payment slip below.
-                  </p>
                 </div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+                  Franchise Onboarding Fee Receipt
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Submit bank transfer details and payment receipt for admin verification.
+                </p>
+              </div>
 
-                {/* Bright Amber Notice Card — No System Bank Details Attached */}
-                <div className="p-6 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between border-b border-amber-200 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
-                      <span className="text-xs font-black uppercase text-amber-900 tracking-wider">
-                        Verbal Account Manager Payment Consultation
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-bold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded border border-amber-400">
-                      Company Policy
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-sm text-amber-900 leading-relaxed">
-                    <p className="font-bold">
-                      Important Security Policy: Company bank account details are not attached or shared through the system.
-                    </p>
-                    <p className="text-amber-800 font-medium">
-                      All payment details and bank transfer options are communicated directly through verbal discussion with your assigned Account Manager.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-amber-200 pt-3 text-sm font-semibold">
-                    <span className="text-amber-800">Enrollment Fee Reference:</span>
-                    <span className="font-black text-amber-950 text-base">₹{Number(amountPaid).toLocaleString("en-IN")} (+ GST as applicable)</span>
-                  </div>
+              {/* Bank Account Details Box */}
+              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs space-y-2">
+                <h4 className="font-black text-amber-950 flex items-center gap-1.5">
+                  <FiCreditCard className="text-amber-700" size={16} /> Official Company Beneficiary Details
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-slate-700">
+                  <div><strong>Account Name:</strong> SolarKits Clean Energy Solutions Pvt Ltd</div>
+                  <div><strong>Bank:</strong> HDFC Bank Ltd</div>
+                  <div><strong>Account No:</strong> 50200088992211</div>
+                  <div><strong>IFSC Code:</strong> HDFC0001234</div>
                 </div>
+              </div>
 
-                {/* Receipt Upload & UTR Submission Form */}
-                <form onSubmit={handleUploadReceipt} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                        Bank UTR / Transaction Reference No. <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={utrNumber}
-                        onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
-                        placeholder="e.g. HDFC260812345678"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                        Amount Paid (₹) <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        value={amountPaid}
-                        onChange={(e) => setAmountPaid(e.target.value)}
-                        placeholder="50000"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
-                      />
-                    </div>
+              <form onSubmit={handleUploadReceipt} className="space-y-4 text-xs">
+                {uploadError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold flex items-center gap-2">
+                    <FiAlertCircle size={16} />
+                    <span>{uploadError}</span>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                        Payment Date <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={paymentDate}
-                        onChange={(e) => setPaymentDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                        Remitter Bank Name
-                      </label>
-                      <input
-                        type="text"
-                        value={senderBank}
-                        onChange={(e) => setSenderBank(e.target.value)}
-                        placeholder="e.g. State Bank of India"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
-                      />
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Bank UTR / Transaction ID *</label>
+                    <input
+                      type="text"
+                      required
+                      value={utrNumber}
+                      onChange={(e) => setUtrNumber(e.target.value)}
+                      placeholder="e.g. UTR1234567890"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-mono font-bold focus:outline-none focus:border-amber-500"
+                    />
                   </div>
 
                   <div>
-                    <label className="text-sm font-bold text-slate-700 block mb-1.5">
-                      Upload Payment Slip / Screenshot / PDF
-                    </label>
-                    <div className="relative border-2 border-dashed border-slate-300 rounded-2xl p-5 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                      <div className="flex flex-col items-center gap-1.5 text-slate-600">
-                        <FiUploadCloud size={24} className="text-[#0575B8]" />
-                        <span className="text-sm font-bold text-slate-800">
-                          {receiptFile ? receiptFile.name : "Click to select or drop transfer receipt slip"}
-                        </span>
-                        <span className="text-xs text-slate-400 font-medium">Supports JPG, PNG, WEBP, PDF (Max 10MB)</span>
-                      </div>
-                    </div>
+                    <label className="block font-bold text-slate-700 mb-1">Amount Paid (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={amountPaid}
+                      onChange={(e) => setAmountPaid(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-amber-500"
+                    />
                   </div>
 
-                  {uploadError && (
-                    <p className="text-sm font-bold text-red-600">{uploadError}</p>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Sender Bank Name</label>
+                    <input
+                      type="text"
+                      value={senderBank}
+                      onChange={(e) => setSenderBank(e.target.value)}
+                      placeholder="e.g. State Bank of India"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Payment Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Payment Receipt / Bank Slip (Image or PDF)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                    className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-900 hover:file:bg-amber-200"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentModalOpen(false)}
+                    className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={uploadLoading}
+                    className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-md flex items-center gap-2"
+                  >
+                    {uploadLoading ? (
+                      <>
+                        <FiLoader className="animate-spin" size={16} />
+                        <span>Submitting Slip...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiUploadCloud size={16} />
+                        <span>Submit Payment Receipt</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL 3: Physical Store Setup & Inspection Tracker (NEW) ───────── */}
+      <AnimatePresence>
+        {storeSetupModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="bg-white border border-slate-200 rounded-3xl max-w-4xl w-full max-h-[94vh] overflow-y-auto shadow-2xl p-6 sm:p-8 text-slate-900 relative my-4 space-y-6"
+            >
+              <button
+                onClick={() => setStoreSetupModalOpen(false)}
+                className="absolute top-6 right-6 p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+              >
+                <FiX size={20} />
+              </button>
+
+              {/* Store Setup Header */}
+              <div className="border-b border-slate-200 pb-4">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                    Step 6 • Physical Store Setup & Verification
+                  </span>
+                  {setup?.store_setup_id && (
+                    <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                      ID: {setup.store_setup_id}
+                    </span>
                   )}
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    isStoreSetupCompleted
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : "bg-amber-100 text-amber-900 border border-amber-300"
+                  }`}>
+                    {isStoreSetupCompleted ? "✓ ADMIN VERIFIED" : `IN PROGRESS (${setup?.progress_percentage || 0}%)`}
+                  </span>
+                </div>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">
+                  Franchise Store Execution & Inspection Tracker
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  16-step physical showroom setup, branding display, inverter setup, and regional state coordinator inspection.
+                </p>
+              </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentModalOpen(false)}
-                      className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold cursor-pointer"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={uploadLoading}
-                      className="px-8 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black flex items-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer"
-                    >
-                      {uploadLoading ? <FiLoader className="animate-spin" /> : <FiCheckCircle size={18} />}
-                      <span>Submit Payment Receipt for Admin Verification</span>
-                    </button>
+              {/* State Employee & Timeline Ribbon */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div>
+                  <span className="text-slate-400 font-bold uppercase text-[10px] block">Assigned State Coordinator</span>
+                  <strong className="text-slate-900 text-sm block mt-0.5">
+                    {setup?.assigned_employee_name || "Regional Coordinator Assigned"}
+                  </strong>
+                  <div className="text-[11px] text-slate-500 flex flex-col gap-0.5 mt-0.5">
+                    {setup?.assigned_employee_email && <span>{setup.assigned_employee_email}</span>}
+                    {setup?.assigned_employee_phone && <span className="font-semibold text-slate-700">Ph: {setup.assigned_employee_phone}</span>}
                   </div>
-                </form>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold uppercase text-[10px] block">Target Completion Date</span>
+                  <strong className="text-slate-900 text-sm block mt-0.5">
+                    {setup?.revised_completion_date
+                      ? new Date(setup.revised_completion_date).toLocaleDateString()
+                      : setup?.original_completion_date
+                      ? new Date(setup.original_completion_date).toLocaleDateString()
+                      : "Within 21 Days"}
+                  </strong>
+                  <span className="text-[11px] text-slate-500">Allowed SLA: {setup?.allowed_setup_days || 21} Days</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-bold uppercase text-[10px] block">Checklist Progress</span>
+                  <strong className="text-amber-700 text-sm block mt-0.5">
+                    {setup?.completed_activities || 0} of {setup?.total_activities || 16} Steps Completed
+                  </strong>
+                  <div className="w-full bg-slate-200 rounded-full h-2 mt-1.5 overflow-hidden">
+                    <div
+                      className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${setup?.progress_percentage || 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 16-Step Checklist View */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center justify-between">
+                  <span>Physical Store Setup Checklist Items ({checklist.length || 16})</span>
+                  <span className="text-slate-500 font-medium text-[11px]">Assisted by State Coordinator</span>
+                </h4>
+
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {checklist.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-slate-200">
+                      Store setup checklist template is initialized automatically upon fee payment confirmation.
+                    </div>
+                  ) : (
+                    checklist.map((item, idx) => (
+                      <div
+                        key={item._id || idx}
+                        className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900">
+                              #{item.display_order || idx + 1}. {item.title}
+                            </span>
+                            {item.is_mandatory && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-bold">
+                                Mandatory
+                              </span>
+                            )}
+                            {item.proof_required && (
+                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] font-bold">
+                                Proof Required
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-500 text-[11px]">{item.description}</p>
+                        </div>
+
+                        <div className="shrink-0">
+                          <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                            item.status === "completed"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : item.status === "in_progress"
+                              ? "bg-amber-100 text-amber-900 border-amber-300"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
+                          }`}>
+                            {item.status ? item.status.toUpperCase() : "PENDING"}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => setStoreSetupModalOpen(false)}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm"
+                >
+                  Close Tracker
+                </button>
               </div>
             </motion.div>
           </div>

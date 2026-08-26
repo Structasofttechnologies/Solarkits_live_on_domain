@@ -11,6 +11,8 @@ router.get("/countries", check_auth, check_permissions([{ unique_code: 'ADM_SETU
 router.get("/get-countries", check_auth, geolocation_handler.get_countries);
 router.get("/get-states", check_auth, geolocation_handler.get_states);
 router.get("/get-districts", check_auth, geolocation_handler.get_districts);
+router.get("/get-active-states", check_auth, geolocation_handler.get_active_states);
+router.get("/get-active-districts", check_auth, geolocation_handler.get_active_districts);
 router.get("/active-countries",
     check_auth,
     check_permissions([
@@ -30,6 +32,7 @@ router.get("/active-countries",
         { unique_code: 'ADM_BULK_COMBO', permissions: ['view'] },
         { unique_code: 'ADM_WH_KIT_ACT', permissions: ['view'] },
         { unique_code: 'ADM_ORDER_SETTINGS', permissions: ['view'] },
+        { unique_code: 'ADM_BDE_MGMT', permissions: ['view', 'add', 'edit'] },
     ]),
     geolocation_handler.get_active_countries);
 router.post("/country", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_LOC', permissions: ['view'] }]), geolocation_handler.get_country)
@@ -37,13 +40,13 @@ router.post("/activate-country", check_auth, check_permissions([{ unique_code: '
 router.post("/deactivate-country", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['edit'] }]), geolocation_handler.deactivate_country)
 
 router.post("/states", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_LOC', permissions: ['view'] }, { unique_code: 'ADM_APPROVE_EPC', permissions: ['view'] }, { unique_code: 'ADM_MFG_BRANDS', permissions: ['view'] }, { unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['view'] }]), geolocation_handler.get_states)
-router.post("/active-states", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_CLUSTER_SETUP', permissions: ['view', 'add', 'edit', 'delete'] }, { unique_code: 'ADM_WAREHOUSES', permissions: ['view', 'add', 'edit', 'delete'] }, { unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }, { unique_code: 'ADM_COMBO_KIT_VARIANTS', permissions: ['view'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['view'] }, { unique_code: 'ADM_BETCHMARK_PRICE_MASTER', permissions: ['view'] }, { unique_code: 'ADM_PO_ORDERS', permissions: ['view'] }, { unique_code: 'ADM_CO_MARGIN', permissions: ['view'] }, { unique_code: 'ADM_BULK_COMBO', permissions: ['view'] }, { unique_code: 'ADM_WH_KIT_ACT', permissions: ['view'] }, { unique_code: 'ADM_ORDER_SETTINGS', permissions: ['view'] }]), geolocation_handler.get_active_states)
+router.post("/active-states", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_CLUSTER_SETUP', permissions: ['view', 'add', 'edit', 'delete'] }, { unique_code: 'ADM_WAREHOUSES', permissions: ['view', 'add', 'edit', 'delete'] }, { unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }, { unique_code: 'ADM_COMBO_KIT_VARIANTS', permissions: ['view'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['view'] }, { unique_code: 'ADM_BETCHMARK_PRICE_MASTER', permissions: ['view'] }, { unique_code: 'ADM_PO_ORDERS', permissions: ['view'] }, { unique_code: 'ADM_CO_MARGIN', permissions: ['view'] }, { unique_code: 'ADM_BULK_COMBO', permissions: ['view'] }, { unique_code: 'ADM_WH_KIT_ACT', permissions: ['view'] }, { unique_code: 'ADM_ORDER_SETTINGS', permissions: ['view'] }, { unique_code: 'ADM_BDE_MGMT', permissions: ['view', 'add', 'edit'] }]), geolocation_handler.get_active_states)
 router.post("/state", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_LOC', permissions: ['view'] }]), geolocation_handler.get_state)
 router.post("/activate-state", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['edit'] }]), geolocation_handler.activate_state)
 router.post("/deactivate-state", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['edit'] }]), geolocation_handler.deactivate_state)
 
 router.post("/districts", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_LOC', permissions: ['view'] }, { unique_code: 'ADM_MFG_BRANDS', permissions: ['view'] }]), geolocation_handler.get_districts)
-router.post("/active-districts", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_CLUSTER_SETUP', permissions: ['view'] }, { unique_code: 'ADM_ORDER_SETTINGS', permissions: ['view'] }]), geolocation_handler.get_active_districts)
+router.post("/active-districts", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_CLUSTER_SETUP', permissions: ['view'] }, { unique_code: 'ADM_ORDER_SETTINGS', permissions: ['view'] }, { unique_code: 'ADM_BDE_MGMT', permissions: ['view', 'add', 'edit'] }]), geolocation_handler.get_active_districts)
 router.post("/district", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['view'] }, { unique_code: 'ADM_LOC', permissions: ['view'] }, { unique_code: 'ADM_CLUSTER_SETUP', permissions: ['view'] }, { unique_code: 'ADM_WAREHOUSES', permissions: ['view'] }, { unique_code: 'ADM_SUPPLIERS', permissions: ['view'] }]), geolocation_handler.get_district)
 router.post("/activate-district", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['edit'] }]), geolocation_handler.activate_district)
 router.post("/deactivate-district", check_auth, check_permissions([{ unique_code: 'ADM_SETUP_LOC', permissions: ['edit'] }]), geolocation_handler.deactivate_district)

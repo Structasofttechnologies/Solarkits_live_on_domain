@@ -25,6 +25,9 @@ const {
   FpoOrder,
   WarehouseComboKit,
   SolarShopSettings,
+  StoreSetup,
+  StoreSetupChecklist,
+  StoreSetupDelay,
 } = require('../../admin-panel/models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
@@ -2565,6 +2568,38 @@ const upload_manual_payment_receipt = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/india/v1/reseller/store-setup/my-setup
+ * Fetch the physical store setup details, assigned state coordinator & checklist progress for the authenticated franchisee.
+ */
+const get_my_store_setup = async (req, res) => {
+  try {
+    const resellerId = req.reseller._id;
+    const setup = await StoreSetup.findOne({ franchisee_id: resellerId })
+      .populate('assigned_employee_id', 'name email mobile role')
+      .populate('current_bde_id', 'full_name bde_id email mobile');
+
+    if (!setup) {
+      return res.status(200).json({ status: 'success', data: null });
+    }
+
+    const checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 });
+    const delays = await StoreSetupDelay.find({ store_setup_id: setup._id }).sort({ created_at: -1 });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        setup,
+        checklist,
+        delays,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_my_store_setup error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to fetch store setup details' });
+  }
+};
+
 module.exports = {
   register_reseller,
   login_reseller,
@@ -2594,6 +2629,7 @@ module.exports = {
   sign_agreement,
   get_fee_payment_info,
   upload_manual_payment_receipt,
+  get_my_store_setup,
 };
 
 

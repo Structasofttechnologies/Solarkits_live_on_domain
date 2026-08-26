@@ -130,6 +130,15 @@ const schema = new mongoose.Schema({
   fee_payment_verified_by:    { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
   fee_payment_remarks:        { type: String, default: null, trim: true },
 
+  // ── Step 2 & 3: BDE Attribution & Store Operations ───────────────────────
+  bde_id:                { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
+  original_bde_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
+  lead_id:               { type: mongoose.Schema.Types.ObjectId, ref: 'bde_leads', default: null },
+  lead_source:           { type: String, default: 'direct' },
+  store_setup_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'store_setups', default: null },
+  is_operational:        { type: Boolean, default: false },
+  operations_started_at: { type: Date, default: null },
+
   activation_status: {
     type: String,
     enum: ['pending', 'active', 'suspended', 'terminated'],

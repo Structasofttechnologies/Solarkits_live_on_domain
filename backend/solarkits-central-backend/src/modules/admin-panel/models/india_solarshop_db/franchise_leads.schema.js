@@ -58,6 +58,11 @@ const schema = new mongoose.Schema({
   agreement_id:          { type: mongoose.Schema.Types.ObjectId, ref: 'reseller_agreements', default: null },
   converted_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
 
+  // ── Step 2: BDE Attribution ──────────────────────────────────────────
+  bde_id:                { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
+  original_bde_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
+  bde_lead_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'bde_leads', default: null },
+
   // ── Metadata ────────────────────────────────────────────────────────
   source:             { type: String, default: 'storefront_modal' },
   ip_address:         { type: String, default: null },

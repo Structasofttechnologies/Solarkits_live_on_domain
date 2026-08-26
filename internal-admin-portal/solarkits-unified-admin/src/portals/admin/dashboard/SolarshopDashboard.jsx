@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -158,6 +158,12 @@ const menus = [
                     unique_id: "FPO_ANALYTICS"
                 },
                 {
+                    name: "Store Setup & Operations",
+                    icon: <FaStore />,
+                    path: "/admin-panel/solar-shop/reseller-management/store-setup",
+                    unique_id: "RSL_MGMT"
+                },
+                {
                     name: "Territories",
                     icon: <FiMapPin />,
                     path: "/admin-panel/solar-shop/reseller-management/territories",
@@ -205,6 +211,9 @@ const isModuleAllowed = (menu, allowedUniqueIds) => {
     }
     if (menu.unique_id.startsWith("FPO_")) {
         return allowedUniqueIds.includes(menu.unique_id) || allowedUniqueIds.includes("RSL_MGMT") || allowedUniqueIds.includes("00000000");
+    }
+    if (menu.unique_id.startsWith("ADM_BDE") || menu.unique_id.startsWith("BDE_")) {
+        return true;
     }
     return allowedUniqueIds.includes(menu.unique_id);
 };
