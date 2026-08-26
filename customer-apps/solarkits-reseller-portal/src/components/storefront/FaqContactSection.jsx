@@ -193,7 +193,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                 const isOpen = openIndex === idx;
                 return (
                   <div
-                    key={faq.q || idx}
+                    key={faq.id || `${faq.q || 'faq'}-${idx}`}
                     className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden transition-all"
                   >
                     <button

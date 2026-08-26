@@ -13,8 +13,8 @@ const router = express.Router();
 const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
 const handler = require('../../controller/reseller.portal.handler');
 const { upload_files, upload_any_files } = require('../../../admin-panel/utils/upload.files');
-// Phase R1: Rate limiting on reseller auth and GST verify endpoints
-const { authRateLimiter, gstRateLimiter } = require('../../../admin-panel/middlewares/rate.limit');
+// Phase R1: Rate limiting on reseller auth, GST and OTP endpoints
+const { authRateLimiter, gstRateLimiter, otpRateLimiter } = require('../../../admin-panel/middlewares/rate.limit');
 
 const kycDocUpload = upload_any_files('public/uploads/kyc', 10);
 
@@ -33,8 +33,12 @@ router.get('/territory/availability', handler.check_territory_availability);
 // ── Inbound Franchisee & Territory Application Leads ─────────────────────────
 router.post('/leads/submit', require('../../../admin-panel/controller/reseller.leads.handler').submit_lead);
 
-// ── GST Verification (Public format & adapter check) ──────────────────────────
+// ── GST Verification (Public QuickeKYC corporate/gstin check) ────────────────
 router.post('/gst/verify', gstRateLimiter, handler.verify_gstin);
+
+// ── Mobile OTP Verification (Franchise Onboarding / Reseller Portal) ─────────
+router.post('/otp/send',   otpRateLimiter, handler.send_mobile_otp);
+router.post('/otp/verify', handler.verify_mobile_otp);
 
 // ── Public / Self-service Franchise Purchase & Onboarding ───────────────────
 router.post('/plans/purchase-and-onboard', handler.purchase_and_onboard);

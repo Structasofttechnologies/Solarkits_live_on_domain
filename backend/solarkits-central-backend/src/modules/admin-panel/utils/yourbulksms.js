@@ -2,9 +2,9 @@ const axios = require("axios");
 
 const SMS_API_URL = "http://control.yourbulksms.com/api/sendhttp.php";
 
-const sendOTP = async (country, to) => {
+const sendOTP = async (country, to, customOtp = null) => {
     try {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = customOtp ? String(customOtp) : Math.floor(100000 + Math.random() * 900000).toString();
 
         const message = `Dear user, ${otp} is the OTP for your login at Solarkits. In case you have not requested this, please contact us at office@sunnovative.com`;
 

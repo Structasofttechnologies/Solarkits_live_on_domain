@@ -210,12 +210,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
             const earningText = plan.default_commission_rate
               ? `${plan.default_commission_rate}% Commission`
               : "Commission Payout";
-            const btnText =
-              plan.territory_level === "district"
-                ? "Reserve District"
-                : plan.territory_level === "state"
-                ? "Apply for State Rights"
-                : "Request Country Review";
+            const btnText = "Apply";
 
             return (
               <article
@@ -311,45 +306,11 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                     </div>
                   </div>
 
-                  {/* MOQ Capacity & Scope Indicator */}
-                  <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200/80 mb-2 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-amber-900">
-                        ⚡ MOQ Capacity:
-                      </span>
-                      <span className="text-xs font-black text-[#D97E15]">
-                        Up to {Number(plan.moq_capacity_kw || 10000).toLocaleString("en-IN")} kW ({plan.moq_kits_count || 1} Kit MOQ)
-                      </span>
-                    </div>
-                    {plan.project_types_display && (
-                      <div className="text-[10px] text-slate-700 font-semibold truncate pt-0.5">
-                        <span className="text-slate-500 font-medium">Project Types: </span>
-                        {plan.project_types_display}
-                      </div>
-                    )}
-                    {plan.combo_kits_display && plan.combo_kits_display !== "All Admin Combo Kits" && (
-                      <div className="text-[10px] text-[#0575B8] font-semibold truncate">
-                        <span className="text-slate-500 font-medium">Combo Kits: </span>
-                        {plan.combo_kits_display}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Dynamic Plan Description */}
-                  <div className="flex-1 border-t border-slate-100 pt-3">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                      Overview & Scope
-                    </p>
-                    <p className="text-xs sm:text-sm font-medium leading-relaxed text-slate-600">
-                      {plan.description || "Authorized territory franchise partnership plan."}
-                    </p>
-                  </div>
-
                   {/* CTA Button */}
                   <button
                     type="button"
                     onClick={() => handlePlanClick(plan)}
-                    className={`mt-7 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-xs font-black uppercase tracking-wider text-white transition focus:outline-none focus:ring-4 focus:ring-blue-200 ${
+                    className={`mt-6 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-xs font-black uppercase tracking-wider text-white transition focus:outline-none focus:ring-4 focus:ring-blue-200 ${
                       isPopular
                         ? "bg-gradient-to-r from-[#0575B8] to-[#1965B0] shadow-md shadow-blue-500/20 hover:from-[#045D93] hover:to-[#0575B8]"
                         : "bg-[#0575B8] hover:bg-[#045D93]"

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
+import { Link, useLocation, useNavigate, Outlet, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiZap,

@@ -273,7 +273,7 @@ export default function PlansShowcase() {
                         : "bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white shadow-md shadow-blue-600/20"
                     }`}
                   >
-                    <span>Apply for {p.plan_name || p.name}</span>
+                    <span>Apply</span>
                     <FiArrowRight size={15} />
                   </button>
                   <p className="text-[10px] text-center text-slate-500 mt-2 font-medium">

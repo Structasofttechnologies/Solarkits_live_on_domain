@@ -20,8 +20,8 @@ const STATE_CODE_MAP = {
 
 async function verifyGstinMock(cleanGstin) {
   const stateCode = cleanGstin.substring(0, 2);
-  const stateName = STATE_CODE_MAP[stateCode] || 'Unknown State';
-  const pan = cleanGstin.substring(2, 12);
+  const stateName = STATE_CODE_MAP[stateCode] || 'Gujarat';
+  const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : 'AABCS1234F';
 
   // Treat GSTINs ending with "0" as invalid for testing invalid responses
   const isMockValid = !cleanGstin.endsWith('0');
@@ -34,12 +34,16 @@ async function verifyGstinMock(cleanGstin) {
       error_message: 'GSTIN status is INACTIVE or Cancelled in Tax Portal (mock result)',
       legal_name: null,
       trade_name: null,
+      business_name: null,
+      pan_number: null,
       business_status: 'CANCELLED',
+      gstin_status: 'Cancelled',
       registration_state: stateName,
       state_code: stateCode,
       provider_reference_id: null,
       registration_date: null,
       principal_address: null,
+      address: null,
       taxpayer_type: 'Regular',
       normalized_status: 'inactive',
       raw_response: { mock: true, status: 'CANCELLED' },
@@ -50,28 +54,43 @@ async function verifyGstinMock(cleanGstin) {
     is_valid: true,
     gstin: cleanGstin,
     provider: 'mock',
-    legal_name: `SOLAR ENTERPRISES (${pan})`,
+    legal_name: `SOLAR ENTERPRISES LIMITED`,
     trade_name: `SOLARKITS PARTNER - ${stateName}`,
-    business_status: 'ACTIVE',
+    business_name: `SOLARKITS PARTNER - ${stateName}`,
+    pan_number: pan,
+    business_status: 'Active',
+    gstin_status: 'Active',
     registration_state: stateName,
     state_code: stateCode,
-    provider_reference_id: `MOCK-REF-${Date.now()}`,
-    registration_date: new Date('2020-01-01'),
-    principal_address: {
-      addr: '101, Solar Hub Commercial Complex',
-      ntr: 'Principal Place of Business',
-      pncd: '380001',
-      dst: 'Ahmedabad',
-      stcd: stateName,
-    },
+    center_jurisdiction: `Center Jurisdiction ${stateName}`,
+    state_jurisdiction: `State Jurisdiction ${stateName}`,
+    date_of_registration: new Date('2020-01-01'),
+    constitution_of_business: 'Public Limited Company',
     taxpayer_type: 'Regular',
+    nature_bus_activities: ['Office / Sale Office'],
+    nature_of_core_business_activity_description: 'Manufacturer',
+    address: `101, Solar Hub Commercial Complex, ${stateName} Pin-380001`,
+    principal_address: `101, Solar Hub Commercial Complex, ${stateName} Pin-380001`,
+    provider_reference_id: `MOCK-REF-${Date.now()}`,
     normalized_status: 'active',
     error_message: null,
     raw_response: {
-      mock: true,
-      gstin: cleanGstin,
-      stj: `State Tax Office ${stateName}`,
-      dtr: new Date().toISOString(),
+      status: 'success',
+      status_code: 200,
+      data: {
+        gstin: cleanGstin,
+        pan_number: pan,
+        business_name: `SOLARKITS PARTNER - ${stateName}`,
+        legal_name: `SOLAR ENTERPRISES LIMITED`,
+        center_jurisdiction: `Center Jurisdiction ${stateName}`,
+        state_jurisdiction: `State Jurisdiction ${stateName}`,
+        date_of_registration: '2020-01-01',
+        constitution_of_business: 'Public Limited Company',
+        taxpayer_type: 'Regular',
+        gstin_status: 'Active',
+        address: `101, Solar Hub Commercial Complex, ${stateName} Pin-380001`,
+      },
+      request_id: 100001,
     },
   };
 }

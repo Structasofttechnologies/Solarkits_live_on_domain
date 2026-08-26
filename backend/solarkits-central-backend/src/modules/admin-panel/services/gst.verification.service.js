@@ -33,34 +33,40 @@ async function performGstVerification({
   let derivedDistrictId = null;
   let derivedStateId = null;
 
-  // Save structured verification log
-  const logDoc = await GstVerificationLog.create({
-    entity_type,
-    entity_id,
-    gstin: result.gstin,
-    provider: result.provider,
-    request_payload: { gstin, entity_type, entity_id },
-    response_snapshot: result.raw_response || {},
-    legal_name: result.legal_name,
-    trade_name: result.trade_name,
-    business_status: result.business_status,
-    registration_state: result.registration_state,
-    derived_state_id: derivedStateId,
-    derived_district_id: derivedDistrictId,
-    is_valid: result.is_valid,
-    error_message: result.error_message,
-    verified_by: String(verified_by),
-    verified_at: new Date(),
-    provider_reference_id: result.provider_reference_id || null,
-    registration_date: result.registration_date || null,
-    principal_address: result.principal_address || null,
-    taxpayer_type: result.taxpayer_type || null,
-    normalized_status: result.normalized_status || (result.is_valid ? 'active' : 'inactive'),
-  });
+  let logId = null;
+  try {
+    // Save structured verification log
+    const logDoc = await GstVerificationLog.create({
+      entity_type,
+      entity_id,
+      gstin: result.gstin,
+      provider: result.provider,
+      request_payload: { gstin, entity_type, entity_id },
+      response_snapshot: result.raw_response || {},
+      legal_name: result.legal_name,
+      trade_name: result.trade_name,
+      business_status: result.business_status,
+      registration_state: result.registration_state,
+      derived_state_id: derivedStateId,
+      derived_district_id: derivedDistrictId,
+      is_valid: result.is_valid,
+      error_message: result.error_message,
+      verified_by: String(verified_by),
+      verified_at: new Date(),
+      provider_reference_id: result.provider_reference_id || null,
+      registration_date: result.registration_date || null,
+      principal_address: result.principal_address || null,
+      taxpayer_type: result.taxpayer_type || null,
+      normalized_status: result.normalized_status || (result.is_valid ? 'active' : 'inactive'),
+    });
+    logId = logDoc?._id || null;
+  } catch (logErr) {
+    console.warn('[gst.verification.service] Error saving log:', logErr.message);
+  }
 
   return {
     ...result,
-    log_id: logDoc._id,
+    log_id: logId,
   };
 }
 

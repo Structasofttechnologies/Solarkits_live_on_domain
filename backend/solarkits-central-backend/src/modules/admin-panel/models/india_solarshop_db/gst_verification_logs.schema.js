@@ -36,7 +36,6 @@ const schema = new mongoose.Schema({
   },
   provider: {
     type: String,
-    enum: ['mock', 'sandbox', 'production'],
     default: 'mock',
   },
   request_payload:   { type: Object, default: {} },
