@@ -24,6 +24,8 @@ const {
   ResellerPlan,
   StoreSetup,
   StoreSetupChecklist,
+  StoreSetupDelay,
+  StoreSetupVerification,
 } = require('../../admin-panel/models/india_solarshop_db');
 const { generate_token } = require('../utils/jsonwebtoken');
 const {
@@ -909,3 +911,79 @@ exports.get_my_franchisees = async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch franchisees', error: err.message });
   }
 };
+
+exports.get_my_store_setups = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const bdeEmail = req.user.email;
+    const setups = await StoreSetup.find({
+      $or: [
+        { current_bde_id: bdeId },
+        { original_bde_id: bdeId },
+        { assigned_employee_id: bdeId },
+        { assigned_employee_email: bdeEmail },
+      ],
+    })
+      .sort({ created_at: -1 })
+      .populate('franchisee_id', 'business_name owner_name mobile_number email state_name district_name')
+      .lean();
+
+    return res.status(200).json({
+      status: 'success',
+      data: setups,
+    });
+  } catch (err) {
+    console.error('[get_my_store_setups Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch store setups', error: err.message });
+  }
+};
+
+exports.get_bde_store_setup_detail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bdeId = req.user.id;
+    const bdeEmail = req.user.email;
+
+    const setup = await StoreSetup.findOne({
+      _id: id,
+      $or: [
+        { current_bde_id: bdeId },
+        { original_bde_id: bdeId },
+        { assigned_employee_id: bdeId },
+        { assigned_employee_email: bdeEmail },
+      ],
+    })
+      .populate('franchisee_id')
+      .populate('current_bde_id', 'full_name bde_id email mobile_number')
+      .lean();
+
+    if (!setup) {
+      return res.status(404).json({ status: 'error', message: 'Store Setup not found or unauthorized' });
+    }
+
+    const checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 }).lean();
+    const delays = await StoreSetupDelay.find({ store_setup_id: setup._id }).sort({ created_at: -1 }).lean();
+    const verifications = await StoreSetupVerification.find({ store_setup_id: setup._id }).sort({ cycle_number: -1 }).lean();
+
+    const { calculateStoreSetupProgress } = require('../../admin-panel/services/store.setup.service');
+    const progress = await calculateStoreSetupProgress(setup._id);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        setup: {
+          ...setup,
+          ...progress,
+        },
+        checklist,
+        delays,
+        verifications,
+      },
+    });
+  } catch (err) {
+    console.error('[get_bde_store_setup_detail Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch store setup detail', error: err.message });
+  }
+};
+
+

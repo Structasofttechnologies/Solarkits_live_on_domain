@@ -22,6 +22,8 @@ const kycDocUpload = upload_any_files('public/uploads/kyc', 10);
 router.get('/types', handler.get_active_types);
 router.post('/auth/register', authRateLimiter, handler.register_reseller);
 router.post('/auth/login',    authRateLimiter, handler.login_reseller);
+router.post('/auth/login-pin', authRateLimiter, handler.login_reseller_pin);
+router.post('/auth/pin/status', handler.check_pin_status);
 router.post('/auth/logout', handler.logout_reseller);
 
 // ── Dynamic Landing Page CMS Content ──────────────────────────────────────────
@@ -45,6 +47,8 @@ router.post('/plans/purchase-and-onboard', handler.purchase_and_onboard);
 
 // ── Protected Reseller Endpoints ──────────────────────────────────────────────
 router.get('/auth/me', verify_reseller_auth, handler.get_reseller_me);
+router.post('/auth/pin/setup', verify_reseller_auth, handler.setup_reseller_pin);
+router.post('/auth/pin/change', verify_reseller_auth, handler.change_reseller_pin);
 router.get('/territories', verify_reseller_auth, handler.get_reseller_my_territories);
 router.get('/authorized-products', verify_reseller_auth, handler.get_reseller_authorized_products);
 router.post('/kyc/upload', verify_reseller_auth, kycDocUpload, handler.upload_kyc_document);

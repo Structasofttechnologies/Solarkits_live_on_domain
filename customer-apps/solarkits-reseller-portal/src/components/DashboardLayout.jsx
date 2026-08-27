@@ -21,9 +21,11 @@ import {
   FiMoon,
   FiSun,
   FiChevronDown,
+  FiKey,
 } from "react-icons/fi";
 import api from "../services/api";
 import logoImg from "@/assets/images/logo.png";
+import PinSetupModal from "./PinSetupModal";
 
 const NAV_ITEMS = [
   { name: "Home", icon: FiHome, path: "/dashboard" },
@@ -55,6 +57,8 @@ export default function DashboardLayout() {
   });
   const [showNotif, setShowNotif] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinModalMode, setPinModalMode] = useState("setup");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
   const [isDark, setIsDark] = useState(() => localStorage.getItem("reseller_theme") === "dark");
@@ -63,6 +67,20 @@ export default function DashboardLayout() {
   const userMenuRef = useRef(null);
 
   const token = localStorage.getItem("reseller_token");
+
+  // Prompt franchise partner to set up 4-digit PIN if not already configured
+  useEffect(() => {
+    if (reseller && reseller.activation_status === "active") {
+      const isDismissed = sessionStorage.getItem("reseller_pin_modal_dismissed");
+      if (reseller.is_pin_set === false && !isDismissed) {
+        const timer = setTimeout(() => {
+          setPinModalMode("setup");
+          setShowPinModal(true);
+        }, 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [reseller]);
 
   // Auto-expand menu if active path is inside a submenu
   useEffect(() => {
@@ -761,6 +779,34 @@ export default function DashboardLayout() {
                           <FiShield size={15} className="text-blue-600" />
                           <span>KYC & Compliance</span>
                         </Link>
+
+                        {/* 4-Digit Security PIN Management */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setPinModalMode(reseller?.is_pin_set ? "change" : "setup");
+                            setShowPinModal(true);
+                          }}
+                          className="flex items-center justify-between w-full px-4 py-2.5 text-xs font-semibold transition-colors cursor-pointer text-left"
+                          style={{ color: "var(--color-text-primary)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <div className="flex items-center gap-3">
+                            <FiKey size={15} className="text-amber-500" />
+                            <span>4-Digit Security PIN</span>
+                          </div>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase ${
+                              reseller?.is_pin_set
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"
+                                : "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400"
+                            }`}
+                          >
+                            {reseller?.is_pin_set ? "Active" : "Set PIN"}
+                          </span>
+                        </button>
                       </div>
 
                       {/* Logout */}
@@ -793,6 +839,18 @@ export default function DashboardLayout() {
           <Outlet context={{ reseller, refreshUser: fetchMe }} />
         </main>
       </div>
+
+      {/* 4-Digit Security PIN Setup / Update Modal */}
+      <PinSetupModal
+        isOpen={showPinModal}
+        isChangeMode={pinModalMode === "change"}
+        user={reseller}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={(updated) => {
+          setReseller(updated);
+          fetchMe();
+        }}
+      />
     </div>
   );
 }

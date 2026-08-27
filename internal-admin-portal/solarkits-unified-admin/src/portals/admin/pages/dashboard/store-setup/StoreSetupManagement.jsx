@@ -2,17 +2,13 @@ import React, { useState } from 'react';
 import { 
   Store, 
   LayoutDashboard, 
-  ListChecks, 
   Sliders, 
-  TrendingUp, 
-  Award,
-  Plus
+  Award
 } from 'lucide-react';
 import StoreSetupDashboard from './StoreSetupDashboard';
 import AllStoreSetups from './AllStoreSetups';
 import StoreSetupDetail from './StoreSetupDetail';
 import StoreSetupSettings from './StoreSetupSettings';
-import ExpansionPlans from './ExpansionPlans';
 import FranchiseePerformanceRanking from './FranchiseePerformanceRanking';
 
 export default function StoreSetupManagement() {
@@ -32,7 +28,6 @@ export default function StoreSetupManagement() {
   const tabs = [
     { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard },
     { id: 'all-setups', label: 'All Store Setups', icon: Store },
-    { id: 'expansion-plans', label: 'Expansion Plans', icon: TrendingUp },
     { id: 'ranking', label: 'Franchisee Ranking', icon: Award },
     { id: 'settings', label: 'Checklist & Settings', icon: Sliders },
   ];
@@ -55,17 +50,6 @@ export default function StoreSetupManagement() {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Global Action */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setActiveTab('expansion-plans')}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-xl shadow-sm transition-all text-xs"
-          >
-            <Plus className="w-4 h-4" />
-            New Expansion Plan
-          </button>
         </div>
       </div>
 
@@ -113,10 +97,6 @@ export default function StoreSetupManagement() {
           setupId={selectedSetupId}
           onBack={handleBackToList}
         />
-      )}
-
-      {activeTab === 'expansion-plans' && (
-        <ExpansionPlans />
       )}
 
       {activeTab === 'ranking' && (

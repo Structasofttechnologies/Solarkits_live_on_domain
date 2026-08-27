@@ -259,6 +259,71 @@ export default function BdeLeads() {
         </div>
       </div>
 
+      {/* KPI Cards Grid - Fully Responsive */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Card 1: Total Leads */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Leads</span>
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{leads.length}</div>
+            <span className="text-[11px] font-medium text-slate-400 mt-0.5 block">Territory pipeline prospects</span>
+          </div>
+        </div>
+
+        {/* Card 2: Contacted & Interested */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-cyan-600 uppercase tracking-wider">Qualified / Warm</span>
+            <div className="w-10 h-10 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-cyan-600 tracking-tight">
+              {leads.filter((l) => ['new_lead', 'contacted', 'interested'].includes(l.stage)).length}
+            </div>
+            <span className="text-[11px] font-medium text-cyan-600/80 mt-0.5 block">Pitching & follow-up phase</span>
+          </div>
+        </div>
+
+        {/* Card 3: In Onboarding */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">In Signup Phase</span>
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <FileCheck className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-indigo-600 tracking-tight">
+              {leads.filter((l) => ['signup_started', 'approved', 'agreement_signed'].includes(l.stage)).length}
+            </div>
+            <span className="text-[11px] font-medium text-indigo-600/80 mt-0.5 block">Documentation & Agreement</span>
+          </div>
+        </div>
+
+        {/* Card 4: Fee Paid / Converted */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Converted (Won)</span>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-emerald-600 tracking-tight">
+              {leads.filter((l) => l.stage === 'fee_paid').length}
+            </div>
+            <span className="text-[11px] font-medium text-emerald-600/80 mt-0.5 block">Fee paid & store created</span>
+          </div>
+        </div>
+      </div>
+
       {/* Filter & Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="relative flex-1 w-full">

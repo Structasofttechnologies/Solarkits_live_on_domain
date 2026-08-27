@@ -109,15 +109,68 @@ const update_checklist_activity = async (req, res) => {
     if (status) item.status = status;
     if (employee_remarks !== undefined) item.employee_remarks = employee_remarks;
 
-    if (proofs && proofs.length > 0) {
-      const formattedProofs = proofs.map(p => ({
-        url: typeof p === 'string' ? p : p.url,
-        filename: typeof p === 'string' ? 'proof_document.jpg' : (p.filename || 'proof_document.jpg'),
-        file_type: typeof p === 'string' ? 'image' : (p.file_type || 'image'),
+    let newProofs = [];
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      newProofs = req.files.map(f => ({
+        url: f.path || f.secure_url || f.location || `/uploads/${f.filename}`,
+        filename: f.originalname || f.filename || 'proof_image.jpg',
+        file_type: f.mimetype?.startsWith('image') ? 'image' : 'document',
         uploaded_at: new Date(),
         uploaded_by: employeeId,
       }));
-      item.proofs = [...item.proofs, ...formattedProofs];
+    } else if (req.file) {
+      newProofs.push({
+        url: req.file.path || req.file.secure_url || req.file.location || `/uploads/${req.file.filename}`,
+        filename: req.file.originalname || req.file.filename || 'proof_image.jpg',
+        file_type: req.file.mimetype?.startsWith('image') ? 'image' : 'document',
+        uploaded_at: new Date(),
+        uploaded_by: employeeId,
+      });
+    } else {
+      // Only check body if no files were uploaded via multipart
+      let parsedProofs = proofs;
+      if (typeof proofs === 'string') {
+        try { parsedProofs = JSON.parse(proofs); } catch (e) { parsedProofs = [proofs]; }
+      }
+      if (Array.isArray(parsedProofs) && parsedProofs.length > 0) {
+        const formatted = parsedProofs.map(p => ({
+          url: typeof p === 'string' ? p : p.url,
+          filename: typeof p === 'string' ? 'proof_document.jpg' : (p.filename || 'proof_document.jpg'),
+          file_type: typeof p === 'string' ? 'image' : (p.file_type || 'image'),
+          uploaded_at: new Date(),
+          uploaded_by: employeeId,
+        }));
+        newProofs = [...newProofs, ...formatted];
+      } else if (req.body.proof_url) {
+        newProofs.push({
+          url: req.body.proof_url,
+          filename: 'proof_photo.jpg',
+          file_type: 'image',
+          uploaded_at: new Date(),
+          uploaded_by: employeeId,
+        });
+      }
+    }
+
+    if (req.body.clear_proofs === 'true' || req.body.clear_proofs === true) {
+      item.proofs = [];
+      if (status === 'completed' && item.proof_required) {
+        item.status = 'in_progress';
+      }
+    } else if (req.body.replace_proofs === 'true' || req.body.replace_proofs === true) {
+      if (newProofs.length > 0) {
+        item.proofs = newProofs;
+      }
+    } else if (newProofs.length > 0) {
+      const combined = [...(item.proofs || []), ...newProofs];
+      // Deduplicate by URL
+      const uniqueMap = new Map();
+      combined.forEach(p => {
+        if (p && p.url && !uniqueMap.has(p.url)) {
+          uniqueMap.set(p.url, p);
+        }
+      });
+      item.proofs = Array.from(uniqueMap.values());
     }
 
     if (status === 'completed') {

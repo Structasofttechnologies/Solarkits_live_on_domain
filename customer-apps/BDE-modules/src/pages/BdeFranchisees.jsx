@@ -73,24 +73,48 @@ export default function BdeFranchisees() {
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <span className="text-xs text-slate-500 font-medium">Total Attributed Partners</span>
-          <div className="text-2xl font-black text-slate-900 mt-1">{totalPartners}</div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">Lifetime partner signups</span>
+      {/* KPI Cards Grid - Fully Responsive */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        {/* Card 1: Total Attributed */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Attributed Partners</span>
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <Building2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{totalPartners}</div>
+            <span className="text-[11px] font-medium text-slate-400 mt-0.5 block">Lifetime partner signups</span>
+          </div>
         </div>
 
-        <div className="p-4.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <span className="text-xs text-slate-500 font-medium">Live Operational Stores</span>
-          <div className="text-2xl font-black text-emerald-600 mt-1">{operationalCount}</div>
-          <span className="text-[11px] text-emerald-500 mt-0.5 block">Active retail store setups</span>
+        {/* Card 2: Live Operational */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Live Operational Stores</span>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-emerald-600 tracking-tight">{operationalCount}</div>
+            <span className="text-[11px] font-medium text-emerald-600/80 mt-0.5 block">Active retail store setups</span>
+          </div>
         </div>
 
-        <div className="p-4.5 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <span className="text-xs text-slate-500 font-medium">In Onboarding Pipeline</span>
-          <div className="text-2xl font-black text-amber-600 mt-1">{onboardingCount}</div>
-          <span className="text-[11px] text-amber-500 mt-0.5 block">Agreement / Fee / Setup phase</span>
+        {/* Card 3: In Onboarding Pipeline */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group sm:col-span-2 lg:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">In Onboarding Pipeline</span>
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-black text-amber-600 tracking-tight">{onboardingCount}</div>
+            <span className="text-[11px] font-medium text-amber-600/80 mt-0.5 block">Agreement / Fee / Setup phase</span>
+          </div>
         </div>
       </div>
 

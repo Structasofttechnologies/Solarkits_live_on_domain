@@ -36,7 +36,7 @@ export default function DashboardHome() {
       .then((res) => {
         if (res.data?.status === "success") setBuyers(res.data.data || []);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     api.get('/india/v1/reseller/territories')
       .then((res) => {
@@ -44,7 +44,7 @@ export default function DashboardHome() {
           setTerritory(res.data.data[0]);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     api.get('/india/v1/reseller/auth/me')
       .then((res) => {
@@ -52,7 +52,7 @@ export default function DashboardHome() {
           setActiveSubscription(res.data.active_subscription || null);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     api.get('/india/v1/reseller/goals/my-goal')
       .then((res) => {
@@ -60,7 +60,7 @@ export default function DashboardHome() {
           setGoalData(res.data.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   };
 
   useEffect(() => {
@@ -153,20 +153,19 @@ export default function DashboardHome() {
                 <h2 className="text-lg font-black text-slate-900 dark:text-white">
                   Monthly Kit Sales Target & Goal
                 </h2>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                  (goalData?.achievement_pct || 0) >= 100
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                    : (goalData?.achievement_pct || 0) >= 70
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${(goalData?.achievement_pct || 0) >= 100
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                  : (goalData?.achievement_pct || 0) >= 70
                     ? "bg-blue-100 text-blue-800 border border-blue-300"
                     : "bg-amber-100 text-amber-800 border border-amber-300"
-                }`}>
+                  }`}>
                   {goalData?.performance_status === "ACHIEVED" || goalData?.performance_status === "EXCEEDED"
                     ? "🎯 Goal Achieved"
                     : goalData?.performance_status === "ON_TRACK"
-                    ? "⚡ On Track"
-                    : goalData?.performance_status === "BEHIND"
-                    ? "⏳ In Progress"
-                    : "🎯 Active Target"}
+                      ? "⚡ On Track"
+                      : goalData?.performance_status === "BEHIND"
+                        ? "⏳ In Progress"
+                        : "🎯 Active Target"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
@@ -238,13 +237,12 @@ export default function DashboardHome() {
           </div>
           <div className="h-3.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${
-                (goalData?.achievement_pct || 0) >= 100
-                  ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm shadow-emerald-500/50"
-                  : (goalData?.achievement_pct || 0) >= 50
+              className={`h-full rounded-full transition-all duration-700 ${(goalData?.achievement_pct || 0) >= 100
+                ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm shadow-emerald-500/50"
+                : (goalData?.achievement_pct || 0) >= 50
                   ? "bg-gradient-to-r from-blue-600 to-cyan-400 shadow-sm shadow-blue-500/50"
                   : "bg-gradient-to-r from-amber-500 to-orange-400 shadow-sm shadow-amber-500/50"
-              }`}
+                }`}
               style={{ width: `${Math.min(Math.max(goalData?.achievement_pct || 0, 4), 100)}%` }}
             />
           </div>
@@ -334,45 +332,11 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* ── 3. Key Performance Stats ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <div className="bg-white dark:bg-slate-900/60 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-            <FiArrowUpRight size={26} />
-          </div>
-          <div>
-            <div className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Sales Volume</div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">₹{(1450000).toLocaleString("en-IN")}</div>
-          </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-900/60 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <FiUsers size={26} />
-          </div>
-          <div>
-            <div className="text-xs font-black text-slate-500 uppercase tracking-wider">My EPC Network</div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">{buyers.length || 8} Active Buyers</div>
-          </div>
-        </div>
 
-        <div className="bg-white dark:bg-slate-900/60 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-            <FiPackage size={26} />
-          </div>
-          <div>
-            <div className="text-xs font-black text-slate-500 uppercase tracking-wider">KYC Compliance</div>
-            <div className="text-lg font-black text-slate-900 dark:text-white mt-1 capitalize flex items-center gap-1.5">
-              {reseller?.kyc_status === 'verified' ? (
-                <span className="text-emerald-600 flex items-center gap-1"><FiCheckCircle size={18} /> Verified Partner</span>
-              ) : (
-                <span className="text-amber-600">{reseller?.kyc_status || 'Draft'}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+
 
     </div>
+
   );
 }

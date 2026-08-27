@@ -378,10 +378,10 @@ export default function MyEpcBuyers() {
 
                         <div className="bg-white p-3.5 rounded-xl border border-red-200 space-y-2 text-xs">
                           <p className="font-semibold text-red-800 leading-relaxed">
-                            This EPC company's GST is registered in <strong className="underline decoration-red-400 font-bold text-red-900">{gstResult.gst_state_name || "another state"}</strong>, which is <strong>outside your assigned territory boundary</strong>.
+                            {gstResult.territory_reason || `This EPC company's GST is registered in ${gstResult.gst_state_name || "another state"}, which is outside your authorized territory boundary.`}
                           </p>
                           <div className="pt-2 border-t border-red-100 flex items-center justify-between text-[11px] text-slate-600">
-                            <span>Your Authorized Territories:</span>
+                            <span>Your Authorized Territories ({gstResult.territory_level ? `${gstResult.territory_level.toUpperCase()} Plan` : "Assigned Scope"}):</span>
                             <span className="font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
                               {(gstResult.authorized_territories || []).join(", ") || "Your Territory"}
                             </span>
@@ -389,13 +389,13 @@ export default function MyEpcBuyers() {
                         </div>
                       </div>
                     ) : gstResult.is_unique === false ? (
-                      /* Case 2: Duplicate EPC Partner */
+                      /* Case 2: Duplicate EPC / Exclusivity Conflict */
                       <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <FiAlertCircle className="text-amber-600 flex-shrink-0" size={22} />
                             <span className="text-xs font-black text-amber-900 uppercase tracking-wider">
-                              ⚠️ Duplicate EPC Partner Conflict
+                              ⛔ EPC Exclusivity Conflict — Registration Blocked
                             </span>
                           </div>
                           <button type="button" onClick={handleResetGst} className="text-xs font-bold text-slate-600 bg-white border border-slate-300 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer">
@@ -403,8 +403,13 @@ export default function MyEpcBuyers() {
                           </button>
                         </div>
 
-                        <div className="bg-white p-3.5 rounded-xl border border-amber-200 text-xs font-semibold text-amber-900">
-                          An EPC company with GSTIN <span className="font-mono font-bold text-slate-900">{gstInput}</span> ({gstResult.existing_epc?.company_name || 'Existing Partner'}) is already registered on the platform.
+                        <div className="bg-white p-3.5 rounded-xl border border-amber-200 text-xs font-semibold text-amber-900 space-y-1">
+                          <p className="leading-relaxed font-bold">
+                            {gstResult.conflict_message || `An EPC company with GSTIN ${gstInput} is already registered under another Franchise Partner.`}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-normal">
+                            As per platform policy, each EPC buyer sub-account is strictly exclusive to a single Franchise Partner.
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -436,7 +441,7 @@ export default function MyEpcBuyers() {
                           <div className="flex justify-between">
                             <span className="text-slate-500 font-semibold">Territory Validation:</span>
                             <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300">
-                              Inside Assigned Boundary ✓
+                              Inside Authorized Scope ({gstResult.territory_level ? `${gstResult.territory_level.toUpperCase()} Plan` : "Assigned Scope"}) ✓
                             </span>
                           </div>
                         </div>
@@ -449,7 +454,7 @@ export default function MyEpcBuyers() {
                   type="button"
                   onClick={() => gstResult && gstResult.territory_matched !== false && gstResult.is_unique !== false && setStep(2)}
                   disabled={!gstResult || gstResult.territory_matched === false || gstResult.is_unique === false}
-                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl transition-all shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-xl transition-all shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Proceed to EPC Details <FiArrowRight size={18} />
                 </button>

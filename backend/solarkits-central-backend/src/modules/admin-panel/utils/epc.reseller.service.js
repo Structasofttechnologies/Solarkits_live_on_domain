@@ -46,31 +46,58 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
     throw new Error('Reseller KYC must be verified before onboarding EPC buyers');
   }
 
-  // 2. Verify Territory match
+  // 2. Determine Reseller Plan & Strict Territory Scope
+  const { ResellerPlanSubscription } = require('../models/india_solarshop_db');
+  const sub = await ResellerPlanSubscription.findOne({
+    reseller_id: resellerId,
+    status: { $in: ['active', 'paid', 'approved', 'pending_payment'] },
+  }).populate('plan_id').sort({ created_at: -1 }).lean();
+
+  const activeTerritories = await ResellerTerritory.find({ reseller_id: resellerId, status: 'active' })
+    .populate('state_id', 'name state_code')
+    .populate('district_id', 'name')
+    .lean();
+
+  const plan = sub?.plan_id;
+  const territoryLevel = plan?.territory_level || (activeTerritories.length > 0 ? activeTerritories[0].territory_level : 'district');
+
   let effStateId = state_id;
   let effDistrictId = district_id;
 
   if (!effStateId || !effDistrictId) {
-    const activeTerritories = await ResellerTerritory.find({ reseller_id: resellerId, status: 'active' }).lean();
     if (activeTerritories.length > 0) {
-      if (!effStateId && activeTerritories[0].state_id) effStateId = activeTerritories[0].state_id;
-      if (!effDistrictId && activeTerritories[0].district_id) effDistrictId = activeTerritories[0].district_id;
+      if (!effStateId && activeTerritories[0].state_id) effStateId = activeTerritories[0].state_id?._id || activeTerritories[0].state_id;
+      if (!effDistrictId && activeTerritories[0].district_id) effDistrictId = activeTerritories[0].district_id?._id || activeTerritories[0].district_id;
     } else if (reseller.address?.state_id) {
       if (!effStateId) effStateId = reseller.address.state_id;
       if (!effDistrictId) effDistrictId = reseller.address.district_id;
     }
   }
 
-  const territoryCheck = await validateEpcResellerTerritoryMatch(resellerId, {
-    state_id: effStateId,
-    district_id: effDistrictId,
-  });
+  // Strict District vs State Level Territory Boundaries
+  const allowedStateIds = activeTerritories.map(t => String(t.state_id?._id || t.state_id)).filter(Boolean);
+  const allowedDistrictIds = activeTerritories.map(t => String(t.district_id?._id || t.district_id)).filter(Boolean);
+  const allowedStateNames = activeTerritories.map(t => t.state_id?.name).filter(Boolean);
+  const allowedDistrictNames = activeTerritories.map(t => t.district_id?.name).filter(Boolean);
 
-  if (!territoryCheck.is_matched) {
-    throw new Error(`Territory validation failed: ${territoryCheck.reason}`);
+  if (allowedStateIds.length === 0 && reseller.address?.state_id) {
+    allowedStateIds.push(String(reseller.address.state_id));
+  }
+  if (allowedDistrictIds.length === 0 && reseller.address?.district_id) {
+    allowedDistrictIds.push(String(reseller.address.district_id));
   }
 
-  // 3. Optional GSTIN Verification & Duplicate Conflict Check
+  if (territoryLevel === 'district') {
+    if (effDistrictId && allowedDistrictIds.length > 0 && !allowedDistrictIds.includes(String(effDistrictId))) {
+      throw new Error(`Territory Restriction: As a District Franchise Partner, you can only onboard EPC buyers located in your authorized District (${allowedDistrictNames.join(', ') || 'Authorized District'}).`);
+    }
+  } else if (territoryLevel === 'state') {
+    if (effStateId && allowedStateIds.length > 0 && !allowedStateIds.includes(String(effStateId))) {
+      throw new Error(`Territory Restriction: As a State Franchise Partner, you can only onboard EPC buyers located in your authorized State (${allowedStateNames.join(', ') || 'Authorized State'}).`);
+    }
+  }
+
+  // 3. Optional GSTIN Verification & Strict EPC Exclusivity (Single Reseller Association)
   let cleanGstin = gstin ? gstin.trim().toUpperCase() : null;
   let gstResult = null;
 
@@ -86,12 +113,8 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
       gstStateObj = await GeoLevel1.findOne({ name: new RegExp(gstStateName.replace(/[^a-zA-Z0-9\s]/g, '').trim(), 'i') }).lean();
     }
 
-    const gstTerritoryCheck = await validateEpcResellerTerritoryMatch(resellerId, {
-      state_id: gstStateObj?._id || effStateId,
-    });
-
-    if (!gstTerritoryCheck.is_matched) {
-      throw new Error(`Territory Mismatch: EPC company GST state (${gstStateName || epcStateCode}) is outside your authorized territory boundary.`);
+    if (gstStateObj && allowedStateIds.length > 0 && !allowedStateIds.includes(String(gstStateObj._id))) {
+      throw new Error(`Territory Mismatch: EPC company GST state (${gstStateName || epcStateCode}) is outside your authorized ${territoryLevel === 'district' ? 'District' : 'State'} territory (${allowedStateNames.join(', ') || 'Assigned Territory'}).`);
     }
 
     gstResult = await performGstVerification({
@@ -105,57 +128,36 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
       throw new Error(`GSTIN Verification Failed: ${gstResult.error_message}`);
     }
 
-    // Check existing account with this GSTIN
+    // Strict Single Reseller Rule: Check existing account or pending signup with this GSTIN
     const existingGstinAccount = await EpcAccount.findOne({
       gstin: cleanGstin,
       deleted_at: null,
-    });
+    }).populate('onboarded_by_reseller_id', 'business_name');
 
     if (existingGstinAccount) {
-      const currentResellerId = existingGstinAccount.primary_reseller_id || existingGstinAccount.onboarded_by_reseller_id;
-
+      const currentResellerId = existingGstinAccount.primary_reseller_id || existingGstinAccount.onboarded_by_reseller_id?._id || existingGstinAccount.onboarded_by_reseller_id;
       if (currentResellerId && String(currentResellerId) !== String(resellerId)) {
-        // GSTIN Conflict: Registered under another reseller. Create pending transfer request.
-        let existingReq = await EpcTransferRequest.findOne({
-          gstin: cleanGstin,
-          requested_by_reseller_id: resellerId,
-          status: 'pending',
-        });
-
-        if (!existingReq) {
-          existingReq = await EpcTransferRequest.create({
-            epc_id: existingGstinAccount._id,
-            requested_by_reseller_id: resellerId,
-            current_reseller_id: currentResellerId,
-            gstin: cleanGstin,
-            status: 'pending',
-            reason: `GSTIN ${cleanGstin} conflict during reseller onboarding by ${reseller.business_name}`,
-          });
-
-          await logAudit({
-            actor_type: 'reseller',
-            actor_id: resellerId,
-            action: 'EPC_TRANSFER_REQUEST_CREATED',
-            entity_type: 'epc_transfer_requests',
-            entity_id: existingReq._id,
-            metadata: { gstin: cleanGstin, current_reseller_id: currentResellerId },
-          });
-        }
-
-        return {
-          status: 'transfer_pending',
-          transfer_request_id: existingReq._id,
-          gstin: cleanGstin,
-          message: 'An EPC account with this GSTIN is already registered under another reseller. A transfer request has been submitted for Admin review.',
-        };
+        const otherResellerName = existingGstinAccount.onboarded_by_reseller_id?.business_name || 'another Franchise Partner';
+        throw new Error(`Exclusivity Conflict: An EPC company with GSTIN ${cleanGstin} is already registered under ${otherResellerName}. Each EPC can only belong to one Franchise Partner.`);
       }
-
       if (currentResellerId && String(currentResellerId) === String(resellerId)) {
-        return {
-          account_id: existingGstinAccount._id,
-          status: existingGstinAccount.status,
-          message: 'An EPC account with this GSTIN is already registered under your account.',
-        };
+        throw new Error(`This EPC company (GSTIN: ${cleanGstin}) is already registered under your Franchise account.`);
+      }
+    }
+
+    const pendingGstinRequest = await EpcSignupRequest.findOne({
+      gstin: cleanGstin,
+      status: 'pending',
+    }).populate('onboarded_by_reseller_id', 'business_name');
+
+    if (pendingGstinRequest) {
+      const reqResellerId = pendingGstinRequest.onboarded_by_reseller_id?._id || pendingGstinRequest.onboarded_by_reseller_id;
+      if (reqResellerId && String(reqResellerId) !== String(resellerId)) {
+        const otherResellerName = pendingGstinRequest.onboarded_by_reseller_id?.business_name || 'another Franchise Partner';
+        throw new Error(`Exclusivity Conflict: An onboarding request for GSTIN ${cleanGstin} has already been submitted by ${otherResellerName}.`);
+      }
+      if (reqResellerId && String(reqResellerId) === String(resellerId)) {
+        throw new Error(`An onboarding request for GSTIN ${cleanGstin} is already pending review for your Franchise account.`);
       }
     }
   }
@@ -170,6 +172,14 @@ async function registerEpcByReseller(resellerId, epcData = {}) {
   });
   if (existingAccount) {
     throw new Error('An EPC account with this Email or WhatsApp number already exists');
+  }
+
+  const existingRequest = await EpcSignupRequest.findOne({
+    $or: [{ email: cleanEmail }, { whatsapp: cleanWhatsapp }],
+    status: { $in: ['pending', 'approved'] },
+  });
+  if (existingRequest) {
+    throw new Error('An onboarding request with this Email or WhatsApp number is already pending review');
   }
 
   const password_hash = await bcrypt.hash(password || 'EpcPass@123', 10);

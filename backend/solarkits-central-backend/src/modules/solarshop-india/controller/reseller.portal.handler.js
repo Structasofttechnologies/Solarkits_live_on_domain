@@ -464,6 +464,8 @@ const login_reseller = async (req, res) => {
         fee_payment_status: reseller.fee_payment_status || 'pending_payment',
         activation_status: reseller.activation_status,
         reseller_lifecycle_status: reseller.reseller_lifecycle_status || 'draft',
+        is_pin_set:        Boolean(reseller.is_pin_set && reseller.security_pin_hash),
+        pin_set_at:        reseller.pin_set_at || null,
       },
     });
   } catch (error) {
@@ -520,6 +522,8 @@ const get_reseller_me = async (req, res) => {
       fee_payment_remarks: reseller.fee_payment_remarks || subscription?.verification_remarks || null,
       activation_status: reseller.activation_status,
       reseller_lifecycle_status: reseller.reseller_lifecycle_status || 'draft',
+      is_pin_set:        Boolean(reseller.is_pin_set && reseller.security_pin_hash),
+      pin_set_at:        reseller.pin_set_at || null,
       bank_details:      reseller.bank_details || null,
     };
 
@@ -535,6 +539,347 @@ const get_reseller_me = async (req, res) => {
   } catch (error) {
     console.error('[reseller.portal] get_reseller_me error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 4A. 4-DIGIT PIN LOGIN ───────────────────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/auth/login-pin
+ * Body: { email_or_mobile, pin }
+ */
+const login_reseller_pin = async (req, res) => {
+  try {
+    const { pin } = req.body;
+    const loginId = req.body.email_or_mobile || req.body.email || req.body.mobile;
+
+    if (!loginId || !pin) {
+      return res.status(400).json({ status: 'error', message: 'Email/Mobile and 4-digit PIN are required' });
+    }
+
+    const cleanLoginId = String(loginId).trim();
+    const pinStr = String(pin).trim();
+
+    if (!/^\d{4}$/.test(pinStr)) {
+      return res.status(400).json({ status: 'error', message: 'PIN must be exactly 4 numeric digits (0-9)' });
+    }
+
+    const isEmail = cleanLoginId.includes('@');
+
+    // 1. Find FranchiseLead or Reseller
+    const lead = await FranchiseLead.findOne({
+      $or: [
+        { email: new RegExp(`^${cleanLoginId}$`, 'i') },
+        { mobile_number: cleanLoginId },
+      ],
+      deleted_at: null,
+    });
+
+    const searchConditions = [
+      ...(isEmail ? [{ email: new RegExp(`^${cleanLoginId}$`, 'i') }] : [{ mobile: cleanLoginId }]),
+      ...(lead?.email ? [{ email: new RegExp(`^${lead.email.trim()}$`, 'i') }] : []),
+      ...(lead?.mobile_number ? [{ mobile: lead.mobile_number.trim() }] : []),
+    ];
+
+    let reseller = await Reseller.findOne({
+      $or: searchConditions,
+    });
+
+    if (reseller && reseller.deleted_at) {
+      reseller.deleted_at = null;
+      reseller.is_active = true;
+      await reseller.save();
+    }
+
+    if (!reseller) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Account not found. Please verify your email/mobile or apply for a franchise.',
+      });
+    }
+
+    if (!reseller.is_active || reseller.activation_status === 'terminated') {
+      return res.status(403).json({ status: 'error', message: 'Reseller account is deactivated or terminated' });
+    }
+
+    if (!reseller.is_pin_set || !reseller.security_pin_hash) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'PIN_NOT_SET',
+        message: '4-digit PIN is not yet set for this account. Please sign in with your password and set your PIN.',
+      });
+    }
+
+    // Check account lockout
+    if (reseller.pin_locked_until && new Date() < new Date(reseller.pin_locked_until)) {
+      const remainingMins = Math.ceil((new Date(reseller.pin_locked_until).getTime() - Date.now()) / 60000);
+      return res.status(429).json({
+        status: 'error',
+        message: `Too many incorrect PIN attempts. PIN login is temporarily locked for ${remainingMins} minute(s). You can still log in using your password.`,
+      });
+    }
+
+    // Compare PIN hash
+    let isMatch = false;
+    try {
+      isMatch = await bcrypt.compare(pinStr, reseller.security_pin_hash);
+    } catch (err) {
+      console.warn('[login_reseller_pin] bcrypt compare error:', err?.message);
+    }
+
+    if (!isMatch) {
+      reseller.pin_failed_attempts = (reseller.pin_failed_attempts || 0) + 1;
+      const MAX_ATTEMPTS = 5;
+      const remainingAttempts = Math.max(0, MAX_ATTEMPTS - reseller.pin_failed_attempts);
+
+      if (reseller.pin_failed_attempts >= MAX_ATTEMPTS) {
+        reseller.pin_locked_until = new Date(Date.now() + 15 * 60 * 1000); // 15 mins lock
+        await reseller.save();
+        return res.status(429).json({
+          status: 'error',
+          message: 'Too many failed PIN attempts. PIN login locked for 15 minutes. Please log in with your password.',
+        });
+      }
+
+      await reseller.save();
+      return res.status(401).json({
+        status: 'error',
+        message: `Incorrect 4-digit PIN. ${remainingAttempts} attempt(s) remaining before temporary lockout.`,
+        remaining_attempts: remainingAttempts,
+      });
+    }
+
+    // Reset failure attempts on successful match
+    reseller.pin_failed_attempts = 0;
+    reseller.pin_locked_until = null;
+    await reseller.save();
+
+    // Generate JWT token
+    const tokenPayload = {
+      id:              reseller._id,
+      email:           reseller.email,
+      business_name:   reseller.business_name,
+      commercial_mode: reseller.commercial_mode,
+      role:            'reseller',
+      token_version:   reseller.token_version,
+    };
+    const token = generate_token(tokenPayload);
+
+    // Set cookie
+    res.cookie('reseller_access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    await logAudit({
+      actor_type:  'reseller',
+      actor_id:    reseller._id,
+      action:      'RESELLER_PIN_LOGIN',
+      entity_type: 'resellers',
+      entity_id:   reseller._id,
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      token,
+      user: {
+        id:                reseller._id,
+        business_name:     reseller.business_name,
+        contact_person:    reseller.contact_person,
+        email:             reseller.email,
+        mobile:            reseller.mobile,
+        commercial_mode:   reseller.commercial_mode,
+        kyc_status:        reseller.kyc_status,
+        agreement_status:  reseller.agreement_status,
+        fee_payment_status: reseller.fee_payment_status || 'pending_payment',
+        activation_status: reseller.activation_status,
+        reseller_lifecycle_status: reseller.reseller_lifecycle_status || 'draft',
+        is_pin_set:        true,
+        pin_set_at:        reseller.pin_set_at,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] login_reseller_pin error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 4B. CHECK PIN STATUS (PUBLIC) ───────────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/auth/pin/status
+ * Body: { email_or_mobile }
+ */
+const check_pin_status = async (req, res) => {
+  try {
+    const loginId = req.body.email_or_mobile || req.body.email || req.body.mobile;
+    if (!loginId) {
+      return res.status(400).json({ status: 'error', message: 'Email or Mobile is required' });
+    }
+
+    const cleanLoginId = String(loginId).trim();
+    const isEmail = cleanLoginId.includes('@');
+
+    const reseller = await Reseller.findOne({
+      $or: isEmail ? [{ email: new RegExp(`^${cleanLoginId}$`, 'i') }] : [{ mobile: cleanLoginId }],
+      deleted_at: null,
+    }).lean();
+
+    if (!reseller) {
+      return res.json({
+        status: 'success',
+        exists: false,
+        is_pin_set: false,
+      });
+    }
+
+    return res.json({
+      status: 'success',
+      exists: true,
+      business_name: reseller.business_name,
+      is_pin_set: Boolean(reseller.is_pin_set && reseller.security_pin_hash),
+      pin_set_at: reseller.pin_set_at || null,
+      is_locked: Boolean(reseller.pin_locked_until && new Date() < new Date(reseller.pin_locked_until)),
+    });
+  } catch (error) {
+    console.error('[reseller.portal] check_pin_status error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 4C. SETUP 4-DIGIT PIN (PROTECTED) ─────────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/auth/pin/setup
+ * Body: { pin, confirm_pin }
+ */
+const setup_reseller_pin = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { pin, confirm_pin } = req.body;
+
+    if (!pin || !confirm_pin) {
+      return res.status(400).json({ status: 'error', message: '4-digit PIN and confirmation PIN are required' });
+    }
+
+    const pinStr = String(pin).trim();
+    const confirmPinStr = String(confirm_pin).trim();
+
+    if (!/^\d{4}$/.test(pinStr)) {
+      return res.status(400).json({ status: 'error', message: 'Security PIN must be exactly 4 numeric digits (0-9)' });
+    }
+
+    if (pinStr !== confirmPinStr) {
+      return res.status(400).json({ status: 'error', message: 'PIN and Confirm PIN do not match' });
+    }
+
+    const reseller = await Reseller.findById(resellerId);
+    if (!reseller || reseller.deleted_at) {
+      return res.status(404).json({ status: 'error', message: 'Reseller account not found' });
+    }
+
+    const pinHash = await bcrypt.hash(pinStr, 10);
+    reseller.security_pin_hash = pinHash;
+    reseller.is_pin_set = true;
+    reseller.pin_set_at = new Date();
+    reseller.pin_failed_attempts = 0;
+    reseller.pin_locked_until = null;
+    await reseller.save();
+
+    await logAudit({
+      actor_type:  'reseller',
+      actor_id:    reseller._id,
+      action:      'RESELLER_PIN_SET',
+      entity_type: 'resellers',
+      entity_id:   reseller._id,
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      message: '4-digit Security PIN set successfully! You can now use it for fast 1-click login.',
+      data: {
+        is_pin_set: true,
+        pin_set_at: reseller.pin_set_at,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] setup_reseller_pin error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
+// ─── 4D. CHANGE 4-DIGIT PIN (PROTECTED) ───────────────────────────────────────
+/**
+ * POST /api/india/v1/reseller/auth/pin/change
+ * Body: { current_pin, current_password, new_pin, confirm_new_pin }
+ */
+const change_reseller_pin = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { current_pin, current_password, new_pin, confirm_new_pin } = req.body;
+
+    if (!new_pin || !confirm_new_pin) {
+      return res.status(400).json({ status: 'error', message: 'New 4-digit PIN and confirmation are required' });
+    }
+
+    const newPinStr = String(new_pin).trim();
+    const confirmNewPinStr = String(confirm_new_pin).trim();
+
+    if (!/^\d{4}$/.test(newPinStr)) {
+      return res.status(400).json({ status: 'error', message: 'New PIN must be exactly 4 numeric digits (0-9)' });
+    }
+
+    if (newPinStr !== confirmNewPinStr) {
+      return res.status(400).json({ status: 'error', message: 'New PIN and Confirm PIN do not match' });
+    }
+
+    const reseller = await Reseller.findById(resellerId);
+    if (!reseller || reseller.deleted_at) {
+      return res.status(404).json({ status: 'error', message: 'Reseller account not found' });
+    }
+
+    // Verify current credentials if PIN was already configured
+    let isAuthorized = false;
+    if (reseller.is_pin_set && reseller.security_pin_hash && current_pin) {
+      isAuthorized = await bcrypt.compare(String(current_pin).trim(), reseller.security_pin_hash);
+    }
+    if (!isAuthorized && current_password && reseller.password_hash) {
+      isAuthorized = await bcrypt.compare(String(current_password).trim(), reseller.password_hash);
+    }
+
+    if (!isAuthorized && reseller.is_pin_set && reseller.security_pin_hash) {
+      return res.status(401).json({ status: 'error', message: 'Current 4-digit PIN or password is incorrect' });
+    }
+
+    const pinHash = await bcrypt.hash(newPinStr, 10);
+    reseller.security_pin_hash = pinHash;
+    reseller.is_pin_set = true;
+    reseller.pin_set_at = new Date();
+    reseller.pin_failed_attempts = 0;
+    reseller.pin_locked_until = null;
+    await reseller.save();
+
+    await logAudit({
+      actor_type:  'reseller',
+      actor_id:    reseller._id,
+      action:      'RESELLER_PIN_CHANGED',
+      entity_type: 'resellers',
+      entity_id:   reseller._id,
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      message: '4-digit Security PIN updated successfully',
+      data: {
+        is_pin_set: true,
+        pin_set_at: reseller.pin_set_at,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] change_reseller_pin error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
   }
 };
 
@@ -563,9 +908,23 @@ const verify_gstin = async (req, res) => {
     }
 
     // ── EPC Buyer Onboarding Context Validation ──────────────────────────────
-    if (context === 'epc_onboarding' && req.reseller?._id) {
-      const { EpcAccount, ResellerTerritory } = require('../../admin-panel/models/india_solarshop_db');
-      const { validateResellerTerritoryAccess } = require('../../admin-panel/utils/territory.validator');
+    let effectiveReseller = req.reseller;
+    if (!effectiveReseller) {
+      const { decode_token } = require('../utils/jsonwebtoken');
+      let token = req.cookies?.reseller_access_token || req.cookies?.access_token;
+      if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        token = req.headers.authorization.split(' ')[1];
+      }
+      if (token) {
+        const decoded = decode_token(token);
+        if (decoded?.id && decoded?.role === 'reseller') {
+          effectiveReseller = await Reseller.findOne({ _id: decoded.id, deleted_at: null }).lean();
+        }
+      }
+    }
+
+    if (context === 'epc_onboarding' && effectiveReseller?._id) {
+      const { EpcAccount, EpcSignupRequest, ResellerTerritory, ResellerPlanSubscription } = require('../../admin-panel/models/india_solarshop_db');
 
       // 1. Resolve State from GSTIN State Code
       const epcStateCode = cleanGst.substring(0, 2);
@@ -577,26 +936,101 @@ const verify_gstin = async (req, res) => {
         matchedState = await GeoLevel1.findOne({ name: new RegExp(cleanName, 'i') }).lean();
       }
 
-      // 2. Validate Territory Match
-      const territoryCheck = await validateResellerTerritoryAccess(req.reseller._id, {
-        state_id: matchedState?._id || null,
-      });
-
-      // Fetch Reseller's Authorized Territories for display info
-      const activeTerritories = await ResellerTerritory.find({ reseller_id: req.reseller._id, status: 'active' })
-        .populate('state_id', 'name')
+      // 2. Fetch Reseller's Plan & Active Territories
+      const activeTerritories = await ResellerTerritory.find({
+        reseller_id: effectiveReseller._id,
+        status: 'active',
+      })
+        .populate('state_id', 'name state_code')
+        .populate('district_id', 'name')
         .lean();
 
-      const resellerStateNames = activeTerritories
-        .map(t => t.state_id?.name)
-        .filter(Boolean);
+      const subscription = await ResellerPlanSubscription.findOne({
+        reseller_id: effectiveReseller._id,
+        status: { $in: ['active', 'paid', 'approved', 'pending_payment'] },
+      })
+        .populate('plan_id')
+        .sort({ created_at: -1 })
+        .lean();
 
-      if (resellerStateNames.length === 0 && req.reseller.address?.gst_state_name) {
-        resellerStateNames.push(req.reseller.address.gst_state_name);
+      const plan = subscription?.plan_id;
+      const territoryLevel = plan?.territory_level || (activeTerritories.length > 0 ? activeTerritories[0].territory_level : 'district');
+
+      let authorizedStateNames = [];
+      let authorizedDistrictNames = [];
+      let isStateMatched = false;
+
+      if (activeTerritories.length > 0) {
+        for (const t of activeTerritories) {
+          if (t.territory_level === 'country') isStateMatched = true;
+          if (t.state_id?.name) authorizedStateNames.push(t.state_id.name);
+          if (t.district_id?.name) authorizedDistrictNames.push(t.district_id.name);
+          if (t.state_id?.state_code && t.state_id.state_code === epcStateCode) isStateMatched = true;
+          if (t.state_id?.name && epcStateName && new RegExp(t.state_id.name.replace(/[^a-zA-Z0-9\s]/g, '').trim(), 'i').test(epcStateName)) {
+            isStateMatched = true;
+          }
+        }
+      } else if (effectiveReseller.address?.state_id) {
+        const resState = await GeoLevel1.findById(effectiveReseller.address.state_id).lean();
+        if (resState) {
+          authorizedStateNames.push(resState.name);
+          if (resState.state_code === epcStateCode || (epcStateName && new RegExp(resState.name.replace(/[^a-zA-Z0-9\s]/g, '').trim(), 'i').test(epcStateName))) {
+            isStateMatched = true;
+          }
+        }
+        if (effectiveReseller.address?.district_id) {
+          const resDistrict = await GeoLevel2.findById(effectiveReseller.address.district_id).lean();
+          if (resDistrict) authorizedDistrictNames.push(resDistrict.name);
+        }
       }
 
-      // 3. Unique EPC Partner Check
-      const existingEpc = await EpcAccount.findOne({ gstin: cleanGst, deleted_at: null }).lean();
+      let territoryMatched = isStateMatched;
+      let territoryReason = '';
+
+      if (!isStateMatched) {
+        territoryReason = `EPC company GST state (${epcStateName || epcStateCode}) is outside your authorized ${territoryLevel === 'district' ? 'District' : 'State'} territory (${authorizedStateNames.join(', ') || 'Assigned Territory'}).`;
+      } else if (territoryLevel === 'district') {
+        territoryReason = `GST State matches. As a District Franchise Partner, in Step 2 this EPC must be registered in your authorized District (${authorizedDistrictNames.join(', ') || 'Assigned District'}).`;
+      } else {
+        territoryReason = `EPC State matches your authorized ${territoryLevel} territory (${authorizedStateNames.join(', ')}).`;
+      }
+
+      // 3. Strict EPC Exclusivity (Single Reseller Rule)
+      const existingEpc = await EpcAccount.findOne({ gstin: cleanGst, deleted_at: null })
+        .populate('onboarded_by_reseller_id', 'business_name')
+        .lean();
+
+      const pendingSignup = await EpcSignupRequest.findOne({ gstin: cleanGst, status: 'pending' })
+        .populate('onboarded_by_reseller_id', 'business_name')
+        .lean();
+
+      let isUnique = true;
+      let isOwnEpc = false;
+      let conflictMessage = null;
+
+      if (existingEpc) {
+        isUnique = false;
+        const ownerResellerId = existingEpc.onboarded_by_reseller_id?._id || existingEpc.onboarded_by_reseller_id || existingEpc.primary_reseller_id;
+        if (String(ownerResellerId) === String(effectiveReseller._id)) {
+          isOwnEpc = true;
+          conflictMessage = 'This EPC company is already registered under your Franchise account.';
+        } else {
+          isOwnEpc = false;
+          const otherName = existingEpc.onboarded_by_reseller_id?.business_name || 'another Franchise Partner';
+          conflictMessage = `This EPC company (GSTIN: ${cleanGst}) is already registered under ${otherName}. Each EPC can only be associated with one Franchise Partner.`;
+        }
+      } else if (pendingSignup) {
+        isUnique = false;
+        const ownerResellerId = pendingSignup.onboarded_by_reseller_id?._id || pendingSignup.onboarded_by_reseller_id;
+        if (String(ownerResellerId) === String(effectiveReseller._id)) {
+          isOwnEpc = true;
+          conflictMessage = 'An onboarding request for this EPC is already pending review for your account.';
+        } else {
+          isOwnEpc = false;
+          const otherName = pendingSignup.onboarded_by_reseller_id?.business_name || 'another Franchise Partner';
+          conflictMessage = `An onboarding request for this EPC (GSTIN: ${cleanGst}) has already been submitted by ${otherName}.`;
+        }
+      }
 
       return res.json({
         status: 'success',
@@ -604,10 +1038,15 @@ const verify_gstin = async (req, res) => {
           ...result,
           gst_state_code: epcStateCode,
           gst_state_name: epcStateName,
-          territory_matched: territoryCheck.is_allowed,
-          territory_reason: territoryCheck.reason,
-          authorized_territories: resellerStateNames,
-          is_unique: !existingEpc,
+          territory_level: territoryLevel,
+          territory_matched: territoryMatched,
+          territory_reason: territoryReason,
+          authorized_territories: territoryLevel === 'district' ? authorizedDistrictNames : authorizedStateNames,
+          authorized_states: authorizedStateNames,
+          authorized_districts: authorizedDistrictNames,
+          is_unique: isUnique,
+          is_own_epc: isOwnEpc,
+          conflict_message: conflictMessage,
           existing_epc: existingEpc ? {
             id: existingEpc._id,
             company_name: existingEpc.company_name || existingEpc.name,
@@ -2649,15 +3088,16 @@ const get_my_store_setup = async (req, res) => {
   try {
     const resellerId = req.reseller._id;
     const setup = await StoreSetup.findOne({ franchisee_id: resellerId })
-      .populate('assigned_employee_id', 'name email mobile role')
-      .populate('current_bde_id', 'full_name bde_id email mobile');
+      .populate('current_bde_id', 'full_name bde_id email mobile_number')
+      .lean();
 
     if (!setup) {
       return res.status(200).json({ status: 'success', data: null });
     }
 
-    const checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 });
-    const delays = await StoreSetupDelay.find({ store_setup_id: setup._id }).sort({ created_at: -1 });
+    const checklist = await StoreSetupChecklist.find({ store_setup_id: setup._id }).sort({ display_order: 1 }).lean();
+    const delays = await StoreSetupDelay.find({ store_setup_id: setup._id }).sort({ created_at: -1 }).lean();
+
 
     return res.status(200).json({
       status: 'success',
@@ -2696,6 +3136,10 @@ const get_my_goal_progress = async (req, res) => {
 module.exports = {
   register_reseller,
   login_reseller,
+  login_reseller_pin,
+  check_pin_status,
+  setup_reseller_pin,
+  change_reseller_pin,
   logout_reseller,
   get_reseller_me,
   verify_gstin,

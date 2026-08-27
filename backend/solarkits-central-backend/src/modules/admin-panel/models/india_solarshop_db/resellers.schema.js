@@ -23,6 +23,13 @@ const schema = new mongoose.Schema({
   email:           { type: String, required: true, trim: true, lowercase: true, maxlength: 200 },
   password_hash:   { type: String, required: true },
 
+  // ── 4-Digit Security PIN for Fast Login ──────────────────────────────────
+  security_pin_hash:   { type: String, default: null }, // bcrypt hashed 4-digit PIN
+  is_pin_set:          { type: Boolean, default: false },
+  pin_set_at:          { type: Date, default: null },
+  pin_failed_attempts: { type: Number, default: 0 },
+  pin_locked_until:    { type: Date, default: null },
+
   address: {
     line:        { type: String, default: null, trim: true, maxlength: 500 },
     country_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_0', default: null },

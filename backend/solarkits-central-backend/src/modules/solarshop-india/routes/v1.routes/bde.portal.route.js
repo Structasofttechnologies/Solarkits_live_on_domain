@@ -12,6 +12,10 @@ const router = express.Router();
 
 const { verify_bde_auth } = require('../../middlewares/verify_bde_auth');
 const handler = require('../../controller/bde.portal.handler');
+const employeeHandler = require('../../../admin-panel/controller/store.setup.employee.handler');
+const { upload_any_files } = require('../../../admin-panel/utils/upload.files');
+
+const proofUpload = upload_any_files('public/uploads/store_setup', 10);
 
 // ── Public Auth Endpoints ─────────────────────────────────────────────────────
 router.post('/auth/login', handler.login_bde);
@@ -28,13 +32,20 @@ router.get('/dashboard', verify_bde_auth, handler.get_bde_dashboard);
 router.get('/notifications', verify_bde_auth, handler.get_notifications);
 router.put('/notifications/:id/read', verify_bde_auth, handler.mark_notification_read);
 
-// Scoped assignments
+// Scoped assignments & Physical Store Setup Execution
 router.get('/territory/my', verify_bde_auth, handler.get_my_territory);
 router.get('/territory/availability', verify_bde_auth, require('../../controller/reseller.portal.handler').check_territory_availability);
 router.post('/gst/verify', verify_bde_auth, require('../../controller/reseller.portal.handler').verify_gstin);
 router.get('/plans/my', verify_bde_auth, handler.get_my_plans);
 router.get('/goals/my', verify_bde_auth, handler.get_my_goals);
+
+// Store Setup & 16-Step Physical Inspection Execution
 router.get('/store-setup', verify_bde_auth, handler.get_my_store_setups);
+router.get('/store-setup/:id', verify_bde_auth, handler.get_bde_store_setup_detail);
+router.put('/store-setup/:id/checklist/:activity_id', verify_bde_auth, proofUpload, employeeHandler.update_checklist_activity);
+router.post('/store-setup/:id/checklist/:activity_id', verify_bde_auth, proofUpload, employeeHandler.update_checklist_activity);
+router.post('/store-setup/:id/submit-verification', verify_bde_auth, employeeHandler.submit_for_admin_verification);
+router.post('/store-setup/:id/delay-request', verify_bde_auth, proofUpload, employeeHandler.submit_delay_request);
 
 // ── Step 2: BDE Leads & Franchisee Pipeline ───────────────────────────────────
 router.post('/leads/create', verify_bde_auth, handler.create_bde_lead);
@@ -49,3 +60,4 @@ router.get('/pipeline', verify_bde_auth, handler.get_bde_pipeline);
 router.get('/franchisees', verify_bde_auth, handler.get_my_franchisees);
 
 module.exports = router;
+
