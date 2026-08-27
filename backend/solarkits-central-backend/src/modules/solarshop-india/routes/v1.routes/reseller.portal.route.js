@@ -72,6 +72,7 @@ router.get('/po/plan-settings', verify_reseller_auth, handler.get_my_plan_po_set
 router.get('/po/my-orders',     verify_reseller_auth, handler.list_my_po_orders);
 router.post('/po/create',       verify_reseller_auth, handler.create_my_po_order);
 router.get('/po/detail/:id',    verify_reseller_auth, handler.get_my_po_order_detail);
+router.get('/goals/my-goal',    verify_reseller_auth, handler.get_my_goal_progress);
 
 // Bank Details Routes (commission payout account management)
 router.get('/profile/bank-details',  verify_reseller_auth, handler.get_reseller_bank_details);

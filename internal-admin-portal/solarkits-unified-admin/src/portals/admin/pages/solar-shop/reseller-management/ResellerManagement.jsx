@@ -17,6 +17,7 @@ const ResellerWalletManager = lazy(() => import("./ResellerWalletManager"));
 const ResellerSettings = lazy(() => import("./ResellerSettings"));
 
 // ── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ─────────
+const FranchiseeSettings           = lazy(() => import("./FranchiseeSettings"));
 const FranchiseePOSettings         = lazy(() => import("./FranchiseePOSettings"));
 const FranchiseeMoqRules           = lazy(() => import("./FranchiseeMoqRules"));
 const FranchiseeKitTargets         = lazy(() => import("./FranchiseeKitTargets"));
@@ -174,13 +175,23 @@ function ResellerManagement() {
         }
       />
 
-      {/* ── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ── */}
+      {/* ── Unified Franchisee Settings: MOQ, Commission, PO Settings ── */}
+      <Route
+        path="/franchise-settings"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_SETTINGS">
+            <Suspense fallback={<Loader text="Loading Franchisee Settings..." />}>
+              <FranchiseeSettings />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
       <Route
         path="/fpo/po-settings"
         element={
           <PermissionGuard requiredUniqueId="FPO_SETTINGS">
-            <Suspense fallback={<Loader text="Loading PO Settings..." />}>
-              <FranchiseePOSettings />
+            <Suspense fallback={<Loader text="Loading Franchisee Settings..." />}>
+              <FranchiseeSettings />
             </Suspense>
           </PermissionGuard>
         }
@@ -188,9 +199,9 @@ function ResellerManagement() {
       <Route
         path="/fpo/moq-rules"
         element={
-          <PermissionGuard requiredUniqueId="FPO_MOQ">
-            <Suspense fallback={<Loader text="Loading MOQ Rules..." />}>
-              <FranchiseeMoqRules />
+          <PermissionGuard requiredUniqueId="FPO_SETTINGS">
+            <Suspense fallback={<Loader text="Loading Franchisee Settings..." />}>
+              <FranchiseeSettings />
             </Suspense>
           </PermissionGuard>
         }

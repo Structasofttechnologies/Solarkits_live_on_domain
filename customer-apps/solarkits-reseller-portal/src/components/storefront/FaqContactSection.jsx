@@ -10,6 +10,7 @@ import {
   FiPhone,
 } from "react-icons/fi";
 import { INDIAN_STATES_DISTRICTS } from "../../data/territoryData";
+import api from "../../services/api";
 
 const FAQ_CATEGORIES = {
   "Complete SolarKits": [
@@ -95,9 +96,37 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+
+    const payload = {
+      fullName: formData.name,
+      businessName: `${formData.name} (Consultation Desk)`,
+      mobileNumber: formData.mobile,
+      whatsappNumber: formData.mobile,
+      email: formData.email,
+      state: formData.state,
+      district: formData.district,
+      businessProfile: formData.businessType || "Solar Dealer / Installer",
+      expectedOrderQty: "1 - 3 Kits / Month (Starter)",
+      selectedSolution: "Request Partner Callback",
+      actionType: "callback_request",
+      action_type: "callback_request",
+      notes: formData.message || "Requested priority partner consultation callback within 2 hours regarding state distribution or container pricing.",
+      source: "consultation_desk",
+    };
+
+    try {
+      await api.post("/india/v1/reseller/leads/submit", payload);
+    } catch (err) {
+      console.warn("Backend lead submit note, trying fallback:", err);
+      try {
+        await api.post("/resellers/leads/submit", payload);
+      } catch (err2) {
+        console.warn("Fallback lead submit note:", err2);
+      }
+    }
 
     try {
       const existing = JSON.parse(localStorage.getItem("solarkits_crm_leads") || "[]");
@@ -110,27 +139,28 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
         district: formData.district,
         businessType: formData.businessType,
         notes: formData.message,
-        actionType: "consultation_request",
+        actionType: "callback_request",
+        selectedSolution: "Request Partner Callback",
+        source: "consultation_desk",
         submittedAt: new Date().toISOString(),
+        status: "NEW",
       });
       localStorage.setItem("solarkits_crm_leads", JSON.stringify(existing));
     } catch (err) {
       console.warn("Storage note:", err);
     }
 
-    setTimeout(() => {
-      setSubmitting(false);
-      setSubmitted(true);
-      setFormData({
-        name: "",
-        mobile: "",
-        email: "",
-        state: "Maharashtra",
-        district: "Pune",
-        businessType: "Solar Dealer / Installer",
-        message: "",
-      });
-    }, 800);
+    setSubmitting(false);
+    setSubmitted(true);
+    setFormData({
+      name: "",
+      mobile: "",
+      email: "",
+      state: "Maharashtra",
+      district: "Pune",
+      businessType: "Solar Dealer / Installer",
+      message: "",
+    });
   };
 
   const handleWhatsApp = () => {

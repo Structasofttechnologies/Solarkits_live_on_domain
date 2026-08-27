@@ -13,13 +13,15 @@ const { logAudit } = require('../utils/audit.service');
 // ── LIST ──────────────────────────────────────────────────────────────────────
 const list_commission_rules = async (req, res) => {
   try {
-    const { plan_id, active_only } = req.query;
+    const { plan_id, combo_kit_id, active_only } = req.query;
     const query = { deleted_at: null };
     if (plan_id) query.plan_id = plan_id;
+    if (combo_kit_id) query.combo_kit_id = combo_kit_id;
     if (active_only === 'true') query.is_active = true;
 
     const rows = await FranchiseeCommissionRule.find(query)
       .populate('plan_id', 'name')
+      .populate({ path: 'combo_kit_id', model: 'pc_comobo_kit', select: 'name kit_name kit_code' })
       .sort({ effective_from: -1 })
       .lean();
 
@@ -34,7 +36,7 @@ const list_commission_rules = async (req, res) => {
 const add_commission_rule = async (req, res) => {
   try {
     const {
-      plan_id, commission_method, commission_percentage, fixed_amount_per_kit_paise,
+      plan_id, combo_kit_id, commission_method, commission_percentage, fixed_amount_per_kit_paise,
       min_eligible_quantity, max_commission_paise, applicable_industry_type_ids,
       applicable_project_type_ids, calculation_stage, settlement_rule,
       effective_from, effective_until,
@@ -59,25 +61,31 @@ const add_commission_rule = async (req, res) => {
     const plan = await ResellerPlan.findOne({ _id: plan_id, deleted_at: null }).lean();
     if (!plan) return res.status(404).json({ status: 'error', message: 'Reseller plan not found' });
 
-    // Check for overlapping active rule of the same method for the same plan+period
-    const overlap = await FranchiseeCommissionRule.findOne({
+    // Check for overlapping active rule of the same method for the same plan+kit+period
+    const overlapQuery = {
       plan_id,
       commission_method,
       is_active: true,
       deleted_at: null,
       effective_from: { $lte: effective_until || new Date('9999-12-31') },
       $or: [{ effective_until: null }, { effective_until: { $gte: effective_from } }],
-    }).lean();
+    };
+    if (combo_kit_id) {
+      overlapQuery.combo_kit_id = combo_kit_id;
+    }
+
+    const overlap = await FranchiseeCommissionRule.findOne(overlapQuery).lean();
 
     if (overlap) {
       return res.status(409).json({
         status: 'error',
-        message: `An active ${commission_method} commission rule already exists for this plan in the specified period.`,
+        message: `An active ${commission_method} commission rule already exists for this plan/product in the specified period.`,
       });
     }
 
     const doc = await FranchiseeCommissionRule.create({
       plan_id,
+      combo_kit_id:                   combo_kit_id || null,
       commission_method,
       commission_percentage:          commission_method === 'PERCENTAGE' ? Number(commission_percentage) : null,
       fixed_amount_per_kit_paise:     commission_method === 'FIXED_PER_KIT' ? Math.round(Number(fixed_amount_per_kit_paise)) : null,
@@ -116,7 +124,7 @@ const update_commission_rule = async (req, res) => {
 
     const before = doc.toObject();
     const editable = ['commission_percentage', 'fixed_amount_per_kit_paise', 'min_eligible_quantity',
-      'max_commission_paise', 'applicable_industry_type_ids', 'applicable_project_type_ids',
+      'max_commission_paise', 'applicable_industry_type_ids', 'applicable_project_type_ids', 'combo_kit_id',
       'calculation_stage', 'settlement_rule', 'effective_until', 'is_active'];
 
     for (const key of editable) {

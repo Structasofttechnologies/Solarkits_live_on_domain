@@ -58,6 +58,11 @@ const schema = new mongoose.Schema(
     },
 
     // ── Scope Filters ─────────────────────────────────────────────────────────
+    combo_kit_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'pc_comobo_kit',
+      default: null,
+    },
     applicable_industry_type_ids: [
       { type: mongoose.Schema.Types.ObjectId, ref: 'sys_industry_types' },
     ],

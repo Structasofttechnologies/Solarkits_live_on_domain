@@ -38,6 +38,7 @@ const schema = new mongoose.Schema({
     trim: true,
   },
   selected_solution:  { type: String, default: 'Header Fast Application', trim: true },
+  action_type:        { type: String, default: 'franchise_apply', trim: true },
   plan_id:            { type: mongoose.Schema.Types.ObjectId, ref: 'reseller_plans', default: null },
 
   // ── Applicant Requirements & Terms ──────────────────────────────────

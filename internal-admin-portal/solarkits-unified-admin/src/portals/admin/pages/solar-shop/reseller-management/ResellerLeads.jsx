@@ -36,6 +36,8 @@ import {
   FiGlobe,
   FiUserCheck,
   FiUser,
+  FiPhoneCall,
+  FiPhoneForwarded,
 } from "react-icons/fi";
 import { FaWhatsapp, FaBuilding } from "react-icons/fa";
 import { authHeaderObj } from "@/app/authHeader";
@@ -550,17 +552,40 @@ export default function ResellerLeads() {
     const newCount = leads.filter((l) => l.status === "NEW").length;
     const inReviewCount = leads.filter((l) => l.status === "IN_REVIEW" || l.status === "CONTACTED").length;
     const convertedCount = leads.filter((l) => l.status === "APPROVED_CONVERTED").length;
+    const callbackCount = leads.filter(
+      (l) =>
+        l.is_callback_request ||
+        l.actionType === "callback_request" ||
+        l.action_type === "callback_request" ||
+        l.source === "consultation_desk" ||
+        l.selectedSolution?.toLowerCase().includes("callback")
+    ).length;
     const bdeCount = leads.filter((l) => l.is_bde_lead || l.source === "bde_portal" || l.bde).length;
-    const websiteCount = leads.filter((l) => !l.is_bde_lead && (l.source === "storefront_modal" || l.source === "website" || !l.source)).length;
-    return { total, newCount, inReviewCount, convertedCount, bdeCount, websiteCount };
+    const websiteCount = leads.filter(
+      (l) =>
+        !l.is_bde_lead &&
+        !l.is_callback_request &&
+        l.actionType !== "callback_request" &&
+        l.action_type !== "callback_request" &&
+        l.source !== "consultation_desk" &&
+        (l.source === "storefront_modal" || l.source === "website" || !l.source)
+    ).length;
+    return { total, newCount, inReviewCount, convertedCount, callbackCount, bdeCount, websiteCount };
   }, [leads]);
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((item) => {
+      const isItemCallback = Boolean(
+        item.is_callback_request ||
+        item.actionType === "callback_request" ||
+        item.action_type === "callback_request" ||
+        item.source === "consultation_desk" ||
+        item.selectedSolution?.toLowerCase().includes("callback")
+      );
       const isItemBde = Boolean(item.is_bde_lead || item.source === "bde_portal" || item.bde);
       const isItemManual = item.source === "manual_admin";
-      const isItemWebsite = !isItemBde && !isItemManual;
+      const isItemWebsite = !isItemBde && !isItemManual && !isItemCallback;
 
       const matchesSearch =
         search === "" ||
@@ -580,6 +605,7 @@ export default function ResellerLeads() {
 
       const matchesSource =
         sourceFilter === "ALL" ||
+        (sourceFilter === "callback" && isItemCallback) ||
         (sourceFilter === "bde" && isItemBde) ||
         (sourceFilter === "website" && isItemWebsite) ||
         (sourceFilter === "manual" && isItemManual);
@@ -751,8 +777,10 @@ export default function ResellerLeads() {
                   setBdeFilter("ALL");
                 }
               }}
-              className={`px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:border-primary transition-all min-w-[170px] ${
-                sourceFilter === "bde"
+              className={`px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:border-primary transition-all min-w-[180px] ${
+                sourceFilter === "callback"
+                  ? "bg-amber-50 border-amber-300 text-amber-950"
+                  : sourceFilter === "bde"
                   ? "bg-indigo-50 border-indigo-300 text-indigo-900"
                   : sourceFilter === "website"
                   ? "bg-teal-50 border-teal-300 text-teal-900"
@@ -760,8 +788,9 @@ export default function ResellerLeads() {
               }`}
             >
               <option value="ALL">🌐 All Channels ({leads.length})</option>
-              <option value="bde">👔 BDE Field Sourced ({stats.bdeCount})</option>
-              <option value="website">💻 Website Inbound ({stats.websiteCount})</option>
+              <option value="callback">📞 Callback Inquiries ({stats.callbackCount})</option>
+              <option value="bde">👔 BDE Field Leads ({stats.bdeCount})</option>
+              <option value="website">💻 Franchise Applications ({stats.websiteCount})</option>
               <option value="manual">✍️ Manual Admin</option>
             </select>
 
@@ -898,7 +927,13 @@ export default function ResellerLeads() {
                               <div className="font-bold text-text-primary flex items-center gap-2">
                                 <span>{lead.fullName}</span>
                                 {lead.selectedSolution && (
-                                  <span className="px-2 py-0.5 rounded-md bg-info-soft text-primary text-[10px] font-bold">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                      lead.is_callback_request || lead.actionType === "callback_request" || lead.action_type === "callback_request"
+                                        ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                        : "bg-info-soft text-primary"
+                                    }`}
+                                  >
                                     {lead.selectedSolution}
                                   </span>
                                 )}
@@ -911,7 +946,15 @@ export default function ResellerLeads() {
 
                               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                                 {/* Lead Source Badge */}
-                                {lead.is_bde_lead || lead.source === "bde_portal" || lead.bde ? (
+                                {lead.is_callback_request || lead.actionType === "callback_request" || lead.action_type === "callback_request" || lead.source === "consultation_desk" ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-black text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-300 shadow-xs"
+                                    title="Priority Callback Request from Partner Consultation Desk"
+                                  >
+                                    <FiPhoneCall size={10} className="text-amber-700" />
+                                    <span>Priority Callback</span>
+                                  </span>
+                                ) : lead.is_bde_lead || lead.source === "bde_portal" || lead.bde ? (
                                   <span
                                     className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50/90 px-2 py-0.5 rounded border border-indigo-200"
                                     title={`Field Sourced by BDE Executive: ${lead.bde?.fullName || 'BDE Portal'}`}
@@ -1066,16 +1109,32 @@ export default function ResellerLeads() {
                         {/* Actions */}
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {lead.status !== "APPROVED_CONVERTED" && (
-                              <button
-                                type="button"
-                                onClick={() => setApproveLead(lead)}
-                                title="Approve as Franchise Partner"
-                                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1"
+                            {lead.is_callback_request || lead.actionType === "callback_request" || lead.action_type === "callback_request" || lead.source === "consultation_desk" ? (
+                              <a
+                                href={`tel:${lead.mobileNumber}`}
+                                onClick={() => {
+                                  if (lead.status === "NEW") {
+                                    handleStatusChange(lead.id, "CONTACTED");
+                                  }
+                                }}
+                                title={`Click to Call Back: +91 ${lead.mobileNumber}`}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all shadow-xs flex items-center gap-1.5"
                               >
-                                <FiCheckCircle size={13} />
-                                <span>Approve</span>
-                              </button>
+                                <FiPhoneCall size={13} className="text-blue-100" />
+                                <span>Call Back</span>
+                              </a>
+                            ) : (
+                              lead.status !== "APPROVED_CONVERTED" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setApproveLead(lead)}
+                                  title="Approve as Franchise Partner"
+                                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1"
+                                >
+                                  <FiCheckCircle size={13} />
+                                  <span>Approve</span>
+                                </button>
+                              )
                             )}
 
                             <button
@@ -1144,6 +1203,23 @@ export default function ResellerLeads() {
 
               {/* Modal Body */}
               <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                {/* Priority Callback Alert Banner if applicable */}
+                {(selectedLead.is_callback_request || selectedLead.actionType === "callback_request" || selectedLead.source === "consultation_desk" || selectedLead.selectedSolution?.toLowerCase().includes("callback")) && (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 flex items-start gap-3 shadow-xs">
+                    <div className="p-2 rounded-xl bg-amber-200 text-amber-900 shrink-0">
+                      <FiPhoneCall size={18} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-black text-amber-950 uppercase tracking-wide">
+                        Priority B2B Partner Consultation Callback
+                      </p>
+                      <p className="text-xs text-amber-900 leading-relaxed">
+                        Applicant submitted a consultation request from the priority desk expecting a callback within 2 hours regarding state distribution, commercial models, or bulk container pricing.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Status Bar */}
                 <div className="flex items-center justify-between p-4 rounded-2xl bg-bg border border-border">
                   <div>
@@ -1172,7 +1248,7 @@ export default function ResellerLeads() {
                   <a
                     href={`https://wa.me/91${selectedLead.whatsappNumber || selectedLead.mobileNumber}?text=Hi%20${encodeURIComponent(
                       selectedLead.fullName
-                    )},%20regarding%20your%20SolarKits%20franchise%20application%20for%20${encodeURIComponent(
+                    )},%20this%20is%20SolarKits%20Regional%20Partner%20Desk%20calling%20back%20regarding%20your%20franchise%20consultation%20request%20for%20${encodeURIComponent(
                       selectedLead.district || selectedLead.state
                     )}...`}
                     target="_blank"
@@ -1185,10 +1261,15 @@ export default function ResellerLeads() {
 
                   <a
                     href={`tel:${selectedLead.mobileNumber}`}
-                    className="flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-hover transition shadow-sm"
+                    onClick={() => {
+                      if (selectedLead.status === "NEW") {
+                        handleStatusChange(selectedLead.id, "CONTACTED");
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold hover:from-blue-700 hover:to-indigo-700 transition shadow-sm"
                   >
-                    <FiPhone size={16} />
-                    <span>Call +91 {selectedLead.mobileNumber}</span>
+                    <FiPhoneCall size={16} />
+                    <span>Call Back +91 {selectedLead.mobileNumber}</span>
                   </a>
                 </div>
 

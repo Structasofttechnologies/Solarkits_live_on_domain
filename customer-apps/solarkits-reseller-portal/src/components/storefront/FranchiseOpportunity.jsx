@@ -261,23 +261,14 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                     <p className="mt-1 text-xs text-slate-500">{periodText}</p>
                   </div>
 
-                  {/* Territory and Earnings */}
-                  <div className="grid grid-cols-2 gap-3 py-4">
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                  {/* Plan Attributes (Territory, Warehouse, Order Type) */}
+                  <div className="grid grid-cols-3 gap-2 py-4">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-2.5">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Territory
                       </p>
-                      <p className="mt-1 text-sm font-black text-slate-800">
+                      <p className="mt-1 text-xs font-black text-slate-800 line-clamp-1">
                         {territoryText}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#0575B8]/70">
-                        Earning
-                      </p>
-                      <p className="mt-1 text-sm font-black text-[#0575B8]">
-                        {earningText}
                       </p>
                     </div>
 
@@ -285,7 +276,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Warehouse
                       </p>
-                      <p className="mt-0.5 text-xs font-black text-[#0575B8]">
+                      <p className="mt-1 text-xs font-black text-[#0575B8] line-clamp-1">
                         {plan.warehouse_required
                           ? `${plan.warehouse_count || 1} WH (${Number(plan.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)`
                           : "No WH Required"}
@@ -296,12 +287,12 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Order Type
                       </p>
-                      <p className="mt-0.5 text-xs font-black text-purple-700">
+                      <p className="mt-1 text-xs font-black text-purple-700 line-clamp-1">
                         {plan.order_type_allowed === "po_order"
-                          ? "PO Order Only"
+                          ? "PO Only"
                           : plan.order_type_allowed === "loose_order"
                           ? "Loose Only"
-                          : "PO & Loose Orders"}
+                          : "Both"}
                       </p>
                     </div>
                   </div>

@@ -62,22 +62,28 @@ function classifyPerformance(achievement_pct, target_quantity) {
  */
 async function resolveEffectiveTarget({ franchisee_id, month, year }) {
   const now = new Date();
+  const currentMonth = month || now.getMonth() + 1;
+  const currentYear = year || now.getFullYear();
+
   const baseQuery = {
-    target_month: month,
-    target_year:  year,
     is_active:    true,
     deleted_at:   null,
-    $or: [{ effective_from: null }, { effective_from: { $lte: now } }],
-    $and: [{ $or: [{ effective_until: null }, { effective_until: { $gte: now } }] }],
+    $or: [
+      { is_recurring: true },
+      { target_month: currentMonth, target_year: currentYear },
+      { target_month: null, target_year: null },
+    ],
   };
 
   // 1. Franchisee-specific override
-  const franchiseeTarget = await FranchiseeKitTarget.findOne({
-    ...baseQuery,
-    target_type:   'FRANCHISEE',
-    franchisee_id: new mongoose.Types.ObjectId(franchisee_id),
-  }).lean();
-  if (franchiseeTarget) return franchiseeTarget;
+  if (franchisee_id) {
+    const franchiseeTarget = await FranchiseeKitTarget.findOne({
+      ...baseQuery,
+      target_type:   'FRANCHISEE',
+      franchisee_id: new mongoose.Types.ObjectId(franchisee_id),
+    }).lean();
+    if (franchiseeTarget) return franchiseeTarget;
+  }
 
   // Fetch territory for state/district lookup
   const territory = await ResellerTerritory.findOne({
@@ -106,18 +112,29 @@ async function resolveEffectiveTarget({ franchisee_id, month, year }) {
   }
 
   // 4. Plan-level target
+  // Check subscription table or reseller doc
+  let planId = null;
   const subscription = await ResellerPlanSubscription.findOne({
     reseller_id: franchisee_id,
-    status: 'active',
   })
-    .sort({ start_date: -1 })
+    .sort({ created_at: -1, start_date: -1 })
     .lean();
 
   if (subscription?.plan_id) {
+    planId = subscription.plan_id;
+  } else {
+    const resellerDoc = await Reseller.findById(franchisee_id).lean();
+    if (resellerDoc?.plan_subscription_id) {
+      const sub = await ResellerPlanSubscription.findById(resellerDoc.plan_subscription_id).lean();
+      if (sub?.plan_id) planId = sub.plan_id;
+    }
+  }
+
+  if (planId) {
     const planTarget = await FranchiseeKitTarget.findOne({
       ...baseQuery,
       target_type: 'PLAN',
-      plan_id:     subscription.plan_id,
+      plan_id:     planId,
     }).lean();
     if (planTarget) return planTarget;
   }
@@ -127,21 +144,42 @@ async function resolveEffectiveTarget({ franchisee_id, month, year }) {
     ...baseQuery,
     target_type: 'GLOBAL',
   }).lean();
-  return globalTarget || null;
+  if (globalTarget) return globalTarget;
+
+  // 6. First plan target fallback if available
+  const anyPlanTarget = await FranchiseeKitTarget.findOne({
+    is_active: true,
+    deleted_at: null,
+  }).lean();
+
+  return anyPlanTarget || null;
 }
 
 /**
  * Recalculate and upsert progress for a franchisee for the given month/year.
  *
- * @param {object} params
- * @param {string|ObjectId} params.franchisee_id
- * @param {number} params.month
- * @param {number} params.year
- * @param {string|ObjectId} [params.actor_id]
- * @param {object} [params.req]
+ * @param {object|string|ObjectId} paramsOrId
+ * @param {number} [maybeMonth]
+ * @param {number} [maybeYear]
  * @returns {Promise<object>} Updated progress record
  */
-async function recalculateProgress({ franchisee_id, month, year, actor_id = null, req = null }) {
+async function recalculateProgress(paramsOrId, maybeMonth, maybeYear) {
+  let franchisee_id, month, year, actor_id = null, req = null;
+  if (typeof paramsOrId === 'object' && paramsOrId !== null && !paramsOrId._bsontype && !(paramsOrId instanceof mongoose.Types.ObjectId)) {
+    franchisee_id = paramsOrId.franchisee_id;
+    month = paramsOrId.month || (new Date().getMonth() + 1);
+    year = paramsOrId.year || new Date().getFullYear();
+    actor_id = paramsOrId.actor_id || null;
+    req = paramsOrId.req || null;
+  } else {
+    franchisee_id = paramsOrId;
+    month = maybeMonth || (new Date().getMonth() + 1);
+    year = maybeYear || new Date().getFullYear();
+  }
+
+  if (!franchisee_id) {
+    return null;
+  }
   const target = await resolveEffectiveTarget({ franchisee_id, month, year });
 
   // Aggregate quantities from delivered FPO orders in the period
@@ -159,7 +197,12 @@ async function recalculateProgress({ franchisee_id, month, year, actor_id = null
     {
       $group: {
         _id: null,
-        approved_quantity:  {
+        ordered_quantity: {
+          $sum: {
+            $cond: [{ $not: [{ $in: ['$status', ['CANCELLED', 'REJECTED', 'DRAFT']] }] }, { $sum: '$items.quantity' }, 0],
+          },
+        },
+        approved_quantity: {
           $sum: {
             $cond: [{ $in: ['$status', ['APPROVED', 'AWAITING_PAYMENT', 'PARTIALLY_PAID', 'PAID', 'STOCK_ALLOCATED', 'PROCESSING', 'PARTIALLY_DISPATCHED', 'DISPATCHED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'COMPLETED']] }, { $sum: '$items.quantity' }, 0],
           },
@@ -176,17 +219,18 @@ async function recalculateProgress({ franchisee_id, month, year, actor_id = null
         },
         delivered_quantity: {
           $sum: {
-            $cond: [{ $in: ['$status', ['DELIVERED', 'COMPLETED']] }, { $sum: '$items.delivered_quantity' }, 0],
+            $cond: [{ $in: ['$status', ['DELIVERED', 'COMPLETED']] }, { $sum: { $ifNull: ['$items.delivered_quantity', '$items.quantity'] } }, 0],
           },
         },
-        cancelled_quantity: { $sum: { $sum: '$items.cancelled_quantity' } },
-        returned_quantity:  { $sum: { $sum: '$items.returned_quantity' } },
+        cancelled_quantity: { $sum: { $sum: { $ifNull: ['$items.cancelled_quantity', 0] } } },
+        returned_quantity:  { $sum: { $sum: { $ifNull: ['$items.returned_quantity', 0] } } },
       },
     },
   ];
 
   const [agg] = await FpoOrder.aggregate(pipeline);
 
+  const ordered_quantity    = agg?.ordered_quantity    || 0;
   const approved_quantity   = agg?.approved_quantity   || 0;
   const paid_quantity       = agg?.paid_quantity        || 0;
   const dispatched_quantity = agg?.dispatched_quantity  || 0;
@@ -194,8 +238,22 @@ async function recalculateProgress({ franchisee_id, month, year, actor_id = null
   const cancelled_quantity  = agg?.cancelled_quantity   || 0;
   const returned_quantity   = agg?.returned_quantity    || 0;
 
-  const target_quantity   = target?.target_quantity || 0;
-  const eligible_quantity = Math.max(0, delivered_quantity - cancelled_quantity - returned_quantity);
+  const target_quantity = target?.target_quantity || 0;
+  const stage = target?.calculation_stage || 'DELIVERED_QUANTITY';
+
+  let rawStageQty = delivered_quantity;
+  if (stage === 'APPROVED_PO_QUANTITY') {
+    rawStageQty = approved_quantity;
+  } else if (stage === 'PAID_QUANTITY') {
+    rawStageQty = paid_quantity;
+  } else if (stage === 'DISPATCHED_QUANTITY') {
+    rawStageQty = dispatched_quantity;
+  } else {
+    // If delivered_quantity is 0, we can also factor in approved/paid if stage is lenient or use delivered
+    rawStageQty = delivered_quantity;
+  }
+
+  const eligible_quantity = Math.max(0, rawStageQty - cancelled_quantity - returned_quantity);
   const balance_quantity  = Math.max(0, target_quantity - eligible_quantity);
   const achievement_pct   = target_quantity > 0
     ? Math.round((eligible_quantity / target_quantity) * 10000) / 100 // 2 decimal places
@@ -209,6 +267,7 @@ async function recalculateProgress({ franchisee_id, month, year, actor_id = null
     target_month:      month,
     target_year:       year,
     target_quantity,
+    ordered_quantity,
     approved_quantity,
     paid_quantity,
     dispatched_quantity,
@@ -219,6 +278,7 @@ async function recalculateProgress({ franchisee_id, month, year, actor_id = null
     balance_quantity,
     achievement_pct,
     performance_status,
+    calculation_stage: stage,
     last_calculated_at: new Date(),
   };
 
@@ -303,8 +363,11 @@ async function getGoalWidget(franchisee_id) {
  * @param {string} [filters.performance_status]
  * @returns {Promise<Array>}
  */
-async function getPerformanceAnalytics({ month, year, state_id, district_id, plan_id, performance_status }) {
-  const matchStage = { target_year: year, target_month: month };
+async function getPerformanceAnalytics({ month, year, state_id, district_id, plan_id, performance_status } = {}) {
+  const currentMonth = Number(month) || (new Date().getMonth() + 1);
+  const currentYear  = Number(year)  || new Date().getFullYear();
+
+  const matchStage = { target_year: currentYear, target_month: currentMonth };
   if (performance_status) matchStage.performance_status = performance_status;
 
   const rows = await FranchiseeTargetProgress.find(matchStage)

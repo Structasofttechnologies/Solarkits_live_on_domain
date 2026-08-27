@@ -271,6 +271,8 @@ const submit_lead = async (req, res) => {
       expected_order_volume,
       selectedSolution,
       selected_solution,
+      actionType,
+      action_type,
       plan_id,
       notes,
       shop_photos,
@@ -309,6 +311,14 @@ const submit_lead = async (req, res) => {
       ? photos
       : [];
 
+    const leadSource = source || 'storefront_modal';
+    const isCallbackReq = Boolean(
+      actionType === 'callback_request' ||
+      action_type === 'callback_request' ||
+      leadSource === 'consultation_desk' ||
+      selectedSolution?.toLowerCase().includes('callback')
+    );
+
     const newLead = await FranchiseLead.create({
       full_name: name,
       business_name: company,
@@ -326,23 +336,27 @@ const submit_lead = async (req, res) => {
       pincode: (pincode || '').trim() || null,
       business_profile: businessProfile || business_profile || 'Solar EPC Contractor',
       expected_order_volume: expectedOrderQty || expected_order_volume || '1 - 3 Kits / Month (Starter)',
-      selected_solution: selectedSolution || selected_solution || 'Header Fast Application',
+      selected_solution: selectedSolution || selected_solution || (isCallbackReq ? 'Request Partner Callback' : 'Header Fast Application'),
+      action_type: isCallbackReq ? 'callback_request' : (actionType || action_type || 'franchise_apply'),
       plan_id: plan_id && mongoose.Types.ObjectId.isValid(plan_id) ? plan_id : null,
       notes: (notes || '').trim() || null,
       shop_photos: photosList,
       consent_agreed: consent !== undefined ? Boolean(consent) : (consent_agreed !== undefined ? Boolean(consent_agreed) : true),
       status: isGstVerified ? 'GST_VERIFIED' : 'NEW',
-      source: source || 'storefront_modal',
+      source: leadSource,
       ip_address: req.ip || req.headers['x-forwarded-for'] || null,
     });
 
     return res.status(201).json({
       status: 'success',
-      message: 'Your franchise application has been received successfully! Our regional partner team will review and approve your agreement.',
+      message: isCallbackReq
+        ? 'Thank you! Your partner consultation callback request has been received. Our priority team will reach out within 2 hours.'
+        : 'Your franchise application has been received successfully! Our regional partner team will review and approve your agreement.',
       data: {
         lead_id: newLead._id,
         reference_id: `FRN-${newLead._id.toString().slice(-6).toUpperCase()}`,
         status: newLead.status,
+        action_type: newLead.action_type,
         gst_verified: newLead.gst_verified,
         gst_legal_name: newLead.gst_legal_name,
         created_at: newLead.created_at,
@@ -381,9 +395,16 @@ const list_leads = async (req, res) => {
     if (source && source !== 'ALL') {
       if (source === 'bde' || source === 'bde_portal') {
         query.$or = [{ source: 'bde_portal' }, { bde_id: { $ne: null } }];
+      } else if (source === 'callback' || source === 'consultation_desk') {
+        query.$or = [
+          { source: 'consultation_desk' },
+          { action_type: 'callback_request' },
+          { selected_solution: /callback|consultation/i },
+        ];
       } else if (source === 'website' || source === 'storefront' || source === 'storefront_modal') {
         query.source = { $in: ['storefront_modal', 'website', 'public_landing', null] };
         query.bde_id = null;
+        query.action_type = { $ne: 'callback_request' };
       } else if (source === 'manual' || source === 'manual_admin') {
         query.source = 'manual_admin';
       } else {
@@ -436,6 +457,7 @@ const list_leads = async (req, res) => {
       rejected: 0,
       bde_sourced: 0,
       website_sourced: 0,
+      callback_requests: 0,
     };
 
     statsAgg.forEach((s) => {
@@ -451,6 +473,13 @@ const list_leads = async (req, res) => {
 
     const data = rows.map((r) => {
       const isBdeSourced = Boolean(r.source === 'bde_portal' || r.bde_id);
+      const isCallback = Boolean(
+        r.action_type === 'callback_request' ||
+        r.source === 'consultation_desk' ||
+        r.selected_solution?.toLowerCase().includes('callback') ||
+        r.selected_solution?.toLowerCase().includes('consultation')
+      );
+
       return {
         id: r._id,
         fullName: r.full_name,
@@ -467,13 +496,16 @@ const list_leads = async (req, res) => {
         pincode: r.pincode,
         businessProfile: r.business_profile,
         expectedOrderQty: r.expected_order_volume,
-        selectedSolution: r.selected_solution,
+        selectedSolution: r.selected_solution || (isCallback ? 'Request Partner Callback' : 'Header Fast Application'),
+        actionType: r.action_type || (isCallback ? 'callback_request' : 'franchise_apply'),
+        action_type: r.action_type || (isCallback ? 'callback_request' : 'franchise_apply'),
+        is_callback_request: isCallback,
         plan_id: r.plan_id,
         notes: r.notes,
         shop_photos: r.shop_photos || [],
         consent: r.consent_agreed,
         status: r.status,
-        source: r.source || (isBdeSourced ? 'bde_portal' : 'storefront_modal'),
+        source: r.source || (isBdeSourced ? 'bde_portal' : (isCallback ? 'consultation_desk' : 'storefront_modal')),
         is_bde_lead: isBdeSourced,
         bde_id: r.bde_id?._id || r.bde_id || null,
         bde: r.bde_id && typeof r.bde_id === 'object' ? {

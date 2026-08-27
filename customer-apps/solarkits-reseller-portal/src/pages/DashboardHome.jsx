@@ -14,6 +14,10 @@ import {
   FiShoppingBag,
   FiLayers,
   FiMapPin,
+  FiTarget,
+  FiTrendingUp,
+  FiArrowRight,
+  FiBox,
 } from "react-icons/fi";
 
 export default function DashboardHome() {
@@ -24,8 +28,9 @@ export default function DashboardHome() {
   const [buyers, setBuyers] = useState([]);
   const [territory, setTerritory] = useState(null);
   const [activeSubscription, setActiveSubscription] = useState(null);
+  const [goalData, setGoalData] = useState(null);
 
-  // Fetch buyers, territories & subscription
+  // Fetch buyers, territories, subscription & target goals
   const fetchDashboardData = () => {
     api.get('/india/v1/reseller/epc-buyers/list')
       .then((res) => {
@@ -45,6 +50,14 @@ export default function DashboardHome() {
       .then((res) => {
         if (res.data?.status === "success") {
           setActiveSubscription(res.data.active_subscription || null);
+        }
+      })
+      .catch(() => {});
+
+    api.get('/india/v1/reseller/goals/my-goal')
+      .then((res) => {
+        if (res.data?.status === "success" && res.data.data) {
+          setGoalData(res.data.data);
         }
       })
       .catch(() => {});
@@ -124,6 +137,122 @@ export default function DashboardHome() {
             >
               <FiLayers size={14} /> My Listings
             </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 2. Franchise Monthly Kit Target & Goal Progress Widget ───────────── */}
+      <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border-2 border-blue-100 dark:border-blue-900/40 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black shadow-md shadow-blue-500/25 shrink-0">
+              <FiTarget size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                  Monthly Kit Sales Target & Goal
+                </h2>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                  (goalData?.achievement_pct || 0) >= 100
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                    : (goalData?.achievement_pct || 0) >= 70
+                    ? "bg-blue-100 text-blue-800 border border-blue-300"
+                    : "bg-amber-100 text-amber-800 border border-amber-300"
+                }`}>
+                  {goalData?.performance_status === "ACHIEVED" || goalData?.performance_status === "EXCEEDED"
+                    ? "🎯 Goal Achieved"
+                    : goalData?.performance_status === "ON_TRACK"
+                    ? "⚡ On Track"
+                    : goalData?.performance_status === "BEHIND"
+                    ? "⏳ In Progress"
+                    : "🎯 Active Target"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                {goalData?.period || "Current Calendar Month"} territory commitment • Orders placed and fulfilled dynamically reduce your remaining goal
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/po-orders"
+            className="self-start sm:self-auto px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-all flex items-center gap-2 shadow-md shadow-blue-500/20 active:scale-95 shrink-0"
+          >
+            <FiPackage size={15} />
+            <span>Create PO Order</span>
+            <FiArrowRight size={14} />
+          </Link>
+        </div>
+
+        {/* 4 Metric Tiles */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800">
+            <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <FiTarget className="text-blue-600" size={13} /> Monthly Target
+            </div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white mt-1.5">
+              {goalData?.monthly_goal || 100} <span className="text-xs font-bold text-slate-400">Kits</span>
+            </div>
+            <div className="text-[10px] font-semibold text-slate-400 mt-1">Plan Territory Goal</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
+            <div className="text-[11px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              <FiCheckCircle className="text-emerald-600" size={13} /> Achieved / Fulfilled
+            </div>
+            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1.5">
+              {goalData?.eligible_kits || 0} <span className="text-xs font-bold text-emerald-700/60">Kits</span>
+            </div>
+            <div className="text-[10px] font-bold text-emerald-600 mt-1">
+              {goalData?.achievement_pct || 0}% Completed
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
+            <div className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <FiBox className="text-amber-600" size={13} /> Remaining Target
+            </div>
+            <div className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1.5">
+              {goalData?.balance_kits != null ? goalData.balance_kits : (100 - (goalData?.eligible_kits || 0))} <span className="text-xs font-bold text-amber-700/60">Kits</span>
+            </div>
+            <div className="text-[10px] font-bold text-amber-600 mt-1">Kits Left to Target</div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40">
+            <div className="text-[11px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+              <FiClock className="text-purple-600" size={13} /> Cycle Timeline
+            </div>
+            <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1.5">
+              {goalData?.days_remaining != null ? goalData.days_remaining : 15} <span className="text-xs font-bold text-purple-700/60">Days</span>
+            </div>
+            <div className="text-[10px] font-bold text-purple-600 mt-1">Remaining in Month</div>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-xs font-black text-slate-700 dark:text-slate-300">
+            <span>Progress: {goalData?.achievement_pct || 0}% Complete</span>
+            <span>{goalData?.eligible_kits || 0} / {goalData?.monthly_goal || 100} Solar Combo Kits</span>
+          </div>
+          <div className="h-3.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                (goalData?.achievement_pct || 0) >= 100
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm shadow-emerald-500/50"
+                  : (goalData?.achievement_pct || 0) >= 50
+                  ? "bg-gradient-to-r from-blue-600 to-cyan-400 shadow-sm shadow-blue-500/50"
+                  : "bg-gradient-to-r from-amber-500 to-orange-400 shadow-sm shadow-amber-500/50"
+              }`}
+              style={{ width: `${Math.min(Math.max(goalData?.achievement_pct || 0, 4), 100)}%` }}
+            />
+          </div>
+          <div className="text-[11px] text-slate-500 flex items-center justify-between font-medium">
+            <span>🚀 PO order placements and deliveries continuously fulfill this monthly goal.</span>
+            <span className="font-bold text-blue-600 dark:text-blue-400">
+              {goalData?.balance_kits || (100 - (goalData?.eligible_kits || 0))} kits to reach 100%
+            </span>
           </div>
         </div>
       </div>

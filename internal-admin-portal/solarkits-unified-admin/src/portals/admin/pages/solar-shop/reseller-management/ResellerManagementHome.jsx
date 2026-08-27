@@ -1,4 +1,4 @@
-import { FiUsers, FiTag, FiFileText, FiMapPin, FiPackage, FiDollarSign, FiInbox } from "react-icons/fi";
+import { FiUsers, FiTag, FiFileText, FiMapPin, FiPackage, FiDollarSign, FiInbox, FiSliders } from "react-icons/fi";
 import { FaStore, FaAward } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -37,26 +37,10 @@ const QUICK_LINKS = [
     bg: "bg-warning-soft",
   },
   {
-    label: "Plan PO Order Settings",
-    description: "Configure PO ordering permissions, limits & payment terms",
-    icon: FiPackage,
-    path: "/admin-panel/solar-shop/reseller-management/fpo/po-settings",
-    color: "text-primary",
-    bg: "bg-info-soft",
-  },
-  {
-    label: "Project-Type MOQ & Increments",
-    description: "Set project-type-wise minimum orders & batch increments",
-    icon: FiPackage,
-    path: "/admin-panel/solar-shop/reseller-management/fpo/moq-rules",
-    color: "text-warning",
-    bg: "bg-warning-soft",
-  },
-  {
-    label: "Monthly Kit Targets & Goals",
-    description: "Plan, state, district & franchisee kit goals & progress",
-    icon: FiFileText,
-    path: "/admin-panel/solar-shop/reseller-management/fpo/kit-targets",
+    label: "Franchisee Settings",
+    description: "Manage product MOQ rules, Commission models, PO parameters & Monthly Kit Targets per plan",
+    icon: FiSliders,
+    path: "/admin-panel/solar-shop/reseller-management/franchise-settings",
     color: "text-primary",
     bg: "bg-info-soft",
   },

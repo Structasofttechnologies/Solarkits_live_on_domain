@@ -2600,6 +2600,26 @@ const get_my_store_setup = async (req, res) => {
   }
 };
 
+const { getGoalWidget } = require('../../admin-panel/services/franchisee.goal.service');
+
+const get_my_goal_progress = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    if (!resellerId) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+
+    const widgetData = await getGoalWidget(resellerId);
+    return res.status(200).json({
+      status: 'success',
+      data: widgetData,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_my_goal_progress error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to retrieve goal progress' });
+  }
+};
+
 module.exports = {
   register_reseller,
   login_reseller,
@@ -2625,6 +2645,7 @@ module.exports = {
   list_my_po_orders,
   create_my_po_order,
   get_my_po_order_detail,
+  get_my_goal_progress,
   get_current_agreement,
   sign_agreement,
   get_fee_payment_info,

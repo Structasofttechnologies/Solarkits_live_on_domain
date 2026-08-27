@@ -113,7 +113,6 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
             ["MOQ Capacity", `${Number(plan.moq_capacity_kw || 10000).toLocaleString("en-IN")} kW (${plan.moq_kits_count || 1} Kit MOQ)`, "text-amber-600"],
             ["Project Types", plan.project_types_display || "All Types", "text-slate-700"],
             ["Order Types", plan.order_type_allowed === "po_order" ? "PO Order Only" : plan.order_type_allowed === "loose_order" ? "Loose Order Only" : "PO & Loose Orders", "text-purple-700"],
-            ["Commission", `${plan.default_commission_rate || 8}% Fixed Commission`, "text-emerald-700"],
             ["Warehouse", plan.warehouse_required ? `${plan.warehouse_count || 1} Hub (${Number(plan.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)` : "No WH Required", "text-slate-700"],
           ].map(([label, value, color]) => (
             <div key={label} className="flex items-start gap-2 text-slate-700">

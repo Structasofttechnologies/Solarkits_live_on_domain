@@ -134,22 +134,10 @@ const menus = [
                     unique_id: "RSL_PLAN"
                 },
                 {
-                    name: "PO Settings",
-                    icon: <FiSettings />,
-                    path: "/admin-panel/solar-shop/reseller-management/fpo/po-settings",
+                    name: "Franchisee Settings",
+                    icon: <FiSliders />,
+                    path: "/admin-panel/solar-shop/reseller-management/franchise-settings",
                     unique_id: "FPO_SETTINGS"
-                },
-                {
-                    name: "MOQ & Increments",
-                    icon: <FiLayers />,
-                    path: "/admin-panel/solar-shop/reseller-management/fpo/moq-rules",
-                    unique_id: "FPO_MOQ"
-                },
-                {
-                    name: "Kit Targets & Goals",
-                    icon: <FiTarget />,
-                    path: "/admin-panel/solar-shop/reseller-management/fpo/kit-targets",
-                    unique_id: "FPO_TARGET"
                 },
                 {
                     name: "Performance Tracker",

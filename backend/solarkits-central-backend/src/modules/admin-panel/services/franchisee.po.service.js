@@ -248,6 +248,9 @@ async function createPoDraft({ franchisee_id, items, idempotency_key, payment_te
     updated_by: actor_id,
   });
 
+  const now = new Date();
+  recalculateProgress({ franchisee_id, month: now.getMonth() + 1, year: now.getFullYear(), req }).catch(() => {});
+
   return { created: true, already_exists: false, order };
 }
 
@@ -265,6 +268,9 @@ async function _transitionStatus(po_id, targetStatus, { changed_by, actor_type =
 
   Object.assign(order, extra_update);
   await order.save();
+
+  recalculateProgress({ franchisee_id: order.franchisee_id, month: now.getMonth() + 1, year: now.getFullYear() }).catch(() => {});
+
   return order;
 }
 

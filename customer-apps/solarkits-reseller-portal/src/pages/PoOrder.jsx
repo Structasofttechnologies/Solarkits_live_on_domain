@@ -24,7 +24,9 @@ import {
   FiGrid,
   FiList,
   FiEye,
-  FiRefreshCw
+  FiRefreshCw,
+  FiTarget,
+  FiTrendingUp
 } from "react-icons/fi";
 import api from "../services/api";
 
@@ -60,6 +62,7 @@ export default function PoOrder() {
   const [planData, setPlanData] = useState(null);
   const [epcBuyers, setEpcBuyers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [goalData, setGoalData] = useState(null);
   const [viewMode, setViewMode] = useState("table"); // "table" | "card"
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -78,10 +81,11 @@ export default function PoOrder() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [settingsRes, buyersRes, ordersRes] = await Promise.all([
+      const [settingsRes, buyersRes, ordersRes, goalRes] = await Promise.all([
         api.get("/india/v1/reseller/po/plan-settings").catch(() => ({ data: { status: "error" } })),
         api.get("/india/v1/reseller/epc-buyers/list").catch(() => ({ data: { data: [] } })),
         api.get("/india/v1/reseller/po/my-orders").catch(() => ({ data: { data: [] } })),
+        api.get("/india/v1/reseller/goals/my-goal").catch(() => ({ data: { data: null } })),
       ]);
 
       if (settingsRes.data?.status === "success") {
@@ -97,6 +101,9 @@ export default function PoOrder() {
       }
       if (ordersRes.data?.status === "success") {
         setOrders(ordersRes.data.data || []);
+      }
+      if (goalRes.data?.status === "success" && goalRes.data.data) {
+        setGoalData(goalRes.data.data);
       }
     } catch (err) {
       console.error("Failed to load PO order context:", err);
@@ -318,6 +325,52 @@ export default function PoOrder() {
           </div>
         </div>
       </div>
+
+      {/* ── Monthly Kit Target & Goal Compact Achievement Bar ───────────────────── */}
+      {goalData && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold shrink-0">
+              <FiTarget size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-text-muted">
+                  {goalData.period || "Monthly Target Goal"}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                  (goalData.achievement_pct || 0) >= 100
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+                }`}>
+                  {goalData.achievement_pct || 0}% Achieved
+                </span>
+              </div>
+              <div className="text-xs sm:text-sm font-black text-text-primary mt-0.5">
+                {goalData.eligible_kits || 0} / {goalData.monthly_goal || 100} Kits Fulfilled
+                <span className="text-xs font-normal text-text-muted ml-2">
+                  ({goalData.balance_kits != null ? goalData.balance_kits : (100 - (goalData.eligible_kits || 0))} kits remaining to meet monthly target)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full md:w-60 space-y-1.5 shrink-0">
+            <div className="flex justify-between text-[11px] font-bold text-text-muted">
+              <span>Goal Progress</span>
+              <span>{goalData.days_remaining != null ? `${goalData.days_remaining}d left` : "This Month"}</span>
+            </div>
+            <div className="h-2.5 w-full bg-bg rounded-full overflow-hidden p-0.5 border border-border">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  (goalData.achievement_pct || 0) >= 100 ? "bg-emerald-500" : "bg-blue-600"
+                }`}
+                style={{ width: `${Math.min(Math.max(goalData.achievement_pct || 0, 4), 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Active Plan & PO Rules Context Strip ───────────────────────────── */}
       {planData?.has_active_plan ? (

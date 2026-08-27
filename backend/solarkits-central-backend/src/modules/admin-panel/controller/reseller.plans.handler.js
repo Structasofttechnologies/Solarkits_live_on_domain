@@ -43,20 +43,66 @@ const list_reseller_plans = async (req, res) => {
     if (active_only === 'true') query.is_active = true;
 
     const rows = await ResellerPlan.find(query)
+      .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name code slug icon cover_image' })
       .populate({ path: 'allowed_project_type_ids', model: ProjectType, select: 'name' })
       .populate({ path: 'allowed_category_ids', model: ProjectCategory, select: 'name' })
-      .populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit, select: 'name capacity kit_code' })
+      .populate({ path: 'allowed_subcategory_ids', model: ProjectSubcategory, select: 'name' })
       .sort({ sort_order: 1, name: 1 })
       .lean();
+
+    // Hybrid Combo Kit Population (pc_comobo_kit & pc_combo_kits)
+    let kitsCore = [];
+    let kitsIndia = [];
+    try {
+      kitsCore = await WarehouseComboKit.find({ deleted_at: null }).select('name kit_name capacity kit_code selling_price_cached').lean();
+    } catch (e) {}
+    try {
+      kitsIndia = await IndiaComboKit.find({ deleted_at: null }).select('name kit_name capacity kit_code selling_price_cached').lean();
+    } catch (e) {}
+
+    const allKitsMap = new Map();
+    [...kitsCore, ...kitsIndia].forEach((k) => allKitsMap.set(String(k._id), k));
 
     const data = rows.map((r) => {
       const projectTypesDisplay = Array.isArray(r.allowed_project_type_ids) && r.allowed_project_type_ids.length > 0
         ? r.allowed_project_type_ids.map((pt) => (pt && pt.name ? pt.name : pt)).join(', ')
         : (r.moq_project_type || 'All Project Types');
 
-      const comboKitsDisplay = Array.isArray(r.allowed_combo_kit_ids) && r.allowed_combo_kit_ids.length > 0
-        ? r.allowed_combo_kit_ids.map((ck) => (ck && ck.name ? ck.name : ck)).join(', ')
+      const allowedIndustryTypeIds = (r.allowed_industry_type_ids || [])
+        .map((i) => (i && i._id ? String(i._id) : String(i)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined');
+
+      const rawKitIds = (r.allowed_combo_kit_ids || [])
+        .map((k) => (k && k._id ? String(k._id) : String(k)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined' && id.length === 24);
+
+      const populatedKits = rawKitIds.map((id) => {
+        const k = allKitsMap.get(id);
+        if (!k) return null;
+        return {
+          id: String(k._id),
+          _id: k._id,
+          name: k.name || k.kit_name || 'Combo Kit',
+          capacity: k.capacity || 0,
+          kit_code: k.kit_code || '',
+          selling_price_cached: k.selling_price_cached || 0,
+        };
+      }).filter(Boolean);
+
+      const comboKitsDisplay = populatedKits.length > 0
+        ? populatedKits.map((ck) => ck.name).join(', ')
         : 'All Admin Combo Kits';
+
+      const allowedComboKitIds = rawKitIds;
+      const allowedCategoryIds = (r.allowed_category_ids || [])
+        .map((c) => (c && c._id ? String(c._id) : String(c)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined');
+      const allowedSubcategoryIds = (r.allowed_subcategory_ids || [])
+        .map((s) => (s && s._id ? String(s._id) : String(s)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined');
+      const allowedProjectTypeIds = (r.allowed_project_type_ids || [])
+        .map((p) => (p && p._id ? String(p._id) : String(p)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined');
 
       return {
         id:                        r._id,
@@ -69,10 +115,22 @@ const list_reseller_plans = async (req, res) => {
         validity_unit:             r.validity_unit,
         allowed_territories_count: r.allowed_territories_count,
         renewal_rules:             r.renewal_rules,
-        allowed_project_types:     r.allowed_project_type_ids || [],
+        
+        // Allowed Scope & Products Assignment
         allowed_industry_types:    r.allowed_industry_type_ids || [],
+        allowed_industry_type_ids: allowedIndustryTypeIds,
+        industry_types_count:      allowedIndustryTypeIds.length,
         allowed_categories:        r.allowed_category_ids || [],
-        allowed_combo_kits:        r.allowed_combo_kit_ids || [],
+        allowed_category_ids:      allowedCategoryIds,
+        categories_count:          allowedCategoryIds.length,
+        allowed_subcategories:     r.allowed_subcategory_ids || [],
+        allowed_subcategory_ids:   allowedSubcategoryIds,
+        allowed_project_types:     r.allowed_project_type_ids || [],
+        allowed_project_type_ids:  allowedProjectTypeIds,
+        allowed_combo_kits:        populatedKits,
+        allowed_combo_kit_ids:     allowedComboKitIds,
+        combo_kits_count:          allowedComboKitIds.length,
+
         project_types_display:     projectTypesDisplay,
         combo_kits_display:        comboKitsDisplay,
 
@@ -294,12 +352,36 @@ const update_reseller_plan = async (req, res) => {
     if (fields.allowed_territories_count != null) {
       updateData.allowed_territories_count = Number(fields.allowed_territories_count);
     }
-    if (fields.renewal_rules) updateData.renewal_rules = fields.renewal_rules;
-    if (Array.isArray(fields.allowed_project_type_ids)) updateData.allowed_project_type_ids = fields.allowed_project_type_ids;
-    if (Array.isArray(fields.allowed_industry_type_ids)) updateData.allowed_industry_type_ids = fields.allowed_industry_type_ids;
-    if (Array.isArray(fields.allowed_category_ids)) updateData.allowed_category_ids = fields.allowed_category_ids;
-    if (Array.isArray(fields.allowed_subcategory_ids)) updateData.allowed_subcategory_ids = fields.allowed_subcategory_ids;
-    if (Array.isArray(fields.allowed_combo_kit_ids)) updateData.allowed_combo_kit_ids = fields.allowed_combo_kit_ids;
+    if (Array.isArray(fields.allowed_project_type_ids)) {
+      updateData.allowed_project_type_ids = fields.allowed_project_type_ids
+        .map((id) => (id && id._id ? String(id._id) : String(id)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+    }
+    if (Array.isArray(fields.allowed_industry_type_ids)) {
+      updateData.allowed_industry_type_ids = fields.allowed_industry_type_ids
+        .map((id) => (id && id._id ? String(id._id) : String(id)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+    }
+    if (Array.isArray(fields.allowed_category_ids)) {
+      updateData.allowed_category_ids = fields.allowed_category_ids
+        .map((id) => (id && id._id ? String(id._id) : String(id)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+    }
+    if (Array.isArray(fields.allowed_subcategory_ids)) {
+      updateData.allowed_subcategory_ids = fields.allowed_subcategory_ids
+        .map((id) => (id && id._id ? String(id._id) : String(id)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+    }
+    if (Array.isArray(fields.allowed_combo_kit_ids)) {
+      updateData.allowed_combo_kit_ids = fields.allowed_combo_kit_ids
+        .map((id) => (id && id._id ? String(id._id) : String(id)))
+        .filter((id) => id && id !== 'null' && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+    }
 
     // 1. Warehouse Requirements
     if (fields.warehouse_required !== undefined) updateData.warehouse_required = Boolean(fields.warehouse_required);
@@ -496,12 +578,66 @@ const get_plan_config_options = async (req, res) => {
 
     const kitsMap = new Map();
     [...kitsCore, ...kitsIndia].forEach((k) => kitsMap.set(String(k._id), k));
-    const comboKits = Array.from(kitsMap.values());
+    const rawComboKits = Array.from(kitsMap.values());
+
+    const comboKits = rawComboKits.map((k) => {
+      const sk = k.solar_kit_id || {};
+      const cat = sk.category_id || {};
+      const sub = sk.subcategory_id || {};
+      const typeObj = sk.type_id || {};
+      const pr = k.project_range_id || {};
+
+      const industryTypeId = cat.industry_type_id ? String(cat.industry_type_id) : null;
+      const categoryId = cat._id ? String(cat._id) : (sk.category_id ? String(sk.category_id) : null);
+      const subcategoryId = sub._id ? String(sub._id) : (sk.subcategory_id ? String(sk.subcategory_id) : null);
+      const systemTypeId = typeObj._id ? String(typeObj._id) : (sk.type_id ? String(sk.type_id) : null);
+      const projectRangeId = pr._id ? String(pr._id) : (k.project_range_id ? String(k.project_range_id) : null);
+
+      return {
+        id:                   k._id,
+        name:                 k.name || k.kit_name || 'Combo Kit',
+        kit_code:             k.kit_code || '',
+        capacity:             k.capacity || 0,
+        capacity_kw:          k.capacity || 0,
+        base_price_cached:    k.base_price_cached || 0,
+        selling_price_cached: k.selling_price_cached || 0,
+        kit_image:            k.kit_image || null,
+        industry_type_id:     industryTypeId,
+        category_id:          categoryId,
+        category_name:        cat.name || '',
+        subcategory_id:       subcategoryId,
+        subcategory_name:     sub.name || '',
+        system_type_id:       systemTypeId,
+        system_type_name:     typeObj.type?.name || '',
+        project_range_id:     projectRangeId,
+        project_range_label:  pr.min_value !== undefined ? `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}` : '',
+        description:          k.description || sk.description || '',
+      };
+    });
+
+    // Compute category and kit counts per industry type
+    const enrichedIndustryTypes = industryTypes.map((i) => {
+      const iIdStr = String(i._id);
+      const matchingCats = categories.filter((c) => c.industry_type_id && String(c.industry_type_id) === iIdStr);
+      const matchingKits = comboKits.filter((k) => k.industry_type_id === iIdStr);
+
+      return {
+        id:             i._id,
+        name:           i.name,
+        code:           i.code || '',
+        slug:           i.slug || '',
+        icon:           i.icon || null,
+        cover_image:    i.cover_image || null,
+        description:    i.description || '',
+        category_count: matchingCats.length,
+        kit_count:      matchingKits.length,
+      };
+    });
 
     return res.json({
       status: 'success',
       data: {
-        industry_types: industryTypes.map((i) => ({ id: i._id, name: i.name })),
+        industry_types: enrichedIndustryTypes,
         project_types:  projectTypes.map((t) => ({ id: t._id, name: t.name })),
         categories:     categories.map((c) => ({ id: c._id, name: c.name, industry_type_id: c.industry_type_id })),
         subcategories:  subcategories.map((sc) => ({ id: sc._id, name: sc.name, category_id: sc.category })),
@@ -519,31 +655,7 @@ const get_plan_config_options = async (req, res) => {
           unit_symbol:         pr.unit_id?.symbol || 'kW',
           label:               `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}`,
         })),
-        combo_kits: comboKits.map((k) => {
-          const sk = k.solar_kit_id || {};
-          const cat = sk.category_id || {};
-          const sub = sk.subcategory_id || {};
-          const typeObj = sk.type_id || {};
-          const pr = k.project_range_id || {};
-          return {
-            id:                   k._id,
-            name:                 k.name || k.kit_name || 'Combo Kit',
-            kit_code:             k.kit_code || '',
-            capacity:             k.capacity || 0,
-            capacity_kw:          k.capacity || 0,
-            base_price_cached:    k.base_price_cached || 0,
-            selling_price_cached: k.selling_price_cached || 0,
-            industry_type_id:     cat.industry_type_id ? String(cat.industry_type_id) : null,
-            category_id:          cat._id ? String(cat._id) : (sk.category_id ? String(sk.category_id) : null),
-            category_name:        cat.name || '',
-            subcategory_id:       sub._id ? String(sub._id) : (sk.subcategory_id ? String(sk.subcategory_id) : null),
-            subcategory_name:     sub.name || '',
-            system_type_id:       typeObj._id ? String(typeObj._id) : (sk.type_id ? String(sk.type_id) : null),
-            system_type_name:     typeObj.type?.name || '',
-            project_range_id:     pr._id ? String(pr._id) : (k.project_range_id ? String(k.project_range_id) : null),
-            project_range_label:  pr.min_value !== undefined ? `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}` : '',
-          };
-        }),
+        combo_kits: comboKits,
       },
     });
   } catch (error) {
