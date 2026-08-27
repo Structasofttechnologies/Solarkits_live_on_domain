@@ -18,13 +18,16 @@ import {
   Calendar,
   Layers,
   Clock,
+  Plus,
 } from 'lucide-react';
+import BdeFranchiseOnboardingModal from '../components/BdeFranchiseOnboardingModal';
 
 export default function BdeDashboard() {
   const { user } = useBdeAuth();
   const navigate = useNavigate();
 
   const [dashboardData, setDashboardData] = useState(null);
+  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -116,8 +119,14 @@ export default function BdeDashboard() {
 
           <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
             <button
+              onClick={() => setOnboardingModalOpen(true)}
+              className="px-5 py-2.5 bg-gradient-to-r from-[#F49222] to-amber-400 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-2xl text-xs transition shadow-lg shadow-amber-400/20 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" /> Onboard Franchise Partner
+            </button>
+            <button
               onClick={() => navigate('/franchisees')}
-              className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-blue-950 font-bold rounded-2xl text-xs transition shadow-lg shadow-amber-400/20 flex items-center gap-2"
+              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
             >
               <Store className="w-4 h-4" /> Franchisee Network
             </button>
@@ -495,6 +504,17 @@ export default function BdeDashboard() {
           </div>
         </div>
       </div>
+
+      {/* 5-Step Franchise Partner Onboarding Modal */}
+      <BdeFranchiseOnboardingModal
+        isOpen={onboardingModalOpen}
+        onClose={() => setOnboardingModalOpen(false)}
+        onLeadCreated={() => {
+          fetchDashboardData();
+          navigate('/leads');
+        }}
+        bdeTerritory={territory}
+      />
     </div>
   );
 }

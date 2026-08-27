@@ -19,6 +19,7 @@ const {
   ResellerTerritory,
   ResellerKyc,
   SolarShopSettings,
+  BDEProfile,
 } = require('../models/india_solarshop_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { logAudit } = require('../utils/audit.service');
@@ -361,7 +362,7 @@ const submit_lead = async (req, res) => {
  */
 const list_leads = async (req, res) => {
   try {
-    const { status, state, search, business_profile, page = 1, limit = 50 } = req.query;
+    const { status, state, search, business_profile, source, bde_id, page = 1, limit = 50 } = req.query;
 
     const query = { deleted_at: null };
 
@@ -375,6 +376,23 @@ const list_leads = async (req, res) => {
 
     if (business_profile && business_profile !== 'ALL') {
       query.business_profile = business_profile;
+    }
+
+    if (source && source !== 'ALL') {
+      if (source === 'bde' || source === 'bde_portal') {
+        query.$or = [{ source: 'bde_portal' }, { bde_id: { $ne: null } }];
+      } else if (source === 'website' || source === 'storefront' || source === 'storefront_modal') {
+        query.source = { $in: ['storefront_modal', 'website', 'public_landing', null] };
+        query.bde_id = null;
+      } else if (source === 'manual' || source === 'manual_admin') {
+        query.source = 'manual_admin';
+      } else {
+        query.source = source;
+      }
+    }
+
+    if (bde_id && bde_id !== 'ALL' && mongoose.Types.ObjectId.isValid(bde_id)) {
+      query.bde_id = new mongoose.Types.ObjectId(bde_id);
     }
 
     if (search && search.trim()) {
@@ -393,8 +411,9 @@ const list_leads = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const [rows, totalCount, statsAgg] = await Promise.all([
+    const [rows, totalCount, statsAgg, bdeList] = await Promise.all([
       FranchiseLead.find(query)
+        .populate('bde_id', 'full_name bde_id email mobile_number')
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(Number(limit))
@@ -404,6 +423,7 @@ const list_leads = async (req, res) => {
         { $match: { deleted_at: null } },
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]),
+      BDEProfile.find({ deleted_at: null }, '_id bde_id full_name email mobile_number status').lean(),
     ]);
 
     const stats = {
@@ -414,6 +434,8 @@ const list_leads = async (req, res) => {
       in_review: 0,
       converted: 0,
       rejected: 0,
+      bde_sourced: 0,
+      website_sourced: 0,
     };
 
     statsAgg.forEach((s) => {
@@ -427,42 +449,57 @@ const list_leads = async (req, res) => {
       else if (s._id === 'REJECTED') stats.rejected = count;
     });
 
-    const data = rows.map((r) => ({
-      id: r._id,
-      fullName: r.full_name,
-      businessName: r.business_name,
-      mobileNumber: r.mobile_number,
-      whatsappNumber: r.whatsapp_number,
-      email: r.email,
-      gstin: r.gstin,
-      gst_verified: r.gst_verified || false,
-      gst_legal_name: r.gst_legal_name || null,
-      gst_trade_name: r.gst_trade_name || null,
-      state: r.state,
-      district: r.district,
-      pincode: r.pincode,
-      businessProfile: r.business_profile,
-      expectedOrderQty: r.expected_order_volume,
-      selectedSolution: r.selected_solution,
-      plan_id: r.plan_id,
-      notes: r.notes,
-      shop_photos: r.shop_photos || [],
-      consent: r.consent_agreed,
-      status: r.status,
-      adminRemarks: r.admin_remarks,
-      reviewed_by: r.reviewed_by,
-      reviewed_at: r.reviewed_at,
-      agreement_id: r.agreement_id,
-      converted_reseller_id: r.converted_reseller_id,
-      submittedAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    const data = rows.map((r) => {
+      const isBdeSourced = Boolean(r.source === 'bde_portal' || r.bde_id);
+      return {
+        id: r._id,
+        fullName: r.full_name,
+        businessName: r.business_name,
+        mobileNumber: r.mobile_number,
+        whatsappNumber: r.whatsapp_number,
+        email: r.email,
+        gstin: r.gstin,
+        gst_verified: r.gst_verified || false,
+        gst_legal_name: r.gst_legal_name || null,
+        gst_trade_name: r.gst_trade_name || null,
+        state: r.state,
+        district: r.district,
+        pincode: r.pincode,
+        businessProfile: r.business_profile,
+        expectedOrderQty: r.expected_order_volume,
+        selectedSolution: r.selected_solution,
+        plan_id: r.plan_id,
+        notes: r.notes,
+        shop_photos: r.shop_photos || [],
+        consent: r.consent_agreed,
+        status: r.status,
+        source: r.source || (isBdeSourced ? 'bde_portal' : 'storefront_modal'),
+        is_bde_lead: isBdeSourced,
+        bde_id: r.bde_id?._id || r.bde_id || null,
+        bde: r.bde_id && typeof r.bde_id === 'object' ? {
+          id: r.bde_id._id,
+          fullName: r.bde_id.full_name,
+          bdeId: r.bde_id.bde_id,
+          mobile: r.bde_id.mobile_number,
+          email: r.bde_id.email,
+        } : null,
+        bde_lead_id: r.bde_lead_id || null,
+        adminRemarks: r.admin_remarks,
+        reviewed_by: r.reviewed_by,
+        reviewed_at: r.reviewed_at,
+        agreement_id: r.agreement_id,
+        converted_reseller_id: r.converted_reseller_id,
+        submittedAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
 
     return res.json({
       status: 'success',
       data: {
         leads: data,
         stats,
+        bdes: bdeList || [],
         pagination: {
           total_records: totalCount,
           current_page: Number(page),
@@ -575,13 +612,20 @@ const approve_lead_as_franchisee = async (req, res) => {
     }
 
     // 2. Check if Reseller already exists
-    let reseller = await Reseller.findOne({
-      $or: [
-        ...(lead.email ? [{ email: new RegExp(`^${lead.email.trim()}$`, 'i') }] : []),
-        ...(lead.mobile_number ? [{ mobile: lead.mobile_number.trim() }] : []),
-        ...(lead.gstin ? [{ gst_number: lead.gstin.trim().toUpperCase() }] : []),
-      ],
-    });
+    const cleanEmail = lead.email ? lead.email.toLowerCase().trim() : null;
+    const cleanMobile = lead.mobile_number ? lead.mobile_number.trim() : null;
+    const cleanGst = lead.gstin ? lead.gstin.trim().toUpperCase() : null;
+
+    let reseller = null;
+    if (cleanEmail) {
+      reseller = await Reseller.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+    }
+    if (!reseller && cleanMobile) {
+      reseller = await Reseller.findOne({ mobile: cleanMobile });
+    }
+    if (!reseller && cleanGst) {
+      reseller = await Reseller.findOne({ gst_number: cleanGst });
+    }
 
     if (reseller && reseller.deleted_at) {
       reseller.deleted_at = null;
@@ -606,16 +650,18 @@ const approve_lead_as_franchisee = async (req, res) => {
         reseller = await Reseller.create({
           business_name: lead.business_name || `${lead.full_name} Solar Enterprise`,
           contact_person: lead.full_name,
-          email: (lead.email || '').toLowerCase().trim(),
-          mobile: (lead.mobile_number || '').trim(),
+          email: cleanEmail || `${cleanMobile || Date.now()}@franchisee.solarkits.in`,
+          mobile: cleanMobile || '9999999999',
           password_hash,
           commercial_mode: req.body.commercial_mode || defaultType.commercial_mode || 'dealer',
           reseller_type_id: defaultType._id,
-          gst_number: lead.gstin || null,
+          gst_number: cleanGst || null,
           gst_legal_name: lead.gst_legal_name || null,
           gst_trade_name: lead.gst_trade_name || null,
           gst_verified_at: lead.gst_verified ? (lead.gst_verified_at || new Date()) : null,
           gst_registration_status: lead.gst_verified ? 'ACTIVE' : null,
+          bde_id: lead.bde_id || null,
+          original_bde_id: lead.original_bde_id || lead.bde_id || null,
           address: {
             city: lead.district,
             state: lead.state,
@@ -637,8 +683,9 @@ const approve_lead_as_franchisee = async (req, res) => {
         if (createErr.code === 11000) {
           reseller = await Reseller.findOne({
             $or: [
-              ...(lead.email ? [{ email: new RegExp(`^${lead.email.trim()}$`, 'i') }] : []),
-              ...(lead.mobile_number ? [{ mobile: lead.mobile_number.trim() }] : []),
+              ...(cleanEmail ? [{ email: new RegExp(`^${cleanEmail}$`, 'i') }] : []),
+              ...(cleanMobile ? [{ mobile: cleanMobile }] : []),
+              ...(cleanGst ? [{ gst_number: cleanGst }] : []),
             ],
           });
           if (!reseller) throw createErr;
@@ -646,18 +693,35 @@ const approve_lead_as_franchisee = async (req, res) => {
           throw createErr;
         }
       }
-    } else {
-      if (lead.email) {
-        reseller.email = lead.email.toLowerCase().trim();
+    }
+
+    if (reseller) {
+      // Safe field updates without colliding with unique constraints
+      if (cleanEmail && reseller.email?.toLowerCase() !== cleanEmail) {
+        const emailColliding = await Reseller.findOne({
+          email: new RegExp(`^${cleanEmail}$`, 'i'),
+          _id: { $ne: reseller._id },
+        });
+        if (!emailColliding) {
+          reseller.email = cleanEmail;
+        } else {
+          console.warn(`[approve_lead_as_franchisee] Email ${cleanEmail} already taken by reseller ${emailColliding._id}. Keeping current reseller email ${reseller.email}`);
+        }
+      }
+      if (cleanMobile && reseller.mobile !== cleanMobile) {
+        const mobileColliding = await Reseller.findOne({
+          mobile: cleanMobile,
+          _id: { $ne: reseller._id },
+        });
+        if (!mobileColliding) {
+          reseller.mobile = cleanMobile;
+        }
       }
       if (lead.full_name) {
         reseller.contact_person = lead.full_name;
       }
       if (lead.business_name) {
         reseller.business_name = lead.business_name;
-      }
-      if (lead.mobile_number) {
-        reseller.mobile = lead.mobile_number.trim();
       }
       reseller.password_hash = password_hash;
       reseller.agreement_status = 'pending';
@@ -671,6 +735,10 @@ const approve_lead_as_franchisee = async (req, res) => {
         reseller.gst_legal_name = lead.gst_legal_name;
         reseller.gst_trade_name = lead.gst_trade_name;
         reseller.gst_registration_status = 'ACTIVE';
+      }
+      if (lead.bde_id && !reseller.bde_id) {
+        reseller.bde_id = lead.bde_id;
+        reseller.original_bde_id = lead.original_bde_id || lead.bde_id;
       }
       await reseller.save();
     }

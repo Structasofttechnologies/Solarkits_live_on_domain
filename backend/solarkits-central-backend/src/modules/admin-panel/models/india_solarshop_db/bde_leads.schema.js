@@ -18,15 +18,21 @@ const schema = new mongoose.Schema({
   mobile_number: { type: String, required: true, trim: true, maxlength: 15 },
   email: { type: String, required: true, trim: true, lowercase: true, maxlength: 150 },
   gst_number: { type: String, default: null, trim: true, uppercase: true, maxlength: 20 },
+  gst_verified: { type: Boolean, default: false },
+  gst_legal_name: { type: String, default: null, trim: true, maxlength: 300 },
+  gst_trade_name: { type: String, default: null, trim: true, maxlength: 300 },
+  pan_number: { type: String, default: null, trim: true, uppercase: true, maxlength: 20 },
 
   // Geographic Territory
   country_name: { type: String, default: 'India', trim: true },
+  territory_level: { type: String, enum: ['district', 'state', 'country', 'master'], default: 'district' },
   state_id: { type: mongoose.Schema.Types.ObjectId, default: null },
   state_name: { type: String, required: true, trim: true },
   district_id: { type: mongoose.Schema.Types.ObjectId, default: null },
   district_name: { type: String, required: true, trim: true },
   pincode: { type: String, default: null, trim: true, maxlength: 10 },
   address_line: { type: String, default: null, trim: true },
+  shop_photos: [{ type: String, trim: true }],
 
   // Plan & Commercial Scope
   interested_plan_id: { type: mongoose.Schema.Types.ObjectId, ref: 'reseller_plans', default: null },

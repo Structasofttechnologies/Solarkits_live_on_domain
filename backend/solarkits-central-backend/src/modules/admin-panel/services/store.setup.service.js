@@ -254,9 +254,25 @@ const createStoreSetupForFranchisee = async (resellerId, actorId = null) => {
   const originalCompletionDate = new Date(setupStartDate.getTime() + (allowedDays * 24 * 60 * 60 * 1000));
 
   // Generate unique Store Setup ID
-  const count = await StoreSetup.countDocuments();
   const currentYear = new Date().getFullYear();
-  const storeSetupId = `ST-${currentYear}-${String(count + 1).padStart(4, '0')}`;
+  const prefix = `ST-${currentYear}-`;
+  const lastSetup = await StoreSetup.findOne({
+    store_setup_id: { $regex: `^${prefix}` },
+  })
+    .sort({ store_setup_id: -1 })
+    .lean();
+
+  let nextNum = 1;
+  if (lastSetup && lastSetup.store_setup_id) {
+    const parts = lastSetup.store_setup_id.split('-');
+    if (parts.length === 3) {
+      const parsed = parseInt(parts[2], 10);
+      if (!isNaN(parsed)) {
+        nextNum = parsed + 1;
+      }
+    }
+  }
+  const storeSetupId = `${prefix}${String(nextNum).padStart(4, '0')}`;
 
   // Find attributed BDE
   const originalBdeId = reseller.original_bde_id || reseller.bde_id || null;
@@ -483,6 +499,17 @@ const startFranchiseeOperations = async (storeSetupId, adminId) => {
 
   const reseller = await Reseller.findById(setup.franchisee_id);
   if (!reseller) throw new Error('Franchisee record not found');
+
+  // Idempotency: If already operational, return current state safely without error or duplicate records
+  if (setup.status === 'operations_started' && reseller.is_operational) {
+    return {
+      store_setup_id: setup.store_setup_id,
+      franchisee_id: reseller._id,
+      operations_start_date: setup.operations_start_date,
+      status: 'operations_started',
+      is_operational: true,
+    };
+  }
 
   // Preconditions Verification:
   // 1. GST verification

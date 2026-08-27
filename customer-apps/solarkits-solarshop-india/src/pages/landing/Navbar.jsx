@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   FiMenu,
   FiX,
@@ -13,11 +13,13 @@ import {
   FiCheckCircle,
   FiHelpCircle,
   FiHome,
+  FiGrid,
 } from "react-icons/fi";
 import logo from "../../assets/images/logo.png";
 
 const NAV_SECTIONS = [
-  { label: "Home", href: "#hero", icon: FiHome },
+  { label: "Home", href: "/", icon: FiHome },
+  { label: "Industry Solutions", href: "/industries", icon: FiGrid, badge: "Showcase" },
   { label: "Products", href: "#products", icon: FiLayers },
   { label: "Why SolarKits", href: "#why-choose", icon: FiCheckCircle },
   { label: "How It Works", href: "#how-it-works", icon: FiHelpCircle },
@@ -46,12 +48,18 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("hero");
+  const location = useLocation();
   const navigate = useNavigate();
 
   // Scroll detection for backdrop styling & active section highlight
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
+
+      if (location.pathname === "/industries" || location.pathname.startsWith("/industries/")) {
+        setActiveSection("industries");
+        return;
+      }
 
       // Simple active section detector
       const sections = ["hero", "products", "why-choose", "how-it-works"];
@@ -66,9 +74,13 @@ export default function Navbar() {
       }
     };
 
+    if (location.pathname === "/industries" || location.pathname.startsWith("/industries/")) {
+      setActiveSection("industries");
+    }
+
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [location.pathname]);
 
   // Lock scroll when mobile menu is open
   useEffect(() => {
@@ -85,16 +97,28 @@ export default function Navbar() {
   const handleNavClick = (href) => {
     setMenuOpen(false);
 
+    if (href === "/") {
+      if (location.pathname === "/") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setActiveSection("hero");
+      } else {
+        navigate("/");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      return;
+    }
+
     if (href.startsWith("#")) {
       const sectionId = href.substring(1);
-      const section = document.getElementById(sectionId);
-
-      if (section) {
-        section.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-        setActiveSection(sectionId);
+      if (location.pathname === "/") {
+        const section = document.getElementById(sectionId);
+        if (section) {
+          section.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+          setActiveSection(sectionId);
+        }
       } else {
         navigate(`/${href}`);
       }
@@ -107,7 +131,9 @@ export default function Navbar() {
     }
 
     navigate(href);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
 
   return (
     <>
@@ -189,7 +215,11 @@ export default function Navbar() {
           >
             {/* Main Section Anchor Links */}
             {NAV_SECTIONS.map((link) => {
-              const isCurrent = activeSection === link.href.substring(1);
+              const isCurrent =
+                (link.href === "/industries" && (location.pathname === "/industries" || location.pathname.startsWith("/industries/"))) ||
+                (link.href === "/" && location.pathname === "/" && activeSection === "hero") ||
+                (link.href.startsWith("#") && location.pathname === "/" && activeSection === link.href.substring(1));
+
               return (
                 <button
                   key={link.label}
@@ -226,10 +256,26 @@ export default function Navbar() {
                     }
                   }}
                 >
-                  {link.label}
+                  <span>{link.label}</span>
+                  {link.badge && (
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: 800,
+                        color: isCurrent ? "#1e40af" : "#2563eb",
+                        background: isCurrent ? "rgba(37, 99, 235, 0.12)" : "#dbeafe",
+                        padding: "1px 6px",
+                        borderRadius: "10px",
+                        letterSpacing: "0.02em",
+                      }}
+                    >
+                      {link.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
+
 
             {/* Divider */}
             <div
@@ -434,12 +480,27 @@ export default function Navbar() {
                       >
                         <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                           <Icon style={{ color: "#3b82f6" }} />
-                          {link.label}
+                          <span>{link.label}</span>
+                          {link.badge && (
+                            <span
+                              style={{
+                                fontSize: "0.65rem",
+                                fontWeight: 800,
+                                color: "#2563eb",
+                                background: "#dbeafe",
+                                padding: "1px 6px",
+                                borderRadius: "8px",
+                              }}
+                            >
+                              {link.badge}
+                            </span>
+                          )}
                         </span>
                         <FiChevronRight style={{ color: "#94a3b8" }} />
                       </button>
                     );
                   })}
+
                 </div>
               </div>
 

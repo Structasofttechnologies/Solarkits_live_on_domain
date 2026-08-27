@@ -22,13 +22,17 @@ import {
   Send,
   MessageSquare,
   FileCheck,
-  ChevronRight
+  ChevronRight,
+  Building,
+  Image as ImageIcon
 } from 'lucide-react';
 import api from '../services/api';
+import BdeFranchiseOnboardingModal from '../components/BdeFranchiseOnboardingModal';
 
 export default function BdeLeads() {
   const [leads, setLeads] = useState([]);
   const [pipeline, setPipeline] = useState(null);
+  const [bdeTerritory, setBdeTerritory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'kanban'
   const [stageFilter, setStageFilter] = useState('');
@@ -66,9 +70,10 @@ export default function BdeLeads() {
   const fetchLeadsAndPipeline = useCallback(async () => {
     setLoading(true);
     try {
-      const [resLeads, resPipe] = await Promise.all([
+      const [resLeads, resPipe, resTerr] = await Promise.all([
         api.get(`/leads/list?search=${encodeURIComponent(search)}&stage=${encodeURIComponent(stageFilter)}`),
         api.get('/pipeline'),
+        api.get('/territory/my').catch(() => ({ data: null })),
       ]);
 
       if (resLeads.data?.status === 'success') {
@@ -76,6 +81,9 @@ export default function BdeLeads() {
       }
       if (resPipe.data?.status === 'success') {
         setPipeline(resPipe.data.data);
+      }
+      if (resTerr.data?.status === 'success' && resTerr.data.data) {
+        setBdeTerritory(resTerr.data.data);
       }
     } catch (err) {
       console.error('Failed to load leads pipeline', err);
@@ -415,160 +423,15 @@ export default function BdeLeads() {
 
       {/* ── MODALS ── */}
 
-      {/* 1. Add Franchisee Lead Modal */}
-      {createModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-xl p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-lg font-black text-slate-900">Add New Franchisee Prospect Lead</h3>
-              <button onClick={() => setCreateModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Prospect Contact Person *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Ramesh Patil"
-                    value={formData.prospect_name}
-                    onChange={(e) => setFormData({ ...formData, prospect_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Company / Business Name *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Patil Solar Enterprises"
-                    value={formData.company_name}
-                    onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mobile Number (10 Digits) *</label>
-                  <input
-                    required
-                    type="tel"
-                    placeholder="e.g. 9876543210"
-                    value={formData.mobile_number}
-                    onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Email Address *</label>
-                  <input
-                    required
-                    type="email"
-                    placeholder="e.g. contact@patilsolar.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">GST Number (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 27AABCU9603R1ZM"
-                    value={formData.gst_number}
-                    onChange={(e) => setFormData({ ...formData, gst_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 uppercase focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Lead Source</label>
-                  <select
-                    value={formData.lead_source}
-                    onChange={(e) => setFormData({ ...formData, lead_source: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="direct_visit">Direct Field Visit</option>
-                    <option value="phone_call">Inbound / Outbound Call</option>
-                    <option value="referral">Referral from Existing Partner</option>
-                    <option value="trade_show">Trade Expo / Solar Summit</option>
-                    <option value="digital">Digital Marketing Inquiry</option>
-                    <option value="cold_outreach">Cold Outreach</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">State *</label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.state_name}
-                    onChange={(e) => setFormData({ ...formData, state_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">District *</label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.district_name}
-                    onChange={(e) => setFormData({ ...formData, district_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Initial BDE Notes / Meeting Remarks</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Existing inverter dealer interested in exclusive SolarKits franchise..."
-                  value={formData.bde_remarks}
-                  onChange={(e) => setFormData({ ...formData, bde_remarks: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Next Follow-up Date (Optional)</label>
-                <input
-                  type="date"
-                  value={formData.next_follow_up_date}
-                  onChange={(e) => setFormData({ ...formData, next_follow_up_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs"
-                >
-                  {submitting ? 'Creating Lead...' : 'Register Lead'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 1. 5-Step Franchise Partner Onboarding Modal */}
+      <BdeFranchiseOnboardingModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onLeadCreated={() => {
+          fetchLeadsAndPipeline();
+        }}
+        bdeTerritory={bdeTerritory}
+      />
 
       {/* 2. Lead Detail Drawer */}
       {selectedLead && (
@@ -576,8 +439,20 @@ export default function BdeLeads() {
           <div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <span className="text-xs font-mono font-bold text-amber-600">{selectedLead.lead.lead_id}</span>
-                <h3 className="text-lg font-black text-slate-900">{selectedLead.lead.company_name}</h3>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-amber-600">{selectedLead.lead.lead_id}</span>
+                  {selectedLead.lead.gst_verified && (
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full">
+                      ✓ GST VERIFIED
+                    </span>
+                  )}
+                  {selectedLead.lead.is_outside_territory && (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-black rounded-full">
+                      ⚠️ OUTSIDE TERRITORY
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mt-0.5">{selectedLead.lead.company_name}</h3>
               </div>
               <button onClick={() => setSelectedLead(null)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
@@ -587,7 +462,7 @@ export default function BdeLeads() {
             {/* Stage and Quick Actions Bar */}
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <span className="text-[11px] text-slate-500 block">Current Pipeline Stage</span>
+                <span className="text-[11px] text-slate-500 block font-semibold">Current Pipeline Stage</span>
                 <LeadStageBadge stage={selectedLead.lead.lead_status} />
               </div>
 
@@ -595,7 +470,7 @@ export default function BdeLeads() {
                 {!['signup_started', 'approved', 'agreement_signed', 'fee_paid'].includes(selectedLead.lead.lead_status) && (
                   <button
                     onClick={() => handleStartSignup(selectedLead.lead._id)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm"
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-600/20"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
                     Start Franchisee Signup
@@ -608,7 +483,7 @@ export default function BdeLeads() {
                     setStageReason('');
                     setStageModalOpen(true);
                   }}
-                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold"
+                  className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold"
                 >
                   Change Stage
                 </button>
@@ -616,24 +491,53 @@ export default function BdeLeads() {
             </div>
 
             {/* Profile Overview */}
-            <div className="grid grid-cols-2 gap-3 text-xs bg-white p-3 rounded-xl border border-slate-100">
+            <div className="grid grid-cols-2 gap-3 text-xs bg-white p-3.5 rounded-2xl border border-slate-200">
               <div>
-                <span className="text-slate-400 block text-[11px]">Prospect Contact</span>
-                <strong className="text-slate-800">{selectedLead.lead.prospect_name} ({selectedLead.lead.mobile_number})</strong>
+                <span className="text-slate-400 block text-[11px] font-bold uppercase">Prospect Contact</span>
+                <strong className="text-slate-900">{selectedLead.lead.prospect_name}</strong>
+                <span className="text-slate-500 block font-mono">{selectedLead.lead.mobile_number}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[11px]">Email & GST</span>
-                <strong className="text-slate-800">{selectedLead.lead.email} &bull; {selectedLead.lead.gst_number || 'No GST'}</strong>
+                <span className="text-slate-400 block text-[11px] font-bold uppercase">Email & GSTIN</span>
+                <strong className="text-slate-900 truncate block">{selectedLead.lead.email}</strong>
+                <span className="font-mono text-slate-600">{selectedLead.lead.gst_number || 'No GST'}</span>
               </div>
               <div>
-                <span className="text-slate-400 block text-[11px]">Territory</span>
-                <strong className="text-slate-800">{selectedLead.lead.district_name}, {selectedLead.lead.state_name}</strong>
+                <span className="text-slate-400 block text-[11px] font-bold uppercase">Territory</span>
+                <strong className="text-slate-900">{selectedLead.lead.district_name}, {selectedLead.lead.state_name}</strong>
+                {selectedLead.lead.address_line && (
+                  <span className="text-slate-500 block text-[11px] truncate">{selectedLead.lead.address_line}</span>
+                )}
               </div>
               <div>
-                <span className="text-slate-400 block text-[11px]">Plan Interest</span>
-                <strong className="text-slate-800">{selectedLead.lead.interested_plan_name || 'Standard Franchisee'}</strong>
+                <span className="text-slate-400 block text-[11px] font-bold uppercase">Plan Interest & Monthly Kits</span>
+                <strong className="text-slate-900">{selectedLead.lead.interested_plan_name || 'Standard Franchisee'}</strong>
+                <span className="text-slate-500 block text-[11px]">{selectedLead.lead.expected_monthly_kits || 5} Kits / Month</span>
               </div>
             </div>
+
+            {/* Uploaded Shop Photos Gallery */}
+            {selectedLead.lead.shop_photos && selectedLead.lead.shop_photos.length > 0 && (
+              <div className="space-y-2 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                  Verified Storefront & Premises Photos ({selectedLead.lead.shop_photos.length})
+                </span>
+                <div className="grid grid-cols-4 gap-2">
+                  {selectedLead.lead.shop_photos.map((photo, pIdx) => (
+                    <a
+                      key={pIdx}
+                      href={photo}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-xl overflow-hidden aspect-video border border-slate-200 bg-slate-200 block group relative"
+                    >
+                      <img src={photo} alt="Shop" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Add Call / Meeting Note Form */}
             <form onSubmit={handleAddActivity} className="p-4 bg-amber-50/50 border border-amber-200/60 rounded-2xl space-y-3">

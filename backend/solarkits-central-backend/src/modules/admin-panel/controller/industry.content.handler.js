@@ -844,6 +844,227 @@ const toggle_active = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 19. PUBLIC LIST CONTENT (SolarShop India & public storefronts)
+// GET /admin-api/industry-content/public/list
+// ─────────────────────────────────────────────────────────────────────────────
+const list_public_content = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 100,
+      industry_type_id,
+      industry_slug,
+      content_type,
+      placement,
+      is_featured,
+      search,
+      sort = 'featured', // 'featured' | 'newest' | 'popular'
+    } = req.query;
+
+    const now = new Date();
+    const filter = {
+      deleted_at: null,
+      status: 'PUBLISHED',
+      is_active: true,
+      $or: [
+        { start_at: null },
+        { start_at: { $lte: now } },
+      ],
+      $and: [
+        {
+          $or: [
+            { end_at: null },
+            { end_at: { $gte: now } },
+          ],
+        },
+      ],
+    };
+
+    if (content_type && content_type !== 'ALL') {
+      filter.content_type = content_type;
+    }
+    if (placement) {
+      filter.placement = placement;
+    }
+    if (is_featured !== undefined && is_featured !== '') {
+      filter.is_featured = is_featured === 'true' || is_featured === true;
+    }
+    if (search && search.trim()) {
+      filter.$or = [
+        { title: { $regex: search.trim(), $options: 'i' } },
+        { heading: { $regex: search.trim(), $options: 'i' } },
+        { short_description: { $regex: search.trim(), $options: 'i' } },
+      ];
+    }
+
+    // Resolve industry filter
+    let targetIndustryId = industry_type_id;
+    if (!targetIndustryId && industry_slug && industry_slug !== 'all') {
+      const ind = await IndustryType.findOne({ slug: industry_slug, deleted_at: null, is_active: true }).lean();
+      if (ind) {
+        targetIndustryId = ind._id;
+      }
+    }
+
+    if (targetIndustryId && mongoose.Types.ObjectId.isValid(targetIndustryId)) {
+      const maps = await IndustryContentIndustryMap.find({
+        industry_type_id: targetIndustryId,
+        deleted_at: null,
+      }).select('content_id').lean();
+      const contentIds = maps.map(m => m.content_id);
+      filter._id = { $in: contentIds };
+    }
+
+    // Determine sort
+    let sortObj = { priority: -1, display_order: 1, created_at: -1 };
+    if (sort === 'newest') {
+      sortObj = { published_at: -1, created_at: -1 };
+    } else if (sort === 'popular') {
+      sortObj = { view_count: -1, download_count: -1, created_at: -1 };
+    }
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [items, total] = await Promise.all([
+      IndustryContent.find(filter)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      IndustryContent.countDocuments(filter),
+    ]);
+
+    const ids = items.map(i => i._id);
+    const [maps, mediaList] = await Promise.all([
+      IndustryContentIndustryMap.find({
+        content_id: { $in: ids },
+        deleted_at: null,
+      }).populate('industry_type_id', 'name slug icon is_active sort_order').lean(),
+      IndustryContentMedia.find({
+        content_id: { $in: ids },
+        deleted_at: null,
+        processing_status: { $ne: 'FAILED' },
+      }).sort({ is_primary: -1, sort_order: 1, created_at: 1 }).lean(),
+    ]);
+
+    const mapByContent = {};
+    maps.forEach(m => {
+      const cid = m.content_id.toString();
+      if (!mapByContent[cid]) mapByContent[cid] = [];
+      if (m.industry_type_id) {
+        mapByContent[cid].push({
+          id: m.industry_type_id._id,
+          name: m.industry_type_id.name,
+          slug: m.industry_type_id.slug,
+          icon: m.industry_type_id.icon,
+        });
+      }
+    });
+
+    const mediaByContent = {};
+    mediaList.forEach(m => {
+      const cid = m.content_id.toString();
+      if (!mediaByContent[cid]) mediaByContent[cid] = [];
+      mediaByContent[cid].push({ ...m, id: m._id });
+    });
+
+    const data = items.map(item => {
+      const contentMedia = mediaByContent[item._id.toString()] || [];
+      const primaryMedia = contentMedia.find(m => m.is_primary) || contentMedia[0] || null;
+      const thumbnail = primaryMedia?.thumbnail_url || primaryMedia?.poster_url || primaryMedia?.url || null;
+
+      return {
+        id: item._id,
+        _id: item._id,
+        title: item.title,
+        heading: item.heading || item.title,
+        short_description: item.short_description,
+        content_type: item.content_type,
+        target_audience: item.target_audience,
+        placement: item.placement,
+        cta_label: item.cta_label,
+        cta_url: item.cta_url,
+        is_featured: item.is_featured,
+        priority: item.priority,
+        display_order: item.display_order,
+        focal_position: item.focal_position,
+        allow_download: item.allow_download,
+        allow_share: item.allow_share,
+        autoplay: item.autoplay,
+        view_count: item.view_count || 0,
+        download_count: item.download_count || 0,
+        share_count: item.share_count || 0,
+        published_at: item.published_at,
+        industries: mapByContent[item._id.toString()] || [],
+        media: contentMedia,
+        thumbnail,
+        primary_media: primaryMedia,
+        media_count: contentMedia.length,
+      };
+    });
+
+    return res.json({
+      status: 'success',
+      data,
+      pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / limit) },
+    });
+  } catch (err) {
+    console.error('[industry.content] list_public_content:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 20. GET PUBLIC CONTENT DETAIL
+// GET /admin-api/industry-content/public/detail/:id
+// ─────────────────────────────────────────────────────────────────────────────
+const get_public_content_detail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ status: 'error', message: 'Invalid content id' });
+
+    const content = await IndustryContent.findOne({
+      _id: id,
+      deleted_at: null,
+      status: 'PUBLISHED',
+      is_active: true,
+    }).lean();
+
+    if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    const [media, maps] = await Promise.all([
+      IndustryContentMedia.find({ content_id: id, deleted_at: null }).sort({ is_primary: -1, sort_order: 1 }).lean(),
+      IndustryContentIndustryMap.find({ content_id: id, deleted_at: null })
+        .populate('industry_type_id', 'name slug icon is_active')
+        .lean(),
+    ]);
+
+    const primaryMedia = media.find(m => m.is_primary) || media[0] || null;
+
+    return res.json({
+      status: 'success',
+      data: {
+        ...content,
+        id: content._id,
+        media: media.map(m => ({ ...m, id: m._id })),
+        primary_media: primaryMedia,
+        thumbnail: primaryMedia?.thumbnail_url || primaryMedia?.poster_url || primaryMedia?.url || null,
+        industries: maps.filter(m => m.industry_type_id).map(m => ({
+          id: m.industry_type_id._id,
+          name: m.industry_type_id.name,
+          slug: m.industry_type_id.slug,
+          icon: m.industry_type_id.icon,
+        })),
+      },
+    });
+  } catch (err) {
+    console.error('[industry.content] get_public_content_detail:', err);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 // ─── Export cache for use by dashboard handler ─────────────────────────────
 module.exports = {
   list_content,
@@ -862,6 +1083,8 @@ module.exports = {
   duplicate_content,
   bulk_action,
   toggle_active,
+  list_public_content,
+  get_public_content_detail,
   track_analytics,
   get_analytics,
   // Expose cache invalidation for scheduler
@@ -869,3 +1092,4 @@ module.exports = {
   contentCache,
   CACHE_KEY,
 };
+

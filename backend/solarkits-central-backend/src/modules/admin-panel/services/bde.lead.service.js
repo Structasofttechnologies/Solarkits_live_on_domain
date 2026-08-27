@@ -203,20 +203,28 @@ async function createLead(data, bdeId) {
     });
   }
 
+  const cleanGst = data.gst_number ? data.gst_number.trim().toUpperCase() : null;
+
   const lead = await BDELead.create({
     lead_id: leadId,
     prospect_name: data.prospect_name,
     company_name: data.company_name,
     mobile_number: data.mobile_number,
     email: data.email,
-    gst_number: data.gst_number ? data.gst_number.trim().toUpperCase() : null,
+    gst_number: cleanGst,
+    gst_verified: Boolean(data.gst_verified),
+    gst_legal_name: data.gst_legal_name || null,
+    gst_trade_name: data.gst_trade_name || null,
+    pan_number: data.pan_number || null,
     country_name: data.country_name || 'India',
+    territory_level: data.territory_level || 'district',
     state_id: data.state_id || null,
     state_name: data.state_name,
     district_id: data.district_id || null,
     district_name: data.district_name,
     pincode: data.pincode || null,
     address_line: data.address_line || null,
+    shop_photos: Array.isArray(data.shop_photos) ? data.shop_photos : [],
     interested_plan_id: data.interested_plan_id || null,
     interested_plan_name: data.interested_plan_name || 'Standard Franchisee Plan',
     estimated_investment: data.estimated_investment || 0,
@@ -231,6 +239,39 @@ async function createLead(data, bdeId) {
     next_follow_up_date: data.next_follow_up_date || null,
     bde_remarks: data.bde_remarks || null,
   });
+
+  // Create corresponding FranchiseLead for standard Admin Franchisee Inbound Pipeline
+  try {
+    const franchiseLead = await FranchiseLead.create({
+      full_name: data.prospect_name,
+      business_name: data.company_name,
+      mobile_number: data.mobile_number,
+      email: data.email,
+      gstin: cleanGst,
+      gst_verified: Boolean(data.gst_verified),
+      gst_legal_name: data.gst_legal_name || null,
+      gst_trade_name: data.gst_trade_name || null,
+      state: data.state_name,
+      district: data.district_name,
+      pincode: data.pincode || null,
+      business_profile: data.business_profile || (data.territory_level === 'state' ? 'State Master Distributor' : 'District Solar Franchisee'),
+      expected_order_volume: data.expected_order_volume || `${data.expected_monthly_kits || 5} Kits / Month (Growth)`,
+      selected_solution: data.interested_plan_name || 'Standard Franchisee Plan',
+      plan_id: data.interested_plan_id || null,
+      notes: data.bde_remarks || `Franchise partner lead uploaded by BDE ${bde.full_name} (${bde.bde_id})`,
+      shop_photos: Array.isArray(data.shop_photos) ? data.shop_photos : [],
+      consent_agreed: true,
+      status: data.gst_verified ? 'GST_VERIFIED' : 'NEW',
+      bde_id: bdeId,
+      original_bde_id: bdeId,
+      bde_lead_id: lead._id,
+      source: 'bde_portal',
+    });
+    lead.franchise_lead_id = franchiseLead._id;
+    await lead.save();
+  } catch (flErr) {
+    console.warn('[createLead] FranchiseLead sync notice:', flErr.message);
+  }
 
   if (exceptionRequest) {
     exceptionRequest.lead_id = lead._id;

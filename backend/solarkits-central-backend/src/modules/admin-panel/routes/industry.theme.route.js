@@ -32,8 +32,10 @@ const CAN_EDIT = [
   { unique_code: '00000000', permissions: ['edit'] },
 ];
 
+router.get('/public/get', handler.get_theme);
 router.get('/get',    check_auth, check_permissions(CAN_VIEW), handler.get_theme);
 router.post('/upsert',check_auth, check_permissions(CAN_EDIT), handler.upsert_theme);
 router.delete('/delete', check_auth, check_permissions(CAN_EDIT), handler.delete_theme);
 
 module.exports = router;
+

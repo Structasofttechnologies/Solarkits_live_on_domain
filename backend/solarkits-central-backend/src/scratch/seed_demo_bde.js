@@ -13,31 +13,31 @@ async function seedDemoBDE() {
 
     const email = 'vikram.bde@solarkits.com';
     const mobile = '9876543210';
+    const bde_id = 'BDE-2026-0001';
     const password = 'Bde@Test1234';
     const password_hash = await bcrypt.hash(password, 10);
 
-    let bde = await BDEProfile.findOne({ email });
-    if (!bde) {
-      bde = new BDEProfile({
-        bde_id: 'BDE-2026-0001',
-        full_name: 'Vikram Sharma',
-        mobile_number: mobile,
-        email: email,
-        state: 'Maharashtra',
-        district: 'Pune',
-        status: 'active',
-        password_hash: password_hash,
-        is_first_login: false,
-      });
-      await bde.save();
-      console.log('✅ Created Demo BDE:', bde.email);
-    } else {
-      bde.status = 'active';
-      bde.password_hash = password_hash;
-      bde.is_first_login = false;
-      await bde.save();
-      console.log('✅ Updated Demo BDE to active with password:', bde.email);
-    }
+    // Clean up any other test record using the same mobile or bde_id
+    await BDEProfile.deleteMany({
+      $or: [
+        { email },
+        { mobile_number: mobile },
+        { bde_id },
+      ]
+    });
+
+    const bde = await BDEProfile.create({
+      bde_id,
+      full_name: 'Vikram Sharma',
+      mobile_number: mobile,
+      email: email,
+      state: 'Maharashtra',
+      district: 'Pune',
+      status: 'active',
+      password_hash: password_hash,
+      is_first_login: false,
+    });
+    console.log('✅ Created/Re-seeded Demo BDE:', bde.email, bde.bde_id, bde.mobile_number);
 
     // Ensure KYC is verified
     let kyc = await BDEKYC.findOne({ bde_id: bde._id });

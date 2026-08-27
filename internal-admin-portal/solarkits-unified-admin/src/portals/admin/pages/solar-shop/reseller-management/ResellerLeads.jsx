@@ -33,6 +33,9 @@ import {
   FiCamera,
   FiMaximize2,
   FiInfo,
+  FiGlobe,
+  FiUserCheck,
+  FiUser,
 } from "react-icons/fi";
 import { FaWhatsapp, FaBuilding } from "react-icons/fa";
 import { authHeaderObj } from "@/app/authHeader";
@@ -241,6 +244,8 @@ export default function ResellerLeads() {
   });
 
 
+  const [bdes, setBdes] = useState([]);
+
   // Fetch leads from backend API
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -251,6 +256,9 @@ export default function ResellerLeads() {
       );
       if (res.data?.status === "success" && Array.isArray(res.data.data?.leads)) {
         setLeads(res.data.data.leads);
+        if (Array.isArray(res.data.data?.bdes)) {
+          setBdes(res.data.data.bdes);
+        }
       }
     } catch (err) {
       console.warn("Live leads fetch note, using cached leads:", err?.message);
@@ -275,6 +283,8 @@ export default function ResellerLeads() {
   // Filters & Search
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [sourceFilter, setSourceFilter] = useState("ALL"); // 'ALL' | 'bde' | 'website' | 'manual'
+  const [bdeFilter, setBdeFilter] = useState("ALL");
   const [stateFilter, setStateFilter] = useState("ALL");
   const [profileFilter, setProfileFilter] = useState("ALL");
 
@@ -540,12 +550,18 @@ export default function ResellerLeads() {
     const newCount = leads.filter((l) => l.status === "NEW").length;
     const inReviewCount = leads.filter((l) => l.status === "IN_REVIEW" || l.status === "CONTACTED").length;
     const convertedCount = leads.filter((l) => l.status === "APPROVED_CONVERTED").length;
-    return { total, newCount, inReviewCount, convertedCount };
+    const bdeCount = leads.filter((l) => l.is_bde_lead || l.source === "bde_portal" || l.bde).length;
+    const websiteCount = leads.filter((l) => !l.is_bde_lead && (l.source === "storefront_modal" || l.source === "website" || !l.source)).length;
+    return { total, newCount, inReviewCount, convertedCount, bdeCount, websiteCount };
   }, [leads]);
 
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((item) => {
+      const isItemBde = Boolean(item.is_bde_lead || item.source === "bde_portal" || item.bde);
+      const isItemManual = item.source === "manual_admin";
+      const isItemWebsite = !isItemBde && !isItemManual;
+
       const matchesSearch =
         search === "" ||
         (item.fullName || "").toLowerCase().includes(search.toLowerCase()) ||
@@ -554,15 +570,29 @@ export default function ResellerLeads() {
         (item.whatsappNumber || "").includes(search) ||
         (item.email || "").toLowerCase().includes(search.toLowerCase()) ||
         (item.district || "").toLowerCase().includes(search.toLowerCase()) ||
-        (item.gstin || "").toLowerCase().includes(search.toLowerCase());
+        (item.gstin || "").toLowerCase().includes(search.toLowerCase()) ||
+        (item.bde?.fullName || "").toLowerCase().includes(search.toLowerCase()) ||
+        (item.bde?.bdeId || "").toLowerCase().includes(search.toLowerCase());
 
       const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
       const matchesState = stateFilter === "ALL" || item.state === stateFilter;
       const matchesProfile = profileFilter === "ALL" || item.businessProfile === profileFilter;
 
-      return matchesSearch && matchesStatus && matchesState && matchesProfile;
+      const matchesSource =
+        sourceFilter === "ALL" ||
+        (sourceFilter === "bde" && isItemBde) ||
+        (sourceFilter === "website" && isItemWebsite) ||
+        (sourceFilter === "manual" && isItemManual);
+
+      const matchesBde =
+        bdeFilter === "ALL" ||
+        item.bde_id === bdeFilter ||
+        item.bde?.id === bdeFilter ||
+        item.bde?.bdeId === bdeFilter;
+
+      return matchesSearch && matchesStatus && matchesState && matchesProfile && matchesSource && matchesBde;
     });
-  }, [leads, search, statusFilter, stateFilter, profileFilter]);
+  }, [leads, search, statusFilter, stateFilter, profileFilter, sourceFilter, bdeFilter]);
 
   return (
     <div className="space-y-6">
@@ -712,10 +742,54 @@ export default function ResellerLeads() {
           </div>
 
           <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+            {/* Channel / Source Filter */}
+            <select
+              value={sourceFilter}
+              onChange={(e) => {
+                setSourceFilter(e.target.value);
+                if (e.target.value !== "bde") {
+                  setBdeFilter("ALL");
+                }
+              }}
+              className={`px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:border-primary transition-all min-w-[170px] ${
+                sourceFilter === "bde"
+                  ? "bg-indigo-50 border-indigo-300 text-indigo-900"
+                  : sourceFilter === "website"
+                  ? "bg-teal-50 border-teal-300 text-teal-900"
+                  : "bg-bg border-border text-text-primary"
+              }`}
+            >
+              <option value="ALL">🌐 All Channels ({leads.length})</option>
+              <option value="bde">👔 BDE Field Sourced ({stats.bdeCount})</option>
+              <option value="website">💻 Website Inbound ({stats.websiteCount})</option>
+              <option value="manual">✍️ Manual Admin</option>
+            </select>
+
+            {/* BDE Executive Filter */}
+            {bdes.length > 0 && (
+              <select
+                value={bdeFilter}
+                onChange={(e) => {
+                  setBdeFilter(e.target.value);
+                  if (e.target.value !== "ALL") {
+                    setSourceFilter("bde");
+                  }
+                }}
+                className="px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs font-medium focus:outline-none focus:border-primary transition-all min-w-[160px]"
+              >
+                <option value="ALL">All BDEs</option>
+                {bdes.map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.full_name} ({b.bde_id})
+                  </option>
+                ))}
+              </select>
+            )}
+
             <select
               value={stateFilter}
               onChange={(e) => setStateFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs font-medium focus:outline-none focus:border-primary transition-all min-w-[140px]"
+              className="px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs font-medium focus:outline-none focus:border-primary transition-all min-w-[130px]"
             >
               <option value="ALL">All States</option>
               {INDIAN_STATES.map((st) => (
@@ -728,7 +802,7 @@ export default function ResellerLeads() {
             <select
               value={profileFilter}
               onChange={(e) => setProfileFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs font-medium focus:outline-none focus:border-primary transition-all min-w-[160px]"
+              className="px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs font-medium focus:outline-none focus:border-primary transition-all min-w-[150px]"
             >
               <option value="ALL">All Business Profiles</option>
               {BUSINESS_PROFILES.map((bp) => (
@@ -738,12 +812,14 @@ export default function ResellerLeads() {
               ))}
             </select>
 
-            {(search || statusFilter !== "ALL" || stateFilter !== "ALL" || profileFilter !== "ALL") && (
+            {(search || statusFilter !== "ALL" || sourceFilter !== "ALL" || bdeFilter !== "ALL" || stateFilter !== "ALL" || profileFilter !== "ALL") && (
               <button
                 type="button"
                 onClick={() => {
                   setSearch("");
                   setStatusFilter("ALL");
+                  setSourceFilter("ALL");
+                  setBdeFilter("ALL");
                   setStateFilter("ALL");
                   setProfileFilter("ALL");
                 }}
@@ -834,6 +910,33 @@ export default function ResellerLeads() {
                               </div>
 
                               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                {/* Lead Source Badge */}
+                                {lead.is_bde_lead || lead.source === "bde_portal" || lead.bde ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50/90 px-2 py-0.5 rounded border border-indigo-200"
+                                    title={`Field Sourced by BDE Executive: ${lead.bde?.fullName || 'BDE Portal'}`}
+                                  >
+                                    <FiUserCheck size={11} className="text-indigo-600" />
+                                    <span>BDE: {lead.bde?.fullName || lead.bde?.bdeId || "Field BDE"}</span>
+                                  </span>
+                                ) : lead.source === "manual_admin" ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200"
+                                    title="Manual Entry by Admin"
+                                  >
+                                    <FiUser size={11} className="text-slate-600" />
+                                    <span>Admin Manual</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-700 bg-teal-50/90 px-2 py-0.5 rounded border border-teal-200"
+                                    title="Online Lead from Public Website / Storefront"
+                                  >
+                                    <FiGlobe size={11} className="text-teal-600" />
+                                    <span>Website Inbound</span>
+                                  </span>
+                                )}
+
                                 {lead.gstin && (
                                   <div className="text-[10px] text-text-muted font-mono bg-bg px-1.5 py-0.5 rounded border border-border inline-block">
                                     GST: {lead.gstin}
@@ -1120,6 +1223,57 @@ export default function ResellerLeads() {
                       </p>
                     </div>
                   </div>
+                </div>
+
+                {/* Acquisition Channel & BDE Attribution Details */}
+                <div className="p-4 rounded-2xl bg-bg border border-border space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                      <FiLayers size={14} className="text-primary" />
+                      <span>Acquisition Channel & Lead Attribution</span>
+                    </p>
+                    {selectedLead.is_bde_lead || selectedLead.bde || selectedLead.source === "bde_portal" ? (
+                      <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 flex items-center gap-1">
+                        <FiUserCheck size={12} className="text-indigo-600" /> BDE Field Sourced
+                      </span>
+                    ) : selectedLead.source === "manual_admin" ? (
+                      <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 flex items-center gap-1">
+                        <FiUser size={12} className="text-slate-600" /> Admin Manual Entry
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200 flex items-center gap-1">
+                        <FiGlobe size={12} className="text-teal-600" /> Website / Storefront Inbound
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedLead.bde ? (
+                    <div className="grid grid-cols-2 gap-3 text-xs p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80">
+                      <div>
+                        <p className="text-[11px] text-indigo-800 font-bold uppercase">Sourcing BDE Executive</p>
+                        <p className="font-bold text-indigo-950 text-sm mt-0.5">{selectedLead.bde.fullName || "Field BDE"}</p>
+                        <span className="inline-block font-mono text-[11px] font-bold text-indigo-700 bg-white/80 px-2 py-0.5 rounded border border-indigo-200 mt-1">
+                          ID: {selectedLead.bde.bdeId}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-indigo-800 font-bold uppercase">BDE Contact</p>
+                        <p className="font-mono text-indigo-950 mt-0.5 font-bold">{selectedLead.bde.mobile || "N/A"}</p>
+                        <p className="text-[11px] text-indigo-700 truncate">{selectedLead.bde.email || ""}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-text-secondary bg-surface p-3 rounded-xl border border-border flex items-center justify-between">
+                      <span>
+                        {selectedLead.source === "manual_admin"
+                          ? "Lead was created manually through the Admin Portal."
+                          : "Lead submitted directly by prospect through the public Website / Storefront onboarding form."}
+                      </span>
+                      <span className="font-mono text-[10px] text-text-muted">
+                        Source: {selectedLead.source || "storefront_modal"}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Territory & Procurement Scope */}

@@ -88,9 +88,14 @@ router.post('/bulk-action',       check_auth, check_permissions(CAN_EDIT), handl
 // ── Preview ───────────────────────────────────────────────────────────────────
 router.get('/preview/:id', check_auth, check_permissions(CAN_VIEW), handler.preview_content);
 
+// ── Public Storefront Access (no auth — for SolarShop India website) ─────────
+router.get('/public/list',        handler.list_public_content);
+router.get('/public/detail/:id',  handler.get_public_content_detail);
+
 // ── Analytics ─────────────────────────────────────────────────────────────────
 // Track event — available to frontend (no admin auth needed, rate-limited in production)
 router.post('/analytics/track', handler.track_analytics);
 router.get('/analytics/:id',    check_auth, check_permissions(CAN_VIEW), handler.get_analytics);
 
 module.exports = router;
+
