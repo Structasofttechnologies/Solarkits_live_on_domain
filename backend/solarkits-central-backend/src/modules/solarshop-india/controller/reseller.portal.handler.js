@@ -1530,16 +1530,21 @@ const get_reseller_bank_details = async (req, res) => {
 // ─── 17. CHECK TERRITORY AVAILABILITY ──────────────────────────────────────────
 /**
  * GET /api/india/v1/reseller/territory/availability
- * Query: { territory_level, country_id?, country_name?, state_id?, state_name?, district_id?, district_name? }
+ * Query: { territory_level?, country_id?, country_name?, state?, state_id?, state_name?, district?, district_id?, district_name?, pincode? }
  */
 const check_territory_availability = async (req, res) => {
   try {
     const {
       territory_level = 'district',
       country_id, country_name,
-      state_id, state_name,
-      district_id, district_name,
-    } = req.query;
+      state, state_id, state_name,
+      district, district_id, district_name,
+      pincode,
+    } = req.query || req.body || {};
+
+    const cleanState = (state || state_name || '').trim();
+    const cleanDistrict = (district || district_name || '').trim();
+    const cleanPincode = (pincode || '').trim();
 
     let targetCountryId = country_id;
     let targetStateId = state_id;
@@ -1552,90 +1557,158 @@ const check_territory_availability = async (req, res) => {
       if (cDoc) targetCountryId = cDoc._id;
     }
 
-    // Resolve State if territory_level is district or state
-    if (!targetStateId && state_name && state_name.trim()) {
-      const cleanState = state_name.trim();
-      const sDoc = await GeoLevel1.findOne({
-        name: new RegExp(cleanState.replace(/[^a-zA-Z0-9\s]/g, ''), 'i'),
+    // Resolve State
+    let stateDoc = null;
+    if (targetStateId && mongoose.Types.ObjectId.isValid(targetStateId)) {
+      stateDoc = await GeoLevel1.findById(targetStateId).lean();
+    } else if (cleanState) {
+      stateDoc = await GeoLevel1.findOne({
+        name: new RegExp('^' + cleanState.replace(/[^a-zA-Z0-9\s]/g, '') + '$', 'i'),
+        deleted_at: null,
       }).lean();
-      if (sDoc) targetStateId = sDoc._id;
+      if (!stateDoc) {
+        stateDoc = await GeoLevel1.findOne({
+          name: new RegExp(cleanState.replace(/[^a-zA-Z0-9\s]/g, ''), 'i'),
+          deleted_at: null,
+        }).lean();
+      }
     }
+    if (stateDoc) targetStateId = stateDoc._id;
 
-    // Resolve District if territory_level is district
-    if (!targetDistrictId && district_name && district_name.trim()) {
-      const cleanDist = district_name.trim();
-      const dQuery = { name: new RegExp(cleanDist.replace(/[^a-zA-Z0-9\s]/g, ''), 'i') };
+    // Resolve District
+    let districtDoc = null;
+    if (targetDistrictId && mongoose.Types.ObjectId.isValid(targetDistrictId)) {
+      districtDoc = await GeoLevel2.findById(targetDistrictId).lean();
+    } else if (cleanDistrict) {
+      const dQuery = {
+        name: new RegExp('^' + cleanDistrict.replace(/[^a-zA-Z0-9\s]/g, '') + '$', 'i'),
+        deleted_at: null,
+      };
       if (targetStateId) dQuery.level_1 = targetStateId;
-      const dDoc = await GeoLevel2.findOne(dQuery).lean();
-      if (dDoc) targetDistrictId = dDoc._id;
+      districtDoc = await GeoLevel2.findOne(dQuery).lean();
+
+      if (!districtDoc && targetStateId) {
+        districtDoc = await GeoLevel2.findOne({
+          name: new RegExp(cleanDistrict.replace(/[^a-zA-Z0-9\s]/g, ''), 'i'),
+          level_1: targetStateId,
+          deleted_at: null,
+        }).lean();
+      }
+    }
+    if (districtDoc) targetDistrictId = districtDoc._id;
+
+    // Check for Active Conflicting Territories
+    let activeDistrictTerritory = null;
+    if (targetDistrictId) {
+      activeDistrictTerritory = await ResellerTerritory.findOne({
+        territory_level: 'district',
+        district_id: targetDistrictId,
+        status: 'active',
+        deleted_at: null,
+      }).populate('reseller_id', 'business_name email activation_status address').lean();
     }
 
-    // Build conflict search query
-    const conflictQuery = {
-      territory_level,
-      status: 'active',
+    let activeStateTerritory = null;
+    if (targetStateId) {
+      activeStateTerritory = await ResellerTerritory.findOne({
+        territory_level: 'state',
+        state_id: targetStateId,
+        is_exclusive: true,
+        status: 'active',
+        deleted_at: null,
+      }).populate('reseller_id', 'business_name email activation_status address').lean();
+    }
+
+    const activeCountryTerritory = await ResellerTerritory.findOne({
+      territory_level: 'country',
       is_exclusive: true,
-      assignment_type: 'primary',
-    };
+      status: 'active',
+      deleted_at: null,
+    }).populate('reseller_id', 'business_name email activation_status address').lean();
 
-    if (territory_level === 'district') {
-      if (targetDistrictId) {
-        conflictQuery.district_id = targetDistrictId;
-      } else {
-        conflictQuery.district_id = null;
-      }
-    } else if (territory_level === 'state') {
-      if (targetStateId) {
-        conflictQuery.state_id = targetStateId;
-      }
-    } else if (territory_level === 'country') {
-      if (targetCountryId) {
-        conflictQuery.country_id = targetCountryId;
-      }
+    let activePincodeTerritory = null;
+    if (cleanPincode) {
+      activePincodeTerritory = await ResellerTerritory.findOne({
+        pincodes: cleanPincode,
+        status: 'active',
+        deleted_at: null,
+      }).populate('reseller_id', 'business_name email activation_status address').lean();
     }
 
-    let existingTerritory = null;
-    if (
-      (territory_level === 'district' && targetDistrictId) ||
-      (territory_level === 'state' && targetStateId) ||
-      (territory_level === 'country' && targetCountryId)
-    ) {
-      existingTerritory = await ResellerTerritory.findOne(conflictQuery)
-        .populate('reseller_id', 'business_name')
-        .lean();
-    }
+    // Check active leads under evaluation
+    const activeLead = cleanDistrict ? await FranchiseLead.findOne({
+      district: new RegExp('^' + cleanDistrict + '$', 'i'),
+      status: { $in: ['NEW', 'CONTACTED', 'IN_DISCUSSION', 'QUALIFIED', 'PROPOSAL_SENT'] },
+      deleted_at: null,
+    }).lean() : null;
 
-    const levelName = territory_level.charAt(0).toUpperCase() + territory_level.slice(1);
-    const locationDisplay = district_name
-      ? (state_name ? `${district_name}, ${state_name}` : district_name)
-      : state_name || country_name || 'India';
+    const assignedTerritory = activeDistrictTerritory || activeStateTerritory || activeCountryTerritory || activePincodeTerritory;
 
-    if (existingTerritory) {
+    const displayState = stateDoc?.name || cleanState || 'State';
+    const displayDistrict = districtDoc?.name || cleanDistrict || 'District';
+    const locationDisplay = cleanDistrict ? `${displayDistrict}, ${displayState}` : displayState;
+
+    if (assignedTerritory && assignedTerritory.reseller_id) {
       return res.status(200).json({
         status: 'success',
         data: {
           is_available: false,
-          territory_level,
-          location_name: locationDisplay,
-          code: 'TERRITORY_RESERVED',
-          message: `${levelName} territory "${locationDisplay}" is already exclusively allocated to an authorized franchisee.`,
-          conflicting_reseller: existingTerritory.reseller_id ? {
-            business_name: existingTerritory.reseller_id.business_name,
-          } : null,
+          status: 'ALLOCATED',
+          state: displayState,
+          district: displayDistrict,
+          pincode: cleanPincode,
+          state_id: targetStateId || null,
+          district_id: targetDistrictId || null,
+          assigned_level: assignedTerritory.territory_level,
+          assigned_partner_type: assignedTerritory.territory_level === 'state' ? 'State Master Partner' : 'District Authorized Franchisee',
+          available_slots: 0,
+          can_join_waitlist: true,
+          hub: `Regional ${displayState} Distribution Hub`,
+          notes: `Territory in ${locationDisplay} is currently assigned to an authorized partner holding exclusive regional dealership rights.`,
+          message: `Franchise territory in ${locationDisplay} is currently allocated. You can join the Priority Waitlist or apply for adjacent uncovered areas.`,
+          conflicting_reseller: {
+            business_name: assignedTerritory.reseller_id.business_name || 'Authorized Partner',
+          },
         },
       });
     }
 
+    if (activeLead) {
+      return res.status(200).json({
+        status: 'success',
+        data: {
+          is_available: true,
+          status: 'LIMITED',
+          state: displayState,
+          district: displayDistrict,
+          pincode: cleanPincode,
+          state_id: targetStateId || null,
+          district_id: targetDistrictId || null,
+          available_slots: 1,
+          can_join_waitlist: false,
+          hub: `Regional ${displayState} Distribution Hub`,
+          notes: `1 exclusive slot remaining in ${locationDisplay}. Submissions undergo fast-track director evaluation within 48 hours.`,
+          message: `Limited territory availability in ${locationDisplay}. High demand in this region.`,
+        },
+      });
+    }
+
+    // Default: 100% Available
     return res.status(200).json({
       status: 'success',
       data: {
         is_available: true,
-        territory_level,
-        location_name: locationDisplay,
-        country_id: targetCountryId,
-        state_id: targetStateId,
-        district_id: targetDistrictId,
-        message: `${levelName} territory "${locationDisplay}" is available for exclusive reservation (1 License policy).`,
+        status: 'AVAILABLE',
+        state: displayState,
+        district: displayDistrict,
+        pincode: cleanPincode,
+        state_id: targetStateId || null,
+        district_id: targetDistrictId || null,
+        available_slots: 1,
+        can_join_waitlist: false,
+        hub: `Regional ${displayState} Distribution Hub`,
+        notes: `Exclusive wholesale & dealership authorization license is 100% open for ${locationDisplay}.`,
+        message: `Franchise Opportunity is Available in ${locationDisplay}!`,
       },
     });
   } catch (error) {
