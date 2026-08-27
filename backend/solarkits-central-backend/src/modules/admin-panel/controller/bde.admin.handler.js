@@ -23,8 +23,8 @@ const { logAudit } = require('../utils/audit.service');
 // Helper to record BDE Activity Log
 async function recordBdeActivity({ bde_id, actor_type = 'admin', actor_id, actor_name, action, details, notes, req }) {
   try {
-    const ip_address = req ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null) : null;
-    const user_agent = req ? req.headers['user-agent'] : null;
+    const ip_address = req?.headers?.['x-forwarded-for'] || req?.socket?.remoteAddress || null;
+    const user_agent = req?.headers?.['user-agent'] || null;
 
     return await BDEActivityLog.create({
       bde_id,
@@ -472,9 +472,9 @@ exports.review_kyc = async (req, res) => {
       kyc.rejection_reason = null;
       await kyc.save();
 
-      // If BDE was in draft/pending, upgrade to kyc_verified
-      if (bde.status === 'draft' || bde.status === 'kyc_pending') {
-        bde.status = 'kyc_verified';
+      // If BDE was in draft/pending/kyc_verified, activate the account
+      if (bde.status === 'draft' || bde.status === 'kyc_pending' || bde.status === 'kyc_verified') {
+        bde.status = 'active';
         await bde.save();
       }
 
@@ -978,6 +978,12 @@ exports.assign_goals = async (req, res) => {
     const currentMonth = month || (new Date().getMonth() + 1);
     const currentQuarter = quarter || (Math.floor(new Date().getMonth() / 3) + 1);
 
+    // Deactivate previous active goals for this BDE
+    await BDEGoal.updateMany(
+      { bde_id, status: 'active' },
+      { $set: { status: 'completed' } }
+    );
+
     const goal = await BDEGoal.create({
       bde_id,
       period_type,
@@ -1052,7 +1058,7 @@ exports.get_goals = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.list_bdes = async (req, res) => {
   try {
-    const {
+    let {
       search,
       state_id,
       district_id,
@@ -1061,15 +1067,28 @@ exports.list_bdes = async (req, res) => {
       status,
       start_date,
       end_date,
+      joining_date_from,
+      joining_date_to,
       page = 1,
       limit = 10,
     } = req.query;
 
+    const cleanVal = (v) => (v && v !== 'undefined' && v !== 'null' && v !== 'all') ? String(v).trim() : null;
+
+    search = cleanVal(search);
+    state_id = cleanVal(state_id);
+    district_id = cleanVal(district_id);
+    plan_id = cleanVal(plan_id);
+    kyc_status = cleanVal(kyc_status);
+    status = cleanVal(status);
+    start_date = cleanVal(start_date) || cleanVal(joining_date_from);
+    end_date = cleanVal(end_date) || cleanVal(joining_date_to);
+
     const query = { deleted_at: null };
 
     // Search by name, email, mobile, BDE ID
-    if (search && search.trim()) {
-      const searchRegex = new RegExp(search.trim(), 'i');
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
       query.$or = [
         { full_name: searchRegex },
         { email: searchRegex },
@@ -1100,8 +1119,8 @@ exports.list_bdes = async (req, res) => {
       if (end_date) query.joining_date.$lte = new Date(end_date);
     }
 
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.max(1, parseInt(limit, 10));
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 10);
     const skip = (pageNum - 1) * limitNum;
 
     const [bdes, total] = await Promise.all([
@@ -1113,12 +1132,13 @@ exports.list_bdes = async (req, res) => {
       BDEProfile.countDocuments(query),
     ]);
 
-    // Attach KYC status, active territory and plan counts
+    // Attach KYC status, active territory, plan counts and goals
     const bdeIds = bdes.map(b => b._id);
-    const [kycDocs, territories, planAssignments] = await Promise.all([
+    const [kycDocs, territories, planAssignments, goals] = await Promise.all([
       BDEKYC.find({ bde_id: { $in: bdeIds } }).lean(),
       BDETerritoryAssignment.find({ bde_id: { $in: bdeIds }, status: 'active' }).lean(),
       BDEPlanAssignment.find({ bde_id: { $in: bdeIds }, status: 'active' }).lean(),
+      BDEGoal.find({ bde_id: { $in: bdeIds }, status: 'active' }).lean(),
     ]);
 
     const kycMap = {};
@@ -1127,6 +1147,9 @@ exports.list_bdes = async (req, res) => {
         kyc_status: k.kyc_status,
         aadhaar_masked: maskAadhaar(k.aadhaar_number),
         pan_masked: maskPan(k.pan_number),
+        aadhaar_document_url: k.aadhaar_document_url,
+        pan_document_url: k.pan_document_url,
+        kyc_remarks: k.kyc_remarks,
       };
     }
 
@@ -1140,11 +1163,17 @@ exports.list_bdes = async (req, res) => {
       planMap[p.bde_id.toString()] = p;
     }
 
+    const goalMap = {};
+    for (const g of goals) {
+      goalMap[g.bde_id.toString()] = g;
+    }
+
     let formatted = bdes.map(b => {
       const bId = b._id.toString();
       const kycInfo = kycMap[bId] || { kyc_status: 'pending', aadhaar_masked: 'XXXXXXXXXXXX', pan_masked: 'XXXXXXXXXX' };
       const territory = territoryMap[bId] || null;
       const plans = planMap[bId] || null;
+      const goal = goalMap[bId] || null;
 
       return {
         id: b._id,
@@ -1161,10 +1190,15 @@ exports.list_bdes = async (req, res) => {
         assigned_districts_count: territory ? territory.district_names.length : 0,
         assigned_plans: plans ? plans.plan_names : [],
         assigned_plans_count: plans ? plans.plan_names.length : 0,
+        goal: goal,
+        current_goal: goal,
+        kyc: kycInfo,
         status: b.status,
         kyc_status: kycInfo.kyc_status,
         aadhaar_masked: kycInfo.aadhaar_masked,
         pan_masked: kycInfo.pan_masked,
+        aadhaar_document_url: kycInfo.aadhaar_document_url,
+        pan_document_url: kycInfo.pan_document_url,
         joining_date: b.joining_date,
         last_login_at: b.last_login_at,
         created_at: b.created_at,

@@ -10,19 +10,57 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetchingGoal, setFetchingGoal] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (isOpen && bde) {
+      setError(null);
+      loadGoalData();
+    }
+  }, [isOpen, bde]);
+
+  const loadGoalData = async () => {
+    // 1. Initial quick population from bde prop if available
+    const existing = bde?.goal || bde?.current_goal;
+    if (existing) {
+      setPeriodType(existing.period_type || 'monthly');
+      setMonthlySignupGoal(existing.monthly_franchisee_signup_goal ?? 10);
+      setQuarterlySignupGoal(existing.quarterly_franchisee_signup_goal ?? 30);
+      setOperationalStoreGoal(existing.operational_store_goal ?? 5);
+      setYear(existing.year || new Date().getFullYear());
+      setNotes(existing.notes || '');
+    } else {
       setPeriodType('monthly');
       setMonthlySignupGoal(10);
       setQuarterlySignupGoal(30);
       setOperationalStoreGoal(5);
       setYear(new Date().getFullYear());
       setNotes('');
-      setError(null);
     }
-  }, [isOpen, bde]);
+
+    // 2. Fetch latest active goal from API to ensure fresh data
+    const bdeId = bde._id || bde.id;
+    if (!bdeId) return;
+
+    try {
+      setFetchingGoal(true);
+      const res = await bdeApi.getGoals(bdeId);
+      const activeGoal = res.data?.current || (res.data?.history && res.data.history[0]);
+      if (activeGoal) {
+        setPeriodType(activeGoal.period_type || 'monthly');
+        setMonthlySignupGoal(activeGoal.monthly_franchisee_signup_goal ?? 10);
+        setQuarterlySignupGoal(activeGoal.quarterly_franchisee_signup_goal ?? 30);
+        setOperationalStoreGoal(activeGoal.operational_store_goal ?? 5);
+        setYear(activeGoal.year || new Date().getFullYear());
+        setNotes(activeGoal.notes || '');
+      }
+    } catch (err) {
+      console.error('Failed to fetch latest goals in GoalModal', err);
+    } finally {
+      setFetchingGoal(false);
+    }
+  };
 
   if (!isOpen || !bde) return null;
 

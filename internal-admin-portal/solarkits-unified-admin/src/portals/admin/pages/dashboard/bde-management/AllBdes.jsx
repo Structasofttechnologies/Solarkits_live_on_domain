@@ -87,18 +87,18 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     }
   };
 
-  const fetchBdes = async (page = 1) => {
+  const fetchBdes = async (page = 1, isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const params = {
         page,
         limit: pagination.limit,
-        search: search || undefined,
+        search: search.trim() || undefined,
         status: statusFilter || undefined,
         kyc_status: kycFilter || undefined,
         state_id: stateFilter || undefined,
         district_id: districtFilter || undefined,
-        joining_date_from: startDateFilter || undefined,
+        start_date: startDateFilter || undefined,
       };
 
       const res = await bdeApi.listBdes(params, moduleUniqueId);
@@ -109,7 +109,7 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     } catch (err) {
       console.error('Failed to load BDEs', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -137,7 +137,7 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
         status: newStatus,
         reason: `Status changed to ${newStatus} by Admin`,
       });
-      fetchBdes(pagination.page);
+      await fetchBdes(pagination.page, true);
       setActionMenuOpenId(null);
     } catch (err) {
       alert(err.response?.data?.message || err.message || 'Failed to update status');
@@ -147,15 +147,12 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
   const handleKycReviewSuccess = async (data) => {
     if (!selectedBde) return;
     try {
-      if (data.action === 'verify') {
-        await bdeApi.verifyKyc(selectedBde._id || selectedBde.id, { remarks: data.remarks });
-      } else {
-        await bdeApi.rejectKyc(selectedBde._id || selectedBde.id, {
-          rejection_reason: data.rejection_reason,
-          remarks: data.remarks,
-        });
-      }
-      fetchBdes(pagination.page);
+      await bdeApi.reviewKyc(selectedBde._id || selectedBde.id, {
+        action: data.action,
+        remarks: data.remarks,
+        rejection_reason: data.rejection_reason,
+      }, moduleUniqueId);
+      await fetchBdes(pagination.page, true);
     } catch (err) {
       alert(err.response?.data?.message || err.message || 'Failed to update KYC');
     }
@@ -364,16 +361,26 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
 
                     {/* Account Status */}
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                         bde.status === 'active'
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                           : bde.status === 'suspended'
                           ? 'bg-rose-100 text-rose-800 border border-rose-300'
                           : bde.status === 'inactive'
                           ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                          : bde.status === 'kyc_verified'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
                           : 'bg-amber-100 text-amber-900 border border-amber-300'
                       }`}>
-                        {bde.status}
+                        {bde.status === 'active'
+                          ? 'Active'
+                          : bde.status === 'suspended'
+                          ? 'Suspended'
+                          : bde.status === 'inactive'
+                          ? 'Inactive'
+                          : bde.status === 'kyc_verified'
+                          ? 'Ready to Activate'
+                          : 'Pending Activation'}
                       </span>
                     </td>
 
@@ -444,7 +451,6 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                                   setSelectedBde(bde);
                                   setResetLoginModalOpen(true);
                                   setActionMenuOpenId(null);
-                                daylight: true
                                 }}
                                 className="w-full px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 font-bold cursor-pointer"
                               >

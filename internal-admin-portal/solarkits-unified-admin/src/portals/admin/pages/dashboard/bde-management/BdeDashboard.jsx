@@ -223,14 +223,26 @@ export default function BdeDashboard({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                       {b.state_name || 'Unassigned'} {b.district_name ? `(${b.district_name})` : ''}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                         b.status === 'active'
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                           : b.status === 'suspended'
                           ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                          : b.status === 'inactive'
+                          ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                          : b.status === 'kyc_verified'
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
                           : 'bg-amber-100 text-amber-900 border border-amber-300'
                       }`}>
-                        {b.status}
+                        {b.status === 'active'
+                          ? 'Active'
+                          : b.status === 'suspended'
+                          ? 'Suspended'
+                          : b.status === 'inactive'
+                          ? 'Inactive'
+                          : b.status === 'kyc_verified'
+                          ? 'Ready to Activate'
+                          : 'Pending Activation'}
                       </span>
                     </td>
                     <td className="px-4 py-3">

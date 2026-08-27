@@ -35,9 +35,10 @@ router.put('/notifications/:id/read', verify_bde_auth, handler.mark_notification
 // Scoped assignments & Physical Store Setup Execution
 router.get('/territory/my', verify_bde_auth, handler.get_my_territory);
 router.get('/territory/availability', verify_bde_auth, require('../../controller/reseller.portal.handler').check_territory_availability);
-router.post('/gst/verify', verify_bde_auth, require('../../controller/reseller.portal.handler').verify_gstin);
 router.get('/plans/my', verify_bde_auth, handler.get_my_plans);
+router.get('/plans', verify_bde_auth, handler.get_my_plans);
 router.get('/goals/my', verify_bde_auth, handler.get_my_goals);
+router.get('/goals', verify_bde_auth, handler.get_my_goals);
 
 // Store Setup & 16-Step Physical Inspection Execution
 router.get('/store-setup', verify_bde_auth, handler.get_my_store_setups);

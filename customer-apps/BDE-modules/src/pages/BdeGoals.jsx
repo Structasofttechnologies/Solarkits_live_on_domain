@@ -13,8 +13,14 @@ export default function BdeGoals() {
   const fetchGoals = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/goals');
-      setGoalData(res.data.data);
+      let res;
+      try {
+        res = await api.get('/goals/my');
+      } catch {
+        res = await api.get('/goals');
+      }
+      const raw = res?.data?.data;
+      setGoalData(raw?.current || raw || {});
     } catch (err) {
       console.error('Failed to load goals', err);
     } finally {
@@ -22,17 +28,17 @@ export default function BdeGoals() {
     }
   };
 
-  const goal = goalData || {};
-  const monthlyGoal = goal.monthly_franchisee_signup_goal || 0;
-  const monthlyAchieved = goal.monthly_signup_achieved || 0;
+  const goal = goalData?.current || goalData || {};
+  const monthlyGoal = goal.monthly_franchisee_signup_goal ?? goal.monthly_signup_goal ?? 0;
+  const monthlyAchieved = goal.monthly_signup_achieved ?? 0;
   const monthlyPct = monthlyGoal > 0 ? Math.min(100, Math.round((monthlyAchieved / monthlyGoal) * 100)) : 0;
 
-  const quarterlyGoal = goal.quarterly_franchisee_signup_goal || 0;
-  const quarterlyAchieved = goal.quarterly_signup_achieved || 0;
+  const quarterlyGoal = goal.quarterly_franchisee_signup_goal ?? goal.quarterly_signup_goal ?? 0;
+  const quarterlyAchieved = goal.quarterly_signup_achieved ?? 0;
   const quarterlyPct = quarterlyGoal > 0 ? Math.min(100, Math.round((quarterlyAchieved / quarterlyGoal) * 100)) : 0;
 
-  const storeGoal = goal.operational_store_goal || 0;
-  const storeAchieved = goal.operational_store_achieved || 0;
+  const storeGoal = goal.operational_store_goal ?? 0;
+  const storeAchieved = goal.operational_store_achieved ?? 0;
   const storePct = storeGoal > 0 ? Math.min(100, Math.round((storeAchieved / storeGoal) * 100)) : 0;
 
   return (

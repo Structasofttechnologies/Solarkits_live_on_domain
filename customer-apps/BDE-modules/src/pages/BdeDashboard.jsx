@@ -64,21 +64,21 @@ export default function BdeDashboard() {
   const kyc = dashboardData?.kyc || {};
   const territory = dashboardData?.territory || null;
   const plans = dashboardData?.plans || null;
-  const goal = dashboardData?.goal || null;
+  const goal = dashboardData?.goal || dashboardData?.goals || null;
   const notifications = dashboardData?.recent_notifications || [];
   const territoryHistory = dashboardData?.territory_history || [];
 
   // Goal calculations
-  const monthlyGoal = goal?.monthly_franchisee_signup_goal || 0;
-  const monthlyAchieved = goal?.monthly_signup_achieved || 0;
+  const monthlyGoal = goal?.monthly_franchisee_signup_goal ?? goal?.monthly_signup_goal ?? 0;
+  const monthlyAchieved = goal?.monthly_signup_achieved ?? 0;
   const monthlyPct = monthlyGoal > 0 ? Math.min(100, Math.round((monthlyAchieved / monthlyGoal) * 100)) : 0;
 
-  const quarterlyGoal = goal?.quarterly_franchisee_signup_goal || 0;
-  const quarterlyAchieved = goal?.quarterly_signup_achieved || 0;
+  const quarterlyGoal = goal?.quarterly_franchisee_signup_goal ?? goal?.quarterly_signup_goal ?? 0;
+  const quarterlyAchieved = goal?.quarterly_signup_achieved ?? 0;
   const quarterlyPct = quarterlyGoal > 0 ? Math.min(100, Math.round((quarterlyAchieved / quarterlyGoal) * 100)) : 0;
 
-  const storeGoal = goal?.operational_store_goal || 0;
-  const storeAchieved = goal?.operational_store_achieved || 0;
+  const storeGoal = goal?.operational_store_goal ?? 0;
+  const storeAchieved = goal?.operational_store_achieved ?? 0;
   const storePct = storeGoal > 0 ? Math.min(100, Math.round((storeAchieved / storeGoal) * 100)) : 0;
 
   return (
@@ -234,23 +234,23 @@ export default function BdeDashboard() {
       </div>
 
       {/* Step 2: Leads Pipeline & Conversion Summary Banner */}
-      <div className="p-6 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 rounded-3xl text-white shadow-xl space-y-4 border border-slate-700/80">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-700/80 pb-4">
+      <div className="p-6 bg-white rounded-3xl text-slate-900 shadow-sm space-y-4 border border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full text-[10px] font-bold uppercase">
+              <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold uppercase">
                 Field Funnel
               </span>
-              <h2 className="text-base font-bold text-white">Lead Generation & Conversion Pipeline</h2>
+              <h2 className="text-base font-bold text-slate-900">Lead Generation & Conversion Pipeline</h2>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
               Live status of prospective franchisees captured in your territory
             </p>
           </div>
 
           <button
             onClick={() => navigate('/leads')}
-            className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 transition self-start sm:self-auto"
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 transition shadow-sm self-start sm:self-auto cursor-pointer"
           >
             <Users className="w-3.5 h-3.5" />
             Manage Pipeline Leads
@@ -258,51 +258,51 @@ export default function BdeDashboard() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 text-center text-xs">
-          <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Leads</span>
-            <span className="text-xl font-black text-white mt-1 block">
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+            <span className="text-[10px] text-slate-500 uppercase font-bold block">Total Leads</span>
+            <span className="text-xl font-black text-slate-900 mt-1 block">
               {dashboardData?.metrics?.total_leads || 0}
             </span>
           </div>
 
-          <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60">
-            <span className="text-[10px] text-cyan-400 uppercase font-semibold block">Contacted</span>
-            <span className="text-xl font-black text-cyan-300 mt-1 block">
+          <div className="p-3 bg-sky-50/70 rounded-2xl border border-sky-100">
+            <span className="text-[10px] text-sky-600 uppercase font-bold block">Contacted</span>
+            <span className="text-xl font-black text-sky-700 mt-1 block">
               {dashboardData?.metrics?.conversion_funnel?.contacted || 0}
             </span>
           </div>
 
-          <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60">
-            <span className="text-[10px] text-teal-400 uppercase font-semibold block">Interested</span>
-            <span className="text-xl font-black text-teal-300 mt-1 block">
+          <div className="p-3 bg-teal-50/70 rounded-2xl border border-teal-100">
+            <span className="text-[10px] text-teal-600 uppercase font-bold block">Interested</span>
+            <span className="text-xl font-black text-teal-700 mt-1 block">
               {dashboardData?.metrics?.conversion_funnel?.interested || 0}
             </span>
           </div>
 
-          <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60">
-            <span className="text-[10px] text-indigo-400 uppercase font-semibold block">Signup Started</span>
-            <span className="text-xl font-black text-indigo-300 mt-1 block">
+          <div className="p-3 bg-indigo-50/70 rounded-2xl border border-indigo-100">
+            <span className="text-[10px] text-indigo-600 uppercase font-bold block">Signup Started</span>
+            <span className="text-xl font-black text-indigo-700 mt-1 block">
               {dashboardData?.metrics?.conversion_funnel?.signup_started || 0}
             </span>
           </div>
 
-          <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60">
-            <span className="text-[10px] text-purple-400 uppercase font-semibold block">Approved</span>
-            <span className="text-xl font-black text-purple-300 mt-1 block">
+          <div className="p-3 bg-purple-50/70 rounded-2xl border border-purple-100">
+            <span className="text-[10px] text-purple-600 uppercase font-bold block">Approved</span>
+            <span className="text-xl font-black text-purple-700 mt-1 block">
               {dashboardData?.metrics?.conversion_funnel?.approved || 0}
             </span>
           </div>
 
-          <div className="p-3 bg-slate-800/60 rounded-2xl border border-slate-700/60">
-            <span className="text-[10px] text-amber-400 uppercase font-semibold block">Agreement</span>
-            <span className="text-xl font-black text-amber-300 mt-1 block">
+          <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-100">
+            <span className="text-[10px] text-amber-700 uppercase font-bold block">Agreement</span>
+            <span className="text-xl font-black text-amber-800 mt-1 block">
               {dashboardData?.metrics?.conversion_funnel?.agreement_signed || 0}
             </span>
           </div>
 
-          <div className="p-3 bg-emerald-500/20 rounded-2xl border border-emerald-500/40">
-            <span className="text-[10px] text-emerald-300 uppercase font-bold block">Fee Paid (Won)</span>
-            <span className="text-xl font-black text-emerald-300 mt-1 block">
+          <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
+            <span className="text-[10px] text-emerald-700 uppercase font-bold block">Fee Paid (Won)</span>
+            <span className="text-xl font-black text-emerald-700 mt-1 block">
               {dashboardData?.metrics?.conversion_funnel?.fee_paid || 0}
             </span>
           </div>

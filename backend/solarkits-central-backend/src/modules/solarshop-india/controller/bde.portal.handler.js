@@ -113,7 +113,7 @@ exports.login_bde = async (req, res) => {
       });
     }
 
-    if (bde.status !== 'active') {
+    if (bde.status !== 'active' && bde.status !== 'kyc_verified') {
       return res.status(403).json({
         status: 'error',
         message: `Your account is currently in "${bde.status}" status. It must be activated by Admin before you can log in.`,
@@ -478,14 +478,25 @@ exports.get_bde_dashboard = async (req, res) => {
           count: assignedPlans.length,
           plan_details: plans?.plan_ids || [],
         },
+        goal: goal ? {
+          ...goal,
+          monthly_franchisee_signup_goal: monthlyGoal,
+          quarterly_franchisee_signup_goal: quarterlyGoal,
+          operational_store_goal: storeGoal,
+          monthly_signup_achieved: monthlyAchieved,
+          quarterly_signup_achieved: quarterlyAchieved,
+          operational_store_achieved: storeAchieved,
+        } : null,
         goals: {
           period_type: goal?.period_type || 'monthly',
           month: goal?.month || (new Date().getMonth() + 1),
           quarter: goal?.quarter || (Math.floor(new Date().getMonth() / 3) + 1),
           year: goal?.year || new Date().getFullYear(),
+          monthly_franchisee_signup_goal: monthlyGoal,
           monthly_signup_goal: monthlyGoal,
           monthly_signup_achieved: monthlyAchieved,
           monthly_progress_percent: monthlyProgressPercent,
+          quarterly_franchisee_signup_goal: quarterlyGoal,
           quarterly_signup_goal: quarterlyGoal,
           quarterly_signup_achieved: quarterlyAchieved,
           quarterly_progress_percent: quarterlyProgressPercent,

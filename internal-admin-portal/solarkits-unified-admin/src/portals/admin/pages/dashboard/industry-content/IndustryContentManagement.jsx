@@ -518,7 +518,7 @@ export default function IndustryContentManagement() {
           {[
             { id: "ALL_MEDIA", label: "All Media Assets", icon: FiGrid },
             { id: "DRAFTS", label: "Drafts & Scheduled", icon: FiClock },
-            { id: "RESELLER_PREVIEW", label: "Reseller Showcase Preview", icon: FiEye },
+            { id: "Franchise_PREVIEW", label: "Franchise Showcase Preview", icon: FiEye },
             { id: "DISTRIBUTOR_PREVIEW", label: "Distributor Showcase Preview", icon: FiMonitor },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -528,7 +528,7 @@ export default function IndustryContentManagement() {
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  if (tab.id === "RESELLER_PREVIEW") setPreviewAudience("RESELLER");
+                  if (tab.id === "Franchise_PREVIEW") setPreviewAudience("RESELLER");
                   if (tab.id === "DISTRIBUTOR_PREVIEW") setPreviewAudience("DISTRIBUTOR");
                 }}
                 className={`
@@ -550,11 +550,10 @@ export default function IndustryContentManagement() {
       {/* ── Alert Toast ──────────────────────────────────────────────────────── */}
       {alert && (
         <div
-          className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-bold shadow-sm animate-in fade-in duration-200 ${
-            alert.type === "success"
-              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : "bg-rose-50 text-rose-800 border-rose-200"
-          }`}
+          className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-bold shadow-sm animate-in fade-in duration-200 ${alert.type === "success"
+            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+            : "bg-rose-50 text-rose-800 border-rose-200"
+            }`}
         >
           {alert.type === "success" ? <FiCheck size={16} /> : <FiAlertCircle size={16} />}
           <span>{alert.message}</span>
@@ -724,18 +723,16 @@ export default function IndustryContentManagement() {
               <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
                 <button
                   onClick={() => setViewMode("GRID")}
-                  className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-                    viewMode === "GRID" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-xs font-bold" : "text-slate-500"
-                  }`}
+                  className={`p-1.5 rounded-xl transition-all cursor-pointer ${viewMode === "GRID" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-xs font-bold" : "text-slate-500"
+                    }`}
                   title="Grid View"
                 >
                   <FiGrid size={15} />
                 </button>
                 <button
                   onClick={() => setViewMode("TABLE")}
-                  className={`p-1.5 rounded-xl transition-all cursor-pointer ${
-                    viewMode === "TABLE" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-xs font-bold" : "text-slate-500"
-                  }`}
+                  className={`p-1.5 rounded-xl transition-all cursor-pointer ${viewMode === "TABLE" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-xs font-bold" : "text-slate-500"
+                    }`}
                   title="List Table View"
                 >
                   <FiList size={15} />
@@ -838,11 +835,10 @@ export default function IndustryContentManagement() {
                 return (
                   <div
                     key={id}
-                    className={`bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border transition-all duration-200 flex flex-col justify-between group ${
-                      isSelected
-                        ? "border-[#185ADB] shadow-md ring-2 ring-[#185ADB]/20"
-                        : "border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md"
-                    }`}
+                    className={`bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border transition-all duration-200 flex flex-col justify-between group ${isSelected
+                      ? "border-[#185ADB] shadow-md ring-2 ring-[#185ADB]/20"
+                      : "border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md"
+                      }`}
                   >
                     {/* Media Thumbnail & Selection */}
                     <div className="relative aspect-video bg-slate-950 overflow-hidden">
@@ -919,17 +915,15 @@ export default function IndustryContentManagement() {
                         {/* Active Toggle Switch */}
                         <button
                           onClick={() => handleToggleActive(item)}
-                          className={`text-xs font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-xl cursor-pointer transition-all ${
-                            item.is_active
-                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                          }`}
+                          className={`text-xs font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-xl cursor-pointer transition-all ${item.is_active
+                            ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
                           title="Toggle Active Status"
                         >
                           <span
-                            className={`w-2 h-2 rounded-full ${
-                              item.is_active ? "bg-emerald-600" : "bg-slate-400"
-                            }`}
+                            className={`w-2 h-2 rounded-full ${item.is_active ? "bg-emerald-600" : "bg-slate-400"
+                              }`}
                           />
                           <span>{item.is_active ? "Active" : "Paused"}</span>
                         </button>
@@ -1014,9 +1008,8 @@ export default function IndustryContentManagement() {
                     return (
                       <tr
                         key={id}
-                        className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${
-                          isSelected ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
-                        }`}
+                        className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${isSelected ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
+                          }`}
                       >
                         <td className="p-4">
                           <input
@@ -1109,11 +1102,10 @@ export default function IndustryContentManagement() {
                   <button
                     key={s.num}
                     onClick={() => setFormStep(s.num)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black transition-all ${
-                      formStep === s.num
-                        ? "bg-[#185ADB] text-white shadow-xs"
-                        : "bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700"
-                    }`}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black transition-all ${formStep === s.num
+                      ? "bg-[#185ADB] text-white shadow-xs"
+                      : "bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700"
+                      }`}
                   >
                     <span>{s.num}.</span>
                     <span className="hidden sm:inline">{s.label}</span>
@@ -1247,11 +1239,10 @@ export default function IndustryContentManagement() {
                           key={aud.key}
                           type="button"
                           onClick={() => setTargetAudience(aud.key)}
-                          className={`p-3 rounded-2xl border text-left cursor-pointer transition-all ${
-                            targetAudience === aud.key
-                              ? "border-[#185ADB] bg-blue-50/50 dark:bg-blue-950/40 text-[#185ADB]"
-                              : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                          }`}
+                          className={`p-3 rounded-2xl border text-left cursor-pointer transition-all ${targetAudience === aud.key
+                            ? "border-[#185ADB] bg-blue-50/50 dark:bg-blue-950/40 text-[#185ADB]"
+                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                            }`}
                         >
                           <div className="text-xs font-black">{aud.label}</div>
                           <div className="text-[10px] text-slate-500">{aud.desc}</div>

@@ -22,12 +22,14 @@ const {
   reassignFranchisee,
 } = require('../services/bde.lead.service');
 
+const cleanVal = (v) => (v && v !== 'undefined' && v !== 'null' && v !== 'all') ? String(v).trim() : null;
+
 /**
  * GET /admin-api/bde-mgmt/leads/list
  */
 const list_bde_leads = async (req, res) => {
   try {
-    const {
+    let {
       page = 1,
       limit = 10,
       search,
@@ -40,10 +42,19 @@ const list_bde_leads = async (req, res) => {
       end_date,
     } = req.query;
 
+    search = cleanVal(search);
+    bde_id = cleanVal(bde_id);
+    state_name = cleanVal(state_name);
+    district_name = cleanVal(district_name);
+    lead_status = cleanVal(lead_status);
+    plan_id = cleanVal(plan_id);
+    start_date = cleanVal(start_date);
+    end_date = cleanVal(end_date);
+
     const query = { deleted_at: null };
 
-    if (search && search.trim()) {
-      const s = search.trim();
+    if (search) {
+      const s = search;
       query.$or = [
         { lead_id: { $regex: s, $options: 'i' } },
         { prospect_name: { $regex: s, $options: 'i' } },
@@ -66,7 +77,9 @@ const list_bde_leads = async (req, res) => {
       if (end_date) query.created_at.$lte = new Date(end_date);
     }
 
-    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+    const skip = (pageNum - 1) * limitNum;
     const [leads, total] = await Promise.all([
       BDELead.find(query)
         .populate('current_bde_id', 'full_name bde_id email mobile')
@@ -164,7 +177,7 @@ const reassign_bde_lead = async (req, res) => {
  */
 const list_attributed_franchisees = async (req, res) => {
   try {
-    const {
+    let {
       page = 1,
       limit = 10,
       search,
@@ -177,12 +190,20 @@ const list_attributed_franchisees = async (req, res) => {
       is_operational,
     } = req.query;
 
+    search = cleanVal(search);
+    bde_id = cleanVal(bde_id);
+    state_name = cleanVal(state_name);
+    district_name = cleanVal(district_name);
+    activation_status = cleanVal(activation_status);
+    agreement_status = cleanVal(agreement_status);
+    fee_payment_status = cleanVal(fee_payment_status);
+
     const query = {
       $or: [{ bde_id: { $ne: null } }, { original_bde_id: { $ne: null } }],
     };
 
-    if (search && search.trim()) {
-      const s = search.trim();
+    if (search) {
+      const s = search;
       query.$and = [
         {
           $or: [
@@ -202,9 +223,13 @@ const list_attributed_franchisees = async (req, res) => {
     if (activation_status) query.activation_status = activation_status;
     if (agreement_status) query.agreement_status = agreement_status;
     if (fee_payment_status) query.fee_payment_status = fee_payment_status;
-    if (is_operational !== undefined && is_operational !== '') query.is_operational = is_operational === 'true';
+    if (is_operational !== undefined && is_operational !== '' && is_operational !== 'undefined' && is_operational !== 'null') {
+      query.is_operational = is_operational === 'true';
+    }
 
-    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+    const skip = (pageNum - 1) * limitNum;
     const [franchisees, total] = await Promise.all([
       Reseller.find(query)
         .populate('bde_id', 'full_name bde_id email mobile')
@@ -212,7 +237,7 @@ const list_attributed_franchisees = async (req, res) => {
         .populate('lead_id', 'lead_id lead_source created_at')
         .sort({ created_at: -1 })
         .skip(skip)
-        .limit(parseInt(limit, 10))
+        .limit(limitNum)
         .lean(),
       Reseller.countDocuments(query),
     ]);
@@ -222,9 +247,9 @@ const list_attributed_franchisees = async (req, res) => {
       data: franchisees,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        pages: Math.ceil(total / parseInt(limit, 10)) || 1,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum) || 1,
       },
     });
   } catch (err) {
@@ -261,7 +286,9 @@ const reassign_franchisee_bde = async (req, res) => {
  */
 const list_territory_exceptions = async (req, res) => {
   try {
-    const { status = 'pending', bde_id } = req.query;
+    let { status = 'pending', bde_id } = req.query;
+    status = cleanVal(status);
+    bde_id = cleanVal(bde_id);
     const query = {};
     if (status) query.status = status;
     if (bde_id) query.bde_id = bde_id;

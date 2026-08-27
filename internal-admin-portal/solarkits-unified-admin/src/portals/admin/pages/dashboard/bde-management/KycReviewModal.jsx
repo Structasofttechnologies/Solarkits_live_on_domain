@@ -10,10 +10,19 @@ export default function KycReviewModal({ isOpen, onClose, bde, onReviewSuccess }
 
   if (!isOpen || !bde) return null;
 
-  const kyc = bde.kyc || {};
+  const kyc = bde.kyc || {
+    aadhaar_masked: bde.aadhaar_masked,
+    pan_masked: bde.pan_masked,
+    aadhaar_document_url: bde.aadhaar_document_url,
+    pan_document_url: bde.pan_document_url,
+    kyc_status: bde.kyc_status,
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setError(null);
     setLoading(true);
 

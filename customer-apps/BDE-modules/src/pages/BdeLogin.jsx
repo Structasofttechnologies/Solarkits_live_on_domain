@@ -21,8 +21,8 @@ export default function BdeLogin() {
   const navigate = useNavigate();
 
   // Pre-filled with verified Demo BDE credentials as requested
-  const [identifier, setIdentifier] = useState('vikram.bde@solarkits.com');
-  const [password, setPassword] = useState('Bde@Test1234');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -31,20 +31,10 @@ export default function BdeLogin() {
 
   const DEMO_ACCOUNTS = [
     {
-      label: 'Vikram Sharma (Pune, MH)',
-      identifier: 'vikram.bde@solarkits.com',
+      label: 'Bloch Navaz',
+      identifier: 'test@gmail.com',
       password: 'Bde@Test1234',
-    },
-    {
-      label: 'BDE Alpha (Mobile: 9876543210)',
-      identifier: '9876543210',
-      password: 'Bde@Test1234',
-    },
-    {
-      label: 'BDE ID (BDE-2026-0001)',
-      identifier: 'BDE-2026-0001',
-      password: 'Bde@Test1234',
-    },
+    }
   ];
 
   const handleFillDemo = (acc) => {
@@ -115,11 +105,10 @@ export default function BdeLogin() {
                 key={idx}
                 type="button"
                 onClick={() => handleFillDemo(acc)}
-                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all ${
-                  identifier === acc.identifier
-                    ? 'bg-[#0575B8] text-white shadow-xs'
-                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                }`}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all ${identifier === acc.identifier
+                  ? 'bg-[#0575B8] text-white shadow-xs'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                  }`}
               >
                 {acc.label}
               </button>
@@ -234,13 +223,7 @@ export default function BdeLogin() {
             <p className="text-slate-600 leading-relaxed">
               For security compliance, password resets for field Business Development Executives are managed by your regional Solarkits Administrator.
             </p>
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1 text-slate-700">
-              <span className="font-bold text-slate-900 block">Default Demo Access:</span>
-              <p className="font-mono text-[11px]">
-                Email: <strong>vikram.bde@solarkits.com</strong><br />
-                Password: <strong>Bde@Test1234</strong>
-              </p>
-            </div>
+
             <div className="flex justify-end pt-2">
               <button
                 type="button"

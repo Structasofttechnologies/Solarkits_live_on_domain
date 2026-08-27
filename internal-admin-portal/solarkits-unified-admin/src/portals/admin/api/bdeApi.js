@@ -16,6 +16,20 @@ const getHeaders = (extra = {}) => ({
   },
 });
 
+// Helper to filter out undefined, null, or empty string values from query params
+const buildCleanQuery = (params = {}, uniqueId = 'ADM_BDE_MGMT', reqFor = 'view') => {
+  const clean = {
+    unique_id: uniqueId,
+    req_for: reqFor,
+  };
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null') {
+      clean[k] = v;
+    }
+  });
+  return new URLSearchParams(clean).toString();
+};
+
 export const bdeApi = {
   // Dashboard stats
   getDashboardStats: async (uniqueId = 'ADM_BDE_MGMT') => {
@@ -25,11 +39,7 @@ export const bdeApi = {
 
   // List & Search BDEs
   listBdes: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/bde/list?${query}`, getHeaders());
     return res.data;
   },
@@ -62,6 +72,16 @@ export const bdeApi = {
   reviewKyc: async (id, data, uniqueId = 'ADM_BDE_MGMT') => {
     const res = await axios.put(`${API_BASE}/bde/kyc/review/${id}?unique_id=${uniqueId}&req_for=edit`, data, getHeaders());
     return res.data;
+  },
+
+  // Verify KYC helper alias
+  verifyKyc: async (id, data = {}, uniqueId = 'ADM_BDE_MGMT') => {
+    return bdeApi.reviewKyc(id, { action: 'verify', ...data }, uniqueId);
+  },
+
+  // Reject KYC helper alias
+  rejectKyc: async (id, data = {}, uniqueId = 'ADM_BDE_MGMT') => {
+    return bdeApi.reviewKyc(id, { action: 'reject', ...data }, uniqueId);
   },
 
   // Change Status (Activate, Suspend, Deactivate)
@@ -111,11 +131,7 @@ export const bdeApi = {
 
   // Activity History
   getActivityHistory: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/bde/activity-history?${query}`, getHeaders());
     return res.data;
   },
@@ -160,11 +176,7 @@ export const bdeApi = {
 
   // ── Step 2: BDE Leads, Attribution, Exceptions & Funnel ───────────────────
   listLeads: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/bde/leads/list?${query}`, getHeaders());
     return res.data;
   },
@@ -180,11 +192,7 @@ export const bdeApi = {
   },
 
   listAttributedFranchisees: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/bde/leads/franchisees?${query}`, getHeaders());
     return res.data;
   },
@@ -195,11 +203,7 @@ export const bdeApi = {
   },
 
   listTerritoryExceptions: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/bde/leads/territory-exceptions?${query}`, getHeaders());
     return res.data;
   },
@@ -210,11 +214,7 @@ export const bdeApi = {
   },
 
   getConversionFunnel: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/bde/leads/conversion-funnel?${query}`, getHeaders());
     return res.data;
   },

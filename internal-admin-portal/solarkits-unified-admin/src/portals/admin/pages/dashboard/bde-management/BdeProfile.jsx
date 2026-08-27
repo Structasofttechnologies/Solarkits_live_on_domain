@@ -39,32 +39,36 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
     fetchBdeDetail();
   }, [id]);
 
-  const fetchBdeDetail = async () => {
+  const fetchBdeDetail = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       setError(null);
       const res = await bdeApi.getBdeDetail(id, moduleUniqueId);
       setBde(res.data);
     } catch (err) {
       console.error('Failed to load BDE profile', err);
-      setError(err.message || 'Failed to load profile');
+      if (!isSilent) setError(err.message || 'Failed to load profile');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   const handleStatusToggle = async (newStatus) => {
     try {
       await bdeApi.changeStatus(id, { status: newStatus, reason: `Admin changed status to ${newStatus}` }, moduleUniqueId);
-      fetchBdeDetail();
+      fetchBdeDetail(true);
     } catch (err) {
       alert(err.response?.data?.message || err.message || 'Failed to update status');
     }
   };
 
   const handleKycReviewSuccess = async (reviewData) => {
-    await bdeApi.reviewKyc(id, reviewData, moduleUniqueId);
-    fetchBdeDetail();
+    try {
+      await bdeApi.reviewKyc(id, reviewData, moduleUniqueId);
+      await fetchBdeDetail(true);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to review KYC');
+    }
   };
 
   if (loading) return <Loader text="Loading BDE Profile..." />;
@@ -126,22 +130,36 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
             <p className="text-xs text-slate-500 font-medium">
               {bde.email} • <span className="font-mono text-slate-700">{bde.mobile_number}</span>
             </p>
-            <div className="flex items-center gap-2 pt-1">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                 bde.status === 'active'
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                   : bde.status === 'suspended'
                   ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                  : bde.status === 'inactive'
+                  ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                  : bde.status === 'kyc_verified'
+                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
                   : 'bg-amber-100 text-amber-900 border border-amber-300'
               }`}>
-                {bde.status}
+                Account: {bde.status === 'active'
+                  ? 'Active'
+                  : bde.status === 'suspended'
+                  ? 'Suspended'
+                  : bde.status === 'inactive'
+                  ? 'Inactive'
+                  : bde.status === 'kyc_verified'
+                  ? 'Ready to Activate'
+                  : 'Pending Activation'}
               </span>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
-                kyc.kyc_status === 'verified'
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                kyc?.kyc_status === 'verified'
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : kyc?.kyc_status === 'rejected'
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
                   : 'bg-amber-100 text-amber-900 border border-amber-300'
               }`}>
-                KYC: {kyc.kyc_status || 'Pending'}
+                KYC: {kyc?.kyc_status === 'verified' ? 'Verified' : kyc?.kyc_status === 'rejected' ? 'Rejected' : 'Pending'}
               </span>
             </div>
           </div>

@@ -16,6 +16,20 @@ const getHeaders = (extra = {}) => ({
   },
 });
 
+// Helper to filter out undefined, null, or empty string values from query params
+const buildCleanQuery = (params = {}, uniqueId = 'ADM_STORE_SETUP', reqFor = 'view') => {
+  const clean = {
+    unique_id: uniqueId,
+    req_for: reqFor,
+  };
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null') {
+      clean[k] = v;
+    }
+  });
+  return new URLSearchParams(clean).toString();
+};
+
 export const storeSetupApi = {
   // Dashboard stats
   getDashboardStats: async (uniqueId = 'ADM_STORE_SETUP') => {
@@ -25,11 +39,7 @@ export const storeSetupApi = {
 
   // List & Search Store Setups
   listStoreSetups: async (params = {}, uniqueId = 'ADM_STORE_SETUP') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/store-setup/list?${query}`, getHeaders());
     return res.data;
   },
@@ -77,11 +87,7 @@ export const storeSetupApi = {
 
   // Expansion Plans
   listExpansionPlans: async (params = {}, uniqueId = 'ADM_STORE_SETUP') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/store-setup/expansion-plans/list?${query}`, getHeaders());
     return res.data;
   },
@@ -93,22 +99,14 @@ export const storeSetupApi = {
 
   // Performance Ranking
   getPerformanceRanking: async (params = {}, uniqueId = 'ADM_STORE_SETUP') => {
-    const query = new URLSearchParams({
-      unique_id: uniqueId,
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, uniqueId, 'view');
     const res = await axios.get(`${API_BASE}/store-setup/performance/ranking?${query}`, getHeaders());
     return res.data;
   },
 
   // List BDE State Coordinators for employee assignment dropdown
   listEmployees: async (params = {}) => {
-    const query = new URLSearchParams({
-      unique_id: 'ADM_STORE_SETUP',
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, 'ADM_STORE_SETUP', 'view');
     try {
       const res = await axios.get(`${API_BASE}/store-setup/coordinators?${query}`, getHeaders());
       return res.data?.coordinators || res.data?.data || [];
@@ -123,11 +121,7 @@ export const storeSetupApi = {
   },
 
   listCoordinators: async (params = {}) => {
-    const query = new URLSearchParams({
-      unique_id: 'ADM_STORE_SETUP',
-      req_for: 'view',
-      ...params,
-    }).toString();
+    const query = buildCleanQuery(params, 'ADM_STORE_SETUP', 'view');
     try {
       const res = await axios.get(`${API_BASE}/store-setup/coordinators?${query}`, getHeaders());
       return res.data?.coordinators || res.data?.data || [];

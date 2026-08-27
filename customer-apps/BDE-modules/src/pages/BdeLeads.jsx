@@ -207,13 +207,47 @@ export default function BdeLeads() {
   };
 
   const kanbanStages = [
-    { id: 'new_lead', title: 'New Leads', color: 'border-blue-200 bg-blue-50/40 text-blue-800' },
-    { id: 'contacted', title: 'Contacted', color: 'border-cyan-200 bg-cyan-50/40 text-cyan-800' },
-    { id: 'interested', title: 'Qualified / Interested', color: 'border-teal-200 bg-teal-50/40 text-teal-800' },
-    { id: 'signup_started', title: 'Signup In Progress', color: 'border-indigo-200 bg-indigo-50/40 text-indigo-800' },
-    { id: 'approved', title: 'Admin Approved', color: 'border-emerald-200 bg-emerald-50/40 text-emerald-800' },
-    { id: 'fee_paid', title: 'Fee Paid & Converted', color: 'border-emerald-300 bg-emerald-100/60 text-emerald-900' },
+    { id: 'new_lead', title: 'New Leads', color: 'border-blue-200 bg-blue-50 text-blue-800' },
+    { id: 'contacted', title: 'Contacted', color: 'border-cyan-200 bg-cyan-50 text-cyan-800' },
+    { id: 'interested', title: 'Qualified / Interested', color: 'border-teal-200 bg-teal-50 text-teal-800' },
+    { id: 'signup_started', title: 'Signup In Progress', color: 'border-indigo-200 bg-indigo-50 text-indigo-800' },
+    { id: 'approved', title: 'Admin Approved', color: 'border-purple-200 bg-purple-50 text-purple-800' },
+    { id: 'fee_paid', title: 'Fee Paid & Converted', color: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
   ];
+
+  const getStageItems = (stageId) => {
+    if (!pipeline?.grouped) {
+      return leads.filter((l) => {
+        if (stageId === 'new_lead') return l.lead_status === 'new_lead';
+        if (stageId === 'contacted') return l.lead_status === 'contacted' || l.lead_status === 'follow_up_scheduled';
+        if (stageId === 'interested') return l.lead_status === 'interested';
+        if (stageId === 'signup_started') return ['signup_started', 'gst_verification_pending', 'admin_review_pending'].includes(l.lead_status);
+        if (stageId === 'approved') return ['approved', 'agreement_pending', 'agreement_signed', 'fee_payment_pending'].includes(l.lead_status);
+        if (stageId === 'fee_paid') return l.lead_status === 'fee_paid';
+        return false;
+      });
+    }
+
+    if (stageId === 'contacted') {
+      return [...(pipeline.grouped['contacted'] || []), ...(pipeline.grouped['follow_up_scheduled'] || [])];
+    }
+    if (stageId === 'signup_started') {
+      return [
+        ...(pipeline.grouped['signup_started'] || []),
+        ...(pipeline.grouped['gst_verification_pending'] || []),
+        ...(pipeline.grouped['admin_review_pending'] || []),
+      ];
+    }
+    if (stageId === 'approved') {
+      return [
+        ...(pipeline.grouped['approved'] || []),
+        ...(pipeline.grouped['agreement_pending'] || []),
+        ...(pipeline.grouped['agreement_signed'] || []),
+        ...(pipeline.grouped['fee_payment_pending'] || []),
+      ];
+    }
+    return pipeline.grouped[stageId] || [];
+  };
 
   return (
     <div className="space-y-6">
@@ -450,39 +484,73 @@ export default function BdeLeads() {
 
       {/* KANBAN PIPELINE BOARD */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 overflow-x-auto pb-4">
-          {kanbanStages.map((st) => {
-            const items = pipeline?.grouped ? pipeline.grouped[st.id] || [] : [];
-            return (
-              <div key={st.id} className="bg-slate-50/80 rounded-2xl p-3 border border-slate-200 space-y-3 min-w-[220px]">
-                <div className={`p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between ${st.color}`}>
-                  <span>{st.title}</span>
-                  <span className="bg-white/80 px-2 py-0.5 rounded-full text-[11px]">{items.length}</span>
-                </div>
+        <div className="w-full">
+          <div className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start select-none">
+            {kanbanStages.map((st) => {
+              const items = getStageItems(st.id);
+              return (
+                <div
+                  key={st.id}
+                  className="w-72 sm:w-80 shrink-0 bg-slate-50 rounded-3xl p-3.5 border border-slate-200 flex flex-col shadow-xs min-h-[460px]"
+                >
+                  {/* Stage Header */}
+                  <div className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-between shadow-2xs ${st.color}`}>
+                    <span className="font-bold tracking-tight">{st.title}</span>
+                    <span className="bg-white px-2.5 py-0.5 rounded-full text-xs font-black shadow-2xs">
+                      {items.length}
+                    </span>
+                  </div>
 
-                <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-                  {items.map((lead) => (
-                    <div
-                      key={lead._id}
-                      onClick={() => handleOpenLeadDetail(lead._id)}
-                      className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-amber-400 cursor-pointer space-y-2 transition-all hover:translate-y-[-1px]"
-                    >
-                      <div>
-                        <span className="text-[10px] font-mono text-amber-600 font-bold block">{lead.lead_id}</span>
-                        <h4 className="font-bold text-slate-900 text-xs leading-tight">{lead.company_name}</h4>
-                        <span className="text-[11px] text-slate-500 block mt-0.5">{lead.prospect_name}</span>
+                  {/* Cards List or Empty Placeholder */}
+                  <div className="flex-1 mt-3 space-y-2.5 overflow-y-auto max-h-[580px] pr-1">
+                    {items.length === 0 ? (
+                      <div className="h-full min-h-[260px] flex flex-col items-center justify-center p-6 text-center border-2 border-dashed border-slate-200/90 rounded-2xl bg-white/50">
+                        <Users className="w-8 h-8 text-slate-300 mb-2" />
+                        <p className="text-xs font-bold text-slate-500">No prospects</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Leads in this stage will appear here</p>
                       </div>
+                    ) : (
+                      items.map((lead) => (
+                        <div
+                          key={lead._id}
+                          onClick={() => handleOpenLeadDetail(lead._id)}
+                          className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md hover:border-amber-400 cursor-pointer space-y-2.5 transition-all group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-[10px] font-mono font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-100">
+                              {lead.lead_id}
+                            </span>
+                            {lead.gst_verified && (
+                              <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
+                                ✓ GST
+                              </span>
+                            )}
+                          </div>
 
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
-                        <span>{lead.district_name}</span>
-                        <span className="font-semibold text-slate-700">{lead.mobile_number}</span>
-                      </div>
-                    </div>
-                  ))}
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-xs leading-snug group-hover:text-blue-600 transition-colors">
+                              {lead.company_name}
+                            </h4>
+                            <span className="text-[11px] text-slate-500 font-medium block mt-0.5">
+                              {lead.prospect_name}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-2 border-t border-slate-100 font-medium">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              {lead.district_name || lead.state_name || 'Territory'}
+                            </span>
+                            <span className="font-mono font-bold text-slate-700">{lead.mobile_number}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 

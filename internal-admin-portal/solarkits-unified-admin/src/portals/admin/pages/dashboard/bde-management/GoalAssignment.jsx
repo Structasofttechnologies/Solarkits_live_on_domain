@@ -90,19 +90,31 @@ export default function GoalAssignment({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                 <h3 className="text-base font-bold text-slate-900 mt-2">{b.full_name}</h3>
                 <p className="text-xs text-slate-500 truncate font-medium">{b.state_name || 'Unassigned Territory'}</p>
 
-                {/* Target Metric Placeholders */}
+                {/* Target Metric Cards */}
                 <div className="mt-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
                   <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Period & Year:</span>
+                    <span className="font-bold text-slate-900 uppercase">
+                      {b.goal?.period_type ? `${b.goal.period_type} (${b.goal.year || new Date().getFullYear()})` : 'Monthly (Current)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 font-medium">Monthly Signups:</span>
-                    <span className="font-bold text-[#0575B8]">Target Tracked</span>
+                    <span className="font-bold text-[#0575B8]">
+                      {b.goal?.monthly_franchisee_signup_goal ?? b.current_goal?.monthly_franchisee_signup_goal ?? 0} Signups
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 font-medium">Quarterly Signups:</span>
-                    <span className="font-bold text-indigo-700">Target Tracked</span>
+                    <span className="font-bold text-indigo-700">
+                      {b.goal?.quarterly_franchisee_signup_goal ?? b.current_goal?.quarterly_franchisee_signup_goal ?? 0} Signups
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 font-medium">Store Setups:</span>
-                    <span className="font-bold text-emerald-700">Active</span>
+                    <span className="font-bold text-emerald-700">
+                      {b.goal?.operational_store_goal ?? b.current_goal?.operational_store_goal ?? 0} Stores
+                    </span>
                   </div>
                 </div>
               </div>
@@ -114,7 +126,7 @@ export default function GoalAssignment({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                 }}
                 className="w-full py-2.5 bg-blue-50 hover:bg-[#0575B8] text-[#0575B8] hover:text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
               >
-                <FaBullseye /> Set & Update Goals
+                <FaBullseye /> {b.goal ? 'Update Goals & Targets' : 'Set Initial Goals'}
               </button>
             </div>
           ))}

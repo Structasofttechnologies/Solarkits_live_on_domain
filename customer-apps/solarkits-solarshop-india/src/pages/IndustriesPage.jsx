@@ -176,7 +176,7 @@ export default function IndustriesPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-                Industry-Specific Solar Solutions
+                Industry-Specific Solar Kits Solutions
               </h1>
               <p className="text-slate-600 text-sm sm:text-base max-w-3xl mt-2 leading-relaxed">
                 Explore high-resolution product posters, technical spec sheets, 4K installation videos, and pre-engineered solar kits tailored for your sector.
