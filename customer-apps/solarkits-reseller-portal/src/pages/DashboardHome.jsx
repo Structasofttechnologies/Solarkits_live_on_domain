@@ -100,7 +100,7 @@ export default function DashboardHome() {
         <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <div className="text-xs font-black text-white/70 uppercase tracking-widest">Reseller Portal</div>
+              <div className="text-xs font-black text-white/70 uppercase tracking-wider">Franchisee Portal</div>
               {territory?.location_name && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white border border-white/30">
                   📍 {territory.location_name}
