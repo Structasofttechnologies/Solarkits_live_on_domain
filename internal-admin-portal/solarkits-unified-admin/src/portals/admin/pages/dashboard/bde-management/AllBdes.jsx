@@ -295,7 +295,7 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                   <th className="px-4 py-3.5">Name & Email</th>
                   <th className="px-4 py-3.5">Mobile</th>
                   <th className="px-4 py-3.5">State & Districts</th>
-                  <th className="px-4 py-3.5">Assigned Plans</th>
+                  {/* <th className="px-4 py-3.5">Assigned Plans</th> */}
                   <th className="px-4 py-3.5">KYC Status</th>
                   <th className="px-4 py-3.5">Account Status</th>
                   <th className="px-4 py-3.5">Joining Date</th>
@@ -335,7 +335,7 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                       </div>
                     </td>
 
-                    {/* Assigned Plans */}
+                    {/* Assigned Plans
                     <td className="px-4 py-3.5 text-xs">
                       {bde.assigned_plans_count > 0 ? (
                         <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 text-[11px]">
@@ -344,43 +344,41 @@ export default function AllBdes({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                       ) : (
                         <span className="text-slate-400 text-xs">None</span>
                       )}
-                    </td>
+                    </td> */}
 
                     {/* KYC Status */}
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${
-                        bde.kyc_status === 'verified'
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : bde.kyc_status === 'rejected'
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${bde.kyc_status === 'verified'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : bde.kyc_status === 'rejected'
                           ? 'bg-rose-100 text-rose-800 border border-rose-300'
                           : 'bg-amber-100 text-amber-900 border border-amber-300'
-                      }`}>
+                        }`}>
                         {bde.kyc_status || 'Pending'}
                       </span>
                     </td>
 
                     {/* Account Status */}
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        bde.status === 'active'
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : bde.status === 'suspended'
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${bde.status === 'active'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : bde.status === 'suspended'
                           ? 'bg-rose-100 text-rose-800 border border-rose-300'
                           : bde.status === 'inactive'
-                          ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                          : bde.status === 'kyc_verified'
-                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                          : 'bg-amber-100 text-amber-900 border border-amber-300'
-                      }`}>
+                            ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                            : bde.status === 'kyc_verified'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                              : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}>
                         {bde.status === 'active'
                           ? 'Active'
                           : bde.status === 'suspended'
-                          ? 'Suspended'
-                          : bde.status === 'inactive'
-                          ? 'Inactive'
-                          : bde.status === 'kyc_verified'
-                          ? 'Ready to Activate'
-                          : 'Pending Activation'}
+                            ? 'Suspended'
+                            : bde.status === 'inactive'
+                              ? 'Inactive'
+                              : bde.status === 'kyc_verified'
+                                ? 'Ready to Activate'
+                                : 'Pending Activation'}
                       </span>
                     </td>
 

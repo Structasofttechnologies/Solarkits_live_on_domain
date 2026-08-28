@@ -247,11 +247,10 @@ export default function Login() {
               setAuthMode("password");
               setError("");
             }}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              authMode === "password"
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${authMode === "password"
                 ? "bg-white text-blue-900 shadow-sm border border-slate-200"
                 : "text-slate-600 hover:text-slate-900"
-            }`}
+              }`}
           >
             <FiLock size={14} className={authMode === "password" ? "text-blue-600" : ""} />
             <span>Password Login</span>
@@ -263,11 +262,10 @@ export default function Login() {
               setAuthMode("pin");
               setError("");
             }}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              authMode === "pin"
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${authMode === "pin"
                 ? "bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-md shadow-blue-700/20"
                 : "text-slate-600 hover:text-slate-900"
-            }`}
+              }`}
           >
             <FiZap size={14} className={authMode === "pin" ? "text-amber-300" : "text-amber-500"} />
             <span>Quick 4-Digit PIN</span>
@@ -604,7 +602,7 @@ export default function Login() {
           </form>
         )}
 
-        <div className="text-center pt-1 text-xs font-medium" style={{ color: "#64748b" }}>
+        {/* <div className="text-center pt-1 text-xs font-medium" style={{ color: "#64748b" }}>
           Don't have a Franchisee Business Account?{" "}
           <Link
             to="/register"
@@ -613,7 +611,7 @@ export default function Login() {
           >
             Apply Now
           </Link>
-        </div>
+        </div> */}
       </motion.div>
     </div>
   );

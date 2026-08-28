@@ -70,7 +70,15 @@ export default function BdeLayout() {
             {profile?.territory && (
               <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200 text-purple-700 rounded-full text-xs font-semibold">
                 <MapPin className="w-3.5 h-3.5" />
-                <span>{profile.territory.state_name} ({profile.territory.district_names?.length || 0} Districts)</span>
+                <span>
+                  {profile.territory.state_name}
+                  {(() => {
+                    const dList = profile.territory.district_names || profile.territory.districts || [];
+                    if (dList.length === 0) return '';
+                    if (dList.length <= 2) return ` (${dList.join(', ')})`;
+                    return ` (${dList.length} Districts)`;
+                  })()}
+                </span>
               </div>
             )}
 

@@ -469,6 +469,7 @@ exports.get_bde_dashboard = async (req, res) => {
         territory: {
           state_name: territory ? territory.state_name : 'No State Assigned',
           districts: assignedDistricts,
+          district_names: assignedDistricts,
           district_count: assignedDistricts.length,
           priority: territory?.priority || 'medium',
           start_date: territory?.assignment_start_date || null,

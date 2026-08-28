@@ -20,7 +20,7 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
   const brandSubtitle = footerConfig?.brand_subtitle || "B2B Franchise Network";
   const description = footerConfig?.description || "India's primary B2B ready-to-sell solar platform and franchise opportunity. Sourcing certified On-Grid, Off-Grid, and Hybrid Solarkits for solar dealers, EPC contractors, and regional distributors.";
   const badges = footerConfig?.badges && footerConfig.badges.length > 0 ? footerConfig.badges : ["ALMM / DCR Certified", "100% GST ITC Claim"];
-  
+
   const deskTitle = footerConfig?.contact?.desk_title || "National B2B Partner Desk";
   const address = footerConfig?.contact?.address || "SolarKits Tech Park, Phase-1 Central Logistics Hub, Pune, Maharashtra 411045";
   const phone = footerConfig?.contact?.phone || "+91 (020) 6789-SOLAR / 1800-SOLAR-KIT";
@@ -28,7 +28,7 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
   const whatsappNum = footerConfig?.contact?.whatsapp_number || "919876543210";
   const whatsappBtnText = footerConfig?.contact?.whatsapp_button_text || "WhatsApp B2B";
   const callbackBtnText = footerConfig?.contact?.callback_button_text || "Request Callback";
-  
+
   const disclaimer = footerConfig?.disclaimer || "Regulatory & Statutory Disclaimer: Solarkits is a registered B2B e-commerce platform and equipment fulfillment provider for authorized dealers, EPC contractors, and franchisees. Revenue figures, margins, and generation estimates shown on this website are illustrative and depend on territory, sales volume, product mix, margins, operating costs, and business performance. Solarkits does not guarantee revenue or profit. PM Surya Ghar Muft Bijli Yojana subsidies are disbursed directly by the Government of India / State DISCOMs subject to applicant eligibility and DISCOM technical feasibility.";
   const copyright = footerConfig?.copyright_text || "© 2026 Solarkits Platform India. All Rights Reserved. Position: One-Stop Solar Business Platform.";
 
@@ -165,18 +165,6 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
               {copyright}
             </div>
 
-            <div className="flex items-center gap-4">
-              <a href="#" className="hover:text-[#0575B8] transition-colors">Privacy Policy</a>
-              <a href="#" className="hover:text-[#0575B8] transition-colors">Terms of Franchise</a>
-              <a href="#" className="hover:text-[#0575B8] transition-colors">GST Compliance</a>
-              <button
-                onClick={scrollToTop}
-                className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors shadow-xs"
-                title="Scroll to Top"
-              >
-                <FiArrowUp size={14} />
-              </button>
-            </div>
           </div>
         </div>
 

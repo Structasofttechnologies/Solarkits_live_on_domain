@@ -108,12 +108,12 @@ const menus = [
           path: "/admin-panel/bde-management/goal-assignment",
           unique_id: "ADM_BDE_MGMT",
         },
-        {
-          name: "BDE Activity History",
-          icon: <FaFileContract />,
-          path: "/admin-panel/bde-management/activity-history",
-          unique_id: "ADM_BDE_MGMT",
-        },
+        // {
+        //   name: "BDE Activity History",
+        //   icon: <FaFileContract />,
+        //   path: "/admin-panel/bde-management/activity-history",
+        //   unique_id: "ADM_BDE_MGMT",
+        // },
       ],
     },
     {

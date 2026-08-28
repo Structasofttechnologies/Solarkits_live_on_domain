@@ -528,6 +528,9 @@ async function reassignLead(leadId, newBdeId, adminUser, reason) {
   }
 
   // Create Reassignment Audit History
+  const reassignedBy = (adminUser && (adminUser._id || adminUser.id)) ? (adminUser._id || adminUser.id) : null;
+  const reassignedByName = (adminUser && (adminUser.name || adminUser.full_name || adminUser.email)) ? (adminUser.name || adminUser.full_name || adminUser.email) : 'Admin';
+
   await BDEReassignmentHistory.create({
     entity_type: 'lead',
     lead_id: lead._id,
@@ -535,8 +538,8 @@ async function reassignLead(leadId, newBdeId, adminUser, reason) {
     previous_bde_name: prevBde ? prevBde.full_name : 'Unknown BDE',
     new_bde_id: newBde._id,
     new_bde_name: newBde.full_name,
-    reassigned_by: adminUser._id || adminUser.id,
-    reassigned_by_name: adminUser.name || adminUser.email || 'Admin',
+    reassigned_by: reassignedBy,
+    reassigned_by_name: reassignedByName,
     reassignment_reason: reason.trim(),
   });
 
@@ -609,6 +612,9 @@ async function reassignFranchisee(resellerId, newBdeId, adminUser, reason) {
     throw err;
   }
 
+  const reassignedBy = (adminUser && (adminUser._id || adminUser.id)) ? (adminUser._id || adminUser.id) : null;
+  const reassignedByName = (adminUser && (adminUser.name || adminUser.full_name || adminUser.email)) ? (adminUser.name || adminUser.full_name || adminUser.email) : 'Admin';
+
   await BDEReassignmentHistory.create({
     entity_type: 'franchisee',
     franchisee_id: reseller._id,
@@ -616,8 +622,8 @@ async function reassignFranchisee(resellerId, newBdeId, adminUser, reason) {
     previous_bde_name: prevBde ? prevBde.full_name : 'Unassigned',
     new_bde_id: newBde._id,
     new_bde_name: newBde.full_name,
-    reassigned_by: adminUser._id || adminUser.id,
-    reassigned_by_name: adminUser.name || adminUser.email || 'Admin',
+    reassigned_by: reassignedBy,
+    reassigned_by_name: reassignedByName,
     reassignment_reason: reason.trim(),
   });
 

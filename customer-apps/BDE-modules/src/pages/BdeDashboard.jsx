@@ -112,7 +112,12 @@ export default function BdeDashboard() {
                 BDE ID: <strong className="text-white">{bde.bde_id}</strong>
               </span>
               <span className="bg-blue-950/60 px-3 py-1 rounded-lg border border-blue-700/40">
-                Territory: <strong className="text-white">{territory?.state_name || 'Assigned State'}</strong> ({territory?.district_names?.length || 0} Districts)
+                Territory: <strong className="text-white">{territory?.state_name || 'Assigned State'}</strong>{(() => {
+                  const dList = territory?.district_names || territory?.districts || [];
+                  if (dList.length === 0) return ' (All Districts)';
+                  if (dList.length <= 2) return ` (${dList.join(', ')})`;
+                  return ` (${dList.length} Districts: ${dList.slice(0, 2).join(', ')} +${dList.length - 2})`;
+                })()}
               </span>
             </div>
           </div>

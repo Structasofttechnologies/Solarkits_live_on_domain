@@ -37,9 +37,10 @@ const schema = new mongoose.Schema({
   reassigned_by: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'cms_users',
-    required: true,
+    required: false,
+    default: null,
   },
-  reassigned_by_name: { type: String, default: null, trim: true },
+  reassigned_by_name: { type: String, default: 'Admin', trim: true },
   reassignment_reason: {
     type: String,
     required: true,
