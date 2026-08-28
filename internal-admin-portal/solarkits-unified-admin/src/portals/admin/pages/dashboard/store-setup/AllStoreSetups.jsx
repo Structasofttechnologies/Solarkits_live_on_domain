@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Store, 
-  Search, 
-  Filter, 
-  RotateCw, 
-  Eye, 
-  Users, 
-  Clock, 
+import {
+  Store,
+  Search,
+  Filter,
+  RotateCw,
+  Eye,
+  Users,
+  Clock,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
@@ -157,7 +157,7 @@ export default function AllStoreSetups({ onViewDetail }) {
                 <th className="py-3.5 px-4">Setup ID & Franchisee</th>
                 <th className="py-3.5 px-4">Location / Territory</th>
                 <th className="py-3.5 px-4">Assigned State Employee</th>
-                <th className="py-3.5 px-4">Attributed BDE</th>
+                <th className="py-3.5 px-4">Assigned BDE</th>
                 <th className="py-3.5 px-4">Timeline & Deadlines</th>
                 <th className="py-3.5 px-4">Progress</th>
                 <th className="py-3.5 px-4">Status</th>
@@ -241,13 +241,12 @@ export default function AllStoreSetups({ onViewDetail }) {
                           </div>
                           <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${
-                                setup.progress_percentage === 100
-                                  ? 'bg-emerald-500'
-                                  : setup.delay_days > 0
+                              className={`h-full rounded-full ${setup.progress_percentage === 100
+                                ? 'bg-emerald-500'
+                                : setup.delay_days > 0
                                   ? 'bg-red-500'
                                   : 'bg-amber-500'
-                              }`}
+                                }`}
                               style={{ width: `${setup.progress_percentage || 0}%` }}
                             />
                           </div>

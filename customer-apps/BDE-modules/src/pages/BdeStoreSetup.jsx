@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Store, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle2, 
-  ShieldCheck, 
-  Zap, 
-  RotateCw, 
-  MapPin, 
-  Users, 
+import {
+  Store,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  ShieldCheck,
+  Zap,
+  RotateCw,
+  MapPin,
+  Users,
   Calendar,
   Eye,
   X,
@@ -300,8 +300,8 @@ export default function BdeStoreSetup() {
     'Final Verification',
   ];
 
-  const filteredChecklist = activeCategory === 'All' 
-    ? checklist 
+  const filteredChecklist = activeCategory === 'All'
+    ? checklist
     : checklist.filter((item) => item.category === activeCategory);
 
   const completedCount = checklist.filter((c) => c.status === 'completed').length;
@@ -319,7 +319,7 @@ export default function BdeStoreSetup() {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 mt-1">
-            Attributed Franchisee Store Setups
+            Franchisee Store Setups
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Inspect physical showroom readiness, upload site inspection photos, and submit verification for partner activation.
@@ -340,7 +340,7 @@ export default function BdeStoreSetup() {
         {/* Card 1: Attributed Stores */}
         <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attributed Stores</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Franchisee Stores</span>
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
               <Store className="w-5 h-5" />
             </div>
@@ -448,21 +448,20 @@ export default function BdeStoreSetup() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleOpenExecutionModal(setup)}
-                        className={`px-4 py-2.5 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${
-                          setup.status === 'admin_verification_pending'
-                            ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200'
-                            : setup.status === 'operations_started'
+                        className={`px-4 py-2.5 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer ${setup.status === 'admin_verification_pending'
+                          ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200'
+                          : setup.status === 'operations_started'
                             ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                             : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-                        }`}
+                          }`}
                       >
                         <Camera className="w-4 h-4" />
                         <span>
                           {setup.status === 'admin_verification_pending'
                             ? 'Under Admin Review (Desk)'
                             : setup.status === 'operations_started'
-                            ? 'View Live Store Desk'
-                            : 'Inspect & Upload Proofs'}
+                              ? 'View Live Store Desk'
+                              : 'Inspect & Upload Proofs'}
                         </span>
                       </button>
                     </div>
@@ -474,13 +473,12 @@ export default function BdeStoreSetup() {
                       <span className="text-slate-400 block mb-1">Checklist Progress</span>
                       <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden mb-1">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            setup.progress_percentage === 100
-                              ? 'bg-emerald-500'
-                              : setup.delay_days > 0
+                          className={`h-full rounded-full transition-all duration-500 ${setup.progress_percentage === 100
+                            ? 'bg-emerald-500'
+                            : setup.delay_days > 0
                               ? 'bg-rose-500'
                               : 'bg-amber-500'
-                          }`}
+                            }`}
                           style={{ width: `${setup.progress_percentage || 0}%` }}
                         />
                       </div>
@@ -601,11 +599,10 @@ export default function BdeStoreSetup() {
 
                 {/* Feedback Notification Banner */}
                 {feedbackMsg.text && (
-                  <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${
-                    feedbackMsg.type === 'error'
-                      ? 'bg-rose-50 border-rose-200 text-rose-800'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  }`}>
+                  <div className={`p-4 rounded-2xl border text-xs flex items-center gap-2.5 ${feedbackMsg.type === 'error'
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    }`}>
                     {feedbackMsg.type === 'error' ? (
                       <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                     ) : (
@@ -621,11 +618,10 @@ export default function BdeStoreSetup() {
                     <button
                       key={cat}
                       onClick={() => setActiveCategory(cat)}
-                      className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
-                        activeCategory === cat
-                          ? 'bg-slate-900 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${activeCategory === cat
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
                     >
                       {cat}
                     </button>
@@ -641,13 +637,12 @@ export default function BdeStoreSetup() {
                     return (
                       <div
                         key={item._id || idx}
-                        className={`p-4 rounded-2xl border transition-all ${
-                          isCompleted
-                            ? 'bg-emerald-50/40 border-emerald-200'
-                            : isSelected
+                        className={`p-4 rounded-2xl border transition-all ${isCompleted
+                          ? 'bg-emerald-50/40 border-emerald-200'
+                          : isSelected
                             ? 'bg-amber-50/70 border-amber-400 ring-2 ring-amber-400/20'
                             : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
-                        }`}
+                          }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 text-xs">
                           <div className="space-y-1 flex-1">
@@ -717,13 +712,12 @@ export default function BdeStoreSetup() {
 
                           {/* Action Button & Status Pill */}
                           <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                              isCompleted
-                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                : item.status === 'in_progress'
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${isCompleted
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : item.status === 'in_progress'
                                 ? 'bg-amber-100 text-amber-900 border-amber-300'
                                 : 'bg-slate-200 text-slate-700 border-slate-300'
-                            }`}>
+                              }`}>
                               {item.status ? item.status.toUpperCase() : 'PENDING'}
                             </span>
 
@@ -739,13 +733,12 @@ export default function BdeStoreSetup() {
                                   setFeedbackMsg({ type: '', text: '' });
                                 }
                               }}
-                              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'bg-slate-900 text-white'
-                                  : isCompleted
+                              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${isSelected
+                                ? 'bg-slate-900 text-white'
+                                : isCompleted
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                   : 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs'
-                              }`}
+                                }`}
                             >
                               <Camera className="w-3.5 h-3.5" />
                               <span>{isCompleted ? 'Re-Upload Photo' : 'Upload Proof Photo'}</span>
@@ -881,11 +874,10 @@ export default function BdeStoreSetup() {
                           setVerificationSetupId(currentSetup?._id);
                           setVerificationModalOpen(true);
                         }}
-                        className={`px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all ${
-                          canSubmitVerification
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
-                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}
+                        className={`px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all ${canSubmitVerification
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          }`}
                       >
                         <Send className="w-4 h-4" />
                         <span>Submit for Admin Verification</span>

@@ -325,7 +325,17 @@ export default function FranchisePlanPurchases() {
 
                     {/* Payment Method */}
                     <td className="px-4 py-3.5 text-text-secondary whitespace-nowrap text-xs">
-                      {p.payment_method}
+                      <div>{p.payment_method}</div>
+                      {p.receipt_url && (
+                        <a
+                          href={p.receipt_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-bold mt-0.5"
+                        >
+                          <MdReceipt size={12} /> Receipt Attached
+                        </a>
+                      )}
                     </td>
 
                     {/* Payment Status */}

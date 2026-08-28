@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Store, 
-  Search, 
-  RotateCw, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  FileCheck, 
-  Zap, 
-  CheckCircle2, 
-  Clock, 
+import {
+  Store,
+  Search,
+  RotateCw,
+  MapPin,
+  Phone,
+  Mail,
+  FileCheck,
+  Zap,
+  CheckCircle2,
+  Clock,
   ShieldCheck,
   Building2
 } from 'lucide-react';
@@ -40,12 +40,12 @@ export default function BdeFranchisees() {
 
   const filtered = search.trim()
     ? franchisees.filter(
-        (f) =>
-          f.business_name?.toLowerCase().includes(search.toLowerCase()) ||
-          f.contact_person?.toLowerCase().includes(search.toLowerCase()) ||
-          f.reseller_code?.toLowerCase().includes(search.toLowerCase()) ||
-          f.mobile?.includes(search)
-      )
+      (f) =>
+        f.business_name?.toLowerCase().includes(search.toLowerCase()) ||
+        f.contact_person?.toLowerCase().includes(search.toLowerCase()) ||
+        f.reseller_code?.toLowerCase().includes(search.toLowerCase()) ||
+        f.mobile?.includes(search)
+    )
     : franchisees;
 
   const totalPartners = franchisees.length;
@@ -58,7 +58,7 @@ export default function BdeFranchisees() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900">
-            Attributed Franchisee Network
+            Franchisee Network
           </h1>
           <p className="text-xs text-slate-500">
             Real-time accounts, onboarding milestones, and operations tracking for your converted franchisee partners.
@@ -78,7 +78,7 @@ export default function BdeFranchisees() {
         {/* Card 1: Total Attributed */}
         <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3 group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Attributed Partners</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Franchisees</span>
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-xs">
               <Building2 className="w-5 h-5" />
             </div>
@@ -162,13 +162,12 @@ export default function BdeFranchisees() {
                       <span className="px-2.5 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 font-mono text-xs font-bold rounded-lg">
                         {f.reseller_code}
                       </span>
-                      <span className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-full border ${
-                        f.is_operational
-                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
-                          : f.activation_status === 'active'
+                      <span className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-full border ${f.is_operational
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
+                        : f.activation_status === 'active'
                           ? 'bg-teal-50 text-teal-700 border-teal-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}>
+                        }`}>
                         {f.is_operational ? 'OPERATIONS LIVE' : f.activation_status.toUpperCase()}
                       </span>
                     </div>

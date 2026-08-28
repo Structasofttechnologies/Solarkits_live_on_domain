@@ -480,6 +480,26 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                           </div>
                         </div>
                       )}
+
+                      {(details?.payment_info?.receipt_url || transaction?.receipt_url) && (
+                        <div className="sm:col-span-2 pt-3 mt-1 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-primary/5 p-3 rounded-xl">
+                          <div>
+                            <span className="text-[11px] font-bold text-text-muted uppercase block">Uploaded Payment Receipt</span>
+                            <span className="text-xs font-semibold text-text-primary truncate max-w-[240px] block">
+                              {details?.payment_info?.receipt_filename || transaction?.receipt_filename || "Payment_Receipt_Proof.pdf"}
+                            </span>
+                          </div>
+                          <a
+                            href={details?.payment_info?.receipt_url || transaction?.receipt_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-xs shrink-0"
+                          >
+                            <MdReceipt size={14} />
+                            View Attached Receipt
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>

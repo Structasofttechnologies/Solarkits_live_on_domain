@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Award, 
-  RotateCw, 
-  Filter, 
-  TrendingUp, 
-  Package, 
-  Zap, 
+import {
+  Award,
+  RotateCw,
+  Filter,
+  TrendingUp,
+  Package,
+  Zap,
   AlertCircle,
   Medal,
   ChevronDown
@@ -65,11 +65,10 @@ export default function FranchiseePerformanceRanking() {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
         <button
           onClick={() => setTierFilter('')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            tierFilter === ''
+          className={`p-4 rounded-2xl border text-left transition-all ${tierFilter === ''
               ? 'bg-slate-900 text-white border-slate-900 shadow-md'
               : 'bg-white text-slate-900 border-slate-200 hover:border-slate-300'
-          }`}
+            }`}
         >
           <span className={`text-[11px] font-semibold block ${tierFilter === '' ? 'text-slate-300' : 'text-slate-500'}`}>
             All Live Stores
@@ -79,11 +78,10 @@ export default function FranchiseePerformanceRanking() {
 
         <button
           onClick={() => setTierFilter('Top Performer')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            tierFilter === 'Top Performer'
+          className={`p-4 rounded-2xl border text-left transition-all ${tierFilter === 'Top Performer'
               ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
               : 'bg-white text-slate-900 border-emerald-200 hover:border-emerald-300'
-          }`}
+            }`}
         >
           <span className={`text-[11px] font-semibold block ${tierFilter === 'Top Performer' ? 'text-emerald-100' : 'text-emerald-600'}`}>
             Top Performers
@@ -93,11 +91,10 @@ export default function FranchiseePerformanceRanking() {
 
         <button
           onClick={() => setTierFilter('Good Performer')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            tierFilter === 'Good Performer'
+          className={`p-4 rounded-2xl border text-left transition-all ${tierFilter === 'Good Performer'
               ? 'bg-teal-600 text-white border-teal-600 shadow-md'
               : 'bg-white text-slate-900 border-teal-200 hover:border-teal-300'
-          }`}
+            }`}
         >
           <span className={`text-[11px] font-semibold block ${tierFilter === 'Good Performer' ? 'text-teal-100' : 'text-teal-600'}`}>
             Good Performers
@@ -107,11 +104,10 @@ export default function FranchiseePerformanceRanking() {
 
         <button
           onClick={() => setTierFilter('Average Performer')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            tierFilter === 'Average Performer'
+          className={`p-4 rounded-2xl border text-left transition-all ${tierFilter === 'Average Performer'
               ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md'
               : 'bg-white text-slate-900 border-amber-200 hover:border-amber-300'
-          }`}
+            }`}
         >
           <span className={`text-[11px] font-semibold block ${tierFilter === 'Average Performer' ? 'text-slate-900' : 'text-amber-600'}`}>
             Average
@@ -121,11 +117,10 @@ export default function FranchiseePerformanceRanking() {
 
         <button
           onClick={() => setTierFilter('Underperformer')}
-          className={`p-4 rounded-2xl border text-left transition-all ${
-            tierFilter === 'Underperformer'
+          className={`p-4 rounded-2xl border text-left transition-all ${tierFilter === 'Underperformer'
               ? 'bg-rose-600 text-white border-rose-600 shadow-md'
               : 'bg-white text-slate-900 border-rose-200 hover:border-rose-300'
-          }`}
+            }`}
         >
           <span className={`text-[11px] font-semibold block ${tierFilter === 'Underperformer' ? 'text-rose-100' : 'text-rose-600'}`}>
             Needs Attention
@@ -143,7 +138,7 @@ export default function FranchiseePerformanceRanking() {
                 <th className="py-3.5 px-4 text-center">Rank</th>
                 <th className="py-3.5 px-4">Franchisee Store</th>
                 <th className="py-3.5 px-4">Territory</th>
-                <th className="py-3.5 px-4">Attributed BDE</th>
+                <th className="py-3.5 px-4">Assigned BDE</th>
                 <th className="py-3.5 px-4 text-right">Orders Volume</th>
                 <th className="py-3.5 px-4 text-right">Kits Ordered</th>
                 <th className="py-3.5 px-4 text-right">Target Achieved</th>
@@ -169,9 +164,8 @@ export default function FranchiseePerformanceRanking() {
                   return (
                     <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
                       <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-xl text-xs border ${
-                          isTop3 ? rankColors[idx] : 'bg-slate-50 text-slate-500 border-slate-200'
-                        }`}>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-xl text-xs border ${isTop3 ? rankColors[idx] : 'bg-slate-50 text-slate-500 border-slate-200'
+                          }`}>
                           {item.rank}
                         </span>
                       </td>
@@ -199,29 +193,27 @@ export default function FranchiseePerformanceRanking() {
                       </td>
 
                       <td className="py-4 px-4 text-right">
-                        <span className={`font-bold font-mono ${
-                          item.achievement_percentage >= 100
+                        <span className={`font-bold font-mono ${item.achievement_percentage >= 100
                             ? 'text-emerald-600'
                             : item.achievement_percentage >= 70
-                            ? 'text-teal-600'
-                            : item.achievement_percentage >= 40
-                            ? 'text-amber-600'
-                            : 'text-rose-600'
-                        }`}>
+                              ? 'text-teal-600'
+                              : item.achievement_percentage >= 40
+                                ? 'text-amber-600'
+                                : 'text-rose-600'
+                          }`}>
                           {item.achievement_percentage || 0}%
                         </span>
                       </td>
 
                       <td className="py-4 px-4 text-center">
-                        <span className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full border ${
-                          item.category === 'Top Performer'
+                        <span className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full border ${item.category === 'Top Performer'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : item.category === 'Good Performer'
-                            ? 'bg-teal-50 text-teal-700 border-teal-200'
-                            : item.category === 'Average Performer'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
-                        }`}>
+                              ? 'bg-teal-50 text-teal-700 border-teal-200'
+                              : item.category === 'Average Performer'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}>
                           {item.category}
                         </span>
                       </td>

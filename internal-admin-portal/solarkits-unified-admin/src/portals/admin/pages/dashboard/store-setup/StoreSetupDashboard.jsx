@@ -170,7 +170,7 @@ export default function StoreSetupDashboard({ onViewAll, onViewDetail }) {
                 <th className="py-3 px-4">Setup ID & Franchisee</th>
                 <th className="py-3 px-4">Location</th>
                 <th className="py-3 px-4">Assigned Employee</th>
-                <th className="py-3 px-4">Attributed BDE</th>
+                <th className="py-3 px-4">Assigned BDE</th>
                 <th className="py-3 px-4">Progress</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-right">Action</th>

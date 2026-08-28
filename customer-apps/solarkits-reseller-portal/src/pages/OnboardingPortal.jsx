@@ -1047,17 +1047,7 @@ export default function OnboardingPortal() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">
-                      Attach Signed Physical Copy (Optional)
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setAgreementFile(e.target.files?.[0] || null)}
-                      className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-[#0575B8] hover:file:bg-blue-200"
-                    />
-                  </div>
+
 
                   <div className="flex items-start gap-2 pt-2">
                     <input
@@ -1152,18 +1142,7 @@ export default function OnboardingPortal() {
                 </p>
               </div>
 
-              {/* Bank Account Details Box */}
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs space-y-2">
-                <h4 className="font-black text-amber-950 flex items-center gap-1.5">
-                  <FiCreditCard className="text-amber-700" size={16} /> Official Company Beneficiary Details
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-slate-700">
-                  <div><strong>Account Name:</strong> SolarKits Clean Energy Solutions Pvt Ltd</div>
-                  <div><strong>Bank:</strong> HDFC Bank Ltd</div>
-                  <div><strong>Account No:</strong> 50200088992211</div>
-                  <div><strong>IFSC Code:</strong> HDFC0001234</div>
-                </div>
-              </div>
+
 
               <form onSubmit={handleUploadReceipt} className="space-y-4 text-xs">
                 {uploadError && (

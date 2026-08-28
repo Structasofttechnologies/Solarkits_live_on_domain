@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Store, 
-  ArrowLeft, 
-  Clock, 
-  Calendar, 
-  Users, 
-  UserCheck, 
-  AlertTriangle, 
-  CheckCircle2, 
-  ShieldCheck, 
-  Zap, 
-  FileText, 
-  ExternalLink, 
+import {
+  Store,
+  ArrowLeft,
+  Clock,
+  Calendar,
+  Users,
+  UserCheck,
+  AlertTriangle,
+  CheckCircle2,
+  ShieldCheck,
+  Zap,
+  FileText,
+  ExternalLink,
   RotateCw,
   Image as ImageIcon,
   Check,
@@ -249,7 +249,7 @@ export default function StoreSetupDetail({ setupId, onBack }) {
 
           <div className="flex flex-wrap items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div>
-              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Attributed BDE</span>
+              <span className="text-[10px] text-slate-400 uppercase font-semibold block">Assigned BDE</span>
               <span className="text-xs font-bold text-slate-800">{setup.current_bde_id?.full_name || 'Direct / HO'}</span>
             </div>
             <div className="h-8 w-px bg-slate-200" />
@@ -276,9 +276,8 @@ export default function StoreSetupDetail({ setupId, onBack }) {
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                setup.progress_percentage === 100 ? 'bg-emerald-500' : 'bg-amber-500'
-              }`}
+              className={`h-full rounded-full transition-all duration-500 ${setup.progress_percentage === 100 ? 'bg-emerald-500' : 'bg-amber-500'
+                }`}
               style={{ width: `${setup.progress_percentage || 0}%` }}
             />
           </div>
@@ -375,13 +374,12 @@ export default function StoreSetupDetail({ setupId, onBack }) {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-bold text-slate-900">{del.reason}</span>
-                    <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${
-                      del.decision_status === 'approved'
+                    <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${del.decision_status === 'approved'
                         ? 'bg-teal-50 text-teal-700 border-teal-200'
                         : del.decision_status === 'rejected'
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-purple-50 text-purple-700 border-purple-200'
-                    }`}>
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-purple-50 text-purple-700 border-purple-200'
+                      }`}>
                       {del.decision_status.toUpperCase()}
                     </span>
                   </div>
@@ -483,13 +481,12 @@ export default function StoreSetupDetail({ setupId, onBack }) {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-full border ${
-                        item.status === 'completed'
+                      <span className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-full border ${item.status === 'completed'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : item.status === 'in_progress'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
                         {item.status.toUpperCase()}
                       </span>
                     </div>
@@ -535,8 +532,8 @@ export default function StoreSetupDetail({ setupId, onBack }) {
                   Select a registered BDE from Admin Panel for <span className="font-semibold text-slate-900">{setup?.franchisee_name}</span> ({setup?.state_name || 'Regional'})
                 </p>
               </div>
-              <button 
-                onClick={() => setAssignModalOpen(false)} 
+              <button
+                onClick={() => setAssignModalOpen(false)}
                 className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -601,16 +598,14 @@ export default function StoreSetupDetail({ setupId, onBack }) {
                           <div
                             key={empId}
                             onClick={() => setSelectedEmployeeId(empId)}
-                            className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-start justify-between gap-3 ${
-                              isSelected
+                            className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-start justify-between gap-3 ${isSelected
                                 ? 'bg-blue-50 border-[#0575B8] shadow-xs'
                                 : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-start gap-3 min-w-0">
-                              <div className={`p-2.5 rounded-xl text-xs font-black shrink-0 ${
-                                isSelected ? 'bg-[#0575B8] text-white' : 'bg-slate-200 text-slate-700'
-                              }`}>
+                              <div className={`p-2.5 rounded-xl text-xs font-black shrink-0 ${isSelected ? 'bg-[#0575B8] text-white' : 'bg-slate-200 text-slate-700'
+                                }`}>
                                 <Users className="w-4 h-4" />
                               </div>
                               <div className="min-w-0 space-y-1">
@@ -640,9 +635,8 @@ export default function StoreSetupDetail({ setupId, onBack }) {
                               </div>
                             </div>
 
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 ${
-                              isSelected ? 'border-[#0575B8] bg-[#0575B8] text-white' : 'border-slate-300 bg-white'
-                            }`}>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-1 ${isSelected ? 'border-[#0575B8] bg-[#0575B8] text-white' : 'border-slate-300 bg-white'
+                              }`}>
                               {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                             </div>
                           </div>

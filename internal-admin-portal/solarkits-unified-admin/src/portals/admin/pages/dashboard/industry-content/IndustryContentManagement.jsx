@@ -495,10 +495,10 @@ export default function IndustryContentManagement() {
               <span className="text-xs text-slate-400 font-bold">Media Showcase v2.0</span>
             </div>
             <h1 className="font-heading font-black text-2xl sm:text-3xl text-slate-900 dark:text-white tracking-tight">
-              Industry Media & Poster Management
+              Industry Wise Media & Poster Management
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-              Curate and publish high-resolution photos, posters, and 4K videos segmented by industry for Resellers and Distributors.
+              Curate, tag and  publish high-resolution photos, posters, and 4K videos segmented by industry for Franchisees and Distributors.
             </p>
           </div>
 
@@ -508,7 +508,7 @@ export default function IndustryContentManagement() {
               className="px-5 py-2.5 rounded-2xl bg-[#185ADB] hover:bg-blue-700 text-white text-xs font-black shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
             >
               <FiPlus size={16} />
-              <span>Create New Media</span>
+              <span>Create New</span>
             </button>
           </div>
         </div>
@@ -518,7 +518,7 @@ export default function IndustryContentManagement() {
           {[
             { id: "ALL_MEDIA", label: "All Media Assets", icon: FiGrid },
             { id: "DRAFTS", label: "Drafts & Scheduled", icon: FiClock },
-            { id: "Franchise_PREVIEW", label: "Franchise Showcase Preview", icon: FiEye },
+            { id: "FRANCHISE_PREVIEW", label: "Franchise Showcase Preview", icon: FiEye },
             { id: "DISTRIBUTOR_PREVIEW", label: "Distributor Showcase Preview", icon: FiMonitor },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -528,7 +528,7 @@ export default function IndustryContentManagement() {
                 key={tab.id}
                 onClick={() => {
                   setActiveTab(tab.id);
-                  if (tab.id === "Franchise_PREVIEW") setPreviewAudience("RESELLER");
+                  if (tab.id === "FRANCHISE_PREVIEW") setPreviewAudience("RESELLER");
                   if (tab.id === "DISTRIBUTOR_PREVIEW") setPreviewAudience("DISTRIBUTOR");
                 }}
                 className={`
@@ -561,7 +561,7 @@ export default function IndustryContentManagement() {
       )}
 
       {/* ── Tab: Live Partner Preview ────────────────────────────────────────── */}
-      {(activeTab === "RESELLER_PREVIEW" || activeTab === "DISTRIBUTOR_PREVIEW") && (
+      {(activeTab === "FRANCHISE_PREVIEW" || activeTab === "RESELLER_PREVIEW" || activeTab === "DISTRIBUTOR_PREVIEW") && (
         <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 space-y-6 border border-slate-800 shadow-xl">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
             <div>
@@ -569,7 +569,7 @@ export default function IndustryContentManagement() {
                 LIVE INTERACTIVE SIMULATION
               </span>
               <h2 className="text-xl font-black font-heading mt-0.5">
-                {activeTab === "RESELLER_PREVIEW" ? "SolarKits Reseller Portal View" : "BOS Kits Distributor Console View"}
+                {(activeTab === "FRANCHISE_PREVIEW" || activeTab === "RESELLER_PREVIEW") ? "SolarKits Franchise Portal View" : "BOS Kits Distributor Console View"}
               </h2>
             </div>
 
@@ -698,7 +698,7 @@ export default function IndustryContentManagement() {
                 className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200"
               >
                 <option value="">All Audiences</option>
-                <option value="RESELLER">Resellers Only</option>
+                <option value="RESELLER">Franchisees Only</option>
                 <option value="DISTRIBUTOR">Distributors Only</option>
                 <option value="BOTH">Both (Shared)</option>
               </select>
@@ -887,7 +887,7 @@ export default function IndustryContentManagement() {
                           {item.content_type}
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-blue-600/80 backdrop-blur-md uppercase tracking-wider">
-                          {item.target_audience}
+                          {item.target_audience === "RESELLER" ? "FRANCHISEE" : item.target_audience}
                         </span>
                       </div>
                     </div>
@@ -1034,7 +1034,7 @@ export default function IndustryContentManagement() {
                           {item.content_type}
                         </td>
                         <td className="p-4 font-bold uppercase text-[10px] text-blue-600">
-                          {item.target_audience}
+                          {item.target_audience === "RESELLER" ? "FRANCHISEE" : item.target_audience}
                         </td>
                         <td className="p-4 text-slate-500 font-bold text-[11px]">
                           {item.placement}
@@ -1231,7 +1231,7 @@ export default function IndustryContentManagement() {
                     </label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { key: "RESELLER", label: "Resellers Only", desc: "SolarKits Reseller App" },
+                        { key: "RESELLER", label: "Franchisees Only", desc: "SolarKits Franchise App" },
                         { key: "DISTRIBUTOR", label: "Distributors Only", desc: "BOS Kits Console" },
                         { key: "BOTH", label: "Both (Shared)", desc: "Show in both portals" },
                       ].map((aud) => (
@@ -1301,7 +1301,7 @@ export default function IndustryContentManagement() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
                       <span className="text-[10px] font-black uppercase text-blue-600">
-                        Reseller CTA Settings
+                        Franchisee CTA Settings
                       </span>
                       <input
                         type="text"

@@ -23,7 +23,7 @@ import {
 import { FaMagnifyingGlassLocation, FaMapLocationDot } from "react-icons/fa6";
 import { BiSolidLayerPlus } from "react-icons/bi";
 import { GoProject } from "react-icons/go";
-import { HiCube, HiOutlineTemplate, HiSparkles } from "react-icons/hi";
+import { HiCube, HiOutlineTemplate } from "react-icons/hi";
 import { FiSmartphone } from "react-icons/fi";
 
 /* ===================== Lazy Pages ===================== */
@@ -38,7 +38,6 @@ const AccountSettings = lazy(() => import("../pages/AccountSettings"));
 const CreateUsers = lazy(() => import("../pages/CreateUsers"));
 const IndustryContentManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryContentManagement"));
 const IndustryTypeManagement = lazy(() => import("../pages/dashboard/industry-content/IndustryTypeManagement"));
-const IndustryThemeConfig = lazy(() => import("../pages/dashboard/industry-content/IndustryThemeConfig"));
 const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-configuration/WebsiteConfiguration"));
 const BdeManagement = lazy(() => import("../pages/dashboard/bde-management/BdeManagement"));
 const StoreSetupManagement = lazy(() => import("../pages/dashboard/store-setup/StoreSetupManagement"));
@@ -310,20 +309,6 @@ const menus = [
       icon: <FaIndustry />,
       path: "/admin-panel/industry-content/cms",
       unique_id: "ADM_INDUSTRY_CONTENT",
-      subMenu: [
-        {
-          name: "Content Management",
-          icon: <HiSparkles />,
-          path: "/admin-panel/industry-content/cms",
-          unique_id: "ADM_INDUSTRY_CONTENT",
-        },
-        {
-          name: "Theme Configuration",
-          icon: <MdTune />,
-          path: "/admin-panel/industry-content/themes",
-          unique_id: "ADM_INDUSTRY_THEMES",
-        },
-      ],
     },
   ],
 ];
@@ -537,7 +522,6 @@ export default function Dashboard() {
                         <Routes>
                           <Route path="/cms" element={<IndustryContentManagement />} />
                           <Route path="/types" element={<IndustryTypeManagement />} />
-                          <Route path="/themes" element={<IndustryThemeConfig />} />
                           <Route path="*" element={<IndustryContentManagement />} />
                         </Routes>
                       </Suspense>

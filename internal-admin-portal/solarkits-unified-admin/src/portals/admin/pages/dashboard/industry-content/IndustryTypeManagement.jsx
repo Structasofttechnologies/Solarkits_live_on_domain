@@ -17,7 +17,6 @@ import {
   FiX,
   FiLayers,
   FiRefreshCw,
-  FiDroplet,
   FiAlertCircle,
 } from "react-icons/fi";
 import { MdOutlineFactory } from "react-icons/md";
@@ -283,15 +282,6 @@ export default function IndustryTypeManagement() {
                         >
                           <FiUsers size={14} />
                         </button>
-
-                        {/* Theme Config */}
-                        <Link
-                          to={`/admin-panel/industry-content/themes?industry_id=${item.id || item._id}`}
-                          className="p-2 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors cursor-pointer"
-                          title="Configure Design Theme"
-                        >
-                          <FiDroplet size={14} />
-                        </Link>
 
                         {/* Edit */}
                         <button

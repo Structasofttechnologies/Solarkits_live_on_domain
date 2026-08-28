@@ -157,10 +157,18 @@ const get_recent_transactions = async (req, res) => {
         .lean();
 
       for (const s of subs) {
-        const paymentStatus = s.status === 'active' ? 'Paid' : s.status === 'grace' ? 'Pending' : s.status === 'cancelled' ? 'Refunded' : 'Failed';
+        let paymentStatus = 'Paid';
+        if (s.status === 'grace' || s.status === 'pending_verification' || s.payment_status === 'receipt_uploaded') {
+          paymentStatus = 'Pending';
+        } else if (s.status === 'cancelled') {
+          paymentStatus = 'Refunded';
+        } else if (s.status === 'expired') {
+          paymentStatus = 'Failed';
+        }
+
         unifiedTransactions.push({
           id: s._id,
-          transaction_id: s.payment_reference || `FPS-${String(s._id).slice(-6).toUpperCase()}`,
+          transaction_id: s.utr_number || s.payment_reference || `FPS-${String(s._id).slice(-6).toUpperCase()}`,
           transaction_type: 'Franchise Plan',
           type_key: 'franchise_plan',
           party_name: s.reseller_id?.business_name || 'Franchise Partner',
@@ -174,9 +182,10 @@ const get_recent_transactions = async (req, res) => {
           franchise_commission: 0,
           payment_status: paymentStatus,
           commission_status: 'N/A',
-          payment_date: s.start_date || s.created_at,
-          payment_method: s.payment_reference ? 'Online / NetBanking' : 'Direct Transfer',
-          utr_reference: s.payment_reference || 'N/A',
+          payment_date: s.payment_date || s.start_date || s.created_at,
+          payment_method: s.payment_method === 'offline_manual' ? 'Offline Bank Transfer / UTR' : s.payment_reference ? 'Online / NetBanking' : 'Direct Transfer',
+          utr_reference: s.utr_number || s.payment_reference || 'N/A',
+          receipt_url: s.receipt_url || '',
           created_at: s.created_at || s.start_date,
           raw_data: s
         });
@@ -327,13 +336,17 @@ const get_franchise_plan_purchases = async (req, res) => {
     let query = {};
     if (status && status !== 'all') {
       const mapStatus = {
-        'paid': ['active'],
-        'pending': ['grace'],
+        'paid': ['active', 'verified'],
+        'pending': ['grace', 'pending_verification', 'receipt_uploaded', 'pending_payment'],
         'refunded': ['cancelled'],
-        'failed': ['expired']
+        'failed': ['expired', 'rejected']
       };
-      if (mapStatus[status.toLowerCase()]) {
-        query.status = { $in: mapStatus[status.toLowerCase()] };
+      const mapped = mapStatus[status.toLowerCase()];
+      if (mapped) {
+        query.$or = [
+          { status: { $in: mapped } },
+          { payment_status: { $in: mapped } }
+        ];
       }
     }
 
@@ -341,7 +354,7 @@ const get_franchise_plan_purchases = async (req, res) => {
       .sort({ created_at: -1 })
       .populate({
         path: 'reseller_id',
-        select: 'business_name mobile email gst_number pan_number address contact_person activation_status'
+        select: 'business_name mobile email gst_number pan_number address contact_person activation_status fee_payment_receipt_url fee_payment_utr'
       })
       .populate({
         path: 'plan_id',
@@ -371,15 +384,20 @@ const get_franchise_plan_purchases = async (req, res) => {
       }
 
       let paymentStatus = 'Paid';
-      if (s.status === 'grace') paymentStatus = 'Pending';
-      else if (s.status === 'cancelled') paymentStatus = 'Refunded';
-      else if (s.status === 'expired') paymentStatus = 'Failed';
+      if (s.status === 'grace' || s.status === 'pending_verification' || s.payment_status === 'receipt_uploaded') {
+        paymentStatus = 'Pending';
+      } else if (s.status === 'cancelled') {
+        paymentStatus = 'Refunded';
+      } else if (s.status === 'expired' || s.payment_status === 'rejected') {
+        paymentStatus = 'Failed';
+      }
 
       const amountPaid = s.amount_paid != null ? Number(s.amount_paid) : (s.plan_id?.one_time_fee || 0);
+      const cleanUtr = s.utr_number || s.payment_reference || s.reseller_id?.fee_payment_utr || '';
 
       return {
         id: s._id,
-        transaction_id: s.payment_reference || `FPS-${String(s._id).slice(-8).toUpperCase()}`,
+        transaction_id: cleanUtr || `FPS-${String(s._id).slice(-8).toUpperCase()}`,
         franchise_partner_name: s.reseller_id?.business_name || 'N/A',
         franchise_partner_id: s.reseller_id?._id,
         contact_person: s.reseller_id?.contact_person || 'Partner Admin',
@@ -393,11 +411,15 @@ const get_franchise_plan_purchases = async (req, res) => {
         territory_level: s.plan_id?.territory_level || 'district',
         plan_amount: amountPaid,
         currency: s.currency || 'INR',
-        payment_date: s.start_date || s.created_at,
+        payment_date: s.payment_date || s.start_date || s.created_at,
         expiry_date: s.expiry_date,
-        payment_method: s.payment_reference?.startsWith('pay_') ? 'Razorpay Gateway' : s.payment_reference ? 'NEFT / RTGS Bank Transfer' : 'Direct Credit',
+        payment_method: s.payment_method === 'offline_manual' ? 'Offline Bank Transfer / UTR' : s.payment_reference?.startsWith('pay_') ? 'Razorpay Gateway' : s.payment_reference ? 'NEFT / RTGS Bank Transfer' : 'Direct Credit',
         payment_status: paymentStatus,
-        payment_reference: s.payment_reference || 'N/A',
+        payment_reference: cleanUtr || 'N/A',
+        utr_number: cleanUtr,
+        receipt_url: s.receipt_url || s.reseller_id?.fee_payment_receipt_url || '',
+        receipt_filename: s.receipt_filename || '',
+        sender_bank_name: s.sender_bank_name || '',
         subscription_status: s.status,
         validity: `${s.plan_id?.validity_value || 1} ${s.plan_id?.validity_unit || 'years'}`,
         created_at: s.created_at
@@ -457,12 +479,45 @@ const update_plan_payment_status = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Plan subscription record not found' });
     }
 
-    if (payment_status === 'Paid') sub.status = 'active';
-    else if (payment_status === 'Pending') sub.status = 'grace';
-    else if (payment_status === 'Refunded') sub.status = 'cancelled';
-    else if (payment_status === 'Failed') sub.status = 'expired';
+    if (payment_status === 'Paid') {
+      sub.status = 'active';
+      sub.payment_status = 'verified';
+      sub.verified_at = new Date();
+      if (sub.reseller_id) {
+        const { Reseller, ResellerTerritory } = require('../../admin-panel/models/india_solarshop_db');
+        const reseller = await Reseller.findById(sub.reseller_id);
+        if (reseller) {
+          reseller.fee_payment_status = 'verified';
+          reseller.fee_payment_verified_at = new Date();
+          reseller.activation_status = 'active';
+          reseller.is_active = true;
+          reseller.reseller_lifecycle_status = 'active';
+          await reseller.save();
+          await ResellerTerritory.updateMany({ reseller_id: reseller._id }, { $set: { status: 'active' } });
+        }
+      }
+    } else if (payment_status === 'Pending') {
+      sub.status = 'pending_verification';
+      sub.payment_status = 'receipt_uploaded';
+    } else if (payment_status === 'Refunded') {
+      sub.status = 'cancelled';
+      sub.payment_status = 'refunded';
+    } else if (payment_status === 'Failed') {
+      sub.status = 'expired';
+      sub.payment_status = 'rejected';
+      if (sub.reseller_id) {
+        const { Reseller } = require('../../admin-panel/models/india_solarshop_db');
+        await Reseller.findByIdAndUpdate(sub.reseller_id, {
+          fee_payment_status: 'rejected',
+          reseller_lifecycle_status: 'fee_payment_pending'
+        });
+      }
+    }
 
-    if (payment_reference) sub.payment_reference = payment_reference;
+    if (payment_reference) {
+      sub.payment_reference = payment_reference;
+      sub.utr_number = payment_reference;
+    }
     await sub.save();
 
     return res.status(200).json({
@@ -945,13 +1000,22 @@ const get_transaction_details = async (req, res) => {
         }
       }
 
-      const pStatus = s.status === 'active' ? 'Paid' : s.status === 'grace' ? 'Pending' : s.status === 'cancelled' ? 'Refunded' : 'Failed';
+      let pStatus = 'Paid';
+      if (s.status === 'grace' || s.status === 'pending_verification' || s.payment_status === 'receipt_uploaded') {
+        pStatus = 'Pending';
+      } else if (s.status === 'cancelled') {
+        pStatus = 'Refunded';
+      } else if (s.status === 'expired' || s.payment_status === 'rejected') {
+        pStatus = 'Failed';
+      }
+
       const amount = s.amount_paid != null ? Number(s.amount_paid) : (s.plan_id?.one_time_fee || 0);
+      const cleanUtr = s.utr_number || s.payment_reference || s.reseller_id?.fee_payment_utr || '';
 
       return res.status(200).json({
         status: 'success',
         data: {
-          transaction_id: s.payment_reference || `FPS-${String(s._id).slice(-8).toUpperCase()}`,
+          transaction_id: cleanUtr || `FPS-${String(s._id).slice(-8).toUpperCase()}`,
           transaction_type: 'Franchise Plan Purchase',
           type_key: 'franchise_plan',
           franchise_details: {
@@ -985,10 +1049,13 @@ const get_transaction_details = async (req, res) => {
           },
           payment_info: {
             payment_status: pStatus,
-            payment_date: s.start_date || s.created_at,
+            payment_date: s.payment_date || s.start_date || s.created_at,
             expiry_date: s.expiry_date,
-            payment_method: s.payment_reference?.startsWith('pay_') ? 'Razorpay Gateway' : 'Bank Transfer / NEFT',
-            utr_reference: s.payment_reference || 'N/A',
+            payment_method: s.payment_method === 'offline_manual' ? 'Offline Bank Transfer / UTR' : s.payment_reference?.startsWith('pay_') ? 'Razorpay Gateway' : 'Bank Transfer / NEFT',
+            utr_reference: cleanUtr || 'N/A',
+            receipt_url: s.receipt_url || s.reseller_id?.fee_payment_receipt_url || '',
+            receipt_filename: s.receipt_filename || '',
+            sender_bank_name: s.sender_bank_name || '',
             subscription_status: s.status
           },
           created_at: s.created_at
