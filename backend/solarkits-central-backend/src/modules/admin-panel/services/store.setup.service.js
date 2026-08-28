@@ -321,8 +321,9 @@ const createStoreSetupForFranchisee = async (resellerId, actorId = null) => {
     created_by: actorId,
   });
 
-  // 5. Create Checklist Snapshot
-  const snapshotItems = (settings.master_checklist_activities || DEFAULT_ACTIVITIES).map(activity => ({
+  // 5. Create Checklist Snapshot from Active Master Activities
+  const activeMasterList = (settings.master_checklist_activities || DEFAULT_ACTIVITIES).filter(a => a.is_active !== false);
+  const snapshotItems = activeMasterList.map(activity => ({
     store_setup_id: newSetup._id,
     franchisee_id: reseller._id,
     activity_code: activity.activity_code,
@@ -331,6 +332,7 @@ const createStoreSetupForFranchisee = async (resellerId, actorId = null) => {
     category: activity.category,
     is_mandatory: activity.is_mandatory !== false,
     proof_required: activity.proof_required !== false,
+    proof_type: activity.proof_type || 'image_or_pdf',
     display_order: activity.display_order || 0,
     status: 'pending',
   }));
@@ -674,6 +676,79 @@ const updateBdePerformanceMetrics = async (bdeId) => {
   };
 };
 
+/**
+ * Get active master checklist template (for public preview or franchisee onboarding Step 6)
+ */
+const getMasterChecklistTemplate = async () => {
+  const settings = await getOrCreateSettings();
+  const activeActivities = (settings.master_checklist_activities || DEFAULT_ACTIVITIES).filter(
+    (a) => a.is_active !== false
+  );
+  return {
+    default_setup_days: settings.default_setup_days || 30,
+    categories: settings.checklist_categories || DEFAULT_CATEGORIES,
+    activities: activeActivities,
+    total_count: activeActivities.length,
+    mandatory_count: activeActivities.filter((a) => a.is_mandatory).length,
+  };
+};
+
+/**
+ * Synchronize all active/in-progress store setups with the current master settings.
+ * Ensures newly created master activities are added to existing setups without overriding finished items.
+ */
+const syncActiveStoreSetupsWithMasterSettings = async (actorId = null) => {
+  const settings = await getOrCreateSettings();
+  const masterActivities = (settings.master_checklist_activities || DEFAULT_ACTIVITIES).filter(
+    (a) => a.is_active !== false
+  );
+
+  const activeSetups = await StoreSetup.find({
+    status: { $in: ['not_started', 'employee_assigned', 'in_progress', 'delayed', 'correction_required', 'admin_verification_pending'] },
+  });
+
+  let syncedCount = 0;
+  let itemsAddedTotal = 0;
+
+  for (const setup of activeSetups) {
+    const existingChecklist = await StoreSetupChecklist.find({ store_setup_id: setup._id });
+    const existingCodes = new Set(existingChecklist.map((c) => c.activity_code));
+
+    const newItemsToInsert = [];
+    for (const master of masterActivities) {
+      if (!existingCodes.has(master.activity_code)) {
+        newItemsToInsert.push({
+          store_setup_id: setup._id,
+          franchisee_id: setup.franchisee_id,
+          activity_code: master.activity_code,
+          title: master.title,
+          description: master.description,
+          category: master.category,
+          is_mandatory: master.is_mandatory !== false,
+          proof_required: master.proof_required !== false,
+          proof_type: master.proof_type || 'image_or_pdf',
+          display_order: master.display_order || 0,
+          status: 'pending',
+        });
+      }
+    }
+
+    if (newItemsToInsert.length > 0) {
+      await StoreSetupChecklist.insertMany(newItemsToInsert);
+      itemsAddedTotal += newItemsToInsert.length;
+    }
+
+    await calculateStoreSetupProgress(setup._id);
+    syncedCount++;
+  }
+
+  return {
+    synced_setups_count: syncedCount,
+    items_added_total: itemsAddedTotal,
+    master_activities_count: masterActivities.length,
+  };
+};
+
 module.exports = {
   getOrCreateSettings,
   createStoreSetupForFranchisee,
@@ -681,4 +756,6 @@ module.exports = {
   evaluateDelaysAndReminders,
   startFranchiseeOperations,
   updateBdePerformanceMetrics,
+  getMasterChecklistTemplate,
+  syncActiveStoreSetupsWithMasterSettings,
 };

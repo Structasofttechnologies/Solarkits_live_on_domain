@@ -3133,6 +3133,21 @@ const get_my_goal_progress = async (req, res) => {
   }
 };
 
+const { getMasterChecklistTemplate } = require('../../admin-panel/services/store.setup.service');
+
+const get_master_store_setup_checklist = async (req, res) => {
+  try {
+    const template = await getMasterChecklistTemplate();
+    return res.status(200).json({
+      status: 'success',
+      data: template,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_master_store_setup_checklist error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to fetch master checklist template' });
+  }
+};
+
 module.exports = {
   register_reseller,
   login_reseller,
@@ -3168,6 +3183,7 @@ module.exports = {
   get_fee_payment_info,
   upload_manual_payment_receipt,
   get_my_store_setup,
+  get_master_store_setup_checklist,
 };
 
 

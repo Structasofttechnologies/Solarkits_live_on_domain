@@ -76,8 +76,9 @@ export default function StoreSetupDetail({ setupId, onBack }) {
   const delays = data?.delays || [];
   const verifications = data?.verifications || [];
 
-  // Group checklist by category
-  const categories = [
+  // Group checklist by category dynamically
+  const distinctCategories = Array.from(new Set(checklist.map((c) => c.category).filter(Boolean)));
+  const categories = distinctCategories.length > 0 ? distinctCategories : [
     'Location and Documentation',
     'Store Infrastructure',
     'Solarkits Branding',
@@ -89,7 +90,7 @@ export default function StoreSetupDetail({ setupId, onBack }) {
   const groupedChecklist = categories.map((cat) => ({
     category: cat,
     items: checklist.filter((c) => c.category === cat),
-  }));
+  })).filter(group => group.items.length > 0);
 
   // Handle Employee Assignment
   const handleAssignSubmit = async (e) => {

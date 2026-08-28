@@ -66,6 +66,7 @@ router.post('/fee-payment/upload-receipt', verify_reseller_auth, kycDocUpload, h
 
 // ── Physical Store Setup & Verification Routes ─────────────────────────────
 router.get('/store-setup/my-setup', verify_reseller_auth, handler.get_my_store_setup);
+router.get('/store-setup/master-checklist', handler.get_master_store_setup_checklist);
 
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);

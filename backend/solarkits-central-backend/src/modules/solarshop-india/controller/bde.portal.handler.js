@@ -562,10 +562,19 @@ exports.mark_notification_read = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.get_my_territory = async (req, res) => {
   try {
-    const territory = await BDETerritoryAssignment.findOne({ bde_id: req.user.id, status: 'active' }).lean();
+    const assignments = await BDETerritoryAssignment.find({ bde_id: req.user.id, status: 'active' }).lean();
+    const primary = assignments[0] || null;
     return res.status(200).json({
       status: 'success',
-      data: territory,
+      data: primary,
+      assignments: assignments,
+      assigned_states: Array.from(new Set(assignments.map(a => a.state_name).filter(Boolean))),
+      assigned_districts: assignments.reduce((acc, a) => {
+        if (a.district_names && a.district_names.length > 0) {
+          acc.push(...a.district_names);
+        }
+        return acc;
+      }, []),
     });
   } catch (error) {
     console.error('[get_my_territory Error]', error);

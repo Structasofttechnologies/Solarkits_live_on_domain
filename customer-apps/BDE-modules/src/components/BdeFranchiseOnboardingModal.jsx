@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X,
   Zap,
@@ -42,12 +42,68 @@ export default function BdeFranchiseOnboardingModal({
   const [step, setStep] = useState(1);
 
   // ── Step 1: Territory & Exclusivity State ────────────────────────────────────
-  const [territoryLevel, setTerritoryLevel] = useState('district'); // 'district' | 'state' | 'master'
-  const defaultState = bdeTerritory?.state_name || 'Maharashtra';
-  const defaultDistrict = (bdeTerritory?.districts && bdeTerritory.districts[0]) || 'Pune';
+  const [internalTerritory, setInternalTerritory] = useState(bdeTerritory);
 
-  const [selectedState, setSelectedState] = useState(defaultState);
-  const [selectedDistrict, setSelectedDistrict] = useState(defaultDistrict);
+  useEffect(() => {
+    if (bdeTerritory) {
+      setInternalTerritory(bdeTerritory);
+    } else {
+      api.get('/territory/my')
+        .then((res) => {
+          if (res.data?.status === 'success') {
+            setInternalTerritory(res.data);
+          }
+        })
+        .catch((err) => console.warn('Territory fetch error', err));
+    }
+  }, [bdeTerritory, isOpen]);
+
+  // Derived Assigned States for this BDE
+  const assignedStates = useMemo(() => {
+    if (internalTerritory?.assigned_states && internalTerritory.assigned_states.length > 0) {
+      return internalTerritory.assigned_states;
+    }
+    if (internalTerritory?.data?.state_name) {
+      return [internalTerritory.data.state_name];
+    }
+    if (internalTerritory?.state_name) {
+      return [internalTerritory.state_name];
+    }
+    return ['Maharashtra'];
+  }, [internalTerritory]);
+
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+
+  // Derived Assigned Districts for the selected state
+  const assignedDistricts = useMemo(() => {
+    if (!selectedState) return [];
+
+    const assignments = internalTerritory?.assignments || (internalTerritory?.data ? [internalTerritory.data] : (internalTerritory?.state_name ? [internalTerritory] : []));
+    const matching = assignments.find(a => a.state_name === selectedState);
+
+    const specificDistricts = matching?.district_names || matching?.districts || internalTerritory?.assigned_districts;
+    if (specificDistricts && specificDistricts.length > 0) {
+      return specificDistricts;
+    }
+    // If state-wide assignment, all districts of this state from database
+    return INDIAN_STATES_DISTRICTS[selectedState] || [];
+  }, [internalTerritory, selectedState]);
+
+  // Auto-sync selectedState and selectedDistrict with assigned territory
+  useEffect(() => {
+    if (assignedStates.length > 0 && (!selectedState || !assignedStates.includes(selectedState))) {
+      setSelectedState(assignedStates[0]);
+    }
+  }, [assignedStates, selectedState]);
+
+  useEffect(() => {
+    if (assignedDistricts.length > 0 && (!selectedDistrict || !assignedDistricts.includes(selectedDistrict))) {
+      setSelectedDistrict(assignedDistricts[0]);
+    }
+  }, [assignedDistricts, selectedDistrict]);
+
+  const [territoryLevel, setTerritoryLevel] = useState('district'); // 'district' | 'state' | 'master'
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availabilityResult, setAvailabilityResult] = useState(null);
 
@@ -379,7 +435,7 @@ export default function BdeFranchiseOnboardingModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 lg:p-7 text-slate-900 font-sans">
       <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-100 overflow-hidden relative flex flex-col max-h-[92vh]">
-        
+
         {/* ── Modal Header (Matches Screenshot Exactly) ────────────────────────── */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
           <div className="flex items-center gap-3.5">
@@ -413,21 +469,19 @@ export default function BdeFranchiseOnboardingModal({
         {/* ── Step Indicator Bar (Matches Screenshot) ──────────────────────────── */}
         <div className="px-6 py-3.5 bg-slate-50/70 border-b border-slate-100">
           <div className="grid grid-cols-5 gap-2 text-center text-xs font-bold">
-            
+
             {/* Step 1 */}
             <div
               onClick={() => step <= 4 && setStep(1)}
-              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all cursor-pointer ${
-                step === 1
-                  ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20'
-                  : step > 1
+              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all cursor-pointer ${step === 1
+                ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20'
+                : step > 1
                   ? 'bg-blue-50 text-blue-700 border border-blue-200'
                   : 'bg-white text-slate-400 border border-slate-200'
-              }`}
+                }`}
             >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                step === 1 ? 'bg-white text-[#0575B8]' : step > 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${step === 1 ? 'bg-white text-[#0575B8]' : step > 1 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
                 {step > 1 ? <Check className="w-3 h-3 stroke-[3]" /> : '1'}
               </span>
               <span className="truncate">Territory Selecti...</span>
@@ -436,17 +490,15 @@ export default function BdeFranchiseOnboardingModal({
             {/* Step 2 */}
             <div
               onClick={() => step <= 4 && step >= 2 && setStep(2)}
-              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${
-                step === 2
-                  ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20 cursor-pointer'
-                  : step > 2
+              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${step === 2
+                ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20 cursor-pointer'
+                : step > 2
                   ? 'bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer'
                   : 'bg-white text-slate-400 border border-slate-200'
-              }`}
+                }`}
             >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                step === 2 ? 'bg-white text-[#0575B8]' : step > 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${step === 2 ? 'bg-white text-[#0575B8]' : step > 2 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
                 {step > 2 ? <Check className="w-3 h-3 stroke-[3]" /> : '2'}
               </span>
               <span className="truncate">GST & Contact...</span>
@@ -455,17 +507,15 @@ export default function BdeFranchiseOnboardingModal({
             {/* Step 3 */}
             <div
               onClick={() => step <= 4 && step >= 3 && setStep(3)}
-              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${
-                step === 3
-                  ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20 cursor-pointer'
-                  : step > 3
+              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${step === 3
+                ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20 cursor-pointer'
+                : step > 3
                   ? 'bg-blue-50 text-blue-700 border border-blue-200 cursor-pointer'
                   : 'bg-white text-slate-400 border border-slate-200'
-              }`}
+                }`}
             >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                step === 3 ? 'bg-white text-[#0575B8]' : step > 3 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${step === 3 ? 'bg-white text-[#0575B8]' : step > 3 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
                 {step > 3 ? <Check className="w-3 h-3 stroke-[3]" /> : '3'}
               </span>
               <span className="truncate">Shop Photos</span>
@@ -474,17 +524,15 @@ export default function BdeFranchiseOnboardingModal({
             {/* Step 4 */}
             <div
               onClick={() => step === 4 && setStep(4)}
-              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${
-                step === 4
-                  ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20 cursor-pointer'
-                  : step > 4
+              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${step === 4
+                ? 'bg-[#0575B8] text-white shadow-sm shadow-blue-500/20 cursor-pointer'
+                : step > 4
                   ? 'bg-blue-50 text-blue-700 border border-blue-200'
                   : 'bg-white text-slate-400 border border-slate-200'
-              }`}
+                }`}
             >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                step === 4 ? 'bg-white text-[#0575B8]' : step > 4 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
-              }`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${step === 4 ? 'bg-white text-[#0575B8]' : step > 4 ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
                 {step > 4 ? <Check className="w-3 h-3 stroke-[3]" /> : '4'}
               </span>
               <span className="truncate">Review & Submit</span>
@@ -492,15 +540,13 @@ export default function BdeFranchiseOnboardingModal({
 
             {/* Step 5 */}
             <div
-              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${
-                step === 5
-                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
-                  : 'bg-white text-slate-400 border border-slate-200'
-              }`}
+              className={`flex items-center justify-center gap-2 py-2 px-2.5 rounded-xl transition-all ${step === 5
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20'
+                : 'bg-white text-slate-400 border border-slate-200'
+                }`}
             >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                step === 5 ? 'bg-white text-emerald-600' : 'bg-slate-200 text-slate-600'
-              }`}>
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${step === 5 ? 'bg-white text-emerald-600' : 'bg-slate-200 text-slate-600'
+                }`}>
                 5
               </span>
               <span className="truncate">Admin Approval</span>
@@ -517,18 +563,23 @@ export default function BdeFranchiseOnboardingModal({
              ═════════════════════════════════════════════════════════════════════ */}
           {step === 1 && (
             <div className="space-y-6">
-              
-              {/* Exclusivity Guarantee Banner */}
-              <div className="p-4 bg-blue-50/80 border border-blue-200/80 rounded-2xl flex items-start gap-3.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#0575B8] flex items-center justify-center shrink-0 mt-0.5">
-                  <Shield className="w-5 h-5" />
+
+              {/* BDE Assigned Territory Scope Banner */}
+              <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3.5 shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <MapPin className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-black text-slate-900">
-                    Strict Territorial Exclusivity Guarantee
-                  </h4>
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    Only <span className="font-bold text-[#0575B8]">one authorized franchisee</span> is assigned per territory. Once approved by Admin, you gain exclusive factory pricing and regional lead allocation.
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-black text-emerald-950">
+                      Assigned Territory: {selectedState} {assignedDistricts.length === 1 ? `• ${selectedDistrict}` : `(${assignedDistricts.length} Assigned Districts)`}
+                    </h4>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 text-[10px] font-black uppercase">
+                      Authorized BDE Scope
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-800 leading-relaxed">
+                    You are authorized to onboard franchise partners exclusively within your assigned territory. Lead creation is strictly restricted to your designated region.
                   </p>
                 </div>
               </div>
@@ -539,15 +590,14 @@ export default function BdeFranchiseOnboardingModal({
                   FRANCHISE TERRITORY LEVEL
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                  
+
                   {/* District Level Card */}
                   <div
                     onClick={() => setTerritoryLevel('district')}
-                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                      territoryLevel === 'district'
-                        ? 'border-[#0575B8] bg-blue-50/40 shadow-md shadow-blue-500/10'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${territoryLevel === 'district'
+                      ? 'border-[#0575B8] bg-blue-50/40 shadow-md shadow-blue-500/10'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
                   >
                     {territoryLevel === 'district' && (
                       <div className="absolute top-3 right-3 text-[#0575B8]">
@@ -562,11 +612,10 @@ export default function BdeFranchiseOnboardingModal({
                   {/* State Level Card */}
                   <div
                     onClick={() => setTerritoryLevel('state')}
-                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                      territoryLevel === 'state'
-                        ? 'border-[#0575B8] bg-blue-50/40 shadow-md shadow-blue-500/10'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${territoryLevel === 'state'
+                      ? 'border-[#0575B8] bg-blue-50/40 shadow-md shadow-blue-500/10'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
                   >
                     {territoryLevel === 'state' && (
                       <div className="absolute top-3 right-3 text-[#0575B8]">
@@ -581,11 +630,10 @@ export default function BdeFranchiseOnboardingModal({
                   {/* Master Franchise Card */}
                   <div
                     onClick={() => setTerritoryLevel('master')}
-                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
-                      territoryLevel === 'master'
-                        ? 'border-[#0575B8] bg-blue-50/40 shadow-md shadow-blue-500/10'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${territoryLevel === 'master'
+                      ? 'border-[#0575B8] bg-blue-50/40 shadow-md shadow-blue-500/10'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
                   >
                     {territoryLevel === 'master' && (
                       <div className="absolute top-3 right-3 text-[#0575B8]">
@@ -600,46 +648,78 @@ export default function BdeFranchiseOnboardingModal({
                 </div>
               </div>
 
-              {/* State & District Dropdowns */}
+              {/* State & District Inputs (Restricted to Assigned Territory) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* State Selection / Locked View */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    Target State <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                    <span>Target State <span className="text-red-500">*</span></span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      ✓ Assigned State
+                    </span>
                   </label>
-                  <select
-                    value={selectedState}
-                    onChange={(e) => setSelectedState(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0575B8] focus:bg-white"
-                  >
-                    {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
-                      <option key={st} value={st}>
-                        {st}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {territoryLevel === 'district' && (
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                      Target District <span className="text-red-500">*</span>
-                    </label>
+                  {assignedStates.length <= 1 ? (
+                    <div className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 flex items-center justify-between shadow-xs">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-emerald-600" />
+                        <span>{selectedState || assignedStates[0]}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        Territory Fixed
+                      </span>
+                    </div>
+                  ) : (
                     <select
-                      value={selectedDistrict}
-                      onChange={(e) => setSelectedDistrict(e.target.value)}
+                      value={selectedState}
+                      onChange={(e) => setSelectedState(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0575B8] focus:bg-white"
                     >
-                      {(INDIAN_STATES_DISTRICTS[selectedState] || []).map((dst) => (
-                        <option key={dst} value={dst}>
-                          {dst}
+                      {assignedStates.map((st) => (
+                        <option key={st} value={st}>
+                          {st} (Assigned)
                         </option>
                       ))}
                     </select>
+                  )}
+                </div>
+
+                {/* District Selection / Locked View */}
+                {territoryLevel === 'district' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                      <span>Target District <span className="text-red-500">*</span></span>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        ✓ Assigned District
+                      </span>
+                    </label>
+                    {assignedDistricts.length <= 1 ? (
+                      <div className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 flex items-center justify-between shadow-xs">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-emerald-600" />
+                          <span>{selectedDistrict || assignedDistricts[0]}</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                          District Fixed
+                        </span>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedDistrict}
+                        onChange={(e) => setSelectedDistrict(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0575B8] focus:bg-white"
+                      >
+                        {assignedDistricts.map((dst) => (
+                          <option key={dst} value={dst}>
+                            {dst} (Assigned)
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* Live Territory Availability Banner (Matches Screenshot) */}
+              {/* Live Territory Availability Banner */}
               <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex items-start gap-3.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
                   <CheckCircle2 className="w-5 h-5" />
@@ -660,12 +740,12 @@ export default function BdeFranchiseOnboardingModal({
               {/* BDE Assigned Territory Context Indicator */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-slate-500" />
+                  <MapPin className="w-4 h-4 text-emerald-600" />
                   <span className="text-slate-600">
-                    BDE Scope Status:
+                    Territory Verification Status:
                   </span>
-                  <span className={`font-bold ${isInsideBdeTerritory() ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {isInsideBdeTerritory() ? '✓ Within Assigned Territory' : '⚠️ Outside Designated Territory (Requires Exception Review)'}
+                  <span className="font-bold text-emerald-600">
+                    ✓ Strictly Confined to Authorized BDE Territory ({selectedState} • {selectedDistrict})
                   </span>
                 </div>
               </div>
@@ -1128,7 +1208,7 @@ export default function BdeFranchiseOnboardingModal({
              ═════════════════════════════════════════════════════════════════════ */}
           {step === 5 && (
             <div className="space-y-6 py-2 text-center">
-              
+
               {/* Success Badge */}
               <div className="w-16 h-16 bg-emerald-100 rounded-3xl flex items-center justify-center mx-auto text-emerald-600 shadow-lg shadow-emerald-500/20">
                 <CheckCircle2 className="w-10 h-10" />

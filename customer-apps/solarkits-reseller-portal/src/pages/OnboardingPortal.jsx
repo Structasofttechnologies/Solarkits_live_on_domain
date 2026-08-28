@@ -70,6 +70,7 @@ export default function OnboardingPortal() {
   const [receiptFile, setReceiptFile] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [masterChecklist, setMasterChecklist] = useState([]);
 
   const fetchStoreSetup = useCallback(async () => {
     try {
@@ -79,6 +80,15 @@ export default function OnboardingPortal() {
       }
     } catch (err) {
       console.warn("Failed to fetch store setup:", err);
+    }
+
+    try {
+      const resMaster = await api.get("/india/v1/reseller/store-setup/master-checklist");
+      if (resMaster.data?.status === "success" && resMaster.data?.data?.activities) {
+        setMasterChecklist(resMaster.data.data.activities);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch master checklist:", err);
     }
   }, []);
 
@@ -263,7 +273,9 @@ export default function OnboardingPortal() {
 
   // Store Setup Evaluation
   const setup = storeSetupData?.setup;
-  const checklist = storeSetupData?.checklist || [];
+  const checklist = (storeSetupData?.checklist && storeSetupData.checklist.length > 0)
+    ? storeSetupData.checklist
+    : masterChecklist;
   const isStoreSetupCompleted = Boolean(
     setup && (
       setup.status === "admin_verified" ||
@@ -1281,7 +1293,7 @@ export default function OnboardingPortal() {
                   Franchise Store Execution & Inspection Tracker
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  16-step physical showroom setup, branding display, inverter setup, and regional state coordinator inspection.
+                  {checklist.length}-step physical showroom setup, branding display, inverter setup, and regional state coordinator inspection.
                 </p>
               </div>
 
@@ -1311,7 +1323,7 @@ export default function OnboardingPortal() {
                 <div>
                   <span className="text-slate-400 font-bold uppercase text-[10px] block">Checklist Progress</span>
                   <strong className="text-amber-700 text-sm block mt-0.5">
-                    {setup?.completed_activities || 0} of {setup?.total_activities || 16} Steps Completed
+                    {setup?.completed_activities || 0} of {setup?.total_activities || checklist.length} Steps Completed
                   </strong>
                   <div className="w-full bg-slate-200 rounded-full h-2 mt-1.5 overflow-hidden">
                     <div
@@ -1322,10 +1334,10 @@ export default function OnboardingPortal() {
                 </div>
               </div>
 
-              {/* 16-Step Checklist View */}
+              {/* Dynamic Checklist View */}
               <div className="space-y-3">
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center justify-between">
-                  <span>Physical Store Setup Checklist Items ({checklist.length || 16})</span>
+                  <span>Physical Store Setup Checklist Items ({checklist.length})</span>
                   <span className="text-slate-500 font-medium text-[11px]">Assisted by State Coordinator</span>
                 </h4>
 

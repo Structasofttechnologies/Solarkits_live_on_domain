@@ -27,6 +27,7 @@ const {
   startFranchiseeOperations,
   evaluateDelaysAndReminders,
   updateBdePerformanceMetrics,
+  syncActiveStoreSetupsWithMasterSettings,
 } = require('../services/store.setup.service');
 
 // ── 1. DASHBOARD STATS ────────────────────────────────────────────────────────
@@ -542,9 +543,35 @@ const update_settings = async (req, res) => {
     settings.updated_by = req.user?.id || req.user?._id || null;
     await settings.save();
 
-    return res.json({ status: 'success', message: 'Store setup settings updated successfully', data: settings });
+    // Auto-sync active setups if requested
+    let syncResult = null;
+    if (req.body.auto_sync_active_setups) {
+      syncResult = await syncActiveStoreSetupsWithMasterSettings(req.user?.id || req.user?._id || null);
+    }
+
+    return res.json({
+      status: 'success',
+      message: 'Store setup document settings updated successfully' + (syncResult ? ` and synced across ${syncResult.synced_setups_count} active store setup(s).` : ''),
+      data: settings,
+      sync_result: syncResult,
+    });
   } catch (error) {
     console.error('[store.setup.admin] update_settings error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
+  }
+};
+
+const sync_active_setups = async (req, res) => {
+  try {
+    const actorId = req.user?.id || req.user?._id || null;
+    const syncResult = await syncActiveStoreSetupsWithMasterSettings(actorId);
+    return res.json({
+      status: 'success',
+      message: `Master document settings synced across ${syncResult.synced_setups_count} active store setup(s). Added ${syncResult.items_added_total} new checklist item(s).`,
+      data: syncResult,
+    });
+  } catch (error) {
+    console.error('[store.setup.admin] sync_active_setups error:', error);
     return res.status(500).json({ status: 'error', message: error.message || 'Internal server error' });
   }
 };
@@ -773,6 +800,7 @@ module.exports = {
   start_operations,
   get_settings,
   update_settings,
+  sync_active_setups,
   list_expansion_plans,
   create_expansion_plan,
   get_franchisee_performance_ranking,

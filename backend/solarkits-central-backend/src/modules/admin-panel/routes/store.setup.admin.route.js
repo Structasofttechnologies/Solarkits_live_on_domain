@@ -95,6 +95,13 @@ router.put(
   adminHandler.update_settings
 );
 
+router.post(
+  '/settings/sync-active',
+  check_auth,
+  check_permissions([{ unique_code: 'ADM_STORE_SETUP', permissions: ['edit'] }]),
+  adminHandler.sync_active_setups
+);
+
 // ── EXPANSION PLANS ───────────────────────────────────────────────────────────
 router.get(
   '/expansion-plans/list',

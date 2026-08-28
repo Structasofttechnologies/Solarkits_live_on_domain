@@ -12,18 +12,17 @@ const activitySchema = new mongoose.Schema({
   description: { type: String, default: '', trim: true },
   category: {
     type: String,
-    enum: [
-      'Location and Documentation',
-      'Store Infrastructure',
-      'Solarkits Branding',
-      'Product Display',
-      'Software Setup',
-      'Final Verification',
-    ],
     required: true,
+    trim: true,
+    default: 'Location and Documentation',
   },
   is_mandatory: { type: Boolean, default: true },
   proof_required: { type: Boolean, default: true },
+  proof_type: {
+    type: String,
+    enum: ['image_or_pdf', 'photo_only', 'document_only', 'gps_photo', 'checkbox'],
+    default: 'image_or_pdf',
+  },
   display_order: { type: Number, default: 0 },
   is_active: { type: Boolean, default: true },
 }, { _id: true });

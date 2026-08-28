@@ -85,6 +85,11 @@ export const storeSetupApi = {
     return res.data;
   },
 
+  syncActiveSetups: async (uniqueId = 'ADM_STORE_SETUP') => {
+    const res = await axios.post(`${API_BASE}/store-setup/settings/sync-active?unique_id=${uniqueId}&req_for=edit`, {}, getHeaders());
+    return res.data;
+  },
+
   // Expansion Plans
   listExpansionPlans: async (params = {}, uniqueId = 'ADM_STORE_SETUP') => {
     const query = buildCleanQuery(params, uniqueId, 'view');

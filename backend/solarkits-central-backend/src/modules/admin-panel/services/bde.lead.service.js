@@ -177,31 +177,27 @@ async function createLead(data, bdeId) {
     throw err;
   }
 
-  // Validate Territory
+  // Validate Territory strictly
   const territoryCheck = await validateBdeTerritory(bdeId, {
     state_name: data.state_name,
     district_name: data.district_name,
     plan_id: data.interested_plan_id,
   });
 
-  const isOutsideTerritory = !territoryCheck.isAssigned;
-  const leadId = await generateNextLeadId();
-
-  let exceptionRequest = null;
-  if (isOutsideTerritory) {
-    exceptionRequest = await TerritoryExceptionRequest.create({
-      bde_id: bdeId,
-      bde_name: bde.full_name,
-      prospect_name: data.prospect_name,
-      company_name: data.company_name,
-      requested_state: data.state_name,
-      requested_district: data.district_name,
-      requested_plan_id: data.interested_plan_id || null,
-      requested_plan_name: data.interested_plan_name || null,
-      reason: data.outside_territory_reason || 'Prospect located outside designated territory assignment.',
-      status: 'pending',
-    });
+  if (!territoryCheck.isAssigned) {
+    const assignments = await BDETerritoryAssignment.find({ bde_id: bdeId, status: 'active' }).lean();
+    const allowedDesc = assignments.length > 0
+      ? assignments.map(a => `${a.state_name}${a.district_names?.length ? ' (' + a.district_names.join(', ') + ')' : ' (All Districts)'}`).join('; ')
+      : 'No Active Territory Assigned';
+    const err = new Error(
+      `Territory Restricted: You are assigned to [${allowedDesc}]. You cannot submit leads for ${data.state_name || 'unspecified'}${data.district_name ? ' - ' + data.district_name : ''}.`
+    );
+    err.statusCode = 403;
+    throw err;
   }
+
+  const isOutsideTerritory = false;
+  const leadId = await generateNextLeadId();
 
   const cleanGst = data.gst_number ? data.gst_number.trim().toUpperCase() : null;
 
@@ -233,8 +229,8 @@ async function createLead(data, bdeId) {
     created_by_bde_id: bdeId,
     original_bde_id: bdeId,
     current_bde_id: bdeId,
-    is_outside_territory: isOutsideTerritory,
-    territory_exception_id: exceptionRequest ? exceptionRequest._id : null,
+    is_outside_territory: false,
+    territory_exception_id: null,
     lead_status: 'new_lead',
     next_follow_up_date: data.next_follow_up_date || null,
     bde_remarks: data.bde_remarks || null,
@@ -272,12 +268,6 @@ async function createLead(data, bdeId) {
   } catch (flErr) {
     console.warn('[createLead] FranchiseLead sync notice:', flErr.message);
   }
-
-  if (exceptionRequest) {
-    exceptionRequest.lead_id = lead._id;
-    await exceptionRequest.save();
-  }
-
   // Create Activity Log
   await BDELeadActivity.create({
     lead_id: lead._id,

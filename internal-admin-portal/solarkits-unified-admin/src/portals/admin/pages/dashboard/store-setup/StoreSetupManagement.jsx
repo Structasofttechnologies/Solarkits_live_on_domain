@@ -29,7 +29,7 @@ export default function StoreSetupManagement() {
     { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard },
     { id: 'all-setups', label: 'All Store Setups', icon: Store },
     { id: 'ranking', label: 'Franchisee Ranking', icon: Award },
-    { id: 'settings', label: 'Checklist & Settings', icon: Sliders },
+    { id: 'settings', label: 'Document & Checklist Settings', icon: Sliders },
   ];
 
   return (

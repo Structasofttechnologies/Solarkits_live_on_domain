@@ -82,8 +82,8 @@ export default function BdeLeads() {
       if (resPipe.data?.status === 'success') {
         setPipeline(resPipe.data.data);
       }
-      if (resTerr.data?.status === 'success' && resTerr.data.data) {
-        setBdeTerritory(resTerr.data.data);
+      if (resTerr.data?.status === 'success') {
+        setBdeTerritory(resTerr.data);
       }
     } catch (err) {
       console.error('Failed to load leads pipeline', err);
