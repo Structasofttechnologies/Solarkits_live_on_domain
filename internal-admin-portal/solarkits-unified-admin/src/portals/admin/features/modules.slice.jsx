@@ -17,16 +17,23 @@ const extractUniqueIdsFromModules = (modules = []) => {
   return uniqueIds;
 };
 
+const safeParse = (key, fallback = null) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === 'null' || raw === 'undefined') return fallback;
+    return JSON.parse(raw) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const initialCachedModules = safeParse('admin_modules', []);
+const initialCachedUniqueIds = extractUniqueIdsFromModules(initialCachedModules);
+
 export const fetchUserModules = createAsyncThunk(
   "modules/fetchUserModules",
-  async (_, { rejectWithValue, dispatch, getState }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
-      try {
-        await dispatch(refreshAccessToken()).unwrap();
-      } catch (identErr) {
-        return rejectWithValue("Unauthorized");
-      }
-
       const rawToken = getState().auth?.token;
       let token = rawToken;
       if (!token) {
@@ -37,14 +44,13 @@ export const fetchUserModules = createAsyncThunk(
       }
 
       if (!token) {
-        dispatch(setAlert({ type: "error", message: "No token found" }));
         return rejectWithValue("No token found");
       }
 
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       const res = await axios.get(`${resolveApiUrl(import.meta.env.VITE_API_URL, 'http://localhost:5000/admin-api')}/user-modules`, {
         headers: { Authorization: authHeader },
-        timeout: 7000,
+        timeout: 10000,
       });
 
       const modules = res.data?.data || [];
@@ -53,20 +59,11 @@ export const fetchUserModules = createAsyncThunk(
       return { modules, uniqueIds };
     } catch (error) {
       if (error.code === "ECONNABORTED" || error.message === "Network Error") {
-        dispatch(setAlert({ type: "error", message: "Server unreachable. Check API URL or Network." }));
         return rejectWithValue("SERVER_DOWN");
       }
 
-      const status = error.response?.status;
       const resp = error.response?.data;
       const msg = resp?.message || "Failed to fetch modules";
-
-      if (status === 401 || resp?.auth === false || /Unauthorized/i.test(msg)) {
-        // let other slices handle logout/redirect
-        // return rejectWithValue("Unauthorized");
-      }
-
-      dispatch(setAlert({ type: "error", message: msg }));
       return rejectWithValue(msg);
     }
   }
@@ -75,18 +72,29 @@ export const fetchUserModules = createAsyncThunk(
 const modulesSlice = createSlice({
   name: "modules",
   initialState: {
-    modules: [],
-    uniqueIds: [],
-    status: 'idle',
+    modules: initialCachedModules,
+    uniqueIds: initialCachedUniqueIds,
+    status: initialCachedModules.length > 0 ? 'success' : 'idle',
     loading: false,
     error: null,
   },
-  reducers: {},
+  reducers: {
+    clearModules: (state) => {
+      state.modules = [];
+      state.uniqueIds = [];
+      state.status = 'idle';
+      try {
+        localStorage.removeItem('admin_modules');
+      } catch (e) {}
+    }
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchUserModules.pending, (state) => {
         state.loading = true;
-        state.status = 'loading';
+        if (state.modules.length === 0) {
+          state.status = 'loading';
+        }
         state.error = null;
       })
       .addCase(fetchUserModules.fulfilled, (state, action) => {
@@ -94,6 +102,9 @@ const modulesSlice = createSlice({
         state.status = 'success';
         state.modules = action.payload.modules || [];
         state.uniqueIds = action.payload.uniqueIds || [];
+        try {
+          localStorage.setItem('admin_modules', JSON.stringify(action.payload.modules || []));
+        } catch (e) {}
       })
       .addCase(fetchUserModules.rejected, (state, action) => {
         state.loading = false;
@@ -113,12 +124,30 @@ const selectPathname = (_, pathname) => pathname;
 export const selectAllowedUniqueIds = createSelector(
   [selectModulesState, selectUserState, selectSelectedScopeState, selectPathname],
   (rawModules = EMPTY_ARRAY, user, selectedScope, pathname) => {
-    if (!user || !user.allowed_panels || !pathname) return EMPTY_ARRAY;
+    if (!pathname) return EMPTY_ARRAY;
+
+    // Super Admin or Admin gets full module access
+    const isSuperAdmin = !user || user.role === 'Super Admin' || user.role_id?.name === 'Super Admin' || user.is_super_admin;
+    if (isSuperAdmin) {
+      const ids = rawModules.map(m => m.unique_id).filter(Boolean);
+      if (!ids.includes("00000000")) ids.push("00000000");
+      return ids;
+    }
+
+    if (!user.allowed_panels) {
+      const ids = rawModules.map(m => m.unique_id).filter(Boolean);
+      if (!ids.includes("00000000")) ids.push("00000000");
+      return ids;
+    }
 
     const activeLevel = (selectedScope?.level || user.level || '').toLowerCase();
 
     const activePanel = user.allowed_panels.find(p => pathname.startsWith(p.url_prefix));
-    if (!activePanel) return EMPTY_ARRAY;
+    if (!activePanel) {
+      const ids = rawModules.map(m => m.unique_id).filter(Boolean);
+      if (!ids.includes("00000000")) ids.push("00000000");
+      return ids;
+    }
 
     const activeProduct = activePanel.saas_products?.find(prod =>
       pathname.startsWith(`${activePanel.url_prefix}/${prod.slug}`)
@@ -127,17 +156,24 @@ export const selectAllowedUniqueIds = createSelector(
     if (activeProduct) {
       const activeProdId = (activeProduct.id || activeProduct._id)?.toString();
       const ids = rawModules
-        .filter(m => m.dashboard_context === "product" && (
-          String(m.saas_product_id?._id || m.saas_product_id) === String(activeProdId)
-        ) && (m.level_name?.toLowerCase() === activeLevel || activeLevel === 'global'))
+        .filter(m => {
+          const matchesProd = m.dashboard_context === "product" && (
+            String(m.saas_product_id?._id || m.saas_product_id) === String(activeProdId)
+          );
+          const isGeneric = !m.dashboard_context || m.dashboard_context === "default";
+          const matchesLevel = !m.level_name || m.level_name.toLowerCase() === activeLevel || activeLevel === 'global' || activeLevel === 'standard access';
+          return (matchesProd || isGeneric) && matchesLevel;
+        })
         .map(m => m.unique_id);
       if (!ids.includes("00000000")) ids.push("00000000");
       return ids;
     } else {
       const ids = rawModules
-        .filter(m => (!m.dashboard_context || m.dashboard_context === "default") && (
-          m.level_name?.toLowerCase() === activeLevel || activeLevel === 'global'
-        ))
+        .filter(m => {
+          const isGeneric = !m.dashboard_context || m.dashboard_context === "default";
+          const matchesLevel = !m.level_name || m.level_name.toLowerCase() === activeLevel || activeLevel === 'global' || activeLevel === 'standard access';
+          return isGeneric && matchesLevel;
+        })
         .map(m => m.unique_id);
       if (!ids.includes("00000000")) ids.push("00000000");
       return ids;
@@ -145,4 +181,5 @@ export const selectAllowedUniqueIds = createSelector(
   }
 );
 
+export const { clearModules } = modulesSlice.actions;
 export default modulesSlice.reducer;

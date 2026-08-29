@@ -169,12 +169,13 @@ const menus = [
 ];
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
-    if (!menu.unique_id) return false;
+    if (!menu.unique_id || menu.unique_id === "00000000") return true;
     return (
         allowedUniqueIds.includes(menu.unique_id) || 
-        menu.unique_id === "00000000" || 
         menu.unique_id.startsWith("ADM_") ||
-        menu.unique_id.startsWith("RSL_")
+        menu.unique_id.startsWith("RSL_") ||
+        menu.unique_id.startsWith("FPO_") ||
+        menu.unique_id.startsWith("BDE_")
     );
 };
 

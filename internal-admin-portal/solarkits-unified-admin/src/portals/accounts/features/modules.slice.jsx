@@ -16,26 +16,40 @@ const extractUniqueIdsFromModules = (modules = []) => {
   return uniqueIds;
 };
 
+const safeParse = (key, fallback = null) => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === 'null' || raw === 'undefined') return fallback;
+    return JSON.parse(raw) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const initialCachedModules = safeParse('accounts_modules', []);
+const initialCachedUniqueIds = extractUniqueIdsFromModules(initialCachedModules);
+
 export const fetchUserModules = createAsyncThunk(
   "modules/fetchUserModules",
-  async (_, { rejectWithValue, dispatch, getState }) => {
+  async (_, { rejectWithValue, getState }) => {
     try {
-      try {
-        await dispatch(refreshAccessToken()).unwrap();
-      } catch (identErr) {
-        return rejectWithValue("Unauthorized");
+      const rawToken = getState().auth?.token;
+      let token = rawToken;
+      if (!token) {
+        try {
+          const raw = localStorage.getItem('login');
+          token = raw ? (JSON.parse(raw)?.token || raw) : null;
+        } catch (e) {}
       }
 
-      const token = getState().auth?.token;
-
       if (!token) {
-        dispatch(setAlert({ type: "error", message: "No token found" }));
         return rejectWithValue("No token found");
       }
 
+      const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       const res = await axios.get(`${import.meta.env.VITE_ACCOUNT_API_URL || import.meta.env.VITE_API_URL}/user-modules`, {
-        headers: { Authorization: token },
-        timeout: 7000,
+        headers: { Authorization: authHeader },
+        timeout: 10000,
       });
 
       const modules = res.data?.data || [];
@@ -44,21 +58,11 @@ export const fetchUserModules = createAsyncThunk(
       return { modules, uniqueIds };
     } catch (error) {
       if (error.code === "ECONNABORTED" || error.message === "Network Error") {
-        dispatch(setAlert({ type: "error", message: "Server unreachable. Check API URL or Network." }));
         return rejectWithValue("SERVER_DOWN");
       }
 
-      const status = error.response?.status;
       const resp = error.response?.data;
       const msg = resp?.message || "Failed to fetch modules";
-
-      // Only force-logout on 401 (token expired/invalid), NOT on 403 (access forbidden)
-      if (status === 401) {
-        // let other slices handle logout/redirect
-        return rejectWithValue("Unauthorized");
-      }
-
-      dispatch(setAlert({ type: "error", message: msg }));
       return rejectWithValue(msg);
     }
   }
@@ -67,18 +71,29 @@ export const fetchUserModules = createAsyncThunk(
 const modulesSlice = createSlice({
   name: "modules",
   initialState: {
-    modules: [],
-    uniqueIds: [],
-    status: 'idle',
+    modules: initialCachedModules,
+    uniqueIds: initialCachedUniqueIds,
+    status: initialCachedModules.length > 0 ? 'success' : 'idle',
     loading: false,
     error: null,
   },
-  reducers: {},
+  reducers: {
+    clearModules: (state) => {
+      state.modules = [];
+      state.uniqueIds = [];
+      state.status = 'idle';
+      try {
+        localStorage.removeItem('accounts_modules');
+      } catch (e) {}
+    }
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchUserModules.pending, (state) => {
         state.loading = true;
-        state.status = 'loading';
+        if (state.modules.length === 0) {
+          state.status = 'loading';
+        }
         state.error = null;
       })
       .addCase(fetchUserModules.fulfilled, (state, action) => {
@@ -86,6 +101,9 @@ const modulesSlice = createSlice({
         state.status = 'success';
         state.modules = action.payload.modules || [];
         state.uniqueIds = action.payload.uniqueIds || [];
+        try {
+          localStorage.setItem('accounts_modules', JSON.stringify(action.payload.modules || []));
+        } catch (e) {}
       })
       .addCase(fetchUserModules.rejected, (state, action) => {
         state.loading = false;

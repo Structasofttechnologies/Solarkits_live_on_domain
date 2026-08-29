@@ -19,12 +19,20 @@ export const getUserData = createAsyncThunk(
   "user/getUserData",
   async (_, { rejectWithValue, dispatch, getState }) => {
     try {
-      try {
-        await dispatch(refreshAccessToken()).unwrap();
-      } catch (identErr) {
-        console.warn('refreshAccessToken failed', identErr);
+      let token = getState().auth?.token;
+      if (!token) {
+        const parsed = safeParse('login', null);
+        token = parsed?.token || parsed;
       }
-      const token = getState().auth?.token || safeParse('login', null)?.token;
+
+      if (!token) {
+        try {
+          const refreshRes = await dispatch(refreshAccessToken()).unwrap();
+          token = refreshRes?.token;
+        } catch (identErr) {
+          console.warn('refreshAccessToken failed', identErr);
+        }
+      }
 
       if (!token) {
         dispatch(setAlert({ type: "error", message: "No token found" }));
@@ -34,16 +42,15 @@ export const getUserData = createAsyncThunk(
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       const res = await axios.get(`${resolveApiUrl(import.meta.env.VITE_API_URL, 'http://localhost:5000/admin-api')}/user-data`, {
         headers: { Authorization: authHeader },
-        timeout: 7000,
+        timeout: 10000,
       });
 
-      dispatch(setAlert({ type: "success", message: "User data loaded successfully" }));
+      // Dispatch fetchUserModules asynchronously without blocking user data
       dispatch(fetchUserModules());
       return res.data.data;
     } catch (error) {
       if (error.code === "ECONNABORTED" || error.message === "Network Error") {
         console.warn("⚠️ Server not reachable or request timed out.");
-        dispatch(setAlert({ type: "error", message: "Server unreachable. Check API URL or Network." }));
         return rejectWithValue("SERVER_DOWN");
       }
 
@@ -62,6 +69,7 @@ export const getUserData = createAsyncThunk(
         dispatch(authLogout());
         localStorage.removeItem('login');
         localStorage.removeItem('user');
+        localStorage.removeItem('admin_modules');
         window.location.href = getAuthPortalUrl();
         return rejectWithValue('Unauthorized');
       }

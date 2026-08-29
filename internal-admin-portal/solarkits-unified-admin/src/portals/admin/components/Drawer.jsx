@@ -135,10 +135,8 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
     ];
     for (const slug of slugs) {
       if (targetPath.includes(`/${slug}/`)) {
-        const storedCountry = localStorage.getItem('selected_country_admin');
-        if (storedCountry) {
-          targetPath = targetPath.replace(`/${slug}/`, `/${slug}/${storedCountry.toLowerCase()}/`);
-        }
+        const storedCountry = localStorage.getItem('selected_country_admin') || 'india';
+        targetPath = targetPath.replace(`/${slug}/`, `/${slug}/${storedCountry.toLowerCase()}/`);
       }
     }
     return targetPath;
@@ -264,11 +262,11 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
             </div>
 
             {/* Menu Sections */}
-            <div className="flex-1 overflow-y-auto scrollbar-hover py-4 flex flex-col">
+            <div className="flex-1 overflow-y-auto scrollbar-hover py-4">
               {menuItems.map((section, index) => (
                 <div
                   key={index}
-                  className={`py-1 ${index !== menuItems.length - 1 ? "border-b border-border/50 mb-1" : "mt-auto pt-2 border-t border-border/50"}`}
+                  className={`py-1 ${index !== menuItems.length - 1 ? "border-b border-border/50 mb-1" : ""}`}
                 >
                   {renderMenuItems(section)}
                 </div>

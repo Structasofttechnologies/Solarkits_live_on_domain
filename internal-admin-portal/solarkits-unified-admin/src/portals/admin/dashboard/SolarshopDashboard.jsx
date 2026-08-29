@@ -195,15 +195,19 @@ const menus = [
 const isModuleAllowed = (menu, allowedUniqueIds) => {
     if (!menu.unique_id || menu.unique_id === "00000000") return true;
     if (menu.name === "Loose Orders" || menu.unique_id === "ADM_LOOSE_ORDERS") {
-        return allowedUniqueIds.includes("ADM_PO_ORDERS") || allowedUniqueIds.includes("ADM_LOOSE_ORDERS");
+        return (
+            allowedUniqueIds.includes("ADM_PO_ORDERS") ||
+            allowedUniqueIds.includes("ADM_LOOSE_ORDERS") ||
+            allowedUniqueIds.includes("00000000")
+        );
     }
-    if (menu.unique_id.startsWith("FPO_")) {
-        return allowedUniqueIds.includes(menu.unique_id) || allowedUniqueIds.includes("RSL_MGMT") || allowedUniqueIds.includes("00000000");
-    }
-    if (menu.unique_id.startsWith("ADM_BDE") || menu.unique_id.startsWith("BDE_")) {
-        return true;
-    }
-    return allowedUniqueIds.includes(menu.unique_id);
+    return (
+        allowedUniqueIds.includes(menu.unique_id) ||
+        menu.unique_id.startsWith("ADM_") ||
+        menu.unique_id.startsWith("RSL_") ||
+        menu.unique_id.startsWith("FPO_") ||
+        menu.unique_id.startsWith("BDE_")
+    );
 };
 
 // Filter menu tree recursively
