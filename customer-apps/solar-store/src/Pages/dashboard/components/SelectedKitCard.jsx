@@ -121,10 +121,23 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
   const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
   const [selectedVariant, setSelectedVariant] = useState(initialVariantIndex);
+  const [selectedOrderQty, setSelectedOrderQty] = useState(null);
+
+  // Order quantities from kit configuration
+  const orderQuantities = useMemo(() => {
+    const rawQtys = kit?.orderQuantities || kit?.order_quantities || [];
+    return Array.isArray(rawQtys) ? rawQtys.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b) : [];
+  }, [kit?.orderQuantities, kit?.order_quantities]);
+
+  const hasOrderQuantities = orderQuantities.length > 0;
 
   useEffect(() => {
     setSelectedVariant(initialVariantIndex);
-  }, [kit?.id]);
+    if (hasOrderQuantities) {
+      setSelectedOrderQty(orderQuantities[0]);
+    }
+  }, [kit?.id, hasOrderQuantities, initialVariantIndex]);
+
   const [showVariants, setShowVariants] = useState(false);
   const [showVariantComparison, setShowVariantComparison] = useState(false);
   const [showBosPopup, setShowBosPopup] = useState(false);
@@ -230,20 +243,42 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       dispatch(setShowAuthDialog(true));
       return;
     }
-    dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant }));
-  }, [dispatch, kit?.id, selectedVariant, isAuthenticated]);
+    dispatch(addToCart({
+      id: kit.id,
+      variantIndex: selectedVariant,
+      qty: hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1
+    }));
+  }, [dispatch, kit?.id, selectedVariant, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseQty = useCallback(() => {
-    if (cartItem?.qty > 1) {
-      dispatch(decreaseQty(cartItemId));
+    if (hasOrderQuantities) {
+      const currentQty = cartItem?.qty || 0;
+      const prevQty = [...orderQuantities].reverse().find(q => q < currentQty);
+      if (prevQty) {
+        dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty: prevQty, replace: true }));
+      } else {
+        dispatch(removeFromCart(cartItemId));
+      }
     } else {
-      dispatch(removeFromCart(cartItemId));
+      if (cartItem?.qty > 1) {
+        dispatch(decreaseQty(cartItemId));
+      } else {
+        dispatch(removeFromCart(cartItemId));
+      }
     }
-  }, [dispatch, cartItemId, cartItem?.qty]);
+  }, [dispatch, cartItemId, cartItem?.qty, hasOrderQuantities, orderQuantities, kit?.id, selectedVariant]);
 
   const handleIncreaseQty = useCallback(() => {
-    dispatch(increaseQty(cartItemId));
-  }, [dispatch, cartItemId]);
+    if (hasOrderQuantities) {
+      const currentQty = cartItem?.qty || 0;
+      const nextQty = orderQuantities.find(q => q > currentQty);
+      if (nextQty) {
+        dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty: nextQty, replace: true }));
+      }
+    } else {
+      dispatch(increaseQty(cartItemId));
+    }
+  }, [dispatch, cartItemId, hasOrderQuantities, orderQuantities, kit?.id, selectedVariant, cartItem?.qty]);
 
   const handleVariantChange = useCallback((index) => {
     setSelectedVariant(index);
@@ -937,9 +972,85 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       )}
 
       {/* Cart Controls */}
-      <div className="mb-6 flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-border pb-5">
-        <div className="flex-1 w-full">
-          {!currentVariant?.inStock ? (
+      <div className="mb-6 flex flex-col gap-4 border-b border-border pb-5">
+        <div className="w-full">
+          {hasOrderQuantities ? (
+            /* Order Quantity Chips Mode */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-text-secondary uppercase tracking-wider">
+                  Available Order Quantity (Kits)
+                </span>
+                {cartItem && (
+                  <span className="text-[11px] font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
+                    Selected: {cartItem.qty} Kits
+                  </span>
+                )}
+              </div>
+
+              {!cartItem ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {orderQuantities.map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={() => setSelectedOrderQty(qty)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black border transition-all duration-150 cursor-pointer
+                          ${selectedOrderQty === qty
+                            ? 'bg-primary text-white border-primary shadow-md scale-105'
+                            : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                          }`}
+                      >
+                        {qty} Kits
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    onClick={handleAddToCart}
+                    variant="primary"
+                    size="lg"
+                    className="w-full rounded-xl py-3 font-black bg-gradient-to-r from-primary to-primary-end shadow-md hover:shadow-lg transition-all duration-200 transform active:scale-98 mt-2"
+                    leftIcon={<FaShoppingCart />}
+                  >
+                    Add {selectedOrderQty || orderQuantities[0]} Kits to Cart
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {orderQuantities.map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={() => {
+                          dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                          setSelectedOrderQty(qty);
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-black border transition-all duration-150 cursor-pointer
+                          ${cartItem.qty === qty
+                            ? 'bg-primary text-white border-primary shadow-md scale-105'
+                            : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                          }`}
+                      >
+                        {qty} Kits
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    onClick={() => dispatch(removeFromCart(cartItemId))}
+                    variant="outline"
+                    size="md"
+                    className="w-full rounded-xl py-2.5 font-bold text-rose-600 border-rose-200 hover:bg-rose-50 transition-colors"
+                  >
+                    Remove from Cart
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : !currentVariant?.inStock ? (
             <Button variant="danger" size="lg" disabled className="cursor-not-allowed w-full rounded-xl py-3 font-bold">
               Out of Stock
             </Button>

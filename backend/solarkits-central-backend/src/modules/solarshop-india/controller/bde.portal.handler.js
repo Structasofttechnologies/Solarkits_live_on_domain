@@ -26,7 +26,10 @@ const {
   StoreSetupChecklist,
   StoreSetupDelay,
   StoreSetupVerification,
+  EpcAccount,
+  EpcResellerRelationship,
 } = require('../../admin-panel/models/india_solarshop_db');
+const { EpcCompany } = require('../../admin-panel/models/india_core_db');
 const { generate_token } = require('../utils/jsonwebtoken');
 const {
   createLead,
@@ -1007,4 +1010,448 @@ exports.get_bde_store_setup_detail = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BDE EPC MANAGEMENT — Territory-Scoped EPC Operations
+// ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Helper: Get BDE's active territory (state_id, district_ids)
+ */
+async function _getBdeTerritoryScope(bdeId) {
+  const territory = await BDETerritoryAssignment.findOne({ bde_id: bdeId, status: 'active' }).lean();
+  if (!territory) return null;
+  return territory;
+}
+
+// ─── 1. GET EPC STATS FOR BDE TERRITORY ──────────────────────────────────────
+exports.get_bde_epc_stats = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const territory = await _getBdeTerritoryScope(bdeId);
+    if (!territory) {
+      return res.status(200).json({
+        status: 'success',
+        data: { total_epcs: 0, epcs_with_partner: 0, epcs_pending_partner: 0, franchise_partners_available: 0, territory_state: null },
+      });
+    }
+
+    const stateId = territory.state_id;
+
+    // Count EpcCompanies in BDE's state
+    const totalEpcs = await EpcCompany.countDocuments({
+      working_states: stateId,
+      deleted_at: null,
+    });
+
+    // Count EpcAccounts in BDE's state
+    const epcAccounts = await EpcAccount.find({
+      states: stateId,
+      deleted_at: null,
+    }).select('_id').lean();
+    const epcAccountIds = epcAccounts.map(e => e._id);
+
+    // Count those with active franchise partner assignment
+    const withPartner = await EpcResellerRelationship.countDocuments({
+      epc_id: { $in: epcAccountIds },
+      status: 'active',
+    });
+
+    // Count available franchise partners in BDE's state
+    const availablePartners = await Reseller.countDocuments({
+      'address.state_id': stateId,
+      is_operational: true,
+      deleted_at: null,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        total_epcs: totalEpcs,
+        epc_accounts: epcAccountIds.length,
+        epcs_with_partner: withPartner,
+        epcs_pending_partner: Math.max(0, epcAccountIds.length - withPartner),
+        franchise_partners_available: availablePartners,
+        territory_state: territory.state_name,
+        territory_districts: territory.district_names || [],
+      },
+    });
+  } catch (err) {
+    console.error('[get_bde_epc_stats Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch EPC stats', error: err.message });
+  }
+};
+
+// ─── 2. GET EPC LIST FOR BDE TERRITORY ────────────────────────────────────────
+exports.get_bde_epc_list = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { search = '', page = 1, limit = 20 } = req.query;
+
+    const territory = await _getBdeTerritoryScope(bdeId);
+    if (!territory) {
+      return res.status(200).json({ status: 'success', data: [], pagination: { total: 0, page: 1, pages: 0 }, territory: null });
+    }
+
+    const stateId = territory.state_id;
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+
+    // Build EpcCompany query scoped to territory state
+    const matchQuery = { working_states: stateId, deleted_at: null };
+    if (search && search.trim()) {
+      const s = search.trim();
+      matchQuery.$or = [
+        { name: { $regex: s, $options: 'i' } },
+        { email: { $regex: s, $options: 'i' } },
+      ];
+    }
+
+    const [epcCompanies, total] = await Promise.all([
+      EpcCompany.find(matchQuery).sort({ created_at: -1 }).skip(skip).limit(parseInt(limit, 10)).lean(),
+      EpcCompany.countDocuments(matchQuery),
+    ]);
+
+    // For each EpcCompany, find linked EpcAccount(s) and their partner assignments
+    const companyIds = epcCompanies.map(c => c._id);
+    const epcAccounts = await EpcAccount.find({
+      company_id: { $in: companyIds },
+      deleted_at: null,
+    }).lean();
+
+    // Map: company_id → epcAccount[]
+    const accountsByCompany = new Map();
+    epcAccounts.forEach(acc => {
+      const key = acc.company_id?.toString();
+      if (key) {
+        if (!accountsByCompany.has(key)) accountsByCompany.set(key, []);
+        accountsByCompany.get(key).push(acc);
+      }
+    });
+
+    // Gather all epcAccount IDs for relationship lookup
+    const allAccountIds = epcAccounts.map(a => a._id);
+    const relationships = await EpcResellerRelationship.find({
+      epc_id: { $in: allAccountIds },
+      status: 'active',
+    }).populate('reseller_id', 'business_name mobile email reseller_code').lean();
+
+    // Map: epc_id → relationship
+    const relationshipByAccount = new Map();
+    relationships.forEach(r => {
+      relationshipByAccount.set(r.epc_id?.toString(), r);
+    });
+
+    const data = epcCompanies.map(company => {
+      const accounts = accountsByCompany.get(company._id.toString()) || [];
+      const primaryAccount = accounts[0] || null;
+      const relationship = primaryAccount
+        ? relationshipByAccount.get(primaryAccount._id?.toString()) || null
+        : null;
+
+      return {
+        id: company._id,
+        name: company.name,
+        email: company.email,
+        source: company.source,
+        state_count: (company.working_states || []).length,
+        created_at: company.created_at,
+        // Account info
+        account_id: primaryAccount?._id || null,
+        account_status: primaryAccount?.status || null,
+        is_email_verified: primaryAccount?.is_email_verified || false,
+        // Franchise partner assignment
+        has_partner: !!relationship,
+        franchise_partner: relationship?.reseller_id || null,
+        partner_assigned_date: relationship?.effective_from || null,
+      };
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data,
+      pagination: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        pages: Math.ceil(total / parseInt(limit, 10)) || 1,
+      },
+      territory: {
+        state_name: territory.state_name,
+        district_names: territory.district_names,
+      },
+    });
+  } catch (err) {
+    console.error('[get_bde_epc_list Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch EPC list', error: err.message });
+  }
+};
+
+// ─── 3. ONBOARD NEW EPC (Add EpcCompany to BDE's territory state) ─────────────
+exports.onboard_epc = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { name, email } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ status: 'error', message: 'EPC company name and email are required' });
+    }
+
+    const emailRegex = /^[A-Za-z0-9._%+&-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ status: 'error', message: 'Invalid email address' });
+    }
+
+    const territory = await _getBdeTerritoryScope(bdeId);
+    if (!territory) {
+      return res.status(403).json({ status: 'error', message: 'No active territory assigned. Please contact your admin.' });
+    }
+
+    const stateId = territory.state_id;
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
+    // Check if EpcCompany already exists with same email and state
+    const existing = await EpcCompany.findOne({
+      email: cleanEmail,
+      working_states: stateId,
+      deleted_at: null,
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        status: 'error',
+        message: `An EPC company with this email is already registered in ${territory.state_name}.`,
+        epc_id: existing._id,
+      });
+    }
+
+    // Upsert: if company exists with same email (different state), add this state
+    let epcCompany = await EpcCompany.findOne({ email: cleanEmail, deleted_at: null });
+
+    if (epcCompany) {
+      // Add state to existing company
+      await EpcCompany.findByIdAndUpdate(epcCompany._id, {
+        $addToSet: { working_states: stateId },
+      });
+      epcCompany.working_states.push(stateId);
+    } else {
+      // Create new EpcCompany
+      epcCompany = await EpcCompany.create({
+        name: cleanName,
+        email: cleanEmail,
+        source: 'government',
+        working_states: [stateId],
+      });
+    }
+
+    // Log activity
+    await BDEActivityLog.create({
+      bde_id: bdeId,
+      actor_type: 'bde',
+      actor_id: bdeId,
+      actor_name: req.user.full_name,
+      action: 'EPC_ONBOARDED',
+      notes: `Onboarded EPC: ${cleanName} (${cleanEmail}) for state: ${territory.state_name}`,
+      ip_address: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
+      user_agent: req.headers['user-agent'],
+    });
+
+    return res.status(201).json({
+      status: 'success',
+      message: `EPC "${cleanName}" successfully onboarded for ${territory.state_name}`,
+      data: {
+        id: epcCompany._id,
+        name: epcCompany.name,
+        email: epcCompany.email,
+        state: territory.state_name,
+      },
+    });
+  } catch (err) {
+    console.error('[onboard_epc Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to onboard EPC', error: err.message });
+  }
+};
+
+// ─── 4. GET FRANCHISE PARTNERS IN BDE TERRITORY ───────────────────────────────
+exports.get_bde_franchise_partners = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { search = '', page = 1, limit = 20 } = req.query;
+
+    const territory = await _getBdeTerritoryScope(bdeId);
+    if (!territory) {
+      return res.status(200).json({ status: 'success', data: [], pagination: { total: 0, page: 1, pages: 0 }, territory: null });
+    }
+
+    const stateId = territory.state_id;
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+
+    const matchQuery = { 'address.state_id': stateId, deleted_at: null };
+    if (search && search.trim()) {
+      const s = search.trim();
+      matchQuery.$or = [
+        { business_name: { $regex: s, $options: 'i' } },
+        { mobile: { $regex: s, $options: 'i' } },
+        { email: { $regex: s, $options: 'i' } },
+        { reseller_code: { $regex: s, $options: 'i' } },
+      ];
+    }
+
+    const [partners, total] = await Promise.all([
+      Reseller.find(matchQuery)
+        .select('business_name email mobile reseller_code contact_person is_operational activation_status agreement_status address gst_number')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(parseInt(limit, 10))
+        .lean(),
+      Reseller.countDocuments(matchQuery),
+    ]);
+
+    // Gather partner IDs and check their current EPC assignments
+    const partnerIds = partners.map(p => p._id);
+    const existingAssignments = await EpcResellerRelationship.find({
+      reseller_id: { $in: partnerIds },
+      status: 'active',
+    }).lean();
+    const assignmentCountByPartner = new Map();
+    existingAssignments.forEach(a => {
+      const key = a.reseller_id?.toString();
+      assignmentCountByPartner.set(key, (assignmentCountByPartner.get(key) || 0) + 1);
+    });
+
+    const data = partners.map(p => ({
+      id: p._id,
+      reseller_code: p.reseller_code,
+      business_name: p.business_name,
+      contact_person: p.contact_person,
+      email: p.email,
+      mobile: p.mobile,
+      gst_number: p.gst_number,
+      is_operational: p.is_operational,
+      activation_status: p.activation_status,
+      agreement_status: p.agreement_status,
+      district: p.address?.district_name || null,
+      assigned_epc_count: assignmentCountByPartner.get(p._id?.toString()) || 0,
+    }));
+
+    return res.status(200).json({
+      status: 'success',
+      data,
+      pagination: {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        pages: Math.ceil(total / parseInt(limit, 10)) || 1,
+      },
+      territory: {
+        state_name: territory.state_name,
+        district_names: territory.district_names,
+      },
+    });
+  } catch (err) {
+    console.error('[get_bde_franchise_partners Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch franchise partners', error: err.message });
+  }
+};
+
+// ─── 5. ASSIGN FRANCHISE PARTNER TO EPC ACCOUNT ───────────────────────────────
+exports.assign_franchise_partner = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { epc_account_id, reseller_id } = req.body;
+
+    if (!epc_account_id || !reseller_id) {
+      return res.status(400).json({ status: 'error', message: 'epc_account_id and reseller_id are required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(epc_account_id) || !mongoose.Types.ObjectId.isValid(reseller_id)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid ID format' });
+    }
+
+    const territory = await _getBdeTerritoryScope(bdeId);
+    if (!territory) {
+      return res.status(403).json({ status: 'error', message: 'No active territory assigned.' });
+    }
+
+    // Verify EPC account exists and is in BDE's state
+    const epcAccount = await EpcAccount.findOne({
+      _id: epc_account_id,
+      states: territory.state_id,
+      deleted_at: null,
+    });
+    if (!epcAccount) {
+      return res.status(404).json({ status: 'error', message: 'EPC account not found in your territory' });
+    }
+
+    // Verify reseller exists and is in BDE's state
+    const reseller = await Reseller.findOne({
+      _id: reseller_id,
+      'address.state_id': territory.state_id,
+      deleted_at: null,
+    });
+    if (!reseller) {
+      return res.status(404).json({ status: 'error', message: 'Franchise partner not found in your territory' });
+    }
+
+    // Check if EPC already has an active assignment
+    const existingRelationship = await EpcResellerRelationship.findOne({
+      epc_id: epc_account_id,
+      status: 'active',
+    });
+    if (existingRelationship) {
+      if (existingRelationship.reseller_id?.toString() === reseller_id) {
+        return res.status(409).json({ status: 'error', message: 'This franchise partner is already assigned to this EPC.' });
+      }
+      // Revoke old assignment
+      existingRelationship.status = 'revoked';
+      existingRelationship.effective_to = new Date();
+      existingRelationship.transfer_reason = `Reassigned by BDE ${req.user.bde_id}`;
+      await existingRelationship.save();
+    }
+
+    // Create new relationship
+    const newRelationship = await EpcResellerRelationship.create({
+      epc_id: epc_account_id,
+      reseller_id: reseller._id,
+      effective_from: new Date(),
+      status: 'active',
+      assigned_by: null, // BDE doesn't have a cms_user id, track via activity log
+    });
+
+    // Update EpcAccount to record primary reseller
+    await EpcAccount.findByIdAndUpdate(epc_account_id, {
+      onboarded_by_reseller_id: reseller._id,
+      onboarding_source: 'reseller',
+      reseller_assigned_date: new Date(),
+      primary_reseller_id: reseller._id,
+    });
+
+    // Log BDE activity
+    await BDEActivityLog.create({
+      bde_id: bdeId,
+      actor_type: 'bde',
+      actor_id: bdeId,
+      actor_name: req.user.full_name,
+      action: 'EPC_PARTNER_ASSIGNED',
+      notes: `Assigned franchise partner ${reseller.business_name} (${reseller.reseller_code}) to EPC account ${epcAccount.name}`,
+      ip_address: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null,
+      user_agent: req.headers['user-agent'],
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Franchise partner "${reseller.business_name}" successfully assigned to EPC "${epcAccount.name}"`,
+      data: {
+        relationship_id: newRelationship._id,
+        epc_account_id: epc_account_id,
+        reseller_id: reseller._id,
+        reseller_name: reseller.business_name,
+        effective_from: newRelationship.effective_from,
+      },
+    });
+  } catch (err) {
+    console.error('[assign_franchise_partner Error]', err);
+    if (err.code === 11000) {
+      return res.status(409).json({ status: 'error', message: 'An active assignment already exists for this EPC. Please reassign.' });
+    }
+    return res.status(500).json({ status: 'error', message: 'Failed to assign franchise partner', error: err.message });
+  }
+};

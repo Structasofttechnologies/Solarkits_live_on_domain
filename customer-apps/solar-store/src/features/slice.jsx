@@ -228,6 +228,8 @@ const slice = createSlice({
 
       let kit;
       let variantIndex = 0;
+      let requestedQty = 1;
+      let replaceQty = false;
 
       if (typeof payload === 'number' || typeof payload === 'string') {
         kit = state.availableKits.find((i) => String(i.id) === String(payload));
@@ -235,6 +237,8 @@ const slice = createSlice({
       } else {
         kit = state.availableKits.find((i) => String(i.id) === String(payload?.id));
         variantIndex = payload.variantIndex || 0;
+        requestedQty = (typeof payload.qty === 'number' && payload.qty > 0) ? payload.qty : 1;
+        replaceQty = payload.replace === true;
       }
 
       if (kit) {
@@ -254,13 +258,19 @@ const slice = createSlice({
 
         const effectiveGstRate = Number(currentVariant.gstRate ?? kit.gstRate ?? kit.pricing?.gstRate ?? 13.8);
 
+        const orderQuantities = Array.isArray(kit.orderQuantities || kit.order_quantities)
+          ? (kit.orderQuantities || kit.order_quantities).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)
+          : [];
+
         const cartItem = {
           ...kit,
           ...currentVariant,
           id: kit.id,
           cartItemId,
           variantIndex,
-          qty: 1,
+          qty: requestedQty,
+          orderQuantities,
+          order_quantities: orderQuantities,
           productTier: currentVariant.productTier,
           tierBenefits: currentVariant.tierBenefits,
           marketPrice: currentVariant.marketPrice,
@@ -279,11 +289,15 @@ const slice = createSlice({
           .reduce((sum, item) => sum + item.qty, 0);
 
         if (exists) {
-          if (currentCartQtySum < liveAvailable) {
-            exists.qty += 1;
+          if (replaceQty) {
+            exists.qty = requestedQty;
+          } else {
+            if (currentCartQtySum + requestedQty <= liveAvailable) {
+              exists.qty += requestedQty;
+            }
           }
         } else {
-          if (currentCartQtySum < liveAvailable && liveAvailable > 0) {
+          if (requestedQty <= liveAvailable && liveAvailable > 0) {
             state.cart.push(cartItem);
             // Record the district when first item was added
             if (state.cart.length === 1) {
@@ -324,11 +338,19 @@ const slice = createSlice({
         const liveAvailable = state.liveStock[product.id] !== undefined
           ? state.liveStock[product.id]
           : (product.availableStock ?? 999);
-        const currentCartQtySum = state.cart
-          .filter(item => item.id === product.id)
-          .reduce((sum, item) => sum + item.qty, 0);
-        if (currentCartQtySum < liveAvailable) {
-          product.qty += 1;
+        const orderQtys = product.orderQuantities || product.order_quantities || [];
+        if (Array.isArray(orderQtys) && orderQtys.length > 0) {
+          const nextQty = orderQtys.find(q => q > product.qty);
+          if (nextQty && nextQty <= liveAvailable) {
+            product.qty = nextQty;
+          }
+        } else {
+          const currentCartQtySum = state.cart
+            .filter(item => item.id === product.id)
+            .reduce((sum, item) => sum + item.qty, 0);
+          if (currentCartQtySum < liveAvailable) {
+            product.qty += 1;
+          }
         }
       }
     },
@@ -336,7 +358,17 @@ const slice = createSlice({
     decreaseQty: (state, action) => {
       const cartItemId = action.payload;
       const product = state.cart.find((c) => c.cartItemId === cartItemId);
-      if (product && product.qty > 1) product.qty -= 1;
+      if (product) {
+        const orderQtys = product.orderQuantities || product.order_quantities || [];
+        if (Array.isArray(orderQtys) && orderQtys.length > 0) {
+          const prevQty = [...orderQtys].reverse().find(q => q < product.qty);
+          if (prevQty) {
+            product.qty = prevQty;
+          }
+        } else {
+          if (product.qty > 1) product.qty -= 1;
+        }
+      }
     },
 
     // ── Bulk Cart (local-only, disconnected from live inventory) ─────────────
@@ -344,12 +376,17 @@ const slice = createSlice({
       const payload = action.payload;
       let kit;
       let variantIndex = 0;
+      let requestedQty = 1;
+      let replaceQty = false;
+
       if (typeof payload === 'number' || typeof payload === 'string') {
         kit = state.bulkKits.find((i) => i.id === Number(payload));
         variantIndex = 0;
       } else {
         kit = state.bulkKits.find((i) => i.id === payload.id);
         variantIndex = payload.variantIndex || 0;
+        requestedQty = (typeof payload.qty === 'number' && payload.qty > 0) ? payload.qty : 1;
+        replaceQty = payload.replace === true;
       }
       if (kit) {
         const currentVariant = kit.variants?.[variantIndex];
@@ -357,7 +394,7 @@ const slice = createSlice({
         const cartItemId = generateCartItemId(kit.id, variantIndex);
         const exists = state.bulkCart.find((c) => c.cartItemId === cartItemId);
         const bulkCartItem = {
-          ...kit, ...currentVariant, id: kit.id, cartItemId, variantIndex, qty: 1,
+          ...kit, ...currentVariant, id: kit.id, cartItemId, variantIndex, qty: requestedQty,
           productTier: currentVariant.productTier, tierBenefits: currentVariant.tierBenefits,
           marketPrice: currentVariant.marketPrice, ourPrice: currentVariant.ourPrice,
           includedDeliveryCharge: currentVariant.includedDeliveryCharge,
@@ -365,11 +402,16 @@ const slice = createSlice({
           bulkPack: kit.bulkPack,
         };
         if (exists) {
-          let maxAllowedPacks = 10;
-          if (exists.bulkPack?.tiers?.length > 0) {
-            maxAllowedPacks = Math.max(...exists.bulkPack.tiers.map(t => t.quantity));
+          if (replaceQty) {
+            // Directly set the qty (used when switching between order quantity tiers)
+            exists.qty = requestedQty;
+          } else {
+            let maxAllowedPacks = 10;
+            if (exists.bulkPack?.tiers?.length > 0) {
+              maxAllowedPacks = Math.max(...exists.bulkPack.tiers.map(t => t.quantity));
+            }
+            if (exists.qty < maxAllowedPacks) exists.qty += 1;
           }
-          if (exists.qty < maxAllowedPacks) exists.qty += 1;
         } else {
           state.bulkCart.push(bulkCartItem);
         }

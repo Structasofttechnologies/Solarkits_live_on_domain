@@ -81,6 +81,18 @@ export default function ComboKitDetailsModal({
                                         <div className="rounded-xl bg-surface-hover p-2.5 text-center"><p className="text-[8px] font-black uppercase text-text-muted">Tolerance</p><p className="mt-1 text-xs font-black text-indigo-700">±{viewingKit.inverter_tolerance || 10}%</p></div>
                                         <div className="rounded-xl bg-surface-hover p-2.5 text-center"><p className="text-[8px] font-black uppercase text-text-muted">Range</p><p className="mt-1.5 text-[9px] font-black text-text-primary truncate">{viewingKit.project_range_id ? `${viewingKit.project_range_id.min_value}-${viewingKit.project_range_id.max_value} ${viewingKit.project_range_id.unit_id?.symbol || "kW"}` : "N/A"}</p></div>
                                     </div>
+                                    {Array.isArray(viewingKit.order_quantities) && viewingKit.order_quantities.length > 0 && (
+                                        <div className="border-t border-border/50 pt-2 space-y-1">
+                                            <span className="font-semibold text-text-secondary text-[11px]">Order Quantity Options:</span>
+                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                {viewingKit.order_quantities.filter(n => n > 0).sort((a, b) => a - b).map((qty, idx) => (
+                                                    <span key={idx} className="bg-orange-500/10 text-orange-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-orange-500/20">
+                                                        {qty} Kits
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -53,6 +53,7 @@ const SelectedBulkKitCard = memo(({ kit }) => {
   }, [kit?.variants]);
 
   const [selectedVariant, setSelectedVariant] = useState(initialVariantIndex);
+  const [selectedOrderQty, setSelectedOrderQty] = useState(null);
 
   useEffect(() => {
     setSelectedVariant(initialVariantIndex);
@@ -69,6 +70,20 @@ const SelectedBulkKitCard = memo(({ kit }) => {
   const currentVariant = kit?.variants?.[selectedVariant] || kit?.variants?.[0];
   const cartItemId = kit ? `${kit.id}-${selectedVariant}` : "";
   const bulkCartItem = kit ? bulkCart.find((item) => item.cartItemId === cartItemId) : null;
+
+  // Order quantities from kit configuration
+  const orderQuantities = useMemo(() => {
+    const rawQtys = kit?.orderQuantities || kit?.order_quantities || [];
+    return Array.isArray(rawQtys) ? rawQtys.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b) : [];
+  }, [kit?.orderQuantities, kit?.order_quantities]);
+
+  const hasOrderQuantities = orderQuantities.length > 0;
+
+  useEffect(() => {
+    if (hasOrderQuantities) {
+      setSelectedOrderQty(orderQuantities[0]);
+    }
+  }, [kit?.id, hasOrderQuantities]);
 
   const maxAllowedPacks = useMemo(() => {
     let maxTiersQty = 10;
@@ -140,20 +155,42 @@ const SelectedBulkKitCard = memo(({ kit }) => {
 
   // Bulk cart actions
   const handleAddToBulkCart = useCallback(() => {
-    dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant }));
-  }, [dispatch, kit.id, selectedVariant]);
+    dispatch(addToBulkCart({
+      id: kit.id,
+      variantIndex: selectedVariant,
+      qty: hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1
+    }));
+  }, [dispatch, kit.id, selectedVariant, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseBulkQty = useCallback(() => {
-    if (bulkCartItem?.qty > 1) {
-      dispatch(decreaseBulkQty(cartItemId));
+    if (hasOrderQuantities) {
+      const currentQty = bulkCartItem?.qty || 0;
+      const prevQty = [...orderQuantities].reverse().find(q => q < currentQty);
+      if (prevQty) {
+        dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty: prevQty, replace: true }));
+      } else {
+        dispatch(removeFromBulkCart(cartItemId));
+      }
     } else {
-      dispatch(removeFromBulkCart(cartItemId));
+      if (bulkCartItem?.qty > 1) {
+        dispatch(decreaseBulkQty(cartItemId));
+      } else {
+        dispatch(removeFromBulkCart(cartItemId));
+      }
     }
-  }, [dispatch, cartItemId, bulkCartItem?.qty]);
+  }, [dispatch, cartItemId, bulkCartItem?.qty, hasOrderQuantities, orderQuantities, kit?.id, selectedVariant]);
 
   const handleIncreaseBulkQty = useCallback(() => {
-    dispatch(increaseBulkQty(cartItemId));
-  }, [dispatch, cartItemId]);
+    if (hasOrderQuantities) {
+      const currentQty = bulkCartItem?.qty || 0;
+      const nextQty = orderQuantities.find(q => q > currentQty);
+      if (nextQty) {
+        dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty: nextQty, replace: true }));
+      }
+    } else {
+      dispatch(increaseBulkQty(cartItemId));
+    }
+  }, [dispatch, cartItemId, hasOrderQuantities, orderQuantities, kit?.id, selectedVariant, bulkCartItem?.qty]);
 
   const handleVariantChange = useCallback((index) => {
     if (index !== selectedVariant && bulkCartItem) {
@@ -919,9 +956,85 @@ const SelectedBulkKitCard = memo(({ kit }) => {
       )}
 
       {/* Cart Controls */}
-      <div className="mb-6 flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-border pb-5">
-        <div className="flex-1 w-full">
-          {!bulkCartItem ? (
+      <div className="mb-6 flex flex-col gap-4 border-b border-border pb-5">
+        <div className="w-full">
+          {hasOrderQuantities ? (
+            /* Order Quantity Chips Mode */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-text-secondary uppercase tracking-wider">
+                  Available Order Quantity (Kits)
+                </span>
+                {bulkCartItem && (
+                  <span className="text-[11px] font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
+                    Selected: {bulkCartItem.qty} Kits
+                  </span>
+                )}
+              </div>
+
+              {!bulkCartItem ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {orderQuantities.map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={() => setSelectedOrderQty(qty)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black border transition-all duration-150 cursor-pointer
+                          ${selectedOrderQty === qty
+                            ? 'bg-primary text-white border-primary shadow-md scale-105'
+                            : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                          }`}
+                      >
+                        {qty} Kits
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    onClick={handleAddToBulkCart}
+                    variant="primary"
+                    size="lg"
+                    className="w-full rounded-xl py-3 font-black bg-gradient-to-r from-primary to-primary-end shadow-md hover:shadow-lg transition-all duration-200 transform active:scale-98 mt-2"
+                    leftIcon={<FaShoppingCart />}
+                  >
+                    Order {selectedOrderQty || orderQuantities[0]} Kits
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {orderQuantities.map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={() => {
+                          dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                          setSelectedOrderQty(qty);
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-black border transition-all duration-150 cursor-pointer
+                          ${bulkCartItem.qty === qty
+                            ? 'bg-primary text-white border-primary shadow-md scale-105'
+                            : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                          }`}
+                      >
+                        {qty} Kits
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    onClick={() => dispatch(removeFromBulkCart(cartItemId))}
+                    variant="outline"
+                    size="md"
+                    className="w-full rounded-xl py-2.5 font-bold text-rose-600 border-rose-200 hover:bg-rose-50 transition-colors"
+                  >
+                    Remove from Order
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : !bulkCartItem ? (
             <Button
               onClick={handleAddToBulkCart}
               variant="primary"

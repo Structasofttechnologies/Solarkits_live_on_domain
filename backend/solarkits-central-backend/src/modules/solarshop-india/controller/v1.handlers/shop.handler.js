@@ -1012,6 +1012,8 @@ const get_combo_kits_by_district = async (req, res) => {
           })
         } : null,
         capacityKW: kit.capacity || 0,
+        orderQuantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        order_quantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
         description: kit.description || (kit.capacity ? `High quality solar kit of ${kit.capacity}kW capacity.` : ""),
         warrantyYears: (firstPanel && firstPanel.warrantyYears) || (firstInverter && firstInverter.warrantyYears) || null,
         generationEstimateKWhPerYear: kit.capacity ? Math.round(kit.capacity * 1400) : null,

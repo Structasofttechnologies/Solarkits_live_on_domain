@@ -126,6 +126,21 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const [showVariants, setShowVariants] = useState(false);
   const [showPerksTooltip, setShowPerksTooltip] = useState(false);
 
+  // Order quantities from kit configuration
+  const orderQuantities = useMemo(() => {
+    const rawQtys = kit?.orderQuantities || kit?.order_quantities || [];
+    return Array.isArray(rawQtys) ? rawQtys.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b) : [];
+  }, [kit?.orderQuantities, kit?.order_quantities]);
+
+  const hasOrderQuantities = orderQuantities.length > 0;
+  const [selectedOrderQty, setSelectedOrderQty] = useState(null);
+
+  useEffect(() => {
+    if (hasOrderQuantities) {
+      setSelectedOrderQty(orderQuantities[0]);
+    }
+  }, [kit?.id, hasOrderQuantities]);
+
   useEffect(() => {
     if (!showPerksTooltip) return;
     const handleOutsideClick = () => {
@@ -261,22 +276,44 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     if (kit.limitedStock?.displayPopup) {
       alert(`⚠️ Limited Stock Warning!\nOnly ${kit.limitedStock.quantityLeft} kits are available in inventory for this configuration. Hurry and complete your checkout!`);
     }
-    dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant }));
-  }, [dispatch, kit.id, selectedVariant, kit.limitedStock, isAuthenticated]);
+    dispatch(addToCart({
+      id: kit.id,
+      variantIndex: selectedVariant,
+      qty: hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1
+    }));
+  }, [dispatch, kit.id, selectedVariant, kit.limitedStock, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseQty = useCallback((e) => {
     e.stopPropagation();
-    if (cartItem?.qty > 1) {
-      dispatch(decreaseQty(cartItemId));
+    if (hasOrderQuantities) {
+      const currentQty = cartItem?.qty || 0;
+      const prevQty = [...orderQuantities].reverse().find(q => q < currentQty);
+      if (prevQty) {
+        dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty: prevQty, replace: true }));
+      } else {
+        dispatch(removeFromCart(cartItemId));
+      }
     } else {
-      dispatch(removeFromCart(cartItemId));
+      if (cartItem?.qty > 1) {
+        dispatch(decreaseQty(cartItemId));
+      } else {
+        dispatch(removeFromCart(cartItemId));
+      }
     }
-  }, [dispatch, cartItemId, cartItem?.qty]);
+  }, [dispatch, cartItemId, cartItem?.qty, hasOrderQuantities, orderQuantities, kit.id, selectedVariant]);
 
   const handleIncreaseQty = useCallback((e) => {
     e.stopPropagation();
-    dispatch(increaseQty(cartItemId));
-  }, [dispatch, cartItemId]);
+    if (hasOrderQuantities) {
+      const currentQty = cartItem?.qty || 0;
+      const nextQty = orderQuantities.find(q => q > currentQty);
+      if (nextQty) {
+        dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty: nextQty, replace: true }));
+      }
+    } else {
+      dispatch(increaseQty(cartItemId));
+    }
+  }, [dispatch, cartItemId, hasOrderQuantities, orderQuantities, kit.id, selectedVariant, cartItem?.qty]);
 
   const handleVariantChange = useCallback((index) => {
     setSelectedVariant(index);
@@ -710,7 +747,71 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
 
         {/* Action Button Section */}
         <div className="mt-auto pt-2">
-          {cartItem ? (
+          {hasOrderQuantities ? (
+            /* Order Quantity Chips Mode */
+            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+              {!cartItem && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {orderQuantities.map((qty) => (
+                    <button
+                      key={qty}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setSelectedOrderQty(qty); }}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
+                        ${selectedOrderQty === qty
+                          ? 'bg-primary text-white border-primary shadow-md'
+                          : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                        }`}
+                    >
+                      {qty} Kits
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!cartItem ? (
+                <Button
+                  onClick={handleAddToCart}
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  leftIcon={<FaShoppingCart />}
+                  className="bg-gradient-to-r from-primary to-primary-end text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+                >
+                  Add {selectedOrderQty || orderQuantities[0]} Kits to Cart
+                </Button>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    {orderQuantities.map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                          setSelectedOrderQty(qty);
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
+                          ${cartItem.qty === qty
+                            ? 'bg-primary text-white border-primary shadow-md'
+                            : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                          }`}
+                      >
+                        {qty} Kits
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); dispatch(removeFromCart(cartItemId)); }}
+                    className="w-full text-[10px] text-rose-500 font-bold uppercase tracking-wider hover:text-rose-700 py-1 transition-colors"
+                  >
+                    Remove from Cart
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : cartItem ? (
             <div className="flex justify-between items-center bg-gradient-to-r from-primary to-primary-end rounded-xl py-1 px-1.5 shadow-md">
               <IconButton
                 onClick={handleDecreaseQty}
@@ -1048,7 +1149,70 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
 
             {/* Cart Button */}
             <div>
-              {!currentVariant?.inStock ? (
+              {hasOrderQuantities ? (
+                <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                  {!cartItem && (
+                    <div className="flex flex-wrap gap-1.5 mb-1.5">
+                      {orderQuantities.map((qty) => (
+                        <button
+                          key={qty}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSelectedOrderQty(qty); }}
+                          className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
+                            ${selectedOrderQty === qty
+                              ? 'bg-primary text-white border-primary shadow-md'
+                              : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                            }`}
+                        >
+                          {qty} Kits
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {!cartItem ? (
+                    <Button
+                      onClick={handleAddToCart}
+                      variant="primary"
+                      size="md"
+                      fullWidth
+                      leftIcon={<FaShoppingCart />}
+                      className="bg-gradient-to-r from-primary to-primary-end text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+                    >
+                      Add {selectedOrderQty || orderQuantities[0]} Kits to Cart
+                    </Button>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        {orderQuantities.map((qty) => (
+                          <button
+                            key={qty}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                              setSelectedOrderQty(qty);
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
+                              ${cartItem.qty === qty
+                                ? 'bg-primary text-white border-primary shadow-md'
+                                : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                              }`}
+                          >
+                            {qty} Kits
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); dispatch(removeFromCart(cartItemId)); }}
+                        className="w-full text-[10px] text-rose-500 font-bold uppercase tracking-wider hover:text-rose-700 py-1 transition-colors"
+                      >
+                        Remove from Cart
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : !currentVariant?.inStock ? (
                 <Button
                   variant="danger"
                   size="md"

@@ -83,12 +83,35 @@ const didBosKitsChange = (existing = [], newMapped = []) => {
     return false;
 };
 
+const cleanId = (val) => {
+    if (!val) return null;
+    if (typeof val === 'object') {
+        const id = val._id || val.id || val.value;
+        return (id && mongoose.Types.ObjectId.isValid(id)) ? new mongoose.Types.ObjectId(id) : null;
+    }
+    if (typeof val === 'string' && mongoose.Types.ObjectId.isValid(val)) {
+        return new mongoose.Types.ObjectId(val);
+    }
+    return null;
+};
+
 const isCountryIndia = async (countryId) => {
     if (!countryId) return false;
     try {
-        const queryId = mongoose.Types.ObjectId.isValid(countryId) ? new mongoose.Types.ObjectId(countryId) : countryId;
-        const country = await GeoLevel0.findOne({ _id: queryId, deleted_at: null });
-        return country && country.name.toLowerCase() === 'india';
+        if (typeof countryId === 'string' && countryId.toLowerCase() === 'india') return true;
+        if (typeof countryId === 'object' && countryId.name?.toLowerCase() === 'india') return true;
+        const rawId = typeof countryId === 'object' ? (countryId.id || countryId._id) : countryId;
+        if (!rawId) return false;
+        if (typeof rawId === 'string' && rawId.toLowerCase() === 'india') return true;
+
+        const queryId = mongoose.Types.ObjectId.isValid(rawId) ? new mongoose.Types.ObjectId(rawId) : rawId;
+        const country = await GeoLevel0.findOne({ _id: queryId, $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] });
+        if (country && country.name?.toLowerCase() === 'india') return true;
+
+        const countryIndia = await GeoLevel0.findOne({ name: /india/i, $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] });
+        if (countryIndia && String(countryIndia._id) === String(rawId)) return true;
+
+        return false;
     } catch (e) {
         console.error("Error in isCountryIndia:", e);
         return false;
@@ -102,6 +125,7 @@ const create_combo_kit = async (req, res) => {
         const targetVariantIds = variant_ids.length > 0 
             ? variant_ids.map(id => id.id || id._id || id)
             : (variant_id ? [variant_id] : []);
+        const order_quantities = parseJSON(req.body.order_quantities, []);
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -139,24 +163,24 @@ const create_combo_kit = async (req, res) => {
 
         // Map base components
         const mappedBaseComponents = base_components.map(bc => ({
-            template_id: bc.template_id,
-            subtype_id: bc.subtype_id || null,
-            brand_id: bc.brand_id || null,
-            brand_ids: bc.brand_ids || [],
-            sku_id: bc.sku_id || null,
-            quantity: bc.quantity || 1
+            template_id: cleanId(bc.template_id) || bc.template_id,
+            subtype_id: cleanId(bc.subtype_id),
+            brand_id: cleanId(bc.brand_id),
+            brand_ids: (bc.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bc.sku_id),
+            quantity: parseFloat(bc.quantity) || 1
         }));
 
         // Map BOS kits and assign images
         const mappedBosKits = bos_kits.map((bk, idx) => ({
             name: bk.name,
-            brand_id: bk.brand_id || null,
-            brand_ids: bk.brand_ids || [],
-            sku_id: bk.sku_id || null,
-            quantity: bk.quantity || 1,
+            brand_id: cleanId(bk.brand_id),
+            brand_ids: (bk.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bk.sku_id),
+            quantity: parseFloat(bk.quantity) || 1,
             image: bos_images[idx] || bk.image || null,
-            template_ids: bk.template_ids || [],
-            subtype_ids: bk.subtype_ids || []
+            template_ids: (bk.template_ids || []).map(cleanId).filter(Boolean),
+            subtype_ids: (bk.subtype_ids || []).map(cleanId).filter(Boolean)
         }));
 
         if (mappedBosKits.some(bk => !bk.image)) {
@@ -200,6 +224,7 @@ const create_combo_kit = async (req, res) => {
                 kit_image,
                 variant_id: targetVariantIds[0] || null,
                 variant_ids: targetVariantIds,
+                order_quantities: (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -412,24 +437,24 @@ const update_combo_kit = async (req, res) => {
 
         // Map base components
         const mappedBaseComponents = base_components.map(bc => ({
-            template_id: bc.template_id,
-            subtype_id: bc.subtype_id || null,
-            brand_id: bc.brand_id || null,
-            brand_ids: bc.brand_ids || [],
-            sku_id: bc.sku_id || null,
-            quantity: bc.quantity || 1
+            template_id: cleanId(bc.template_id) || bc.template_id,
+            subtype_id: cleanId(bc.subtype_id),
+            brand_id: cleanId(bc.brand_id),
+            brand_ids: (bc.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bc.sku_id),
+            quantity: parseFloat(bc.quantity) || 1
         }));
 
         // Map BOS kits and assign new or existing images
         const mappedBosKits = bos_kits.map((bk, idx) => ({
             name: bk.name,
-            brand_id: bk.brand_id || null,
-            brand_ids: bk.brand_ids || [],
-            sku_id: bk.sku_id || null,
-            quantity: bk.quantity || 1,
-            image: bos_images[idx] || bk.image || null,
-            template_ids: bk.template_ids || [],
-            subtype_ids: bk.subtype_ids || []
+            brand_id: cleanId(bk.brand_id),
+            brand_ids: (bk.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bk.sku_id),
+            quantity: parseFloat(bk.quantity) || 1,
+            image: bos_images[idx] || bk.image || existingKit.bos_kits?.[idx]?.image || null,
+            template_ids: (bk.template_ids || []).map(cleanId).filter(Boolean),
+            subtype_ids: (bk.subtype_ids || []).map(cleanId).filter(Boolean)
         }));
 
         if (mappedBosKits.some(bk => !bk.image)) {
@@ -460,17 +485,21 @@ const update_combo_kit = async (req, res) => {
         existingKit.name = name || existingKit.name;
         existingKit.description = description !== undefined ? description : existingKit.description;
         existingKit.country_id = country_id !== undefined ? country_id : existingKit.country_id;
-        existingKit.solar_kit_id = solar_kit_id || existingKit.solar_kit_id;
+        existingKit.solar_kit_id = targetSolarKitId;
         existingKit.brand_id = brand_id !== undefined ? (brand_id || null) : existingKit.brand_id;
         existingKit.project_range_id = project_range_id !== undefined ? (project_range_id || null) : existingKit.project_range_id;
-        const variant_ids = parseJSON(req.body.variant_ids, null);
-        if (variant_ids !== null) {
+        if (req.body.variant_ids !== undefined) {
+            const variant_ids = parseJSON(req.body.variant_ids, []);
             const targetVariantIds = variant_ids.map(id => id.id || id._id || id);
             existingKit.variant_ids = targetVariantIds;
             existingKit.variant_id = targetVariantIds[0] || null;
         } else if (variant_id !== undefined) {
             existingKit.variant_id = variant_id || null;
             existingKit.variant_ids = variant_id ? [variant_id] : [];
+        }
+        if (req.body.order_quantities !== undefined) {
+            const order_quantities = parseJSON(req.body.order_quantities, []);
+            existingKit.order_quantities = (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
         }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
@@ -556,6 +585,7 @@ const create_combo_kit_india = async (req, res) => {
         const targetVariantIds = variant_ids.length > 0 
             ? variant_ids.map(id => id.id || id._id || id)
             : (variant_id ? [variant_id] : []);
+        const order_quantities = parseJSON(req.body.order_quantities, []);
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -594,24 +624,24 @@ const create_combo_kit_india = async (req, res) => {
 
         // Map base components
         const mappedBaseComponents = base_components.map(bc => ({
-            template_id: bc.template_id,
-            subtype_id: bc.subtype_id || null,
-            brand_id: bc.brand_id || null,
-            brand_ids: bc.brand_ids || [],
-            sku_id: bc.sku_id || null,
-            quantity: bc.quantity || 1
+            template_id: cleanId(bc.template_id) || bc.template_id,
+            subtype_id: cleanId(bc.subtype_id),
+            brand_id: cleanId(bc.brand_id),
+            brand_ids: (bc.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bc.sku_id),
+            quantity: parseFloat(bc.quantity) || 1
         }));
 
         // Map BOS kits and assign images
         const mappedBosKits = bos_kits.map((bk, idx) => ({
             name: bk.name,
-            brand_id: bk.brand_id || null,
-            brand_ids: bk.brand_ids || [],
-            sku_id: bk.sku_id || null,
-            quantity: bk.quantity || 1,
+            brand_id: cleanId(bk.brand_id),
+            brand_ids: (bk.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bk.sku_id),
+            quantity: parseFloat(bk.quantity) || 1,
             image: bos_images[idx] || bk.image || null,
-            template_ids: bk.template_ids || [],
-            subtype_ids: bk.subtype_ids || []
+            template_ids: (bk.template_ids || []).map(cleanId).filter(Boolean),
+            subtype_ids: (bk.subtype_ids || []).map(cleanId).filter(Boolean)
         }));
 
         if (mappedBosKits.some(bk => !bk.image)) {
@@ -655,6 +685,7 @@ const create_combo_kit_india = async (req, res) => {
                 kit_image,
                 variant_id: targetVariantIds[0] || null,
                 variant_ids: targetVariantIds,
+                order_quantities: (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -923,24 +954,24 @@ const update_combo_kit_india = async (req, res) => {
 
         // Map base components
         const mappedBaseComponents = base_components.map(bc => ({
-            template_id: bc.template_id,
-            subtype_id: bc.subtype_id || null,
-            brand_id: bc.brand_id || null,
-            brand_ids: bc.brand_ids || [],
-            sku_id: bc.sku_id || null,
-            quantity: bc.quantity || 1
+            template_id: cleanId(bc.template_id) || bc.template_id,
+            subtype_id: cleanId(bc.subtype_id),
+            brand_id: cleanId(bc.brand_id),
+            brand_ids: (bc.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bc.sku_id),
+            quantity: parseFloat(bc.quantity) || 1
         }));
 
         // Map BOS kits and assign new or existing images
         const mappedBosKits = bos_kits.map((bk, idx) => ({
             name: bk.name,
-            brand_id: bk.brand_id || null,
-            brand_ids: bk.brand_ids || [],
-            sku_id: bk.sku_id || null,
-            quantity: bk.quantity || 1,
-            image: bos_images[idx] || bk.image || null,
-            template_ids: bk.template_ids || [],
-            subtype_ids: bk.subtype_ids || []
+            brand_id: cleanId(bk.brand_id),
+            brand_ids: (bk.brand_ids || []).map(cleanId).filter(Boolean),
+            sku_id: cleanId(bk.sku_id),
+            quantity: parseFloat(bk.quantity) || 1,
+            image: bos_images[idx] || bk.image || existingKit.bos_kits?.[idx]?.image || null,
+            template_ids: (bk.template_ids || []).map(cleanId).filter(Boolean),
+            subtype_ids: (bk.subtype_ids || []).map(cleanId).filter(Boolean)
         }));
 
         if (mappedBosKits.some(bk => !bk.image)) {
@@ -982,6 +1013,10 @@ const update_combo_kit_india = async (req, res) => {
         } else if (variant_id !== undefined) {
             existingKit.variant_id = variant_id || null;
             existingKit.variant_ids = variant_id ? [variant_id] : [];
+        }
+        if (req.body.order_quantities !== undefined) {
+            const order_quantities = parseJSON(req.body.order_quantities, []);
+            existingKit.order_quantities = (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
         }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;

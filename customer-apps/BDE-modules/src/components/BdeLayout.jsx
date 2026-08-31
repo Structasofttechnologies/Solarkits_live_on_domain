@@ -16,6 +16,7 @@ import {
   MapPin,
   ChevronRight,
   SunMedium,
+  Zap,
 } from 'lucide-react';
 
 export default function BdeLayout() {
@@ -29,6 +30,7 @@ export default function BdeLayout() {
     { name: 'Leads', path: '/leads', icon: Users },
     { name: 'Franchisees', path: '/franchisees', icon: Store },
     { name: 'Goals & Targets', path: '/goals', icon: Target },
+    { name: "EPC Management", path: '/epc-management', icon: Zap },
     { name: 'Store Setup', path: '/store-setup', icon: ShoppingBag },
     { name: 'Notifications', path: '/notifications', icon: Bell },
     { name: 'My Profile & KYC', path: '/profile', icon: User },
@@ -150,9 +152,8 @@ export default function BdeLayout() {
       <div className="flex-1 flex">
         {/* Sidebar */}
         <aside
-          className={`fixed md:sticky top-16 z-30 h-[calc(100vh-4rem)] w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`fixed md:sticky top-16 z-30 h-[calc(100vh-4rem)] w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
         >
           <div className="p-4 space-y-1">
             <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -167,10 +168,9 @@ export default function BdeLayout() {
                   end={item.path === '/'}
                   onClick={() => setSidebarOpen(false)}
                   className={({ isActive }) =>
-                    `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200/60 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                    `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${isActive
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200/60 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
                     }`
                   }
                 >

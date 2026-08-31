@@ -60,5 +60,12 @@ router.post('/leads/start-signup/:id', verify_bde_auth, handler.start_franchisee
 router.get('/pipeline', verify_bde_auth, handler.get_bde_pipeline);
 router.get('/franchisees', verify_bde_auth, handler.get_my_franchisees);
 
+// ── Step 3: BDE EPC Management (Territory-Scoped) ─────────────────────────────
+router.get('/epc/stats',              verify_bde_auth, handler.get_bde_epc_stats);
+router.get('/epc/list',               verify_bde_auth, handler.get_bde_epc_list);
+router.post('/epc/onboard',           verify_bde_auth, handler.onboard_epc);
+router.get('/epc/franchise-partners', verify_bde_auth, handler.get_bde_franchise_partners);
+router.post('/epc/assign-partner',    verify_bde_auth, handler.assign_franchise_partner);
+
 module.exports = router;
 

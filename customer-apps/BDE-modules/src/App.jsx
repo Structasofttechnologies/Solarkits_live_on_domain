@@ -11,6 +11,7 @@ import BdeGoals from './pages/BdeGoals';
 import BdeStoreSetup from './pages/BdeStoreSetup';
 import BdeNotifications from './pages/BdeNotifications';
 import BdeProfile from './pages/BdeProfile';
+import EpcManagement from './pages/EpcManagement';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
               <Route path="/store-setup" element={<BdeStoreSetup />} />
               <Route path="/notifications" element={<BdeNotifications />} />
               <Route path="/profile" element={<BdeProfile />} />
+              <Route path="/epc-management" element={<EpcManagement />} />
             </Route>
           </Route>
 

@@ -32,10 +32,27 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
   }, [kit.id]);
 
   const [showVariants, setShowVariants] = useState(false);
+  // Track selected order quantity when kit has order_quantities configured
+  const [selectedOrderQty, setSelectedOrderQty] = useState(null);
 
   const currentVariant = kit.variants?.[selectedVariant] || kit.variants?.[0];
   const cartItemId =`${kit.id}-${selectedVariant}`;
   const bulkCartItem = bulkCart.find((item) => item.cartItemId === cartItemId);
+
+  // Order quantities from kit configuration
+  const orderQuantities = useMemo(() => {
+    const rawQtys = kit.orderQuantities || kit.order_quantities || [];
+    return Array.isArray(rawQtys) ? rawQtys.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b) : [];
+  }, [kit.orderQuantities, kit.order_quantities]);
+
+  const hasOrderQuantities = orderQuantities.length > 0;
+
+  // Initialize selectedOrderQty with first quantity when orderQuantities available
+  useMemo(() => {
+    if (hasOrderQuantities && !selectedOrderQty) {
+      setSelectedOrderQty(orderQuantities[0]);
+    }
+  }, [hasOrderQuantities, orderQuantities]);
 
   const maxAllowedPacks = useMemo(() => {
     let maxTiersQty = 10;
@@ -104,22 +121,42 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
 
   const handleAddToBulkCart = useCallback((e) => {
     e.stopPropagation();
-    dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant }));
-  }, [dispatch, kit.id, selectedVariant]);
+    dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty: hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1 }));
+  }, [dispatch, kit.id, selectedVariant, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseBulkQty = useCallback((e) => {
     e.stopPropagation();
-    if (bulkCartItem?.qty > 1) {
-      dispatch(decreaseBulkQty(cartItemId));
+    if (hasOrderQuantities) {
+      // Step to previous quantity tier
+      const currentQty = bulkCartItem?.qty || 0;
+      const prevQty = [...orderQuantities].reverse().find(q => q < currentQty);
+      if (prevQty) {
+        dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty: prevQty, replace: true }));
+      } else {
+        dispatch(removeFromBulkCart(cartItemId));
+      }
     } else {
-      dispatch(removeFromBulkCart(cartItemId));
+      if (bulkCartItem?.qty > 1) {
+        dispatch(decreaseBulkQty(cartItemId));
+      } else {
+        dispatch(removeFromBulkCart(cartItemId));
+      }
     }
-  }, [dispatch, cartItemId, bulkCartItem?.qty]);
+  }, [dispatch, cartItemId, bulkCartItem?.qty, hasOrderQuantities, orderQuantities, kit.id, selectedVariant]);
 
   const handleIncreaseBulkQty = useCallback((e) => {
     e.stopPropagation();
-    dispatch(increaseBulkQty(cartItemId));
-  }, [dispatch, cartItemId]);
+    if (hasOrderQuantities) {
+      // Step to next quantity tier
+      const currentQty = bulkCartItem?.qty || 0;
+      const nextQty = orderQuantities.find(q => q > currentQty);
+      if (nextQty) {
+        dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty: nextQty, replace: true }));
+      }
+    } else {
+      dispatch(increaseBulkQty(cartItemId));
+    }
+  }, [dispatch, cartItemId, hasOrderQuantities, orderQuantities, kit.id, selectedVariant, bulkCartItem?.qty]);
 
   const handleVariantChange = useCallback((index) => {
     setSelectedVariant(index);
@@ -530,7 +567,72 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
 
         {/* Action Button Section */}
         <div className="mt-auto pt-2">
-          {!bulkCartItem ? (
+          {hasOrderQuantities ? (
+            /* Order Quantity Chips Mode */
+            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+              {/* Qty selector chips */}
+              {!bulkCartItem && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {orderQuantities.map((qty) => (
+                    <button
+                      key={qty}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setSelectedOrderQty(qty); }}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150
+                        ${selectedOrderQty === qty
+                          ? 'bg-primary text-white border-primary shadow-md'
+                          : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                        }`}
+                    >
+                      {qty} Kits
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!bulkCartItem ? (
+                <Button
+                  onClick={handleAddToBulkCart}
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  leftIcon={<FaShoppingCart />}
+                  className="bg-gradient-to-r from-primary to-primary-end text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+                >
+                  Order {selectedOrderQty || orderQuantities[0]} Kits
+                </Button>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    {orderQuantities.map((qty) => (
+                      <button
+                        key={qty}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dispatch(addToBulkCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                          setSelectedOrderQty(qty);
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150
+                          ${bulkCartItem.qty === qty
+                            ? 'bg-primary text-white border-primary shadow-md'
+                            : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
+                          }`}
+                      >
+                        {qty} Kits
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); dispatch(removeFromBulkCart(cartItemId)); }}
+                    className="w-full text-[10px] text-rose-500 font-bold uppercase tracking-wider hover:text-rose-700 py-1 transition-colors"
+                  >
+                    Remove from Order
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : !bulkCartItem ? (
             <Button
               onClick={handleAddToBulkCart}
               variant="primary"

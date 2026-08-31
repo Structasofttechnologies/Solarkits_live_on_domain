@@ -88,6 +88,7 @@ export default function ComboKitFormDrawer({
     brands = [],
 }) {
     const [filterInfoData, setFilterInfoData] = useState(null);
+    const [orderQtyInput, setOrderQtyInput] = useState("");
 
     const comboKitBrandOptions = useMemo(() => {
         return (brands || []).map((b) => ({
@@ -786,6 +787,145 @@ export default function ComboKitFormDrawer({
                             )}
                         </div>
                     </div>
+
+                    {/* ─── ORDER QUANTITY OPTIONS SECTION ─────────────────────────── */}
+                    <section className="rounded-2xl border border-border bg-surface-hover/20 p-5 space-y-4">
+                        <div className="flex items-center gap-2 px-1">
+                            <div className="rounded-lg bg-orange-500/10 p-1.5 text-orange-600">
+                                <FaShoppingBag size={14} />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-text-primary">
+                                    Order Quantity Options (Kits)
+                                </h3>
+                                <p className="text-[10px] text-text-muted mt-0.5">
+                                    Define how many kits a customer can order at a time. Store mein sirf yahi quantities dikhenge.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Quick Preset Chips */}
+                        <div className="space-y-2">
+                            <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                Quick Add Presets
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {[10, 25, 50, 100, 200, 500].map((preset) => {
+                                    const alreadyAdded = (formData.order_quantities || []).includes(preset);
+                                    return (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            disabled={alreadyAdded}
+                                            onClick={() => {
+                                                if (!alreadyAdded) {
+                                                    const updated = [...(formData.order_quantities || []), preset].sort((a, b) => a - b);
+                                                    handleFormChange("order_quantities", updated);
+                                                }
+                                            }}
+                                            className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border transition-all duration-150 
+                                                ${alreadyAdded
+                                                    ? "bg-orange-500/10 text-orange-700 border-orange-500/30 cursor-not-allowed opacity-60"
+                                                    : "bg-surface border-border text-text-secondary hover:bg-orange-500/10 hover:text-orange-700 hover:border-orange-500/30 cursor-pointer"
+                                                }`}
+                                        >
+                                            {alreadyAdded ? `✓ ${preset} Kits` : `+ ${preset} Kits`}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Custom Qty Input */}
+                        <div className="space-y-2">
+                            <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                Add Custom Quantity
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="99999"
+                                    value={orderQtyInput}
+                                    onChange={(e) => setOrderQtyInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            const val = parseInt(orderQtyInput);
+                                            if (!isNaN(val) && val > 0 && !(formData.order_quantities || []).includes(val)) {
+                                                const updated = [...(formData.order_quantities || []), val].sort((a, b) => a - b);
+                                                handleFormChange("order_quantities", updated);
+                                                setOrderQtyInput("");
+                                            }
+                                        }
+                                    }}
+                                    placeholder="e.g. 150"
+                                    className="flex-1 h-10 px-4 bg-surface border-2 border-border focus:border-primary rounded-xl text-xs font-bold text-text-primary placeholder:text-text-muted outline-none transition-colors"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const val = parseInt(orderQtyInput);
+                                        if (!isNaN(val) && val > 0 && !(formData.order_quantities || []).includes(val)) {
+                                            const updated = [...(formData.order_quantities || []), val].sort((a, b) => a - b);
+                                            handleFormChange("order_quantities", updated);
+                                            setOrderQtyInput("");
+                                        }
+                                    }}
+                                    className="h-10 px-4 bg-orange-500 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5"
+                                >
+                                    <FaPlus size={11} /> Add
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Configured Quantities Display */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                    Configured Quantities ({(formData.order_quantities || []).length})
+                                </label>
+                                {(formData.order_quantities || []).length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFormChange("order_quantities", [])}
+                                        className="text-[9px] text-rose-500 font-black uppercase tracking-wider hover:text-rose-700 transition-colors"
+                                    >
+                                        Clear All
+                                    </button>
+                                )}
+                            </div>
+                            {(formData.order_quantities || []).length > 0 ? (
+                                <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-orange-500/5 border border-orange-500/15">
+                                    {[...(formData.order_quantities || [])].sort((a, b) => a - b).map((qty, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-center gap-1.5 bg-orange-500/10 text-orange-700 border border-orange-500/25 px-3 py-1 rounded-full group"
+                                        >
+                                            <span className="text-[11px] font-black">{qty} Kits</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const updated = (formData.order_quantities || []).filter(q => q !== qty);
+                                                    handleFormChange("order_quantities", updated);
+                                                }}
+                                                className="w-3.5 h-3.5 rounded-full bg-orange-500/20 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors text-orange-700"
+                                                title={`Remove ${qty} Kits`}
+                                            >
+                                                <FaTrash size={7} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/5 text-center">
+                                    <p className="text-[11px] text-text-muted italic">
+                                        No quantity options set — store mein +/- counter dikhega (unlimited orders)
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </section>
 
                     <div className="space-y-6">
                         {!selectedSolarKitObj ? (

@@ -60,7 +60,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     variant_ids: [],
     kit_image: null,
     base_components: [],
-    bos_kits: []
+    bos_kits: [],
+    order_quantities: [] // e.g. [10, 25, 50, 100] — allowed order kit quantities
   });
 
   const [kitImageFile, setKitImageFile] = useState(null);
@@ -1334,7 +1335,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
           variant_ids: [],
           kit_image: null,
           base_components: [],
-          bos_kits: []
+          bos_kits: [],
+          order_quantities: []
         });
       } finally {
         setLoadingDrawerData(false);
@@ -1354,7 +1356,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         variant_ids: [],
         kit_image: null,
         base_components: [],
-        bos_kits: []
+        bos_kits: [],
+        order_quantities: []
       });
       setLoadingDrawerData(false);
     }
@@ -1498,6 +1501,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         solar_kit_id: row.solar_kit_id?.id || row.solar_kit_id?._id || row.solar_kit_id,
         brand_id: row.brand_id?._id || row.brand_id?.id || row.brand_id || "",
         project_range_id: row.project_range_id?.id || row.project_range_id?._id || row.project_range_id || "",
+        order_quantities: Array.isArray(row.order_quantities) ? row.order_quantities.map(Number).filter(n => !isNaN(n) && n > 0) : [],
         capacity: row.capacity || 0,
         inverter_tolerance: row.inverter_tolerance || 10,
         inverter_mode: row.inverter_mode || (hasMultiInverter ? "multi" : "single"),
@@ -1545,37 +1549,60 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     try {
       const payload = new FormData();
       if (editingKit) {
-        payload.append("id", editingKit.id);
+        payload.append("id", editingKit.id || editingKit._id);
       }
       payload.append("name", formData.name);
       payload.append("description", formData.description || "");
-      payload.append("brand_id", formData.brand_id || "");
-      payload.append("country_id", selectedCountry);
-      payload.append("solar_kit_id", formData.solar_kit_id);
-      payload.append("project_range_id", formData.project_range_id || "");
+
+      const rawCountryId = selectedCountry || editingKit?.country_id?._id || editingKit?.country_id?.id || editingKit?.country_id || "";
+      const rawSolarKitId = formData.solar_kit_id?._id || formData.solar_kit_id?.id || formData.solar_kit_id || "";
+      const rawBrandId = formData.brand_id?._id || formData.brand_id?.id || formData.brand_id || "";
+      const rawRangeId = formData.project_range_id?._id || formData.project_range_id?.id || formData.project_range_id || "";
+      const rawVariantId = formData.variant_id?._id || formData.variant_id?.id || formData.variant_id || "";
+      const cleanVariantIds = (formData.variant_ids || []).map(v => v?._id || v?.id || v).filter(Boolean);
+
+      payload.append("country_id", rawCountryId);
+      payload.append("solar_kit_id", rawSolarKitId);
+      payload.append("brand_id", rawBrandId);
+      payload.append("project_range_id", rawRangeId);
       payload.append("capacity", formData.capacity || 0);
       payload.append("inverter_tolerance", formData.inverter_tolerance || 10);
       payload.append("inverter_mode", formData.inverter_mode || "single");
-      payload.append("variant_id", formData.variant_id || "");
-      payload.append("variant_ids", JSON.stringify(formData.variant_ids || []));
-      payload.append("base_components", JSON.stringify(formData.base_components));
+      payload.append("variant_id", rawVariantId);
+      payload.append("variant_ids", JSON.stringify(cleanVariantIds));
+      payload.append("order_quantities", JSON.stringify((formData.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)));
+
+      const cleanBaseComponents = (formData.base_components || []).map(bc => ({
+        template_id: bc.template_id?._id || bc.template_id?.id || bc.template_id,
+        subtype_id: bc.subtype_id?._id || bc.subtype_id?.id || bc.subtype_id || null,
+        brand_id: bc.brand_id?._id || bc.brand_id?.id || bc.brand_id || null,
+        brand_ids: (bc.brand_ids || []).map(b => b?._id || b?.id || b).filter(Boolean),
+        sku_id: bc.sku_id?._id || bc.sku_id?.id || bc.sku_id || null,
+        quantity: parseFloat(bc.quantity) || 1
+      }));
+      payload.append("base_components", JSON.stringify(cleanBaseComponents));
 
       const flattenedBosKits = [];
       let flatIdx = 0;
-      formData.bos_kits.forEach((bk, groupIdx) => {
+      (formData.bos_kits || []).forEach((bk, groupIdx) => {
         (bk.items || []).forEach(item => {
           let resolvedBrandId = item.brand_id || bk.brand_id || null;
+          resolvedBrandId = resolvedBrandId?._id || resolvedBrandId?.id || resolvedBrandId;
           if (resolvedBrandId === "Standard Kit") {
             resolvedBrandId = null;
           }
+          const tId = item.template_id?._id || item.template_id?.id || item.template_id;
+          const sId = item.sku_id?._id || item.sku_id?.id || item.sku_id || null;
+          const subIds = (item.subtype_ids || []).map(s => s?._id || s?.id || s).filter(Boolean);
+
           flattenedBosKits.push({
-            name: `${bk.name} — ${item.name}`,
-            brand_id: resolvedBrandId,
-            sku_id: item.sku_id || null,
-            quantity: item.quantity || 1,
+            name: `${bk.name || "BOS Kit"} — ${item.name || "Item"}`,
+            brand_id: resolvedBrandId || null,
+            sku_id: sId,
+            quantity: parseFloat(item.quantity) || 1,
             image: bk.image || null,
-            template_ids: [item.template_id],
-            subtype_ids: item.subtype_ids || []
+            template_ids: tId ? [tId] : [],
+            subtype_ids: subIds
           });
 
           if (bosImageFiles[groupIdx]) {
@@ -1871,6 +1898,25 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
           </p>
         </div>
       )
+    },
+    {
+      header: "Order Qty Options",
+      label: "Order Qty Options",
+      accessor: "order_quantities",
+      render: (val) => {
+        const qtys = Array.isArray(val) ? val.filter(n => n > 0).sort((a, b) => a - b) : [];
+        return (
+          <div className="flex flex-wrap gap-1 max-w-60">
+            {qtys.length > 0 ? qtys.map((q, idx) => (
+              <span key={idx} className="bg-amber-500/10 text-amber-700 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/20">
+                {q} Kits
+              </span>
+            )) : (
+              <span className="text-[10px] text-text-muted font-bold italic">No Qty Limits</span>
+            )}
+          </div>
+        );
+      }
     },
     {
       header: "Configured Brands",

@@ -53,7 +53,6 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
     kit: null,
     showcase_margin: "",
     standard_margin: "",
-    po_margin: "",
     gst_rate: ""
   });
 
@@ -150,7 +149,6 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
       kit: row,
       showcase_margin: entry.showcase_margin,
       standard_margin: entry.standard_margin,
-      po_margin: entry.po_margin,
       gst_rate: entry.gst_rate
     });
   };
@@ -184,21 +182,15 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
     const kitId = dialogState.kit.id;
     const displayVal = dialogState.showcase_margin !== "" ? Number(dialogState.showcase_margin) : 0;
     const standardVal = dialogState.standard_margin !== "" ? Number(dialogState.standard_margin) : 0;
-    const poVal = dialogState.po_margin !== "" ? Number(dialogState.po_margin) : 0;
     const gstVal = dialogState.gst_rate !== "" ? Number(dialogState.gst_rate) : null;
 
-    if (displayVal < 0 || standardVal < 0 || poVal < 0) {
+    if (displayVal < 0 || standardVal < 0) {
       dispatch(setAlert({ type: "warning", message: "Margin percentages must be 0 or a positive number" }));
       return;
     }
 
     if (standardVal > displayVal) {
       dispatch(setAlert({ type: "warning", message: "Standard Sales Margin cannot exceed Display Margin" }));
-      return;
-    }
-
-    if (poVal > displayVal) {
-      dispatch(setAlert({ type: "warning", message: "PO Sales Margin cannot exceed Display Margin" }));
       return;
     }
 
@@ -216,7 +208,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
         // API field names kept backward-compatible
         showcase_margin: displayVal,
         standard_margin: standardVal,
-        po_discounted_margin: poVal,
+        po_discounted_margin: 0,
         gst_rate: gstVal
       };
 
@@ -317,19 +309,6 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
       }
     },
     {
-      key: "po_margin",
-      accessor: "id",
-      label: "PO Sales Margin",
-      render: (val, row) => {
-        const entry = marginsInput[row.id] || { showcase_margin: 0, standard_margin: 0, po_margin: 0, gst_rate: "" };
-        return (
-          <span className="font-bold text-xs text-text-secondary bg-surface-hover px-2.5 py-1 rounded-lg border border-border/40">
-            {Number(entry.po_margin).toFixed(2)}%
-          </span>
-        );
-      }
-    },
-    {
       key: "gst_rate",
       accessor: "id",
       label: "GST Rate",
@@ -387,7 +366,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
                     Configure Warehouse Margins
                   </h1>
                   <p className="text-white/80 text-xs mt-0.5 font-bold">
-                    Configure Display, Standard Sales, and PO Sales margin percentages on a per-kit basis.
+                    Configure Display and Standard Sales margin percentages on a per-kit basis.
                   </p>
                 </div>
               </div>
@@ -464,7 +443,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-black text-text-primary uppercase tracking-wider">Combo Kit Margins</h3>
-                <p className="text-xs text-text-muted mt-1 font-bold">Configure Display, Standard Sales, and PO Sales margin percentages specifically applied to each Combo Kit definition.</p>
+                <p className="text-xs text-text-muted mt-1 font-bold">Configure Display and Standard Sales margin percentages specifically applied to each Combo Kit definition.</p>
               </div>
               <div className="bg-surface rounded-2xl border border-border overflow-hidden">
                 <CustomTable
@@ -481,7 +460,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-black text-text-primary uppercase tracking-wider">Customized Kit Margins</h3>
-                <p className="text-xs text-text-muted mt-1 font-bold">Configure Display, Standard Sales, and PO Sales margin percentages specifically applied to each customized/custom kit combination.</p>
+                <p className="text-xs text-text-muted mt-1 font-bold">Configure Display and Standard Sales margin percentages specifically applied to each customized/custom kit combination.</p>
               </div>
               <div className="bg-surface rounded-2xl border border-border overflow-hidden">
                 <CustomTable
@@ -538,18 +517,6 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
               step="0.01"
               value={dialogState.standard_margin}
               onChange={(e) => setDialogState((prev) => ({ ...prev, standard_margin: e.target.value }))}
-              placeholder="0.00"
-              prefix={<FaPercent className="text-text-muted text-[10px]" />}
-            />
-
-            {/* PO Sales Margin */}
-            <CustomInput
-              label="PO Sales Margin (%) *"
-              type="number"
-              min="0"
-              step="0.01"
-              value={dialogState.po_margin}
-              onChange={(e) => setDialogState((prev) => ({ ...prev, po_margin: e.target.value }))}
               placeholder="0.00"
               prefix={<FaPercent className="text-text-muted text-[10px]" />}
             />
