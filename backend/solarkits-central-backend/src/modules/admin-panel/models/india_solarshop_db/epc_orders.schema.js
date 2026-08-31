@@ -62,9 +62,14 @@ const schema = new mongoose.Schema({
     enum: ['pending', 'confirmed', 'processing', 'allocated', 'dispatched', 'delivered', 'cancelled'],
     default: 'pending',
   },
+  payment_method: {
+    type: String,
+    enum: ['offline_bank_transfer'],
+    default: 'offline_bank_transfer',
+  },
   payment_status: {
     type: String,
-    enum: ['pending', 'captured', 'failed', 'refunded'],
+    enum: ['pending', 'pending_verification', 'captured', 'rejected', 'failed', 'refunded'],
     default: 'pending',
   },
   payment_reference: {
@@ -77,15 +82,66 @@ const schema = new mongoose.Schema({
     default: null,
     trim: true,
   },
+  fulfillment_source: {
+    type: String,
+    enum: ['company_warehouse', 'franchise_warehouse', 'direct_fulfillment'],
+    default: 'company_warehouse',
+  },
+  warehouse_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'company_warehouses',
+    default: null,
+  },
+
+  // ── Offline Bank Transfer & Verification Details ──────────────────────────
+  offline_payment: {
+    utr_number:          { type: String, default: null, trim: true, uppercase: true },
+    amount_paid:         { type: Number, default: 0 },
+    payment_date:        { type: Date, default: null },
+    receipt_url:         { type: String, default: null },
+    receipt_filename:    { type: String, default: null },
+    sender_bank_name:    { type: String, default: null, trim: true },
+    account_holder_name: { type: String, default: null, trim: true },
+    verification_status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    verified_by:         { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    verified_at:         { type: Date, default: null },
+    rejection_reason:    { type: String, default: null, trim: true },
+    resubmitted_count:   { type: Number, default: 0 },
+    notes:               { type: String, default: null },
+  },
+
+  // ── Tax Invoice Details ──────────────────────────────────────────────────
+  invoice: {
+    invoice_number: { type: String, default: null, trim: true },
+    invoice_date:   { type: Date, default: null },
+    invoice_url:    { type: String, default: null },
+    generated_at:   { type: Date, default: null },
+  },
+
+  // ── Dispatch & Logistics Tracking ────────────────────────────────────────
+  dispatch_tracking: {
+    courier_name:       { type: String, default: null, trim: true },
+    tracking_number:    { type: String, default: null, trim: true },
+    tracking_url:       { type: String, default: null, trim: true },
+    dispatched_at:      { type: Date, default: null },
+    estimated_delivery: { type: Date, default: null },
+    dispatched_by:      { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    dispatch_notes:     { type: String, default: null },
+  },
+
   is_end_customer_sale: {
     type: Boolean,
     default: true,
   },
   delivery_address: {
-    line:        { type: String, default: null },
-    state_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_1', default: null },
-    district_id: { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_2', default: null },
-    pincode:     { type: String, default: null },
+    line:          { type: String, default: null },
+    state_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_1', default: null },
+    state_name:    { type: String, default: null },
+    district_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_2', default: null },
+    district_name: { type: String, default: null },
+    pincode:       { type: String, default: null },
+    contact_name:  { type: String, default: null },
+    contact_phone: { type: String, default: null },
   },
 
   reservation_expires_at: { type: Date, default: null },
@@ -101,6 +157,8 @@ const schema = new mongoose.Schema({
 
 schema.index({ reseller_id: 1, order_status: 1 });
 schema.index({ epc_id: 1, created_at: -1 });
+schema.index({ 'offline_payment.verification_status': 1 });
+schema.index({ 'invoice.invoice_number': 1 }, { sparse: true });
 
 schema.virtual('id').get(function () { return this._id; });
 

@@ -17,11 +17,13 @@ const ResellerWalletManager = lazy(() => import("./ResellerWalletManager"));
 const ResellerSettings = lazy(() => import("./ResellerSettings"));
 
 // ── Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ─────────
-const FranchiseeSettings           = lazy(() => import("./FranchiseeSettings"));
-const FranchiseePOSettings         = lazy(() => import("./FranchiseePOSettings"));
-const FranchiseeMoqRules           = lazy(() => import("./FranchiseeMoqRules"));
-const FranchiseeKitTargets         = lazy(() => import("./FranchiseeKitTargets"));
-const FranchiseePerformanceTracker = lazy(() => import("./FranchiseePerformanceTracker"));
+const FranchiseeSettings             = lazy(() => import("./FranchiseeSettings"));
+const FranchiseePOSettings           = lazy(() => import("./FranchiseePOSettings"));
+const FranchiseeMoqRules             = lazy(() => import("./FranchiseeMoqRules"));
+const FranchiseeKitTargets           = lazy(() => import("./FranchiseeKitTargets"));
+const FranchiseePerformanceTracker   = lazy(() => import("./FranchiseePerformanceTracker"));
+const FranchiseeCommissionSettings   = lazy(() => import("./FranchiseeCommissionSettings"));
+const FranchiseeCommissionLedger     = lazy(() => import("./FranchiseeCommissionLedger"));
 const StoreSetupManagement = lazy(() => import("../../dashboard/store-setup/StoreSetupManagement"));
 
 /**
@@ -226,6 +228,28 @@ function ResellerManagement() {
           </PermissionGuard>
         }
       />
+      {/* ── Margin & Commission Module: Commission Settings & Ledger ── */}
+      <Route
+        path="/commission-settings"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_COMM">
+            <Suspense fallback={<Loader text="Loading Commission Settings..." />}>
+              <FranchiseeCommissionSettings moduleUniqueId="FPO_COMM" />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/commission-ledger"
+        element={
+          <PermissionGuard requiredUniqueId="FPO_COMM">
+            <Suspense fallback={<Loader text="Loading Commission Ledger..." />}>
+              <FranchiseeCommissionLedger moduleUniqueId="FPO_COMM" />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+
       {/* Franchisee Store Setup & Operations */}
       <Route
         path="/store-setup/*"

@@ -49,6 +49,22 @@ const schema = new mongoose.Schema({
     min: 0,
     default: 0,
   },
+  // EPC & Network Kit Goals
+  monthly_epc_lead_goal: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+  monthly_epc_onboard_goal: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+  monthly_network_kit_goal: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
   monthly_signup_achieved: {
     type: Number,
     min: 0,
@@ -60,6 +76,21 @@ const schema = new mongoose.Schema({
     default: 0,
   },
   operational_store_achieved: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+  monthly_epc_leads_achieved: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+  monthly_epc_onboarded_achieved: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+  monthly_network_kits_achieved: {
     type: Number,
     min: 0,
     default: 0,

@@ -26,6 +26,7 @@ export default function MyEpcBuyers() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
+  const [tabFilter, setTabFilter] = useState("all"); // 'all' | 'assigned_bde' | 'self'
 
   // Registration Multi-Step State
   const [step, setStep] = useState(1); // 1 = GST verify, 2 = EPC details form
@@ -80,6 +81,12 @@ export default function MyEpcBuyers() {
       })
       .catch(() => {});
   }, []);
+
+  const filteredBuyers = buyers.filter((b) => {
+    if (tabFilter === "assigned_bde") return b.is_assigned_by_bde;
+    if (tabFilter === "self") return !b.is_assigned_by_bde;
+    return true;
+  });
 
   const gstStateName = gstInput.length >= 2
     ? (GST_STATE_MAP[gstInput.substring(0, 2).toUpperCase()] || null)
@@ -217,8 +224,34 @@ export default function MyEpcBuyers() {
           </div>
         </div>
 
-        <div className="text-xs font-semibold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shrink-0">
-          Total Onboarded: <span className="font-bold text-slate-900">{buyers.length} EPCs</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTabFilter('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+              tabFilter === 'all' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            All EPCs ({buyers.length})
+          </button>
+          <button
+            onClick={() => setTabFilter('assigned_bde')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
+              tabFilter === 'assigned_bde' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+            }`}
+          >
+            <span>Assigned by BDE</span>
+            <span className="bg-white/20 text-white px-1.5 py-0.2 rounded-full text-[10px] font-black">
+              {buyers.filter((b) => b.is_assigned_by_bde).length}
+            </span>
+          </button>
+          <button
+            onClick={() => setTabFilter('self')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+              tabFilter === 'self' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Self Onboarded
+          </button>
         </div>
       </div>
 
@@ -228,38 +261,107 @@ export default function MyEpcBuyers() {
           <div className="flex items-center justify-center py-20 text-slate-500 font-bold gap-2">
             <FiLoader className="animate-spin text-blue-600" size={24} /> Loading onboarded EPC buyers...
           </div>
-        ) : buyers.length === 0 ? (
+        ) : filteredBuyers.length === 0 ? (
           <div className="py-20 text-center text-slate-600 text-sm font-semibold space-y-2">
-            <div>No EPC buyers onboarded yet.</div>
-            <p className="text-xs text-slate-400 font-normal">Click "Register New EPC Buyer" to onboard client sub-accounts with GST validation.</p>
+            <div>No EPC buyers found in this view.</div>
+            <p className="text-xs text-slate-400 font-normal">EPCs assigned by your regional BDE or onboarded directly will appear here.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className="text-left text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Company / EPC Name</th>
-                  <th className="text-left text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Contact Person</th>
-                  <th className="text-left text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Email</th>
-                  <th className="text-left text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">WhatsApp</th>
-                  <th className="text-center text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">GSTIN</th>
-                  <th className="text-center text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Admin Approval</th>
+                  <th className="text-left text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">Company / EPC Name</th>
+                  <th className="text-left text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">District</th>
+                  <th className="text-left text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">GSTIN</th>
+                  <th className="text-left text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">Attribution Source</th>
+                  <th className="text-center text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">Orders / Value</th>
+                  <th className="text-center text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">Commission</th>
+                  <th className="text-center text-slate-700 font-extrabold px-5 py-4 uppercase text-xs tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {buyers.map((b) => (
+                {filteredBuyers.map((b) => (
                   <tr key={b.id || b._id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 font-black text-slate-900">{b.company_name || b.name}</td>
-                    <td className="px-6 py-4 font-bold text-slate-700">{b.name}</td>
-                    <td className="px-6 py-4 text-slate-700 font-medium"><FiMail className="inline mr-1.5 text-slate-400" size={14} /> {b.email}</td>
-                    <td className="px-6 py-4 text-slate-700 font-medium"><FiPhone className="inline mr-1.5 text-slate-400" size={14} /> {b.whatsapp}</td>
-                    <td className="px-6 py-4 text-center font-mono text-xs font-bold text-slate-700">{b.gstin || '—'}</td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-5 py-4">
+                      <div className="font-black text-slate-900">{b.company_name || b.name}</div>
+                      <div className="text-xs text-slate-500 font-medium mt-1 space-y-0.5">
+                        <div>
+                          Contact: <span className="font-semibold text-slate-700">{b.contact_person || b.name}</span>
+                          {(b.whatsapp || b.mobile) && (
+                            <span className="font-mono text-slate-600"> • {b.whatsapp || b.mobile}</span>
+                          )}
+                        </div>
+                        {b.email && (
+                          <div className="text-[11px] text-slate-500 font-normal">
+                            Email: <span className="text-blue-600 font-mono font-medium">{b.email}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="font-bold text-slate-800">{b.district_name || 'Regional'}</div>
+                      <div className="text-xs text-slate-400">{b.state_name}</div>
+                    </td>
+                    <td className="px-5 py-4 font-mono text-xs font-bold text-slate-700">
+                      {b.gstin ? (
+                        <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          {b.gstin}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      {b.is_assigned_by_bde ? (
+                        <div>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            Assigned by BDE
+                          </span>
+                          {b.assigned_by_bde_name && (
+                            <div className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                              {b.assigned_by_bde_name} {b.assigned_by_bde_id ? `(${b.assigned_by_bde_id})` : ''}
+                            </div>
+                          )}
+                          {b.assignment_date && (
+                            <div className="text-[10px] text-slate-400">
+                              {new Date(b.assignment_date).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          Self Onboarded
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <div className="font-bold text-slate-900">{b.orders_count || 0} Orders</div>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        ₹{(b.total_order_value_inr || 0).toLocaleString()}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+                        100% Eligible
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-center">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold capitalize ${
-                        b.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : b.status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+                        b.status === 'approved' || b.status === 'active'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : b.status === 'pending'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-red-100 text-red-800'
                       }`}>
-                        {b.status === 'approved' ? <FiCheckCircle size={13} /> : b.status === 'pending' ? <FiClock size={13} /> : <FiXCircle size={13} />}
-                        {b.status}
+                        {b.status === 'approved' || b.status === 'active' ? (
+                          <FiCheckCircle size={13} />
+                        ) : b.status === 'pending' ? (
+                          <FiClock size={13} />
+                        ) : (
+                          <FiXCircle size={13} />
+                        )}
+                        {b.status || 'Active'}
                       </span>
                     </td>
                   </tr>

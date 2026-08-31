@@ -17,7 +17,7 @@ import {
   MdOutlineAccessTime
 } from "react-icons/md";
 import { FaRupeeSign, FaShieldAlt } from "react-icons/fa";
-import { getTransactionDetails } from "../api/solarshopAccounts";
+import { getTransactionDetails, verifyEpcOrderPayment, dispatchEpcOrder, deliverEpcOrder } from "../api/solarshopAccounts";
 import Button from "./Button";
 
 export default function TransactionDetailsDrawer({ isOpen, onClose, transaction, onStatusUpdated }) {
@@ -25,13 +25,108 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
   const [details, setDetails] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
 
+  // Accounts Action States
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [actionSuccessMsg, setActionSuccessMsg] = useState("");
+  const [actionErrorMsg, setActionErrorMsg] = useState("");
+
+  // Dispatch Tracking State
+  const [showDispatchSection, setShowDispatchSection] = useState(false);
+  const [courierName, setCourierName] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
+
   useEffect(() => {
     if (isOpen && transaction) {
       fetchFullDetails();
+      setActionSuccessMsg("");
+      setActionErrorMsg("");
+      setShowRejectModal(false);
     } else {
       setDetails(null);
     }
   }, [isOpen, transaction]);
+
+  const handleApprovePayment = async () => {
+    if (!window.confirm("Confirm that bank transfer UTR and funds have been verified in company bank statement? This will automatically generate the official Tax Invoice.")) return;
+
+    setActionLoading(true);
+    setActionSuccessMsg("");
+    setActionErrorMsg("");
+    try {
+      const orderId = details?.id || details?._id || transaction?.id || transaction?._id;
+      const res = await verifyEpcOrderPayment(orderId, { decision: "approved" });
+      if (res.status === "success") {
+        setActionSuccessMsg(res.message || "Payment approved successfully! Tax invoice generated.");
+        fetchFullDetails();
+        if (onStatusUpdated) onStatusUpdated();
+      }
+    } catch (err) {
+      setActionErrorMsg(err.response?.data?.message || err.message || "Failed to approve payment.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectPayment = async (e) => {
+    e.preventDefault();
+    if (!rejectionReason.trim()) {
+      setActionErrorMsg("Please enter a specific rejection reason for the EPC contractor.");
+      return;
+    }
+
+    setActionLoading(true);
+    setActionSuccessMsg("");
+    setActionErrorMsg("");
+    try {
+      const orderId = details?.id || details?._id || transaction?.id || transaction?._id;
+      const res = await verifyEpcOrderPayment(orderId, {
+        decision: "rejected",
+        rejection_reason: rejectionReason.trim(),
+      });
+      if (res.status === "success") {
+        setActionSuccessMsg(res.message || "Payment rejected. EPC notified with rejection reason.");
+        setShowRejectModal(false);
+        setRejectionReason("");
+        fetchFullDetails();
+        if (onStatusUpdated) onStatusUpdated();
+      }
+    } catch (err) {
+      setActionErrorMsg(err.response?.data?.message || err.message || "Failed to reject payment.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveDispatch = async (e) => {
+    e.preventDefault();
+    if (!courierName || !trackingNumber) {
+      setActionErrorMsg("Courier name and tracking/LR number are required.");
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const orderId = details?.id || details?._id || transaction?.id || transaction?._id;
+      const res = await dispatchEpcOrder(orderId, {
+        courier_name: courierName,
+        tracking_number: trackingNumber,
+        tracking_url: trackingUrl,
+      });
+      if (res.status === "success") {
+        setActionSuccessMsg("Dispatch and tracking information updated successfully.");
+        setShowDispatchSection(false);
+        fetchFullDetails();
+        if (onStatusUpdated) onStatusUpdated();
+      }
+    } catch (err) {
+      setActionErrorMsg(err.response?.data?.message || "Failed to save dispatch details.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const fetchFullDetails = async () => {
     if (!transaction) return;
@@ -502,6 +597,174 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                       )}
                     </div>
                   </div>
+
+                  {/* Feedback Messages */}
+                  {actionSuccessMsg && (
+                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2">
+                      <MdCheckCircle className="text-emerald-500 shrink-0" />
+                      <span>{actionSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {actionErrorMsg && (
+                    <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold flex items-center gap-2">
+                      <MdErrorOutline className="text-red-500 shrink-0" />
+                      <span>{actionErrorMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Accounts Verification Action Panel */}
+                  {((
+                    String(
+                      details?.payment_info?.payment_status ||
+                      details?.payment_status ||
+                      transaction?.payment_status ||
+                      transaction?.status ||
+                      ""
+                    ).toLowerCase().includes("pending") ||
+                    details?.payment_info?.verification_status === "pending_verification" ||
+                    details?.payment_status === "pending_verification" ||
+                    transaction?.payment_status === "pending_verification"
+                  ) && (details?.payment_info?.payment_status !== "Paid" && details?.payment_status !== "Paid" && transaction?.payment_status !== "Paid")) && (
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl space-y-3">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-500 text-white rounded">
+                          Accounts Action Required
+                        </span>
+                        <h4 className="text-xs font-extrabold text-text-primary mt-1">
+                          Verify Bank Statement Deposit & UTR Reference
+                        </h4>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          Confirm funds match UTR in SolarKits bank account before approving.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleApprovePayment}
+                          loading={actionLoading}
+                          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-none flex-1 justify-center py-2.5"
+                        >
+                          <MdCheckCircle size={15} /> Approve & Generate Tax Invoice
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowRejectModal(true)}
+                          className="text-xs font-bold text-red-600 border-red-300 hover:bg-red-50 py-2.5"
+                        >
+                          <MdErrorOutline size={15} /> Reject
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dispatch & Waybill Tracking Section */}
+                  {(String(details?.payment_info?.payment_status || details?.payment_status || transaction?.status).toLowerCase() === "captured" ||
+                    String(details?.payment_info?.payment_status || details?.payment_status || transaction?.status).toLowerCase() === "paid") && (
+                    <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl space-y-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-purple-900 dark:text-purple-200">
+                          Logistics & Dispatch Tracking
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowDispatchSection(!showDispatchSection)}
+                          className="text-purple-700 font-bold hover:underline"
+                        >
+                          {showDispatchSection ? "Cancel" : details?.payment_info?.dispatch_tracking?.tracking_number ? "Edit Dispatch Info" : "+ Enter Dispatch Info"}
+                        </button>
+                      </div>
+
+                      {details?.payment_info?.dispatch_tracking?.tracking_number && !showDispatchSection && (
+                        <div className="p-3 bg-surface rounded-xl border border-border space-y-1">
+                          <p>Courier: <strong>{details.payment_info.dispatch_tracking.courier_name}</strong></p>
+                          <p className="font-mono">LR/Waybill: <strong>{details.payment_info.dispatch_tracking.tracking_number}</strong></p>
+                          {details.payment_info.dispatch_tracking.tracking_url && (
+                            <a
+                              href={details.payment_info.dispatch_tracking.tracking_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary font-bold hover:underline inline-block mt-1"
+                            >
+                              Live Courier URL &rarr;
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {showDispatchSection && (
+                        <form onSubmit={handleSaveDispatch} className="space-y-2 pt-1">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="Courier Name (e.g. VRL Logistics)"
+                              value={courierName}
+                              onChange={(e) => setCourierName(e.target.value)}
+                              className="p-2 text-xs border border-border rounded-lg bg-surface"
+                              required
+                            />
+                            <input
+                              type="text"
+                              placeholder="LR / Tracking Number"
+                              value={trackingNumber}
+                              onChange={(e) => setTrackingNumber(e.target.value)}
+                              className="p-2 text-xs border border-border rounded-lg bg-surface font-mono"
+                              required
+                            />
+                          </div>
+                          <input
+                            type="url"
+                            placeholder="Tracking URL (optional)"
+                            value={trackingUrl}
+                            onChange={(e) => setTrackingUrl(e.target.value)}
+                            className="w-full p-2 text-xs border border-border rounded-lg bg-surface"
+                          />
+                          <Button type="submit" variant="primary" size="sm" loading={actionLoading} className="text-xs w-full justify-center">
+                            Save Dispatch Tracking
+                          </Button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Rejection Modal Dialog */}
+                  {showRejectModal && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl space-y-3">
+                      <h4 className="text-xs font-black text-red-600 dark:text-red-400">
+                        Enter Rejection Reason for EPC Contractor
+                      </h4>
+                      <textarea
+                        rows={2}
+                        placeholder="e.g. UTR number does not match bank credit, or amount deposited is ₹10,000 less than invoice total."
+                        value={rejectionReason}
+                        onChange={(e) => setRejectionReason(e.target.value)}
+                        className="w-full p-2.5 text-xs bg-surface border border-red-300 rounded-xl focus:outline-none focus:border-red-500"
+                        required
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setShowRejectModal(false)}
+                          className="text-xs"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleRejectPayment}
+                          loading={actionLoading}
+                          className="text-xs font-bold bg-red-600 hover:bg-red-700 text-white border-none"
+                        >
+                          Confirm Rejection
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

@@ -129,6 +129,9 @@ adminRouter.use('/bde',                          require('./modules/admin-panel/
 // ─── Step 3: Franchisee Store Setup & Operations ─────────────────────────────
 adminRouter.use('/store-setup',                  require('./modules/admin-panel/routes/store.setup.admin.route'));
 
+// ─── Margin & Commission Settings Module ─────────────────────────────────────
+adminRouter.use('/company/margin-goals',         require('./modules/admin-panel/routes/company_margin_goals.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 

@@ -19,15 +19,20 @@ import {
   Layers,
   Clock,
   Plus,
+  Zap,
+  Package,
+  CheckCircle2,
+  AlertCircle,
+  RotateCw,
+  Building2,
+  FileCheck,
 } from 'lucide-react';
-import BdeFranchiseOnboardingModal from '../components/BdeFranchiseOnboardingModal';
 
 export default function BdeDashboard() {
   const { user } = useBdeAuth();
   const navigate = useNavigate();
 
   const [dashboardData, setDashboardData] = useState(null);
-  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -40,7 +45,9 @@ export default function BdeDashboard() {
       setLoading(true);
       setError(null);
       const res = await api.get('/dashboard');
-      setDashboardData(res.data.data);
+      if (res.data?.status === 'success') {
+        setDashboardData(res.data.data);
+      }
     } catch (err) {
       console.error('Failed to load BDE dashboard data', err);
       setError(err.message || 'Failed to load dashboard');
@@ -54,38 +61,23 @@ export default function BdeDashboard() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-semibold text-slate-500">Loading BDE dashboard...</p>
+          <p className="text-sm font-semibold text-slate-500">Loading BDE State & District Dashboard...</p>
         </div>
       </div>
     );
   }
 
   const bde = dashboardData?.bde || user || {};
-  const kyc = dashboardData?.kyc || {};
   const territory = dashboardData?.territory || null;
-  const plans = dashboardData?.plans || null;
-  const goal = dashboardData?.goal || dashboardData?.goals || null;
-  const notifications = dashboardData?.recent_notifications || [];
-  const territoryHistory = dashboardData?.territory_history || [];
-
-  // Goal calculations
-  const monthlyGoal = goal?.monthly_franchisee_signup_goal ?? goal?.monthly_signup_goal ?? 0;
-  const monthlyAchieved = goal?.monthly_signup_achieved ?? 0;
-  const monthlyPct = monthlyGoal > 0 ? Math.min(100, Math.round((monthlyAchieved / monthlyGoal) * 100)) : 0;
-
-  const quarterlyGoal = goal?.quarterly_franchisee_signup_goal ?? goal?.quarterly_signup_goal ?? 0;
-  const quarterlyAchieved = goal?.quarterly_signup_achieved ?? 0;
-  const quarterlyPct = quarterlyGoal > 0 ? Math.min(100, Math.round((quarterlyAchieved / quarterlyGoal) * 100)) : 0;
-
-  const storeGoal = goal?.operational_store_goal ?? 0;
-  const storeAchieved = goal?.operational_store_achieved ?? 0;
-  const storePct = storeGoal > 0 ? Math.min(100, Math.round((storeAchieved / storeGoal) * 100)) : 0;
+  const stateSummary = dashboardData?.state_summary || {};
+  const districtBreakdown = dashboardData?.district_breakdown || [];
+  const goals = dashboardData?.goals || {};
+  const notifications = dashboardData?.notifications || [];
 
   return (
     <div className="space-y-6">
       {/* Top Welcome Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white p-6 md:p-8 shadow-xl shadow-blue-950/10 border border-blue-700/50">
-        {/* Background glow */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 text-white p-6 md:p-8 shadow-xl shadow-blue-950/15 border border-blue-800/50">
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -99,427 +91,267 @@ export default function BdeDashboard() {
               </span>
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-black tracking-tight">
               Welcome back, {bde.full_name || 'BDE Executive'}!
             </h1>
 
             <p className="text-xs md:text-sm text-blue-200 max-w-xl">
-              Track your assigned districts, franchisee recruitment targets, store activations, and performance metrics in real-time.
+              Territory management, EPC leads generation, GST onboarding, franchisee kit targets, and sales analytics for your assigned region.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-blue-100">
-              <span className="font-mono bg-blue-950/60 px-3 py-1 rounded-lg border border-blue-700/40">
+              <span className="font-mono bg-blue-950/80 px-3 py-1 rounded-lg border border-blue-700/40">
                 BDE ID: <strong className="text-white">{bde.bde_id}</strong>
               </span>
-              <span className="bg-blue-950/60 px-3 py-1 rounded-lg border border-blue-700/40">
-                Territory: <strong className="text-white">{territory?.state_name || 'Assigned State'}</strong>{(() => {
-                  const dList = territory?.district_names || territory?.districts || [];
-                  if (dList.length === 0) return ' (All Districts)';
-                  if (dList.length <= 2) return ` (${dList.join(', ')})`;
-                  return ` (${dList.length} Districts: ${dList.slice(0, 2).join(', ')} +${dList.length - 2})`;
-                })()}
+              <span className="bg-blue-950/80 px-3 py-1 rounded-lg border border-blue-700/40 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                State: <strong className="text-white">{territory?.state_name || 'Assigned State'}</strong>
+                <span className="text-blue-300">({territory?.district_count || 0} Districts Assigned)</span>
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
             <button
-              onClick={() => setOnboardingModalOpen(true)}
+              onClick={() => navigate('/epc-onboarding')}
               className="px-5 py-2.5 bg-gradient-to-r from-[#F49222] to-amber-400 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-2xl text-xs transition shadow-lg shadow-amber-400/20 flex items-center gap-2"
             >
-              <Plus className="w-4 h-4 stroke-[3]" /> Onboard Franchise Partner
+              <ShieldCheck className="w-4 h-4 stroke-[2.5]" /> GST Onboard EPC
+            </button>
+            <button
+              onClick={() => navigate('/epc-leads')}
+              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
+            >
+              <Users className="w-4 h-4" /> EPC Leads
             </button>
             <button
               onClick={() => navigate('/franchisees')}
               className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
             >
-              <Store className="w-4 h-4" /> Franchisee Network
-            </button>
-            <button
-              onClick={() => navigate('/leads')}
-              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
-            >
-              <Users className="w-4 h-4" /> View Leads
+              <Store className="w-4 h-4" /> Franchisee Goals
             </button>
           </div>
         </div>
       </div>
 
-      {/* Target & KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Monthly Signups */}
-        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+      {/* 5. STATE DASHBOARD — Geography-Focused State Summary */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-blue-600" /> State Territory Summary ({territory?.state_name})
+          </h2>
+          <button
+            onClick={fetchDashboardData}
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+          >
+            <RotateCw className="w-3.5 h-3.5" /> Refresh Data
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          {/* Assigned Districts */}
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-1">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Assigned Districts</span>
+            <div className="text-2xl font-black text-slate-900">{stateSummary.total_assigned_districts || 0}</div>
+            <span className="text-[10px] text-slate-500 font-medium">In your territory</span>
+          </div>
+
+          {/* Franchisee Network */}
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-1">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Franchisees</span>
+            <div className="text-2xl font-black text-slate-900">{stateSummary.total_franchisees || 0}</div>
+            <div className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+              <span>{stateSummary.operational_franchisees || 0} Live</span> •{' '}
+              <span className="text-amber-600">{stateSummary.franchisees_under_setup || 0} Setup</span>
+            </div>
+          </div>
+
+          {/* EPC Leads */}
+          <div className="p-4 bg-white rounded-2xl border border-blue-100 shadow-xs space-y-1">
+            <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">EPC Leads</span>
+            <div className="text-2xl font-black text-blue-700">{stateSummary.epc_leads || 0}</div>
+            <span className="text-[10px] text-blue-600 font-medium">Pipeline contacts</span>
+          </div>
+
+          {/* EPCs Onboarded & Assigned */}
+          <div className="p-4 bg-white rounded-2xl border border-teal-100 shadow-xs space-y-1">
+            <span className="text-[11px] font-bold text-teal-600 uppercase tracking-wider">EPCs Onboarded</span>
+            <div className="text-2xl font-black text-teal-700">{stateSummary.epcs_onboarded || 0}</div>
+            <span className="text-[10px] text-teal-600 font-medium">
+              {stateSummary.epcs_assigned || 0} Assigned to Franchisees
+            </span>
+          </div>
+
+          {/* Total Kits Ordered */}
+          <div className="p-4 bg-white rounded-2xl border border-emerald-100 shadow-xs space-y-1 sm:col-span-2 lg:col-span-1">
+            <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Kits Ordered</span>
+            <div className="text-2xl font-black text-emerald-700">{stateSummary.total_kits_ordered || 0}</div>
+            <span className="text-[10px] text-emerald-600 font-medium">Across {stateSummary.total_orders || 0} PO orders</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. DISTRICT DASHBOARD TABLE — District-by-District Breakdown */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6">
+        <div>
+          <h2 className="text-base font-black text-slate-900">District-by-District Territory Breakdown</h2>
+          <p className="text-xs text-slate-500">
+            Performance comparison of Franchisees, EPC Leads, Onboarded contractors, and actual Kits ordered by district.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider">
+              <tr>
+                <th className="px-4 py-3.5">District</th>
+                <th className="px-4 py-3.5 text-center">Franchisees (Live / Setup)</th>
+                <th className="px-4 py-3.5 text-center">EPC Leads</th>
+                <th className="px-4 py-3.5 text-center">EPCs Onboarded</th>
+                <th className="px-4 py-3.5 text-center">Kits Ordered</th>
+                <th className="px-4 py-3.5 text-right">Goal Achievement</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {districtBreakdown.length > 0 ? (
+                districtBreakdown.map((d, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/80 transition">
+                    <td className="px-4 py-3.5 font-bold text-slate-900 flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                      <span>{d.district}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-bold text-slate-800">{d.franchisees_count}</span>
+                      <span className="text-[11px] text-slate-400 ml-1">
+                        ({d.operational_count} Live)
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center font-bold text-blue-700">{d.epc_leads_count}</td>
+                    <td className="px-4 py-3.5 text-center font-bold text-teal-700">{d.epcs_onboarded_count}</td>
+                    <td className="px-4 py-3.5 text-center font-bold text-emerald-700">{d.kits_ordered_count}</td>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-24 bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              d.goal_achievement_pct >= 100
+                                ? 'bg-emerald-500'
+                                : d.goal_achievement_pct >= 60
+                                ? 'bg-blue-500'
+                                : 'bg-amber-500'
+                            }`}
+                            style={{ width: `${Math.min(100, d.goal_achievement_pct)}%` }}
+                          />
+                        </div>
+                        <span
+                          className={`font-black text-xs ${
+                            d.goal_achievement_pct >= 100
+                              ? 'text-emerald-700'
+                              : d.goal_achievement_pct >= 60
+                              ? 'text-blue-700'
+                              : 'text-amber-700'
+                          }`}
+                        >
+                          {d.goal_achievement_pct}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400 italic">
+                    No district breakdown records found for this territory.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Target Progress & Quick Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Franchisee Signups Target */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Signups</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Franchisee Signups</span>
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-2xl">
               <Target className="w-5 h-5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900">{monthlyAchieved}</span>
-              <span className="text-xs text-slate-400 font-semibold">/ {monthlyGoal} target</span>
+              <span className="text-3xl font-black text-slate-900">{goals.monthly_signup_achieved || 0}</span>
+              <span className="text-xs text-slate-400 font-semibold">/ {goals.monthly_franchisee_signup_goal || 5} target</span>
             </div>
             <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
               <div
-                className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${monthlyPct}%` }}
+                className="bg-blue-600 h-full rounded-full transition-all"
+                style={{ width: `${goals.monthly_signup_progress_pct || 0}%` }}
               />
             </div>
-            <p className="text-[11px] font-semibold text-blue-600">{monthlyPct}% completed this month</p>
+            <p className="text-[11px] font-semibold text-blue-600">{goals.monthly_signup_progress_pct || 0}% completed</p>
           </div>
         </div>
 
-        {/* Quarterly Signups */}
-        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+        {/* EPC Onboarding Target */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quarterly Signups</span>
-            <div className="p-2.5 bg-purple-50 text-purple-600 rounded-2xl">
-              <TrendingUp className="w-5 h-5" />
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">EPC Onboardings</span>
+            <div className="p-2.5 bg-teal-50 text-teal-600 rounded-2xl">
+              <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900">{quarterlyAchieved}</span>
-              <span className="text-xs text-slate-400 font-semibold">/ {quarterlyGoal} target</span>
+              <span className="text-3xl font-black text-teal-700">{goals.monthly_epc_onboarded_achieved || 0}</span>
+              <span className="text-xs text-slate-400 font-semibold">/ {goals.monthly_epc_onboard_goal || 10} target</span>
             </div>
             <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
               <div
-                className="bg-purple-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${quarterlyPct}%` }}
+                className="bg-teal-600 h-full rounded-full transition-all"
+                style={{
+                  width: `${
+                    goals.monthly_epc_onboard_goal > 0
+                      ? Math.min(100, Math.round(((goals.monthly_epc_onboarded_achieved || 0) / goals.monthly_epc_onboard_goal) * 100))
+                      : 0
+                  }%`,
+                }}
               />
             </div>
-            <p className="text-[11px] font-semibold text-purple-600">{quarterlyPct}% quarterly milestone</p>
+            <p className="text-[11px] font-semibold text-teal-600">
+              {goals.monthly_epc_onboard_goal > 0
+                ? Math.round(((goals.monthly_epc_onboarded_achieved || 0) / goals.monthly_epc_onboard_goal) * 100)
+                : 0}
+              % verified & onboarded
+            </p>
           </div>
         </div>
 
-        {/* Store Setup Targets */}
-        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+        {/* Network Kits Ordered Target */}
+        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Store Setups</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Network Kit Orders</span>
             <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-2xl">
-              <ShoppingBag className="w-5 h-5" />
+              <Package className="w-5 h-5" />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900">{storeAchieved}</span>
-              <span className="text-xs text-slate-400 font-semibold">/ {storeGoal} target</span>
+              <span className="text-3xl font-black text-emerald-700">{goals.monthly_network_kits_achieved || 0}</span>
+              <span className="text-xs text-slate-400 font-semibold">/ {goals.monthly_network_kit_goal || 250} kits</span>
             </div>
             <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
               <div
-                className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${storePct}%` }}
+                className="bg-emerald-600 h-full rounded-full transition-all"
+                style={{ width: `${Math.min(100, goals.network_kit_achievement_pct || 0)}%` }}
               />
             </div>
-            <p className="text-[11px] font-semibold text-emerald-600">{storePct}% operational stores</p>
-          </div>
-        </div>
-
-        {/* Authorized Territory */}
-        <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Authorized Area</span>
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-2xl">
-              <MapPin className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-lg font-black text-slate-900 block truncate">
-              {territory?.state_name || 'Territory Assigned'}
-            </span>
-            <p className="text-xs text-slate-500">
-              <strong className="text-amber-600 font-bold">{territory?.district_names?.length || 0}</strong> Districts Assigned
-            </p>
-            <span className="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold uppercase">
-              Priority: {territory?.priority || 'Medium'}
-            </span>
+            <p className="text-[11px] font-semibold text-emerald-600">{goals.network_kit_achievement_pct || 0}% kit goal achievement</p>
           </div>
         </div>
       </div>
-
-      {/* Step 2: Leads Pipeline & Conversion Summary Banner */}
-      <div className="p-6 bg-white rounded-3xl text-slate-900 shadow-sm space-y-4 border border-slate-200">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold uppercase">
-                Field Funnel
-              </span>
-              <h2 className="text-base font-bold text-slate-900">Lead Generation & Conversion Pipeline</h2>
-            </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Live status of prospective franchisees captured in your territory
-            </p>
-          </div>
-
-          <button
-            onClick={() => navigate('/leads')}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-2 transition shadow-sm self-start sm:self-auto cursor-pointer"
-          >
-            <Users className="w-3.5 h-3.5" />
-            Manage Pipeline Leads
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 text-center text-xs">
-          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
-            <span className="text-[10px] text-slate-500 uppercase font-bold block">Total Leads</span>
-            <span className="text-xl font-black text-slate-900 mt-1 block">
-              {dashboardData?.metrics?.total_leads || 0}
-            </span>
-          </div>
-
-          <div className="p-3 bg-sky-50/70 rounded-2xl border border-sky-100">
-            <span className="text-[10px] text-sky-600 uppercase font-bold block">Contacted</span>
-            <span className="text-xl font-black text-sky-700 mt-1 block">
-              {dashboardData?.metrics?.conversion_funnel?.contacted || 0}
-            </span>
-          </div>
-
-          <div className="p-3 bg-teal-50/70 rounded-2xl border border-teal-100">
-            <span className="text-[10px] text-teal-600 uppercase font-bold block">Interested</span>
-            <span className="text-xl font-black text-teal-700 mt-1 block">
-              {dashboardData?.metrics?.conversion_funnel?.interested || 0}
-            </span>
-          </div>
-
-          <div className="p-3 bg-indigo-50/70 rounded-2xl border border-indigo-100">
-            <span className="text-[10px] text-indigo-600 uppercase font-bold block">Signup Started</span>
-            <span className="text-xl font-black text-indigo-700 mt-1 block">
-              {dashboardData?.metrics?.conversion_funnel?.signup_started || 0}
-            </span>
-          </div>
-
-          <div className="p-3 bg-purple-50/70 rounded-2xl border border-purple-100">
-            <span className="text-[10px] text-purple-600 uppercase font-bold block">Approved</span>
-            <span className="text-xl font-black text-purple-700 mt-1 block">
-              {dashboardData?.metrics?.conversion_funnel?.approved || 0}
-            </span>
-          </div>
-
-          <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-100">
-            <span className="text-[10px] text-amber-700 uppercase font-bold block">Agreement</span>
-            <span className="text-xl font-black text-amber-800 mt-1 block">
-              {dashboardData?.metrics?.conversion_funnel?.agreement_signed || 0}
-            </span>
-          </div>
-
-          <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
-            <span className="text-[10px] text-emerald-700 uppercase font-bold block">Fee Paid (Won)</span>
-            <span className="text-xl font-black text-emerald-700 mt-1 block">
-              {dashboardData?.metrics?.conversion_funnel?.fee_paid || 0}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Grid: Territory & Plans Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Assigned Districts Card */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
-                <MapPin className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Assigned Territory Jurisdiction</h2>
-                <p className="text-xs text-slate-500">
-                  {territory?.state_name ? `State: ${territory.state_name}` : 'No state assigned'}
-                </p>
-              </div>
-            </div>
-            {territory?.assignment_start_date && (
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" />
-                Active Since: {new Date(territory.assignment_start_date).toLocaleDateString()}
-              </span>
-            )}
-          </div>
-
-          {territory?.district_names && territory.district_names.length > 0 ? (
-            <div className="space-y-3">
-              <p className="text-xs text-slate-500 font-medium">
-                You have official authorization to onboard franchisee partners in the following {territory.district_names.length} district(s):
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {territory.district_names.map((dName, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-xl text-xs font-semibold text-purple-800 transition"
-                  >
-                    <MapPin className="w-3.5 h-3.5 text-purple-500" />
-                    <span>{dName}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="py-8 text-center text-xs text-slate-400 space-y-2">
-              <MapPin className="w-8 h-8 text-slate-300 mx-auto" />
-              <p>No districts assigned yet. Please contact your regional administrator.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Assigned Franchisee Plans */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Franchisee Plans</h2>
-              <p className="text-xs text-slate-500">Authorized tiers you can pitch</p>
-            </div>
-          </div>
-
-          {plans?.plan_names && plans.plan_names.length > 0 ? (
-            <div className="space-y-2.5">
-              {plans.plan_names.map((pName, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 bg-slate-50 hover:bg-blue-50/50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs transition"
-                >
-                  <div className="flex items-center gap-2">
-                    <Award className="w-4 h-4 text-blue-600" />
-                    <span className="font-bold text-slate-800">{pName}</span>
-                  </div>
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px] uppercase">
-                    Active
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-6 text-center text-xs text-slate-500 space-y-1">
-              <p className="font-semibold text-slate-700">All Master Plans Accessible</p>
-              <p className="text-[11px] text-slate-400">Standard platform franchisee packages available.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Section: Notifications & Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Notifications & System Updates */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
-                <Bell className="w-5 h-5" />
-              </div>
-              <h2 className="text-base font-bold text-slate-900">Recent Notifications & Updates</h2>
-            </div>
-            <button
-              onClick={() => navigate('/notifications')}
-              className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
-            >
-              View All <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-
-          {notifications.length > 0 ? (
-            <div className="space-y-3">
-              {notifications.map((notif, idx) => (
-                <div
-                  key={idx}
-                  className={`p-3.5 rounded-2xl border text-xs flex items-start gap-3 transition ${
-                    notif.is_read ? 'bg-slate-50 border-slate-200' : 'bg-blue-50/50 border-blue-200'
-                  }`}
-                >
-                  <div className="p-2 bg-blue-100 text-blue-700 rounded-xl mt-0.5">
-                    <Bell className="w-3.5 h-3.5" />
-                  </div>
-                  <div className="flex-1 space-y-0.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">{notif.title}</span>
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {notif.createdAt ? new Date(notif.createdAt).toLocaleDateString() : ''}
-                      </span>
-                    </div>
-                    <p className="text-slate-600 text-xs">{notif.message}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-6 text-center text-xs text-slate-400">
-              No new notifications at this time.
-            </div>
-          )}
-        </div>
-
-        {/* Quick Module Shortcuts */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <h2 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-3">
-            Quick Actions
-          </h2>
-
-          <div className="space-y-2.5">
-            <button
-              onClick={() => navigate('/leads')}
-              className="w-full p-3.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-2xl text-left flex items-center justify-between transition group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 text-blue-700 rounded-xl group-hover:scale-110 transition">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">Lead Pipeline</span>
-                  <span className="text-[11px] text-slate-500">View and follow up field leads</span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition" />
-            </button>
-
-            <button
-              onClick={() => navigate('/franchisees')}
-              className="w-full p-3.5 bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 rounded-2xl text-left flex items-center justify-between transition group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 text-purple-700 rounded-xl group-hover:scale-110 transition">
-                  <Store className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">Franchisee Accounts</span>
-                  <span className="text-[11px] text-slate-500">Active franchisee partners</span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-purple-600 transition" />
-            </button>
-
-            <button
-              onClick={() => navigate('/store-setup')}
-              className="w-full p-3.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-2xl text-left flex items-center justify-between transition group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl group-hover:scale-110 transition">
-                  <ShoppingBag className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">Store Setup Tracker</span>
-                  <span className="text-[11px] text-slate-500">Physical shop readiness</span>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 transition" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 5-Step Franchise Partner Onboarding Modal */}
-      <BdeFranchiseOnboardingModal
-        isOpen={onboardingModalOpen}
-        onClose={() => setOnboardingModalOpen(false)}
-        onLeadCreated={() => {
-          fetchDashboardData();
-          navigate('/leads');
-        }}
-        bdeTerritory={territory}
-      />
     </div>
   );
 }

@@ -23,6 +23,14 @@ router.get(
   handler.get_dashboard_stats
 );
 
+// Performance KPIs & Evaluation Dashboard
+router.get(
+  '/performance/dashboard',
+  check_auth,
+  check_permissions([{ unique_code: 'ADM_BDE_MGMT', permissions: ['view'] }]),
+  handler.get_bde_performance_dashboard
+);
+
 // List and Search BDEs
 router.get(
   '/list',

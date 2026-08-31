@@ -24,9 +24,16 @@ const {
   save_bos_custom_catalog,
   get_nearby_stores,
   get_shop_hierarchy,
+  get_company_bank_details,
+  check_warehouse_stock,
+  create_epc_offline_checkout,
+  resubmit_epc_offline_payment,
+  get_epc_order_invoice_data,
 } = require("../../controller/v1.handlers/shop.handler");
 
 const { verify_auth } = require("../../middlewares/auth");
+const { upload_any_files } = require("../../../admin-panel/utils/upload.files");
+const epcReceiptUpload = upload_any_files('public/uploads/epc_receipts', 10);
 
 const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
 
@@ -58,6 +65,13 @@ router.get("/cart", verify_auth, get_cart);
 router.post("/cart", verify_auth, update_cart);
 router.get("/orders", verify_auth, get_orders);
 router.put("/orders/:id/address", verify_auth, update_order_address);
+
+// ── EPC Offline Bank Transfer Checkout & Order Tracking Routes ─────────────
+router.get("/bank-details", get_company_bank_details);
+router.get("/check-warehouse-stock", verify_auth, check_warehouse_stock);
+router.post("/offline-checkout/create", verify_auth, epcReceiptUpload, create_epc_offline_checkout);
+router.post("/offline-checkout/:id/resubmit", verify_auth, epcReceiptUpload, resubmit_epc_offline_payment);
+router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);
 
 
 // ── EPC Industry Content Dashboard Routes ─────────────────────────────────────

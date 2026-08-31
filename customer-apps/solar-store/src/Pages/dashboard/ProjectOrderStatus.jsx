@@ -3,14 +3,13 @@ import axiosInstance from "@/utils/axiosInstance";
 import { 
   FaShoppingCart, FaEye, FaRegClock, FaCheckCircle, 
   FaTimesCircle, FaMapMarkerAlt, FaEdit, FaTimes, FaTruck,
-  FaWarehouse, FaTruckLoading
+  FaWarehouse, FaTruckLoading, FaFileInvoice, FaRedo, FaUpload,
+  FaBuilding, FaExclamationTriangle
 } from "react-icons/fa";
 import { BsArrowRepeat } from "react-icons/bs";
 import Button from "@/Components/Button";
 import CustomInput from "@/Components/CustomInput";
 import MapLocationPicker from "@/Components/MapLocationPicker";
-
-
 
 export default function ProjectOrderStatus() {
   const [orders, setOrders] = useState([]);
@@ -20,6 +19,21 @@ export default function ProjectOrderStatus() {
 
   // Filter tab state
   const [activeTab, setActiveTab] = useState("All");
+
+  // Re-submit payment proof modal state
+  const [resubmittingOrder, setResubmittingOrder] = useState(null);
+  const [newUtr, setNewUtr] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const [newDate, setNewDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newBank, setNewBank] = useState("");
+  const [newReceiptFile, setNewReceiptFile] = useState(null);
+  const [newReceiptPreview, setNewReceiptPreview] = useState(null);
+  const [resubmitLoading, setResubmitLoading] = useState(false);
+  const [resubmitError, setResubmitError] = useState("");
+
+  // Invoice view modal state
+  const [viewingInvoice, setViewingInvoice] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   // Address edit modal state
   const [editingOrder, setEditingOrder] = useState(null);
@@ -37,37 +51,7 @@ export default function ProjectOrderStatus() {
   const [savingAddress, setSavingAddress] = useState(false);
   const [boundaries, setBoundaries] = useState([]);
 
-  useEffect(() => {
-    const fetchBoundary = async () => {
-      if (!editingOrder) {
-        setBoundaries([]);
-        return;
-      }
-      
-      const districtName = editingOrder.district_id?.name;
-      const stateObj = statesList.find(s => s.id === selectedStateId);
-      const stateName = stateObj?.name || editingOrder.state_id?.name || editingOrder.district_id?.state_name;
-      const countryName = "India";
-      
-      if (!districtName || !stateName) return;
-      
-      try {
-        const res = await axiosInstance.get(`/india/v1/geo/district-boundary?district=${districtName}&state=${stateName}&country=${countryName}`);
-        if (res.data?.success && res.data.district?.geometry) {
-          setBoundaries([{
-            id: res.data.district.id,
-            level: 'district',
-            geometry: res.data.district.geometry
-          }]);
-        }
-      } catch (err) {
-        console.error("Failed to fetch district boundary:", err);
-      }
-    };
-    fetchBoundary();
-  }, [editingOrder, selectedStateId, statesList]);
-
-  // Fetch orders on load
+  // Fetch orders
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -101,231 +85,133 @@ export default function ProjectOrderStatus() {
     }
   };
 
-  // Fetch districts when selectedStateId changes
-  useEffect(() => {
-    const fetchDistricts = async () => {
-      if (!selectedStateId) {
-        setDistrictsList([]);
-        return;
-      }
-      try {
-        const response = await axiosInstance.get(`/india/v1/geo/districts?state_id=${selectedStateId}`);
-        if (response.data?.districts) {
-          setDistrictsList(response.data.districts);
-        }
-      } catch (error) {
-        console.error("Error fetching districts:", error);
-      }
-    };
-    fetchDistricts();
-  }, [selectedStateId]);
-
-  // Open Edit Address Modal
-  const handleOpenEditAddress = (order) => {
-    setEditingOrder(order);
-    setStreetAddress(order.delivery_address?.address_line || "");
-    setPincode(order.delivery_address?.pincode || "");
-    setContactNumber(order.delivery_address?.contact_number || "");
-    setContactName(order.delivery_address?.contact_name || "");
-    
-    const stateVal = order.delivery_address?.state_id || order.state_id?._id || order.state_id || "";
-    const distVal = order.delivery_address?.district_id || order.district_id?._id || order.district_id || "";
-    
-    setSelectedStateId(stateVal ? stateVal.toString() : "");
-    setSelectedDistrictId(distVal ? distVal.toString() : "");
-    setSelectedLat(order.delivery_address?.lat || "");
-    setSelectedLng(order.delivery_address?.lng || "");
-    setModalError("");
+  // Open Re-submit Payment Modal
+  const handleOpenResubmit = (order) => {
+    setResubmittingOrder(order);
+    setNewUtr(order.offline_payment?.utr_number || order.payment_reference || "");
+    setNewAmount(order.offline_payment?.amount_paid || order.total_amount || "");
+    setNewDate(new Date().toISOString().slice(0, 10));
+    setNewBank(order.offline_payment?.sender_bank_name || "");
+    setNewReceiptFile(null);
+    setNewReceiptPreview(null);
+    setResubmitError("");
   };
 
-  // Handle Save Address
-  const handleSaveAddress = async () => {
-    setModalError("");
-    if (!streetAddress.trim()) {
-      setModalError("Street address is required.");
-      return;
-    }
-    if (!pincode.trim() || pincode.trim().length !== 6 || isNaN(pincode.trim())) {
-      setModalError("Please enter a valid 6-digit pincode.");
-      return;
-    }
-    if (!contactName.trim()) {
-      setModalError("Delivery contact person name is required.");
-      return;
-    }
-    if (!contactNumber.trim()) {
-      setModalError("Delivery contact mobile number is required.");
-      return;
-    }
-    if (!/^\d{10}$/.test(contactNumber.trim())) {
-      setModalError("Please enter a valid 10-digit delivery contact mobile number.");
-      return;
-    }
-    if (!selectedStateId) {
-      setModalError("Please select a state.");
-      return;
-    }
-    if (!selectedDistrictId) {
-      setModalError("Please select a district.");
-      return;
-    }
-
-    // Verify district boundary restriction
-    const targetDistrictId = editingOrder.district_id?._id || editingOrder.district_id;
-    if (targetDistrictId && selectedDistrictId !== targetDistrictId.toString()) {
-      const allowedDistrictName = editingOrder.district_id?.name || "the original ordering district";
-      setModalError(`Delivery address must be within the district boundary from which the kit was ordered (Locked to: ${allowedDistrictName}).`);
-      return;
-    }
-
-    // Verify pin coordinates are inside the district boundaries
-    if (selectedLat && selectedLng && boundaries && boundaries.length > 0 && window.google) {
-      if (google.maps.geometry && google.maps.geometry.poly) {
-        const latLng = new google.maps.LatLng(parseFloat(selectedLat), parseFloat(selectedLng));
-        let isInside = false;
-
-        const tempDiv = document.createElement("div");
-        const tempMap = new google.maps.Map(tempDiv);
-
-        for (const b of boundaries) {
-          if (!b.geometry?.coordinates) continue;
-          const { type, coordinates } = b.geometry;
-          const paths = [];
-          if (type === "Polygon") {
-            paths.push(coordinates.map(ring => ring.map(([lng, lat]) => ({ lat: parseFloat(lat), lng: parseFloat(lng) }))));
-          } else if (type === "MultiPolygon") {
-            coordinates.forEach(polygonCoordinates =>
-              paths.push(polygonCoordinates.map(ring => ring.map(([lng, lat]) => ({ lat: parseFloat(lat), lng: parseFloat(lng) }))))
-            );
-          }
-
-          for (const path of paths) {
-            const poly = new google.maps.Polygon({ paths: path, map: tempMap });
-            if (google.maps.geometry.poly.containsLocation(latLng, poly)) {
-              isInside = true;
-              break;
-            }
-          }
-          if (isInside) break;
-        }
-
-        if (!isInside) {
-          const allowedDistrictName = editingOrder.district_id?.name || "the original ordering district";
-          setModalError(`The selected location pin is outside the ${allowedDistrictName} district boundaries! Please move the pin inside the highlighted red boundary on the map.`);
-          return;
-        }
+  const handleResubmitFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setNewReceiptFile(file);
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setNewReceiptPreview(ev.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        setNewReceiptPreview(null);
       }
     }
+  };
 
-    setSavingAddress(true);
+  const handleConfirmResubmit = async (e) => {
+    e.preventDefault();
+    if (!newUtr.trim()) {
+      setResubmitError("Please enter a valid UTR number.");
+      return;
+    }
+    if (!newAmount || Number(newAmount) <= 0) {
+      setResubmitError("Please enter a valid payment amount.");
+      return;
+    }
+
+    setResubmitLoading(true);
+    setResubmitError("");
     try {
-      const stateObj = statesList.find(s => s.id === selectedStateId);
-      const districtObj = districtsList.find(d => d.id === selectedDistrictId);
+      const formData = new FormData();
+      formData.append("utr_number", newUtr.trim().toUpperCase());
+      formData.append("amount_paid", newAmount);
+      formData.append("payment_date", newDate);
+      formData.append("sender_bank_name", newBank);
+      if (newReceiptFile) {
+        formData.append("payment_receipt", newReceiptFile);
+      }
 
-      const payload = {
-        delivery_address: {
-          address_line: streetAddress,
-          state_id: selectedStateId,
-          state_name: stateObj?.name || "",
-          district_id: selectedDistrictId,
-          district_name: districtObj?.name || "",
-          pincode,
-          contact_number: contactNumber,
-          contact_name: contactName,
-          lat: selectedLat ? parseFloat(selectedLat) : null,
-          lng: selectedLng ? parseFloat(selectedLng) : null
-        }
-      };
-
-      const res = await axios.put(
-        `${API_URL}/india/v1/shop/orders/${editingOrder._id}/address`,
-        payload,
-        { withCredentials: true }
+      const res = await axiosInstance.post(
+        `/india/v1/shop/offline-checkout/${resubmittingOrder.id || resubmittingOrder._id}/resubmit`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
       if (res.data?.success) {
-        setEditingOrder(null);
+        setResubmittingOrder(null);
         fetchOrders();
       } else {
-        setModalError(res.data?.message || "Failed to update delivery address.");
+        setResubmitError(res.data?.message || "Failed to re-submit payment proof.");
       }
-    } catch (error) {
-      console.error("Failed to update address:", error);
-      setModalError(error.response?.data?.message || "Failed to update delivery address.");
+    } catch (err) {
+      setResubmitError(err.response?.data?.message || "Re-submission failed. Please try again.");
     } finally {
-      setSavingAddress(false);
+      setResubmitLoading(false);
     }
   };
 
-  // Status mapping
-  const statusColors = {
-    pending: "bg-amber-500/10 text-amber-600 border border-amber-500/20",
-    confirmed: "bg-blue-600/10 text-blue-600 border border-blue-600/20",
-    completed: "bg-green-600/10 text-green-600 border border-green-600/20",
-    cancelled: "bg-red-600/10 text-red-600 border border-red-600/20",
+  // Open Tax Invoice View Modal
+  const handleViewInvoice = async (order) => {
+    setViewingInvoice(order);
+    setInvoiceLoading(true);
+    try {
+      const res = await axiosInstance.get(`/india/v1/shop/orders/${order.id || order._id}/invoice-data`);
+      if (res.data?.success) {
+        setViewingInvoice(res.data.data);
+      }
+    } catch (err) {
+      console.error("Error fetching invoice:", err);
+    } finally {
+      setInvoiceLoading(false);
+    }
   };
 
-  // Stats calculation
-  const stats = {
-    total: orders.length,
-    processing: orders.filter(o => o.status === "pending" || o.status === "confirmed").length,
-    completed: orders.filter(o => o.status === "completed").length,
-    cancelled: orders.filter(o => o.status === "cancelled").length
-  };
-
-  const filteredOrders = orders.filter(o => {
-    if (activeTab === "All") return true;
-    if (activeTab === "Processing") return o.status === "pending" || o.status === "confirmed";
-    return o.status.toLowerCase() === activeTab.toLowerCase();
+  // Filter orders by tab
+  const filteredOrders = orders.filter((o) => {
+    const status = o.status?.toLowerCase();
+    const pStatus = o.payment_status?.toLowerCase();
+    if (activeTab === "Pending Verification") return pStatus === "pending_verification" || status === "pending_verification";
+    if (activeTab === "Approved") return pStatus === "captured" || status === "confirmed";
+    if (activeTab === "Dispatched") return status === "dispatched";
+    if (activeTab === "Delivered") return status === "delivered" || status === "completed";
+    if (activeTab === "Rejected") return pStatus === "rejected" || status === "rejected";
+    return true;
   });
 
   return (
-    <div className="min-h-screen space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
       {/* Header */}
-      <div className="bg-surface p-6 rounded-2xl shadow-sm border border-border flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-black text-text-primary dark:text-info tracking-tight">
-            Order Kit Status & Tracking
+          <h1 className="text-2xl font-black text-text-primary dark:text-white flex items-center gap-2.5">
+            <FaShoppingCart className="text-primary" /> My Solar Kit Orders & Live Tracking
           </h1>
           <p className="text-xs text-text-secondary mt-1">
-            Manage your solar kits, view real-time delivery statuses, and adjust delivery addresses.
+            Real-time status tracking for Direct EPC and Franchise-attributed purchase orders.
           </p>
         </div>
-        <Button onClick={fetchOrders} variant="secondary" className="px-4 py-2 flex items-center gap-1">
-          <BsArrowRepeat className={loading ? "animate-spin" : ""} /> Refresh
-        </Button>
+
+        <button
+          onClick={fetchOrders}
+          className="inline-flex items-center gap-2 px-3.5 py-2 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-bold text-text-primary transition-colors shadow-sm self-start"
+        >
+          <BsArrowRepeat className={loading ? "animate-spin text-primary" : ""} /> Refresh
+        </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { title: "Total Orders", value: stats.total, color: "blue", icon: FaShoppingCart },
-          { title: "Processing", value: stats.processing, color: "amber", icon: BsArrowRepeat },
-          { title: "Completed", value: stats.completed, color: "green", icon: FaCheckCircle },
-          { title: "Cancelled", value: stats.cancelled, color: "red", icon: FaTimesCircle }
-        ].map((stat, idx) => (
-          <div key={idx} className="bg-surface p-5 rounded-2xl border border-border flex items-center justify-between">
-            <div>
-              <p className="text-[10px] uppercase font-extrabold text-text-secondary tracking-widest">{stat.title}</p>
-              <h2 className="text-2xl font-black text-text-primary mt-1.5">{stat.value}</h2>
-            </div>
-            <div className={`p-3 rounded-xl bg-${stat.color}-500/10 text-${stat.color}-600`}>
-              <stat.icon className="text-xl" />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs Selector */}
-      <div className="flex border-b border-border gap-2">
-        {["All", "Processing", "Completed", "Cancelled"].map((tab) => (
+      {/* Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {["All", "Pending Verification", "Approved", "Dispatched", "Delivered", "Rejected"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-5 py-3.5 text-xs font-bold transition-all border-b-2 -mb-0.5 ${
+            className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all ${
               activeTab === tab
-                ? "border-primary text-primary dark:border-info dark:text-info"
-                : "border-transparent text-text-secondary hover:text-text-primary"
+                ? "bg-primary text-white shadow-md"
+                : "bg-surface hover:bg-surface-hover text-text-secondary border border-border"
             }`}
           >
             {tab}
@@ -333,384 +219,468 @@ export default function ProjectOrderStatus() {
         ))}
       </div>
 
+      {/* Loading & Empty States */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center p-20 space-y-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-xs text-text-muted">Loading your orders...</p>
-        </div>
-      ) : errorMsg ? (
-        <div className="bg-danger/5 border border-danger/20 rounded-xl p-5 text-center text-danger text-sm">
-          {errorMsg}
+        <div className="py-20 text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs font-bold text-text-secondary">Loading your order history & live tracking...</p>
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="bg-surface border border-border rounded-2xl p-12 text-center space-y-4">
-          <FaShoppingCart className="text-text-muted mx-auto text-5xl opacity-40" />
-          <div>
-            <h3 className="text-base font-bold text-text-primary">No Orders Found</h3>
-            <p className="text-xs text-text-secondary mt-1">There are no orders matching this filter.</p>
-          </div>
+        <div className="py-20 text-center bg-surface rounded-3xl border border-border shadow-sm p-8 space-y-3">
+          <FaShoppingCart className="mx-auto text-text-muted text-4xl" />
+          <h3 className="text-base font-bold text-text-primary dark:text-white">No Orders Found</h3>
+          <p className="text-xs text-text-secondary max-w-sm mx-auto">
+            You don't have any purchase orders matching the "{activeTab}" filter.
+          </p>
         </div>
       ) : (
-        <div className="bg-surface rounded-2xl border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-surface-hover/50 border-b border-border text-[10px] uppercase font-bold text-text-secondary tracking-wider">
-                <tr>
-                  <th className="p-4">Order Details</th>
-                  <th className="p-4">District Boundary</th>
-                  <th className="p-4">Order Value</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Date Ordered</th>
-                  <th className="p-4 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border text-sm">
-                {filteredOrders.map((order) => {
-                  const isExpanded = expandedOrderId === order._id;
-                  const kitName = order.combo_kit_id?.kitName || "Solar Combo Kit";
-                  const districtName = order.district_id?.name || order.delivery_address?.district_name || "Original District";
+        /* Orders List */
+        <div className="space-y-5">
+          {filteredOrders.map((order) => {
+            const isEpcOrder = order.is_epc_order || order.order_type === "offline_epc_order";
+            const orderId = order.order_number || order.id || order._id;
+            const items = order.items || [];
+            const isExpanded = expandedOrderId === orderId;
 
-                  return (
-                    <React.Fragment key={order._id}>
-                      <tr 
-                        onClick={() => setExpandedOrderId(isExpanded ? null : order._id)}
-                        className="hover:bg-surface-hover/30 cursor-pointer transition-colors"
-                      >
-                        <td className="p-4">
-                          <div className="font-bold text-text-primary">{kitName}</div>
-                          <div className="text-[10px] text-text-muted font-mono mt-0.5">{order._id}</div>
-                        </td>
-                        <td className="p-4 font-semibold text-text-secondary flex items-center gap-1.5 mt-2">
-                          <FaMapMarkerAlt className="text-primary text-xs" />
-                          {districtName}
-                        </td>
-                        <td className="p-4 font-bold text-text-primary">
-                          ₹{order.selling_price_snapshot?.toLocaleString("en-IN")}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col gap-1 items-start">
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${statusColors[order.status] || ""}`}>
-                              {order.status}
-                            </span>
-                            {(!order.delivery_address || !order.delivery_address.address_line) && (
-                              <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[9px] font-black px-2 py-0.5 rounded tracking-wide uppercase">
-                                ⚠️ Pending Address
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-4 text-xs text-text-secondary">
-                          {new Date(order.created_at || order.created_by).toLocaleDateString("en-IN", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric"
-                          })}
-                        </td>
-                        <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-3">
-                            <button
-                              onClick={() => setExpandedOrderId(isExpanded ? null : order._id)}
-                              className="p-2 text-text-secondary hover:text-primary transition-colors"
-                              title="View Details"
-                            >
-                              <FaEye size={15} />
-                            </button>
-                            <button
-                              onClick={() => handleOpenEditAddress(order)}
-                              className="p-2 text-text-secondary hover:text-primary transition-colors"
-                              title="Update Delivery Address"
-                            >
-                              <FaEdit size={15} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+            const isPendingVerification = order.payment_status === "pending_verification" || order.status === "pending_verification";
+            const isApproved = order.payment_status === "captured" || order.status === "confirmed";
+            const isDispatched = order.order_status === "dispatched" || order.status === "dispatched";
+            const isDelivered = order.order_status === "delivered" || order.status === "completed" || order.status === "delivered";
+            const isRejected = order.payment_status === "rejected" || order.status === "rejected";
 
-                      {/* Expanded Section */}
-                      {isExpanded && (
-                        <tr className="bg-surface-hover/10">
-                          <td colSpan={6} className="p-5 border-t border-b border-border">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              {/* Left - Kit specs & details */}
-                              <div className="space-y-3">
-                                <h4 className="text-xs uppercase font-extrabold text-text-secondary tracking-wider">
-                                  📦 Kit Configuration Specifications
-                                </h4>
-                                <div className="bg-surface rounded-xl p-4 border border-border text-xs space-y-2 text-text-secondary">
-                                  <div className="flex justify-between">
-                                    <span>Brand Name:</span>
-                                    <span className="font-bold text-text-primary">{order.combo_kit_id?.brand || "SolarShop Brand"}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Generation Capacity:</span>
-                                    <span className="font-bold text-text-primary">{order.combo_kit_id?.capacityKW} kW</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Usage Type:</span>
-                                    <span className="font-bold text-text-primary">{order.combo_kit_id?.usageType || "Residential"}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Estimated Annual Savings:</span>
-                                    <span className="font-bold text-success">
-                                      ₹{((order.combo_kit_id?.generationEstimateKWhPerYear || 0) * 8.5).toLocaleString("en-IN")} / Year
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
+            // Determine timeline step (1: Submitted, 2: Verification, 3: Approved, 4: Dispatched, 5: Delivered)
+            let step = 1;
+            if (isDelivered) step = 5;
+            else if (isDispatched) step = 4;
+            else if (isApproved) step = 3;
+            else if (isPendingVerification) step = 2;
 
-                              {/* Right - Delivery Address Information */}
-                              <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <h4 className="text-xs uppercase font-extrabold text-text-secondary tracking-wider flex items-center gap-1">
-                                    <FaMapMarkerAlt className="text-primary dark:text-info shrink-0" /> Delivery Address
-                                  </h4>
-                                  <button
-                                    onClick={() => handleOpenEditAddress(order)}
-                                    className="text-xs text-primary dark:text-info hover:underline font-bold flex items-center gap-1"
-                                  >
-                                    <FaEdit /> Edit Address
-                                  </button>
-                                </div>
-
-                                <div className="bg-surface rounded-xl p-4 border border-border text-xs space-y-3">
-                                  {order.delivery_address?.address_line ? (
-                                    <div className="space-y-1 text-text-primary">
-                                      <p className="font-semibold">{order.delivery_address.address_line}</p>
-                                      <p>{order.delivery_address.district_name}, {order.delivery_address.state_name}</p>
-                                      <p className="font-bold text-text-secondary mt-1">Pincode: {order.delivery_address.pincode}</p>
-                                      {order.delivery_address.contact_name && (
-                                        <p className="font-bold text-text-secondary mt-1">Contact Person: {order.delivery_address.contact_name}</p>
-                                      )}
-                                      {order.delivery_address.contact_number && (
-                                        <p className="font-bold text-text-secondary">Contact Number: {order.delivery_address.contact_number}</p>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="text-amber-500 font-semibold flex items-center gap-1.5">
-                                      <FaRegClock /> Address details pending update.
-                                    </div>
-                                  )}
-                                  <div className="text-[10px] text-text-muted bg-surface-hover/50 p-2.5 rounded-lg border border-border">
-                                    🚚 Dispatched from: <span className="font-bold text-text-secondary">{order.delivery_address?.district_name || districtName} solar hub</span>. 
-                                    Delivery destination must reside within {districtName} district boundary limits.
-                                  </div>
-                                </div>
-                              </div>
-                              {/* Bottom (Span 2) - Real-time tracking stepper */}
-                              {order.status !== 'pending' && (() => {
-                                const steps = ['At Warehouse', 'Loaded', 'Out for Delivery', 'Reached Site', 'Delivered'];
-                                const stepIcons = [FaWarehouse, FaTruckLoading, FaTruck, FaMapMarkerAlt, FaCheckCircle];
-                                const currentStatus = order.tracking_status || (order.status === 'completed' ? 'Delivered' : null);
-                                const currentIdx = currentStatus ? steps.indexOf(currentStatus) : -1;
-                                return (
-                                  <div className="md:col-span-2 space-y-3 border-t border-border/60 pt-4">
-                                    {/* Header row */}
-                                    <div className="flex items-center justify-between">
-                                      <h4 className="text-xs uppercase font-extrabold text-text-secondary tracking-wider flex items-center gap-1.5">
-                                        <FaTruck className="text-primary dark:text-info shrink-0" />
-                                        Live Delivery Tracking — {kitName}
-                                      </h4>
-                                      {currentStatus ? (
-                                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${
-                                          currentStatus === 'Delivered'
-                                            ? 'bg-green-500/10 text-green-600 border-green-500/20'
-                                            : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                                        }`}>
-                                          {currentStatus}
-                                        </span>
-                                      ) : (
-                                        <span className="text-[10px] font-bold text-text-muted px-2.5 py-1 rounded-full border border-border/50 bg-surface">
-                                          Awaiting Dispatch
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <div className="bg-surface rounded-2xl p-5 border border-border">
-                                      {currentStatus ? (
-                                        /* Connected Stepper */
-                                        <div className="relative">
-                                          {/* Progress bar track */}
-                                          <div className="absolute top-5 left-[10%] right-[10%] h-1 bg-border/50 rounded-full" />
-                                          {/* Progress fill */}
-                                          <div
-                                            className="absolute top-5 left-[10%] h-1 bg-primary dark:bg-info rounded-full transition-all duration-700"
-                                            style={{ width: `${currentIdx >= 0 ? (currentIdx / (steps.length - 1)) * 80 : 0}%` }}
-                                          />
-                                          <div className="relative grid grid-cols-5 text-center gap-1">
-                                            {steps.map((status, idx) => {
-                                              const isPassed = currentIdx >= idx;
-                                              const isCurrent = currentIdx === idx;
-                                              const StepIcon = stepIcons[idx];
-                                              return (
-                                                <div key={status} className="flex flex-col items-center gap-1.5">
-                                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 z-10 ${
-                                                    isCurrent
-                                                      ? 'bg-primary dark:bg-info text-white shadow-md ring-4 ring-primary/20 dark:ring-info/20 scale-110'
-                                                      : isPassed
-                                                        ? 'bg-primary/80 dark:bg-info/80 text-white'
-                                                        : 'bg-border/50 text-text-muted'
-                                                  }`}>
-                                                    <StepIcon size={14} />
-                                                  </div>
-                                                  <span className={`text-[9px] font-bold leading-tight max-w-[60px] ${
-                                                    isPassed ? 'text-primary dark:text-info' : 'text-text-muted'
-                                                  }`}>
-                                                    {status}
-                                                  </span>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        /* Awaiting dispatch state */
-                                        <div className="flex flex-col items-center gap-3 py-4 text-center">
-                                          <div className="w-12 h-12 rounded-full bg-border/30 flex items-center justify-center text-text-muted">
-                                            <FaWarehouse size={20} />
-                                          </div>
-                                          <div>
-                                            <p className="text-xs font-bold text-text-primary">Order Confirmed</p>
-                                            <p className="text-[10px] text-text-muted mt-0.5">Your kit is being prepared at the warehouse. Tracking will begin once dispatched.</p>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                        </tr>
+            return (
+              <div
+                key={orderId}
+                className="bg-surface rounded-3xl border border-border shadow-sm overflow-hidden transition-all hover:border-primary/40"
+              >
+                {/* Order Top Bar */}
+                <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-hover/30">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="font-mono font-black text-base text-text-primary dark:text-white">
+                        {order.order_number || `#${String(order._id).slice(-8).toUpperCase()}`}
+                      </span>
+                      {order.reseller?.business_name ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                          <FaBuilding size={10} /> Franchise: {order.reseller.business_name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                          <FaWarehouse size={10} /> Central Company Fulfillment
+                        </span>
                       )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </div>
+                    <p className="text-xs text-text-secondary">
+                      Ordered on {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Status Badge */}
+                    {isRejected ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/20">
+                        <FaTimesCircle /> Payment Rejected
+                      </span>
+                    ) : isPendingVerification ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        <FaRegClock /> Accounts Verification Pending
+                      </span>
+                    ) : isApproved && !isDispatched && !isDelivered ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                        <FaCheckCircle /> Payment Approved • Packing
+                      </span>
+                    ) : isDispatched ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                        <FaTruck /> Dispatched & In Transit
+                      </span>
+                    ) : isDelivered ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <FaCheckCircle /> Delivered & Completed
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-black bg-surface text-text-secondary border border-border">
+                        {order.status}
+                      </span>
+                    )}
+
+                    <span className="text-base font-black text-text-primary dark:text-white">
+                      ₹{(order.total_amount || order.selling_price_snapshot || 0).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Visual Progress Stepper */}
+                {!isRejected && (
+                  <div className="p-6 border-b border-border bg-surface">
+                    <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                      {/* Step 1 */}
+                      <div className={`space-y-1.5 ${step >= 1 ? "text-primary font-bold" : "text-text-muted"}`}>
+                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-black ${
+                          step >= 1 ? "bg-primary text-white" : "bg-surface-hover border border-border"
+                        }`}>
+                          1
+                        </div>
+                        <p className="text-[11px] leading-tight">Order & UTR Placed</p>
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className={`space-y-1.5 ${step >= 2 ? "text-primary font-bold" : "text-text-muted"}`}>
+                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-black ${
+                          step >= 2 ? "bg-primary text-white" : "bg-surface-hover border border-border"
+                        }`}>
+                          2
+                        </div>
+                        <p className="text-[11px] leading-tight">Accounts Review</p>
+                      </div>
+
+                      {/* Step 3 */}
+                      <div className={`space-y-1.5 ${step >= 3 ? "text-primary font-bold" : "text-text-muted"}`}>
+                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-black ${
+                          step >= 3 ? "bg-primary text-white" : "bg-surface-hover border border-border"
+                        }`}>
+                          3
+                        </div>
+                        <p className="text-[11px] leading-tight">Payment Approved</p>
+                      </div>
+
+                      {/* Step 4 */}
+                      <div className={`space-y-1.5 ${step >= 4 ? "text-primary font-bold" : "text-text-muted"}`}>
+                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-black ${
+                          step >= 4 ? "bg-primary text-white" : "bg-surface-hover border border-border"
+                        }`}>
+                          4
+                        </div>
+                        <p className="text-[11px] leading-tight">Dispatched</p>
+                      </div>
+
+                      {/* Step 5 */}
+                      <div className={`space-y-1.5 ${step >= 5 ? "text-emerald-600 font-bold" : "text-text-muted"}`}>
+                        <div className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-black ${
+                          step >= 5 ? "bg-emerald-500 text-white" : "bg-surface-hover border border-border"
+                        }`}>
+                          5
+                        </div>
+                        <p className="text-[11px] leading-tight">Delivered</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* High-visibility Rejection Notice if Accounts Rejected Payment */}
+                {isRejected && (
+                  <div className="p-6 bg-red-500/10 border-b border-red-500/20 text-red-800 dark:text-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <FaExclamationTriangle className="text-red-500 text-2xl shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-extrabold text-sm text-red-600 dark:text-red-400">
+                          Payment Verification Rejected by Accounts
+                        </h4>
+                        <p className="text-xs mt-0.5 text-text-secondary">
+                          <strong>Reason:</strong> {order.offline_payment?.rejection_reason || "Payment amount or UTR could not be verified."}
+                        </p>
+                        <p className="text-[11px] text-text-muted mt-1">
+                          Please verify your bank transaction and re-upload the receipt with the correct UTR number.
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={() => handleOpenResubmit(order)}
+                      variant="primary"
+                      className="py-2.5 px-4 text-xs font-black shrink-0 shadow bg-red-600 hover:bg-red-700 border-none"
+                    >
+                      <FaRedo className="mr-1.5" /> Re-submit Receipt & UTR
+                    </Button>
+                  </div>
+                )}
+
+                {/* Dispatch / Logistics Details Bar if Dispatched */}
+                {isDispatched && order.dispatch_tracking?.tracking_number && (
+                  <div className="p-4 bg-purple-500/10 border-b border-purple-500/20 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-purple-900 dark:text-purple-200">
+                    <div className="flex items-center gap-2.5">
+                      <FaTruck className="text-purple-600 text-lg shrink-0" />
+                      <div>
+                        <span className="font-bold">Courier: {order.dispatch_tracking.courier_name || "Express Transport"}</span>
+                        <span className="mx-2">•</span>
+                        <span className="font-mono font-bold">LR / Waybill: {order.dispatch_tracking.tracking_number}</span>
+                      </div>
+                    </div>
+                    {order.dispatch_tracking.tracking_url && (
+                      <a
+                        href={order.dispatch_tracking.tracking_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-black text-purple-600 dark:text-purple-400 hover:underline inline-flex items-center gap-1"
+                      >
+                        Live Tracking Link &rarr;
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Order Details Body */}
+                <div className="p-6 space-y-4 text-xs">
+                  {/* Items and quantities */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <span className="font-bold text-text-secondary block">Ordered Equipment / Kit:</span>
+                      <div className="bg-surface-hover p-3 rounded-xl border border-border">
+                        <p className="font-extrabold text-sm text-text-primary dark:text-white">
+                          {order.combo_kit_id?.name || order.combo_kit_id?.kitName || (items[0] && items[0].item_name) || "Solar Kit Package"}
+                        </p>
+                        <p className="text-text-secondary text-xs mt-0.5">
+                          Total Quantity: <strong>{order.total_kits || items.length || 1} Kit(s)</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="font-bold text-text-secondary block">Offline Payment Details:</span>
+                      <div className="bg-surface-hover p-3 rounded-xl border border-border space-y-1 font-mono">
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary font-sans">UTR Ref:</span>
+                          <span className="font-bold text-text-primary dark:text-white">
+                            {order.offline_payment?.utr_number || order.payment_reference || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary font-sans">Amount:</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans">
+                            ₹{(order.offline_payment?.amount_paid || order.total_amount || 0).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div className="flex items-center justify-between pt-2 border-t border-border flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      {order.invoice?.invoice_number && (
+                        <button
+                          onClick={() => handleViewInvoice(order)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-bold text-primary transition-colors"
+                        >
+                          <FaFileInvoice /> Tax Invoice ({order.invoice.invoice_number})
+                        </button>
+                      )}
+                      {order.offline_payment?.receipt_url && (
+                        <a
+                          href={order.offline_payment.receipt_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-secondary transition-colors"
+                        >
+                          <FaEye /> View Uploaded Receipt
+                        </a>
+                      )}
+                    </div>
+
+                    <span className="text-text-muted text-[11px]">
+                      Fulfillment: {order.fulfillment_source === "franchise_warehouse" ? "Franchise Partner Stock" : "Central Company Hub"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Re-submit Payment Proof Modal ────────────────────────────────────── */}
+      {resubmittingOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-3xl border border-border shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-border pb-3">
+              <div>
+                <h3 className="text-lg font-black text-text-primary dark:text-white">
+                  Re-submit Payment Proof & UTR
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Order #{resubmittingOrder.order_number}
+                </p>
+              </div>
+              <button onClick={() => setResubmittingOrder(null)} className="text-text-secondary hover:text-text-primary p-1">
+                <FaTimes size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmResubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  Correct UTR / Transaction Ref No. <span className="text-red-500">*</span>
+                </label>
+                <CustomInput
+                  value={newUtr}
+                  onChange={(e) => setNewUtr(e.target.value.toUpperCase())}
+                  required
+                  placeholder="e.g. HDFC0001928374"
+                  className="font-mono uppercase font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                    Amount Paid (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="number"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    required
+                    className="font-bold font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                    Payment Date
+                  </label>
+                  <CustomInput
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  Upload Fresh Receipt / Screenshot
+                </label>
+                <div className="border-2 border-dashed border-border rounded-xl p-4 text-center cursor-pointer relative bg-surface-hover">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleResubmitFileChange}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {newReceiptPreview ? (
+                    <img src={newReceiptPreview} alt="Preview" className="max-h-28 mx-auto rounded object-contain" />
+                  ) : (
+                    <p className="text-xs text-text-secondary">
+                      {newReceiptFile ? newReceiptFile.name : "Click to browse new payment screenshot"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {resubmitError && (
+                <div className="text-xs text-red-500 font-bold p-2 bg-red-500/10 rounded-lg">
+                  {resubmitError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="secondary" onClick={() => setResubmittingOrder(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" loading={resubmitLoading}>
+                  Submit for Re-verification
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Address Edit Dialog Backdrop / Modal */}
-      {editingOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditingOrder(null)} />
-          
-          <div className="bg-surface border border-border rounded-2xl w-full max-w-2xl shadow-2xl p-6 relative z-10 animate-in fade-in zoom-in-95 duration-200">
-            {/* Modal Close */}
-            <button
-              onClick={() => setEditingOrder(null)}
-              className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition-colors"
-            >
-              <FaTimes size={16} />
-            </button>
-
-            {/* Modal Title */}
-            <div className="flex items-center gap-2 mb-4 border-b border-border pb-3">
-              <FaMapMarkerAlt className="text-primary text-xl" />
+      {/* ── Tax Invoice View Modal ───────────────────────────────────────────── */}
+      {viewingInvoice && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-3xl border border-border shadow-2xl max-w-2xl w-full p-6 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-border pb-3">
               <div>
-                <h3 className="text-lg font-black text-text-primary tracking-tight">Pin Delivery Address</h3>
-                <p className="text-[10px] text-text-muted">Locked to district: {editingOrder.district_id?.name || "Original District"}</p>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-500/15 text-emerald-600 rounded">
+                  Official Tax Invoice
+                </span>
+                <h3 className="text-lg font-black text-text-primary dark:text-white mt-1">
+                  Invoice #{viewingInvoice.invoice_number || "INV-SK-2026-001"}
+                </h3>
               </div>
+              <button onClick={() => setViewingInvoice(null)} className="text-text-secondary hover:text-text-primary p-1">
+                <FaTimes size={18} />
+              </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="space-y-4">
-              {modalError && (
-                <div className="bg-danger/10 text-danger p-3 rounded-xl border border-danger/20 text-xs font-semibold">
-                  {modalError}
-                </div>
-              )}
-
-              {/* Map Location Picker */}
-              <div className="bg-surface-hover/50 p-2.5 rounded-2xl border border-border">
-                <MapLocationPicker
-                  lat={selectedLat}
-                  lng={selectedLng}
-                  visible={true}
-                  boundaries={boundaries}
-                  onLocationError={(err) => setModalError(err)}
-                  onSelect={(loc) => {
-                    setModalError("");
-                    setStreetAddress(loc.address || "");
-                    setPincode(loc.pincode || "");
-                    setSelectedLat(loc.lat);
-                    setSelectedLng(loc.lng);
-                  }}
-                />
+            {invoiceLoading ? (
+              <div className="py-12 text-center">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
               </div>
-
-              <div>
-                <label className="block text-xs font-bold text-text-secondary uppercase mb-1.5">Street Address</label>
-                <textarea
-                  value={streetAddress}
-                  onChange={(e) => setStreetAddress(e.target.value)}
-                  placeholder="Street name, building number, locality..."
-                  className="w-full px-3.5 py-2.5 bg-surface border border-border focus:border-primary focus:ring-1 focus:ring-primary rounded-xl text-sm transition-all outline-hidden resize-none h-16 text-text-primary animate-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <CustomInput
-                  label="Contact Person Name"
-                  placeholder="Enter receiver's name"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                />
-
-                <CustomInput
-                  label="Contact Mobile Number"
-                  placeholder="10-digit mobile number"
-                  value={contactNumber}
-                  onChange={(e) => setContactNumber(e.target.value)}
-                />
-
-                <CustomInput
-                  label="Pincode"
-                  placeholder="400001"
-                  value={pincode}
-                  onChange={(e) => setPincode(e.target.value)}
-                />
-                
-                <div>
-                  <label className="block text-xs font-bold text-text-secondary uppercase mb-1.5">State</label>
-                  <input
-                    type="text"
-                    value={statesList.find(s => s.id?.toString() === selectedStateId?.toString())?.name || editingOrder?.state_id?.name || editingOrder?.delivery_address?.state_name || ""}
-                    disabled
-                    className="w-full px-3.5 py-2.5 bg-surface-hover/50 border border-border rounded-xl text-sm outline-hidden text-text-muted cursor-not-allowed h-[42px]"
-                  />
+            ) : (
+              <div className="space-y-4 text-xs">
+                {/* Seller & Buyer Header */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-surface-hover rounded-2xl border border-border">
+                  <div>
+                    <span className="text-[10px] font-bold text-text-muted uppercase">Seller</span>
+                    <p className="font-extrabold text-text-primary dark:text-white mt-0.5">SolarKits Technologies Pvt Ltd</p>
+                    <p className="text-text-secondary">GSTIN: 27AABCS1234F1Z5</p>
+                    <p className="text-text-secondary text-[11px]">Mumbai, Maharashtra</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-text-muted uppercase">Billed To (EPC)</span>
+                    <p className="font-extrabold text-text-primary dark:text-white mt-0.5">
+                      {viewingInvoice.buyer?.company_name || viewingInvoice.buyer?.name}
+                    </p>
+                    <p className="text-text-secondary">GSTIN: {viewingInvoice.buyer?.gstin || "N/A"}</p>
+                    <p className="text-text-secondary text-[11px]">{viewingInvoice.buyer?.email}</p>
+                  </div>
                 </div>
 
-                <div className="col-span-2">
-                  <label className="block text-xs font-bold text-text-secondary uppercase mb-1.5">District</label>
-                  <input
-                    type="text"
-                    value={districtsList.find(d => d.id?.toString() === selectedDistrictId?.toString())?.name || editingOrder?.district_id?.name || editingOrder?.delivery_address?.district_name || ""}
-                    disabled
-                    className="w-full px-3.5 py-2.5 bg-surface-hover/50 border border-border rounded-xl text-sm outline-hidden text-text-muted cursor-not-allowed h-[42px]"
-                  />
+                {/* Items Table */}
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-surface-hover border-b border-border text-[11px] font-bold text-text-secondary">
+                      <tr>
+                        <th className="p-2.5">Item Description</th>
+                        <th className="p-2.5 text-center">Qty</th>
+                        <th className="p-2.5 text-right">Taxable</th>
+                        <th className="p-2.5 text-right">GST (13.8%)</th>
+                        <th className="p-2.5 text-right">Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(viewingInvoice.items || []).map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="p-2.5 font-bold text-text-primary dark:text-white">{item.item_name}</td>
+                          <td className="p-2.5 text-center">{item.quantity}</td>
+                          <td className="p-2.5 text-right">₹{(item.taxable_amount || 0).toLocaleString("en-IN")}</td>
+                          <td className="p-2.5 text-right">₹{(item.tax_amount || 0).toLocaleString("en-IN")}</td>
+                          <td className="p-2.5 text-right font-bold">₹{(item.total_amount || 0).toLocaleString("en-IN")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Total */}
+                <div className="flex justify-between items-center p-3 bg-surface-hover rounded-xl font-bold text-sm">
+                  <span>Grand Total (Incl. GST):</span>
+                  <span className="text-lg font-black text-primary">
+                    ₹{(viewingInvoice.financials?.grand_total || 0).toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                {/* Payment Receipt Info */}
+                <div className="p-3 border border-border rounded-xl flex justify-between items-center text-xs font-mono">
+                  <span>UTR Reference: {viewingInvoice.payment?.utr_number}</span>
+                  <span className="text-emerald-600 font-sans font-bold">Payment Verified & Settled</span>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button variant="secondary" onClick={() => window.print()} className="text-xs">
+                    Print Invoice
+                  </Button>
                 </div>
               </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex justify-end gap-3 mt-6 border-t border-border pt-4">
-              <Button
-                variant="secondary"
-                onClick={() => setEditingOrder(null)}
-                disabled={savingAddress}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSaveAddress}
-                loading={savingAddress}
-              >
-                Save Changes
-              </Button>
-            </div>
+            )}
           </div>
         </div>
       )}

@@ -42,6 +42,23 @@ const schema = new mongoose.Schema({
     ref: 'cms_users',
     default: null,
   },
+  assigned_by_bde_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'bde_profiles',
+    default: null,
+  },
+  assigned_by_bde_name: {
+    type: String,
+    default: null,
+  },
+  assigned_by_bde_code: {
+    type: String,
+    default: null,
+  },
+  assigned_date: {
+    type: Date,
+    default: null,
+  },
   transfer_reason: {
     type: String,
     default: null,

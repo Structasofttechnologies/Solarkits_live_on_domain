@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useBdeAuth } from '../context/BdeAuthContext';
+import logoImg from '../assets/logo.png';
 import {
   LayoutDashboard,
   Users,
@@ -17,6 +18,8 @@ import {
   ChevronRight,
   SunMedium,
   Zap,
+  Package,
+  Award,
 } from 'lucide-react';
 
 export default function BdeLayout() {
@@ -27,10 +30,11 @@ export default function BdeLayout() {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Leads', path: '/leads', icon: Users },
-    { name: 'Franchisees', path: '/franchisees', icon: Store },
-    { name: 'Goals & Targets', path: '/goals', icon: Target },
-    { name: "EPC Management", path: '/epc-management', icon: Zap },
+    { name: 'EPC Leads', path: '/epc-leads', icon: Users },
+    { name: 'GST Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
+    { name: 'Franchisee Goals', path: '/franchisees', icon: Store },
+    { name: 'Order History & Kits', path: '/order-history', icon: Package },
+    { name: 'Leaderboard Ranking', path: '/ranking', icon: Award },
     { name: 'Store Setup', path: '/store-setup', icon: ShoppingBag },
     { name: 'Notifications', path: '/notifications', icon: Bell },
     { name: 'My Profile & KYC', path: '/profile', icon: User },
@@ -55,14 +59,11 @@ export default function BdeLayout() {
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('/')}>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-blue-500 text-white flex items-center justify-center font-black shadow-md shadow-blue-700/20">
-                <SunMedium className="w-6 h-6 text-amber-300" />
-              </div>
-              <div>
-                <span className="text-lg font-black tracking-tight text-blue-900">SOLARKITS</span>
-                <span className="text-[10px] block font-bold text-amber-500 tracking-wider -mt-1">BDE PORTAL</span>
-              </div>
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
+              <img src={logoImg} alt="SolarKits" className="h-9 w-auto object-contain" />
+              <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-black uppercase tracking-wider border border-amber-200 shadow-xs">
+                BDE PORTAL
+              </span>
             </div>
           </div>
 

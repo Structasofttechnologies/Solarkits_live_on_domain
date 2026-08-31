@@ -54,11 +54,10 @@ export const getAvailableKitData = createAsyncThunk(
   "solar/getAvailableKitData",
   async (params) => {
     const { districtId } = params || {};
-    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
     const url = districtId 
-      ? `${apiBase}/india/v1/shop/combo-kits?district_id=${districtId}`
-      : `${apiBase}/india/v1/shop/combo-kits`;
-    const response = await axios.get(url);
+      ? `/india/v1/shop/combo-kits?district_id=${districtId}`
+      : `/india/v1/shop/combo-kits`;
+    const response = await axiosInstance.get(url);
     return response.data.data;
   }
 );
@@ -68,11 +67,10 @@ export const getBulkKitBuyData = createAsyncThunk(
   "solar/getBulkKitBuyData",
   async (params) => {
     const { districtId } = params || {};
-    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
     const url = districtId 
-      ? `${apiBase}/india/v1/shop/combo-kits?district_id=${districtId}`
-      : `${apiBase}/india/v1/shop/combo-kits`;
-    const response = await axios.get(url);
+      ? `/india/v1/shop/combo-kits?district_id=${districtId}`
+      : `/india/v1/shop/combo-kits`;
+    const response = await axiosInstance.get(url);
     return response.data.data;
   }
 );
@@ -82,11 +80,10 @@ export const fetchLiveInventory = createAsyncThunk(
   async (params, { rejectWithValue }) => {
     try {
       const { districtId } = params || {};
-      const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
       const url = districtId
-        ? `${apiBase}/india/v1/shop/inventory-status?district_id=${districtId}`
-        : `${apiBase}/india/v1/shop/inventory-status`;
-      const response = await axios.get(url);
+        ? `/india/v1/shop/inventory-status?district_id=${districtId}`
+        : `/india/v1/shop/inventory-status`;
+      const response = await axiosInstance.get(url);
       return response.data.stock || {};
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch inventory');
@@ -98,8 +95,7 @@ export const fetchShopHierarchy = createAsyncThunk(
   "solar/fetchShopHierarchy",
   async (_, { rejectWithValue }) => {
     try {
-      const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const response = await axios.get(`${apiBase}/india/v1/shop/hierarchy`);
+      const response = await axiosInstance.get(`/india/v1/shop/hierarchy`);
       return response.data?.data || [];
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch shop hierarchy');

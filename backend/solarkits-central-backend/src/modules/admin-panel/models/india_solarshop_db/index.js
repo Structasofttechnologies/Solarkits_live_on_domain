@@ -91,12 +91,16 @@ const StoreSetupDelay          = require('./store_setup_delays.schema');
 const StoreSetupVerification   = require('./store_setup_verifications.schema');
 const ExpansionPlan            = require('./expansion_plans.schema');
 
+// --- BDE EPC Management ---
+const EPCLead                  = require('./epc_leads.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
   EpcResellerRelationship,
   EpcTransferRequest,
   WarehouseComboKit,
+  ComboKit: WarehouseComboKit,
   PoSetting,
   CompanyMargin,
   BulkKitSetting,
@@ -183,4 +187,6 @@ module.exports = {
   StoreSetupDelay,
   StoreSetupVerification,
   ExpansionPlan,
+  EPCLead,
+  EpcLead: EPCLead,
 };

@@ -111,6 +111,7 @@ async function syncResellerListingsForReseller(resellerId) {
             scope_type: 'kit',
             title: kit.name || kit.kit_name || 'Solar Combo Kit',
             description: kit.description || 'Franchisee Plan Allocated Solar Kit',
+            image_url: kit.kit_image || kit.image || null,
             cost_price_paise: costPaise,
             selling_price_paise: costPaise,
             margin_paise: 0,
@@ -122,6 +123,11 @@ async function syncResellerListingsForReseller(resellerId) {
             subcategory_id: kit.subcategory_id || null,
             brand_id: kit.brand_id || null,
           });
+        }
+      } else if (!existing.image_url) {
+        const kit = await WarehouseComboKit.findById(kitId).lean();
+        if (kit && (kit.kit_image || kit.image)) {
+          await ResellerListing.updateOne({ _id: existing._id }, { $set: { image_url: kit.kit_image || kit.image } });
         }
       }
     }

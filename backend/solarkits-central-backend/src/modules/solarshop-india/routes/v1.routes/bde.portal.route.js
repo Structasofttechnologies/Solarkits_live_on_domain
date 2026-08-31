@@ -4,7 +4,7 @@
  * Express router for BDE Portal self-service APIs.
  * Prefix: /api/bde/v1 or /api/india/v1/bde
  *
- * Step 1 — SolarKits BDE System
+ * SolarKits – Updated BDE Login & EPC Management Module
  */
 
 const express = require('express');
@@ -22,7 +22,7 @@ router.post('/auth/login', handler.login_bde);
 router.post('/auth/logout', handler.logout_bde);
 router.post('/auth/forgot-password', handler.forgot_password);
 
-// ── Protected BDE Endpoints ───────────────────────────────────────────────────
+// ── Protected BDE Core Endpoints ──────────────────────────────────────────────
 router.post('/auth/change-password', verify_bde_auth, handler.change_password);
 router.get('/profile/me', verify_bde_auth, handler.get_bde_me);
 router.put('/profile/update', verify_bde_auth, handler.update_me || handler.update_bde_me);
@@ -32,7 +32,7 @@ router.get('/dashboard', verify_bde_auth, handler.get_bde_dashboard);
 router.get('/notifications', verify_bde_auth, handler.get_notifications);
 router.put('/notifications/:id/read', verify_bde_auth, handler.mark_notification_read);
 
-// Scoped assignments & Physical Store Setup Execution
+// Scoped assignments & Territory Information
 router.get('/territory/my', verify_bde_auth, handler.get_my_territory);
 router.get('/territory/availability', verify_bde_auth, require('../../controller/reseller.portal.handler').check_territory_availability);
 router.get('/plans/my', verify_bde_auth, handler.get_my_plans);
@@ -48,7 +48,7 @@ router.post('/store-setup/:id/checklist/:activity_id', verify_bde_auth, proofUpl
 router.post('/store-setup/:id/submit-verification', verify_bde_auth, employeeHandler.submit_for_admin_verification);
 router.post('/store-setup/:id/delay-request', verify_bde_auth, proofUpload, employeeHandler.submit_delay_request);
 
-// ── Step 2: BDE Leads & Franchisee Pipeline ───────────────────────────────────
+// ── Franchisee Pipeline (Legacy / Store Prospect Leads) ───────────────────────
 router.post('/leads/create', verify_bde_auth, handler.create_bde_lead);
 router.get('/leads/list', verify_bde_auth, handler.list_bde_leads);
 router.get('/leads/detail/:id', verify_bde_auth, handler.get_bde_lead_detail);
@@ -58,14 +58,40 @@ router.post('/leads/follow-up/:id', verify_bde_auth, handler.schedule_follow_up)
 router.put('/leads/stage/:id', verify_bde_auth, handler.update_lead_stage);
 router.post('/leads/start-signup/:id', verify_bde_auth, handler.start_franchisee_signup);
 router.get('/pipeline', verify_bde_auth, handler.get_bde_pipeline);
-router.get('/franchisees', verify_bde_auth, handler.get_my_franchisees);
 
-// ── Step 3: BDE EPC Management (Territory-Scoped) ─────────────────────────────
-router.get('/epc/stats',              verify_bde_auth, handler.get_bde_epc_stats);
-router.get('/epc/list',               verify_bde_auth, handler.get_bde_epc_list);
-router.post('/epc/onboard',           verify_bde_auth, handler.onboard_epc);
-router.get('/epc/franchise-partners', verify_bde_auth, handler.get_bde_franchise_partners);
-router.post('/epc/assign-partner',    verify_bde_auth, handler.assign_franchise_partner);
+// ── 1 & 2. EPC Leads Management ───────────────────────────────────────────────
+router.post('/epc-leads/create',            verify_bde_auth, handler.create_epc_lead);
+router.get('/epc-leads/list',               verify_bde_auth, handler.list_epc_leads);
+router.get('/epc-leads/detail/:id',         verify_bde_auth, handler.get_epc_lead_detail);
+router.put('/epc-leads/update/:id',         verify_bde_auth, handler.update_epc_lead);
+router.post('/epc-leads/follow-up/:id',     verify_bde_auth, handler.schedule_epc_follow_up);
+router.put('/epc-leads/status/:id',         verify_bde_auth, handler.update_epc_lead_status);
+
+// ── 3 & 4. GST-Based EPC Onboarding & Franchisee Assignment ───────────────────
+router.post('/epc/verify-gst',              verify_bde_auth, handler.verify_epc_gstin);
+router.post('/epc/onboard-with-gst',        verify_bde_auth, handler.onboard_epc_with_gst);
+router.get('/epc/eligible-franchisees',     verify_bde_auth, handler.get_eligible_franchisees_for_epc);
+router.post('/epc/assign-franchisee',       verify_bde_auth, handler.assign_epc_to_franchisee);
+
+// Legacy EPC endpoints (backward-compatible)
+router.get('/epc/stats',                    verify_bde_auth, handler.get_bde_epc_stats);
+router.get('/epc/list',                     verify_bde_auth, handler.get_bde_epc_list);
+router.post('/epc/onboard',                 verify_bde_auth, handler.onboard_epc);
+router.get('/epc/franchise-partners',       verify_bde_auth, handler.get_bde_franchise_partners);
+router.post('/epc/assign-partner',          verify_bde_auth, handler.assign_franchise_partner);
+
+// ── 5 & 6. Franchisee Network, Goal vs Achievement & Performance ──────────────
+router.get('/franchisees',                  verify_bde_auth, handler.get_my_franchisees);
+router.get('/franchisees/performance',      verify_bde_auth, handler.get_franchisee_performance);
+
+// ── 7. Franchisee Order History ───────────────────────────────────────────────
+router.get('/franchisees/:id/orders',       verify_bde_auth, handler.get_franchisee_order_history);
+router.get('/orders/all',                   verify_bde_auth, handler.get_territory_order_history);
+
+// ── 8. Kit Sales Performance Analytics ────────────────────────────────────────
+router.get('/analytics/kit-sales',          verify_bde_auth, handler.get_kit_sales_analytics);
+
+// ── 11. Performance Ranking ───────────────────────────────────────────────────
+router.get('/ranking/franchisees',          verify_bde_auth, handler.get_franchisee_ranking);
 
 module.exports = router;
-

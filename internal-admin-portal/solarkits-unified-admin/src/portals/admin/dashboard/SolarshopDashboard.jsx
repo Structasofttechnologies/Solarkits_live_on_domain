@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -33,6 +33,12 @@ const CompanyMargin = lazy(() => import("../pages/solar-shop/company-margin/Comp
 const WarehouseMarginConfig = lazy(() => import("../pages/solar-shop/company-margin/WarehouseMarginConfig"));
 const WarehouseKitActivations = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitActivations"));
 const WarehouseKitConfig = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitConfig"));
+
+// ── Margin & Commission Settings Module ─────────────────────────────────────────
+const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
+const OffersDiscountSettings = lazy(() => import("../pages/solar-shop/company-margin/OffersDiscountSettings"));
+const CompanyGoalsSettings = lazy(() => import("../pages/solar-shop/company-margin/CompanyGoalsSettings"));
+const MarginAnalytics = lazy(() => import("../pages/solar-shop/company-margin/MarginAnalytics"));
 
 const menus = [
     [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/solar-shop/home", unique_id: "00000000" }],
@@ -72,7 +78,38 @@ const menus = [
         },
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "ADM_PO_ORDERS" },
         { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "ADM_PO_ORDERS" },
-        { name: "Company Margin", icon: <FaCoins />, path: "/admin-panel/solar-shop/company-margin", unique_id: "ADM_CO_MARGIN" },
+        {
+            name: "Margin & Commission",
+            icon: <FaCoins />,
+            path: "/admin-panel/solar-shop/company-margin",
+            unique_id: "ADM_CO_MARGIN",
+            subMenu: [
+                {
+                    name: "Warehouse Margins",
+                    icon: <FaPercent />,
+                    path: "/admin-panel/solar-shop/company-margin",
+                    unique_id: "ADM_CO_MARGIN"
+                },
+                {
+                    name: "Offers & Discounts",
+                    icon: <FiTag />,
+                    path: "/admin-panel/solar-shop/company-margin/offers",
+                    unique_id: "ADM_CO_MARGIN"
+                },
+                {
+                    name: "Company Goals",
+                    icon: <FiTarget />,
+                    path: "/admin-panel/solar-shop/company-margin/goals",
+                    unique_id: "ADM_CO_MARGIN"
+                },
+                {
+                    name: "Margin Analytics",
+                    icon: <FiBarChart2 />,
+                    path: "/admin-panel/solar-shop/company-margin/analytics",
+                    unique_id: "ADM_CO_MARGIN"
+                },
+            ]
+        },
         { name: "Warehouse Kit Activations", icon: <FaToggleOn />, path: "/admin-panel/solar-shop/warehouse-kit-activations", unique_id: "ADM_WH_KIT_ACT" },
         {
             name: "Order Management Settings",
@@ -144,6 +181,18 @@ const menus = [
                     icon: <FiBarChart2 />,
                     path: "/admin-panel/solar-shop/reseller-management/fpo/performance",
                     unique_id: "FPO_ANALYTICS"
+                },
+                {
+                    name: "Commission Settings",
+                    icon: <FiDollarSign />,
+                    path: "/admin-panel/solar-shop/reseller-management/commission-settings",
+                    unique_id: "FPO_COMM"
+                },
+                {
+                    name: "Commission Ledger",
+                    icon: <FiFileText />,
+                    path: "/admin-panel/solar-shop/reseller-management/commission-ledger",
+                    unique_id: "FPO_COMM"
                 },
                 {
                     name: "Store Setup & Operations",
@@ -294,12 +343,13 @@ export default function SolarShopDashboard() {
                             if (!subPath || subPath === 'home') {
                                 subPath = 'home';
                             }
-                            navigate(`/admin-panel/${parts[slugIndex]}/${defaultCountry}/${subPath}`, { replace: true });
                         }
                     }
                 }
             } catch (error) {
-                console.error("Error checking product markets in SolarshopDashboard:", error);
+                if (error.response?.status !== 401) {
+                    console.warn("Notice checking product markets in SolarshopDashboard:", error?.message || error);
+                }
             }
         };
         checkProductMarket();
@@ -490,6 +540,47 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_CO_MARGIN">
                                                 <Suspense fallback={<Loader text="Loading Warehouse Margin Configuration..." />}>
                                                     <WarehouseMarginConfig moduleUniqueId="ADM_CO_MARGIN" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    {/* ── Margin & Commission: New Sub-Pages ────────────────────────────── */}
+                                    <Route
+                                        path="/:countryName/company-margin/overview"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_CO_MARGIN">
+                                                <Suspense fallback={<Loader text="Loading Margin Overview..." />}>
+                                                    <MarginCommissionHome moduleUniqueId="ADM_CO_MARGIN" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/company-margin/offers"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_CO_MARGIN">
+                                                <Suspense fallback={<Loader text="Loading Offers & Discounts..." />}>
+                                                    <OffersDiscountSettings moduleUniqueId="ADM_CO_MARGIN" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/company-margin/goals"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_CO_MARGIN">
+                                                <Suspense fallback={<Loader text="Loading Company Goals..." />}>
+                                                    <CompanyGoalsSettings moduleUniqueId="ADM_CO_MARGIN" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/company-margin/analytics"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_CO_MARGIN">
+                                                <Suspense fallback={<Loader text="Loading Margin Analytics..." />}>
+                                                    <MarginAnalytics moduleUniqueId="ADM_CO_MARGIN" />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBdeAuth } from '../context/BdeAuthContext';
+import logoImg from '../assets/logo.png';
 import {
   SunMedium,
   Lock,
@@ -72,15 +73,14 @@ export default function BdeLogin() {
       {/* Main Login Card */}
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-3xl p-7 sm:p-8 shadow-xl space-y-6 relative z-10">
         {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#0575B8] to-blue-500 text-white mx-auto flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <SunMedium className="w-8 h-8 text-amber-300" />
+        <div className="text-center space-y-3">
+          <div className="flex justify-center">
+            <img src={logoImg} alt="SolarKits" className="h-12 w-auto object-contain" />
           </div>
-          <div className="pt-1">
-            <h1 className="text-2xl font-black tracking-tight text-slate-900">SOLARKITS</h1>
-            <p className="text-[11px] font-black text-[#F49222] tracking-widest uppercase mt-0.5">
+          <div>
+            <span className="inline-block px-3 py-1 rounded-full bg-amber-50 text-amber-800 text-[10px] font-black tracking-widest uppercase border border-amber-200 shadow-xs">
               Business Development Portal
-            </p>
+            </span>
           </div>
           <p className="text-xs text-slate-500">
             Sign in with your Email, Mobile number, or BDE Employee ID

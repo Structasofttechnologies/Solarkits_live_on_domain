@@ -1513,70 +1513,129 @@ const get_reseller_authorized_products = async (req, res) => {
     if (activePlan) {
       const { FranchiseePlanPOSetting, FranchiseePlanPoSetting } = require('../../admin-panel/models/india_solarshop_db');
       const PlanPoModel = FranchiseePlanPOSetting || FranchiseePlanPoSetting;
-      const poSetting = PlanPoModel ? await PlanPoModel.findOne({
+      const poSettingsList = PlanPoModel ? await PlanPoModel.find({
         plan_id: activePlan._id,
         is_active: true,
-      }).lean() : null;
+        po_enabled: { $ne: false },
+        deleted_at: null,
+      }).lean() : [];
 
-      const poKitIds = (poSetting?.allowed_combo_kit_ids || []).map((id) => String(id));
-      const planKitIds = (activePlan.allowed_combo_kit_ids || []).map((id) => String(id));
-      const combinedPlanKitIds = Array.from(new Set([...poKitIds, ...planKitIds]));
+      // Collect all industry, category, subcategory, project type, and kit IDs
+      const allIndustryIds = new Set([
+        ...(activePlan.allowed_industry_type_ids || []).map(String),
+        ...poSettingsList.flatMap((s) => (s.allowed_industry_type_ids || []).map(String)),
+      ]);
 
-      const planProdIds = (activePlan.allowed_product_ids || []).map((id) => String(id));
-      const planCatIds = (activePlan.allowed_category_ids || []).map((id) => String(id));
-      const planSubcatIds = (activePlan.allowed_subcategory_ids || []).map((id) => String(id));
-      const planProjectTypeIds = (activePlan.allowed_project_type_ids || []).map((id) => String(id));
+      const allCategoryIds = new Set([
+        ...(activePlan.allowed_category_ids || []).map(String),
+        ...poSettingsList.flatMap((s) => (s.allowed_category_ids || []).map(String)),
+      ]);
 
-      // 2a. Load Plan Combo Kits
-      let comboKitQuery = { is_active: { $ne: false }, deleted_at: null };
-      if (combinedPlanKitIds.length > 0) {
-        comboKitQuery._id = { $in: combinedPlanKitIds };
-      } else if (planCatIds.length > 0 || planSubcatIds.length > 0 || planProjectTypeIds.length > 0) {
-        const { SolarKit } = require('../../admin-panel/models/core_db');
-        const defQuery = { deleted_at: null };
-        if (planCatIds.length > 0) defQuery.category_id = { $in: planCatIds };
-        if (planSubcatIds.length > 0) defQuery.subcategory_id = { $in: planSubcatIds };
-        if (planProjectTypeIds.length > 0) defQuery.type_id = { $in: planProjectTypeIds };
+      const allSubcatIds = new Set([
+        ...(activePlan.allowed_subcategory_ids || []).map(String),
+        ...poSettingsList.flatMap((s) => (s.allowed_subcategory_ids || []).map(String)),
+      ]);
 
-        const matchingDefs = await SolarKit.find(defQuery).select('_id').lean();
-        const defIds = matchingDefs.map((d) => d._id);
-        comboKitQuery.solar_kit_id = { $in: defIds };
+      const allProjectTypeIds = new Set([
+        ...(activePlan.allowed_project_type_ids || []).map(String),
+        ...poSettingsList.flatMap((s) => (s.allowed_project_type_ids || []).map(String)),
+      ]);
+
+      const explicitKitIds = new Set([
+        ...(activePlan.allowed_combo_kit_ids || []).map(String),
+        ...poSettingsList.flatMap((s) => (s.allowed_combo_kit_ids || []).map(String)),
+      ]);
+
+      const planProdIds = (activePlan.allowed_product_ids || []).map(String);
+
+      // If industry types are allocated, find all categories belonging to them
+      if (allIndustryIds.size > 0) {
+        const catsInIndustries = await ProjectCategory.find({
+          industry_type_id: { $in: Array.from(allIndustryIds) },
+          deleted_at: null,
+        }).select('_id').lean();
+        catsInIndustries.forEach((c) => allCategoryIds.add(String(c._id)));
       }
 
-      const planKits = await WarehouseComboKit.find(comboKitQuery).lean();
-      planKits.forEach((k) => {
-        const listing = listingMap[k._id.toString()];
-        const kitDisplayName = k.name || k.kit_name || 'Combo Kit';
-        const kitCode = k.kit_code || 'KIT-SKU';
-        const priceInr = listing?.cost_price_paise
-          ? listing.cost_price_paise / 100
-          : (k.base_price_cached || k.selling_price_cached || k.base_price || 5000);
+      // Find matching SolarKit definitions
+      const solarKitConditions = [];
+      if (allCategoryIds.size > 0) solarKitConditions.push({ category_id: { $in: Array.from(allCategoryIds) } });
+      if (allSubcatIds.size > 0) solarKitConditions.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
+      if (allProjectTypeIds.size > 0) solarKitConditions.push({ type_id: { $in: Array.from(allProjectTypeIds) } });
 
-        itemMap.set(`kit:${k._id.toString()}`, {
-          _id: k._id,
-          id: k._id,
-          scope_type: 'kit',
-          is_kit: true,
-          name: kitDisplayName,
-          kit_name: kitDisplayName,
-          sku_code: kitCode,
-          kit_code: kitCode,
-          base_price: priceInr,
-          price: priceInr,
-          reseller_cost_inr: priceInr,
-          is_authorized: true,
-          source: 'plan_default',
-          plan_name: activePlan.name,
+      let matchedSolarKitIds = [];
+      if (solarKitConditions.length > 0) {
+        const { SolarKit } = require('../../admin-panel/models/core_db');
+        const matchedDefs = await SolarKit.find({
+          $or: solarKitConditions,
+          deleted_at: null,
+        }).select('_id').lean();
+        matchedSolarKitIds = matchedDefs.map((d) => d._id);
+      }
+
+      // Build ComboKit query with $or
+      const kitOrConditions = [];
+      const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (validExplicitIds.length > 0) {
+        kitOrConditions.push({ _id: { $in: validExplicitIds } });
+      }
+      if (matchedSolarKitIds.length > 0) {
+        kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
+      }
+
+      if (kitOrConditions.length > 0) {
+        const planKits = await WarehouseComboKit.find({
+          is_active: { $ne: false },
+          deleted_at: null,
+          $or: kitOrConditions,
+        }).lean();
+
+        planKits.forEach((k) => {
+          const listing = listingMap[k._id.toString()];
+          const kitDisplayName = k.name || k.kit_name || 'Combo Kit';
+          const kitCode = k.kit_code || 'KIT-SKU';
+          const priceInr = listing?.cost_price_paise
+            ? listing.cost_price_paise / 100
+            : (k.base_price_cached || k.selling_price_cached || k.base_price || 5000);
+
+          itemMap.set(`kit:${k._id.toString()}`, {
+            _id: k._id,
+            id: k._id,
+            scope_type: 'kit',
+            is_kit: true,
+            name: kitDisplayName,
+            kit_name: kitDisplayName,
+            sku_code: kitCode,
+            kit_code: kitCode,
+            base_price: priceInr,
+            price: priceInr,
+            reseller_cost_inr: priceInr,
+            is_authorized: true,
+            source: 'plan_default',
+            plan_name: activePlan.name,
+          });
         });
-      });
+      }
 
-      // 2b. Load Plan Products ONLY if explicitly specified in plan allowed_product_ids
+      // 2b. Load Plan Products if specified or matching categories
+      const prodOrConditions = [];
       if (planProdIds.length > 0) {
+        prodOrConditions.push({ _id: { $in: planProdIds } });
+      }
+      if (allCategoryIds.size > 0) {
+        prodOrConditions.push({ category_id: { $in: Array.from(allCategoryIds) } });
+      }
+      if (allSubcatIds.size > 0) {
+        prodOrConditions.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
+      }
+
+      if (prodOrConditions.length > 0) {
         const planProds = await Product.find({
-          _id: { $in: planProdIds },
+          $or: prodOrConditions,
           is_active: { $ne: false },
           deleted_at: null,
         }).lean();
+
         planProds.forEach((p) => {
           const listing = listingMap[p._id.toString()];
           const priceInr = listing?.cost_price_paise
@@ -1761,35 +1820,263 @@ const register_epc_buyer = async (req, res) => {
  */
 const list_my_epc_buyers = async (req, res) => {
   try {
-    const { EpcAccount } = require('../../admin-panel/models/india_solarshop_db');
+    const { EpcAccount, EpcResellerRelationship, EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
     const epcs = await EpcAccount.find({
-      onboarded_by_reseller_id: req.reseller._id,
+      $or: [
+        { onboarded_by_reseller_id: req.reseller._id },
+        { primary_reseller_id: req.reseller._id },
+      ],
       deleted_at: null,
     })
       .populate('states', 'name state_code')
       .populate('districts', 'name')
+      .populate('onboarded_by_bde_id', 'full_name bde_id email')
       .sort({ created_at: -1 })
       .lean();
 
+    const epcIds = epcs.map((e) => e._id);
+    const [relationships, epcOrders] = await Promise.all([
+      EpcResellerRelationship.find({
+        epc_id: { $in: epcIds },
+        reseller_id: req.reseller._id,
+        status: 'active',
+      }).lean(),
+      EpcOrder.find({
+        epc_id: { $in: epcIds },
+      }).lean(),
+    ]);
+
+    const relMap = {};
+    relationships.forEach((r) => {
+      relMap[r.epc_id.toString()] = r;
+    });
+
+    const ordersByEpc = {};
+    epcOrders.forEach((o) => {
+      const key = o.epc_id.toString();
+      if (!ordersByEpc[key]) ordersByEpc[key] = { count: 0, total_value: 0 };
+      ordersByEpc[key].count += 1;
+      ordersByEpc[key].total_value += (o.grand_total_paise || 0) / 100;
+    });
+
     return res.json({
       status: 'success',
-      data: epcs.map((e) => ({
-        id:                     e._id,
-        _id:                    e._id,
-        name:                   e.name,
-        company_name:           e.gstin_trade_name || e.gstin_legal_name || e.name,
-        gstin:                  e.gstin || null,
-        email:                  e.email,
-        whatsapp:               e.whatsapp,
-        states:                 e.states,
-        districts:              e.districts,
-        status:                 e.status,
-        reseller_assigned_date: e.reseller_assigned_date,
-        created_at:             e.created_at,
-      })),
+      data: epcs.map((e) => {
+        const rel = relMap[e._id.toString()] || {};
+        const ord = ordersByEpc[e._id.toString()] || { count: 0, total_value: 0 };
+        const assignedByBde = rel.assigned_by_bde_name || e.onboarded_by_bde_id?.full_name || null;
+        const bdeCode = e.onboarded_by_bde_id?.bde_id || null;
+
+        return {
+          id: e._id,
+          _id: e._id,
+          name: e.name,
+          company_name: e.company_name || e.gstin_trade_name || e.gstin_legal_name || e.name,
+          contact_person: e.contact_person || e.name,
+          gstin: e.gstin || null,
+          email: e.email,
+          whatsapp: e.whatsapp || e.mobile,
+          state_name: e.state_name || e.states?.[0]?.name || 'Regional State',
+          district_name: e.district_name || e.districts?.[0]?.name || 'Regional District',
+          status: e.status || 'active',
+          is_assigned_by_bde: !!assignedByBde || e.onboarding_source === 'bde',
+          assigned_by_bde_name: assignedByBde,
+          assigned_by_bde_id: bdeCode,
+          assignment_date: rel.effective_from || e.reseller_assigned_date || e.created_at,
+          orders_count: ord.count,
+          total_order_value_inr: ord.total_value,
+          commission_eligible: true,
+          created_at: e.created_at,
+        };
+      }),
     });
   } catch (error) {
     console.error('[reseller.portal] list_my_epc_buyers error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 12B. LIST EPC BUYER ORDERS & REAL-TIME TRACKING ──────────────────────────
+/**
+ * GET /api/india/v1/reseller/epc-orders/list
+ * Real-time order tracking for all orders placed by this Franchise Partner's onboarded EPCs.
+ */
+const list_my_epc_orders = async (req, res) => {
+  try {
+    const { EpcAccount, EpcOrder, ResellerWalletLedger } = require('../../admin-panel/models/india_solarshop_db');
+    const resellerId = req.reseller._id;
+
+    // Find all EPC accounts onboarded by or assigned to this reseller
+    const myEpcs = await EpcAccount.find({
+      $or: [
+        { onboarded_by_reseller_id: resellerId },
+        { primary_reseller_id: resellerId },
+      ],
+      deleted_at: null,
+    }).select('_id name email whatsapp gstin company_name').lean();
+
+    const epcIds = myEpcs.map((e) => e._id);
+    const epcMap = {};
+    myEpcs.forEach((e) => { epcMap[e._id.toString()] = e; });
+
+    // Fetch all orders attributed to this reseller or placed by their onboarded EPCs
+    const orders = await EpcOrder.find({
+      $or: [
+        { reseller_id: resellerId },
+        { epc_id: { $in: epcIds } },
+      ],
+    })
+      .populate('epc_id', 'name email whatsapp gstin company_name address')
+      .sort({ created_at: -1 })
+      .lean();
+
+    // Check commission ledger status
+    const ledgers = await ResellerWalletLedger.find({
+      reseller_id: resellerId,
+      transaction_type: 'commission_credit',
+    }).lean();
+
+    const ledgerMap = {};
+    ledgers.forEach((l) => {
+      if (l.reference_order_id) ledgerMap[l.reference_order_id.toString()] = l;
+    });
+
+    const enrichedOrders = orders.map((o) => {
+      const epc = o.epc_id || epcMap[o.epc_id?.toString()] || {};
+      const ledger = ledgerMap[o._id.toString()];
+      const totalAmount = (o.grand_total_paise || 0) / 100;
+      const subtotal = (o.subtotal_paise || 0) / 100;
+      const taxAmount = (o.tax_total_paise || 0) / 100;
+      const grossMargin = (o.reseller_total_margin_paise || 0) / 100;
+      const platformFee = (o.platform_total_commission_paise || 0) / 100;
+      const netCommission = ledger?.net_amount_paise ? (ledger.net_amount_paise / 100) : grossMargin;
+      const commissionRate = subtotal > 0 ? Math.round((grossMargin / subtotal) * 100 * 10) / 10 : 8.0;
+
+      // Status pipeline
+      let timelineStep = 1; // 1: Placed, 2: Verification, 3: Approved, 4: Dispatched, 5: Delivered
+      if (o.order_status === 'delivered') timelineStep = 5;
+      else if (o.order_status === 'dispatched') timelineStep = 4;
+      else if (o.payment_status === 'captured' || o.order_status === 'confirmed') timelineStep = 3;
+      else if (o.payment_status === 'pending_verification') timelineStep = 2;
+
+      let walletStatus = 'Pending Verification';
+      if (o.payment_status === 'captured' || o.order_status === 'delivered') {
+        walletStatus = ledger ? 'Credited to Wallet' : 'Accrued (Pending Payout)';
+      } else if (o.payment_status === 'rejected') {
+        walletStatus = 'Payment Rejected';
+      }
+
+      return {
+        id: o._id,
+        order_number: o.order_number,
+        created_at: o.created_at,
+        epc_buyer: {
+          id: epc._id,
+          name: epc.name || 'EPC Contractor',
+          company_name: epc.company_name || epc.name,
+          email: epc.email || 'N/A',
+          whatsapp: epc.whatsapp || 'N/A',
+          gstin: epc.gstin || 'N/A',
+        },
+        items: (o.items || []).map((i) => ({
+          item_name: i.item_name,
+          quantity: i.quantity,
+          unit_price: (i.unit_price_paise || 0) / 100,
+          total_price: (i.total_price_paise || 0) / 100,
+          reseller_margin: (i.reseller_margin_paise || 0) / 100,
+        })),
+        total_kits: (o.items || []).reduce((sum, i) => sum + (i.quantity || 1), 0),
+        fulfillment_source: o.fulfillment_source || (o.reseller_id ? 'franchise_warehouse' : 'company_warehouse'),
+        fulfillment_source_label: (o.fulfillment_source === 'franchise_warehouse' || o.reseller_id)
+          ? 'Franchise Partner Stock / Hub'
+          : 'Central Company Warehouse',
+        financials: {
+          total_amount: totalAmount,
+          subtotal: subtotal,
+          tax_amount: taxAmount,
+          gross_margin: grossMargin,
+          platform_fee: platformFee,
+          net_commission: netCommission,
+          commission_rate: commissionRate,
+          wallet_status: walletStatus,
+        },
+        payment_info: {
+          payment_method: 'Offline Bank Transfer (RTGS/NEFT/IMPS)',
+          payment_status: o.payment_status,
+          utr_number: o.offline_payment?.utr_number || o.payment_reference || 'N/A',
+          amount_paid: o.offline_payment?.amount_paid || totalAmount,
+          payment_date: o.offline_payment?.payment_date || o.created_at,
+          receipt_url: o.offline_payment?.receipt_url || '',
+          receipt_filename: o.offline_payment?.receipt_filename || '',
+          sender_bank_name: o.offline_payment?.sender_bank_name || '',
+          verification_status: o.offline_payment?.verification_status || o.payment_status,
+          rejection_reason: o.offline_payment?.rejection_reason || null,
+        },
+        invoice: o.invoice || {},
+        dispatch_tracking: {
+          courier_name: o.dispatch_tracking?.courier_name || null,
+          tracking_number: o.dispatch_tracking?.tracking_number || null,
+          tracking_url: o.dispatch_tracking?.tracking_url || null,
+          dispatched_at: o.dispatch_tracking?.dispatched_at || null,
+          estimated_delivery: o.dispatch_tracking?.estimated_delivery || null,
+          dispatch_notes: o.dispatch_tracking?.dispatch_notes || null,
+        },
+        order_status: o.order_status,
+        timeline_step: timelineStep,
+        delivery_address: o.delivery_address || {},
+      };
+    });
+
+    // Summary statistics for Franchise Dashboard
+    const totalOrdersCount = enrichedOrders.length;
+    const totalOrderVolume = enrichedOrders.reduce((sum, o) => sum + o.financials.total_amount, 0);
+    const totalCommissionEarned = enrichedOrders.reduce((sum, o) => o.payment_info.payment_status === 'captured' ? sum + o.financials.net_commission : sum, 0);
+    const pendingVerificationCount = enrichedOrders.filter((o) => o.payment_info.payment_status === 'pending_verification').length;
+    const activeDispatchCount = enrichedOrders.filter((o) => o.order_status === 'dispatched').length;
+
+    return res.status(200).json({
+      status: 'success',
+      data: enrichedOrders,
+      stats: {
+        total_orders: totalOrdersCount,
+        total_volume: Math.round(totalOrderVolume * 100) / 100,
+        total_commission_earned: Math.round(totalCommissionEarned * 100) / 100,
+        pending_verification_count: pendingVerificationCount,
+        active_dispatch_count: activeDispatchCount,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] list_my_epc_orders error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+/**
+ * GET /api/india/v1/reseller/epc-orders/:id/tracking
+ * Full detailed real-time tracking timeline for a specific EPC order.
+ */
+const get_epc_order_live_tracking = async (req, res) => {
+  try {
+    const { EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const { id } = req.params;
+
+    const order = await EpcOrder.findOne({
+      _id: id,
+      reseller_id: req.reseller._id,
+    })
+      .populate('epc_id', 'name email whatsapp gstin company_name address')
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'EPC Order not found or unauthorized.' });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: order,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_epc_order_live_tracking error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
@@ -2502,50 +2789,87 @@ const get_my_plan_po_settings = async (req, res) => {
       is_active: true,
       po_enabled: { $ne: false },
       deleted_at: null,
-    })
-      .populate({ path: 'allowed_combo_kit_ids', model: WarehouseComboKit })
-      .lean();
+    }).lean();
 
-    // Collect combo kits explicitly configured in active PO settings for this plan
-    let comboKits = [];
-    if (poSettingsList.length > 0) {
-      poSettingsList.forEach((s) => {
-        if (s.po_enabled !== false && Array.isArray(s.allowed_combo_kit_ids)) {
-          s.allowed_combo_kit_ids.forEach((k) => {
-            if (k && (k._id || k.id)) {
-              comboKits.push({
-                ...k,
-                po_setting_id: s._id,
-                min_po_quantity: s.min_po_quantity ?? 1,
-                max_po_quantity: s.max_po_quantity ?? null,
-                po_validity_days: s.po_validity_days ?? 30,
-              });
-            }
-          });
-        }
-      });
+    const defSetting = poSettingsList[0] || null;
+
+    // Collect all industry, category, subcategory, project type, and kit IDs
+    const allIndustryIds = new Set([
+      ...(plan.allowed_industry_type_ids || []).map(String),
+      ...poSettingsList.flatMap((s) => (s.allowed_industry_type_ids || []).map(String)),
+    ]);
+
+    const allCategoryIds = new Set([
+      ...(plan.allowed_category_ids || []).map(String),
+      ...poSettingsList.flatMap((s) => (s.allowed_category_ids || []).map(String)),
+    ]);
+
+    const allSubcatIds = new Set([
+      ...(plan.allowed_subcategory_ids || []).map(String),
+      ...poSettingsList.flatMap((s) => (s.allowed_subcategory_ids || []).map(String)),
+    ]);
+
+    const allProjectTypeIds = new Set([
+      ...(plan.allowed_project_type_ids || []).map(String),
+      ...poSettingsList.flatMap((s) => (s.allowed_project_type_ids || []).map(String)),
+    ]);
+
+    const explicitKitIds = new Set([
+      ...(plan.allowed_combo_kit_ids || []).map(String),
+      ...poSettingsList.flatMap((s) => (s.allowed_combo_kit_ids || []).map(String)),
+    ]);
+
+    // If industry types are specified, find all categories belonging to them
+    if (allIndustryIds.size > 0) {
+      const { ProjectCategory } = require('../../admin-panel/models/core_db');
+      const catsInIndustries = await ProjectCategory.find({
+        industry_type_id: { $in: Array.from(allIndustryIds) },
+        deleted_at: null,
+      }).select('_id').lean();
+      catsInIndustries.forEach((c) => allCategoryIds.add(String(c._id)));
     }
 
-    // Fall back to Plan's own allowed_combo_kit_ids only if no kits configured in PO settings
-    if (comboKits.length === 0) {
-      const planKitIds = (plan?.allowed_combo_kit_ids || []).filter(Boolean);
-      if (planKitIds.length > 0) {
-        const foundKits = await WarehouseComboKit.find({
-          _id: { $in: planKitIds },
-          is_active: { $ne: false },
-          deleted_at: null,
-        }).lean();
-        const defSetting = poSettingsList[0];
-        foundKits.forEach((k) => {
-          comboKits.push({
-            ...k,
-            po_setting_id: defSetting?._id || null,
-            min_po_quantity: defSetting?.min_po_quantity ?? 1,
-            max_po_quantity: defSetting?.max_po_quantity ?? null,
-            po_validity_days: defSetting?.po_validity_days ?? 30,
-          });
-        });
-      }
+    // Find matching SolarKit definitions
+    const solarKitConditions = [];
+    if (allCategoryIds.size > 0) solarKitConditions.push({ category_id: { $in: Array.from(allCategoryIds) } });
+    if (allSubcatIds.size > 0) solarKitConditions.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
+    if (allProjectTypeIds.size > 0) solarKitConditions.push({ type_id: { $in: Array.from(allProjectTypeIds) } });
+
+    let matchedSolarKitIds = [];
+    if (solarKitConditions.length > 0) {
+      const { SolarKit } = require('../../admin-panel/models/core_db');
+      const matchedDefs = await SolarKit.find({
+        $or: solarKitConditions,
+        deleted_at: null,
+      }).select('_id').lean();
+      matchedSolarKitIds = matchedDefs.map((d) => d._id);
+    }
+
+    // Build ComboKit query
+    const kitOrConditions = [];
+    const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (validExplicitIds.length > 0) {
+      kitOrConditions.push({ _id: { $in: validExplicitIds } });
+    }
+    if (matchedSolarKitIds.length > 0) {
+      kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
+    }
+
+    let comboKits = [];
+    if (kitOrConditions.length > 0) {
+      const foundKits = await WarehouseComboKit.find({
+        is_active: { $ne: false },
+        deleted_at: null,
+        $or: kitOrConditions,
+      }).lean();
+
+      comboKits = foundKits.map((k) => ({
+        ...k,
+        po_setting_id: defSetting?._id || null,
+        min_po_quantity: defSetting?.min_po_quantity ?? 1,
+        max_po_quantity: defSetting?.max_po_quantity ?? null,
+        po_validity_days: defSetting?.po_validity_days ?? 30,
+      }));
     }
 
     // Deduplicate combo kits
@@ -3167,6 +3491,8 @@ module.exports = {
   get_reseller_authorized_products,
   register_epc_buyer,
   list_my_epc_buyers,
+  list_my_epc_orders,
+  get_epc_order_live_tracking,
   get_active_types,
   get_active_plans,
   update_reseller_bank_details,

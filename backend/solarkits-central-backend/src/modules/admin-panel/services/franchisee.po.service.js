@@ -134,12 +134,54 @@ async function createPoDraft({ franchisee_id, items, idempotency_key, payment_te
 
   const po_settings = allPlanPoSettings[0];
 
-  // Validate that items are authorized under the plan's PO settings
+  // Validate that items are authorized under the plan's PO settings and category allocations
+  const allIndustryIds = new Set([
+    ...(subscription.plan_id?.allowed_industry_type_ids || []).map(String),
+    ...allPlanPoSettings.flatMap((s) => (s.allowed_industry_type_ids || []).map(String)),
+  ]);
+  const allCategoryIds = new Set([
+    ...(subscription.plan_id?.allowed_category_ids || []).map(String),
+    ...allPlanPoSettings.flatMap((s) => (s.allowed_category_ids || []).map(String)),
+  ]);
+  const allSubcatIds = new Set([
+    ...(subscription.plan_id?.allowed_subcategory_ids || []).map(String),
+    ...allPlanPoSettings.flatMap((s) => (s.allowed_subcategory_ids || []).map(String)),
+  ]);
+  const allProjectTypeIds = new Set([
+    ...(subscription.plan_id?.allowed_project_type_ids || []).map(String),
+    ...allPlanPoSettings.flatMap((s) => (s.allowed_project_type_ids || []).map(String)),
+  ]);
+
   const authorizedKitIds = new Set();
   allPlanPoSettings.forEach((s) => {
     (s.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
   });
   (subscription.plan_id?.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
+
+  if (allIndustryIds.size > 0) {
+    const { ProjectCategory } = require('../models/core_db');
+    const cats = await ProjectCategory.find({
+      industry_type_id: { $in: Array.from(allIndustryIds) },
+      deleted_at: null,
+    }).select('_id').lean();
+    cats.forEach((c) => allCategoryIds.add(String(c._id)));
+  }
+
+  if (allCategoryIds.size > 0 || allSubcatIds.size > 0 || allProjectTypeIds.size > 0) {
+    const { SolarKit } = require('../models/core_db');
+    const { WarehouseComboKit } = require('../models/india_solarshop_db');
+    const conds = [];
+    if (allCategoryIds.size > 0) conds.push({ category_id: { $in: Array.from(allCategoryIds) } });
+    if (allSubcatIds.size > 0) conds.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
+    if (allProjectTypeIds.size > 0) conds.push({ type_id: { $in: Array.from(allProjectTypeIds) } });
+
+    const matchedDefs = await SolarKit.find({ $or: conds, deleted_at: null }).select('_id').lean();
+    const defIds = matchedDefs.map((d) => d._id);
+    if (defIds.length > 0) {
+      const matchingKits = await WarehouseComboKit.find({ solar_kit_id: { $in: defIds }, is_active: { $ne: false }, deleted_at: null }).select('_id').lean();
+      matchingKits.forEach((k) => authorizedKitIds.add(String(k._id)));
+    }
+  }
 
   if (authorizedKitIds.size > 0) {
     for (const item of items) {

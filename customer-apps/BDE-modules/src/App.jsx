@@ -5,13 +5,15 @@ import BdeProtectedRoute from './components/BdeProtectedRoute';
 import BdeLayout from './components/BdeLayout';
 import BdeLogin from './pages/BdeLogin';
 import BdeDashboard from './pages/BdeDashboard';
-import BdeLeads from './pages/BdeLeads';
+import BdeEpcLeads from './pages/BdeEpcLeads';
+import BdeEpcOnboardingWizard from './pages/BdeEpcOnboardingWizard';
 import BdeFranchisees from './pages/BdeFranchisees';
+import BdeOrderHistoryAndKits from './pages/BdeOrderHistoryAndKits';
+import BdePerformanceRanking from './pages/BdePerformanceRanking';
 import BdeGoals from './pages/BdeGoals';
 import BdeStoreSetup from './pages/BdeStoreSetup';
 import BdeNotifications from './pages/BdeNotifications';
 import BdeProfile from './pages/BdeProfile';
-import EpcManagement from './pages/EpcManagement';
 
 export default function App() {
   return (
@@ -23,13 +25,17 @@ export default function App() {
           <Route element={<BdeProtectedRoute />}>
             <Route element={<BdeLayout />}>
               <Route path="/" element={<BdeDashboard />} />
-              <Route path="/leads" element={<BdeLeads />} />
+              <Route path="/epc-leads" element={<BdeEpcLeads />} />
+              <Route path="/leads" element={<BdeEpcLeads />} />
+              <Route path="/epc-onboarding" element={<BdeEpcOnboardingWizard />} />
+              <Route path="/epc-management" element={<BdeEpcOnboardingWizard />} />
               <Route path="/franchisees" element={<BdeFranchisees />} />
+              <Route path="/order-history" element={<BdeOrderHistoryAndKits />} />
+              <Route path="/ranking" element={<BdePerformanceRanking />} />
               <Route path="/goals" element={<BdeGoals />} />
               <Route path="/store-setup" element={<BdeStoreSetup />} />
               <Route path="/notifications" element={<BdeNotifications />} />
               <Route path="/profile" element={<BdeProfile />} />
-              <Route path="/epc-management" element={<EpcManagement />} />
             </Route>
           </Route>
 

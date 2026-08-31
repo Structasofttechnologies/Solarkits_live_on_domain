@@ -87,14 +87,78 @@ const get_epc_catalogue = async (req, res) => {
 
     // 3. Resolve reseller
     const resellerId = await resolveResellerId(epcAccount);
+
+    // ─── DIRECT EPC CASE: No reseller assigned, show ALL company products & kits ───
     if (!resellerId) {
-      return res.status(200).json({
+      const { search, category_id, subcategory_id, brand_id, industry_type_id, min_price, max_price } = req.query;
+      const prodFilter = { is_active: true, deleted_at: null };
+      if (category_id && mongoose.Types.ObjectId.isValid(category_id)) prodFilter.category_id = category_id;
+      if (subcategory_id && mongoose.Types.ObjectId.isValid(subcategory_id)) prodFilter.subcategory_id = subcategory_id;
+      if (brand_id && mongoose.Types.ObjectId.isValid(brand_id)) prodFilter.brand_id = brand_id;
+      if (industry_type_id && mongoose.Types.ObjectId.isValid(industry_type_id)) prodFilter.industry_type_id = industry_type_id;
+      if (search && search.trim()) {
+        const q = search.trim();
+        prodFilter.$or = [
+          { name: { $regex: q, $options: 'i' } },
+          { description: { $regex: q, $options: 'i' } }
+        ];
+      }
+
+      const products = await Product.find(prodFilter)
+        .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
+        .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
+        .populate({ path: 'brand_id', model: Brand, select: 'name logo' })
+        .populate({ path: 'industry_type_id', model: IndustryType, select: 'name slug' })
+        .lean();
+
+      const directCatalogue = products.map((p) => {
+        const basePrice = p.base_price || p.price || 5000;
+        const gstRate = p.gst_rate || 18;
+        const taxAmount = Math.round((basePrice * gstRate) / 100);
+        const finalPrice = basePrice + taxAmount;
+        const sellingPricePaise = Math.round(finalPrice * 100);
+        const taxesPaise = Math.round(taxAmount * 100);
+        const priceBeforeTaxPaise = Math.round(basePrice * 100);
+
+        return {
+          id: p._id,
+          listing_id: p._id,
+          item_type: 'product',
+          product_id: p._id,
+          title: p.name || 'Solar Equipment',
+          sku_code: p.sku_code || null,
+          description: p.description || '',
+          features: p.features || [],
+          image_url: p.image || null,
+          specifications: p.specifications || {},
+          category: p.category_id ? { id: p.category_id._id, name: p.category_id.name } : null,
+          subcategory: p.subcategory_id ? { id: p.subcategory_id._id, name: p.subcategory_id.name } : null,
+          brand: p.brand_id ? { id: p.brand_id._id, name: p.brand_id.name, logo: p.brand_id.logo } : null,
+          industry_type: p.industry_type_id ? { id: p.industry_type_id._id, name: p.industry_type_id.name, slug: p.industry_type_id.slug } : null,
+          stock_quantity: 100,
+          availability: 'In Stock',
+          availability_label: 'in_stock',
+          selling_price_paise: sellingPricePaise,
+          selling_price_inr: (sellingPricePaise / 100).toFixed(2),
+          price_before_tax_paise: priceBeforeTaxPaise,
+          price_before_tax_inr: (priceBeforeTaxPaise / 100).toFixed(2),
+          taxes_and_charges_paise: taxesPaise,
+          taxes_and_charges_inr: (taxesPaise / 100).toFixed(2),
+          gst_rate_pct: gstRate,
+          currency: 'INR',
+          reseller_name: 'SolarKits Direct Store',
+          publication_status: 'published',
+          listing_status: 'active',
+          published_at: p.created_at || new Date(),
+        };
+      });
+
+      return res.json({
         status: 'success',
-        code: 'NO_RESELLER_ASSIGNED',
-        message: 'No reseller has been assigned to your EPC account. Please contact your channel partner.',
-        contact_support: true,
-        data: [],
-        total_items: 0
+        reseller_business_name: 'SolarKits Direct Store',
+        epc_name: epcAccount.name,
+        total_items: directCatalogue.length,
+        data: directCatalogue,
       });
     }
 

@@ -27,4 +27,9 @@ router.get('/onboarded-epc-purchases', check_auth, solarshop_handler.get_onboard
 // 7. Transaction Details for Side Drawer / Modal
 router.get('/transaction-details/:type/:id', check_auth, solarshop_handler.get_transaction_details);
 
+// 8. EPC Offline Payment Verification (Approve / Reject) & Logistics
+router.post('/epc-orders/:id/verify-payment', check_auth, solarshop_handler.verify_epc_order_payment);
+router.post('/epc-orders/:id/dispatch', check_auth, solarshop_handler.dispatch_epc_order);
+router.post('/epc-orders/:id/deliver', check_auth, solarshop_handler.deliver_epc_order);
+
 module.exports = router;

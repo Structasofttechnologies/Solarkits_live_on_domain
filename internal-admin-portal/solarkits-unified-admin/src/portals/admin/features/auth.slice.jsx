@@ -14,6 +14,94 @@ const safeParse = (key, fallback = null) => {
   }
 };
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// Global Request Interceptor: Attach Authorization header if missing
+axios.interceptors.request.use(
+  (config) => {
+    if (!config.headers) config.headers = {};
+    if (!config.headers.Authorization && !config.headers.authorization) {
+      const raw = localStorage.getItem('login');
+      const token = raw ? (safeParse('login', null)?.token || raw) : null;
+      if (token) {
+        config.headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Global Response Interceptor: Seamless 401 Token Refresh & Request Retry
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (!originalRequest) return Promise.reject(error);
+
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/refresh-access-token') &&
+      !originalRequest.url?.includes('/login') &&
+      !originalRequest.url?.includes('/logout')
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            return axios(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshUrl = `${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5000/auth-api')}/refresh-access-token`;
+        const res = await axios.post(
+          refreshUrl,
+          {},
+          { withCredentials: true, timeout: ms_conversion('7s') }
+        );
+
+        const newToken = res.data?.token;
+        if (newToken) {
+          localStorage.setItem('login', JSON.stringify({ token: newToken }));
+          processQueue(null, newToken);
+          originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+          return axios(originalRequest);
+        } else {
+          processQueue(new Error('No token received from refresh'), null);
+          return Promise.reject(error);
+        }
+      } catch (refreshErr) {
+        processQueue(refreshErr, null);
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 export const refreshAccessToken = createAsyncThunk(
     'auth/refreshAccessToken',
     async (_, { rejectWithValue, getState }) => {

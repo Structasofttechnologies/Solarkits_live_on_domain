@@ -75,27 +75,55 @@ export default function KitProductModal({
     ? currentVariant.ourPrice - Math.round(currentVariant.ourPrice / (1 + (gstRate / 100)))
     : 0;
 
+  const [quantity, setQuantity] = useState(1);
+  const [checkingStock, setCheckingStock] = useState(false);
+
   const handleAddToCart = () => {
     if (!isAuthenticated) {
       dispatch(setShowAuthDialog(true));
       return;
     }
-    dispatch(addToCart({ id: kit.id, variantIndex: selectedVariantIndex }));
+    dispatch(addToCart({ id: kit.id, variantIndex: selectedVariantIndex, qty: quantity }));
     if (onClose) onClose();
   };
 
-  const handleCheckPincode = (e) => {
-    e.preventDefault();
-    if (/^\d{6}$/.test(pincodeCheck.trim())) {
-      setPincodeResult({
-        available: true,
-        message: `Delivery available in PIN ${pincodeCheck} (${districtName}) within 3-5 business days.`
-      });
-    } else {
+  const handleCheckPincode = async (e) => {
+    if (e) e.preventDefault();
+    if (!/^\d{6}$/.test(pincodeCheck.trim())) {
       setPincodeResult({
         available: false,
-        message: "Please enter a valid 6-digit Indian PIN code."
+        message: "Please enter a valid 6-digit Indian PIN code.",
       });
+      return;
+    }
+
+    setCheckingStock(true);
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/india/v1/shop/check-warehouse-stock?pincode=${pincodeCheck}&kit_id=${kit.id}&quantity=${quantity}`,
+        { withCredentials: true }
+      );
+      if (res.data?.success && res.data.data) {
+        const d = res.data.data;
+        setPincodeResult({
+          available: d.available,
+          warehouse_name: d.warehouse_name,
+          fulfillment_source: d.fulfillment_source,
+          message: d.message || `Stock available for PIN ${pincodeCheck} (${d.estimated_delivery_days}).`,
+        });
+      } else {
+        setPincodeResult({
+          available: true,
+          message: `Delivery available in PIN ${pincodeCheck} within 3-5 business days.`,
+        });
+      }
+    } catch (err) {
+      setPincodeResult({
+        available: true,
+        message: `Delivery serviceable in PIN ${pincodeCheck} (3-5 business days).`,
+      });
+    } finally {
+      setCheckingStock(false);
     }
   };
 
@@ -301,8 +329,54 @@ export default function KitProductModal({
                   </div>
                 )}
 
-                {/* Delivery PIN Code Checker */}
-                <form onSubmit={handleCheckPincode} className="mt-4">
+                {/* Bulk Quantity Presets Selector (25, 50, 75, 100 Kits) */}
+                <div className="mt-4 pt-3 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-text-primary dark:text-white">
+                      Select Quantity:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                        className="w-7 h-7 rounded-lg border border-border bg-surface-hover flex items-center justify-center font-bold text-sm"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono font-black text-sm w-8 text-center">{quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(quantity + 1)}
+                        className="w-7 h-7 rounded-lg border border-border bg-surface-hover flex items-center justify-center font-bold text-sm"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5 pt-1">
+                    {[25, 50, 75, 100].map((qtyPreset) => (
+                      <button
+                        key={qtyPreset}
+                        type="button"
+                        onClick={() => setQuantity(qtyPreset)}
+                        className={`py-1.5 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          quantity === qtyPreset
+                            ? "bg-primary text-white shadow-sm"
+                            : "bg-surface-hover hover:bg-border text-text-primary border border-border"
+                        }`}
+                      >
+                        {qtyPreset} Kits
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Delivery PIN Code & Warehouse Stock Checker */}
+                <form onSubmit={handleCheckPincode} className="mt-4 space-y-1.5">
+                  <label className="text-[11px] font-bold text-text-secondary block">
+                    Check Delivery & Warehouse Stock:
+                  </label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <FiMapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
@@ -317,15 +391,24 @@ export default function KitProductModal({
                     </div>
                     <button
                       type="submit"
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer"
+                      disabled={checkingStock}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50"
                     >
-                      Check
+                      {checkingStock ? "Checking..." : "Check"}
                     </button>
                   </div>
                   {pincodeResult && (
-                    <p className={`text-xs mt-1.5 font-medium ${pincodeResult.available ? "text-emerald-600" : "text-danger"}`}>
-                      {pincodeResult.message}
-                    </p>
+                    <div className={`p-2.5 rounded-xl border text-xs font-medium mt-2 space-y-1 ${
+                      pincodeResult.available
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                        : "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
+                    }`}>
+                      <p className="font-bold flex items-center gap-1">
+                        {pincodeResult.available ? "✓ Stock Available" : "✗ Out of Stock"}
+                        {pincodeResult.warehouse_name && ` — ${pincodeResult.warehouse_name}`}
+                      </p>
+                      <p className="text-[11px] opacity-90">{pincodeResult.message}</p>
+                    </div>
                   )}
                 </form>
               </div>

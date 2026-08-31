@@ -13,7 +13,22 @@ import {
   FiZap,
   FiInfo,
 } from "react-icons/fi";
+import defaultKitImage from "../assets/images/product_solar_kit.jpg";
 import api from "../services/api";
+
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+
+function resolveKitImage(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) return defaultKitImage;
+  const clean = rawUrl.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean.replace('localhost:3001', 'localhost:5000');
+  }
+  if (clean.startsWith('/')) {
+    return `${BACKEND_BASE}${clean}`;
+  }
+  return `${BACKEND_BASE}/${clean}`;
+}
 
 export default function StorefrontListings() {
   const [listings, setListings] = useState([]);
@@ -258,7 +273,8 @@ export default function StorefrontListings() {
 
             const displayTitle = item.title || p?.name || k?.name || k?.kit_name || (isKit ? "Solar Combo Kit" : "Solar Component");
             const displaySku = p?.sku_code || k?.kit_code || (isKit ? "SKU-KIT" : "SKU-PROD");
-            const displayImage = item.image_url || p?.image || k?.kit_image || "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=500&auto=format&fit=crop&q=60";
+            const rawImg = item.image_url || p?.image || p?.image_url || k?.kit_image || k?.image || k?.product_image || (typeof item.kit_id === 'object' ? item.kit_id?.kit_image : null);
+            const displayImage = resolveKitImage(rawImg);
             const displayDesc = item.description || p?.description || k?.description || "Certified solar equipment configured under your authorized franchisee plan.";
 
             return (
@@ -272,10 +288,13 @@ export default function StorefrontListings() {
                     <img
                       src={displayImage}
                       alt={displayTitle}
-                      className="max-h-full max-w-full object-contain"
+                      className="max-h-full max-w-full object-contain transition-opacity duration-300"
+                      loading="lazy"
                       onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=500&auto=format&fit=crop&q=60";
+                        e.currentTarget.onerror = null;
+                        if (e.currentTarget.src !== defaultKitImage) {
+                          e.currentTarget.src = defaultKitImage;
+                        }
                       }}
                     />
                     <span className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">

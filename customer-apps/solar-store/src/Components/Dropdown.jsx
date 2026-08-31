@@ -77,7 +77,7 @@ export default function Dropdown({
     <div className={`flex flex-col ${className}`}>
       {label && <label className="text-text-primary font-medium mb-1">{label}</label>}
 
-      <Listbox value={value} onChange={onChange} disabled={disabled}>
+      <Listbox value={value ?? ""} onChange={onChange} disabled={disabled}>
         {({ open }) => {
           // eslint-disable-next-line react-hooks/rules-of-hooks
           useLayoutEffect(() => {

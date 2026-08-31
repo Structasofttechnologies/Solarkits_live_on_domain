@@ -17,8 +17,16 @@ const schema = new mongoose.Schema({
 
   // --- Phase 5: Reseller Onboarding Pipeline (backward-compatible) ---
   onboarded_by_reseller_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
-  onboarding_source:        { type: String, enum: ['direct', 'reseller'], default: 'direct' },
+  onboarding_source:        { type: String, enum: ['direct', 'reseller', 'bde'], default: 'direct' },
   reseller_assigned_date:   { type: Date, default: null },
+
+  // --- BDE Onboarding & Attribution Pipeline ---
+  onboarded_by_bde_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
+  bde_assigned_date:        { type: Date, default: null },
+  state_name:               { type: String, default: null },
+  district_name:            { type: String, default: null },
+  address:                  { type: String, default: null },
+  pincode:                  { type: String, default: null },
 
   // --- Phase R4: Canonical GSTIN & Reseller Identity ---
   gstin:                    { type: String, default: null, trim: true, uppercase: true, maxlength: 20 },

@@ -11,6 +11,9 @@ import {
   FaHistory,
   FaArrowRight,
   FaShieldAlt,
+  FaTrophy,
+  FaChartLine,
+  FaBoxes,
 } from 'react-icons/fa';
 import { bdeApi } from '../../../api/bdeApi';
 import Loader from '../../../components/Loader';
@@ -18,28 +21,41 @@ import Loader from '../../../components/Loader';
 export default function BdeDashboard({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [performanceData, setPerformanceData] = useState([]);
+  const [leaderboard, setLeaderboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchDashboardStats();
+    fetchPerformanceDashboard();
   }, []);
 
   const fetchDashboardStats = async () => {
     try {
-      setLoading(true);
-      setError(null);
       const res = await bdeApi.getDashboardStats(moduleUniqueId);
       setStats(res.data);
     } catch (err) {
       console.error('Failed to load BDE dashboard stats', err);
-      setError(err.message || 'Failed to load stats');
+    }
+  };
+
+  const fetchPerformanceDashboard = async () => {
+    try {
+      setLoading(true);
+      const res = await bdeApi.getPerformanceDashboard({}, moduleUniqueId);
+      if (res.status === 'success') {
+        setPerformanceData(res.data || []);
+        setLeaderboard(res.leaderboard || null);
+      }
+    } catch (err) {
+      console.error('Failed to load BDE performance dashboard', err);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) return <Loader text="Loading BDE Dashboard..." />;
+  if (loading && !stats && performanceData.length === 0) return <Loader text="Loading BDE Dashboard..." />;
 
   const statCards = [
     {
@@ -93,9 +109,11 @@ export default function BdeDashboard({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-[#0575B8] rounded-full text-xs font-bold uppercase tracking-wider mb-1">
               <FaShieldAlt /> SolarKits BDE Subsystem
             </div>
-            <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">BDE Executive Management</h1>
+            <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+              BDE Executive Management & Performance Evaluation
+            </h1>
             <p className="text-sm text-slate-500 font-medium max-w-2xl">
-              Manage field Business Development Executives, review KYC documents, assign state and district territories, set franchisee signup goals, and monitor activity.
+              Track field Business Development Executives, EPC lead conversion, GST onboarding targets, and franchisee network kit ordering.
             </p>
           </div>
 
@@ -134,6 +152,130 @@ export default function BdeDashboard({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
         ))}
       </div>
 
+      {/* REQUIREMENT 9 & 11: BDE PERFORMANCE DASHBOARD & LEADERBOARD EVALUATION */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                <FaTrophy />
+              </span>
+              <h2 className="text-lg font-black text-slate-900">BDE Performance Evaluation & Ranking Leaderboard</h2>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Comprehensive evaluation of EPC lead generation, onboardings, assigned franchisees, and territory kit orders.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-xl border border-emerald-200">
+              Top: {leaderboard?.top_performers?.length || 0}
+            </span>
+            <span className="px-3 py-1 bg-teal-50 text-teal-700 font-bold rounded-xl border border-teal-200">
+              Average: {leaderboard?.average_performers?.length || 0}
+            </span>
+            <span className="px-3 py-1 bg-rose-50 text-rose-700 font-bold rounded-xl border border-rose-200">
+              Under: {leaderboard?.under_performers?.length || 0}
+            </span>
+          </div>
+        </div>
+
+        {/* Evaluation Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-600 uppercase font-bold border-b border-slate-200 tracking-wider">
+              <tr>
+                <th className="px-4 py-3.5 text-center">Rank</th>
+                <th className="px-4 py-3.5">BDE Executive / Territory</th>
+                <th className="px-4 py-3.5 text-center">EPC Leads (Gen/Goal)</th>
+                <th className="px-4 py-3.5 text-center">EPCs Onboarded</th>
+                <th className="px-4 py-3.5 text-center">Conversion %</th>
+                <th className="px-4 py-3.5 text-center">Franchisees (Live/Goal)</th>
+                <th className="px-4 py-3.5 text-center">Territory Kits Ordered</th>
+                <th className="px-4 py-3.5 text-right">Territory Achievement</th>
+                <th className="px-4 py-3.5 text-center">Classification</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {performanceData.length > 0 ? (
+                performanceData.map((p, idx) => (
+                  <tr key={p.bde_id} className="hover:bg-slate-50/80 transition">
+                    <td className="px-4 py-3.5 text-center">
+                      <span
+                        className={`w-6 h-6 rounded-full inline-flex items-center justify-center font-black text-xs ${
+                          idx === 0
+                            ? 'bg-amber-400 text-slate-950 font-black'
+                            : idx === 1
+                            ? 'bg-slate-300 text-slate-900 font-black'
+                            : idx === 2
+                            ? 'bg-amber-700 text-white font-black'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="font-mono text-[11px] text-[#0575B8] font-bold">{p.bde_code}</div>
+                      <div className="font-bold text-slate-900 text-sm mt-0.5">{p.full_name}</div>
+                      <div className="text-slate-500 text-[11px] flex items-center gap-1">
+                        <FaMapMarkedAlt className="text-slate-400 text-[10px]" />
+                        <span>{p.state_name || 'Assigned Territory'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-bold text-blue-700 text-sm">{p.epc_leads_generated}</span>
+                      <span className="text-slate-400 text-[11px] ml-1">/ {p.epc_lead_goal}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-bold text-teal-700 text-sm">{p.epc_onboarding_completed}</span>
+                      <span className="text-slate-400 text-[11px] ml-1">/ {p.epc_onboarding_goal}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center font-bold text-slate-800">
+                      {p.epc_conversion_pct}%
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-bold text-slate-900">{p.franchisees_onboarded}</span>
+                      <span className="text-[11px] text-emerald-600 font-semibold ml-1">
+                        ({p.operational_franchisees} Live)
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-black text-emerald-700 text-sm">{p.total_actual_kits_ordered} Kits</span>
+                      <span className="text-slate-400 text-[11px] block">
+                        ₹{Math.round(p.total_network_sales_value || 0).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <span className="font-black text-slate-900 text-sm">{p.assigned_territory_achievement_pct}%</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold border inline-block ${
+                          p.rank_tier === 'Top Performer'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : p.rank_tier === 'Average Performer'
+                            ? 'bg-teal-50 text-teal-800 border-teal-200'
+                            : 'bg-rose-50 text-rose-800 border-rose-200'
+                        }`}
+                      >
+                        {p.rank_tier}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400 italic">
+                    No active BDE evaluation records found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Quick Shortcuts */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div
@@ -164,7 +306,7 @@ export default function BdeDashboard({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
           </div>
           <h3 className="text-base font-bold text-slate-900">Target & Goal Assignment</h3>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Assign monthly/quarterly franchisee signup goals and operational store setup metrics.
+            Assign monthly/quarterly franchisee signup goals, EPC onboarding targets, and network kit goals.
           </p>
         </div>
 
@@ -183,86 +325,6 @@ export default function BdeDashboard({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
             View full historical event log of territory changes, KYC approvals, and status transitions.
           </p>
         </div>
-      </div>
-
-      {/* Recently Registered BDEs Table */}
-      <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-black text-slate-900">Recently Registered BDEs</h2>
-            <p className="text-xs text-slate-500 font-medium">Latest field executives added to the platform</p>
-          </div>
-          <button
-            onClick={() => navigate('/admin-panel/bde-management/all')}
-            className="text-xs font-bold text-[#0575B8] hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            View All BDEs <FaArrowRight className="text-[10px]" />
-          </button>
-        </div>
-
-        {stats?.recent_bdes && stats.recent_bdes.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600 text-xs uppercase font-bold border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">BDE ID</th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Mobile</th>
-                  <th className="px-4 py-3">State / District</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {stats.recent_bdes.map((b) => (
-                  <tr key={b._id} className="hover:bg-slate-50/70 transition">
-                    <td className="px-4 py-3 font-mono font-bold text-[#0575B8]">{b.bde_id}</td>
-                    <td className="px-4 py-3 font-bold text-slate-900">{b.full_name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-700">{b.mobile_number}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs font-medium">
-                      {b.state_name || 'Unassigned'} {b.district_name ? `(${b.district_name})` : ''}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        b.status === 'active'
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                          : b.status === 'suspended'
-                          ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                          : b.status === 'inactive'
-                          ? 'bg-slate-100 text-slate-700 border border-slate-300'
-                          : b.status === 'kyc_verified'
-                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                          : 'bg-amber-100 text-amber-900 border border-amber-300'
-                      }`}>
-                        {b.status === 'active'
-                          ? 'Active'
-                          : b.status === 'suspended'
-                          ? 'Suspended'
-                          : b.status === 'inactive'
-                          ? 'Inactive'
-                          : b.status === 'kyc_verified'
-                          ? 'Ready to Activate'
-                          : 'Pending Activation'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => navigate(`/admin-panel/bde-management/profile/${b._id}`)}
-                        className="text-xs font-bold text-[#0575B8] hover:underline cursor-pointer"
-                      >
-                        Manage Profile
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="py-8 text-center text-sm text-slate-500 font-medium">
-            No BDE profiles found. Click "Create New BDE" to add one.
-          </div>
-        )}
       </div>
     </div>
   );

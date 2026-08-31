@@ -72,3 +72,24 @@ export const getTransactionDetails = async (type, id) => {
   });
   return res.data;
 };
+
+export const verifyEpcOrderPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/verify-payment`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const dispatchEpcOrder = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/dispatch`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const deliverEpcOrder = async (id) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/deliver`, {}, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};

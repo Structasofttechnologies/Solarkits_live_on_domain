@@ -70,6 +70,8 @@ router.get('/store-setup/master-checklist', handler.get_master_store_setup_check
 
 router.post('/epc-buyers/register', verify_reseller_auth, handler.register_epc_buyer);
 router.get('/epc-buyers/list', verify_reseller_auth, handler.list_my_epc_buyers);
+router.get('/epc-orders/list', verify_reseller_auth, handler.list_my_epc_orders);
+router.get('/epc-orders/:id/tracking', verify_reseller_auth, handler.get_epc_order_live_tracking);
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);
 
 // ── Franchisee Self-Service PO Ordering Routes ─────────────────────────────

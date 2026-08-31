@@ -560,8 +560,8 @@ const get_direct_epc_transactions = async (req, res) => {
     if (status && status !== 'all') {
       const mapStatus = {
         'paid': ['captured', 'paid', 'success'],
-        'pending': ['pending'],
-        'failed': ['failed'],
+        'pending': ['pending', 'pending_verification'],
+        'failed': ['failed', 'rejected'],
         'refunded': ['refunded']
       };
       if (mapStatus[status.toLowerCase()]) {
@@ -584,7 +584,10 @@ const get_direct_epc_transactions = async (req, res) => {
       let pStatus = 'Pending';
       if (o.payment_status === 'captured' || o.payment_status === 'paid') pStatus = 'Paid';
       else if (o.payment_status === 'refunded') pStatus = 'Refunded';
-      else if (o.payment_status === 'failed') pStatus = 'Failed';
+      else if (o.payment_status === 'failed' || o.payment_status === 'rejected') pStatus = 'Failed';
+      else if (o.payment_status === 'pending_verification' || o.payment_status === 'pending') pStatus = 'Pending';
+
+      const cleanUtr = o.offline_payment?.utr_number || o.payment_reference || 'N/A';
 
       return {
         id: o._id,
@@ -602,10 +605,19 @@ const get_direct_epc_transactions = async (req, res) => {
         company_amount: companyAmount,
         franchise_commission: 0, // Explicitly zero
         commission_rate: 0,      // Explicitly zero
-        payment_date: o.created_at,
+        payment_date: o.offline_payment?.payment_date || o.created_at,
         payment_status: pStatus,
         order_status: o.order_status || 'confirmed',
-        payment_reference: o.payment_reference || o.razorpay_order_id || 'N/A',
+        payment_method: 'Offline Bank Transfer (RTGS/NEFT/IMPS)',
+        payment_reference: cleanUtr,
+        utr_number: cleanUtr,
+        receipt_url: o.offline_payment?.receipt_url || '',
+        receipt_filename: o.offline_payment?.receipt_filename || '',
+        sender_bank_name: o.offline_payment?.sender_bank_name || '',
+        rejection_reason: o.offline_payment?.rejection_reason || '',
+        offline_payment: o.offline_payment || {},
+        invoice: o.invoice || {},
+        dispatch_tracking: o.dispatch_tracking || {},
         items_count: (o.items || []).length,
         items: o.items || [],
         delivery_address: o.delivery_address,
@@ -904,7 +916,16 @@ const get_onboarded_epc_purchases = async (req, res) => {
         const itemMargin = (item.reseller_margin_paise || 0) / 100;
         const commRate = itemTotal > 0 ? Math.round((itemMargin / itemTotal) * 100 * 10) / 10 : 8.0;
 
+        let pStatus = 'Pending';
+        if (o.payment_status === 'captured' || o.payment_status === 'paid') pStatus = 'Paid';
+        else if (o.payment_status === 'refunded') pStatus = 'Refunded';
+        else if (o.payment_status === 'failed' || o.payment_status === 'rejected') pStatus = 'Failed';
+        else if (o.payment_status === 'pending_verification' || o.payment_status === 'pending') pStatus = 'Pending';
+
+        const cleanUtr = o.offline_payment?.utr_number || o.payment_reference || 'N/A';
+
         flatItems.push({
+          id: o._id,
           order_id: o._id,
           order_number: o.order_number,
           item_id: item._id || `${o._id}-${item.item_name}`,
@@ -922,9 +943,18 @@ const get_onboarded_epc_purchases = async (req, res) => {
           epc_id: o.epc_id?._id,
           epc_gstin: o.epc_id?.gstin || 'N/A',
           epc_phone: o.epc_id?.whatsapp || 'N/A',
-          payment_status: o.payment_status === 'captured' || o.payment_status === 'paid' ? 'Paid' : o.payment_status,
+          payment_status: pStatus,
           order_status: o.order_status,
-          order_date: o.created_at
+          order_date: o.created_at,
+          utr_number: cleanUtr,
+          payment_reference: cleanUtr,
+          receipt_url: o.offline_payment?.receipt_url || '',
+          receipt_filename: o.offline_payment?.receipt_filename || '',
+          offline_payment: o.offline_payment || {},
+          invoice: o.invoice || {},
+          dispatch_tracking: o.dispatch_tracking || {},
+          type_key: 'commission',
+          transaction_type: 'Franchise Onboarded EPC Order'
         });
       }
     }
@@ -1134,10 +1164,16 @@ const get_transaction_details = async (req, res) => {
           commission_status: cStatus,
           payment_date: order.created_at,
           commission_paid_date: order.delivered_at || (cStatus === 'Paid' ? order.updated_at : null),
-          payment_method: order.payment_reference ? 'Razorpay Gateway / Online' : 'Bank Transfer',
-          utr_reference: order.payment_reference || order.razorpay_order_id || 'N/A',
+          payment_method: 'Offline Bank Transfer',
+          utr_reference: order.offline_payment?.utr_number || order.payment_reference || 'N/A',
+          receipt_url: order.offline_payment?.receipt_url || '',
+          receipt_filename: order.offline_payment?.receipt_filename || '',
+          sender_bank_name: order.offline_payment?.sender_bank_name || '',
+          rejection_reason: order.offline_payment?.rejection_reason || '',
           order_status: order.order_status,
-          delivery_address: order.delivery_address
+          delivery_address: order.delivery_address,
+          invoice: order.invoice || {},
+          dispatch_tracking: order.dispatch_tracking || {},
         },
         created_at: order.created_at
       }
@@ -1145,6 +1181,92 @@ const get_transaction_details = async (req, res) => {
   } catch (error) {
     console.error('Error in get_transaction_details:', error);
     return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * 8. Accounts Department Review Offline EPC Payment (Approve with Invoice or Reject with Comment)
+ */
+const verify_epc_order_payment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, rejection_reason, notes } = req.body;
+    const admin_user_id = req.user?.id || req.user?._id;
+
+    const { reviewEpcOfflinePayment } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const updatedOrder = await reviewEpcOfflinePayment({
+      order_id: id,
+      admin_user_id,
+      decision,
+      rejection_reason,
+      notes,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: decision === 'approved'
+        ? `Payment approved successfully! Tax invoice #${updatedOrder.invoice?.invoice_number} generated.`
+        : `Payment rejected. Rejection reason shared with EPC buyer.`,
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Error in verify_epc_order_payment:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * 9. Operations / Warehouse Dispatch Entry
+ */
+const dispatch_epc_order = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { courier_name, tracking_number, tracking_url, estimated_delivery, dispatch_notes } = req.body;
+    const admin_user_id = req.user?.id || req.user?._id;
+
+    const { updateEpcOrderDispatch } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const updatedOrder = await updateEpcOrderDispatch({
+      order_id: id,
+      admin_user_id,
+      courier_name,
+      tracking_number,
+      tracking_url,
+      estimated_delivery,
+      dispatch_notes,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Order dispatch and tracking information saved successfully.',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Error in dispatch_epc_order:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * 10. Mark Order Delivered / Completed
+ */
+const deliver_epc_order = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const admin_user_id = req.user?.id || req.user?._id;
+
+    const { markEpcOrderDelivered } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const updatedOrder = await markEpcOrderDelivered(id, admin_user_id, req);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Order marked as Delivered & Completed.',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Error in deliver_epc_order:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
   }
 };
 
@@ -1158,4 +1280,7 @@ module.exports = {
   update_commission_status,
   get_onboarded_epc_purchases,
   get_transaction_details,
+  verify_epc_order_payment,
+  dispatch_epc_order,
+  deliver_epc_order,
 };

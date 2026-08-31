@@ -218,4 +218,10 @@ export const bdeApi = {
     const res = await axios.get(`${API_BASE}/bde/leads/conversion-funnel?${query}`, getHeaders());
     return res.data;
   },
+
+  getPerformanceDashboard: async (params = {}, uniqueId = 'ADM_BDE_MGMT') => {
+    const query = buildCleanQuery(params, uniqueId, 'view');
+    const res = await axios.get(`${API_BASE}/bde/performance/dashboard?${query}`, getHeaders());
+    return res.data;
+  },
 };

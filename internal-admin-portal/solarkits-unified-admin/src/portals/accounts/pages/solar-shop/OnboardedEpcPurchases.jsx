@@ -262,16 +262,20 @@ export default function OnboardedEpcPurchases() {
                     {/* Action */}
                     <td className="px-4 sm:px-6 py-3.5 text-center whitespace-nowrap">
                       <Button
-                        variant="outline"
+                        variant={i.payment_status === "Pending" ? "primary" : "outline"}
                         size="sm"
                         onClick={() => {
-                          setSelectedTxn({ id: i.order_id, type_key: "commission", transaction_type: "Franchise Onboarded EPC Order" });
+                          setSelectedTxn({ id: i.order_id, type_key: "commission", transaction_type: "Franchise Onboarded EPC Order", payment_status: i.payment_status });
                           setIsDrawerOpen(true);
                         }}
-                        className="text-xs font-semibold px-2.5 py-1 gap-1 border-primary/30 text-primary hover:bg-primary hover:text-white"
+                        className={`text-xs font-bold px-3 py-1 gap-1 ${
+                          i.payment_status === "Pending"
+                            ? "bg-amber-500 hover:bg-amber-600 text-white border-none shadow-xs animate-pulse"
+                            : "border-primary/30 text-primary hover:bg-primary hover:text-white"
+                        }`}
                       >
                         <MdVisibility size={14} />
-                        View
+                        {i.payment_status === "Pending" ? "Verify Payment" : "View"}
                       </Button>
                     </td>
                   </tr>

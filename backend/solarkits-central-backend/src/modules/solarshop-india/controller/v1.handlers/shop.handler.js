@@ -3,7 +3,7 @@ const { processEpcCheckout, confirmEpcOrderPayment } = require("../../../admin-p
 
 const CompanyWarehouse = require("../../models/india_core_db/company_warehouses.schema");
 const WarehouseKitActivation = require("../../models/india_core_db/warehouse_kit_activations.schema");
-const ComboKit = require("../../models/india_core_db/combo_kits.schema");
+const ComboKit = require("../../models/india_solarshop_db/combo_kits.schema");
 const SolarKit = require("../../models/india_core_db/solar_kits.schema");
 const ProjectCategory = require("../../models/india_core_db/project_categories.schema");
 const ProjectSubcategory = require("../../models/india_core_db/project_subcategories.schema");
@@ -281,13 +281,15 @@ const get_combo_kits_by_district = async (req, res) => {
       warehouseIds = allActiveWarehouses.map(w => w._id);
     }
 
+    const ComboKitModel = ComboKit || WarehouseComboKit || require('../../../admin-panel/models/india_solarshop_db').WarehouseComboKit;
+
     // Build set of kit IDs
     let kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
 
     // Fetch combo kits
     let kits = [];
     if (kitIds.length > 0) {
-      kits = await ComboKit.find({
+      kits = await ComboKitModel.find({
         _id: { $in: kitIds },
         is_active: true,
         deleted_at: null
@@ -296,10 +298,88 @@ const get_combo_kits_by_district = async (req, res) => {
 
     // If still no kits found via activations, fetch all active combo kits in the system
     if (!kits || kits.length === 0) {
-      kits = await ComboKit.find({
+      kits = await ComboKitModel.find({
         is_active: true,
         deleted_at: null
       }).lean();
+    }
+
+    // ── EPC TENANT ISOLATION: FRANCHISE-ONBOARDED vs DIRECT EPC ───────────────
+    // If requester is an authenticated EPC onboarded by a Franchise Partner:
+    // ONLY show combo kits listed / authorized by that Franchise Partner.
+    // If Direct EPC or unauthenticated public store visitor: show ALL active company combo kits.
+    try {
+      let epcAccount = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.decode(token);
+        const accountId = decoded?.account_id || decoded?._id || decoded?.id;
+        if (accountId && mongoose.Types.ObjectId.isValid(accountId)) {
+          const { EpcAccount } = require('../../../admin-panel/models/india_solarshop_db');
+          epcAccount = await EpcAccount.findOne({ _id: accountId, deleted_at: null }).lean();
+        }
+      }
+
+      if (epcAccount) {
+        const resellerId = epcAccount.primary_reseller_id || epcAccount.onboarded_by_reseller_id;
+        if (resellerId) {
+          const {
+            ResellerListing,
+            ResellerPlanSubscription,
+            FranchiseePlanPOSetting,
+            FranchiseePlanPoSetting,
+            ResellerProductAuthorization
+          } = require('../../../admin-panel/models/india_solarshop_db');
+
+          const PlanPoModel = FranchiseePlanPOSetting || FranchiseePlanPoSetting;
+          const [listings, activeSub, poSettings, directAuths] = await Promise.all([
+            ResellerListing.find({
+              reseller_id: resellerId,
+              status: { $in: ['active', 'published'] },
+              deleted_at: null,
+            }).lean(),
+            ResellerPlanSubscription.findOne({
+              reseller_id: resellerId,
+              status: 'active',
+            }).populate('plan_id').lean(),
+            PlanPoModel ? PlanPoModel.find({
+              franchisee_id: resellerId,
+              is_active: true,
+              deleted_at: null,
+            }).lean() : [],
+            ResellerProductAuthorization ? ResellerProductAuthorization.find({
+              reseller_id: resellerId,
+              status: 'active',
+              is_authorized: true,
+            }).lean() : []
+          ]);
+
+          const authorizedKitIds = new Set();
+          listings.forEach(l => {
+            if (l.kit_id) authorizedKitIds.add(l.kit_id.toString());
+            if (l.combo_kit_id) authorizedKitIds.add(l.combo_kit_id.toString());
+          });
+          if (activeSub?.plan_id?.allowed_combo_kit_ids) {
+            activeSub.plan_id.allowed_combo_kit_ids.forEach(id => authorizedKitIds.add(id.toString()));
+          }
+          poSettings.forEach(s => {
+            (s.allowed_combo_kit_ids || []).forEach(id => authorizedKitIds.add(id.toString()));
+          });
+          directAuths.forEach(a => {
+            if (a.kit_id) authorizedKitIds.add(a.kit_id.toString());
+          });
+
+          // Filter kits strictly to only those authorized / listed by this Franchise Partner
+          if (authorizedKitIds.size > 0) {
+            kits = kits.filter(k => authorizedKitIds.has(k._id.toString()));
+          }
+        }
+        // If resellerId is null (Direct EPC): No filtering applied, full company catalog is shown!
+      }
+    } catch (isolationErr) {
+      console.warn('EPC tenant catalog isolation check warning:', isolationErr.message);
     }
 
     // Fetch all solar kits for mapping and manual population
@@ -2333,9 +2413,310 @@ const get_orders = async (req, res) => {
       return populated;
     });
 
-    return res.status(200).json({ success: true, data: populatedOrders });
+    // 7. Fetch modern EpcOrder records for this EPC Account
+    const { EpcOrder } = require("../../../admin-panel/models/india_solarshop_db");
+    const epcOrders = await EpcOrder.find({ epc_id: customer_id })
+      .populate('reseller_id', 'business_name mobile email')
+      .populate('items.product_id')
+      .populate('items.kit_id')
+      .sort({ created_at: -1 })
+      .lean();
+
+    const formattedEpcOrders = epcOrders.map((o) => {
+      const firstItem = (o.items && o.items[0]) || {};
+      const totalAmount = (o.grand_total_paise || 0) / 100;
+      const subtotal = (o.subtotal_paise || 0) / 100;
+      const taxTotal = (o.tax_total_paise || 0) / 100;
+
+      // Status translation for EPC buyer view
+      let displayStatus = 'pending';
+      if (o.order_status === 'cancelled') displayStatus = 'cancelled';
+      else if (o.order_status === 'delivered') displayStatus = 'delivered';
+      else if (o.order_status === 'dispatched') displayStatus = 'dispatched';
+      else if (o.payment_status === 'captured' || o.order_status === 'confirmed') displayStatus = 'confirmed';
+      else if (o.payment_status === 'rejected') displayStatus = 'rejected';
+      else if (o.payment_status === 'pending_verification') displayStatus = 'pending_verification';
+
+      return {
+        _id: o._id,
+        id: o._id,
+        order_number: o.order_number,
+        is_epc_order: true,
+        order_type: 'offline_epc_order',
+        customer_id: o.epc_id,
+        created_at: o.created_at,
+        status: displayStatus,
+        order_status: o.order_status,
+        payment_status: o.payment_status,
+        payment_method: o.payment_method || 'offline_bank_transfer',
+        payment_reference: o.payment_reference || o.offline_payment?.utr_number,
+        fulfillment_source: o.fulfillment_source || (o.reseller_id ? 'franchise_warehouse' : 'company_warehouse'),
+        reseller: o.reseller_id ? {
+          id: o.reseller_id._id,
+          business_name: o.reseller_id.business_name,
+          mobile: o.reseller_id.mobile,
+          email: o.reseller_id.email,
+        } : null,
+        offline_payment: o.offline_payment || {},
+        invoice: o.invoice || {},
+        dispatch_tracking: o.dispatch_tracking || {},
+        items: o.items || [],
+        total_kits: (o.items || []).reduce((sum, i) => sum + (i.quantity || 1), 0),
+        total_amount: totalAmount,
+        subtotal: subtotal,
+        tax_total: taxTotal,
+        selling_price_snapshot: totalAmount,
+        base_price_snapshot: subtotal,
+        combo_kit_id: {
+          _id: firstItem.kit_id?._id || firstItem.product_id?._id || o._id,
+          name: firstItem.item_name || 'Solar Kit Bundle',
+          kitName: firstItem.item_name || 'Solar Kit Bundle',
+          selling_price_cached: totalAmount,
+        },
+        delivery_address: o.delivery_address || {},
+      };
+    });
+
+    const combined = [...formattedEpcOrders, ...populatedOrders];
+
+    return res.status(200).json({ success: true, data: combined });
   } catch (error) {
     console.error('get_orders error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET Official SolarKits Escrow / Company Bank Details for Offline Transfer
+ */
+const get_company_bank_details = async (req, res) => {
+  try {
+    const { COMPANY_BANK_DETAILS } = require("../../../admin-panel/services/epc.offline.checkout.service");
+    return res.status(200).json({
+      success: true,
+      status: "success",
+      data: COMPANY_BANK_DETAILS,
+    });
+  } catch (error) {
+    console.error("get_company_bank_details error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET Check Warehouse Stock by PIN Code & EPC Attribution
+ */
+const check_warehouse_stock = async (req, res) => {
+  try {
+    const epc_id = req.user?.account_id || req.user?.id;
+    const { kit_id, product_id, quantity, pincode, district_id } = req.query;
+
+    const { checkWarehouseStockAvailability } = require("../../../admin-panel/services/epc.offline.checkout.service");
+    const result = await checkWarehouseStockAvailability({
+      epc_id,
+      kit_id,
+      product_id,
+      quantity: Number(quantity) || 1,
+      pincode,
+      district_id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      status: "success",
+      data: result,
+    });
+  } catch (error) {
+    console.error("check_warehouse_stock error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * POST Create EPC Offline Bank Transfer Checkout with Payment Receipt
+ */
+const create_epc_offline_checkout = async (req, res) => {
+  try {
+    const epc_id = req.user?.account_id || req.user?.id;
+    if (!epc_id) {
+      return res.status(401).json({ success: false, message: "Authentication required for checkout." });
+    }
+
+    // Parse body data (handles both JSON and multipart form data)
+    let body = req.body || {};
+    let items = body.items;
+    let delivery_address = body.delivery_address;
+    let offline_payment_data = body.offline_payment_data || {};
+
+    if (typeof items === 'string') {
+      try { items = JSON.parse(items); } catch (e) {}
+    }
+    if (typeof delivery_address === 'string') {
+      try { delivery_address = JSON.parse(delivery_address); } catch (e) {}
+    }
+    if (typeof offline_payment_data === 'string') {
+      try { offline_payment_data = JSON.parse(offline_payment_data); } catch (e) {}
+    }
+
+    // Capture uploaded receipt file if present
+    if (req.files && req.files.length > 0) {
+      const uploadedFile = req.files.find(f => f.fieldname === 'payment_receipt' || f.fieldname === 'receipt' || f.fieldname === 'file') || req.files[0];
+      if (uploadedFile) {
+        offline_payment_data.receipt_url = uploadedFile.path;
+        offline_payment_data.receipt_filename = uploadedFile.originalname;
+      }
+    }
+
+    if (body.utr_number && !offline_payment_data.utr_number) {
+      offline_payment_data.utr_number = body.utr_number;
+    }
+    if (body.amount_paid && !offline_payment_data.amount_paid) {
+      offline_payment_data.amount_paid = Number(body.amount_paid);
+    }
+    if (body.payment_date && !offline_payment_data.payment_date) {
+      offline_payment_data.payment_date = body.payment_date;
+    }
+    if (body.sender_bank_name && !offline_payment_data.sender_bank_name) {
+      offline_payment_data.sender_bank_name = body.sender_bank_name;
+    }
+
+    const { createEpcOfflineOrder } = require("../../../admin-panel/services/epc.offline.checkout.service");
+    const result = await createEpcOfflineOrder({
+      epc_id,
+      items,
+      delivery_address,
+      offline_payment_data,
+      actor_id: epc_id,
+      req,
+    });
+
+    // Clear cart on successful order placement
+    await Cart.findOneAndUpdate({ account_id: epc_id }, { $set: { cart: [] } });
+
+    return res.status(201).json({
+      success: true,
+      status: "success",
+      message: "Order placed successfully! Payment submitted for Accounts Department verification.",
+      data: result,
+    });
+  } catch (error) {
+    console.error("create_epc_offline_checkout error:", error);
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * POST Re-submit EPC Payment Proof after Accounts Rejection
+ */
+const resubmit_epc_offline_payment = async (req, res) => {
+  try {
+    const epc_id = req.user?.account_id || req.user?.id;
+    const { id } = req.params;
+
+    let body = req.body || {};
+    let receipt_url = body.receipt_url;
+    let receipt_filename = body.receipt_filename;
+
+    if (req.files && req.files.length > 0) {
+      const uploadedFile = req.files.find(f => f.fieldname === 'payment_receipt' || f.fieldname === 'receipt' || f.fieldname === 'file') || req.files[0];
+      if (uploadedFile) {
+        receipt_url = uploadedFile.path;
+        receipt_filename = uploadedFile.originalname;
+      }
+    }
+
+    const { resubmitEpcPaymentProof } = require("../../../admin-panel/services/epc.offline.checkout.service");
+    const updatedOrder = await resubmitEpcPaymentProof({
+      order_id: id,
+      epc_id,
+      utr_number: body.utr_number,
+      amount_paid: body.amount_paid,
+      payment_date: body.payment_date,
+      receipt_url,
+      receipt_filename,
+      sender_bank_name: body.sender_bank_name,
+      req,
+    });
+
+    return res.status(200).json({
+      success: true,
+      status: "success",
+      message: "Payment receipt and UTR re-submitted successfully for verification.",
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error("resubmit_epc_offline_payment error:", error);
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET Tax Invoice Data for Approved EPC Order
+ */
+const get_epc_order_invoice_data = async (req, res) => {
+  try {
+    const epc_id = req.user?.account_id || req.user?.id;
+    const { id } = req.params;
+
+    const { EpcOrder } = require("../../../admin-panel/models/india_solarshop_db");
+    const order = await EpcOrder.findOne({ _id: id, epc_id })
+      .populate('epc_id', 'name email whatsapp gstin company_name address')
+      .populate('reseller_id', 'business_name gst_number address mobile email')
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order record not found." });
+    }
+
+    const invoiceData = {
+      invoice_number: order.invoice?.invoice_number || `INV-SK-${new Date().getFullYear()}-${String(order._id).slice(-5).toUpperCase()}`,
+      invoice_date: order.invoice?.invoice_date || order.updated_at || order.created_at,
+      order_number: order.order_number,
+      order_date: order.created_at,
+      buyer: {
+        name: order.epc_id?.name || 'EPC Buyer',
+        company_name: order.epc_id?.company_name || order.epc_id?.name,
+        gstin: order.epc_id?.gstin || 'N/A',
+        email: order.epc_id?.email,
+        phone: order.epc_id?.whatsapp,
+        delivery_address: order.delivery_address,
+      },
+      seller: {
+        company_name: 'SolarKits Technologies Pvt Ltd',
+        gstin: '27AABCS1234F1Z5',
+        address: 'Plot 42, Green Energy Park, MIDC Industrial Area, Mumbai, MH - 400093',
+        support_email: 'accounts@solarkits.com',
+      },
+      partner_attribution: order.reseller_id ? {
+        business_name: order.reseller_id.business_name,
+        gst_number: order.reseller_id.gst_number,
+      } : null,
+      items: (order.items || []).map((i) => ({
+        item_name: i.item_name,
+        quantity: i.quantity,
+        unit_price: (i.unit_price_paise || 0) / 100,
+        taxable_amount: ((i.quantity * i.unit_price_paise) || 0) / 100,
+        gst_rate: i.gst_rate || 13.8,
+        tax_amount: (i.tax_paise || 0) / 100,
+        total_amount: (i.total_price_paise || 0) / 100,
+      })),
+      financials: {
+        subtotal: (o => (o.subtotal_paise || 0) / 100)(order),
+        tax_total: (o => (o.tax_total_paise || 0) / 100)(order),
+        shipping_fee: (o => (o.shipping_fee_paise || 0) / 100)(order),
+        grand_total: (o => (o.grand_total_paise || 0) / 100)(order),
+      },
+      payment: {
+        payment_method: 'Offline Bank Transfer',
+        payment_status: order.payment_status,
+        utr_number: order.offline_payment?.utr_number || order.payment_reference,
+        payment_date: order.offline_payment?.payment_date || order.created_at,
+      },
+    };
+
+    return res.status(200).json({ success: true, data: invoiceData });
+  } catch (error) {
+    console.error("get_epc_order_invoice_data error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2905,6 +3286,11 @@ module.exports = {
   save_bos_custom_catalog,
   get_nearby_stores,
   get_shop_hierarchy,
+  get_company_bank_details,
+  check_warehouse_stock,
+  create_epc_offline_checkout,
+  resubmit_epc_offline_payment,
+  get_epc_order_invoice_data,
 };
 
 

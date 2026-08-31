@@ -7,6 +7,9 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
   const [monthlySignupGoal, setMonthlySignupGoal] = useState(10);
   const [quarterlySignupGoal, setQuarterlySignupGoal] = useState(30);
   const [operationalStoreGoal, setOperationalStoreGoal] = useState(5);
+  const [monthlyEpcLeadGoal, setMonthlyEpcLeadGoal] = useState(25);
+  const [monthlyEpcOnboardGoal, setMonthlyEpcOnboardGoal] = useState(10);
+  const [monthlyNetworkKitGoal, setMonthlyNetworkKitGoal] = useState(200);
   const [year, setYear] = useState(new Date().getFullYear());
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +31,9 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
       setMonthlySignupGoal(existing.monthly_franchisee_signup_goal ?? 10);
       setQuarterlySignupGoal(existing.quarterly_franchisee_signup_goal ?? 30);
       setOperationalStoreGoal(existing.operational_store_goal ?? 5);
+      setMonthlyEpcLeadGoal(existing.monthly_epc_lead_goal ?? 25);
+      setMonthlyEpcOnboardGoal(existing.monthly_epc_onboard_goal ?? 10);
+      setMonthlyNetworkKitGoal(existing.monthly_network_kit_goal ?? 200);
       setYear(existing.year || new Date().getFullYear());
       setNotes(existing.notes || '');
     } else {
@@ -35,6 +41,9 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
       setMonthlySignupGoal(10);
       setQuarterlySignupGoal(30);
       setOperationalStoreGoal(5);
+      setMonthlyEpcLeadGoal(25);
+      setMonthlyEpcOnboardGoal(10);
+      setMonthlyNetworkKitGoal(200);
       setYear(new Date().getFullYear());
       setNotes('');
     }
@@ -52,6 +61,9 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
         setMonthlySignupGoal(activeGoal.monthly_franchisee_signup_goal ?? 10);
         setQuarterlySignupGoal(activeGoal.quarterly_franchisee_signup_goal ?? 30);
         setOperationalStoreGoal(activeGoal.operational_store_goal ?? 5);
+        setMonthlyEpcLeadGoal(activeGoal.monthly_epc_lead_goal ?? 25);
+        setMonthlyEpcOnboardGoal(activeGoal.monthly_epc_onboard_goal ?? 10);
+        setMonthlyNetworkKitGoal(activeGoal.monthly_network_kit_goal ?? 200);
         setYear(activeGoal.year || new Date().getFullYear());
         setNotes(activeGoal.notes || '');
       }
@@ -77,6 +89,9 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
         monthly_franchisee_signup_goal: Number(monthlySignupGoal),
         quarterly_franchisee_signup_goal: Number(quarterlySignupGoal),
         operational_store_goal: Number(operationalStoreGoal),
+        monthly_epc_lead_goal: Number(monthlyEpcLeadGoal),
+        monthly_epc_onboard_goal: Number(monthlyEpcOnboardGoal),
+        monthly_network_kit_goal: Number(monthlyNetworkKitGoal),
         notes,
       });
 
@@ -179,6 +194,41 @@ export default function GoalModal({ isOpen, onClose, bde, onSuccess }) {
                 min="0"
                 value={operationalStoreGoal}
                 onChange={(e) => setOperationalStoreGoal(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white transition"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 uppercase tracking-wider block text-[11px]">Monthly EPC Leads</label>
+              <input
+                type="number"
+                min="0"
+                value={monthlyEpcLeadGoal}
+                onChange={(e) => setMonthlyEpcLeadGoal(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 uppercase tracking-wider block text-[11px]">EPC Onboardings</label>
+              <input
+                type="number"
+                min="0"
+                value={monthlyEpcOnboardGoal}
+                onChange={(e) => setMonthlyEpcOnboardGoal(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white transition"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 uppercase tracking-wider block text-[11px]">Network Kit Target</label>
+              <input
+                type="number"
+                min="0"
+                value={monthlyNetworkKitGoal}
+                onChange={(e) => setMonthlyNetworkKitGoal(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-semibold focus:outline-none focus:border-[#0575B8] focus:bg-white transition"
               />
             </div>

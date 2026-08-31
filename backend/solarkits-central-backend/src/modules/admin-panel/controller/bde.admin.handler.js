@@ -16,6 +16,10 @@ const {
   BDEActivityLog,
   BDENotification,
   ResellerPlan,
+  Reseller,
+  EPCLead,
+  FpoOrder,
+  FranchiseeKitTarget,
 } = require('../models/india_solarshop_db');
 const { GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { logAudit } = require('../utils/audit.service');
@@ -1357,3 +1361,106 @@ exports.get_dashboard_stats = async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch dashboard stats', error: error.message });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. GET BDE PERFORMANCE DASHBOARD & RANKINGS (Admin Evaluation)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.get_bde_performance_dashboard = async (req, res) => {
+  try {
+    const { month = new Date().getMonth() + 1, year = new Date().getFullYear() } = req.query;
+
+    const bdes = await BDEProfile.find({ deleted_at: null, status: 'active' }).lean();
+
+    const performanceList = await Promise.all(
+      bdes.map(async (bde) => {
+        const [territory, goal, epcLeads, epcsOnboarded, epcsAssigned, franchisees] = await Promise.all([
+          BDETerritoryAssignment.findOne({ bde_id: bde._id, status: 'active' }).lean(),
+          BDEGoal.findOne({ bde_id: bde._id, status: 'active' }).sort({ createdAt: -1 }).lean(),
+          EPCLead.countDocuments({ current_bde_id: bde._id, deleted_at: null }),
+          EPCLead.countDocuments({ current_bde_id: bde._id, deleted_at: null, lead_status: { $in: ['Onboarded', 'Assigned to Franchisee'] } }),
+          EPCLead.countDocuments({ current_bde_id: bde._id, deleted_at: null, lead_status: 'Assigned to Franchisee' }),
+          Reseller.find({ $or: [{ bde_id: bde._id }, { original_bde_id: bde._id }], deleted_at: null }).lean(),
+        ]);
+
+        const fIds = franchisees.map((f) => f._id);
+        const fpoOrders = await FpoOrder.find({
+          reseller_id: { $in: fIds },
+          status: { $nin: ['CANCELLED', 'EXPIRED'] },
+        }).lean();
+
+        let networkKitsOrdered = 0;
+        let totalNetworkValue = 0;
+        fpoOrders.forEach((o) => {
+          totalNetworkValue += (o.total_paise || 0) / 100;
+          (o.items || []).forEach((it) => {
+            networkKitsOrdered += Number(it.quantity || 0);
+          });
+        });
+
+        const epcLeadGoal = goal?.monthly_epc_lead_goal || 25;
+        const epcOnboardGoal = goal?.monthly_epc_onboard_goal || 10;
+        const franchiseeSignupGoal = goal?.monthly_franchisee_signup_goal || 5;
+        const networkKitGoal = goal?.monthly_network_kit_goal || 200;
+
+        const epcConversionPct = epcLeads > 0 ? Math.round((epcsOnboarded / epcLeads) * 100) : 0;
+        const franchiseeSignupAchieved = franchisees.length;
+        const operationalFranchisees = franchisees.filter((f) => f.is_operational).length;
+        const territoryKitAchievementPct = networkKitGoal > 0 ? Math.round((networkKitsOrdered / networkKitGoal) * 100) : 0;
+
+        // Rank category
+        let rankTier = 'Average Performer';
+        let badgeColor = 'teal';
+        if (territoryKitAchievementPct >= 100 || networkKitsOrdered >= 200) {
+          rankTier = 'Top Performer';
+          badgeColor = 'emerald';
+        } else if (territoryKitAchievementPct < 40 || networkKitsOrdered === 0) {
+          rankTier = 'Under Performer';
+          badgeColor = 'rose';
+        }
+
+        return {
+          bde_id: bde._id,
+          bde_code: bde.bde_id,
+          full_name: bde.full_name,
+          email: bde.email,
+          mobile: bde.mobile_number,
+          state_name: territory ? territory.state_name : bde.state_name,
+          district_names: territory ? territory.district_names : [],
+          // KPIs
+          epc_lead_goal: epcLeadGoal,
+          epc_leads_generated: epcLeads,
+          epc_onboarding_goal: epcOnboardGoal,
+          epc_onboarding_completed: epcsOnboarded,
+          epc_conversion_pct: epcConversionPct,
+          epcs_assigned_to_franchisees: epcsAssigned,
+          franchisee_signup_goal: franchiseeSignupGoal,
+          franchisees_onboarded: franchiseeSignupAchieved,
+          operational_franchisees: operationalFranchisees,
+          franchisee_monthly_kit_goal: networkKitGoal,
+          total_actual_kits_ordered: networkKitsOrdered,
+          total_network_sales_value: totalNetworkValue,
+          assigned_territory_achievement_pct: territoryKitAchievementPct,
+          rank_tier: rankTier,
+          badge_color: badgeColor,
+        };
+      })
+    );
+
+    // Sort descending by kit orders then territory achievement
+    performanceList.sort((a, b) => b.total_actual_kits_ordered - a.total_actual_kits_ordered || b.assigned_territory_achievement_pct - a.assigned_territory_achievement_pct);
+
+    return res.status(200).json({
+      status: 'success',
+      data: performanceList,
+      leaderboard: {
+        top_performers: performanceList.filter((p) => p.rank_tier === 'Top Performer'),
+        average_performers: performanceList.filter((p) => p.rank_tier === 'Average Performer'),
+        under_performers: performanceList.filter((p) => p.rank_tier === 'Under Performer'),
+      },
+    });
+  } catch (error) {
+    console.error('[get_bde_performance_dashboard Error]', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch BDE performance dashboard', error: error.message });
+  }
+};
+

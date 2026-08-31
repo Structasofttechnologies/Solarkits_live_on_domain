@@ -325,16 +325,20 @@ export default function DirectEpcTransactions() {
                     {/* View Details Button */}
                     <td className="px-4 sm:px-6 py-3.5 text-center whitespace-nowrap">
                       <Button
-                        variant="outline"
+                        variant={o.payment_status === "Pending" ? "primary" : "outline"}
                         size="sm"
                         onClick={() => {
                           setSelectedTxn({ ...o, type_key: "direct_epc", transaction_type: "Direct EPC Transaction" });
                           setIsDrawerOpen(true);
                         }}
-                        className="text-xs font-semibold px-2.5 py-1 gap-1 border-purple-500/30 text-purple-600 hover:bg-purple-600 hover:text-white"
+                        className={`text-xs font-bold px-3 py-1 gap-1 ${
+                          o.payment_status === "Pending"
+                            ? "bg-amber-500 hover:bg-amber-600 text-white border-none shadow-xs animate-pulse"
+                            : "border-purple-500/30 text-purple-600 hover:bg-purple-600 hover:text-white"
+                        }`}
                       >
                         <MdVisibility size={14} />
-                        View Details
+                        {o.payment_status === "Pending" ? "Verify Payment" : "View Details"}
                       </Button>
                     </td>
                   </tr>
