@@ -1,4 +1,4 @@
-﻿// components/ApproveNewEPCIndia.jsx
+// components/ApproveNewEPCIndia.jsx
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import axios from "axios";
@@ -168,43 +168,15 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       }
     }
 
-    // 3. Fallback sample requests if no local requests exist yet
-    if (!localRequests || localRequests.length === 0) {
-      localRequests = [
-        {
-          id: 'req-demo-001',
-          company_name: 'Prince Solar EPC',
-          full_name: 'Prince Mehta',
-          email: 'prince@solarkits.com',
-          whatsapp: '+91 9876543210',
-          state_name: 'Gujarat',
-          district_name: 'Ahmedabad',
-          is_registered_same_as_whatsapp: 1,
-          registered_whatsapp: '+91 9876543210',
-          gst_number: '27AAAAA0000A1Z5',
-          country: 'India',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: 'req-demo-002',
-          company_name: 'Sunnovative EPC Solutions',
-          full_name: 'Rahil Shah',
-          email: 'rahil.sunnovative@gmail.com',
-          whatsapp: '+91 9988776655',
-          state_name: 'Maharashtra',
-          district_name: 'Mumbai Suburban',
-          is_registered_same_as_whatsapp: 1,
-          registered_whatsapp: '+91 9988776655',
-          gst_number: '27BBBBB1111B1Z2',
-          country: 'India',
-          status: 'pending',
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-        }
-      ];
-      try {
-        localStorage.setItem('pending_epc_requests', JSON.stringify(localRequests));
-      } catch (e) {}
+    // Clean any legacy demo requests from local storage/cookie
+    if (localRequests && localRequests.length > 0) {
+      const filtered = localRequests.filter(r => !r.id?.startsWith('req-demo-'));
+      if (filtered.length !== localRequests.length) {
+        localRequests = filtered;
+        try {
+          localStorage.setItem('pending_epc_requests', JSON.stringify(localRequests));
+        } catch (e) {}
+      }
     }
 
     try {
