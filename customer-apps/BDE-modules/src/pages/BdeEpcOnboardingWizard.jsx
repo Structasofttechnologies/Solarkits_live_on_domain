@@ -289,13 +289,18 @@ export default function BdeEpcOnboardingWizard() {
       {/* STEP 1: GST NUMBER ENTRY & VERIFICATION */}
       {step === 1 && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
-          <div className="space-y-1">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-600" /> Enter EPC Contractor GST Number
-            </h2>
-            <p className="text-xs text-slate-500">
-              The system will perform live GST validation, fetch verified company trade name and registered address, and ensure duplicate prevention.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="space-y-1">
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-blue-600" /> Enter EPC Contractor GST Number
+              </h2>
+              <p className="text-xs text-slate-500">
+                The system will perform live Quick eKYC GST validation, fetch verified company trade name and registered address, and ensure duplicate prevention.
+              </p>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black uppercase tracking-wider self-start sm:self-auto flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Quick eKYC Engine
+            </span>
           </div>
 
           <form onSubmit={handleVerifyGst} className="space-y-4 max-w-xl">
@@ -309,7 +314,7 @@ export default function BdeEpcOnboardingWizard() {
                   maxLength={15}
                   value={gstInput}
                   onChange={(e) => setGstInput(e.target.value.toUpperCase())}
-                  placeholder="e.g. 27ABCDE1234F1Z5"
+                  placeholder="e.g. 24ABDCS5798J1ZR"
                   className="w-full bg-slate-50 border border-slate-300 rounded-2xl px-4 py-3.5 text-sm font-mono font-bold tracking-wider text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white uppercase"
                 />
                 <button
@@ -319,7 +324,7 @@ export default function BdeEpcOnboardingWizard() {
                 >
                   {verifyingGst ? (
                     <>
-                      <RotateCw className="w-4 h-4 animate-spin" /> Verifying...
+                      <RotateCw className="w-4 h-4 animate-spin" /> Verifying via Quick eKYC...
                     </>
                   ) : (
                     <>
@@ -341,10 +346,10 @@ export default function BdeEpcOnboardingWizard() {
             )}
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs text-slate-600">
-              <strong className="block font-bold text-slate-800">GST Validation Rules:</strong>
+              <strong className="block font-bold text-slate-800">Quick eKYC Validation Rules:</strong>
               <ul className="list-disc pl-4 space-y-1">
-                <li>Validates active taxpayer status directly with GST registry.</li>
-                <li>Extracts state code from first 2 digits (e.g. 27 = Maharashtra).</li>
+                <li>Live verification directly with Government Taxpayer Registry via Quick eKYC API.</li>
+                <li>Extracts state code, registered territory, and official legal name.</li>
                 <li>Guarantees strict single EPC registration — prevents duplicate accounts.</li>
               </ul>
             </div>
@@ -358,7 +363,7 @@ export default function BdeEpcOnboardingWizard() {
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <span className="text-[11px] font-bold text-emerald-600 uppercase flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> GST Verified: {gstResult?.gstin}
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Verified with Quick eKYC: {gstResult?.gstin}
               </span>
               <h2 className="text-lg font-black text-slate-900">Confirm Company & Contact Details</h2>
             </div>
@@ -368,6 +373,22 @@ export default function BdeEpcOnboardingWizard() {
             >
               Re-enter GST
             </button>
+          </div>
+
+          {/* Quick eKYC Verified Details Snapshot Pill Card */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-emerald-800 block">Verified Trade Name</span>
+              <span className="font-bold text-slate-900">{gstResult?.trade_name || gstResult?.company_name || formData.company_name}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-emerald-800 block">Legal Entity Name</span>
+              <span className="font-bold text-slate-900">{gstResult?.legal_name || 'Registered Taxpayer'}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-emerald-800 block">State & District Jurisdiction</span>
+              <span className="font-bold text-slate-900">{formData.state_name} ({formData.district_name})</span>
+            </div>
           </div>
 
           <form onSubmit={handleCreateEpcAccount} className="space-y-5 text-xs">

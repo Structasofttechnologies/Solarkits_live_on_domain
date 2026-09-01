@@ -55,6 +55,7 @@ const {
   getBdeDashboardMetrics,
 } = require('../../admin-panel/services/bde.lead.service');
 const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
+const { resolveEffectiveTarget } = require('../../admin-panel/services/franchisee.goal.service');
 
 // Helper to mask sensitive KYC fields
 function maskAadhaar(val) {
@@ -1009,12 +1010,12 @@ exports.verify_epc_gstin = async (req, res) => {
     const stateCode = cleanGst.substring(0, 2);
     const resolvedStateName = GST_STATE_CODE_MAP[stateCode] || 'Unknown State';
 
-    // 3. Call GST Verification Engine
+    // 3. Call GST Verification Engine (Quick eKYC)
     const verification = await performGstVerification({
       gstin: cleanGst,
       entity_type: 'epc_buyer',
       verified_by: req.user.bde_id || String(bdeId),
-      options: { provider: process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'mock' },
+      options: { provider: process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'quickekyc' },
     });
 
     if (!verification.is_valid) {
@@ -1025,8 +1026,9 @@ exports.verify_epc_gstin = async (req, res) => {
       });
     }
 
-    const companyName = verification.legal_name || verification.trade_name || '';
-    const districtName = verification.district || 'Regional District';
+    const companyName = verification.company_name || verification.trade_name || verification.legal_name || '';
+    const stateName = verification.state_name || resolvedStateName || 'Gujarat';
+    const districtName = verification.district_name || verification.district || 'Ahmedabad';
     const address = verification.address || '';
     const pincode = verification.pincode || '';
 
@@ -1041,7 +1043,7 @@ exports.verify_epc_gstin = async (req, res) => {
         lead.lead_status = 'GST Verification Pending';
         lead.history.push({
           activity_type: 'gst_verification',
-          notes: `GST ${cleanGst} verified successfully. Legal Name: ${companyName}`,
+          notes: `GST ${cleanGst} verified successfully via Quick eKYC. Legal Name: ${companyName}`,
           actor_id: bdeId,
           actor_name: req.user.full_name,
         });
@@ -1051,19 +1053,20 @@ exports.verify_epc_gstin = async (req, res) => {
 
     return res.status(200).json({
       status: 'success',
-      message: `GST ${cleanGst} successfully verified.`,
+      message: `GST ${cleanGst} successfully verified via Quick eKYC.`,
       data: {
         gstin: cleanGst,
         is_valid: true,
+        provider: verification.provider || 'quickekyc',
         legal_name: verification.legal_name,
         trade_name: verification.trade_name,
         company_name: companyName,
         state_code: stateCode,
-        state_name: resolvedStateName,
+        state_name: stateName,
         district_name: districtName,
         address: address,
         pincode: pincode,
-        registration_status: verification.status || 'Active',
+        registration_status: verification.business_status || verification.gstin_status || 'Active',
       },
     });
   } catch (err) {
@@ -1423,14 +1426,12 @@ exports.get_franchisee_performance = async (req, res) => {
 
     const results = await Promise.all(
       franchisees.map(async (f) => {
-        // 1. Kit Target
-        const targetRecord = await FranchiseeKitTarget.findOne({
+        // 1. Kit Target & Goals resolved via priority cascade (FRANCHISEE -> DISTRICT -> STATE -> PLAN -> GLOBAL)
+        const targetRecord = await resolveEffectiveTarget({
           franchisee_id: f._id,
-          target_month: currMonth,
-          target_year: currYear,
-          is_active: true,
-          deleted_at: null,
-        }).lean();
+          month: currMonth,
+          year: currYear,
+        });
 
         const monthlyGoal = targetRecord?.target_quantity || (f.is_operational ? 10 : 5);
 

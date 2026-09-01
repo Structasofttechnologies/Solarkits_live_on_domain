@@ -28,7 +28,7 @@ function isValidGstinFormat(gstin) {
  */
 async function verifyGstin(gstin, options = {}) {
   const cleanGstin = (gstin || '').trim().toUpperCase();
-  const provider = options.provider || process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'mock';
+  const provider = options.provider || process.env.QUICKEKYC_PROVIDER || process.env.GST_VERIFY_PROVIDER || 'quickekyc';
 
   // 1. Format check
   if (!isValidGstinFormat(cleanGstin)) {

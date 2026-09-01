@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import api from "../services/api";
 import {
   FiPackage, FiCheckCircle, FiXCircle, FiLoader,
-  FiGrid, FiLayers, FiBox, FiRefreshCw, FiInfo,
+  FiGrid, FiLayers, FiBox, FiRefreshCw, FiInfo, FiTag,
 } from "react-icons/fi";
+import { FaTruck, FaShoppingBag } from "react-icons/fa";
 
 const SCOPE_ICONS = {
   all:         FiGrid,
@@ -21,23 +22,83 @@ const SCOPE_COLORS = {
   kit:         { bg: "#fef3c7", text: "#d97706" },
 };
 
+// ─── Commission Badge ─────────────────────────────────────────────────────────
+function CommBadge({ amount, type, qty }) {
+  if (amount == null) return <span className="text-slate-400 text-xs font-bold">—</span>;
+  const rs = amount / 100;
+  const ispo = type === "po";
+  return (
+    <div className="space-y-0.5">
+      <div className={`text-sm font-black tabular-nums ${ispo ? "text-blue-700" : "text-emerald-700"}`}>
+        ₹{rs.toLocaleString("en-IN")}
+        <span className="text-[10px] font-semibold text-slate-500 ml-0.5">/kit</span>
+      </div>
+      {qty && (
+        <div className={`text-[10px] font-bold ${ispo ? "text-blue-500" : "text-emerald-500"}`}>
+          {qty} kits = ₹{(rs * qty).toLocaleString("en-IN")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AuthorizedCatalog() {
-  // Fetch from the product-authorizations reseller endpoint
-  // which returns { scope_type, is_authorized, source, product, kit, category, subcategory, status }
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // "all" | "kit" | "product" | "category"
 
+  // Commission rates per kit
+  const [commissionRates, setCommissionRates] = useState([]);
+  const [loadingRates, setLoadingRates] = useState(false);
+  // Selected quantity tier for preview
+  const [selectedQty, setSelectedQty] = useState({}); // { [kitId]: qty }
+
   const fetchRules = () => {
     setLoading(true);
-    // This endpoint returns the actual authorization rules with is_authorized, scope_type, source populated
     api.get("/india/v1/reseller/authorized-products")
       .then((res) => { if (res.data?.status === "success") setRules(res.data.data); })
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchRules(); }, []);
+  const fetchCommissionRates = () => {
+    setLoadingRates(true);
+    api.get("/india/v1/reseller/commission-rates")
+      .then((res) => {
+        if (res.data?.status === "success") setCommissionRates(res.data.data || []);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingRates(false));
+  };
+
+  useEffect(() => {
+    fetchRules();
+    fetchCommissionRates();
+  }, []);
+
+  // Build commission lookup: kitId → { [qty]: { po, loose } }
+  const commLookup = {};
+  commissionRates.forEach((r) => {
+    const kitId = r.combo_kit_id?._id || r.combo_kit_id;
+    if (!kitId) return;
+    if (!commLookup[kitId]) commLookup[kitId] = {};
+    const qty = r.order_quantity;
+    if (!commLookup[kitId][qty]) commLookup[kitId][qty] = {};
+    commLookup[kitId][qty][r.order_type] = r.commission_amount_paise;
+  });
+
+  // Get all available qty tiers for a given kit
+  const getQtyTiers = (kitId) => {
+    if (!commLookup[kitId]) return [];
+    return Object.keys(commLookup[kitId]).map(Number).sort((a, b) => a - b);
+  };
+
+  // Find kit commission for a given product rule
+  const getKitComm = (r) => {
+    const kitId = r.kit_id || r.kit?._id || r.kit?.id;
+    if (!kitId || !commLookup[kitId]) return null;
+    return { kitId, data: commLookup[kitId] };
+  };
 
   // Derive the display name from the rule/item
   const getDisplayName = (r) => {
@@ -64,6 +125,9 @@ export default function AuthorizedCatalog() {
     product: rules.filter((r) => r.scope_type === "product").length,
   };
 
+  // Check if any kit has commission data
+  const hasCommissionData = commissionRates.length > 0;
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -71,14 +135,14 @@ export default function AuthorizedCatalog() {
         <div>
           <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2.5">
             <FiPackage className="text-blue-600" size={28} />
-            Authorized Catalog &amp; Product Matrix
+            Authorized Catalog & Product Matrix
           </h1>
           <p className="text-sm font-medium text-slate-600 mt-1">
-            Explore product categories and solar kits authorized for your partner account
+            Explore product categories and solar kits authorized for your partner account, along with commission rates
           </p>
         </div>
         <button
-          onClick={fetchRules}
+          onClick={() => { fetchRules(); fetchCommissionRates(); }}
           className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors self-start"
           title="Refresh"
         >
@@ -107,6 +171,17 @@ export default function AuthorizedCatalog() {
         ))}
       </div>
 
+      {/* ── Commission Info Banner ─────────────────────────────────────── */}
+      {hasCommissionData && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+          <FiTag className="text-amber-600 shrink-0 mt-0.5" size={16} />
+          <p className="text-xs font-semibold text-amber-800">
+            <strong>Commission rates shown below</strong> are your individual franchise rates — 
+            select a quantity tier to see PO and Loose order commissions for each kit.
+          </p>
+        </div>
+      )}
+
       {/* ── Summary Info ──────────────────────────────────────────────── */}
       {!loading && rules.length === 0 && (
         <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-center gap-3 text-blue-800 text-sm font-semibold">
@@ -133,7 +208,26 @@ export default function AuthorizedCatalog() {
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="text-left text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Scope Level</th>
                   <th className="text-left text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Target Entity</th>
-                  <th className="text-center text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Authorization Mode</th>
+                  <th className="text-center text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Authorization</th>
+                  {hasCommissionData && (
+                    <>
+                      <th className="text-center text-slate-700 font-extrabold px-4 py-4 uppercase text-xs tracking-wider">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <FaTruck className="text-blue-600" size={12} />
+                          PO Commission
+                        </div>
+                      </th>
+                      <th className="text-center text-slate-700 font-extrabold px-4 py-4 uppercase text-xs tracking-wider">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <FaShoppingBag className="text-emerald-600" size={12} />
+                          Loose Commission
+                        </div>
+                      </th>
+                      <th className="text-center text-slate-700 font-extrabold px-4 py-4 uppercase text-xs tracking-wider">
+                        Qty Tier
+                      </th>
+                    </>
+                  )}
                   <th className="text-center text-slate-700 font-extrabold px-6 py-4 uppercase text-xs tracking-wider">Rule Source</th>
                 </tr>
               </thead>
@@ -142,9 +236,17 @@ export default function AuthorizedCatalog() {
                   const ScopeIcon  = SCOPE_ICONS[r.scope_type] || FiPackage;
                   const scopeColor = SCOPE_COLORS[r.scope_type] || SCOPE_COLORS.product;
                   const displayName = getDisplayName(r);
-                  const isAuthorized = r.is_authorized !== false; // true by default
+                  const isAuthorized = r.is_authorized !== false;
+
+                  // Commission data for kit items
+                  const kitComm = r.scope_type === "kit" ? getKitComm(r) : null;
+                  const qtyTiers = kitComm ? getQtyTiers(kitComm.kitId) : [];
+                  const currentQty = selectedQty[kitComm?.kitId] || qtyTiers[0];
+                  const currentCommData = kitComm && currentQty ? kitComm.data[currentQty] : null;
+
                   return (
                     <tr key={r.id || r._id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      {/* Scope */}
                       <td className="px-6 py-4">
                         <span
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold"
@@ -154,18 +256,74 @@ export default function AuthorizedCatalog() {
                           {getScopeLabel(r.scope_type)}
                         </span>
                       </td>
+
+                      {/* Name */}
                       <td className="px-6 py-4 font-black text-blue-600">{displayName}</td>
+
+                      {/* Authorization */}
                       <td className="px-6 py-4 text-center">
                         {isAuthorized ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold">
-                            <FiCheckCircle size={13} /> Authorized (Whitelist)
+                            <FiCheckCircle size={13} /> Authorized
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-extrabold">
-                            <FiXCircle size={13} /> Restricted (Blacklist)
+                            <FiXCircle size={13} /> Restricted
                           </span>
                         )}
                       </td>
+
+                      {/* PO Commission */}
+                      {hasCommissionData && (
+                        <td className="px-4 py-4 text-center">
+                          {loadingRates ? (
+                            <FiLoader className="animate-spin text-slate-400 mx-auto" size={14} />
+                          ) : currentCommData?.po != null ? (
+                            <CommBadge amount={currentCommData.po} type="po" qty={currentQty} />
+                          ) : (
+                            <span className="text-slate-400 text-xs font-bold">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Loose Commission */}
+                      {hasCommissionData && (
+                        <td className="px-4 py-4 text-center">
+                          {loadingRates ? (
+                            <FiLoader className="animate-spin text-slate-400 mx-auto" size={14} />
+                          ) : currentCommData?.loose != null ? (
+                            <CommBadge amount={currentCommData.loose} type="loose" qty={currentQty} />
+                          ) : (
+                            <span className="text-slate-400 text-xs font-bold">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Qty Tier selector */}
+                      {hasCommissionData && (
+                        <td className="px-4 py-4 text-center">
+                          {r.scope_type === "kit" && qtyTiers.length > 0 ? (
+                            <select
+                              value={currentQty || ""}
+                              onChange={(e) =>
+                                setSelectedQty((prev) => ({
+                                  ...prev,
+                                  [kitComm.kitId]: Number(e.target.value),
+                                }))
+                              }
+                              className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            >
+                              {qtyTiers.map((qty) => (
+                                <option key={qty} value={qty}>{qty} Kits</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-slate-400 text-xs">N/A</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Rule Source */}
                       <td className="px-6 py-4 text-center">
                         <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold ${
                           r.source === "admin_override"

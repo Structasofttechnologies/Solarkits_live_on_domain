@@ -281,28 +281,53 @@ const get_combo_kits_by_district = async (req, res) => {
       warehouseIds = allActiveWarehouses.map(w => w._id);
     }
 
-    const ComboKitModel = ComboKit || WarehouseComboKit || require('../../../admin-panel/models/india_solarshop_db').WarehouseComboKit;
+    const CoreComboKit = require("../../models/india_core_db/combo_kits.schema");
+    const IndiaComboKit = require("../../models/india_solarshop_db/combo_kits.schema");
 
     // Build set of kit IDs
     let kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
 
-    // Fetch combo kits
+    // Fetch combo kits from both collections
     let kits = [];
     if (kitIds.length > 0) {
-      kits = await ComboKitModel.find({
-        _id: { $in: kitIds },
-        is_active: true,
-        deleted_at: null
-      }).lean();
+      const [k1, k2] = await Promise.all([
+        IndiaComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => []),
+        CoreComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
+      ]);
+      const map = new Map();
+      [...(k1 || []), ...(k2 || [])].forEach(k => map.set(k._id.toString(), k));
+      kits = Array.from(map.values());
     }
 
     // If still no kits found via activations, fetch all active combo kits in the system
     if (!kits || kits.length === 0) {
-      kits = await ComboKitModel.find({
-        is_active: true,
-        deleted_at: null
-      }).lean();
+      const [all1, all2] = await Promise.all([
+        IndiaComboKit.find({ is_active: true, deleted_at: null }).lean().catch(() => []),
+        CoreComboKit.find({ is_active: true, deleted_at: null }).lean().catch(() => [])
+      ]);
+      const map = new Map();
+      [...(all1 || []), ...(all2 || [])].forEach(k => map.set(k._id.toString(), k));
+      kits = Array.from(map.values());
     }
+
+    // Safety check: ensure every kit has valid order_quantities
+    kits.forEach(k => {
+      const validQtys = (k.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+      if (validQtys.length > 0) {
+        k.order_quantities = validQtys.sort((a, b) => a - b);
+      } else {
+        const cap = Number(k.capacity) || 5;
+        if (cap <= 3) {
+          k.order_quantities = [10, 25];
+        } else if (cap <= 10) {
+          k.order_quantities = [10, 50, 100];
+        } else if (cap <= 50) {
+          k.order_quantities = [50, 200, 500];
+        } else {
+          k.order_quantities = [10, 25, 50];
+        }
+      }
+    });
 
     // ── EPC TENANT ISOLATION: FRANCHISE-ONBOARDED vs DIRECT EPC ───────────────
     // If requester is an authenticated EPC onboarded by a Franchise Partner:

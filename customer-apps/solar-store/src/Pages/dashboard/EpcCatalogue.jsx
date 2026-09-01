@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import axiosInstance from "@/utils/axiosInstance";
 import { addToCart, syncCartWithBackend } from "@/features/slice";
@@ -101,6 +101,23 @@ function SpecsAccordion({ specs }) {
 function ProductCard({ item, onAddToCart }) {
   const defaultImg = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
+  // ── Order quantities (e.g. [10, 25, 50]) ─────────────────────────────────
+  const orderQuantities = useMemo(() => {
+    const raw = item?.order_quantities || item?.orderQuantities || [];
+    return Array.isArray(raw)
+      ? raw.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+      : [];
+  }, [item?.order_quantities, item?.orderQuantities]);
+
+  const hasQtyVariants = orderQuantities.length > 0;
+  const [selectedQty, setSelectedQty] = useState(() => orderQuantities[0] ?? null);
+
+  // Keep in sync if item changes
+  useEffect(() => {
+    if (orderQuantities.length > 0) setSelectedQty(orderQuantities[0]);
+    else setSelectedQty(null);
+  }, [item?.id, orderQuantities.length]);
+
   return (
     <article
       className="group relative flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-indigo-300 hover:shadow-lg transition-all duration-200"
@@ -181,6 +198,35 @@ function ProductCard({ item, onAddToCart }) {
         {/* Specifications */}
         <SpecsAccordion specs={item.specifications} />
 
+        {/* ── Order Quantity Variation ─────────────────────────────────────── */}
+        {hasQtyVariants && (
+          <div className="mt-3">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <FiPackage size={11} />
+              Order Quantity Options
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {orderQuantities.map((qty) => (
+                <button
+                  key={qty}
+                  onClick={() => setSelectedQty(qty)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all cursor-pointer ${selectedQty === qty
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                      : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:border-amber-300"
+                    }`}
+                >
+                  {qty} {qty === 1 ? "KIT" : "KITS"}
+                </button>
+              ))}
+            </div>
+            {selectedQty && (
+              <p className="text-[10px] text-indigo-600 font-semibold mt-1.5">
+                Selected: <span className="font-black">{selectedQty} kit{selectedQty !== 1 ? "s" : ""}</span> order
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Stock quantity */}
         <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
           <MdOutlineInventory2 size={14} className="text-slate-400" />
@@ -201,17 +247,22 @@ function ProductCard({ item, onAddToCart }) {
         {/* Action Button */}
         <button
           disabled={item.availability_label === "out_of_stock"}
-          onClick={() => onAddToCart && onAddToCart(item)}
+          onClick={() => onAddToCart && onAddToCart(item, selectedQty)}
           className="mt-4 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-xs hover:shadow-md active:scale-[0.99]"
-          aria-label={`Request quote for ${item.title}`}
+          aria-label={`Request quote for ${item.title}${selectedQty ? ` - ${selectedQty} kits` : ""}`}
         >
           <FiShoppingBag size={15} />
-          {item.availability_label === "out_of_stock" ? "Out of Stock" : "Request Quote / Add to Cart"}
+          {item.availability_label === "out_of_stock"
+            ? "Out of Stock"
+            : hasQtyVariants && selectedQty
+              ? `Add ${selectedQty} Kits to Cart`
+              : "Request Quote / Add to Cart"}
         </button>
       </div>
     </article>
   );
 }
+
 
 /* ─── Empty & Error States (Bright Theme) ─────────────────────────────────── */
 function EmptyState({ code, resellerName, onRefresh }) {
@@ -306,7 +357,7 @@ export default function EpcCatalogue() {
 
   const searchTimer = useRef(null);
 
-  const handleAddToCart = (item) => {
+  const handleAddToCart = (item, selectedQty) => {
     dispatch(addToCart({
       id: item.id || item.listing_id,
       listing_id: item.listing_id || item.id,
@@ -323,6 +374,9 @@ export default function EpcCatalogue() {
       item_type: item.item_type || 'product',
       is_catalogue_item: true,
       is_custom: true,
+      // Pass selected order quantity if kit has quantity variations
+      order_quantity: selectedQty || null,
+      qty: selectedQty || 1,
     }));
     dispatch(syncCartWithBackend());
   };
@@ -443,11 +497,10 @@ export default function EpcCatalogue() {
           {/* Filter Toggle */}
           <button
             onClick={() => setShowFilters((p) => !p)}
-            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-              showFilters || hasActiveFilters
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all ${showFilters || hasActiveFilters
                 ? "bg-indigo-50 border-indigo-300 text-indigo-700"
                 : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-            }`}
+              }`}
           >
             <FiFilter size={15} />
             Filter & Sort

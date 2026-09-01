@@ -892,7 +892,11 @@ const update_combo_kit_india = async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Missing Combo Kit ID.' });
         }
 
-        const existingKit = await ComboKitIndia.findById(id);
+        const { WarehouseComboKit: IndiaComboKit } = require('../models/india_solarshop_db');
+        let existingKit = await ComboKitIndia.findById(id);
+        if (!existingKit) {
+            existingKit = await IndiaComboKit.findById(id);
+        }
         if (!existingKit) {
             console.log("Validation Failed: Combo Kit not found for ID:", id);
             return res.status(404).json({ status: 'error', message: 'Combo Kit not found.' });
@@ -1061,6 +1065,19 @@ const update_combo_kit_india = async (req, res) => {
         }
 
         await existingKit.save();
+
+        if (req.body.order_quantities !== undefined) {
+            try {
+                const otherModel = existingKit.constructor.modelName === 'pc_combo_kits' ? ComboKitIndia : IndiaComboKit;
+                const syncQty = (existingKit.order_quantities || []);
+                await otherModel.updateMany(
+                    { name: { $regex: new RegExp(`^${existingKit.name.trim()}$`, 'i') }, deleted_at: null },
+                    { $set: { order_quantities: syncQty } }
+                );
+            } catch (e) {
+                console.warn('Dual-sync order_quantities error:', e.message);
+            }
+        }
 
         res.status(200).json({ status: 'success', message: 'Combo Kit updated successfully.', data: existingKit });
     } catch (error) {
