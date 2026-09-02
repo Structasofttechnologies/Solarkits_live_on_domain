@@ -338,45 +338,10 @@ export default function Navbar() {
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             onClick={() => handleNavClick("/shop")}
-                            className="whitespace-nowrap text-xs font-bold text-primary-600 hover:text-primary-800 hover:underline flex items-center gap-1 cursor-pointer mr-1"
+                            className="whitespace-nowrap text-xs font-bold text-primary-600 hover:text-primary-800 hover:underline flex items-center gap-1 cursor-pointer"
                           >
                             View All Kits <FiArrowRight className="shrink-0" />
                           </button>
-                          {!isAuthenticated ? (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEshopDropdownOpen(false);
-                                  navigate("/auth/signup");
-                                }}
-                                className="whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-primary-50 text-primary-700 hover:text-primary-800 border border-primary-200 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
-                              >
-                                <FiUserPlus className="text-sm shrink-0" />
-                                <span>Sign Up</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEshopDropdownOpen(false);
-                                  navigate("/auth/login");
-                                }}
-                                className="whitespace-nowrap inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
-                              >
-                                <FiUser className="text-sm shrink-0" />
-                                <span>Login</span>
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setEshopDropdownOpen(false);
-                                navigate("/shop");
-                              }}
-                              className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200"
-                            >
-                              <FiCheckCircle className="text-xs shrink-0" />
-                              <span>Logged In</span>
-                            </button>
-                          )}
                         </div>
                       </div>
 
@@ -653,30 +618,6 @@ export default function Navbar() {
 
                   {mobileEshopExpanded && (
                     <div className="p-2 space-y-1 bg-white border-t border-gray-100">
-                      {!isAuthenticated && (
-                        <div className="flex items-center gap-2 p-1.5 mb-2 bg-gray-50 rounded-xl border border-gray-100">
-                          <button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              navigate("/auth/signup");
-                            }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white hover:bg-primary-50 text-primary-700 border border-primary-200 text-xs font-bold rounded-lg shadow-xs cursor-pointer"
-                          >
-                            <FiUserPlus className="text-xs" />
-                            <span>Sign Up</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              navigate("/auth/login");
-                            }}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
-                          >
-                            <FiUser className="text-xs" />
-                            <span>Login</span>
-                          </button>
-                        </div>
-                      )}
                       {E_SHOP_GROUPS.flatMap((g) => g.items).map((item) => {
                         const Icon = item.icon;
                         return (
