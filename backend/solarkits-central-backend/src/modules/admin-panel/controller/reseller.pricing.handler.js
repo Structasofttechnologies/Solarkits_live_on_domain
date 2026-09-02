@@ -202,6 +202,57 @@ const list_reseller_listings = async (req, res) => {
       .sort(sortOption)
       .lean();
 
+    // Enrich listings with active plan's product-wise commission and MOQ rules
+    const {
+      ResellerPlanSubscription: SubModel,
+      FranchiseeCommissionRule: CommModel,
+      FranchiseeMoqRule: MoqModel,
+    } = require('../models/india_solarshop_db');
+
+    const activeSub = await SubModel.findOne({
+      reseller_id: resellerId,
+      status: 'active',
+    }).populate('plan_id').sort({ start_date: -1 }).lean();
+
+    if (activeSub?.plan_id) {
+      const planId = activeSub.plan_id._id || activeSub.plan_id;
+      const [commRules, moqRules] = await Promise.all([
+        CommModel.find({ plan_id: planId, is_active: true, deleted_at: null }).lean(),
+        MoqModel.find({ plan_id: planId, is_active: true, deleted_at: null }).lean(),
+      ]);
+
+      const commMap = {};
+      let defaultComm = null;
+      commRules.forEach((r) => {
+        if (r.combo_kit_id) commMap[r.combo_kit_id.toString()] = r;
+        else defaultComm = r;
+      });
+
+      const moqMap = {};
+      let defaultMoq = null;
+      moqRules.forEach((r) => {
+        if (r.combo_kit_id) moqMap[r.combo_kit_id.toString()] = r;
+        else defaultMoq = r;
+      });
+
+      rows.forEach((row) => {
+        const kitId = row.kit_id?._id ? row.kit_id._id.toString() : (row.kit_id ? row.kit_id.toString() : null);
+        const comm = (kitId && commMap[kitId]) || defaultComm;
+        const moqR = (kitId && moqMap[kitId]) || defaultMoq;
+
+        if (comm) {
+          row.commission_method = comm.commission_method;
+          row.commission_percentage = comm.commission_percentage;
+          row.fixed_amount_per_kit_paise = comm.fixed_amount_per_kit_paise;
+        }
+        if (moqR) {
+          row.moq = moqR.moq;
+          row.increment_quantity = moqR.increment_quantity;
+          row.max_quantity = moqR.max_quantity;
+        }
+      });
+    }
+
     return res.json({ status: 'success', data: rows });
   } catch (error) {
     console.error('[reseller.pricing] list_reseller_listings error:', error);

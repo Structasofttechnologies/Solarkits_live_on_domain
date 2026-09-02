@@ -259,13 +259,28 @@ export default function StorefrontListings() {
             const p = item.product_id;
             const k = item.kit_id;
 
+            // Product-specific commission rate from Franchise Settings, fallback to plan rate
+            const itemCommissionPct = item.commission_percentage != null
+              ? item.commission_percentage
+              : (commissionRatePct != null ? commissionRatePct : 2);
+
+            const isItemFixedPerKit = (item.commission_method === "FIXED_PER_KIT" && item.fixed_amount_per_kit_paise > 0)
+              || isFixedPerKit;
+            const itemFixedAmount = item.fixed_amount_per_kit_paise
+              ? (item.fixed_amount_per_kit_paise / 100)
+              : fixedAmountPerKit;
+
+            const itemCommissionLabel = isItemFixedPerKit
+              ? `₹${itemFixedAmount.toLocaleString('en-IN')} / kit`
+              : `${itemCommissionPct}%`;
+
             // Cost price in INR
             const costInr = item.cost_price_paise
               ? item.cost_price_paise / 100
               : (p?.base_price || k?.base_price_cached || 1000);
 
             // Fixed Plan Dealer Margin in INR
-            const marginInr = isFixedPerKit ? fixedAmountPerKit : ((costInr * commissionRatePct) / 100);
+            const marginInr = isItemFixedPerKit ? itemFixedAmount : ((costInr * itemCommissionPct) / 100);
             const subtotalWithMargin = costInr + marginInr;
             const taxRate = item.tax_rate_pct || 18;
             const taxAmount = (subtotalWithMargin * taxRate) / 100;
@@ -372,7 +387,7 @@ export default function StorefrontListings() {
                   {/* Fixed Margin/Commission from Plan */}
                   <div className="flex items-center justify-between text-xs py-1">
                     <span className="text-slate-600 font-bold flex items-center gap-1">
-                      <FiShield className="text-emerald-600" /> Plan Commission ({commissionLabel}):
+                      <FiShield className="text-emerald-600" /> Plan Commission ({itemCommissionLabel}):
                     </span>
                     <span className="font-extrabold text-emerald-600 font-mono text-sm">
                       +₹{marginInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
