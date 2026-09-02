@@ -32,9 +32,9 @@ export default function BdeLogin() {
 
   const DEMO_ACCOUNTS = [
     {
-      label: 'Bloch Navaz',
+      label: 'Vivek gohel',
       identifier: 'rahul.bde@solarkits.com',
-      password: 'Bde@Test123445678',
+      password: 'Bde@Test1234',
     }
   ];
 
