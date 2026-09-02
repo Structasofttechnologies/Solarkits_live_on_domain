@@ -25,25 +25,50 @@ const {
 const { logAudit } = require('../utils/audit.service');
 
 /**
- * Resolve the active commission rule for a plan at a given date.
- * Priority: Specific FranchiseeCommissionRule date rule > Plan-level direct commission settings.
+ * Resolve the active commission rule for a plan (and optionally specific combo kit) at a given date.
+ * Priority: Specific ComboKit FranchiseeCommissionRule > Plan-level FranchiseeCommissionRule > Plan-level direct settings.
  *
  * @param {string|ObjectId} plan_id
+ * @param {string|ObjectId|Date} [combo_kit_id_or_asOf]
  * @param {Date} [asOf]
  * @returns {Promise<object|null>}
  */
-async function resolveCommissionRule(plan_id, asOf) {
-  const now = asOf || new Date();
-  let rule = await FranchiseeCommissionRule.findOne({
+async function resolveCommissionRule(plan_id, combo_kit_id_or_asOf = null, asOf = null) {
+  let combo_kit_id = null;
+  let dateToUse = asOf;
+
+  if (combo_kit_id_or_asOf instanceof Date) {
+    dateToUse = combo_kit_id_or_asOf;
+  } else if (combo_kit_id_or_asOf) {
+    combo_kit_id = combo_kit_id_or_asOf;
+  }
+
+  const now = dateToUse || new Date();
+  const baseQuery = {
     plan_id,
     is_active: true,
     deleted_at: null,
     effective_from: { $lte: now },
     $or: [{ effective_until: null }, { effective_until: { $gte: now } }],
-  })
-    .sort({ effective_from: -1 })
-    .lean();
+  };
 
+  let rule = null;
+
+  // 1. First priority: Specific Combo Kit rule if kit_id is provided
+  if (combo_kit_id) {
+    rule = await FranchiseeCommissionRule.findOne({ ...baseQuery, combo_kit_id })
+      .sort({ effective_from: -1 })
+      .lean();
+  }
+
+  // 2. Second priority: Any active rule for the plan
+  if (!rule) {
+    rule = await FranchiseeCommissionRule.findOne(baseQuery)
+      .sort({ effective_from: -1 })
+      .lean();
+  }
+
+  // 3. Fallback to plan direct defaults
   if (!rule && plan_id) {
     const plan = await ResellerPlan.findOne({ _id: plan_id, deleted_at: null }).lean();
     if (plan) {

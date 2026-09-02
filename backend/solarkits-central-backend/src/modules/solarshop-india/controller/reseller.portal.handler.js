@@ -1486,11 +1486,10 @@ const get_reseller_authorized_products = async (req, res) => {
     const resellerId = req.reseller._id;
     const {
       ResellerProductAuthorization,
-      WarehouseComboKit,
       ResellerListing,
       ResellerPlanSubscription,
     } = require('../../admin-panel/models/india_solarshop_db');
-    const { ProjectCategory, ProjectSubcategory, Product } = require('../../admin-panel/models/core_db');
+    const { ProjectCategory, ProjectSubcategory, Product, WarehouseComboKit } = require('../../admin-panel/models/core_db');
 
     // 1. Listings for price resolution
     const listings = await ResellerListing.find({ reseller_id: resellerId }).lean();
@@ -1781,6 +1780,46 @@ const get_reseller_authorized_products = async (req, res) => {
       }
     }
 
+    // 4. Enrich items with plan product-wise commission & MOQ rules
+    if (activePlan) {
+      const { FranchiseeCommissionRule, FranchiseeMoqRule } = require('../../admin-panel/models/india_solarshop_db');
+      const [commRules, moqRules] = await Promise.all([
+        FranchiseeCommissionRule.find({ plan_id: activePlan._id, is_active: true, deleted_at: null }).lean(),
+        FranchiseeMoqRule.find({ plan_id: activePlan._id, is_active: true, deleted_at: null }).lean(),
+      ]);
+
+      const commMap = {};
+      let defaultComm = null;
+      commRules.forEach((r) => {
+        if (r.combo_kit_id) commMap[r.combo_kit_id.toString()] = r;
+        else defaultComm = r;
+      });
+
+      const moqMap = {};
+      let defaultMoq = null;
+      moqRules.forEach((r) => {
+        if (r.combo_kit_id) moqMap[r.combo_kit_id.toString()] = r;
+        else defaultMoq = r;
+      });
+
+      for (const [key, item] of itemMap.entries()) {
+        const kitId = item.id ? item.id.toString() : (item._id ? item._id.toString() : null);
+        const comm = (kitId && commMap[kitId]) || defaultComm;
+        const moqR = (kitId && moqMap[kitId]) || defaultMoq;
+
+        if (comm) {
+          item.commission_method = comm.commission_method;
+          item.commission_percentage = comm.commission_percentage;
+          item.fixed_amount_per_kit_paise = comm.fixed_amount_per_kit_paise;
+        }
+        if (moqR) {
+          item.moq = moqR.moq;
+          item.increment_quantity = moqR.increment_quantity;
+          item.max_quantity = moqR.max_quantity;
+        }
+      }
+    }
+
     const items = Array.from(itemMap.values());
 
     return res.json({
@@ -1789,6 +1828,97 @@ const get_reseller_authorized_products = async (req, res) => {
     });
   } catch (error) {
     console.error('[reseller.portal] get_reseller_authorized_products error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+/**
+ * GET /api/india/v1/reseller/commission-rates
+ * Returns active kit commission rates formatted for Reseller Catalog
+ */
+const get_reseller_commission_rates = async (req, res) => {
+  try {
+    const resellerId = req.reseller._id;
+    const {
+      ResellerPlanSubscription,
+      FranchiseeCommissionRule,
+    } = require('../../admin-panel/models/india_solarshop_db');
+    const { WarehouseComboKit } = require('../../admin-panel/models/core_db');
+
+    const activeSub = await ResellerPlanSubscription.findOne({
+      reseller_id: resellerId,
+      status: 'active',
+    }).populate('plan_id').sort({ start_date: -1 }).lean();
+
+    if (!activeSub || !activeSub.plan_id) {
+      return res.json({ status: 'success', data: [] });
+    }
+
+    const planId = activeSub.plan_id._id || activeSub.plan_id;
+    const commRules = await FranchiseeCommissionRule.find({
+      plan_id: planId,
+      is_active: true,
+      deleted_at: null,
+    }).lean();
+
+    if (!commRules || commRules.length === 0) {
+      return res.json({ status: 'success', data: [] });
+    }
+
+    // Find all combo kits for this plan
+    const kitIds = (activeSub.plan_id.allowed_combo_kit_ids || []).map(String);
+    commRules.forEach((r) => {
+      if (r.combo_kit_id) kitIds.push(r.combo_kit_id.toString());
+    });
+
+    const uniqueKitIds = Array.from(new Set(kitIds)).filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const comboKits = await WarehouseComboKit.find({
+      _id: { $in: uniqueKitIds },
+      deleted_at: null,
+    }).lean();
+
+    const kitMap = new Map();
+    comboKits.forEach((k) => kitMap.set(k._id.toString(), k));
+
+    const defaultRule = commRules.find((r) => !r.combo_kit_id) || commRules[0];
+    const rates = [];
+    const standardTiers = [1, 5, 10, 25, 50, 100];
+
+    uniqueKitIds.forEach((kitId) => {
+      const kit = kitMap.get(kitId);
+      const rule = commRules.find((r) => r.combo_kit_id && r.combo_kit_id.toString() === kitId) || defaultRule;
+      if (!rule) return;
+
+      const pricePaise = kit
+        ? Math.round((kit.base_price_cached || kit.selling_price_cached || kit.base_price || 50000) * 100)
+        : 5000000;
+
+      let perKitPaise = 0;
+      if (rule.commission_method === 'PERCENTAGE') {
+        perKitPaise = Math.round(pricePaise * ((rule.commission_percentage || 0) / 100));
+      } else {
+        perKitPaise = rule.fixed_amount_per_kit_paise || 0;
+      }
+
+      standardTiers.forEach((qty) => {
+        ['po', 'loose'].forEach((orderType) => {
+          rates.push({
+            combo_kit_id: kitId,
+            order_quantity: qty,
+            order_type: orderType,
+            commission_percentage: rule.commission_percentage,
+            commission_amount_paise: perKitPaise,
+          });
+        });
+      });
+    });
+
+    return res.json({
+      status: 'success',
+      data: rates,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_reseller_commission_rates error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 };
@@ -3510,6 +3640,7 @@ module.exports = {
   upload_manual_payment_receipt,
   get_my_store_setup,
   get_master_store_setup_checklist,
+  get_reseller_commission_rates,
 };
 
 

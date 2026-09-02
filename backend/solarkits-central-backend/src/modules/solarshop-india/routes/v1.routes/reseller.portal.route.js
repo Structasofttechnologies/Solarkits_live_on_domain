@@ -51,6 +51,7 @@ router.post('/auth/pin/setup', verify_reseller_auth, handler.setup_reseller_pin)
 router.post('/auth/pin/change', verify_reseller_auth, handler.change_reseller_pin);
 router.get('/territories', verify_reseller_auth, handler.get_reseller_my_territories);
 router.get('/authorized-products', verify_reseller_auth, handler.get_reseller_authorized_products);
+router.get('/commission-rates',     verify_reseller_auth, handler.get_reseller_commission_rates);
 router.post('/kyc/upload', verify_reseller_auth, kycDocUpload, handler.upload_kyc_document);
 router.post('/kyc/submit', verify_reseller_auth, handler.submit_kyc);
 router.get('/plans/list', handler.get_active_plans);
