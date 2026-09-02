@@ -141,6 +141,7 @@ export default function Navbar() {
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
   const totalCartItems = useSelector(selectCartTotalItems);
+  const isShopPage = location.pathname === "/shop" || location.pathname.startsWith("/shop");
 
   // Scroll detection
   useEffect(() => {
@@ -257,8 +258,8 @@ export default function Navbar() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
         className={`sticky top-0 z-50 transition-all duration-300 ${scrolled
-            ? "bg-white/96 backdrop-blur-xl shadow-md border-b border-gray-200/80"
-            : "bg-white/95 backdrop-blur-md border-b border-gray-100"
+          ? "bg-white/96 backdrop-blur-xl shadow-md border-b border-gray-200/80"
+          : "bg-white/95 backdrop-blur-md border-b border-gray-100"
           }`}
       >
         <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8">
@@ -297,8 +298,8 @@ export default function Navbar() {
                 <button
                   onClick={() => setEshopDropdownOpen((prev) => !prev)}
                   className={`whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2 text-xs xl:text-sm font-bold rounded-xl transition-all duration-150 cursor-pointer ${eshopDropdownOpen
-                      ? "text-primary-600 bg-primary-50 ring-1 ring-primary-200"
-                      : "text-gray-800 hover:text-primary-600 hover:bg-primary-50/80"
+                    ? "text-primary-600 bg-primary-50 ring-1 ring-primary-200"
+                    : "text-gray-800 hover:text-primary-600 hover:bg-primary-50/80"
                     }`}
                   aria-expanded={eshopDropdownOpen}
                 >
@@ -502,7 +503,7 @@ export default function Navbar() {
             <div className="flex items-center gap-1.5 sm:gap-2 xl:gap-2.5 shrink-0">
 
               {/* "Become Franchise Partner" Button (Desktop & Tablet) */}
-              <motion.button
+              {/* <motion.button
                 onClick={handleFranchiseRedirect}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -512,7 +513,7 @@ export default function Navbar() {
                 <FiBriefcase className="text-amber-600 text-sm xl:text-base shrink-0 group-hover:scale-110 transition-transform" />
                 <span className="whitespace-nowrap">Become Franchise Partner</span>
                 <FiExternalLink className="text-xs text-amber-600 opacity-70 group-hover:opacity-100 shrink-0" />
-              </motion.button>
+              </motion.button> */}
 
               {/* If Authenticated: Show Store Access & Cart */}
               {isAuthenticated && (
@@ -544,16 +545,16 @@ export default function Navbar() {
                 </>
               )}
 
-              {/* Commented out Sign Up & Login buttons as requested */}
-              {/* {!isAuthenticated && (
-                <>
+              {/* Sign Up & Login buttons — Shown ONLY on /shop page, hidden on home page */}
+              {isShopPage && !isAuthenticated && (
+                <div className="flex items-center gap-2">
                   <motion.button
                     onClick={() => navigate("/auth/signup")}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="whitespace-nowrap shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3 xl:px-3.5 py-2 bg-white hover:bg-primary-50 text-primary-700 hover:text-primary-800 border border-primary-200 text-xs xl:text-sm font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                    className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 bg-white hover:bg-blue-50/80 text-[#132a68] border border-blue-300 text-xs sm:text-sm font-bold rounded-full transition-all shadow-2xs cursor-pointer"
                   >
-                    <FiUserPlus className="text-sm shrink-0" />
+                    <FiUserPlus className="text-sm shrink-0 text-[#132a68]" />
                     <span className="whitespace-nowrap">Sign Up</span>
                   </motion.button>
 
@@ -561,13 +562,13 @@ export default function Navbar() {
                     onClick={() => navigate("/auth/login")}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs xl:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                    className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 bg-[#132a68] hover:bg-[#0c1d4a] text-white text-xs sm:text-sm font-bold rounded-full transition-all shadow-sm cursor-pointer"
                   >
                     <FiUser className="text-sm shrink-0" />
                     <span className="whitespace-nowrap">Login</span>
                   </motion.button>
-                </>
-              )} */}
+                </div>
+              )}
 
               {/* Mobile Hamburger Toggle Button */}
               <motion.button
@@ -760,30 +761,30 @@ export default function Navbar() {
                     <FiShoppingBag className="shrink-0" />
                     <span>Open Store Dashboard</span>
                   </button>
-                ) : (
+                ) : isShopPage ? (
                   <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/auth/login");
-                      }}
-                      className="w-full py-2.5 bg-primary-50 hover:bg-primary-100 text-primary-700 font-bold rounded-xl text-xs transition-all border border-primary-200 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
-                    >
-                      <FiUser className="shrink-0" />
-                      <span>Sign In</span>
-                    </button>
                     <button
                       onClick={() => {
                         setMenuOpen(false);
                         navigate("/auth/signup");
                       }}
-                      className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      className="w-full py-2.5 bg-white hover:bg-blue-50/80 text-[#132a68] border border-blue-300 font-bold rounded-full text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                     >
-                      <FiUserPlus className="shrink-0" />
+                      <FiUserPlus className="shrink-0 text-[#132a68]" />
                       <span>Sign Up</span>
                     </button>
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/auth/login");
+                      }}
+                      className="w-full py-2.5 bg-[#132a68] hover:bg-[#0c1d4a] text-white font-bold rounded-full text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    >
+                      <FiUser className="shrink-0" />
+                      <span>Login</span>
+                    </button>
                   </div>
-                )}
+                ) : null}
 
                 {/* Helpline Box */}
                 <div className="pt-2 text-center">
