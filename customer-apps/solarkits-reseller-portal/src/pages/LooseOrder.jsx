@@ -36,19 +36,19 @@ import { FaSolarPanel, FaWarehouse, FaBuilding, FaBolt } from "react-icons/fa";
 import api from "../services/api";
 
 const STATUS_CONFIG = {
-  DRAFT:             { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300", icon: FiFileText },
-  SUBMITTED:         { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400", icon: FiClock },
-  PENDING_APPROVAL:  { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400", icon: FiClock },
+  DRAFT: { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300", icon: FiFileText },
+  SUBMITTED: { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400", icon: FiClock },
+  PENDING_APPROVAL: { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400", icon: FiClock },
   CHANGES_REQUESTED: { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400", icon: FiAlertCircle },
-  APPROVED:          { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  REJECTED:          { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400", icon: FiX },
-  AWAITING_PAYMENT:  { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FiDollarSign },
-  PAID:              { label: "Paid & Verified", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  PROCESSING:        { label: "Processing & Packing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400", icon: FiRefreshCw },
-  DISPATCHED:        { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400", icon: FiBox },
-  DELIVERED:         { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  COMPLETED:         { label: "Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  CANCELLED:         { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
+  APPROVED: { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  REJECTED: { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400", icon: FiX },
+  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FiDollarSign },
+  PAID: { label: "Paid & Verified", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  PROCESSING: { label: "Processing & Packing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400", icon: FiRefreshCw },
+  DISPATCHED: { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400", icon: FiBox },
+  DELIVERED: { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  COMPLETED: { label: "Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  CANCELLED: { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
 };
 
 function StatusBadge({ status }) {
@@ -255,15 +255,15 @@ export default function LooseOrder() {
     const epcAllocationsList =
       destinationMode === "epc_allocation"
         ? Object.entries(allocations).map(([buyerId, qty]) => {
-            const buyer = epcBuyers.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
-            return {
-              epc_buyer_id: buyerId,
-              company_name: buyer?.company_name || buyer?.name || "EPC Buyer",
-              buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
-              gstin: buyer?.gstin || null,
-              allocated_quantity: qty,
-            };
-          })
+          const buyer = epcBuyers.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
+          return {
+            epc_buyer_id: buyerId,
+            company_name: buyer?.company_name || buyer?.name || "EPC Buyer",
+            buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
+            gstin: buyer?.gstin || null,
+            allocated_quantity: qty,
+          };
+        })
         : [];
 
     const itemPayload = {
@@ -391,11 +391,10 @@ export default function LooseOrder() {
                 <span className="text-[11px] font-black uppercase tracking-wider text-text-muted">
                   {goalData.period || "Monthly Franchise Target Goal"}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                  (goalData.achievement_pct || 0) >= 100
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${(goalData.achievement_pct || 0) >= 100
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                     : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                }`}>
+                  }`}>
                   {goalData.achievement_pct || 0}% Achieved
                 </span>
               </div>
@@ -434,11 +433,10 @@ export default function LooseOrder() {
             <button
               key={tab.id}
               onClick={() => setStatusFilter(tab.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
-                statusFilter === tab.id
+              className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${statusFilter === tab.id
                   ? "bg-blue-600 text-white shadow-md"
                   : "bg-surface hover:bg-surface-hover text-text-secondary border border-border"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -460,18 +458,16 @@ export default function LooseOrder() {
           <div className="flex items-center bg-surface border border-border rounded-xl p-1 shrink-0">
             <button
               onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
-                viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-              }`}
+              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+                }`}
               title="Table View"
             >
               <FiList size={15} />
             </button>
             <button
               onClick={() => setViewMode("card")}
-              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
-                viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-              }`}
+              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+                }`}
               title="Card Grid View"
             >
               <FiGrid size={15} />
@@ -701,11 +697,10 @@ export default function LooseOrder() {
                       <div
                         key={kitId}
                         onClick={() => setSelectedKitId(kitId)}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${isSelected
                             ? "bg-primary/10 border-primary shadow-sm"
                             : "bg-surface hover:bg-surface-hover border-border"
-                        }`}
+                          }`}
                       >
                         <div className="space-y-1">
                           <div className="flex items-center justify-between">
@@ -780,11 +775,10 @@ export default function LooseOrder() {
                         key={presetQty}
                         type="button"
                         onClick={() => setLooseQuantity(presetQty)}
-                        className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          looseQuantity === presetQty
+                        className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${looseQuantity === presetQty
                             ? "bg-primary text-white shadow-sm"
                             : "bg-surface hover:bg-surface-hover text-text-primary border border-border"
-                        }`}
+                          }`}
                       >
                         {presetQty} Kits
                       </button>
@@ -803,11 +797,10 @@ export default function LooseOrder() {
                   <button
                     type="button"
                     onClick={() => setDestinationMode("hub_stock")}
-                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${
-                      destinationMode === "hub_stock"
+                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${destinationMode === "hub_stock"
                         ? "bg-primary/10 border-primary text-primary"
                         : "bg-surface hover:bg-surface-hover border-border text-text-secondary"
-                    }`}
+                      }`}
                   >
                     <FaWarehouse size={20} className="shrink-0" />
                     <div>
@@ -819,11 +812,10 @@ export default function LooseOrder() {
                   <button
                     type="button"
                     onClick={() => setDestinationMode("epc_allocation")}
-                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${
-                      destinationMode === "epc_allocation"
+                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${destinationMode === "epc_allocation"
                         ? "bg-primary/10 border-primary text-primary"
                         : "bg-surface hover:bg-surface-hover border-border text-text-secondary"
-                    }`}
+                      }`}
                   >
                     <FiUsers size={20} className="shrink-0" />
                     <div>
