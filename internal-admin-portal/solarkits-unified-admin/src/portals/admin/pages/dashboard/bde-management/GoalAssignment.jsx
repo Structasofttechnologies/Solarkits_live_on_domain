@@ -98,24 +98,49 @@ export default function GoalAssignment({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                       {b.goal?.period_type ? `${b.goal.period_type} (${b.goal.year || new Date().getFullYear()})` : 'Monthly (Current)'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium">Monthly Signups:</span>
-                    <span className="font-bold text-[#0575B8]">
-                      {b.goal?.monthly_franchisee_signup_goal ?? b.current_goal?.monthly_franchisee_signup_goal ?? 0} Signups
-                    </span>
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Monthly Signups</span>
+                      <span className="font-black text-[#0575B8]">
+                        {b.goal?.monthly_franchisee_signup_goal ?? b.current_goal?.monthly_franchisee_signup_goal ?? 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Quarterly</span>
+                      <span className="font-black text-indigo-700">
+                        {b.goal?.quarterly_franchisee_signup_goal ?? b.current_goal?.quarterly_franchisee_signup_goal ?? 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Store Setups</span>
+                      <span className="font-black text-emerald-700">
+                        {b.goal?.operational_store_goal ?? b.current_goal?.operational_store_goal ?? 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">EPC Leads</span>
+                      <span className="font-black text-amber-700">
+                        {b.goal?.monthly_epc_lead_goal ?? b.current_goal?.monthly_epc_lead_goal ?? 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">EPC Onboard</span>
+                      <span className="font-black text-teal-700">
+                        {b.goal?.monthly_epc_onboard_goal ?? b.current_goal?.monthly_epc_onboard_goal ?? 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Network Kits</span>
+                      <span className="font-black text-purple-700">
+                        {b.goal?.monthly_network_kit_goal ?? b.current_goal?.monthly_network_kit_goal ?? 0}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium">Quarterly Signups:</span>
-                    <span className="font-bold text-indigo-700">
-                      {b.goal?.quarterly_franchisee_signup_goal ?? b.current_goal?.quarterly_franchisee_signup_goal ?? 0} Signups
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500 font-medium">Store Setups:</span>
-                    <span className="font-bold text-emerald-700">
-                      {b.goal?.operational_store_goal ?? b.current_goal?.operational_store_goal ?? 0} Stores
-                    </span>
-                  </div>
+                  {(b.goal?.notes || b.current_goal?.notes) && (
+                    <div className="pt-2 border-t border-slate-200 text-[11px] text-slate-600 italic truncate">
+                      "{b.goal?.notes || b.current_goal?.notes}"
+                    </div>
+                  )}
                 </div>
               </div>
 

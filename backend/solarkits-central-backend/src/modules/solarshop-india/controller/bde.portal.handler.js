@@ -403,9 +403,6 @@ exports.update_bde_me = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. SCOPED ASSIGNMENTS & NOTIFICATIONS
-// ─────────────────────────────────────────────────────────────────────────────
 exports.get_my_territory = async (req, res) => {
   try {
     const territory = await BDETerritoryAssignment.findOne({ bde_id: req.user.id, status: 'active' }).lean();
@@ -426,8 +423,74 @@ exports.get_my_plans = async (req, res) => {
 
 exports.get_my_goals = async (req, res) => {
   try {
-    const goals = await BDEGoal.find({ bde_id: req.user.id }).sort({ createdAt: -1 }).lean();
-    return res.status(200).json({ status: 'success', data: goals });
+    const bdeId = req.user.id;
+    const goals = await BDEGoal.find({ bde_id: bdeId }).sort({ createdAt: -1 }).lean();
+    const current = goals.find(g => g.status === 'active') || goals[0] || null;
+
+    // Fetch live territory & achievements
+    const territory = await BDETerritoryAssignment.findOne({ bde_id: bdeId, status: 'active' }).lean();
+    const assignedDistricts = territory?.district_names || [];
+    const stateName = territory?.state_name || req.bde?.state_name || '';
+
+    const resellerQuery = {
+      deleted_at: null,
+      $or: [{ bde_id: bdeId }],
+    };
+    if (stateName) resellerQuery.$or.push({ 'address.state_name': new RegExp(`^${stateName}$`, 'i') });
+    if (assignedDistricts.length > 0) resellerQuery.$or.push({ 'address.district_name': { $in: assignedDistricts } });
+
+    const territoryFranchisees = await Reseller.find(resellerQuery).lean();
+    const franchiseeIds = territoryFranchisees.map(f => f._id);
+    const operationalCount = territoryFranchisees.filter(f => f.is_operational).length;
+
+    const [epcLeadsCount, epcsOnboardedCount, fpoOrders] = await Promise.all([
+      EPCLead.countDocuments({
+        deleted_at: null,
+        $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+      }),
+      EPCLead.countDocuments({
+        deleted_at: null,
+        lead_status: { $in: ['Onboarded', 'Assigned to Franchisee'] },
+        $or: [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }],
+      }),
+      FpoOrder.find({
+        reseller_id: { $in: franchiseeIds },
+        status: { $nin: ['CANCELLED', 'EXPIRED'] },
+      }).lean(),
+    ]);
+
+    let totalKitsOrdered = 0;
+    fpoOrders.forEach(order => {
+      (order.items || []).forEach(item => {
+        totalKitsOrdered += Number(item.quantity || 0);
+      });
+    });
+
+    const enrichedCurrent = current ? {
+      ...current,
+      monthly_signup_achieved: territoryFranchisees.length,
+      quarterly_signup_achieved: territoryFranchisees.length,
+      operational_store_achieved: operationalCount,
+      monthly_epc_leads_achieved: epcLeadsCount,
+      monthly_epc_onboarded_achieved: epcsOnboardedCount,
+      monthly_network_kits_achieved: totalKitsOrdered,
+    } : null;
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        current: enrichedCurrent,
+        history: goals,
+        achievements: {
+          monthly_signup_achieved: territoryFranchisees.length,
+          quarterly_signup_achieved: territoryFranchisees.length,
+          operational_store_achieved: operationalCount,
+          monthly_epc_leads_achieved: epcLeadsCount,
+          monthly_epc_onboarded_achieved: epcsOnboardedCount,
+          monthly_network_kits_achieved: totalKitsOrdered,
+        },
+      },
+    });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch goals', error: err.message });
   }
@@ -531,7 +594,6 @@ exports.get_bde_dashboard = async (req, res) => {
         const dFranchisees = territoryFranchisees.filter(
           (f) => f.address?.district_name && f.address.district_name.toLowerCase().trim() === dName.toLowerCase().trim()
         );
-        const dFranchiseeIds = dFranchisees.map((f) => f._id);
 
         const [dLeads, dOnboarded, dOrders] = await Promise.all([
           EPCLead.countDocuments({
@@ -544,19 +606,18 @@ exports.get_bde_dashboard = async (req, res) => {
             lead_status: { $in: ['Onboarded', 'Assigned to Franchisee'] },
           }),
           FpoOrder.find({
-            reseller_id: { $in: dFranchiseeIds },
+            reseller_id: { $in: dFranchisees.map(f => f._id) },
             status: { $nin: ['CANCELLED', 'EXPIRED'] },
           }).lean(),
         ]);
 
         let dKits = 0;
         dOrders.forEach((o) => {
-          (o.items || []).forEach((it) => {
-            dKits += Number(it.quantity || 0);
+          (o.items || []).forEach((item) => {
+            dKits += Number(item.quantity || 0);
           });
         });
 
-        // Target for this district
         const dTarget = dFranchisees.length > 0 ? dFranchisees.length * 10 : 20;
         const dAchievement = dTarget > 0 ? Math.round((dKits / dTarget) * 100) : 0;
 
@@ -573,14 +634,20 @@ exports.get_bde_dashboard = async (req, res) => {
       })
     );
 
-    // Goal Metrics
-    const monthlyGoal = goal?.monthly_franchisee_signup_goal || 0;
-    const monthlyAchieved = goal?.monthly_signup_achieved || 0;
+    // Goal Metrics with exact nullish coalescing
+    const monthlyGoal = goal?.monthly_franchisee_signup_goal ?? 0;
+    const monthlyAchieved = totalFranchisees;
     const monthlyPct = monthlyGoal > 0 ? Math.min(100, Math.round((monthlyAchieved / monthlyGoal) * 100)) : 0;
 
-    const monthlyEpcGoal = goal?.monthly_epc_lead_goal || 25;
-    const monthlyEpcOnboardGoal = goal?.monthly_epc_onboard_goal || 10;
-    const monthlyKitGoal = goal?.monthly_network_kit_goal || 250;
+    const monthlyEpcGoal = goal?.monthly_epc_lead_goal !== undefined && goal?.monthly_epc_lead_goal !== null
+      ? Number(goal.monthly_epc_lead_goal)
+      : 25;
+    const monthlyEpcOnboardGoal = goal?.monthly_epc_onboard_goal !== undefined && goal?.monthly_epc_onboard_goal !== null
+      ? Number(goal.monthly_epc_onboard_goal)
+      : 10;
+    const monthlyKitGoal = goal?.monthly_network_kit_goal !== undefined && goal?.monthly_network_kit_goal !== null
+      ? Number(goal.monthly_network_kit_goal)
+      : 200;
 
     return res.status(200).json({
       status: 'success',
@@ -617,9 +684,16 @@ exports.get_bde_dashboard = async (req, res) => {
         },
         district_breakdown: districtBreakdown,
         goals: {
+          period_type: goal?.period_type || 'monthly',
+          year: goal?.year || new Date().getFullYear(),
+          notes: goal?.notes || '',
           monthly_franchisee_signup_goal: monthlyGoal,
           monthly_signup_achieved: monthlyAchieved,
           monthly_signup_progress_pct: monthlyPct,
+          quarterly_franchisee_signup_goal: goal?.quarterly_franchisee_signup_goal ?? 0,
+          quarterly_signup_achieved: totalFranchisees,
+          operational_store_goal: goal?.operational_store_goal ?? 0,
+          operational_store_achieved: operationalFranchisees,
           monthly_epc_lead_goal: monthlyEpcGoal,
           monthly_epc_leads_achieved: epcLeadsCount,
           monthly_epc_onboard_goal: monthlyEpcOnboardGoal,

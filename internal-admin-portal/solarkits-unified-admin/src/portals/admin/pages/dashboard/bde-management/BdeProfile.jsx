@@ -460,7 +460,68 @@ export default function BdeProfile({ moduleUniqueId = 'ADM_BDE_MGMT' }) {
                 />
               </div>
             </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Monthly EPC Leads</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-amber-700">
+                  {goal.monthly_epc_leads_achieved || 0}
+                </span>
+                <span className="text-xs text-slate-500 font-medium">/ {goal.monthly_epc_lead_goal || 0} target</span>
+              </div>
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${goal.monthly_epc_lead_goal > 0 ? Math.min(100, Math.round(((goal.monthly_epc_leads_achieved || 0) / goal.monthly_epc_lead_goal) * 100)) : 0}%`
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">EPC Onboardings</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-teal-700">
+                  {goal.monthly_epc_onboarded_achieved || 0}
+                </span>
+                <span className="text-xs text-slate-500 font-medium">/ {goal.monthly_epc_onboard_goal || 0} target</span>
+              </div>
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-teal-600 h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${goal.monthly_epc_onboard_goal > 0 ? Math.min(100, Math.round(((goal.monthly_epc_onboarded_achieved || 0) / goal.monthly_epc_onboard_goal) * 100)) : 0}%`
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Network Kit Target</span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-purple-700">
+                  {goal.monthly_network_kits_achieved || 0}
+                </span>
+                <span className="text-xs text-slate-500 font-medium">/ {goal.monthly_network_kit_goal || 0} kits</span>
+              </div>
+              <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-purple-600 h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${goal.monthly_network_kit_goal > 0 ? Math.min(100, Math.round(((goal.monthly_network_kits_achieved || 0) / goal.monthly_network_kit_goal) * 100)) : 0}%`
+                  }}
+                />
+              </div>
+            </div>
           </div>
+
+          {goal.notes && (
+            <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-slate-700">
+              <span className="font-bold text-blue-900 block mb-0.5">Strategy / Target Notes:</span>
+              <p className="whitespace-pre-wrap">{goal.notes}</p>
+            </div>
+          )}
         </div>
 
         {/* Activity Timeline Card */}

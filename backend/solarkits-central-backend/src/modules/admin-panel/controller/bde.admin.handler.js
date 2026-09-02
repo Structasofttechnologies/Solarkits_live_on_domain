@@ -965,6 +965,9 @@ exports.assign_goals = async (req, res) => {
       monthly_franchisee_signup_goal = 0,
       quarterly_franchisee_signup_goal = 0,
       operational_store_goal = 0,
+      monthly_epc_lead_goal = 0,
+      monthly_epc_onboard_goal = 0,
+      monthly_network_kit_goal = 0,
       start_date,
       end_date,
       notes,
@@ -974,7 +977,14 @@ exports.assign_goals = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'BDE ID is required' });
     }
 
-    const bde = await BDEProfile.findOne({ _id: bde_id, deleted_at: null });
+    const bdeQuery = { deleted_at: null };
+    if (mongoose.Types.ObjectId.isValid(bde_id)) {
+      bdeQuery._id = bde_id;
+    } else {
+      bdeQuery.bde_id = String(bde_id).toUpperCase().trim();
+    }
+
+    const bde = await BDEProfile.findOne(bdeQuery);
     if (!bde) {
       return res.status(404).json({ status: 'error', message: 'BDE profile not found' });
     }
@@ -984,30 +994,33 @@ exports.assign_goals = async (req, res) => {
 
     // Deactivate previous active goals for this BDE
     await BDEGoal.updateMany(
-      { bde_id, status: 'active' },
+      { bde_id: bde._id, status: 'active' },
       { $set: { status: 'completed' } }
     );
 
     const goal = await BDEGoal.create({
-      bde_id,
+      bde_id: bde._id,
       period_type,
       month: currentMonth,
       quarter: currentQuarter,
       year: Number(year),
-      monthly_franchisee_signup_goal: Number(monthly_franchisee_signup_goal),
-      quarterly_franchisee_signup_goal: Number(quarterly_franchisee_signup_goal),
-      operational_store_goal: Number(operational_store_goal),
+      monthly_franchisee_signup_goal: Number(monthly_franchisee_signup_goal || 0),
+      quarterly_franchisee_signup_goal: Number(quarterly_franchisee_signup_goal || 0),
+      operational_store_goal: Number(operational_store_goal || 0),
+      monthly_epc_lead_goal: Number(monthly_epc_lead_goal || 0),
+      monthly_epc_onboard_goal: Number(monthly_epc_onboard_goal || 0),
+      monthly_network_kit_goal: Number(monthly_network_kit_goal || 0),
       start_date: start_date ? new Date(start_date) : new Date(),
       end_date: end_date ? new Date(end_date) : null,
       status: 'active',
       assigned_by: req.user?.id || null,
-      notes,
+      notes: notes || '',
     });
 
     await BDENotification.create({
       bde_id: bde._id,
       title: 'New Goals Assigned',
-      message: `Your targets have been updated: Monthly Signups: ${monthly_franchisee_signup_goal}, Quarterly Signups: ${quarterly_franchisee_signup_goal}, Operational Stores: ${operational_store_goal}.`,
+      message: `Your targets have been updated: Monthly Signups: ${monthly_franchisee_signup_goal}, Stores: ${operational_store_goal}, EPC Leads: ${monthly_epc_lead_goal}, EPC Onboardings: ${monthly_epc_onboard_goal}, Network Kits: ${monthly_network_kit_goal}.${notes ? ' Note: ' + notes : ''}`,
       type: 'goal',
     });
 
@@ -1021,7 +1034,11 @@ exports.assign_goals = async (req, res) => {
         monthly_franchisee_signup_goal,
         quarterly_franchisee_signup_goal,
         operational_store_goal,
+        monthly_epc_lead_goal,
+        monthly_epc_onboard_goal,
+        monthly_network_kit_goal,
         year,
+        notes,
       },
       req,
     });
@@ -1041,7 +1058,12 @@ exports.assign_goals = async (req, res) => {
 exports.get_goals = async (req, res) => {
   try {
     const { bde_id } = req.params;
-    const goals = await BDEGoal.find({ bde_id }).sort({ createdAt: -1 });
+    let targetBdeId = bde_id;
+    if (!mongoose.Types.ObjectId.isValid(bde_id)) {
+      const bde = await BDEProfile.findOne({ bde_id: String(bde_id).toUpperCase().trim() });
+      if (bde) targetBdeId = bde._id;
+    }
+    const goals = await BDEGoal.find({ bde_id: targetBdeId }).sort({ createdAt: -1 }).lean();
     const current = goals.find(g => g.status === 'active') || goals[0] || null;
 
     return res.status(200).json({
