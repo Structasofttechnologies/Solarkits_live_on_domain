@@ -56,7 +56,7 @@ export default function Drawer({ isOpen, setIsOpen, isMobile, menuItems }) {
         const isLocked = item.requiresAuth && !isAuthenticated;
         const isActive = !isLocked && (
           location.pathname.includes(item.path) ||
-          (item.path === "/shop" && (location.pathname.includes("/preconfigured-combo-kit") || location.pathname === "/"))
+          (item.path === "/preconfigured-combo-kit" && (location.pathname.includes("/dashboard") || location.pathname === "/"))
         );
         const isOpen = openMenus[item.name]?.open;
         const hasSub = !!item.subMenu;

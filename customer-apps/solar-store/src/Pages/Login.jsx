@@ -1,14 +1,14 @@
 // pages/Login.jsx
-import { useState, useEffect, useRef } from"react";
-import { useNavigate, Link } from"react-router-dom";
-import { useDispatch } from"react-redux";
-import { FiMail, FiPhone, FiEye, FiEyeOff, FiArrowRight, FiHome, FiPackage, FiTrendingUp, FiUser } from"react-icons/fi";
-import axios from"axios";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { FiMail, FiPhone, FiEye, FiEyeOff, FiArrowRight, FiHome, FiPackage, FiTrendingUp, FiUser } from "react-icons/fi";
+import axios from "axios";
 import Button from "../Components/Button";
 import CustomInput from "../Components/CustomInput";
 import IconButton from "../Components/IconButton";
-import { setAlert } from"../features/alert.slice";
-import { setUser } from"../features/auth.slice";
+import { setAlert } from "../features/alert.slice";
+import { setUser } from "../features/auth.slice";
 
 // Configure axios defaults for cookie-based auth
 axios.defaults.withCredentials = true;
@@ -17,15 +17,15 @@ export default function Login() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loginMethod, setLoginMethod] = useState("email");
   const [rememberMe, setRememberMe] = useState(false);
   const [formData, setFormData] = useState({
-    email:"",
-    phoneNumber:"",
-    password:"",
+    email: "",
+    phoneNumber: "",
+    password: "",
   });
   const [errors, setErrors] = useState({});
   const [loginAttempts, setLoginAttempts] = useState({
@@ -61,7 +61,7 @@ export default function Login() {
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
 
-    if (type ==="checkbox") {
+    if (type === "checkbox") {
       setRememberMe(checked);
     } else {
       setFormData(prev => ({
@@ -72,29 +72,29 @@ export default function Login() {
 
     // Clear error for this field
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]:"" }));
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
 
-    if (loginMethod ==="email") {
+    if (loginMethod === "email") {
       if (!formData.email.trim()) {
-        newErrors.email ="Email is required";
+        newErrors.email = "Email is required";
       } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-        newErrors.email ="Please enter a valid email";
+        newErrors.email = "Please enter a valid email";
       }
     } else {
       if (!formData.phoneNumber.trim()) {
-        newErrors.phoneNumber ="Phone number is required";
+        newErrors.phoneNumber = "Phone number is required";
       } else if (!/^\d{10}$/.test(formData.phoneNumber.replace(/[\s-]/g, ''))) {
-        newErrors.phoneNumber ="Please enter 10-digit phone number";
+        newErrors.phoneNumber = "Please enter 10-digit phone number";
       }
     }
 
     if (!formData.password) {
-      newErrors.password ="Password is required";
+      newErrors.password = "Password is required";
     }
 
     setErrors(newErrors);
@@ -110,8 +110,8 @@ export default function Login() {
     if (lockedUntil && now < lockedUntil) {
       const minutesLeft = Math.ceil((lockedUntil - now) / (60 * 1000));
       dispatch(setAlert({
-        type:"warning",
-        message:`Too many login attempts. Please try again in ${minutesLeft} minutes.`
+        type: "warning",
+        message: `Too many login attempts. Please try again in ${minutesLeft} minutes.`
       }));
       return false;
     }
@@ -132,8 +132,8 @@ export default function Login() {
         lockedUntil: now + 15 * 60 * 1000 // Lock for 15 minutes
       }));
       dispatch(setAlert({
-        type:"warning",
-        message:"Too many login attempts. Please try again in 15 minutes."
+        type: "warning",
+        message: "Too many login attempts. Please try again in 15 minutes."
       }));
       return false;
     }
@@ -143,13 +143,13 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate form
     if (!validateForm()) {
       // Show first error as alert
       const firstError = Object.values(errors)[0];
       if (firstError) {
-        dispatch(setAlert({ type:"error", message: firstError }));
+        dispatch(setAlert({ type: "error", message: firstError }));
       }
       return;
     }
@@ -160,25 +160,25 @@ export default function Login() {
     }
 
     setLoading(true);
-    
+
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
     try {
       // Prepare payload based on login method
-      const payload = loginMethod ==="email"
+      const payload = loginMethod === "email"
         ? {
-            email: formData.email.trim().toLowerCase(),
-            password: formData.password,
-          }
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+        }
         : {
-            whatsapp: formData.phoneNumber.replace(/\s/g, ''),
-            password: formData.password,
-          };
+          whatsapp: formData.phoneNumber.replace(/\s/g, ''),
+          password: formData.password,
+        };
       // Make API call with credentials included
       const response = await axios.post(`${API_URL}/india/v1/auth/login`,
         payload,
-        { 
+        {
           signal: abortControllerRef.current.signal,
           timeout: 10000, // 10 second timeout
           withCredentials: true // Ensure credentials are sent
@@ -217,12 +217,12 @@ export default function Login() {
 
         // Show success message
         dispatch(setAlert({
-          type:"success",
-          message: response.data.message ||"Login successful! Welcome back."
+          type: "success",
+          message: response.data.message || "Login successful! Welcome back."
         }));
 
-        // Redirect to Solar Combo Kit shop page
-        navigate("/shop");
+        // Redirect to Solar Combo Kit dashboard page
+        navigate("/preconfigured-combo-kit");
       }
     } catch (error) {
       // Handle request cancellation
@@ -239,48 +239,48 @@ export default function Login() {
       }));
 
       // Handle different error scenarios
-      let errorMessage ="Login failed. Please try again.";
-      
+      let errorMessage = "Login failed. Please try again.";
+
       if (error.code === 'ECONNABORTED') {
-        errorMessage ="Request timeout. Please check your connection and try again.";
+        errorMessage = "Request timeout. Please check your connection and try again.";
       } else if (error.response) {
         // Server responded with error
         const res = error.response.data;
-        
+
         switch (error.response.status) {
           case 400:
-            errorMessage = res.message ||"Invalid request format";
+            errorMessage = res.message || "Invalid request format";
             break;
           case 401:
-            errorMessage = res.message ||"Invalid email/phone or password";
+            errorMessage = res.message || "Invalid email/phone or password";
             // Clear password field on auth error
             setFormData(prev => ({ ...prev, password: '' }));
             break;
           case 403:
-            if (res.status ==="pending") {
-              errorMessage = res.message ||"Your account is under verification. Please wait for approval.";
-            } else if (res.status ==="rejected") {
-              errorMessage = res.message ||"Your account has been rejected. Please contact support.";
+            if (res.status === "pending") {
+              errorMessage = res.message || "Your account is under verification. Please wait for approval.";
+            } else if (res.status === "rejected") {
+              errorMessage = res.message || "Your account has been rejected. Please contact support.";
             } else {
-              errorMessage = res.message ||"Access denied. Please contact support.";
+              errorMessage = res.message || "Access denied. Please contact support.";
             }
             break;
           case 404:
-            errorMessage = res.message ||"Account not found";
+            errorMessage = res.message || "Account not found";
             break;
           case 429:
-            errorMessage = res.message ||"Too many attempts. Please try again later.";
+            errorMessage = res.message || "Too many attempts. Please try again later.";
             break;
           default:
-            errorMessage = res.message ||"Server error. Please try again later.";
+            errorMessage = res.message || "Server error. Please try again later.";
         }
       } else if (error.request) {
         // Request made but no response
-        errorMessage ="Network error. Please check your internet connection.";
+        errorMessage = "Network error. Please check your internet connection.";
       }
 
       // Show error alert
-      dispatch(setAlert({ type:"error", message: errorMessage }));
+      dispatch(setAlert({ type: "error", message: errorMessage }));
 
       // Log error for debugging
       console.error("Login error:", error.response?.data || error.message);
@@ -321,12 +321,12 @@ export default function Login() {
         }
         dispatch(setUser(user));
         sessionStorage.setItem('user', JSON.stringify(user));
-        dispatch(setAlert({ type:"success", message:"Direct Login successful! Welcome back." }));
+        dispatch(setAlert({ type: "success", message: "Direct Login successful! Welcome back." }));
         navigate("/preconfigured-combo-kit");
       }
     } catch (error) {
       const msg = error.response?.data?.message || "Login failed. Please check credentials.";
-      dispatch(setAlert({ type:"error", message: msg }));
+      dispatch(setAlert({ type: "error", message: msg }));
     } finally {
       setLoading(false);
     }
@@ -337,7 +337,7 @@ export default function Login() {
 
     return (
       <div className="px-6 pb-6 pt-2 border-t border-border/50 bg-primary/5">
-        <p className="text-[10px] uppercase tracking-wider text-primary/70 font-bold mb-3">
+        {/* <p className="text-[10px] uppercase tracking-wider text-primary/70 font-bold mb-3">
           Quick Access (Testing Only)
         </p>
         <div className="space-y-2">
@@ -358,7 +358,7 @@ export default function Login() {
               <FiArrowRight size={14} className="text-primary dark:text-info opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
             </button>
           ))}
-        </div>
+        </div> */}
       </div>
     );
   };
@@ -370,13 +370,13 @@ export default function Login() {
   const setEmailMethod = () => {
     setLoginMethod("email");
     setErrors({});
-    setFormData(prev => ({ ...prev, email:"", phoneNumber:"" }));
+    setFormData(prev => ({ ...prev, email: "", phoneNumber: "" }));
   };
 
   const setPhoneMethod = () => {
     setLoginMethod("phone");
     setErrors({});
-    setFormData(prev => ({ ...prev, email:"", phoneNumber:"" }));
+    setFormData(prev => ({ ...prev, email: "", phoneNumber: "" }));
   };
 
   return (
@@ -496,20 +496,20 @@ export default function Login() {
                     <Button
                       type="button"
                       onClick={setEmailMethod}
-                      variant={loginMethod ==="email" ?"primary" :"secondary"}
+                      variant={loginMethod === "email" ? "primary" : "secondary"}
                       size="sm"
                       leftIcon={<FiMail size={18} />}
-                      className={`flex-1 ${loginMethod ==="email" ?"" :"border-border"}`}
+                      className={`flex-1 ${loginMethod === "email" ? "" : "border-border"}`}
                     >
                       Email
                     </Button>
                     <Button
                       type="button"
                       onClick={setPhoneMethod}
-                      variant={loginMethod ==="phone" ?"primary" :"secondary"}
+                      variant={loginMethod === "phone" ? "primary" : "secondary"}
                       size="sm"
                       leftIcon={<FiPhone size={18} />}
-                      className={`flex-1 ${loginMethod ==="phone" ?"" :"border-border"}`}
+                      className={`flex-1 ${loginMethod === "phone" ? "" : "border-border"}`}
                     >
                       Phone
                     </Button>
@@ -518,7 +518,7 @@ export default function Login() {
 
                 <div className="space-y-4">
                   {/* Dynamic Field - Email or Phone */}
-                  {loginMethod ==="email" ? (
+                  {loginMethod === "email" ? (
                     // Email Field
                     <div>
                       <CustomInput
@@ -564,7 +564,7 @@ export default function Login() {
                         placeholder="Enter your password"
                         value={formData.password}
                         onChange={handleInputChange}
-                        type={showPassword ?"text" :"password"}
+                        type={showPassword ? "text" : "password"}
                         error={errors.password}
                         required
                       />
@@ -607,7 +607,7 @@ export default function Login() {
                     fullWidth
                     rightIcon={<FiArrowRight size={18} />}
                   >
-                    Sign In with {loginMethod ==="email" ?"Email" :"Phone"}
+                    Sign In with {loginMethod === "email" ? "Email" : "Phone"}
                   </Button>
                 </div>
 

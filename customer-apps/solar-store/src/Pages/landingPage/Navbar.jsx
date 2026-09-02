@@ -39,7 +39,7 @@ const getFranchisePortalUrl = () => {
       return "http://localhost:5178";
     }
   }
-  return "https://solarkits-reseller-portal.onrender.com";
+  return "https://franchise.solarkits.in";
 };
 
 // Consolidated E-Shop Structure
@@ -256,11 +256,10 @@ export default function Navbar() {
         initial={{ y: -80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.45, ease: "easeOut" }}
-        className={`sticky top-0 z-50 transition-all duration-300 ${
-          scrolled
+        className={`sticky top-0 z-50 transition-all duration-300 ${scrolled
             ? "bg-white/96 backdrop-blur-xl shadow-md border-b border-gray-200/80"
             : "bg-white/95 backdrop-blur-md border-b border-gray-100"
-        }`}
+          }`}
       >
         <div className="w-full max-w-[1440px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8">
           <div className="flex items-center justify-between h-16 lg:h-18 gap-2 lg:gap-4">
@@ -297,11 +296,10 @@ export default function Navbar() {
               >
                 <button
                   onClick={() => setEshopDropdownOpen((prev) => !prev)}
-                  className={`whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2 text-xs xl:text-sm font-bold rounded-xl transition-all duration-150 cursor-pointer ${
-                    eshopDropdownOpen
+                  className={`whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2 text-xs xl:text-sm font-bold rounded-xl transition-all duration-150 cursor-pointer ${eshopDropdownOpen
                       ? "text-primary-600 bg-primary-50 ring-1 ring-primary-200"
                       : "text-gray-800 hover:text-primary-600 hover:bg-primary-50/80"
-                  }`}
+                    }`}
                   aria-expanded={eshopDropdownOpen}
                 >
                   <FiShoppingBag className="text-sm xl:text-base text-primary-500 shrink-0" />
@@ -310,9 +308,8 @@ export default function Navbar() {
                     Kits
                   </span>
                   <FiChevronDown
-                    className={`text-xs xl:text-sm shrink-0 transition-transform duration-200 ${
-                      eshopDropdownOpen ? "rotate-180 text-primary-600" : "text-gray-400"
-                    }`}
+                    className={`text-xs xl:text-sm shrink-0 transition-transform duration-200 ${eshopDropdownOpen ? "rotate-180 text-primary-600" : "text-gray-400"
+                      }`}
                   />
                 </button>
 
@@ -428,7 +425,7 @@ export default function Navbar() {
                       </div>
 
                       {/* Bottom Banner */}
-                      <div className="mt-4 pt-3 border-t border-gray-100 bg-gradient-to-r from-primary-50/70 to-amber-50/70 -mx-5 -mb-5 px-5 py-3 flex items-center justify-between">
+                      {/* <div className="mt-4 pt-3 border-t border-gray-100 bg-gradient-to-r from-primary-50/70 to-amber-50/70 -mx-5 -mb-5 px-5 py-3 flex items-center justify-between">
                         {!isAuthenticated ? (
                           <>
                             <div className="flex items-center gap-2 text-xs text-gray-700">
@@ -470,7 +467,7 @@ export default function Navbar() {
                             </button>
                           </>
                         )}
-                      </div>
+                      </div> */}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -536,7 +533,7 @@ export default function Navbar() {
                   </motion.button>
 
                   <motion.button
-                    onClick={() => navigate("/shop")}
+                    onClick={() => navigate("/preconfigured-combo-kit")}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs xl:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer"
@@ -546,6 +543,31 @@ export default function Navbar() {
                   </motion.button>
                 </>
               )}
+
+              {/* Commented out Sign Up & Login buttons as requested */}
+              {/* {!isAuthenticated && (
+                <>
+                  <motion.button
+                    onClick={() => navigate("/auth/signup")}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="whitespace-nowrap shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3 xl:px-3.5 py-2 bg-white hover:bg-primary-50 text-primary-700 hover:text-primary-800 border border-primary-200 text-xs xl:text-sm font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                  >
+                    <FiUserPlus className="text-sm shrink-0" />
+                    <span className="whitespace-nowrap">Sign Up</span>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => navigate("/auth/login")}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs xl:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                  >
+                    <FiUser className="text-sm shrink-0" />
+                    <span className="whitespace-nowrap">Login</span>
+                  </motion.button>
+                </>
+              )} */}
 
               {/* Mobile Hamburger Toggle Button */}
               <motion.button
@@ -623,9 +645,8 @@ export default function Navbar() {
                       </span>
                     </span>
                     <FiChevronDown
-                      className={`text-gray-500 transition-transform duration-200 shrink-0 ${
-                        mobileEshopExpanded ? "rotate-180" : ""
-                      }`}
+                      className={`text-gray-500 transition-transform duration-200 shrink-0 ${mobileEshopExpanded ? "rotate-180" : ""
+                        }`}
                     />
                   </button>
 

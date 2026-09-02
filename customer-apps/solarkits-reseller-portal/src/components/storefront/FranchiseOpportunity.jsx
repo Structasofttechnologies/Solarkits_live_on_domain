@@ -2,71 +2,9 @@ import { useEffect, useState } from "react";
 import { FiLoader, FiAlertCircle } from "react-icons/fi";
 import api from "../../services/api";
 
-const DEFAULT_FALLBACK_PLANS = [
-  {
-    id: "plan-district-franchisee",
-    _id: "plan-district-franchisee",
-    name: "Authorized District Franchisee",
-    slug: "district-franchisee",
-    territory_level: "district",
-    one_time_fee: 50000,
-    validity_value: 1,
-    validity_unit: "year",
-    is_popular: true,
-    allowed_territories_count: 1,
-    default_commission_rate: 8,
-    features: [
-      "1 Exclusive District Territory Rights",
-      "Factory-direct wholesale pricing on all combo kits",
-      "Direct EPC buyer lead allocation from platform",
-      "Official SolarKits Franchise Agreement & Certificate",
-      "Dedicated Territory Account Manager",
-    ],
-  },
-  {
-    id: "plan-dealer-stocking",
-    _id: "plan-dealer-stocking",
-    name: "Dealer Wholesale Stocking Partner",
-    slug: "dealer-stocking",
-    territory_level: "city",
-    one_time_fee: 25000,
-    validity_value: 1,
-    validity_unit: "year",
-    is_popular: false,
-    allowed_territories_count: 1,
-    default_commission_rate: 5,
-    features: [
-      "City/Town Level Wholesale Dealership",
-      "Ready-to-ship pre-engineered solar combo packages",
-      "Digital brochure & marketing collateral kit",
-      "Standard factory warranty & technical support",
-    ],
-  },
-  {
-    id: "plan-state-master",
-    _id: "plan-state-master",
-    name: "State Master Franchisee Partner",
-    slug: "state-master",
-    territory_level: "state",
-    one_time_fee: 150000,
-    validity_value: 1,
-    validity_unit: "year",
-    is_popular: false,
-    allowed_territories_count: 1,
-    default_commission_rate: 12,
-    features: [
-      "Exclusive State-wide Distribution Rights",
-      "Sub-dealer and district partner network onboarding",
-      "Priority warehouse supply chain allocation",
-      "Highest distributor margins & customized SLA",
-      "Quarterly volume performance bonuses",
-    ],
-  },
-];
-
 export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseModal }) {
-  const [plans, setPlans] = useState(DEFAULT_FALLBACK_PLANS);
-  const [loading, setLoading] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchPlans = async () => {
@@ -76,15 +14,16 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
 
       const response = await api.get("/india/v1/reseller/plans/list");
 
-      if (response.data?.status === "success" && Array.isArray(response.data.data) && response.data.data.length > 0) {
+      if (response.data?.status === "success" && Array.isArray(response.data.data)) {
         const activePlans = response.data.data.filter((p) => p.is_active !== false);
-        setPlans(activePlans.length > 0 ? activePlans : DEFAULT_FALLBACK_PLANS);
+        setPlans(activePlans);
       } else {
-        setPlans(DEFAULT_FALLBACK_PLANS);
+        setPlans([]);
       }
     } catch (err) {
-      console.warn("Fetch plans note (using fallback plans):", err.message);
-      setPlans(DEFAULT_FALLBACK_PLANS);
+      console.error("Fetch plans error from admin API:", err.message);
+      setError("Unable to load franchise plans from Admin.");
+      setPlans([]);
     } finally {
       setLoading(false);
     }

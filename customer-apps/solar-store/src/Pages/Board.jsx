@@ -50,7 +50,7 @@ export default function Board() {
   const menuItems = useMemo(() => {
     return [
       [
-        { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/shop" },
+        { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
         { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
         // { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
         { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },

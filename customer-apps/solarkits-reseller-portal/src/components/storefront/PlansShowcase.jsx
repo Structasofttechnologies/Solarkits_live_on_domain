@@ -11,58 +11,24 @@ import {
   FiStar,
 } from "react-icons/fi";
 
-const FALLBACK_PLANS = [
-  {
-    id: "plan_commission_starter",
-    plan_name: "Commission Starter Plan",
-    slug: "commission-starter-plan",
-    territory_level: "district",
-    one_time_fee: 0,
-    annual_fee: 0,
-    validity_value: 1,
-    validity_unit: "years",
-    allowed_territories_count: 2,
-    default_commission_rate: 8,
-    default_dealer_margin: 5,
-    description:
-      "Ideal for new solar entrepreneurs & commission agents. Zero upfront capital requirement with direct district customer leads.",
-    is_popular: false,
-    is_active: true,
-  },
-  {
-    id: "plan_dealer_starter",
-    plan_name: "Dealer Starter Plan",
-    slug: "dealer-starter-plan",
-    territory_level: "district",
-    one_time_fee: 5000,
-    annual_fee: 5000,
-    validity_value: 1,
-    validity_unit: "years",
-    allowed_territories_count: 2,
-    default_commission_rate: 8,
-    default_dealer_margin: 8,
-    description:
-      "Optimized for established electrical traders & solar installers wanting wholesale stock procurement & highest dealer profit margins.",
-    is_popular: true,
-    is_active: true,
-  },
-];
-
 export default function PlansShowcase() {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState(FALLBACK_PLANS);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
       .get("/india/v1/reseller/plans/list")
       .then((res) => {
-        if (res.data?.status === "success" && Array.isArray(res.data.data) && res.data.data.length > 0) {
-          setPlans(res.data.data);
+        if (res.data?.status === "success" && Array.isArray(res.data.data)) {
+          setPlans(res.data.data.filter((p) => p.is_active !== false));
+        } else {
+          setPlans([]);
         }
       })
       .catch((err) => {
-        console.warn("Could not fetch live plans, using baseline plans:", err);
+        console.error("Could not fetch live plans from admin API:", err);
+        setPlans([]);
       })
       .finally(() => setLoading(false));
   }, []);

@@ -248,8 +248,8 @@ export default function Login() {
               setError("");
             }}
             className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${authMode === "password"
-                ? "bg-white text-blue-900 shadow-sm border border-slate-200"
-                : "text-slate-600 hover:text-slate-900"
+              ? "bg-white text-blue-900 shadow-sm border border-slate-200"
+              : "text-slate-600 hover:text-slate-900"
               }`}
           >
             <FiLock size={14} className={authMode === "password" ? "text-blue-600" : ""} />
@@ -263,8 +263,8 @@ export default function Login() {
               setError("");
             }}
             className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${authMode === "pin"
-                ? "bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-md shadow-blue-700/20"
-                : "text-slate-600 hover:text-slate-900"
+              ? "bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-md shadow-blue-700/20"
+              : "text-slate-600 hover:text-slate-900"
               }`}
           >
             <FiZap size={14} className={authMode === "pin" ? "text-amber-300" : "text-amber-500"} />
@@ -273,7 +273,7 @@ export default function Login() {
         </div>
 
         {/* Demo Credentials Card */}
-        <div
+        {/* <div
           className="p-4 rounded-2xl space-y-2.5"
           style={{
             background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
@@ -327,7 +327,7 @@ export default function Login() {
           >
             ⚡ Click to Auto-Fill {authMode === "password" ? "Password" : "PIN"} Credentials
           </button>
-        </div>
+        </div> */}
 
         {/* Error Notification */}
         {error && (
