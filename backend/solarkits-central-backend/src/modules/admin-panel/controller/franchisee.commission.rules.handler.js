@@ -8,6 +8,7 @@
 
 const mongoose = require('mongoose');
 const { FranchiseeCommissionRule, ResellerPlan } = require('../models/india_solarshop_db');
+const { WarehouseComboKit } = require('../models/core_db');
 const { logAudit } = require('../utils/audit.service');
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
@@ -20,8 +21,8 @@ const list_commission_rules = async (req, res) => {
     if (active_only === 'true') query.is_active = true;
 
     const rows = await FranchiseeCommissionRule.find(query)
-      .populate('plan_id', 'name')
-      .populate({ path: 'combo_kit_id', model: 'pc_comobo_kit', select: 'name kit_name kit_code' })
+      .populate({ path: 'plan_id', model: ResellerPlan, select: 'name' })
+      .populate({ path: 'combo_kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code capacity' })
       .sort({ effective_from: -1 })
       .lean();
 

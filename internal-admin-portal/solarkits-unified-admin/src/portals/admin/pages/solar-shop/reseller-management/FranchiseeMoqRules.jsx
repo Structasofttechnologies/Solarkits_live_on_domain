@@ -81,7 +81,7 @@ export default function FranchiseeMoqRules() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [rulesRes, plansRes, indRes, kitsRes] = await Promise.all([
+      const results = await Promise.allSettled([
         axios.get(`${API_BASE}/franchisee/moq-rules/list`, {
           headers: authHeaderObj(),
           params: { req_for: "view", unique_id: "FPO_MOQ" },
@@ -99,10 +99,11 @@ export default function FranchiseeMoqRules() {
           params: { req_for: "view", unique_id: "FPO_MOQ", is_custom: "false" },
         }),
       ]);
-      setRules(rulesRes.data.data || []);
-      setPlans(plansRes.data.data || []);
-      setIndustries(indRes.data.data || []);
-      setComboKits(kitsRes.data.data || []);
+      const [rulesRes, plansRes, indRes, kitsRes] = results;
+      if (rulesRes.status === "fulfilled") setRules(rulesRes.value.data.data || []);
+      if (plansRes.status === "fulfilled") setPlans(plansRes.value.data.data || []);
+      if (indRes.status === "fulfilled") setIndustries(indRes.value.data.data || []);
+      if (kitsRes.status === "fulfilled") setComboKits(kitsRes.value.data.data || []);
     } catch {
       dispatch(setAlert({ type: "error", message: "Failed to load MOQ rules." }));
     } finally {

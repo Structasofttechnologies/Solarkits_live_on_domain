@@ -128,7 +128,7 @@ export default function FranchiseeSettings() {
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, moqRes, commRes, poRes, cfgRes, targetsRes] = await Promise.all([
+      const results = await Promise.allSettled([
         axios.get(`${API_BASE}/resellers/plans/list?req_for=view&unique_id=RSL_PLAN`, { headers: authHeaderObj() }),
         axios.get(`${API_BASE}/franchisee/moq-rules/list?req_for=view&unique_id=FPO_MOQ`, { headers: authHeaderObj() }),
         axios.get(`${API_BASE}/franchisee/commission-rules/list?req_for=view&unique_id=FPO_COMM`, { headers: authHeaderObj() }),
@@ -137,13 +137,33 @@ export default function FranchiseeSettings() {
         axios.get(`${API_BASE}/franchisee/kit-targets/list?req_for=view&unique_id=FPO_TARGET`, { headers: authHeaderObj() }),
       ]);
 
-      if (plansRes.data?.status === "success") setPlans(plansRes.data.data || []);
-      if (moqRes.data?.status === "success") setMoqRules(moqRes.data.data || []);
-      if (commRes.data?.status === "success") setCommissionRules(commRes.data.data || []);
-      if (poRes.data?.status === "success") setPoSettings(poRes.data.data || []);
-      if (cfgRes.data?.status === "success") setConfigOptions(cfgRes.data.data || { combo_kits: [], categories: [] });
-      if (targetsRes.data?.status === "success") setKitTargets(targetsRes.data.data || []);
-    } catch {
+      const [plansRes, moqRes, commRes, poRes, cfgRes, targetsRes] = results;
+
+      if (plansRes.status === "fulfilled" && plansRes.value.data?.status === "success") {
+        setPlans(plansRes.value.data.data || []);
+      }
+      if (moqRes.status === "fulfilled" && moqRes.value.data?.status === "success") {
+        setMoqRules(moqRes.value.data.data || []);
+      }
+      if (commRes.status === "fulfilled" && commRes.value.data?.status === "success") {
+        setCommissionRules(commRes.value.data.data || []);
+      }
+      if (poRes.status === "fulfilled" && poRes.value.data?.status === "success") {
+        setPoSettings(poRes.value.data.data || []);
+      }
+      if (cfgRes.status === "fulfilled" && cfgRes.value.data?.status === "success") {
+        setConfigOptions(cfgRes.value.data.data || { combo_kits: [], categories: [] });
+      }
+      if (targetsRes.status === "fulfilled" && targetsRes.value.data?.status === "success") {
+        setKitTargets(targetsRes.value.data.data || []);
+      }
+
+      const failedCount = results.filter((r) => r.status === "rejected").length;
+      if (failedCount > 0) {
+        console.warn(`[FranchiseeSettings] ${failedCount} data endpoint(s) failed to load.`);
+      }
+    } catch (err) {
+      console.error("[FranchiseeSettings] fetchAllData critical error:", err);
       dispatch(setAlert({ type: "error", message: "Failed to load Franchisee Settings data" }));
     } finally {
       setLoading(false);

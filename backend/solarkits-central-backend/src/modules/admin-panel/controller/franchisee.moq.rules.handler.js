@@ -9,7 +9,16 @@
  */
 
 const mongoose = require('mongoose');
-const { FranchiseeMoqRule } = require('../models/india_solarshop_db');
+const { FranchiseeMoqRule, ResellerPlan } = require('../models/india_solarshop_db');
+const {
+  IndustryType,
+  ProjectCategory,
+  ProjectSubcategory,
+  ProjectSubcategoryType,
+  ProjectType,
+  ProjectRange,
+  WarehouseComboKit
+} = require('../models/core_db');
 const { resolveEffectiveMoqRule, resolveEffectivePoSettings, validateQuantity } = require('../services/franchisee.moq.service');
 const { logAudit } = require('../utils/audit.service');
 
@@ -25,14 +34,14 @@ const list_moq_rules = async (req, res) => {
     if (active_only === 'true') query.is_active = true;
 
     const rows = await FranchiseeMoqRule.find(query)
-      .populate('plan_id', 'name')
-      .populate('industry_type_id', 'name')
-      .populate('category_id', 'name')
-      .populate('subcategory_id', 'name')
-      .populate('system_type_id', 'name')
-      .populate('project_type_id', 'name')
-      .populate('project_range_id', 'label min_value max_value unit_symbol')
-      .populate('combo_kit_id', 'name kit_name total_capacity_kw sku')
+      .populate({ path: 'plan_id', model: ResellerPlan, select: 'name' })
+      .populate({ path: 'industry_type_id', model: IndustryType, select: 'name' })
+      .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
+      .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
+      .populate({ path: 'system_type_id', model: ProjectSubcategoryType, select: 'name' })
+      .populate({ path: 'project_type_id', model: ProjectType, select: 'name' })
+      .populate({ path: 'project_range_id', model: ProjectRange, select: 'label min_value max_value unit_symbol' })
+      .populate({ path: 'combo_kit_id', model: WarehouseComboKit, select: 'name kit_name total_capacity_kw sku capacity' })
       .sort({ priority: -1, created_at: 1 })
       .lean();
 

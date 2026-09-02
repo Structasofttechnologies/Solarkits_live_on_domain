@@ -7,7 +7,8 @@
  */
 
 const mongoose = require('mongoose');
-const { FranchiseeKitTarget, FranchiseeTargetProgress } = require('../models/india_solarshop_db');
+const { FranchiseeKitTarget, FranchiseeTargetProgress, Reseller, ResellerPlan } = require('../models/india_solarshop_db');
+const { GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const { resolveEffectiveTarget, recalculateProgress } = require('../services/franchisee.goal.service');
 const { logAudit } = require('../utils/audit.service');
 
@@ -26,10 +27,10 @@ const list_kit_targets = async (req, res) => {
     if (active_only === 'true') query.is_active = true;
 
     const rows = await FranchiseeKitTarget.find(query)
-      .populate('franchisee_id', 'business_name mobile')
-      .populate('plan_id', 'name')
-      .populate('state_id', 'name')
-      .populate('district_id', 'name')
+      .populate({ path: 'franchisee_id', model: Reseller, select: 'business_name mobile' })
+      .populate({ path: 'plan_id', model: ResellerPlan, select: 'name' })
+      .populate({ path: 'state_id', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'district_id', model: GeoLevel2, select: 'name' })
       .sort({ target_year: -1, target_month: -1, target_type: 1 })
       .lean();
 
