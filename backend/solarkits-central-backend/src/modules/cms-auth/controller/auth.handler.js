@@ -410,7 +410,7 @@ const login = async (req, res) => {
 
     const url_prefix = await _get_url_prefix(userDoc._id);
 
-    const REFRESH_EXP = process.env.AUTH_JWT_REFRESH_EXPIRES || '2d';
+    const REFRESH_EXP = process.env.AUTH_JWT_REFRESH_EXPIRES || '30d';
     const refresh_token = jwt.generate_token(
       { user: { id: userDoc._id.toString(), token_version: userDoc.token_version, token_type: 'refresh' } },
       REFRESH_EXP
@@ -418,12 +418,12 @@ const login = async (req, res) => {
 
     res.cookie('refresh_token', refresh_token, {
       ...cookieOptions,
-      maxAge: ms_conversion(REFRESH_EXP) || 2 * 24 * 60 * 60 * 1000,
+      maxAge: ms_conversion(REFRESH_EXP) || 30 * 24 * 60 * 60 * 1000,
     });
 
     const token = jwt.generate_token(
       { user: { id: userDoc._id.toString(), token_version: userDoc.token_version, token_type: 'access' } },
-      process.env.AUTH_JWT_ACCESS_EXPIRES || '17m'
+      process.env.AUTH_JWT_ACCESS_EXPIRES || '7d'
     );
 
     const detailedPayload = await _get_detailed_auth_response(userDoc);
@@ -432,6 +432,7 @@ const login = async (req, res) => {
       status: 'success', 
       message: 'Login successful.', 
       token,
+      refresh_token,
       url_prefix: url_prefix || null,
       ...detailedPayload
     });
@@ -585,14 +586,25 @@ const refresh_access_token = async (req, res) => {
     const url_prefix = await _get_url_prefix(user._id);
     const token = jwt.generate_token(
       { user: { id: user._id.toString(), token_version: user.token_version, token_type: 'access' } },
-      process.env.AUTH_JWT_ACCESS_EXPIRES || '17m'
+      process.env.AUTH_JWT_ACCESS_EXPIRES || '7d'
     );
+    const REFRESH_EXP = process.env.AUTH_JWT_REFRESH_EXPIRES || '30d';
+    const new_refresh_token = jwt.generate_token(
+      { user: { id: user._id.toString(), token_version: user.token_version, token_type: 'refresh' } },
+      REFRESH_EXP
+    );
+    res.cookie('refresh_token', new_refresh_token, {
+      ...cookieOptions,
+      maxAge: ms_conversion(REFRESH_EXP) || 30 * 24 * 60 * 60 * 1000,
+    });
+
     const detailedPayload = await _get_detailed_auth_response(user);
 
     return res.status(200).json({ 
       message: 'Token refreshed successfully.', 
       auth: true, 
       token, 
+      refresh_token: new_refresh_token,
       url_prefix: url_prefix || null,
       ...detailedPayload
     });

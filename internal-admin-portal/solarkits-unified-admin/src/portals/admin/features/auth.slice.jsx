@@ -74,15 +74,23 @@ axios.interceptors.response.use(
 
       try {
         const refreshUrl = `${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5000/auth-api')}/refresh-access-token`;
+        const storedRefreshToken = localStorage.getItem('refresh_token');
+        const headers = {};
+        if (storedRefreshToken) {
+          headers['x-refresh-token'] = storedRefreshToken;
+        }
         const res = await axios.post(
           refreshUrl,
-          {},
-          { withCredentials: true, timeout: ms_conversion('7s') }
+          { refresh_token: storedRefreshToken },
+          { headers, withCredentials: true, timeout: ms_conversion('7s') }
         );
 
         const newToken = res.data?.token;
         if (newToken) {
           localStorage.setItem('login', JSON.stringify({ token: newToken }));
+          if (res.data?.refresh_token) {
+            localStorage.setItem('refresh_token', res.data.refresh_token);
+          }
           processQueue(null, newToken);
           originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
           return axios(originalRequest);

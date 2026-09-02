@@ -122,6 +122,9 @@ const authSlice = createSlice({
         if (action.payload.token) {
           localStorage.setItem('login', JSON.stringify({ token: action.payload.token }));
         }
+        if (action.payload.refresh_token) {
+          localStorage.setItem('refresh_token', action.payload.refresh_token);
+        }
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.status = 'failed';
@@ -144,6 +147,9 @@ const authSlice = createSlice({
         if (action.payload.token) {
           state.token = action.payload.token;
           localStorage.setItem('login', JSON.stringify({ token: action.payload.token }));
+        }
+        if (action.payload.refresh_token) {
+          localStorage.setItem('refresh_token', action.payload.refresh_token);
         }
       })
       .addCase(identifyUserPanel.rejected, (state) => {
