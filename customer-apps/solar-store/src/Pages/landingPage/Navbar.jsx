@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import {
   FiMenu,
   FiX,
@@ -11,6 +11,7 @@ import {
   FiUserPlus,
   FiHome,
   FiShoppingBag,
+  FiShoppingCart,
   FiSun,
   FiZap,
   FiPackage,
@@ -25,6 +26,7 @@ import {
   FiCheckCircle,
   FiStar,
 } from "react-icons/fi";
+import { selectCartTotalItems, setShowAuthDialog } from "../../features/slice";
 import logo from "../../assets/images/logo.png";
 
 // Resolve Franchisee / Reseller Portal URL dynamically for local dev vs production
@@ -51,8 +53,8 @@ const E_SHOP_GROUPS = [
         badge: "PM Surya Ghar",
         badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
         icon: FiSun,
-        href: "#products",
-        appRoute: "/preconfigured-combo-kit",
+        href: "/shop",
+        appRoute: "/shop",
       },
       {
         title: "Off-Grid Solar Kits",
@@ -60,8 +62,8 @@ const E_SHOP_GROUPS = [
         badge: "Zero Outages",
         badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
         icon: FiZap,
-        href: "#products",
-        appRoute: "/preconfigured-combo-kit",
+        href: "/shop",
+        appRoute: "/shop",
       },
       {
         title: "Hybrid Solar Kits",
@@ -69,8 +71,8 @@ const E_SHOP_GROUPS = [
         badge: "Bestseller",
         badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
         icon: FiPackage,
-        href: "#products",
-        appRoute: "/preconfigured-combo-kit",
+        href: "/shop",
+        appRoute: "/shop",
       },
       {
         title: "Commercial Solar Kits",
@@ -78,8 +80,8 @@ const E_SHOP_GROUPS = [
         badge: "B2B Tiered",
         badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
         icon: FiLayers,
-        href: "#products",
-        appRoute: "/preconfigured-combo-kit",
+        href: "/shop",
+        appRoute: "/shop",
       },
     ],
   },
@@ -136,7 +138,9 @@ export default function Navbar() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
+  const totalCartItems = useSelector(selectCartTotalItems);
 
   // Scroll detection
   useEffect(() => {
@@ -323,7 +327,7 @@ export default function Navbar() {
                       className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[680px] xl:w-[720px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 p-5"
                     >
                       {/* Top Header inside dropdown */}
-                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100 gap-3">
                         <div>
                           <h4 className="text-sm font-extrabold text-navy flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></span>
@@ -333,12 +337,49 @@ export default function Navbar() {
                             Explore certified complete solar combos, bespoke builders & B2B procurement
                           </p>
                         </div>
-                        <button
-                          onClick={() => handleNavClick("/preconfigured-combo-kit")}
-                          className="whitespace-nowrap text-xs font-bold text-primary-600 hover:text-primary-800 hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          View All Kits <FiArrowRight className="shrink-0" />
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => handleNavClick("/shop")}
+                            className="whitespace-nowrap text-xs font-bold text-primary-600 hover:text-primary-800 hover:underline flex items-center gap-1 cursor-pointer mr-1"
+                          >
+                            View All Kits <FiArrowRight className="shrink-0" />
+                          </button>
+                          {!isAuthenticated ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEshopDropdownOpen(false);
+                                  navigate("/auth/signup");
+                                }}
+                                className="whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-primary-50 text-primary-700 hover:text-primary-800 border border-primary-200 text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                              >
+                                <FiUserPlus className="text-sm shrink-0" />
+                                <span>Sign Up</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEshopDropdownOpen(false);
+                                  navigate("/auth/login");
+                                }}
+                                className="whitespace-nowrap inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+                              >
+                                <FiUser className="text-sm shrink-0" />
+                                <span>Login</span>
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEshopDropdownOpen(false);
+                                navigate("/shop");
+                              }}
+                              className="whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-200"
+                            >
+                              <FiCheckCircle className="text-xs shrink-0" />
+                              <span>Logged In</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* 2-Column Grid */}
@@ -388,16 +429,47 @@ export default function Navbar() {
 
                       {/* Bottom Banner */}
                       <div className="mt-4 pt-3 border-t border-gray-100 bg-gradient-to-r from-primary-50/70 to-amber-50/70 -mx-5 -mb-5 px-5 py-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs text-gray-700">
-                          <span className="font-semibold text-navy whitespace-nowrap">Need a custom quotation?</span>
-                          <span className="text-gray-500 hidden sm:inline truncate">Connect with our solar engineers</span>
-                        </div>
-                        <button
-                          onClick={() => handleNavClick("/custom-combo-kit")}
-                          className="whitespace-nowrap px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
-                        >
-                          Launch Kit Builder <FiArrowRight className="text-xs shrink-0" />
-                        </button>
+                        {!isAuthenticated ? (
+                          <>
+                            <div className="flex items-center gap-2 text-xs text-gray-700">
+                              <span className="font-semibold text-navy whitespace-nowrap">Looking to order combo kits?</span>
+                              <span className="text-gray-500 hidden sm:inline truncate">Sign in or register for direct cart checkout</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => {
+                                  setEshopDropdownOpen(false);
+                                  navigate("/auth/signup");
+                                }}
+                                className="whitespace-nowrap px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-bold rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <FiUserPlus className="text-xs" /> Sign Up
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEshopDropdownOpen(false);
+                                  navigate("/auth/login");
+                                }}
+                                className="whitespace-nowrap px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <FiUser className="text-xs" /> Login
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2 text-xs text-gray-700">
+                              <span className="font-semibold text-navy whitespace-nowrap">Need a custom quotation?</span>
+                              <span className="text-gray-500 hidden sm:inline truncate">Connect with our solar engineers</span>
+                            </div>
+                            <button
+                              onClick={() => handleNavClick("/custom-combo-kit")}
+                              className="whitespace-nowrap px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                            >
+                              Launch Kit Builder <FiArrowRight className="text-xs shrink-0" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </motion.div>
                   )}
@@ -445,39 +517,32 @@ export default function Navbar() {
                 <FiExternalLink className="text-xs text-amber-600 opacity-70 group-hover:opacity-100 shrink-0" />
               </motion.button>
 
-              {/* If Authenticated: Show Store Access */}
-              {isAuthenticated ? (
-                <motion.button
-                  onClick={() => navigate("/preconfigured-combo-kit")}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs xl:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer"
-                >
-                  <FiShoppingBag className="text-sm shrink-0" />
-                  <span className="whitespace-nowrap">Go to Store</span>
-                </motion.button>
-              ) : (
+              {/* If Authenticated: Show Store Access & Cart */}
+              {isAuthenticated && (
                 <>
-                  {/* Sign Up Button */}
                   <motion.button
-                    onClick={() => navigate("/auth/signup")}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="whitespace-nowrap shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3 xl:px-3.5 py-2 bg-white hover:bg-primary-50 text-primary-700 hover:text-primary-800 border border-primary-200 text-xs xl:text-sm font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                    onClick={() => navigate("/cart")}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="relative p-2 rounded-xl bg-primary-50 hover:bg-primary-100 text-primary-700 transition-all border border-primary-200/80 cursor-pointer shrink-0"
+                    title="View Shopping Cart"
                   >
-                    <FiUserPlus className="text-sm shrink-0" />
-                    <span className="whitespace-nowrap">Sign Up</span>
+                    <FiShoppingCart className="text-base" />
+                    {totalCartItems > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-extrabold flex items-center justify-center shadow-xs">
+                        {totalCartItems}
+                      </span>
+                    )}
                   </motion.button>
 
-                  {/* Login Button */}
                   <motion.button
-                    onClick={() => navigate("/auth/login")}
+                    onClick={() => navigate("/shop")}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     className="whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-3.5 xl:px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs xl:text-sm font-bold rounded-xl transition-all shadow-sm cursor-pointer"
                   >
-                    <FiUser className="text-sm shrink-0" />
-                    <span className="whitespace-nowrap">Login</span>
+                    <FiShoppingBag className="text-sm shrink-0" />
+                    <span className="whitespace-nowrap">Go to Store</span>
                   </motion.button>
                 </>
               )}
@@ -566,6 +631,30 @@ export default function Navbar() {
 
                   {mobileEshopExpanded && (
                     <div className="p-2 space-y-1 bg-white border-t border-gray-100">
+                      {!isAuthenticated && (
+                        <div className="flex items-center gap-2 p-1.5 mb-2 bg-gray-50 rounded-xl border border-gray-100">
+                          <button
+                            onClick={() => {
+                              setMenuOpen(false);
+                              navigate("/auth/signup");
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white hover:bg-primary-50 text-primary-700 border border-primary-200 text-xs font-bold rounded-lg shadow-xs cursor-pointer"
+                          >
+                            <FiUserPlus className="text-xs" />
+                            <span>Sign Up</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setMenuOpen(false);
+                              navigate("/auth/login");
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
+                          >
+                            <FiUser className="text-xs" />
+                            <span>Login</span>
+                          </button>
+                        </div>
+                      )}
                       {E_SHOP_GROUPS.flatMap((g) => g.items).map((item) => {
                         const Icon = item.icon;
                         return (

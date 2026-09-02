@@ -20,12 +20,12 @@ const get_unit_groups = async (req, res) => {
   try {
     const rows = await UnitGroup.find({ deleted_at: null }).sort({ _id: 1 });
     const data = rows.map(r => ({
-      id: r._id,
-      name: r.name,
-      code: r.code,
-      is_system: !!r.is_system,
-      is_active: !!r.is_active,
-      created_at: r.created_at
+        id: r._id,
+        name: r.name,
+        code: r.code,
+        is_system: !!r.is_system,
+        is_active: !!r.is_active,
+        created_at: r.created_at
     }));
     return res.json(successResponse("Unit groups retrieved successfully", data));
   } catch (error) {
@@ -41,8 +41,8 @@ const add_unit_group = async (req, res) => {
     if (!name) return errorResponse(res, 400, "Unit group name is required");
 
     await UnitGroup.create({
-      name,
-      code: code || null
+        name,
+        code: code || null
     });
 
     return res.json(successResponse("Unit group created successfully"));
@@ -65,14 +65,14 @@ const update_unit_group = async (req, res) => {
 
     let updateData = {};
     if (group.is_system) {
-      // Only allow toggling is_active for system groups
-      updateData = { is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : group.is_active };
+        // Only allow toggling is_active for system groups
+        updateData = { is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : group.is_active };
     } else {
-      updateData = {
-        name,
-        code: code || null,
-        is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : group.is_active
-      };
+        updateData = { 
+            name, 
+            code: code || null,
+            is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : group.is_active 
+        };
     }
 
     const result = await UnitGroup.updateOne({ _id: groupId }, { $set: updateData });
@@ -98,8 +98,8 @@ const delete_unit_group = async (req, res) => {
     if (group.is_system) return errorResponse(res, 403, "System unit groups cannot be deleted");
 
     const result = await UnitGroup.updateOne(
-      { _id: groupId, deleted_at: null },
-      { $set: { deleted_at: new Date() } }
+        { _id: groupId, deleted_at: null },
+        { $set: { deleted_at: new Date() } }
     );
 
     if (result.matchedCount === 0) return errorResponse(res, 404, "Unit group not found");
@@ -114,24 +114,24 @@ const delete_unit_group = async (req, res) => {
 const get_units = async (req, res) => {
   try {
     const groupId = req.query.group_id;
-
+    
     const filter = { deleted_at: null };
     if (groupId) filter.unit_group_id = groupId;
 
     const rows = await Unit.find(filter).populate('unit_group_id').sort({ _id: 1 });
 
     const data = rows.map(u => ({
-      id: u._id,
-      unit_group_id: u.unit_group_id?._id,
-      name: u.name,
-      symbol: u.symbol,
-      conversion_factor: u.conversion_factor,
-      is_base_unit: u.is_base_unit ? 1 : 0,
-      is_system: !!u.is_system,
-      is_active: !!u.is_active,
-      created_at: u.created_at,
-      unit_group_name: u.unit_group_id ? u.unit_group_id.name : "Unknown",
-      unit_group_code: u.unit_group_id ? u.unit_group_id.code : null
+        id: u._id,
+        unit_group_id: u.unit_group_id?._id,
+        name: u.name,
+        symbol: u.symbol,
+        conversion_factor: u.conversion_factor,
+        is_base_unit: u.is_base_unit ? 1 : 0,
+        is_system: !!u.is_system,
+        is_active: !!u.is_active,
+        created_at: u.created_at,
+        unit_group_name: u.unit_group_id ? u.unit_group_id.name : "Unknown",
+        unit_group_code: u.unit_group_id ? u.unit_group_id.code : null
     }));
 
     return res.json(successResponse("Units retrieved successfully", data));
@@ -155,26 +155,26 @@ const add_unit = async (req, res) => {
 
     if (is_base_unit) {
       // Check if there is already a SYSTEM base unit in this group
-      const systemBase = await Unit.findOne({
-        unit_group_id: group._id,
-        is_base_unit: true,
-        is_system: true
+      const systemBase = await Unit.findOne({ 
+          unit_group_id: group._id, 
+          is_base_unit: true, 
+          is_system: true 
       });
 
       if (systemBase) {
-        return errorResponse(res, 403, `This group is locked to system base unit: ${systemBase.name}. You cannot add another base unit.`);
+          return errorResponse(res, 403, `This group is locked to system base unit: ${systemBase.name}. You cannot add another base unit.`);
       }
 
       await Unit.updateMany({ unit_group_id: group._id }, { $set: { is_base_unit: false } });
     }
 
     await Unit.create({
-      unit_group_id: group._id,
-      name,
-      symbol,
-      conversion_factor: is_base_unit ? 1 : conversion_factor,
-      is_base_unit: !!is_base_unit,
-      is_system: false // Manually added units are never system units
+        unit_group_id: group._id,
+        name,
+        symbol,
+        conversion_factor: is_base_unit ? 1 : conversion_factor,
+        is_base_unit: !!is_base_unit,
+        is_system: false // Manually added units are never system units
     });
 
     return res.json(successResponse("Unit created successfully"));
@@ -206,43 +206,43 @@ const update_unit = async (req, res) => {
 
     let updateData = {};
     if (unit.is_system) {
-      // STRICT LOCK: System units can ONLY have their 'is_active' status toggled.
-      // Their name, symbol, conversion_factor, and base_unit status are immutable.
-      updateData = {
-        is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : unit.is_active
-      };
+        // STRICT LOCK: System units can ONLY have their 'is_active' status toggled.
+        // Their name, symbol, conversion_factor, and base_unit status are immutable.
+        updateData = { 
+            is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : unit.is_active 
+        };
     } else {
-      // If attempting to promote this unit to base unit
-      if (is_base_unit) {
-        // Check if there is already a SYSTEM base unit in this group.
-        // If the group has a system base unit, we cannot change the base unit.
-        const systemBase = await Unit.findOne({
-          unit_group_id: group._id,
-          is_base_unit: true,
-          is_system: true,
-          _id: { $ne: unitId }
-        });
+        // If attempting to promote this unit to base unit
+        if (is_base_unit) {
+            // Check if there is already a SYSTEM base unit in this group.
+            // If the group has a system base unit, we cannot change the base unit.
+            const systemBase = await Unit.findOne({ 
+                unit_group_id: group._id, 
+                is_base_unit: true, 
+                is_system: true,
+                _id: { $ne: unitId }
+            });
+            
+            if (systemBase) {
+                return errorResponse(res, 403, `This group is locked to system base unit: ${systemBase.name}. You cannot promote another unit to base.`);
+            }
 
-        if (systemBase) {
-          return errorResponse(res, 403, `This group is locked to system base unit: ${systemBase.name}. You cannot promote another unit to base.`);
+            await Unit.updateMany({ unit_group_id: group._id, _id: { $ne: unitId } }, { $set: { is_base_unit: false } });
+        } else {
+            // If attempting to DEMOTE a base unit
+            if (unit.is_base_unit) {
+                return errorResponse(res, 400, "A group must have at least one base unit. Promote another unit to base instead of unsetting this one.");
+            }
         }
 
-        await Unit.updateMany({ unit_group_id: group._id, _id: { $ne: unitId } }, { $set: { is_base_unit: false } });
-      } else {
-        // If attempting to DEMOTE a base unit
-        if (unit.is_base_unit) {
-          return errorResponse(res, 400, "A group must have at least one base unit. Promote another unit to base instead of unsetting this one.");
-        }
-      }
-
-      updateData = {
-        unit_group_id: group._id,
-        name,
-        symbol,
-        conversion_factor: is_base_unit ? 1 : conversion_factor, // Force factor 1 for base units
-        is_base_unit: !!is_base_unit,
-        is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : unit.is_active
-      };
+        updateData = {
+            unit_group_id: group._id,
+            name,
+            symbol,
+            conversion_factor: is_base_unit ? 1 : conversion_factor, // Force factor 1 for base units
+            is_base_unit: !!is_base_unit,
+            is_active: typeof req.body.is_active !== 'undefined' ? req.body.is_active : unit.is_active
+        };
     }
 
     const result = await Unit.updateOne({ _id: unitId }, { $set: updateData });
@@ -272,8 +272,8 @@ const delete_unit = async (req, res) => {
     if (unit.is_system) return errorResponse(res, 403, "System units cannot be deleted");
 
     const result = await Unit.updateOne(
-      { _id: unitId, deleted_at: null },
-      { $set: { deleted_at: new Date() } }
+        { _id: unitId, deleted_at: null },
+        { $set: { deleted_at: new Date() } }
     );
 
     if (result.matchedCount === 0) return errorResponse(res, 404, "Unit not found");

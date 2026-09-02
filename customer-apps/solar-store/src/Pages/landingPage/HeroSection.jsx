@@ -5,6 +5,7 @@ import { Autoplay, Pagination, EffectFade } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/pagination";
 import "swiper/css/effect-fade";
+import { useNavigate } from "react-router-dom";
 import { FiArrowRight, FiSun, FiZap } from "react-icons/fi";
 import heroImg from "../../assets/images/hero_solar_house.png";
 
@@ -14,7 +15,7 @@ const SLIDES = [
     tag: "🌞 India's #1 Solar Kits Marketplace",
     title: "Complete Solar Kits\nFor Homes & Business",
     subtitle: "Certified pre-configured & custom solar kits — panels, inverter, mounting structure & BOS in one box. Save up to ₹78,000 with PM Surya Ghar Subsidy.",
-    cta1: { label: "Shop Solar Kits", href: "#products" },
+    cta1: { label: "Shop Solar Kits", href: "/shop" },
     cta2: { label: "Calculate Savings", href: "#calculator" },
     bg: "from-navy via-primary-700 to-primary-500",
     image: heroImg,
@@ -24,7 +25,7 @@ const SLIDES = [
     tag: "💰 PM Surya Ghar Yojana",
     title: "Get Govt. Subsidy\nUp to ₹78,000 on Solar Kits",
     subtitle: "Under PM Surya Ghar Muft Bijli Yojana, install 1kW-3kW Rooftop Solar Kits with verified subsidy approval. Apply now through SolarKits!",
-    cta1: { label: "Check Subsidy Kits", href: "#subsidy" },
+    cta1: { label: "Check Subsidy Kits", href: "/shop" },
     cta2: { label: "Talk to Expert", href: "#contact" },
     bg: "from-[#0D3B6E] via-[#1565C0] to-[#29ABE2]",
     image: heroImg,
@@ -34,7 +35,7 @@ const SLIDES = [
     tag: "⚡ Complete Plug & Play Solar Kits",
     title: "Everything You Need\nin One Box",
     subtitle: "From 1kW Home Kits to 100kW Commercial Kits — our complete kits include high-efficiency panels, inverter, mounting structures & AC/DC BOS. Fast delivery across India!",
-    cta1: { label: "View Solar Kits", href: "#products" },
+    cta1: { label: "View Solar Kits", href: "/shop" },
     cta2: { label: "Get Free Quote", href: "#quote" },
     bg: "from-[#0D3B6E] to-primary-600",
     image: heroImg,
@@ -42,6 +43,7 @@ const SLIDES = [
 ];
 
 export default function HeroSection({ heroConfig }) {
+  const navigate = useNavigate();
   if (heroConfig && heroConfig.enabled === false) return null;
 
   const slides = heroConfig?.slides && heroConfig.slides.length > 0 ? heroConfig.slides : SLIDES;
@@ -50,6 +52,13 @@ export default function HeroSection({ heroConfig }) {
     { val: "10,000+", label: "Happy Customers" },
     { val: "50 MW+", label: "Installed Capacity" },
   ];
+
+  const handleCtaClick = (e, href) => {
+    if (href && href.startsWith("/")) {
+      e.preventDefault();
+      navigate(href);
+    }
+  };
 
   return (
     <section id="hero" className="relative w-full">
@@ -126,7 +135,8 @@ export default function HeroSection({ heroConfig }) {
                     {slide.cta1 && slide.cta1.label && (
                       <a
                         href={slide.cta1.href || "#products"}
-                        className="flex items-center gap-2 px-6 py-3.5 bg-accent hover:bg-accent-600 text-white font-bold text-base rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 group"
+                        onClick={(e) => handleCtaClick(e, slide.cta1.href)}
+                        className="flex items-center gap-2 px-6 py-3.5 bg-accent hover:bg-accent-600 text-white font-bold text-base rounded-xl shadow-lg hover:shadow-glow transition-all duration-300 group cursor-pointer"
                       >
                         {slide.cta1.label}
                         <FiArrowRight className="group-hover:translate-x-1 transition-transform" />

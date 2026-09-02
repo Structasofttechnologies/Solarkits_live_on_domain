@@ -9,17 +9,12 @@ import { fetchCart } from "./features/slice"
 
 // Landing page (solar-store's own landing)
 import LandingPage from "./Pages/LandingPage.jsx"
+import ShopPage from "./Pages/ShopPage.jsx"
 
 // Auth pages
 import Login from "./Pages/Login"
 import SignUp from "./Pages/SignUp"
 import ForgotPassword from "./Pages/ForgotPassword"
-
-// Policy pages
-import PrivacyPolicy from "./Pages/policies/PrivacyPolicy"
-import TermsOfService from "./Pages/policies/TermsOfService"
-import RefundPolicy from "./Pages/policies/RefundPolicy"
-import ShippingPolicy from "./Pages/policies/ShippingPolicy"
 
 // Protected store board
 import Board from "./Pages/Board"
@@ -43,14 +38,9 @@ function AppContent() {
       <Alert />
       <AuthDialog />
       <Routes>
-        {/* Public landing page */}
+        {/* Public landing and shop pages */}
         <Route path="/" element={<LandingPage />} />
-
-        {/* Legal & Policy pages */}
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/terms-of-service" element={<TermsOfService />} />
-        <Route path="/refund-policy" element={<RefundPolicy />} />
-        <Route path="/shipping-policy" element={<ShippingPolicy />} />
+        <Route path="/shop" element={<ShopPage />} />
 
         {/* Auth routes */}
         <Route path="/auth/signup" element={<SignUp />} />

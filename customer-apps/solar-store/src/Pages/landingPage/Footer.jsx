@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import {
   FiArrowRight,
   FiFacebook,
@@ -19,41 +20,21 @@ const SHOP_LINKS = [
   "Commercial Solar Kits",
 ];
 
-const HELP_LINKS = ["About Us", "Contact Us", "Installation Guide", "Product Warranty"];
-const POLICY_LINKS = ["Privacy", "Terms", "Returns", "Shipping"];
-
-const SOCIALS = [
-  { Icon: FiFacebook, href: "#", label: "Facebook" },
-  { Icon: FiInstagram, href: "#", label: "Instagram" },
-  { Icon: FiTwitter, href: "#", label: "Twitter" },
-  { Icon: FiYoutube, href: "#", label: "YouTube" },
-  { Icon: FiLinkedin, href: "#", label: "LinkedIn" },
-];
-
-const FooterLink = ({ children }) => (
-  <a
-    href="#"
-    className="group inline-flex items-center gap-2 text-sm text-white/60 transition-colors hover:text-white"
-  >
-    <span className="h-px w-0 bg-accent transition-all duration-300 group-hover:w-3" />
-    {children}
-  </a>
-);
 
 export default function Footer({ footerConfig }) {
+  const navigate = useNavigate();
+
   const boxBadge = footerConfig?.consultation_box?.badge || "Free solar consultation";
   const boxHeading = footerConfig?.consultation_box?.heading || "Ready to switch to solar?";
   const boxSubtitle = footerConfig?.consultation_box?.subtitle || "Share your pincode and our expert will suggest the right solar kit.";
   const boxBtn = footerConfig?.consultation_box?.button_text || "Get free quote";
 
   const description = footerConfig?.description || "Quality solar kits, honest guidance and reliable support for homes, farms and businesses across India.";
-  const phone = footerConfig?.phone || "1800-SOLAR-KIT";
-  const email = footerConfig?.email || "support@solarkits.in";
-  const address = footerConfig?.address || "Mumbai, Maharashtra, India";
+  const phone = footerConfig?.phone || "+91 77779 39842";
+  const email = footerConfig?.email || "ravi.s@sunnovative.com";
+  const address = footerConfig?.address || "1 Tirupati Ind area, 150 Feet Ring Rd, behind patidar auto consultant, near Umiya chowk, Rajkot, Gujarat 360004";
 
   const shopLinks = footerConfig?.shop_links && footerConfig.shop_links.length > 0 ? footerConfig.shop_links : SHOP_LINKS;
-  const helpLinks = footerConfig?.help_links && footerConfig.help_links.length > 0 ? footerConfig.help_links : HELP_LINKS;
-  const policyLinks = footerConfig?.policy_links && footerConfig.policy_links.length > 0 ? footerConfig.policy_links : POLICY_LINKS;
   const copyright = footerConfig?.copyright_text || `© ${new Date().getFullYear()} SolarKits™ Pvt. Ltd. All Rights Reserved.`;
 
   return (
@@ -89,7 +70,7 @@ export default function Footer({ footerConfig }) {
               <motion.button
                 whileHover={{ y: -2 }}
                 whileTap={{ scale: 0.98 }}
-                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-accent px-5 py-3.5 text-sm font-bold text-white shadow-lg transition-colors hover:bg-accent-500"
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-accent px-5 py-3.5 text-sm font-bold text-white shadow-lg transition-colors hover:bg-accent-500 cursor-pointer"
               >
                 {boxBtn} <FiArrowRight />
               </motion.button>
@@ -97,7 +78,7 @@ export default function Footer({ footerConfig }) {
           </div>
         </div>
 
-        {/* Main footer: only essential sections */}
+        {/* Main footer: essential sections only */}
         <div className="grid gap-10 py-12 md:grid-cols-2 lg:grid-cols-12 lg:gap-8 lg:py-16">
           <div className="lg:col-span-5">
             <div className="mb-5 inline-flex rounded-xl bg-white px-3 py-2">
@@ -108,10 +89,10 @@ export default function Footer({ footerConfig }) {
             </p>
 
             <div className="mt-6 grid gap-3 text-sm text-white/65 sm:grid-cols-2 lg:grid-cols-1">
-              <a href={`tel:${phone}`} className="flex items-center gap-3 hover:text-white">
+              <a href={`tel:${phone}`} className="flex items-center gap-3 hover:text-white transition-colors">
                 <FiPhone className="text-accent" /> {phone}
               </a>
-              <a href={`mailto:${email}`} className="flex items-center gap-3 hover:text-white">
+              <a href={`mailto:${email}`} className="flex items-center gap-3 hover:text-white transition-colors">
                 <FiMail className="text-accent" /> {email}
               </a>
               <p className="flex items-start gap-3 sm:col-span-2 lg:col-span-1">
@@ -120,29 +101,27 @@ export default function Footer({ footerConfig }) {
             </div>
           </div>
 
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-white">Solar kits</h4>
             <nav className="flex flex-col items-start gap-3.5">
-              {shopLinks.map((link, idx) => (
-                <FooterLink key={typeof link === "string" ? link : link.label || idx}>
-                  {typeof link === "string" ? link : link.label}
-                </FooterLink>
-              ))}
+              {shopLinks.map((link, idx) => {
+                const label = typeof link === "string" ? link : link.label;
+                return (
+                  <button
+                    key={label || idx}
+                    type="button"
+                    onClick={() => navigate("/shop")}
+                    className="group inline-flex items-center gap-2 text-sm text-white/60 transition-colors hover:text-white cursor-pointer"
+                  >
+                    <span className="h-px w-0 bg-accent transition-all duration-300 group-hover:w-3" />
+                    {label}
+                  </button>
+                );
+              })}
             </nav>
           </div>
 
-          <div className="lg:col-span-2">
-            <h4 className="mb-5 text-xs font-bold uppercase tracking-[0.18em] text-white">Help & company</h4>
-            <nav className="flex flex-col items-start gap-3.5">
-              {helpLinks.map((link, idx) => (
-                <FooterLink key={typeof link === "string" ? link : link.label || idx}>
-                  {typeof link === "string" ? link : link.label}
-                </FooterLink>
-              ))}
-            </nav>
-          </div>
-
-          <div className="md:col-span-2 lg:col-span-3">
+          <div className="md:col-span-2 lg:col-span-4">
             <h4 className="text-xs font-bold uppercase tracking-[0.18em] text-white">Solar tips, once a week</h4>
             <p className="mt-3 text-sm leading-6 text-white/55">
               Useful tips, subsidy updates and offers. No spam.
@@ -154,34 +133,20 @@ export default function Footer({ footerConfig }) {
                 placeholder="Email address"
                 className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm text-white outline-none placeholder:text-white/35"
               />
-              <button aria-label="Subscribe" className="m-1 grid w-11 place-items-center rounded-lg bg-accent text-white transition-colors hover:bg-accent-500">
+              <button aria-label="Subscribe" className="m-1 grid w-11 place-items-center rounded-lg bg-accent text-white transition-colors hover:bg-accent-500 cursor-pointer">
                 <FiArrowRight />
               </button>
             </form>
 
-            <div className="mt-6 flex flex-wrap gap-2">
-              {SOCIALS.map(({ Icon, href, label }) => (
-                <a key={label} href={href} aria-label={label} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/55 transition-all hover:-translate-y-0.5 hover:border-accent/50 hover:bg-accent hover:text-white">
-                  <Icon size={16} />
-                </a>
-              ))}
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Slim legal/payment bar */}
+      {/* Slim copyright & payment bar */}
       <div className="border-t border-white/10 bg-black/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 text-xs text-white/45 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <span>{copyright}</span>
-            <nav className="flex flex-wrap gap-x-4 gap-y-2">
-              {policyLinks.map((link, idx) => (
-                <a key={typeof link === "string" ? link : link.label || idx} href="#" className="hover:text-white">
-                  {typeof link === "string" ? link : link.label}
-                </a>
-              ))}
-            </nav>
           </div>
           <div className="flex flex-wrap items-center gap-2" aria-label="Payment methods">
             {['UPI', 'Visa', 'Mastercard', 'Net Banking', 'EMI'].map((method) => (

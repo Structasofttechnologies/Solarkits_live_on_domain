@@ -50,7 +50,7 @@ export default function Board() {
   const menuItems = useMemo(() => {
     return [
       [
-        { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
+        { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/shop" },
         { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
         // { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
         { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
@@ -122,6 +122,7 @@ export default function Board() {
             <Route path="/dashboard/*" element={<PreconfiguredComboKit />} />
 
             {/* Direct EPC Store Kit Routes */}
+            <Route path="/shop" element={<PreconfiguredComboKit />} />
             <Route path="/preconfigured-combo-kit" element={<PreconfiguredComboKit />} />
             <Route path="/custom-combo-kit" element={<ProtectedRoute><CustomComboKit /></ProtectedRoute>} />
             {/* <Route path="/solar-bos-kit" element={<ProtectedRoute><SolarBosKit /></ProtectedRoute>} /> */}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
+import { useNavigate } from "react-router-dom";
 
 import "swiper/css";
 
@@ -91,21 +92,7 @@ const PRODUCTS = [
     brand: "SolarKits Pro",
     img: imgKit,
   },
-  {
-    id: 6,
-    name: "SolarKits Universal Complete Solar BOS Kit",
-    category: "Solar BOS Kit",
-    badge: "Plug & Play",
-    badgeColor: "bg-purple-500 text-white",
-    rating: 4.7,
-    reviews: 142,
-    price: 18500,
-    mrp: 24000,
-    discount: 23,
-    watt: "Universal BOS",
-    brand: "SolarKits",
-    img: imgKit,
-  },
+
 ];
 
 function ProductCard({ product }) {
@@ -143,8 +130,8 @@ function ProductCard({ product }) {
         >
           <FiHeart
             className={`text-lg ${wished
-                ? "fill-red-500 text-red-500"
-                : "text-gray-500"
+              ? "fill-red-500 text-red-500"
+              : "text-gray-500"
               }`}
           />
         </button>
@@ -217,10 +204,11 @@ function ProductCard({ product }) {
 
         <button
           type="button"
-          className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-primary-600 hover:shadow-lg active:scale-[0.98]"
+          onClick={() => navigate("/shop")}
+          className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl bg-primary-500 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-primary-600 hover:shadow-lg active:scale-[0.98] cursor-pointer"
         >
           <FiShoppingCart className="text-lg" />
-          Add to Cart
+          View & Add to Cart
         </button>
       </div>
     </article>
@@ -228,13 +216,14 @@ function ProductCard({ product }) {
 }
 
 export default function FeaturedProducts({ productsConfig }) {
+  const navigate = useNavigate();
   if (productsConfig && productsConfig.enabled === false) return null;
 
   const badgeText = productsConfig?.badge_text || "Most Popular";
   const heading = productsConfig?.heading || "Bestselling Solar Kits";
   const subtitle = productsConfig?.subtitle || "Explore our most trusted pre-configured solar combo kits selected for high performance, durability and maximum subsidy benefits.";
   const viewAllText = productsConfig?.view_all_text || "View All Solar Kits";
-  const viewAllHref = productsConfig?.view_all_href || "#all-products";
+  const viewAllHref = productsConfig?.view_all_href || "/shop";
   const items = productsConfig?.items && productsConfig.items.length > 0 ? productsConfig.items : PRODUCTS;
 
   return (
@@ -266,7 +255,13 @@ export default function FeaturedProducts({ productsConfig }) {
 
           <a
             href={viewAllHref}
-            className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-primary-500 transition-colors hover:text-primary-700"
+            onClick={(e) => {
+              if (viewAllHref.startsWith("/")) {
+                e.preventDefault();
+                navigate(viewAllHref);
+              }
+            }}
+            className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-primary-500 transition-colors hover:text-primary-700 cursor-pointer"
           >
             {viewAllText}
             <FiTag className="text-base" />

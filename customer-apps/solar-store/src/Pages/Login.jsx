@@ -221,8 +221,8 @@ export default function Login() {
           message: response.data.message ||"Login successful! Welcome back."
         }));
 
-        // Redirect to Solar Combo Kit page
-        navigate("/preconfigured-combo-kit");
+        // Redirect to Solar Combo Kit shop page
+        navigate("/shop");
       }
     } catch (error) {
       // Handle request cancellation
