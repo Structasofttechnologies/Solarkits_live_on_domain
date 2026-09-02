@@ -13,10 +13,21 @@ const { Reseller } = require('../../admin-panel/models/india_solarshop_db');
 
 const verify_reseller_auth = async (req, res, next) => {
   try {
-    let token = req.cookies?.reseller_access_token || req.cookies?.access_token;
+    let token = null;
 
-    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    // 1. Explicit Bearer token takes highest priority
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
       token = req.headers.authorization.split(' ')[1];
+    }
+
+    // 2. Specific Reseller cookie
+    if (!token && req.cookies?.reseller_access_token) {
+      token = req.cookies.reseller_access_token;
+    }
+
+    // 3. Fallback generic cookie
+    if (!token && req.cookies?.access_token) {
+      token = req.cookies.access_token;
     }
 
     if (!token) {

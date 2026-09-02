@@ -29,7 +29,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+    if (error.response && error.response.status === 401 && !isLoginEndpoint) {
       // Clear token on 401 unauthorized
       localStorage.removeItem('bde_token');
       localStorage.removeItem('bde_user');

@@ -22,8 +22,8 @@ export default function BdeLogin() {
   const navigate = useNavigate();
 
   // Pre-filled with verified Demo BDE credentials as requested
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState('rahul.bde@solarkits.com');
+  const [password, setPassword] = useState('Bde@Test1234');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);

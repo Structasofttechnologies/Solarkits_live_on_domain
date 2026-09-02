@@ -8,7 +8,7 @@ export function BdeAuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('bde_user');
-      return saved ? JSON.parse(saved) : null;
+      return (saved && saved !== 'undefined') ? JSON.parse(saved) : null;
     } catch (e) {
       return null;
     }
@@ -30,10 +30,14 @@ export function BdeAuthProvider({ children }) {
       const res = await api.get('/profile/me');
       setProfile(res.data.data);
       if (res.data.data) {
-        setUser(prev => ({
-          ...prev,
-          ...res.data.data,
-        }));
+        setUser(prev => {
+          const updated = {
+            ...prev,
+            ...res.data.data,
+          };
+          localStorage.setItem('bde_user', JSON.stringify(updated));
+          return updated;
+        });
       }
     } catch (err) {
       console.error('Failed to fetch profile', err);
@@ -49,11 +53,15 @@ export function BdeAuthProvider({ children }) {
       remember_me: rememberMe,
     });
 
-    const { token: newToken, bde } = res.data;
+    const newToken = res.data.token;
+    const userData = res.data.data || res.data.bde || res.data.user || null;
+
     setToken(newToken);
-    setUser(bde);
+    setUser(userData);
     localStorage.setItem('bde_token', newToken);
-    localStorage.setItem('bde_user', JSON.stringify(bde));
+    if (userData) {
+      localStorage.setItem('bde_user', JSON.stringify(userData));
+    }
     return res.data;
   };
 
@@ -82,7 +90,11 @@ export function BdeAuthProvider({ children }) {
       localStorage.setItem('bde_token', res.data.token);
     }
 
-    setUser(prev => ({ ...prev, is_first_login: false }));
+    setUser(prev => {
+      const updated = { ...prev, is_first_login: false };
+      localStorage.setItem('bde_user', JSON.stringify(updated));
+      return updated;
+    });
     return res.data;
   };
 

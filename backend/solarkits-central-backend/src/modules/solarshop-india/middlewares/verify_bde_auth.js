@@ -13,10 +13,21 @@ const { BDEProfile, BDEKYC } = require('../../admin-panel/models/india_solarshop
 
 const verify_bde_auth = async (req, res, next) => {
   try {
-    let token = req.cookies?.bde_access_token || req.cookies?.access_token;
+    let token = null;
 
-    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    // 1. Explicit Bearer token takes highest priority
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
       token = req.headers.authorization.split(' ')[1];
+    }
+
+    // 2. Specific BDE portal cookie
+    if (!token && req.cookies?.bde_access_token) {
+      token = req.cookies.bde_access_token;
+    }
+
+    // 3. Fallback generic cookie only if no specific token found
+    if (!token && req.cookies?.access_token) {
+      token = req.cookies.access_token;
     }
 
     if (!token) {
@@ -48,7 +59,7 @@ const verify_bde_auth = async (req, res, next) => {
       return res.status(403).json({ status: 'error', message: 'Your BDE account is currently inactive.', auth: false });
     }
 
-    if (bde.status !== 'active') {
+    if (bde.status !== 'active' && bde.status !== 'kyc_verified') {
       return res.status(403).json({ status: 'error', message: 'Your BDE account is not activated yet. Status: ' + bde.status, auth: false });
     }
 
