@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const { ResellerListing, ResellerPricingRule, WarehouseComboKit } = require('../models/india_solarshop_db');
-const { Product, ProjectCategory, ProjectSubcategory, Brand, IndustryType } = require('../models/core_db');
+const { ResellerListing, ResellerPricingRule } = require('../models/india_solarshop_db');
+const { Product, ProjectCategory, ProjectSubcategory, Brand, IndustryType, WarehouseComboKit } = require('../models/core_db');
 const {
   calculateResellerItemPricing,
   createOrUpdateResellerListing,
@@ -14,10 +14,9 @@ async function syncResellerListingsForReseller(resellerId) {
       FranchiseePlanPOSetting,
       FranchiseePlanPoSetting,
       ResellerProductAuthorization,
-      WarehouseComboKit,
       ResellerListing,
     } = require('../models/india_solarshop_db');
-    const { SolarKit } = require('../models/core_db');
+    const { SolarKit, WarehouseComboKit } = require('../models/core_db');
 
     // 1. Fetch active plan subscription
     const activeSub = await ResellerPlanSubscription.findOne({

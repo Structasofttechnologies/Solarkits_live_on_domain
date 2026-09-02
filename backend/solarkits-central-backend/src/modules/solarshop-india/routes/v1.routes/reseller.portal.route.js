@@ -55,6 +55,7 @@ router.get('/commission-rates',     verify_reseller_auth, handler.get_reseller_c
 router.post('/kyc/upload', verify_reseller_auth, kycDocUpload, handler.upload_kyc_document);
 router.post('/kyc/submit', verify_reseller_auth, handler.submit_kyc);
 router.get('/plans/list', handler.get_active_plans);
+router.get('/plans/my-subscription', verify_reseller_auth, handler.get_my_subscription);
 router.post('/plans/subscribe',     verify_reseller_auth, handler.subscribe_plan);
 
 // ── Franchise Agreement Signing Routes ─────────────────────────────────────

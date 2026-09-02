@@ -23,12 +23,12 @@ const {
   GstVerificationLog,
   FranchiseePlanPoSetting,
   FpoOrder,
-  WarehouseComboKit,
   SolarShopSettings,
   StoreSetup,
   StoreSetupChecklist,
   StoreSetupDelay,
 } = require('../../admin-panel/models/india_solarshop_db');
+const { WarehouseComboKit } = require('../../admin-panel/models/core_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
 const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
@@ -1577,8 +1577,7 @@ const get_reseller_authorized_products = async (req, res) => {
       const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
       if (validExplicitIds.length > 0) {
         kitOrConditions.push({ _id: { $in: validExplicitIds } });
-      }
-      if (matchedSolarKitIds.length > 0) {
+      } else if (matchedSolarKitIds.length > 0) {
         kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
       }
 
@@ -2980,8 +2979,7 @@ const get_my_plan_po_settings = async (req, res) => {
     const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
     if (validExplicitIds.length > 0) {
       kitOrConditions.push({ _id: { $in: validExplicitIds } });
-    }
-    if (matchedSolarKitIds.length > 0) {
+    } else if (matchedSolarKitIds.length > 0) {
       kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
     }
 
@@ -3602,6 +3600,42 @@ const get_master_store_setup_checklist = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/india/v1/reseller/plans/my-subscription
+ * Returns the authenticated reseller's active plan subscription and plan details
+ */
+const get_my_subscription = async (req, res) => {
+  try {
+    const resellerId = req.reseller._id;
+    const subscription = await ResellerPlanSubscription.findOne({
+      reseller_id: resellerId,
+      status: 'active',
+    })
+      .populate('plan_id')
+      .sort({ start_date: -1 })
+      .lean();
+
+    if (!subscription) {
+      return res.status(200).json({
+        status: 'success',
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        ...subscription,
+        plan: subscription.plan_id,
+        subscription,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_my_subscription error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   register_reseller,
   login_reseller,
@@ -3641,6 +3675,7 @@ module.exports = {
   get_my_store_setup,
   get_master_store_setup_checklist,
   get_reseller_commission_rates,
+  get_my_subscription,
 };
 
 
