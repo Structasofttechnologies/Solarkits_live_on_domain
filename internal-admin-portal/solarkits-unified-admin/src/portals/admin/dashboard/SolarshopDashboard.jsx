@@ -13,9 +13,18 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool } from "react-icons/fi";
 
-// Phase 1: Reseller Management
+// ── Margin & Commission Settings Module ─────────────────────────────────────────
+const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
+const OffersDiscountSettings = lazy(() => import("../pages/solar-shop/company-margin/OffersDiscountSettings"));
+const CompanyGoalsSettings = lazy(() => import("../pages/solar-shop/company-margin/CompanyGoalsSettings"));
+const MarginAnalytics = lazy(() => import("../pages/solar-shop/company-margin/MarginAnalytics"));
+
+// ── Service Ticket Module ────────────────────────────────────────────────────
+const ServiceTicketsAdmin = lazy(() => import("../pages/solar-shop/service-tickets/ServiceTicketsAdmin"));
+
+// ── Phase 1: Reseller Management ────────────────────────────────────────────
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
 const ResellerSettings = lazy(() => import("../pages/solar-shop/reseller-management/ResellerSettings"));
 
@@ -33,12 +42,6 @@ const CompanyMargin = lazy(() => import("../pages/solar-shop/company-margin/Comp
 const WarehouseMarginConfig = lazy(() => import("../pages/solar-shop/company-margin/WarehouseMarginConfig"));
 const WarehouseKitActivations = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitActivations"));
 const WarehouseKitConfig = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitConfig"));
-
-// ── Margin & Commission Settings Module ─────────────────────────────────────────
-const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
-const OffersDiscountSettings = lazy(() => import("../pages/solar-shop/company-margin/OffersDiscountSettings"));
-const CompanyGoalsSettings = lazy(() => import("../pages/solar-shop/company-margin/CompanyGoalsSettings"));
-const MarginAnalytics = lazy(() => import("../pages/solar-shop/company-margin/MarginAnalytics"));
 
 const menus = [
     [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/solar-shop/home", unique_id: "00000000" }],
@@ -139,6 +142,9 @@ const menus = [
         },
     ],
     [
+        // ── Service Tickets Module ───────────────────────────────────────────
+        { name: "Service Tickets", icon: <FiTool />, path: "/admin-panel/solar-shop/service-tickets", unique_id: "ADM_SKT_MGMT" },
+
         // ── Phase 1: Franchisee Management ─────────────────────────────
         {
             name: "Franchisee Management",
@@ -735,6 +741,26 @@ export default function SolarShopDashboard() {
                                                     <ResellerSettings moduleUniqueId="RSL_SETTINGS" />
                                                 </Suspense>
                                             </PermissionGuard>
+                                        }
+                                    />
+
+                                    {/* ── Service Ticket / Kit Replacement Module ───────────────── */}
+                                    {/* ── Service Tickets — direct path ───────────────────── */}
+                                    <Route
+                                        path="/service-tickets/*"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Service Tickets..." />}>
+                                                <ServiceTicketsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    {/* ── Service Tickets — country-prefixed path ──────────── */}
+                                    <Route
+                                        path="/:countryName/service-tickets/*"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Service Tickets..." />}>
+                                                <ServiceTicketsAdmin />
+                                            </Suspense>
                                         }
                                     />
 

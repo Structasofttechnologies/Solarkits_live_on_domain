@@ -1,4 +1,4 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════
    SOLARKITS ADMIN — PREMIUM BLUE THEME
@@ -71,6 +71,58 @@
   --gradient-card-glass: linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.85) 100%);
 
   /* ── Button ── */
+  --color-button-primary: var(--color-primary);
+  --color-button-primary-hover: var(--color-primary-hover);
+  --color-button-disabled: #cbd5e1;
+  --color-button-disabled-text: #64748b;
+}
+
+:root {
+  --color-primary: #263880;
+  --color-primary-end: #3a56c9;
+  --color-primary-hover: #1e2d66;
+  --color-secondary: #f5d324;
+  --color-secondary-hover: #eac90f;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f5f9;
+  --color-border: #cbd5e1;
+  --color-ring: #26388040;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+  --color-success: #16a34a;
+  --color-success-hover: #15803d;
+  --color-success-soft: #f0fdf4;
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-soft: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-info: #0ea5e9;
+  --color-info-hover: #0284c7;
+  --color-info-soft: #f0f9ff;
+  --shadow-xs: 0 1px 3px rgba(38, 56, 128, 0.06);
+  --shadow-sm: 0 2px 8px rgba(38, 56, 128, 0.08);
+  --shadow-md: 0 4px 16px rgba(38, 56, 128, 0.10);
+  --shadow-lg: 0 8px 32px rgba(38, 56, 128, 0.14);
+  --shadow-xl: 0 12px 48px rgba(38, 56, 128, 0.18);
+  --gradient-primary: linear-gradient(135deg, #263880 0%, #3a56c9 50%, #4f6ae0 100%);
+  --gradient-primary-soft: linear-gradient(135deg, #26388015 0%, #3a56c910 100%);
+  --gradient-danger: linear-gradient(135deg, var(--color-danger), var(--color-danger-hover));
+  --gradient-danger-soft: linear-gradient(135deg, #dc262615 0%, #b91c1c10 100%);
+  --gradient-warning: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover));
+  --gradient-warning-soft: linear-gradient(135deg, #f59e0b15 0%, #d9770610 100%);
+  --gradient-success: linear-gradient(135deg, var(--color-success), var(--color-success-hover));
+  --gradient-success-soft: linear-gradient(135deg, #16a34a15 0%, #15803d10 100%);
+  --gradient-info: linear-gradient(135deg, var(--color-info), var(--color-info-hover));
+  --gradient-info-soft: linear-gradient(135deg, #0ea5e915 0%, #0284c710 100%);
+  --gradient-secondary: linear-gradient(135deg, var(--color-secondary), #ffdf5e);
+  --gradient-bg-subtle: linear-gradient(145deg, #f8fafc 0%, #eef2ff 50%, #e8ecf8 100%);
+  --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.4) 100%);
+  --gradient-card-glass: linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.85) 100%);
   --color-button-primary: var(--color-primary);
   --color-button-primary-hover: var(--color-primary-hover);
   --color-button-disabled: #cbd5e1;

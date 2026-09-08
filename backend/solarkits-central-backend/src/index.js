@@ -1,5 +1,7 @@
 require('dotenv').config();
 require('./keys/config/databases'); // Initialize database connections
+// Register SolarKits Service Tickets model
+require('./modules/solarshop-india/models/india_solarshop_db/solarkits_service_tickets.schema');
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -131,6 +133,9 @@ adminRouter.use('/store-setup',                  require('./modules/admin-panel/
 
 // ─── Margin & Commission Settings Module ─────────────────────────────────────
 adminRouter.use('/company/margin-goals',         require('./modules/admin-panel/routes/company_margin_goals.route'));
+
+// ─── Service Ticket / Kit Item Replacement Module ─────────────────────────────
+adminRouter.use('/service-tickets',              require('./modules/admin-panel/routes/service_ticket.admin.route'));
 
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);

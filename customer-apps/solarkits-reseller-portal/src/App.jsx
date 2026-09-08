@@ -17,6 +17,7 @@ import EligibilityChecker from "./pages/EligibilityChecker";
 import PoOrder from "./pages/PoOrder";
 import LooseOrder from "./pages/LooseOrder";
 import OnboardingPortal from "./pages/OnboardingPortal";
+import ServiceTickets from "./pages/ServiceTickets";
 
 export default function App() {
   return (
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/wallet" element={<WalletPortal />} />
           <Route path='/po-order' element={<PoOrder />} />
           <Route path='/loose-order' element={<LooseOrder />} />
+          <Route path='/service-tickets' element={<ServiceTickets />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

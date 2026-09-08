@@ -133,5 +133,21 @@ router.get('/industry/dashboard-content', verify_reseller_auth, industryDashboar
 router.get('/industry/related-products',  verify_reseller_auth, industryDashboardHandler.get_related_products);
 router.get('/industry/theme',             verify_reseller_auth, industryDashboardHandler.get_industry_theme);
 
+// ── Service Ticket / Kit Item Replacement Routes (Franchisee) ─────────────────
+const serviceTicketHandler = require('../../controller/service_ticket.handler');
+const proofUpload = upload_any_files('public/uploads/service-tickets', 5);
+
+router.post('/service-tickets/raise',              verify_reseller_auth, serviceTicketHandler.raise_ticket);
+router.get('/service-tickets',                     verify_reseller_auth, serviceTicketHandler.get_my_tickets);
+router.get('/service-tickets/:id',                 verify_reseller_auth, serviceTicketHandler.get_my_ticket_detail);
+router.post('/service-tickets/:id/confirm-delivery', verify_reseller_auth, serviceTicketHandler.confirm_replacement_received);
+router.post('/service-tickets/:id/upload-proof',   verify_reseller_auth, proofUpload, serviceTicketHandler.upload_ticket_proof);
+
+// ── Service Ticket / Kit Item Replacement Routes (EPC Buyer) ──────────────────
+router.post('/epc/service-tickets/raise',              verify_auth, serviceTicketHandler.raise_epc_ticket);
+router.get('/epc/service-tickets',                     verify_auth, serviceTicketHandler.get_epc_tickets);
+router.get('/epc/service-tickets/:id',                 verify_auth, serviceTicketHandler.get_epc_ticket_detail);
+router.post('/epc/service-tickets/:id/confirm-delivery', verify_auth, serviceTicketHandler.confirm_epc_replacement);
+
 module.exports = router;
 

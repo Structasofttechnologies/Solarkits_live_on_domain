@@ -16,6 +16,7 @@ import BulkOrderCart from "./cart/BulkOrderCart";
 import CheckOut from "./CheckOut";
 import ProjectOrderStatus from "./dashboard/ProjectOrderStatus";
 import EpcCatalogue from "./dashboard/EpcCatalogue";
+import EpcPoAllocations from "./dashboard/EpcPoAllocations";
 import StoreLocatorPage from "./store-locator/StoreLocatorPage";
 import {
   MdDashboard,
@@ -48,22 +49,27 @@ export default function Board() {
 
   // Menu items for Direct EPC Solar Store
   const menuItems = useMemo(() => {
+    const defaultGroup = [
+      { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
+      { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
+      { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
+      { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
+      { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
+    ];
+
+    if (isFranchiseeEpc) {
+      defaultGroup.push({ name: "PO Orders", icon: <FaShoppingBag />, path: "/po-allocations", requiresAuth: true });
+    }
+
     return [
-      [
-        { name: "Solar Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
-        { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
-        // { name: "Solar BOS Kit", icon: <MdSettings />, path: "/solar-bos-kit", requiresAuth: true },
-        { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
-        { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
-        { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
-      ],
+      defaultGroup,
       [
         { name: "Find Nearby Store", icon: <FaMapMarkerAlt />, path: "/store-locator" },
         { name: "Track Order Status", icon: <MdListAlt />, path: "/track-status", requiresAuth: true },
       ],
       [{ name: "Settings", icon: <MdSettings />, path: "/settings", requiresAuth: true }]
     ];
-  }, []);
+  }, [isFranchiseeEpc]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -129,6 +135,7 @@ export default function Board() {
 
             {/* Franchisee Product Catalogue (optional fallback) */}
             <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />
+            <Route path="/po-allocations" element={<ProtectedRoute><EpcPoAllocations /></ProtectedRoute>} />
 
             <Route path="/bulk-buy" element={<ProtectedRoute><BulkBuy /></ProtectedRoute>} />
             <Route path="/request-order" element={<ProtectedRoute><BulkOrderCart /></ProtectedRoute>} />

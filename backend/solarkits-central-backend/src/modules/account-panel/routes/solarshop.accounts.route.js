@@ -32,4 +32,8 @@ router.post('/epc-orders/:id/verify-payment', check_auth, solarshop_handler.veri
 router.post('/epc-orders/:id/dispatch', check_auth, solarshop_handler.dispatch_epc_order);
 router.post('/epc-orders/:id/deliver', check_auth, solarshop_handler.deliver_epc_order);
 
+// 9. EPC PO Payments Verification (FPO Allocations)
+router.get('/epc-po-payments', check_auth, solarshop_handler.get_epc_po_payments);
+router.post('/epc-po-payments/:poId/allocations/:epcId/verify', check_auth, solarshop_handler.verify_epc_po_payment);
+
 module.exports = router;

@@ -36,7 +36,7 @@ const { logAudit } = require('../utils/audit.service');
 
 // ── Allowed status transitions ────────────────────────────────────────────────
 const ALLOWED_TRANSITIONS = {
-  DRAFT:               ['SUBMITTED', 'CANCELLED', 'EXPIRED'],
+  DRAFT:               ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'CANCELLED', 'EXPIRED'],
   SUBMITTED:           ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED'],
   PENDING_APPROVAL:    ['CHANGES_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'],
   CHANGES_REQUESTED:   ['SUBMITTED', 'CANCELLED'],

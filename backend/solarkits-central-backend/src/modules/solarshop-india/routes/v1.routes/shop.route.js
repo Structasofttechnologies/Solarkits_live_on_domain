@@ -29,6 +29,8 @@ const {
   create_epc_offline_checkout,
   resubmit_epc_offline_payment,
   get_epc_order_invoice_data,
+  get_epc_po_allocations,
+  submit_epc_po_receipt
 } = require("../../controller/v1.handlers/shop.handler");
 
 const { verify_auth } = require("../../middlewares/auth");
@@ -72,6 +74,10 @@ router.get("/check-warehouse-stock", verify_auth, check_warehouse_stock);
 router.post("/offline-checkout/create", verify_auth, epcReceiptUpload, create_epc_offline_checkout);
 router.post("/offline-checkout/:id/resubmit", verify_auth, epcReceiptUpload, resubmit_epc_offline_payment);
 router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);
+
+// ── EPC PO Allocations from Franchisees ───────────────────────────────────
+router.get("/po-allocations", verify_auth, get_epc_po_allocations);
+router.post("/po-allocations/:poId/upload-receipt", verify_auth, epcReceiptUpload, submit_epc_po_receipt);
 
 
 // ── EPC Industry Content Dashboard Routes ─────────────────────────────────────

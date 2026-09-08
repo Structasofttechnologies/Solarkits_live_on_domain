@@ -3287,6 +3287,86 @@ const get_shop_hierarchy = async (req, res) => {
   }
 };
 
+const get_epc_po_allocations = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    if (!accountId) {
+      return res.status(401).json({ status: "error", message: "Unauthorized" });
+    }
+
+    const { FpoOrder } = require("../../../admin-panel/models/india_solarshop_db");
+    
+    // Find all FPO orders where this account is allocated in any item
+    const orders = await FpoOrder.find({
+      "items.epc_allocations.epc_buyer_id": accountId
+    }).populate('franchisee_id', 'business_name mobile email').sort({ created_at: -1 }).lean();
+
+    return res.json({
+      status: "success",
+      success: true,
+      data: orders
+    });
+  } catch (error) {
+    console.error("get_epc_po_allocations error:", error);
+    return res.status(500).json({ status: "error", success: false, message: error.message });
+  }
+};
+
+const submit_epc_po_receipt = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    if (!accountId) {
+      return res.status(401).json({ status: "error", message: "Unauthorized" });
+    }
+
+    const { poId } = req.params;
+    const { FpoOrder } = require("../../../admin-panel/models/india_solarshop_db");
+
+    let receiptUrl = null;
+    if (req.files && req.files.length > 0) {
+      receiptUrl = req.files[0].path.replace(/\\/g, '/');
+      if (receiptUrl.startsWith('public/')) {
+        receiptUrl = '/' + receiptUrl.substring(7);
+      }
+    }
+
+    if (!receiptUrl) {
+      return res.status(400).json({ status: "error", message: "Payment receipt file is required." });
+    }
+
+    const order = await FpoOrder.findOne({ _id: poId });
+    if (!order) {
+      return res.status(404).json({ status: "error", message: "PO Order not found." });
+    }
+
+    let updated = false;
+    order.items.forEach(item => {
+      (item.epc_allocations || []).forEach(alloc => {
+        if (alloc.epc_buyer_id && alloc.epc_buyer_id.toString() === accountId.toString()) {
+          alloc.payment_status = 'RECEIPT_SUBMITTED';
+          alloc.payment_receipt_url = receiptUrl;
+          updated = true;
+        }
+      });
+    });
+
+    if (!updated) {
+      return res.status(404).json({ status: "error", message: "Allocation for this EPC not found in the PO." });
+    }
+
+    await order.save();
+
+    return res.json({
+      status: "success",
+      success: true,
+      message: "Payment receipt submitted successfully."
+    });
+  } catch (error) {
+    console.error("submit_epc_po_receipt error:", error);
+    return res.status(500).json({ status: "error", success: false, message: error.message });
+  }
+};
+
 module.exports = {
   get_combo_kits_by_district,
   get_inventory_status,
@@ -3316,6 +3396,8 @@ module.exports = {
   create_epc_offline_checkout,
   resubmit_epc_offline_payment,
   get_epc_order_invoice_data,
+  get_epc_po_allocations,
+  submit_epc_po_receipt,
 };
 
 

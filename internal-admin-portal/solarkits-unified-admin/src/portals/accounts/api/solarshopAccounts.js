@@ -93,3 +93,18 @@ export const deliverEpcOrder = async (id) => {
   });
   return res.data;
 };
+
+export const getEpcPoPayments = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/epc-po-payments${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const verifyEpcPoPayment = async (poId, epcId, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-po-payments/${poId}/allocations/${epcId}/verify`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};

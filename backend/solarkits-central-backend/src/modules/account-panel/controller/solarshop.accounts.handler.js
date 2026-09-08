@@ -1270,6 +1270,67 @@ const deliver_epc_order = async (req, res) => {
   }
 };
 
+const get_epc_po_payments = async (req, res) => {
+  try {
+    const { FpoOrder } = require('../../models/india_solarshop_db');
+    const orders = await FpoOrder.find({
+      "items.epc_allocations.payment_status": { $in: ["RECEIPT_SUBMITTED", "VERIFIED"] }
+    }).populate('franchisee_id', 'business_name mobile email').sort({ updated_at: -1 }).lean();
+
+    return res.status(200).json({
+      status: 'success',
+      data: orders
+    });
+  } catch (error) {
+    console.error('Error in get_epc_po_payments:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+const verify_epc_po_payment = async (req, res) => {
+  try {
+    const { poId, epcId } = req.params;
+    const { action } = req.body; // 'approve' or 'reject'
+    
+    const { FpoOrder } = require('../../models/india_solarshop_db');
+    const order = await FpoOrder.findOne({ _id: poId });
+
+    if (!order) {
+      return res.status(404).json({ status: "error", message: "PO Order not found." });
+    }
+
+    let updated = false;
+    order.items.forEach(item => {
+      (item.epc_allocations || []).forEach(alloc => {
+        if (alloc.epc_buyer_id && alloc.epc_buyer_id.toString() === epcId) {
+          if (action === 'approve') {
+            alloc.payment_status = 'VERIFIED';
+            alloc.paid_at = new Date();
+          } else {
+            alloc.payment_status = 'PENDING';
+            alloc.payment_notes = req.body.reason || "Payment receipt rejected by accounts.";
+          }
+          updated = true;
+        }
+      });
+    });
+
+    if (!updated) {
+      return res.status(404).json({ status: "error", message: "Allocation for this EPC not found in the PO." });
+    }
+
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: action === 'approve' ? 'Payment successfully verified.' : 'Payment rejected.'
+    });
+  } catch (error) {
+    console.error('Error in verify_epc_po_payment:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
   get_dashboard_stats,
   get_recent_transactions,
@@ -1283,4 +1344,6 @@ module.exports = {
   verify_epc_order_payment,
   dispatch_epc_order,
   deliver_epc_order,
+  get_epc_po_payments,
+  verify_epc_po_payment,
 };

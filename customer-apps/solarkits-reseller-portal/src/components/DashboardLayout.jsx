@@ -22,6 +22,7 @@ import {
   FiSun,
   FiChevronDown,
   FiKey,
+  FiTool,
 } from "react-icons/fi";
 import api from "../services/api";
 import logoImg from "@/assets/images/logo.png";
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
   { name: "My Buyers", icon: FiUsers, path: "/epc-buyers" },
   { name: "Orders & Tracking", icon: FiShoppingCart, path: "/orders" },
   { name: "My Earnings", icon: FiCreditCard, path: "/wallet" },
+  { name: "Service Tickets", icon: FiTool, path: "/service-tickets" },
 ];
 
 export default function DashboardLayout() {

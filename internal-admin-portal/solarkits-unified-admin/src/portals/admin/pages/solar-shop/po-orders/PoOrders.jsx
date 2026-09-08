@@ -30,26 +30,29 @@ import { authHeaderObj } from "@/app/authHeader";
 const API_URL = import.meta.env.VITE_API_URL;
 
 const STATUS_BADGES = {
-  DRAFT:             { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300" },
-  SUBMITTED:         { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
-  PENDING_APPROVAL:  { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
-  CHANGES_REQUESTED: { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
-  APPROVED:          { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  REJECTED:          { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400" },
-  AWAITING_PAYMENT:  { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
-  PARTIALLY_PAID:    { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400" },
-  PAID:              { label: "Paid", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  PROCESSING:        { label: "Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
-  DISPATCHED:        { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
-  DELIVERED:         { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  COMPLETED:         { label: "Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  CANCELLED:         { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400" },
+  DRAFT:             { label: "Draft", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
+  SUBMITTED:         { label: "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
+  PENDING_APPROVAL:  { label: "Pending Approval", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+  CHANGES_REQUESTED: { label: "Changes Requested", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
+  APPROVED:          { label: "Approved", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  REJECTED:          { label: "Rejected", bg: "#fef2f2", text: "#b91c1c", border: "#fca5a5" },
+  AWAITING_PAYMENT:  { label: "Awaiting Payment", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+  PARTIALLY_PAID:    { label: "Partially Paid", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  PAID:              { label: "Paid", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+  PROCESSING:        { label: "Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+  DISPATCHED:        { label: "Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
+  DELIVERED:         { label: "Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  COMPLETED:         { label: "Completed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  CANCELLED:         { label: "Cancelled", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
 };
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_BADGES[status] || STATUS_BADGES.SUBMITTED;
+  const cfg = STATUS_BADGES[status] || { label: status || "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black border border-current/20 ${cfg.bg} ${cfg.text}`}>
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-xs"
+      style={{ backgroundColor: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}` }}
+    >
       {cfg.label}
     </span>
   );
@@ -184,7 +187,7 @@ export default function PoOrders({ moduleUniqueId }) {
     try {
       const res = await axios.put(
         `${API_URL}/franchisee/po/approve?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
-        { order_id: orderId, auto_advance: true },
+        { po_id: orderId, auto_advance: true },
         { headers: authHeaderObj() }
       );
       if (res.data?.status === "success") {
@@ -206,7 +209,7 @@ export default function PoOrders({ moduleUniqueId }) {
     try {
       const res = await axios.put(
         `${API_URL}/franchisee/po/reject?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
-        { order_id: orderId, reason },
+        { po_id: orderId, reason },
         { headers: authHeaderObj() }
       );
       if (res.data?.status === "success") {
@@ -229,7 +232,7 @@ export default function PoOrders({ moduleUniqueId }) {
       const res = await axios.post(
         `${API_URL}/franchisee/po/confirm-payment?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
         {
-          order_id: selectedOrder._id,
+          po_id: selectedOrder._id,
           payment_reference: paymentRefInput || `PAY-${Date.now()}`,
           payment_mode: "BANK_TRANSFER",
         },
@@ -256,7 +259,7 @@ export default function PoOrders({ moduleUniqueId }) {
     try {
       const res = await axios.put(
         `${API_URL}/franchisee/po/dispatch?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
-        { order_id: orderId, tracking_number: tracking },
+        { po_id: orderId, tracking_number: tracking },
         { headers: authHeaderObj() }
       );
       if (res.data?.status === "success") {
@@ -277,7 +280,7 @@ export default function PoOrders({ moduleUniqueId }) {
     try {
       const res = await axios.put(
         `${API_URL}/franchisee/po/deliver?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
-        { order_id: orderId },
+        { po_id: orderId },
         { headers: authHeaderObj() }
       );
       if (res.data?.status === "success") {
@@ -479,120 +482,108 @@ export default function PoOrders({ moduleUniqueId }) {
           </div>
 
           {/* FPO Orders Table */}
-          <div className="bg-surface rounded-2xl border-2 border-border/60 shadow-sm overflow-hidden">
-            {fpoLoading ? (
-              <div className="py-20 flex flex-col items-center justify-center gap-3">
-                <Loader text="Loading Franchisee PO Orders..." />
-              </div>
-            ) : filteredFpoOrders.length === 0 ? (
-              <div className="p-12 text-center text-text-muted space-y-2">
-                <FaFileInvoiceDollar size={32} className="mx-auto opacity-40 text-primary" />
-                <p className="text-sm font-bold text-text-primary">No Franchisee Purchase Orders Found</p>
-                <p className="text-xs">When franchisees place PO orders from their portal, they will appear here.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-hover border-b border-border text-[11px] font-black uppercase text-text-muted">
-                    <tr>
-                      <th className="py-3.5 px-4">PO Number & Date</th>
-                      <th className="py-3.5 px-4">Franchisee Partner</th>
-                      <th className="py-3.5 px-4">Plan Badge</th>
-                      <th className="py-3.5 px-4">Product & Kit</th>
-                      <th className="py-3.5 px-4">EPC Allocations</th>
-                      <th className="py-3.5 px-4 text-center">Total Quantity</th>
-                      <th className="py-3.5 px-4">Grand Total (₹)</th>
-                      <th className="py-3.5 px-4">Status</th>
-                      <th className="py-3.5 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredFpoOrders.map((order) => {
-                      const item = order.items?.[0] || {};
-                      const allocationsList = item.epc_allocations || [];
-                      const grandTotal = (order.grand_total_paise || 0) / 100;
+          <CustomTable
+            headers={[
+              { key: "po_number", label: "PO Number & Date" },
+              { key: "franchisee", label: "Franchisee Partner" },
+              { key: "plan", label: "Plan Badge" },
+              { key: "product", label: "Product & Kit" },
+              { key: "epc_allocations", label: "EPC Allocations" },
+              { key: "total_quantity", label: "Total Quantity", align: "center" },
+              { key: "grand_total", label: "Grand Total (₹)" },
+              { key: "status", label: "Status" },
+              { key: "actions", label: "Actions", align: "right" },
+            ]}
+            data={filteredFpoOrders}
+            loading={fpoLoading}
+            emptyMessage="No Franchisee Purchase Orders Found"
+            renderRow={(order) => {
+              const item = order.items?.[0] || {};
+              const allocationsList = item.epc_allocations || [];
+              const grandTotal = (order.grand_total_paise || 0) / 100;
 
-                      return (
-                        <tr key={order._id} className="hover:bg-surface-hover/50 transition-colors">
-                          <td className="py-3.5 px-4">
-                            <div className="font-mono font-bold text-text-primary text-xs">
-                              {order.po_number}
-                            </div>
-                            <div className="text-[10px] text-text-muted">
-                              {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </div>
-                          </td>
+              return (
+                <>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-mono font-black text-text-primary text-xs tracking-tight">
+                      {order.po_number}
+                    </div>
+                    <div className="text-[11px] font-medium text-text-muted mt-0.5">
+                      {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </div>
+                  </td>
 
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-text-primary">
-                              {order.franchisee_id?.business_name || "Franchisee Account"}
-                            </div>
-                            <div className="text-[10px] text-text-muted">
-                              {order.franchisee_id?.mobile || order.franchisee_id?.email || "Partner"}
-                            </div>
-                          </td>
+                  <td className="px-6 py-4">
+                    <div className="font-bold text-text-primary text-xs">
+                      {order.franchisee_id?.business_name || "Franchisee Account"}
+                    </div>
+                    <div className="text-[11px] text-text-muted font-medium mt-0.5">
+                      {order.franchisee_id?.mobile || order.franchisee_id?.email || "Partner"}
+                    </div>
+                  </td>
 
-                          <td className="py-3.5 px-4">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
-                              {order.plan_id?.name || "Franchise Plan"}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20">
+                      {order.plan_id?.name || "Franchise Plan"}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <div className="font-bold text-text-primary text-xs truncate max-w-xs" title={item.item_name}>
+                      {item.item_name || "Solar Kit"}
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {allocationsList.length > 0 ? (
+                      <div className="flex flex-col gap-1.5 max-w-xs">
+                        {allocationsList.map((a, i) => (
+                          <div
+                            key={i}
+                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-surface-hover border border-border flex items-center justify-between gap-3 shadow-2xs text-text-primary"
+                          >
+                            <span className="truncate">{a.company_name || a.buyer_name}</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-primary text-white text-[10px] font-black shrink-0">
+                              {a.allocated_quantity} Kits
                             </span>
-                          </td>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] font-medium text-text-muted italic">Direct Purchase</span>
+                    )}
+                  </td>
 
-                          <td className="py-3.5 px-4">
-                            <div className="font-bold text-text-primary truncate max-w-xs">
-                              {item.item_name || "Solar Kit"}
-                            </div>
-                          </td>
+                  <td className="px-6 py-4 text-center font-extrabold text-xs text-primary whitespace-nowrap">
+                    {order.total_quantity || item.quantity || 0} Kits
+                  </td>
 
-                          <td className="py-3.5 px-4">
-                            {allocationsList.length > 0 ? (
-                              <div className="flex flex-wrap gap-1 max-w-xs">
-                                {allocationsList.map((a, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-text-primary border border-border"
-                                  >
-                                    {a.company_name || a.buyer_name}: <strong>{a.allocated_quantity}</strong>
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-text-muted">Direct Purchase</span>
-                            )}
-                          </td>
+                  <td className="px-6 py-4 font-black text-text-primary text-xs whitespace-nowrap">
+                    ₹{grandTotal.toLocaleString("en-IN")}
+                  </td>
 
-                          <td className="py-3.5 px-4 text-center font-extrabold text-xs text-primary">
-                            {order.total_quantity || item.quantity || 0} Kits
-                          </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <StatusBadge status={order.status} />
+                  </td>
 
-                          <td className="py-3.5 px-4 font-black text-text-primary text-xs">
-                            ₹{grandTotal.toLocaleString("en-IN")}
-                          </td>
-
-                          <td className="py-3.5 px-4">
-                            <StatusBadge status={order.status} />
-                          </td>
-
-                          <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() => setSelectedOrder(order)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-all cursor-pointer shadow-xs"
-                            >
-                              Review & Actions
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <Button
+                      onClick={() => setSelectedOrder(order)}
+                      size="sm"
+                      leftIcon={<FaEye size={12} />}
+                      className="rounded-xl text-xs font-black uppercase tracking-wider py-2 px-3"
+                    >
+                      Review & Actions
+                    </Button>
+                  </td>
+                </>
+              );
+            }}
+          />
         </div>
       )}
 

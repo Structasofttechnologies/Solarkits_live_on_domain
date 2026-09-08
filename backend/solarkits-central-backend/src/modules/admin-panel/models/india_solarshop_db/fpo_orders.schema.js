@@ -62,6 +62,21 @@ const moqSnapshotSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const epcAllocationSchema = new mongoose.Schema(
+  {
+    epc_buyer_id: { type: mongoose.Schema.Types.ObjectId, ref: 'reseller_epc_buyers', default: null },
+    company_name: { type: String, default: null },
+    buyer_name: { type: String, default: null },
+    gstin: { type: String, default: null },
+    allocated_quantity: { type: Number, required: true, min: 1 },
+    payment_status: { type: String, enum: ['PENDING', 'PAID', 'RECEIPT_SUBMITTED', 'VERIFIED'], default: 'PENDING' },
+    payment_receipt_url: { type: String, default: null },
+    payment_notes: { type: String, default: null },
+    paid_at: { type: Date, default: null },
+  },
+  { _id: true }
+);
+
 const poItemSchema = new mongoose.Schema(
   {
     project_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types', default: null },
@@ -73,6 +88,9 @@ const poItemSchema = new mongoose.Schema(
 
     // Ordered quantity
     quantity: { type: Number, required: true, min: 1 },
+
+    // EPC Buyer Quantity Allocations
+    epc_allocations: [epcAllocationSchema],
 
     // Snapshots at time of PO creation (immutable after submission)
     moq_snapshot: { type: moqSnapshotSchema, default: null },
