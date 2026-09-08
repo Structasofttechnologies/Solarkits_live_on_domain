@@ -108,8 +108,17 @@ export default function EpcPoAllocations() {
 
             if (!epcAlloc) return null;
 
+            // unit_price_paise = price per single kit (in paise)
             const amountToPay = (allocatedItem.unit_price_paise * epcAlloc.allocated_quantity) / 100;
-            const taxToPay = (allocatedItem.tax_paise * epcAlloc.allocated_quantity) / 100;
+
+            // tax_paise = TOTAL tax for ALL units in this order item (not per-unit).
+            // Formula in backend: tax_paise = unit_price_paise * item.quantity * (gst_rate / 100)
+            // So per-unit tax = tax_paise / item.quantity
+            // EPC's share   = (tax_paise / item.quantity) * allocated_quantity
+            const taxToPay = allocatedItem.quantity > 0
+              ? ((allocatedItem.tax_paise / allocatedItem.quantity) * epcAlloc.allocated_quantity) / 100
+              : 0;
+
             const totalToPay = amountToPay + taxToPay;
 
             return (
@@ -200,7 +209,11 @@ export default function EpcPoAllocations() {
                     {epcAlloc.payment_receipt_url && epcAlloc.payment_status !== 'PENDING' && (
                       <div className="mt-4 text-center">
                         <a 
-                          href={process.env.REACT_APP_API_BASE_URL + epcAlloc.payment_receipt_url}
+                          href={
+                            epcAlloc.payment_receipt_url.startsWith('http')
+                              ? epcAlloc.payment_receipt_url
+                              : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '')}${epcAlloc.payment_receipt_url.startsWith('/') ? '' : '/'}${epcAlloc.payment_receipt_url}`
+                          }
                           target="_blank"
                           rel="noreferrer"
                           className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline"

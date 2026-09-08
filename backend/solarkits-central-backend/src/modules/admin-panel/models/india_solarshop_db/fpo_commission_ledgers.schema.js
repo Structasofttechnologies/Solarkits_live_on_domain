@@ -51,9 +51,10 @@ const schema = new mongoose.Schema(
     },
     settlement_status: {
       type: String,
-      enum: ['PENDING', 'SETTLED', 'REVERSED'],
+      enum: ['PENDING', 'SETTLED', 'PAID', 'ON_HOLD', 'FAILED', 'REVERSED'],
       default: 'PENDING',
     },
+    payout_utr:  { type: String, default: null, trim: true },
     settled_at:  { type: Date, default: null },
     reversed_at: { type: Date, default: null },
     reversal_reason: { type: String, default: null, maxlength: 1000 },

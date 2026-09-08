@@ -137,6 +137,17 @@ const schema = new mongoose.Schema({
   fee_payment_verified_by:    { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
   fee_payment_remarks:        { type: String, default: null, trim: true },
 
+  // ── Franchise Commission Bank Details ──────────────────────────────────
+  bank_details: {
+    bank_name:           { type: String, default: null, trim: true },
+    account_holder_name: { type: String, default: null, trim: true },
+    account_number:      { type: String, default: null, trim: true },
+    ifsc_code:           { type: String, default: null, trim: true, uppercase: true },
+    branch:              { type: String, default: null, trim: true },
+    upi_id:              { type: String, default: null, trim: true },
+    updated_at:          { type: Date, default: null },
+  },
+
   // ── Step 2 & 3: BDE Attribution & Store Operations ───────────────────────
   bde_id:                { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
   original_bde_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },

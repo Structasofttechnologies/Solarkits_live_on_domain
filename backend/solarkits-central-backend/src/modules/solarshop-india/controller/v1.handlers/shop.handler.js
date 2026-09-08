@@ -3367,6 +3367,18 @@ const submit_epc_po_receipt = async (req, res) => {
   }
 };
 
+// ── VERIFY EPC PAYMENT RECEIPT (Forbidden for Franchisees) ────────────────────
+// Franchisees cannot verify or reject payment receipts. Verification is strictly
+// restricted to Admin Panel (/admin-panel/solar-shop/po-orders) and
+// Accounts Panel (/account-panel/solar-shop/franchisee-po-orders).
+const verify_epc_po_payment = async (req, res) => {
+  return res.status(403).json({
+    status: 'error',
+    success: false,
+    message: 'Franchisees are not authorized to verify or reject payment receipts. Verification must be performed via Admin Panel or Accounts Panel only.'
+  });
+};
+
 module.exports = {
   get_combo_kits_by_district,
   get_inventory_status,
@@ -3398,6 +3410,11 @@ module.exports = {
   get_epc_order_invoice_data,
   get_epc_po_allocations,
   submit_epc_po_receipt,
+  verify_epc_po_payment,
 };
+
+
+
+
 
 

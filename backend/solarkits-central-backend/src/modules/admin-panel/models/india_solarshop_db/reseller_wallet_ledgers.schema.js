@@ -18,8 +18,9 @@ const schema = new mongoose.Schema({
   transaction_type: {
     type: String,
     enum: [
-      'commission_credit',  // Net commission earned (after TDS/TCS) — credited to available
-      'payout_hold',         // Funds moved available → pending upon payout request
+      'commission_credit',     // Net commission earned (after TDS/TCS) — credited to available
+      'po_commission_credit',  // Franchisee PO Order Commission credited
+      'payout_hold',            // Funds moved available → pending upon payout request
       'payout_debit',        // Funds debited from pending upon successful payout
       'payout_reversal',     // Funds returned pending → available upon rejection
       'failed_payout',       // Funds returned pending → available upon payout failure

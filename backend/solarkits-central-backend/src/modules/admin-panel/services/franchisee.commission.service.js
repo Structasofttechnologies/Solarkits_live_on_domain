@@ -139,13 +139,13 @@ function calculateCommissionAmount({ commission_rule, eligible_kit_quantity, gro
 async function postCommission({ fpo_order_id, actor_id = null, req = null }) {
   const idempotencyKey = `FPO-COMMISSION-${fpo_order_id}`;
 
-  // Idempotency check
-  const existing = await FpoCommissionLedger.findOne({ idempotency_key: idempotencyKey }).lean();
-  if (existing) {
+  // Idempotency check: only return early if wallet ledger is already linked
+  let existing = await FpoCommissionLedger.findOne({ idempotency_key: idempotencyKey });
+  if (existing && existing.wallet_ledger_id) {
     return {
       posted: true,
       already_posted: true,
-      ledger: existing,
+      ledger: existing.toObject ? existing.toObject() : existing,
       message: `Commission for FPO order "${existing.po_number}" already posted.`,
     };
   }
@@ -153,70 +153,86 @@ async function postCommission({ fpo_order_id, actor_id = null, req = null }) {
   const order = await FpoOrder.findById(fpo_order_id).lean();
   if (!order) throw new Error(`FPO order "${fpo_order_id}" not found`);
 
-  if (!['DELIVERED', 'COMPLETED'].includes(order.status)) {
-    throw new Error(`Commission can only be posted for DELIVERED or COMPLETED orders. Current status: ${order.status}`);
+  if (!['PAID', 'CONFIRMED', 'DELIVERED', 'COMPLETED'].includes(order.status)) {
+    throw new Error(`Commission can only be posted for PAID, CONFIRMED, DELIVERED or COMPLETED orders. Current status: ${order.status}`);
   }
 
   const commission_rule = order.commission_rule_snapshot
     ? order.commission_rule_snapshot
     : await resolveCommissionRule(order.plan_id);
 
-  if (!commission_rule) {
-    return { posted: false, reason: 'No active commission rule found for this plan.' };
-  }
-
-  // Compute eligible quantities from line items
+  // Compute eligible quantities and commission from line items
   let eligible_kit_quantity = 0;
   let gross_eligible_paise = 0;
+  let computed_commission_paise = 0;
 
-  for (const item of order.items) {
-    if (!item.contributes_to_target) continue;
-    const delivered = item.delivered_quantity || item.quantity;
+  for (const item of (order.items || [])) {
+    if (item.contributes_to_target === false) continue;
+    const delivered = item.delivered_quantity || item.quantity || 0;
     const returned  = item.returned_quantity  || 0;
     const cancelled = item.cancelled_quantity || 0;
     const eligible  = Math.max(0, delivered - returned - cancelled);
     eligible_kit_quantity += eligible;
-    gross_eligible_paise  += Math.round((item.unit_price_paise || 0) * eligible);
+    const itemSubtotal = Math.round((item.unit_price_paise || 0) * eligible);
+    gross_eligible_paise  += itemSubtotal;
+
+    // Check item-level commission_snapshot (e.g. 200 bps = 2.0%)
+    if (item.commission_snapshot != null && item.commission_snapshot > 0) {
+      const itemComm = Math.round(itemSubtotal * (Number(item.commission_snapshot) / 10000));
+      computed_commission_paise += itemComm;
+    }
   }
 
-  const { commission_paise, capped } = calculateCommissionAmount({
-    commission_rule,
-    eligible_kit_quantity,
-    gross_eligible_paise,
-  });
+  let commission_paise = 0;
+  let capped = false;
+
+  if (computed_commission_paise > 0) {
+    commission_paise = computed_commission_paise;
+  } else {
+    const calc = calculateCommissionAmount({
+      commission_rule: commission_rule || { commission_method: 'PERCENTAGE', commission_percentage: 2 },
+      eligible_kit_quantity,
+      gross_eligible_paise,
+    });
+    commission_paise = calc.commission_paise;
+    capped = calc.capped;
+  }
 
   if (commission_paise <= 0) {
     return { posted: false, reason: 'Calculated commission is zero. No ledger entry created.' };
   }
 
-  // Fetch TDS/TCS settings
+  // Fetch TDS/TCS settings (default: 5% Section 194H TDS)
   const settings = await SolarShopSettings.findOne().lean();
   const tdsRatePct = settings?.tds_rate_pct != null ? settings.tds_rate_pct : 5.0;
-  const tcsRatePct = settings?.tcs_rate_pct != null ? settings.tcs_rate_pct : 1.0;
+  const tcsRatePct = settings?.tcs_rate_pct != null ? settings.tcs_rate_pct : 0.0;
 
   const tds_paise = Math.round(commission_paise * (tdsRatePct / 100));
   const tcs_paise = Math.round(commission_paise * (tcsRatePct / 100));
   const net_commission_paise = Math.max(0, commission_paise - tds_paise - tcs_paise);
 
-  // Write commission ledger entry
-  const ledger = await FpoCommissionLedger.create({
-    franchisee_id:        order.franchisee_id,
-    fpo_order_id:         order._id,
-    po_number:            order.po_number,
-    commission_method:    commission_rule.commission_method,
-    eligible_kit_quantity,
-    gross_eligible_paise,
-    commission_paise,
-    tds_paise,
-    tcs_paise,
-    net_commission_paise,
-    max_cap_applied:      capped,
-    commission_rule_id:   commission_rule._id || null,
-    calculation_stage:    commission_rule.calculation_stage,
-    settlement_status:    'PENDING',
-    idempotency_key:      idempotencyKey,
-    created_by:           actor_id,
-  });
+  // Write or reuse commission ledger entry
+  let ledger = existing;
+  if (!ledger) {
+    ledger = await FpoCommissionLedger.create({
+      franchisee_id:        order.franchisee_id,
+      fpo_order_id:         order._id,
+      po_number:            order.po_number,
+      commission_method:    commission_rule?.commission_method || 'PERCENTAGE',
+      eligible_kit_quantity,
+      gross_eligible_paise,
+      commission_paise,
+      tds_paise,
+      tcs_paise,
+      net_commission_paise,
+      max_cap_applied:      capped,
+      commission_rule_id:   commission_rule?._id || null,
+      calculation_stage:    commission_rule?.calculation_stage || 'ORDER_CONFIRMED',
+      settlement_status:    'PENDING',
+      idempotency_key:      idempotencyKey,
+      created_by:           actor_id,
+    });
+  }
 
   // Update FPO order flags
   await FpoOrder.findByIdAndUpdate(fpo_order_id, {

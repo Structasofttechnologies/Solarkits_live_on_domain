@@ -412,6 +412,40 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                               </span>
                             </div>
                           )}
+                          {/* Payout Bank Details */}
+                          {(details?.bank_details || transaction?.bank_details) && (
+                            <div className="col-span-2 mt-2 pt-2 border-t border-border/60 bg-emerald-500/10 p-2.5 rounded-xl text-xs">
+                              <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider block mb-1">
+                                Beneficiary Payout Bank Details
+                              </span>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div>
+                                  <span className="text-text-muted text-[10px] block">Bank Name</span>
+                                  <span className="font-bold text-text-primary">
+                                    {details?.bank_details?.bank_name || transaction?.bank_details?.bank_name}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-text-muted text-[10px] block">A/C Number</span>
+                                  <span className="font-mono font-bold text-text-primary">
+                                    {details?.bank_details?.account_number || transaction?.bank_details?.account_number}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-text-muted text-[10px] block">IFSC Code</span>
+                                  <span className="font-mono font-bold text-text-primary">
+                                    {details?.bank_details?.ifsc_code || transaction?.bank_details?.ifsc_code}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-text-muted text-[10px] block">A/C Holder</span>
+                                  <span className="font-semibold text-text-primary truncate block">
+                                    {details?.bank_details?.account_holder_name || transaction?.bank_details?.account_holder_name}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

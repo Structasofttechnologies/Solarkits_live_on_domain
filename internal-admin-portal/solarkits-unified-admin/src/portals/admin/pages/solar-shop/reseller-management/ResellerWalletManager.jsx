@@ -6,7 +6,7 @@ import {
   FiCreditCard, FiDollarSign, FiClock, FiCheckCircle, FiXCircle,
   FiSearch, FiLoader, FiArrowUpRight, FiArrowDownLeft, FiFileText,
   FiShield, FiRefreshCw, FiAlertCircle, FiDownload, FiEye,
-  FiTrendingUp, FiMinusCircle,
+  FiTrendingUp, FiMinusCircle, FiTag, FiCopy, FiCheck
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -48,6 +48,29 @@ function StatusBadge({ status }) {
   );
 }
 
+function CommissionStatusBadge({ status }) {
+  const s = String(status || "").toUpperCase();
+  if (s === "SETTLED") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+        <FiCheckCircle size={11} /> Settled
+      </span>
+    );
+  }
+  if (s === "PAID") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 border border-blue-500/20">
+        <FiCheckCircle size={11} /> Paid
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+      <FiClock size={11} /> Pending Settlement
+    </span>
+  );
+}
+
 // ─── Process Payout Modal ─────────────────────────────────────────────────────
 function ProcessPayoutModal({ payout, onClose, onProcessed }) {
   const dispatch   = useDispatch();
@@ -62,7 +85,7 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (submitting) return; // prevent double-click
+    if (submitting) return;
     setSubmitting(true);
     try {
       const res = await apiFetch("put", `/payouts/process/${payout.id || payout._id}?req_for=edit&unique_id=${MODULE_UID}`, {
@@ -100,7 +123,6 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* ── Payout summary ──────────────────────────────────────────── */}
           <div className="p-4 rounded-xl bg-bg border border-border space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs text-text-muted font-medium uppercase tracking-wider">Reseller</span>
@@ -128,7 +150,6 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
             </div>
           </div>
 
-          {/* ── Bank details ─────────────────────────────────────────────── */}
           {payout.bank_details_snapshot && (
             <div className="p-3.5 rounded-xl bg-bg border border-border font-mono text-xs text-text-secondary space-y-0.5">
               <div className="font-semibold text-text-primary">Bank: {payout.bank_details_snapshot.bank_name}</div>
@@ -137,7 +158,6 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
             </div>
           )}
 
-          {/* ── Wallet balance snapshot at request ───────────────────────── */}
           {payout.wallet_balance_at_request && (
             <div className="p-3 rounded-xl bg-warning-soft border border-warning/20 text-xs font-semibold text-warning space-y-0.5">
               <div className="font-bold mb-1">Balance at time of request:</div>
@@ -146,7 +166,6 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
             </div>
           )}
 
-          {/* ── Decision ────────────────────────────────────────────────── */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">
               Payout Decision <span className="text-danger">*</span>
@@ -159,7 +178,7 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
                   decision === "paid" ? "border-success bg-success-soft text-success shadow-sm" : "border-border bg-bg text-text-muted"
                 }`}
               >
-                <FiCheckCircle size={16} /> Fulfill &amp; Mark Paid
+                <FiCheckCircle size={15} /> Approve &amp; Mark Paid
               </button>
               <button
                 type="button"
@@ -168,35 +187,32 @@ function ProcessPayoutModal({ payout, onClose, onProcessed }) {
                   decision === "rejected" ? "border-danger bg-danger-soft text-danger shadow-sm" : "border-border bg-bg text-text-muted"
                 }`}
               >
-                <FiXCircle size={16} /> Reject &amp; Return Funds
+                <FiXCircle size={15} /> Reject Request
               </button>
             </div>
           </div>
 
-          {/* ── Conditional field ────────────────────────────────────────── */}
           {decision === "paid" ? (
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
-                UTR / Bank Transaction Reference
-                <span className="text-xs text-text-muted ml-1">(Strongly recommended)</span>
+              <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                Bank UTR / Transaction Reference
               </label>
               <input
                 type="text"
-                placeholder="e.g. UTR984719284712 or NEFT ref"
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono"
+                placeholder="e.g. UTR1234567890 / IMPS / NEFT Ref"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-mono"
                 value={txnRef}
                 onChange={(e) => setTxnRef(e.target.value)}
               />
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">
+              <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
                 Rejection Reason <span className="text-danger">*</span>
               </label>
               <textarea
-                required={decision === "rejected"}
-                placeholder="e.g. Bank details mismatch — IFSC does not match account number"
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                placeholder="Provide a clear reason for rejecting this payout request..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-danger/30 resize-none"
                 rows={3}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -288,49 +304,81 @@ function MarkFailedModal({ payout, onClose, onProcessed }) {
 // ─── Main Admin Component ─────────────────────────────────────────────────────
 export default function ResellerWalletManager({ moduleUniqueId }) {
   const dispatch = useDispatch();
-  const [activeTab,       setActiveTab]       = useState("payouts");
-  const [wallets,         setWallets]         = useState([]);
-  const [payouts,         setPayouts]         = useState([]);
-  const [webhooks,        setWebhooks]        = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [statusFilter,    setStatusFilter]    = useState("");
-  const [search,          setSearch]          = useState("");
-  const [selectedPayout,  setSelectedPayout]  = useState(null);
-  const [failedPayout,    setFailedPayout]    = useState(null);
-  const [exporting,       setExporting]       = useState(false);
+  const [activeTab,          setActiveTab]          = useState("commissions");
+  const [commissions,        setCommissions]        = useState([]);
+  const [commissionSummary,  setCommissionSummary]  = useState(null);
+  const [wallets,            setWallets]            = useState([]);
+  const [ledgers,            setLedgers]            = useState([]);
+  const [payouts,            setPayouts]            = useState([]);
+  const [webhooks,           setWebhooks]           = useState([]);
+  const [loading,            setLoading]            = useState(true);
+  const [statusFilter,       setStatusFilter]       = useState("");
+  const [search,             setSearch]             = useState("");
+  const [selectedPayout,     setSelectedPayout]     = useState(null);
+  const [failedPayout,       setFailedPayout]       = useState(null);
+  const [exporting,          setExporting]          = useState(false);
+  const [copiedId,           setCopiedId]           = useState(null);
+
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const fetchCommissions = useCallback(async () => {
+    try {
+      let url = `${API_BASE}/reseller-mgmt/wallet/commissions?req_for=view&unique_id=${MODULE_UID}`;
+      if (statusFilter) url += `&status=${statusFilter}`;
+      const res = await axios.get(url, { headers: authHeaderObj() });
+      if (res.data?.status === "success") {
+        setCommissions(res.data.data || []);
+        if (res.data.summary) setCommissionSummary(res.data.summary);
+      }
+    } catch { /* ignore */ }
+  }, [statusFilter]);
 
   const fetchWallets = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/reseller-mgmt/wallet/list?req_for=view&unique_id=${MODULE_UID}`, { headers: authHeaderObj() });
-      if (res.data?.status === "success") setWallets(res.data.data);
+      if (res.data?.status === "success") setWallets(res.data.data || []);
+    } catch { /* silently ignore */ }
+  }, []);
+
+  const fetchLedgers = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/reseller-mgmt/wallet/ledgers?req_for=view&unique_id=${MODULE_UID}`, { headers: authHeaderObj() });
+      if (res.data?.status === "success") setLedgers(res.data.data || []);
     } catch { /* silently ignore */ }
   }, []);
 
   const fetchPayouts = useCallback(async () => {
-    setLoading(true);
     try {
       let url = `${API_BASE}/reseller-mgmt/wallet/payouts?req_for=view&unique_id=${MODULE_UID}`;
       if (statusFilter) url += `&status=${statusFilter}`;
       const res = await axios.get(url, { headers: authHeaderObj() });
-      if (res.data?.status === "success") setPayouts(res.data.data);
+      if (res.data?.status === "success") setPayouts(res.data.data || []);
     } catch {
       dispatch(setAlert({ type: "error", message: "Failed to load payout requests" }));
-    } finally {
-      setLoading(false);
     }
   }, [dispatch, statusFilter]);
 
   const fetchWebhooks = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/reseller-mgmt/webhook-logs`, { headers: authHeaderObj() });
-      if (res.data?.status === "success") setWebhooks(res.data.data);
+      if (res.data?.status === "success") setWebhooks(res.data.data || []);
     } catch { /* silently ignore */ }
   }, []);
 
-  const refreshAll = useCallback(() => {
-    fetchWallets();
-    fetchPayouts();
-  }, [fetchWallets, fetchPayouts]);
+  const refreshAll = useCallback(async () => {
+    setLoading(true);
+    await Promise.allSettled([
+      fetchCommissions(),
+      fetchWallets(),
+      fetchLedgers(),
+      fetchPayouts(),
+    ]);
+    setLoading(false);
+  }, [fetchCommissions, fetchWallets, fetchLedgers, fetchPayouts]);
 
   useEffect(() => { refreshAll(); }, [refreshAll]);
 
@@ -354,8 +402,7 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
     }
   };
 
-  // ── Aggregated KPIs across all wallets ───────────────────────────────────
-  const kpis = wallets.reduce(
+  const walletKpis = wallets.reduce(
     (acc, w) => ({
       grossEarned:   acc.grossEarned   + (w.breakdown?.gross_earned_inr || 0),
       tdsDeducted:   acc.tdsDeducted   + (w.breakdown?.tds_deducted_inr || 0),
@@ -367,38 +414,65 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
     { grossEarned: 0, tdsDeducted: 0, netEarned: 0, available: 0, pending: 0, withdrawn: 0 }
   );
 
-  // ── Payout counts by status ───────────────────────────────────────────────
-  const pendingCount = payouts.filter((p) => p.status === "pending").length;
+  const grossDisplay   = commissionSummary?.total_gross_commission_inr ?? commissionSummary?.gross_earned ?? walletKpis.grossEarned;
+  const tdsDisplay     = commissionSummary?.total_tds_deducted_inr ?? commissionSummary?.tds_deducted ?? walletKpis.tdsDeducted;
+  const netDisplay     = commissionSummary?.total_net_payout_inr ?? commissionSummary?.net_earned ?? walletKpis.netEarned;
+  const settledDisplay = commissionSummary?.total_settled_inr ?? commissionSummary?.settled_amount ?? 0;
+  const pendingDisplay = commissionSummary?.total_pending_inr ?? commissionSummary?.pending_amount ?? walletKpis.pending;
+
+  const pendingPayoutCount = payouts.filter((p) => p.status === "pending").length;
+
+  const filteredCommissions = commissions.filter((c) => {
+    const po    = (c.po_number || "").toLowerCase();
+    const name  = (c.franchisee_name || "").toLowerCase();
+    const pName = (c.partner_name || "").toLowerCase();
+    const bank  = (c.bank_details?.bank_name || "").toLowerCase();
+    const ac    = (c.bank_details?.account_number || "").toLowerCase();
+    const q     = search.toLowerCase();
+    const matchesSearch = !q || po.includes(q) || name.includes(q) || pName.includes(q) || bank.includes(q) || ac.includes(q);
+    const matchesStatus = !statusFilter || String(c.status).toLowerCase() === statusFilter.toLowerCase();
+    return matchesSearch && matchesStatus;
+  });
 
   const filteredPayouts = payouts.filter((p) => {
-    const name = (p.reseller_id?.business_name || p.reseller?.business_name || "").toLowerCase();
+    const name  = (p.reseller_id?.business_name || p.reseller?.business_name || "").toLowerCase();
     const email = (p.reseller_id?.email || p.reseller?.email || "").toLowerCase();
-    const txn  = (p.utr_reference || p.transaction_reference || "").toLowerCase();
-    const id   = String(p.id || p._id || "").toLowerCase();
+    const txn   = (p.utr_reference || p.transaction_reference || "").toLowerCase();
+    const id    = String(p.id || p._id || "").toLowerCase();
+    const q     = search.toLowerCase();
+    const matchesSearch = !q || name.includes(q) || email.includes(q) || txn.includes(q) || id.includes(q);
+    const matchesStatus = !statusFilter || String(p.status).toLowerCase() === statusFilter.toLowerCase();
+    return matchesSearch && matchesStatus;
+  });
+
+  const filteredLedgers = ledgers.filter((l) => {
+    const name = (l.reseller_id?.business_name || "").toLowerCase();
+    const desc = (l.description || "").toLowerCase();
+    const cat  = (l.category || "").toLowerCase();
+    const ref  = (l.reference_id || "").toLowerCase();
     const q    = search.toLowerCase();
-    return name.includes(q) || email.includes(q) || txn.includes(q) || id.includes(q);
+    return !q || name.includes(q) || desc.includes(q) || cat.includes(q) || ref.includes(q);
   });
 
   return (
     <div className="space-y-6">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-            <FiCreditCard className="text-primary" size={24} />
-            Commission Engine &amp; Wallet Ledger
+            <FiTrendingUp className="text-primary" size={24} />
+            Franchisee Commissions &amp; Wallet Ledgers
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Double-entry ledgers · Reseller wallet balances · Payout request processing
+            Accounts-synced commissions · Section 194H 5% TDS · Beneficiary bank payouts &amp; double-entry ledgers
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {pendingCount > 0 && (
+          {pendingPayoutCount > 0 && (
             <span className="px-3 py-1 rounded-full bg-warning-soft text-warning text-xs font-bold animate-pulse">
-              {pendingCount} Pending
+              {pendingPayoutCount} Payout Requests
             </span>
           )}
-          <button onClick={refreshAll} className="p-2.5 rounded-xl border border-border text-text-muted hover:bg-surface-hover transition-colors" title="Refresh">
+          <button onClick={refreshAll} className="p-2.5 rounded-xl border border-border text-text-muted hover:bg-surface-hover transition-colors" title="Refresh Live Data">
             <FiRefreshCw size={16} />
           </button>
           <button
@@ -412,15 +486,14 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
         </div>
       </div>
 
-      {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
-          { icon: FiTrendingUp,    bg: "bg-success-soft",  text: "text-success",  label: "Gross Earned",      value: fmt(kpis.grossEarned) },
-          { icon: FiMinusCircle,   bg: "bg-danger-soft",   text: "text-danger",   label: "TDS Deducted",      value: fmt(kpis.tdsDeducted) },
-          { icon: FiArrowUpRight,  bg: "bg-info-soft",     text: "text-info",     label: "Net Commissions",   value: fmt(kpis.netEarned) },
-          { icon: FiDollarSign,    bg: "bg-success-soft",  text: "text-success",  label: "Total Available",   value: fmt(kpis.available) },
-          { icon: FiClock,         bg: "bg-warning-soft",  text: "text-warning",  label: "Pending Holds",     value: fmt(kpis.pending) },
-          { icon: FiArrowDownLeft, bg: "bg-primary-soft",  text: "text-primary",  label: "Total Withdrawn",   value: fmt(kpis.withdrawn) },
+          { icon: FiTrendingUp,    bg: "bg-emerald-500/10", text: "text-emerald-500", label: "Gross Commissions", value: fmt(grossDisplay) },
+          { icon: FiMinusCircle,   bg: "bg-rose-500/10",    text: "text-rose-500",    label: "TDS (5% Sec 194H)",   value: fmt(tdsDisplay) },
+          { icon: FiArrowUpRight,  bg: "bg-blue-500/10",    text: "text-blue-500",    label: "Net Commissions",     value: fmt(netDisplay) },
+          { icon: FiDollarSign,    bg: "bg-emerald-500/10", text: "text-emerald-500", label: "Wallet Available",    value: fmt(walletKpis.available) },
+          { icon: FiCheckCircle,   bg: "bg-teal-500/10",    text: "text-teal-500",    label: "Settled Payouts",     value: fmt(settledDisplay) },
+          { icon: FiClock,         bg: "bg-amber-500/10",   text: "text-amber-500",   label: "Pending Payouts",     value: fmt(pendingDisplay) },
         ].map(({ icon: Icon, bg, text, label, value }) => (
           <div key={label} className="bg-surface p-4 rounded-2xl border border-border shadow-sm flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${bg} ${text} flex items-center justify-center shrink-0`}>
@@ -434,54 +507,339 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
         ))}
       </div>
 
-      {/* ── Tabs ──────────────────────────────────────────────────────────── */}
-      <div className="flex border-b border-border overflow-x-auto">
+      <div className="flex border-b border-border overflow-x-auto gap-2">
         {[
-          { key: "payouts", icon: FiCreditCard, label: `Payout Requests (${payouts.length})` },
-          { key: "wallets", icon: FiFileText,   label: `Reseller Wallets (${wallets.length})` },
-          { key: "webhooks", icon: FiShield,   label: "Webhook Logs" },
-        ].map(({ key, icon: Icon, label }) => (
+          { key: "commissions", icon: FiTrendingUp,  label: `Franchisee Commissions (${commissions.length})`, badge: commissionSummary?.pending_count ? `${commissionSummary.pending_count} Pending` : null },
+          { key: "wallets",     icon: FiCreditCard,  label: `Franchisee Wallets (${wallets.length})` },
+          { key: "ledgers",     icon: FiFileText,    label: `Audit Ledgers (${ledgers.length})` },
+          { key: "payouts",     icon: FiClock,       label: `Payout Requests (${payouts.length})`, badge: pendingPayoutCount > 0 ? `${pendingPayoutCount}` : null },
+          { key: "webhooks",    icon: FiShield,      label: "Webhook Logs" },
+        ].map(({ key, icon: Icon, label, badge }) => (
           <button
             key={key}
-            onClick={() => { setActiveTab(key); if (key === "webhooks") fetchWebhooks(); }}
-            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
-              activeTab === key ? "border-primary text-primary" : "border-transparent text-text-muted hover:text-text-primary"
+            onClick={() => {
+              setActiveTab(key);
+              setStatusFilter("");
+              if (key === "webhooks") fetchWebhooks();
+            }}
+            className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === key
+                ? "border-primary text-primary bg-primary/5 rounded-t-xl"
+                : "border-transparent text-text-muted hover:text-text-primary hover:bg-surface-hover/50 rounded-t-xl"
             }`}
           >
-            <Icon size={16} /> {label}
+            <Icon size={16} />
+            {label}
+            {badge && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                {badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* ── Payouts Tab ─────────────────────────────────────────────────────── */}
-      {activeTab === "payouts" && (
-        <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-3 bg-surface p-4 rounded-2xl border border-border shadow-sm">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
-              <input
-                type="text"
-                placeholder="Search by reseller, email, ref ID, or UTR..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
+      {activeTab !== "webhooks" && (
+        <div className="flex flex-col md:flex-row gap-3 bg-surface p-4 rounded-2xl border border-border shadow-sm">
+          <div className="relative flex-1">
+            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
+            <input
+              type="text"
+              placeholder={
+                activeTab === "commissions"
+                  ? "Search by PO#, Franchisee, Partner, Bank A/C, IFSC..."
+                  : activeTab === "ledgers"
+                  ? "Search by reseller, description, reference..."
+                  : "Search by reseller, email, UTR reference..."
+              }
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          {(activeTab === "commissions" || activeTab === "payouts") && (
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="">All Statuses</option>
-              <option value="pending">Pending Review</option>
-              <option value="processing">Processing</option>
-              <option value="paid">Paid</option>
-              <option value="rejected">Rejected</option>
-              <option value="failed">Failed</option>
+              {activeTab === "commissions" ? (
+                <>
+                  <option value="SETTLED">Settled</option>
+                  <option value="PENDING">Pending Settlement</option>
+                  <option value="PAID">Paid</option>
+                </>
+              ) : (
+                <>
+                  <option value="pending">Pending Review</option>
+                  <option value="processing">Processing</option>
+                  <option value="paid">Paid</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="failed">Failed</option>
+                </>
+              )}
             </select>
-          </div>
+          )}
+        </div>
+      )}
 
+      {activeTab === "commissions" && (
+        <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 text-text-muted gap-3">
+              <FiLoader className="animate-spin" size={20} />
+              <span className="text-sm">Loading accounts commission records...</span>
+            </div>
+          ) : filteredCommissions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <p className="text-sm text-text-muted">No commission records found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-bg">
+                    <th className="text-left text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">Ref / PO #</th>
+                    <th className="text-left text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">Franchisee &amp; Contact</th>
+                    <th className="text-left text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">Beneficiary Bank Details</th>
+                    <th className="text-right text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">Order / Kits</th>
+                    <th className="text-right text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">Gross Comm.</th>
+                    <th className="text-right text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">5% TDS</th>
+                    <th className="text-right text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider font-bold">Net Payout</th>
+                    <th className="text-center text-text-muted font-medium px-4 py-3.5 text-xs uppercase tracking-wider">Settlement</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <AnimatePresence>
+                    {filteredCommissions.map((c) => {
+                      const poNumber = c.po_number || c.order_number || shortId(c.id || c._id);
+                      const isPo = c.type === "FPO_PO_ORDER" || c.source === "po_order" || String(poNumber).startsWith("FPO");
+                      const partnerName = c.franchisee_name || c.franchisee?.name || c.franchise_partner_name || "Franchisee Partner";
+                      const partnerContact = c.partner_name || c.franchisee?.contact_person || "";
+                      const contactInfo = c.email || c.mobile || c.franchisee?.email || c.franchisee?.mobile || "—";
+                      const bank = c.bank_details || c.franchisee?.bank_details;
+                      const orderSubtotal = c.order_subtotal ?? c.eligible_subtotal_inr ?? c.subtotal_amount ?? 0;
+                      const kitQty = c.kit_qty ?? c.eligible_kit_quantity ?? 0;
+                      const ratePct = c.commission_rate_pct ?? c.commission_rate ?? 0;
+                      const grossComm = c.gross_commission ?? c.gross_commission_inr ?? 0;
+                      const tdsAmount = c.tds_amount ?? c.tds_deducted_inr ?? 0;
+                      const netPayout = c.net_commission ?? c.net_payout_inr ?? c.commission_amount ?? 0;
+                      const statusVal = c.status || c.settlement_status || c.commission_status || "PENDING";
+                      const utrVal = c.payout_utr || c.utr_number || c.payment_reference;
+                      const settleDate = c.settlement_date || c.settled_at || c.paid_date;
+
+                      return (
+                        <motion.tr
+                          key={c.id || c._id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="hover:bg-surface-hover transition-colors"
+                        >
+                          {/* Reference / PO */}
+                          <td className="px-5 py-4">
+                            <div className="font-mono text-xs font-bold text-primary flex items-center gap-1.5">
+                              {poNumber}
+                              <button
+                                onClick={() => copyToClipboard(poNumber, c.id || c._id)}
+                                className="text-text-muted hover:text-text-primary p-0.5"
+                                title="Copy PO Ref"
+                              >
+                                {copiedId === (c.id || c._id) ? <FiCheck className="text-success" size={12} /> : <FiCopy size={12} />}
+                              </button>
+                            </div>
+                            <div className="text-[11px] text-text-muted mt-0.5">{fmtDate(c.created_at)}</div>
+                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-bg text-text-secondary border border-border">
+                              {isPo ? "PO Bulk Kit" : "Loose Order"}
+                            </span>
+                          </td>
+
+                          {/* Franchisee */}
+                          <td className="px-5 py-4">
+                            <div className="font-semibold text-text-primary text-sm">{partnerName}</div>
+                            {partnerContact && (
+                              <div className="text-xs text-text-secondary">Partner: {partnerContact}</div>
+                            )}
+                            <div className="text-[11px] text-text-muted">{contactInfo}</div>
+                          </td>
+
+                          {/* Bank Details */}
+                          <td className="px-5 py-4 font-mono text-xs">
+                            {bank?.account_number ? (
+                              <div className="p-2 rounded-xl bg-bg border border-border space-y-0.5">
+                                <div className="font-bold text-text-primary text-[11px]">{bank.bank_name || "Bank Account"}</div>
+                                <div className="text-text-secondary text-[11px]">
+                                  A/C: <span className="font-semibold">{bank.account_number}</span>
+                                </div>
+                                <div className="text-text-muted text-[10px]">
+                                  IFSC: {bank.ifsc_code} · {bank.account_holder_name}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-text-muted italic">Bank details pending update</span>
+                            )}
+                          </td>
+
+                          {/* Order Subtotal & Kits */}
+                          <td className="px-5 py-4 text-right">
+                            <div className="font-semibold text-text-primary text-xs">{fmt(orderSubtotal)}</div>
+                            <div className="text-[11px] text-text-muted">{kitQty} Kits · {ratePct}% Rate</div>
+                          </td>
+
+                          {/* Gross Commission */}
+                          <td className="px-5 py-4 text-right font-bold text-emerald-600">
+                            {fmt(grossComm)}
+                          </td>
+
+                          {/* 5% TDS */}
+                          <td className="px-5 py-4 text-right font-semibold text-rose-500 text-xs">
+                            -{fmt(tdsAmount)}
+                            <div className="text-[10px] text-text-muted font-normal">Sec 194H (5%)</div>
+                          </td>
+
+                          {/* Net Commission */}
+                          <td className="px-5 py-4 text-right font-extrabold text-primary text-sm">
+                            {fmt(netPayout)}
+                          </td>
+
+                          {/* Settlement Status */}
+                          <td className="px-4 py-4 text-center">
+                            <CommissionStatusBadge status={statusVal} />
+                            {settleDate && (
+                              <div className="text-[10px] text-text-muted mt-1">{fmtDate(settleDate)}</div>
+                            )}
+                            {utrVal && utrVal !== "N/A" && (
+                              <div className="font-mono text-[9px] text-text-secondary mt-0.5 truncate max-w-[120px] mx-auto" title={utrVal}>
+                                UTR: {utrVal}
+                              </div>
+                            )}
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "wallets" && (
+        <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-bg">
+                  {["Reseller Partner", "Gross Earned", "5% TDS", "Net Earned", "Available Balance", "Pending Holds", "Withdrawn", "Status"].map((h) => (
+                    <th key={h} className={`px-5 py-3.5 text-xs font-medium text-text-muted uppercase tracking-wider ${h === "Reseller Partner" ? "text-left" : "text-right"} ${["Gross Earned","5% TDS"].includes(h) ? "hidden xl:table-cell" : ""}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {wallets.map((w) => (
+                  <tr key={w.id || w._id} className="hover:bg-surface-hover transition-colors">
+                    <td className="px-5 py-3.5">
+                      <div className="font-semibold text-text-primary">{w.reseller_id?.business_name || "Franchisee Partner"}</div>
+                      <div className="text-xs text-text-muted">{w.reseller_id?.email}</div>
+                      {w.reseller_id?.pan_number && <div className="text-[11px] font-mono text-text-muted">PAN: {w.reseller_id.pan_number}</div>}
+                    </td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-text-primary hidden xl:table-cell">{fmt(w.breakdown?.gross_earned_inr || 0)}</td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-danger hidden xl:table-cell">{fmt(w.breakdown?.tds_deducted_inr || 0)}</td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-text-primary">{fmt(w.breakdown?.net_earned_inr || w.total_earned || 0)}</td>
+                    <td className="px-5 py-3.5 text-right font-bold text-success text-base">{fmt(w.available_balance || 0)}</td>
+                    <td className="px-5 py-3.5 text-right font-semibold text-warning">{fmt(w.pending_balance || 0)}</td>
+                    <td className="px-5 py-3.5 text-right text-text-muted">{fmt(w.total_withdrawn || 0)}</td>
+                    <td className="px-4 py-3.5 text-right">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${w.status === "frozen" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"}`}>
+                        {w.status || "active"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "ledgers" && (
+        <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+          {filteredLedgers.length === 0 ? (
+            <div className="py-20 text-center text-text-muted text-sm">
+              No ledger entries recorded yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-bg text-text-muted text-xs uppercase tracking-wider">
+                    <th className="text-left px-5 py-3.5 font-medium">Timestamp</th>
+                    <th className="text-left px-5 py-3.5 font-medium">Franchisee / Reseller</th>
+                    <th className="text-left px-5 py-3.5 font-medium">Category &amp; Description</th>
+                    <th className="text-right px-5 py-3.5 font-medium">Entry Type</th>
+                    <th className="text-right px-5 py-3.5 font-medium">Amount</th>
+                    <th className="text-right px-5 py-3.5 font-medium">Balance After</th>
+                    <th className="text-right px-5 py-3.5 font-medium">Reference ID</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredLedgers.map((l) => {
+                    const isCredit = l.entry_type === "credit";
+                    const amountInr = (l.amount_paise || 0) / 100;
+                    const balanceInr = (l.balance_after_paise || 0) / 100;
+                    return (
+                      <tr key={l._id} className="hover:bg-surface-hover transition-colors">
+                        <td className="px-5 py-3.5 text-xs text-text-muted whitespace-nowrap">
+                          {fmtDate(l.created_at)}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="font-semibold text-text-primary text-xs">
+                            {l.reseller_id?.business_name || "Franchisee"}
+                          </div>
+                          <div className="text-[11px] text-text-muted">{l.reseller_id?.email || ""}</div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="font-semibold text-xs text-text-primary flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-bg border border-border">
+                              {l.category}
+                            </span>
+                          </div>
+                          <div className="text-xs text-text-secondary mt-0.5">{l.description}</div>
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                              isCredit
+                                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}
+                          >
+                            {isCredit ? <FiArrowDownLeft size={12} /> : <FiArrowUpRight size={12} />}
+                            {l.entry_type}
+                          </span>
+                        </td>
+                        <td className={`px-5 py-3.5 text-right font-bold ${isCredit ? "text-emerald-600" : "text-rose-600"}`}>
+                          {isCredit ? "+" : "-"}{fmt(amountInr)}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-mono text-xs text-text-primary font-semibold">
+                          {fmt(balanceInr)}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-mono text-xs text-text-muted">
+                          {l.reference_id ? shortId(l.reference_id) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "payouts" && (
+        <div className="space-y-4">
           <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
             {loading ? (
               <div className="flex items-center justify-center py-20 text-text-muted gap-3">
@@ -507,7 +865,7 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
                       <th className="text-right text-text-muted font-medium px-5 py-3.5 text-xs uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody className="divide-y border-border">
                     <AnimatePresence>
                       {filteredPayouts.map((p) => (
                         <motion.tr
@@ -522,9 +880,6 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
                           <td className="px-5 py-3.5">
                             <div className="font-semibold text-text-primary text-sm">{p.reseller_id?.business_name || p.reseller?.business_name}</div>
                             <div className="text-xs text-text-muted">{p.reseller_id?.email || p.reseller?.email}</div>
-                            {(p.reseller_id?.pan_number || p.reseller?.pan_number) && (
-                              <div className="text-[11px] font-mono text-text-muted mt-0.5">PAN: {p.reseller_id?.pan_number || p.reseller?.pan_number}</div>
-                            )}
                           </td>
                           <td className="px-5 py-3.5 text-right font-bold text-primary">
                             {fmt(p.amount_paise ? p.amount_paise / 100 : p.amount)}
@@ -534,7 +889,6 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
                               <div>
                                 <div className="font-semibold">{p.bank_details_snapshot.bank_name}</div>
                                 <div className="text-text-muted">A/C: {p.bank_details_snapshot.account_number}</div>
-                                <div className="text-text-muted">IFSC: {p.bank_details_snapshot.ifsc_code}</div>
                               </div>
                             ) : (
                               <span className="italic text-text-muted">—</span>
@@ -580,46 +934,6 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
         </div>
       )}
 
-      {/* ── Wallets Overview Tab ──────────────────────────────────────────── */}
-      {activeTab === "wallets" && (
-        <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg">
-                  {["Reseller", "Gross Earned", "TDS", "Net Earned", "Available", "Pending Holds", "Withdrawn", "Status"].map((h) => (
-                    <th key={h} className={`px-5 py-3.5 text-xs font-medium text-text-muted uppercase tracking-wider ${h === "Reseller" ? "text-left" : "text-right"} ${["Gross Earned","TDS"].includes(h) ? "hidden xl:table-cell" : ""}`}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {wallets.map((w) => (
-                  <tr key={w.id || w._id} className="hover:bg-surface-hover transition-colors">
-                    <td className="px-5 py-3.5">
-                      <div className="font-semibold text-text-primary">{w.reseller_id?.business_name || "Reseller"}</div>
-                      <div className="text-xs text-text-muted">{w.reseller_id?.email}</div>
-                      {w.reseller_id?.pan_number && <div className="text-[11px] font-mono text-text-muted">{w.reseller_id.pan_number}</div>}
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-text-primary hidden xl:table-cell">{fmt(w.breakdown?.gross_earned_inr || 0)}</td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-danger hidden xl:table-cell">{fmt(w.breakdown?.tds_deducted_inr || 0)}</td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-text-primary">{fmt(w.breakdown?.net_earned_inr || w.total_earned || 0)}</td>
-                    <td className="px-5 py-3.5 text-right font-bold text-success">{fmt(w.available_balance || 0)}</td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-warning">{fmt(w.pending_balance || 0)}</td>
-                    <td className="px-5 py-3.5 text-right text-text-muted">{fmt(w.total_withdrawn || 0)}</td>
-                    <td className="px-4 py-3.5 text-right">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${w.status === "frozen" ? "bg-danger-soft text-danger" : "bg-success-soft text-success"}`}>
-                        {w.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── Webhooks Tab ─────────────────────────────────────────────────── */}
       {activeTab === "webhooks" && (
         <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden space-y-4 p-4">
           <div className="flex items-center justify-between">
@@ -634,7 +948,7 @@ export default function ResellerWalletManager({ moduleUniqueId }) {
 
           {webhooks.length === 0 ? (
             <div className="py-12 text-center text-text-muted text-xs">
-              No webhook events recorded yet. Webhooks will automatically log here as Razorpay payment events occur.
+              No webhook events recorded yet.
             </div>
           ) : (
             <div className="overflow-x-auto">

@@ -337,7 +337,7 @@ export default function Login() {
 
     return (
       <div className="px-6 pb-6 pt-2 border-t border-border/50 bg-primary/5">
-        {/* <p className="text-[10px] uppercase tracking-wider text-primary/70 font-bold mb-3">
+        <p className="text-[10px] uppercase tracking-wider text-primary/70 font-bold mb-3">
           Quick Access (Testing Only)
         </p>
         <div className="space-y-2">
@@ -358,7 +358,7 @@ export default function Login() {
               <FiArrowRight size={14} className="text-primary dark:text-info opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
             </button>
           ))}
-        </div> */}
+        </div>
       </div>
     );
   };

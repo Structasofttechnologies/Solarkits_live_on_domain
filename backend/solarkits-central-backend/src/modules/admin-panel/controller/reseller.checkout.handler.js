@@ -8,7 +8,7 @@
  */
 
 const mongoose = require('mongoose');
-const { PurchaseOrder, EpcOrder } = require('../models/india_solarshop_db');
+const { PurchaseOrder, EpcOrder, FpoOrder, Reseller } = require('../models/india_solarshop_db');
 const {
   validateResellerCheckoutGuards,
   calculateDualModeOrderPricing,
@@ -176,9 +176,262 @@ const list_reseller_orders = async (req, res) => {
   }
 };
 
+// ─── 5. LIST FRANCHISEE PO ORDERS (Live FPO orders for Reseller Workspace) ───
+/**
+ * GET /admin-api/reseller-mgmt/orders/po-orders
+ */
+const list_fpo_orders = async (req, res) => {
+  try {
+    const { franchisee_id, status, search, page = 1, limit = 50 } = req.query;
+    const query = { deleted_at: null };
+
+    if (franchisee_id && mongoose.Types.ObjectId.isValid(franchisee_id)) {
+      query.franchisee_id = franchisee_id;
+    }
+    if (status && status !== 'ALL') {
+      query.status = { $in: status.split(',') };
+    }
+    if (search && search.trim()) {
+      const q = search.trim();
+      query.$or = [
+        { po_number: { $regex: q, $options: 'i' } },
+        { 'reseller_snapshot.company_name': { $regex: q, $options: 'i' } },
+        { 'reseller_snapshot.name': { $regex: q, $options: 'i' } },
+        { 'items.item_name': { $regex: q, $options: 'i' } },
+      ];
+    }
+
+    const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+    const [orders, total] = await Promise.all([
+      FpoOrder.find(query)
+        .populate('franchisee_id', 'business_name name mobile email gst_number contact_person bank_details address')
+        .populate('plan_id', 'name territory_level')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      FpoOrder.countDocuments(query),
+    ]);
+
+    const formatted = orders.map((o) => {
+      const partner = o.franchisee_id || {};
+      const allocations = (o.items || []).flatMap((it) => it.epc_allocations || []);
+      const totalKits = o.total_kit_quantity || (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
+
+      return {
+        _id: o._id,
+        id: o._id,
+        order_type: 'fpo_order',
+        po_number: o.po_number,
+        franchisee: {
+          _id: partner._id || o.franchisee_id,
+          business_name: partner.business_name || o.reseller_snapshot?.company_name || 'Gujarat SolarTech Enterprises',
+          name: partner.name || o.reseller_snapshot?.name || 'Partner Admin',
+          mobile: partner.mobile || o.reseller_snapshot?.phone || 'N/A',
+          email: partner.email || o.reseller_snapshot?.email || 'N/A',
+          gst_number: partner.gst_number || 'N/A',
+          bank_details: partner.bank_details || null,
+        },
+        plan: o.plan_id ? { name: o.plan_id.name, territory_level: o.plan_id.territory_level } : null,
+        status: o.status,
+        payment_type: o.payment_type || 'FULL_PAYMENT',
+        payment_reference: o.payment_reference || null,
+        total_kit_quantity: totalKits,
+        subtotal_paise: o.subtotal_paise || 0,
+        subtotal_inr: Math.round(o.subtotal_paise || 0) / 100,
+        tax_total_paise: o.tax_total_paise || o.total_tax_paise || 0,
+        tax_total_inr: Math.round(o.tax_total_paise || o.total_tax_paise || 0) / 100,
+        grand_total_paise: o.grand_total_paise || 0,
+        grand_total_inr: Math.round(o.grand_total_paise || 0) / 100,
+        items: (o.items || []).map((it) => ({
+          item_name: it.item_name,
+          item_code: it.item_code,
+          quantity: it.quantity,
+          unit_price_inr: Math.round(it.unit_price_paise || 0) / 100,
+          total_price_inr: Math.round(it.total_price_paise || 0) / 100,
+          gst_rate: it.gst_rate,
+          epc_allocations: (it.epc_allocations || []).map((a) => ({
+            epc_buyer_id: a.epc_buyer_id,
+            buyer_name: a.buyer_name || a.company_name,
+            company_name: a.company_name,
+            gstin: a.gstin,
+            allocated_quantity: a.allocated_quantity,
+            payment_status: a.payment_status || 'PENDING',
+            payment_receipt_url: a.payment_receipt_url || null,
+            paid_at: a.paid_at || null,
+            payment_notes: a.payment_notes || null,
+          })),
+        })),
+        allocations_count: allocations.length,
+        allocations_verified_count: allocations.filter((a) => a.payment_status === 'VERIFIED' || a.payment_status === 'PAID').length,
+        commission_posted: o.commission_posted || false,
+        created_at: o.created_at,
+        updated_at: o.updated_at,
+      };
+    });
+
+    return res.json({
+      status: 'success',
+      data: formatted,
+      pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
+    });
+  } catch (error) {
+    console.error('[reseller.checkout] list_fpo_orders error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 6. LIST LOOSE ORDERS (Direct EPC & Franchisee-Attributed Loose Orders) ───
+/**
+ * GET /admin-api/reseller-mgmt/orders/loose-orders
+ */
+const list_loose_orders = async (req, res) => {
+  try {
+    const { reseller_id, routing_source, status, search, page = 1, limit = 50 } = req.query;
+    const query = {};
+
+    if (reseller_id && mongoose.Types.ObjectId.isValid(reseller_id)) {
+      query.reseller_id = reseller_id;
+    }
+    if (routing_source && routing_source !== 'ALL') {
+      query.routing_source = routing_source;
+    }
+    if (status && status !== 'ALL') {
+      query.status = { $in: status.split(',') };
+    }
+    if (search && search.trim()) {
+      const q = search.trim();
+      query.$or = [
+        { order_number: { $regex: q, $options: 'i' } },
+        { 'items.item_name': { $regex: q, $options: 'i' } },
+        { payment_utr: { $regex: q, $options: 'i' } },
+      ];
+    }
+
+    const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+    const [orders, total] = await Promise.all([
+      EpcOrder.find(query)
+        .populate('reseller_id', 'business_name name mobile email gst_number')
+        .populate('epc_id', 'company_name full_name name email mobile gstin')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      EpcOrder.countDocuments(query),
+    ]);
+
+    const formatted = orders.map((o) => {
+      const partner = o.reseller_id || {};
+      const buyer = o.epc_id || {};
+      const totalKits = (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
+      const subtotalPaise = o.subtotal_paise || (o.items || []).reduce((acc, it) => acc + (it.total_price_paise || 0), 0);
+      const taxPaise = o.tax_total_paise || (o.items || []).reduce((acc, it) => acc + (it.tax_paise || 0), 0);
+      const grandTotalPaise = o.grand_total_paise || (subtotalPaise + taxPaise);
+
+      return {
+        _id: o._id,
+        id: o._id,
+        order_type: 'loose_order',
+        order_number: o.order_number || `ORD-${String(o._id).slice(-8).toUpperCase()}`,
+        routing_source: o.routing_source || 'direct_fallback',
+        is_franchise_attributed: o.routing_source === 'primary_reseller' || Boolean(o.reseller_id),
+        reseller: o.reseller_id ? {
+          _id: partner._id,
+          business_name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+          mobile: partner.mobile || 'N/A',
+          email: partner.email || 'N/A',
+        } : null,
+        buyer: {
+          _id: buyer._id || o.epc_id,
+          name: buyer.company_name || buyer.full_name || buyer.name || 'EPC Buyer Partner',
+          email: buyer.email || 'N/A',
+          mobile: buyer.mobile || 'N/A',
+          gstin: buyer.gstin || 'N/A',
+        },
+        total_kit_quantity: totalKits,
+        subtotal_paise: subtotalPaise,
+        subtotal_inr: Math.round(subtotalPaise) / 100,
+        tax_total_paise: taxPaise,
+        tax_total_inr: Math.round(taxPaise) / 100,
+        grand_total_paise: grandTotalPaise,
+        grand_total_inr: Math.round(grandTotalPaise) / 100,
+        reseller_margin_inr: Math.round((o.items || []).reduce((acc, it) => acc + (it.reseller_margin_paise || 0), 0)) / 100,
+        status: o.status || 'CONFIRMED',
+        payment_status: o.payment_status || (o.status === 'PAID' || o.status === 'COMPLETED' ? 'PAID' : 'PENDING'),
+        payment_utr: o.payment_utr || null,
+        delivery_address: o.delivery_address || null,
+        items: (o.items || []).map((it) => ({
+          item_name: it.item_name || 'Solar Combo Kit',
+          quantity: it.quantity || 1,
+          unit_price_inr: Math.round(it.unit_price_paise || 0) / 100,
+          total_price_inr: Math.round(it.total_price_paise || 0) / 100,
+          gst_rate: it.gst_rate || 13.8,
+          reseller_margin_inr: Math.round(it.reseller_margin_paise || 0) / 100,
+        })),
+        created_at: o.created_at,
+        updated_at: o.updated_at,
+      };
+    });
+
+    return res.json({
+      status: 'success',
+      data: formatted,
+      pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
+    });
+  } catch (error) {
+    console.error('[reseller.checkout] list_loose_orders error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 7. GET ORDERS WORKSPACE STATS ────────────────────────────────────────────
+/**
+ * GET /admin-api/reseller-mgmt/orders/stats
+ */
+const get_orders_stats = async (req, res) => {
+  try {
+    const [fpoOrders, epcOrders] = await Promise.all([
+      FpoOrder.find({ deleted_at: null }).select('status grand_total_paise total_kit_quantity').lean(),
+      EpcOrder.find({}).select('status grand_total_paise routing_source reseller_id items').lean(),
+    ]);
+
+    const po_count = fpoOrders.length;
+    const po_volume_inr = Math.round(fpoOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0)) / 100;
+    const po_kits = fpoOrders.reduce((s, o) => s + (o.total_kit_quantity || 0), 0);
+    const po_paid_count = fpoOrders.filter((o) => o.status === 'PAID' || o.status === 'COMPLETED').length;
+
+    const loose_count = epcOrders.length;
+    const loose_volume_inr = Math.round(epcOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0)) / 100;
+    const loose_kits = epcOrders.reduce((s, o) => s + (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0), 0);
+    const loose_attributed_count = epcOrders.filter((o) => o.reseller_id || o.routing_source === 'primary_reseller').length;
+
+    return res.json({
+      status: 'success',
+      data: {
+        po_count,
+        po_volume_inr,
+        po_kits,
+        po_paid_count,
+        loose_count,
+        loose_volume_inr,
+        loose_kits,
+        loose_attributed_count,
+        total_orders_count: po_count + loose_count,
+        total_volume_inr: po_volume_inr + loose_volume_inr,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.checkout] get_orders_stats error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   validate_checkout,
   create_epc_order,
   confirm_epc_payment,
   list_reseller_orders,
+  list_fpo_orders,
+  list_loose_orders,
+  get_orders_stats,
 };

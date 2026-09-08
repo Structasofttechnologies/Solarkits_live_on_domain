@@ -33,3 +33,7 @@ build/
 *.sw?
 .DS_Store
 Thumbs.db
+
+# Scratch and temporary scripts
+scratch/
+**/scratch/

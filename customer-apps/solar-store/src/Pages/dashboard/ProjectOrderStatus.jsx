@@ -51,6 +51,15 @@ export default function ProjectOrderStatus() {
   const [savingAddress, setSavingAddress] = useState(false);
   const [boundaries, setBoundaries] = useState([]);
 
+  // PO Allocations state
+  const [poAllocations, setPoAllocations] = useState([]);
+  const [poLoading, setPoLoading] = useState(false);
+  const [mainTab, setMainTab] = useState("direct"); // "direct" | "po_allocations"
+  const [selectedPoForUpload, setSelectedPoForUpload] = useState(null);
+  const [poReceiptFile, setPoReceiptFile] = useState(null);
+  const [poUploading, setPoUploading] = useState(false);
+  const [poUploadMsg, setPoUploadMsg] = useState("");
+
   // Fetch orders
   const fetchOrders = async () => {
     setLoading(true);
@@ -69,8 +78,50 @@ export default function ProjectOrderStatus() {
     }
   };
 
+  const fetchPoAllocations = async () => {
+    setPoLoading(true);
+    try {
+      const res = await axiosInstance.get("/india/v1/shop/po-allocations");
+      if (res.data?.success || res.data?.status === "success") {
+        setPoAllocations(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load PO allocations:", err);
+    } finally {
+      setPoLoading(false);
+    }
+  };
+
+  const handlePoReceiptUpload = async (poId) => {
+    if (!poReceiptFile) {
+      setPoUploadMsg("Please select a receipt image or PDF to upload.");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("files", poReceiptFile);
+    setPoUploading(true);
+    setPoUploadMsg("");
+    try {
+      const res = await axiosInstance.post(`/india/v1/shop/po-allocations/${poId}/upload-receipt`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (res.data?.success || res.data?.status === "success") {
+        setSelectedPoForUpload(null);
+        setPoReceiptFile(null);
+        fetchPoAllocations();
+      } else {
+        setPoUploadMsg(res.data?.message || "Failed to upload receipt.");
+      }
+    } catch (err) {
+      setPoUploadMsg(err.response?.data?.message || "Failed to upload receipt.");
+    } finally {
+      setPoUploading(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
+    fetchPoAllocations();
     fetchStates();
   }, []);
 
@@ -195,12 +246,51 @@ export default function ProjectOrderStatus() {
         </div>
 
         <button
-          onClick={fetchOrders}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-bold text-text-primary transition-colors shadow-sm self-start"
+          onClick={() => {
+            fetchOrders();
+            fetchPoAllocations();
+          }}
+          className="inline-flex items-center gap-2 px-3.5 py-2 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-bold text-text-primary transition-colors shadow-sm self-start cursor-pointer"
         >
-          <BsArrowRepeat className={loading ? "animate-spin text-primary" : ""} /> Refresh
+          <BsArrowRepeat className={(loading || poLoading) ? "animate-spin text-primary" : ""} /> Refresh
         </button>
       </div>
+
+      {/* ── Segment Switcher: Direct Orders vs Franchisee PO Allocations ──────── */}
+      <div className="flex items-center gap-2 p-1.5 bg-surface border border-border rounded-2xl w-fit shadow-xs">
+        <button
+          onClick={() => setMainTab("direct")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            mainTab === "direct"
+              ? "bg-primary text-white shadow-sm"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          <FaShoppingCart size={13} />
+          <span>Direct Kit Orders ({orders.length})</span>
+        </button>
+        <button
+          onClick={() => setMainTab("po_allocations")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            mainTab === "po_allocations"
+              ? "bg-primary text-white shadow-sm"
+              : "text-text-secondary hover:text-text-primary"
+          }`}
+        >
+          <FaBuilding size={13} />
+          <span>Franchisee PO Allocations ({poAllocations.length})</span>
+          {poAllocations.some((o) =>
+            (o.items || []).some((i) =>
+              (i.epc_allocations || []).some((a) => a.payment_status === "RECEIPT_SUBMITTED")
+            )
+          ) && (
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+          )}
+        </button>
+      </div>
+
+      {mainTab === "direct" ? (
+        <>
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -491,6 +581,292 @@ export default function ProjectOrderStatus() {
               </div>
             );
           })}
+        </div>
+      )}
+        </>
+      ) : (
+        /* ── Franchisee PO Allocations Tracking Tab ────────────────────────── */
+        <div className="space-y-6">
+          {poLoading ? (
+            <div className="py-20 text-center space-y-3">
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-bold text-text-secondary">Loading Franchisee PO Allocations...</p>
+            </div>
+          ) : poAllocations.length === 0 ? (
+            <div className="py-20 text-center bg-surface rounded-3xl border border-border shadow-sm p-8 space-y-3">
+              <FaBuilding className="mx-auto text-text-muted text-4xl" />
+              <h3 className="text-base font-bold text-text-primary dark:text-white">No Franchisee PO Allocations</h3>
+              <p className="text-xs text-text-secondary max-w-md mx-auto">
+                When your Franchise Partner creates a Purchase Order and allocates solar combo kits to your company, they will appear here for payment upload and live tracking.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {poAllocations.map((order) => {
+                const item = order.items?.[0] || {};
+                const epcAlloc = item.epc_allocations?.[0] || {};
+                const allocQty = epcAlloc.allocated_quantity || 1;
+                const baseAmount = ((item.unit_price_paise || 0) * allocQty) / 100;
+                const taxAmount = item.quantity > 0
+                  ? (((item.tax_paise || 0) / item.quantity) * allocQty) / 100
+                  : 0;
+                const totalPayable = baseAmount + taxAmount;
+                const payStatus = epcAlloc.payment_status || "PENDING";
+                const isPoPaid = ["PAID", "STOCK_ALLOCATED", "PROCESSING", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(order.status);
+                const isDispatched = ["DISPATCHED", "DELIVERED", "COMPLETED"].includes(order.status);
+                const isDelivered = ["DELIVERED", "COMPLETED"].includes(order.status);
+
+                // Step Progression
+                let step = 1;
+                if (isDelivered) step = 5;
+                else if (isDispatched) step = 4;
+                else if (isPoPaid) step = 3;
+                else if (payStatus === "RECEIPT_SUBMITTED" || payStatus === "VERIFIED") step = 2;
+
+                return (
+                  <div
+                    key={order._id}
+                    className="bg-surface rounded-3xl border border-border shadow-sm overflow-hidden transition-all hover:shadow-md"
+                  >
+                    {/* Header */}
+                    <div className="p-5 border-b border-border bg-surface-hover/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-sm text-text-primary dark:text-white">
+                            {order.po_number}
+                          </span>
+                          <span className="text-xs text-text-muted">
+                            • {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                        </div>
+                        <div className="text-xs text-text-secondary mt-0.5">
+                          Franchisee: <strong className="text-text-primary">{order.franchisee_id?.business_name || "Franchise Partner"}</strong>
+                          {order.franchisee_id?.mobile && ` (${order.franchisee_id.mobile})`}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          PO Status: {order.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stepper Timeline */}
+                    <div className="p-6 border-b border-border bg-surface">
+                      <div className="relative flex justify-between items-center max-w-3xl mx-auto">
+                        <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 h-1 bg-border -z-0" />
+                        <div
+                          className="absolute top-1/2 left-0 -translate-y-1/2 h-1 bg-primary transition-all duration-500 -z-0"
+                          style={{ width: `${((step - 1) / 4) * 100}%` }}
+                        />
+
+                        {[
+                          { title: "Allocated", desc: "Kits Assigned" },
+                          { title: "Payment", desc: payStatus === "VERIFIED" ? "Verified ✓" : payStatus === "RECEIPT_SUBMITTED" ? "Under Review ⏳" : "Receipt Due" },
+                          { title: "PO Confirmed", desc: isPoPaid ? "Stock Paid ✓" : "Pending Total" },
+                          { title: "Dispatched", desc: isDispatched ? "In Transit 🚚" : "Warehouse" },
+                          { title: "Delivered", desc: isDelivered ? "Delivered 🎉" : "Destination" },
+                        ].map((s, idx) => {
+                          const num = idx + 1;
+                          const isDone = num <= step;
+                          return (
+                            <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10 bg-surface px-1">
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                                  isDone
+                                    ? "bg-primary text-white shadow-md shadow-primary/20 scale-105"
+                                    : "bg-surface-hover text-text-muted border border-border"
+                                }`}
+                              >
+                                {isDone ? "✓" : num}
+                              </div>
+                              <span className={`text-[11px] font-black ${isDone ? "text-text-primary dark:text-white" : "text-text-muted"}`}>
+                                {s.title}
+                              </span>
+                              <span className="text-[9px] text-text-muted text-center hidden sm:block">
+                                {s.desc}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-6 space-y-4 text-xs">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <span className="font-bold text-text-secondary block">Allocated Solar Kit:</span>
+                          <div className="bg-surface-hover p-4 rounded-2xl border border-border space-y-1.5">
+                            <p className="font-black text-sm text-text-primary dark:text-white">
+                              {item.item_name || "Solar Kit Package"}
+                            </p>
+                            <div className="flex justify-between text-text-secondary pt-1">
+                              <span>Allocated Quantity:</span>
+                              <strong className="text-text-primary font-mono text-sm">{allocQty} Kit(s)</strong>
+                            </div>
+                            <div className="flex justify-between text-text-secondary">
+                              <span>Rate per Kit:</span>
+                              <span className="font-mono">₹{((item.unit_price_paise || 0) / 100).toLocaleString("en-IN")}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="font-bold text-text-secondary block">Commercial Payable Breakdown:</span>
+                          <div className="bg-surface-hover p-4 rounded-2xl border border-border space-y-1.5">
+                            <div className="flex justify-between text-text-secondary">
+                              <span>Base Amount:</span>
+                              <span className="font-mono">₹{baseAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-text-secondary">
+                              <span>GST ({item.gst_rate || 12}%):</span>
+                              <span className="font-mono">₹{taxAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-text-primary font-black text-sm pt-2 border-t border-border">
+                              <span>Total Amount to Pay:</span>
+                              <span className="text-primary font-mono text-base">₹{totalPayable.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Payment Verification Status Banner & Upload Action */}
+                      <div className="pt-2">
+                        {payStatus === "PENDING" && (
+                          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-black">
+                                <FaExclamationTriangle size={16} />
+                                <span>Bank Transfer Payment Proof Required</span>
+                              </div>
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                                Payment Pending
+                              </span>
+                            </div>
+
+                            {epcAlloc.payment_notes && (
+                              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold">
+                                Rejection Note from Franchisee/Admin: {epcAlloc.payment_notes}
+                              </div>
+                            )}
+
+                            {selectedPoForUpload === order._id ? (
+                              <div className="space-y-3 pt-2">
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={(e) => setPoReceiptFile(e.target.files[0])}
+                                  className="block w-full text-xs text-text-secondary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                                />
+                                {poUploadMsg && (
+                                  <p className="text-red-500 text-xs font-bold">{poUploadMsg}</p>
+                                )}
+                                <div className="flex gap-2">
+                                  <button
+                                    disabled={poUploading}
+                                    onClick={() => handlePoReceiptUpload(order._id)}
+                                    className="px-4 py-2 rounded-xl bg-primary text-white font-bold text-xs hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                                  >
+                                    {poUploading ? "Uploading..." : "Submit Receipt for Verification"}
+                                  </button>
+                                  <button
+                                    onClick={() => { setSelectedPoForUpload(null); setPoReceiptFile(null); setPoUploadMsg(""); }}
+                                    className="px-4 py-2 rounded-xl bg-surface border border-border text-text-secondary font-bold text-xs hover:bg-surface-hover cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between pt-1">
+                                <p className="text-xs text-text-secondary">
+                                  Transfer ₹{totalPayable.toLocaleString("en-IN")} to the Franchisee's account and upload the receipt screenshot.
+                                </p>
+                                <button
+                                  onClick={() => setSelectedPoForUpload(order._id)}
+                                  className="px-4 py-2 rounded-xl bg-primary text-white font-black text-xs hover:opacity-90 cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0"
+                                >
+                                  <FaUpload size={12} /> Upload Receipt
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {payStatus === "RECEIPT_SUBMITTED" && (
+                          <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
+                                <FaRegClock size={16} />
+                              </div>
+                              <div>
+                                <div className="font-black text-blue-800 dark:text-blue-300 text-xs">
+                                  Receipt Under Verification ⏳
+                                </div>
+                                <div className="text-xs text-text-secondary mt-0.5">
+                                  Your Franchise Partner and Accounts team have received your payment proof and are verifying it. Once verified, this order will be confirmed.
+                                </div>
+                              </div>
+                            </div>
+
+                            {epcAlloc.payment_receipt_url && (
+                              <a
+                                href={
+                                  epcAlloc.payment_receipt_url.startsWith("http")
+                                    ? epcAlloc.payment_receipt_url
+                                    : `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}${epcAlloc.payment_receipt_url.startsWith("/") ? "" : "/"}${epcAlloc.payment_receipt_url}`
+                                }
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface border border-border text-primary hover:bg-surface-hover inline-flex items-center gap-1 shrink-0"
+                              >
+                                <FaEye size={12} /> View Receipt
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {payStatus === "VERIFIED" && (
+                          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                <FaCheckCircle size={16} />
+                              </div>
+                              <div>
+                                <div className="font-black text-emerald-800 dark:text-emerald-300 text-xs">
+                                  Payment Verified & Allocation Confirmed ✓
+                                </div>
+                                <div className="text-xs text-text-secondary mt-0.5">
+                                  Payment receipt confirmed by Franchisee Partner & Accounts. Your kits are booked for dispatch.
+                                </div>
+                              </div>
+                            </div>
+
+                            {epcAlloc.payment_receipt_url && (
+                              <a
+                                href={
+                                  epcAlloc.payment_receipt_url.startsWith("http")
+                                    ? epcAlloc.payment_receipt_url
+                                    : `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}${epcAlloc.payment_receipt_url.startsWith("/") ? "" : "/"}${epcAlloc.payment_receipt_url}`
+                                }
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface border border-border text-text-primary hover:bg-surface-hover inline-flex items-center gap-1 shrink-0"
+                              >
+                                <FaEye size={12} /> View Receipt
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

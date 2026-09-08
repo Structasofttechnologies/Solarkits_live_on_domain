@@ -1949,7 +1949,7 @@ const register_epc_buyer = async (req, res) => {
  */
 const list_my_epc_buyers = async (req, res) => {
   try {
-    const { EpcAccount, EpcResellerRelationship, EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const { EpcAccount, EpcResellerRelationship, EpcOrder, FpoOrder, PurchaseOrder } = require('../../admin-panel/models/india_solarshop_db');
     const epcs = await EpcAccount.find({
       $or: [
         { onboarded_by_reseller_id: req.reseller._id },
@@ -1964,14 +1964,31 @@ const list_my_epc_buyers = async (req, res) => {
       .lean();
 
     const epcIds = epcs.map((e) => e._id);
-    const [relationships, epcOrders] = await Promise.all([
+    const epcIdStrings = epcIds.map((id) => id.toString());
+
+    const [relationships, epcOrders, purchaseOrders, fpos] = await Promise.all([
       EpcResellerRelationship.find({
         epc_id: { $in: epcIds },
         reseller_id: req.reseller._id,
         status: 'active',
       }).lean(),
       EpcOrder.find({
-        epc_id: { $in: epcIds },
+        $or: [
+          { epc_id: { $in: epcIds } },
+          { reseller_id: req.reseller._id },
+        ],
+        order_status: { $ne: 'cancelled' },
+      }).lean(),
+      PurchaseOrder.find({
+        customer_id: { $in: epcIds },
+        status: { $nin: ['cancelled', 'draft'] },
+      }).lean(),
+      FpoOrder.find({
+        $or: [
+          { franchisee_id: req.reseller._id },
+          { 'items.epc_allocations.epc_buyer_id': { $in: epcIds } },
+        ],
+        status: { $ne: 'CANCELLED' },
       }).lean(),
     ]);
 
@@ -1981,43 +1998,97 @@ const list_my_epc_buyers = async (req, res) => {
     });
 
     const ordersByEpc = {};
-    epcOrders.forEach((o) => {
-      const key = o.epc_id.toString();
-      if (!ordersByEpc[key]) ordersByEpc[key] = { count: 0, total_value: 0 };
-      ordersByEpc[key].count += 1;
-      ordersByEpc[key].total_value += (o.grand_total_paise || 0) / 100;
+    epcIdStrings.forEach((id) => {
+      ordersByEpc[id] = { count: 0, total_value: 0 };
     });
+
+    // 1. Direct EPC Store Orders
+    epcOrders.forEach((o) => {
+      const key = o.epc_id?.toString();
+      if (key && ordersByEpc[key]) {
+        ordersByEpc[key].count += 1;
+        ordersByEpc[key].total_value += (o.grand_total_paise || 0) / 100;
+      }
+    });
+
+    // 2. Direct Purchase Orders
+    purchaseOrders.forEach((p) => {
+      const key = p.customer_id?.toString();
+      if (key && ordersByEpc[key]) {
+        ordersByEpc[key].count += 1;
+        ordersByEpc[key].total_value += (p.grand_total || p.total_amount || p.selling_price_snapshot || 0);
+      }
+    });
+
+    // 3. Franchisee PO Allocations
+    fpos.forEach((f) => {
+      (f.items || []).forEach((item) => {
+        (item.epc_allocations || []).forEach((alloc) => {
+          let matchedEpcId = null;
+          const allocEpcId = alloc.epc_buyer_id?.toString();
+          if (allocEpcId && ordersByEpc[allocEpcId]) {
+            matchedEpcId = allocEpcId;
+          } else if (alloc.gstin) {
+            const found = epcs.find((e) => e.gstin && e.gstin.trim().toUpperCase() === alloc.gstin.trim().toUpperCase());
+            if (found) matchedEpcId = found._id.toString();
+          }
+
+          if (matchedEpcId && ordersByEpc[matchedEpcId]) {
+            let allocValInr = 0;
+            const totalPaise = item.total_price_paise || ((item.unit_price_paise + (item.tax_paise || 0)) * (item.quantity || 1));
+            if (item.quantity > 0 && totalPaise > 0) {
+              allocValInr = Math.round(((alloc.allocated_quantity / item.quantity) * totalPaise) / 100);
+            } else if (item.unit_price_paise) {
+              allocValInr = Math.round((alloc.allocated_quantity * (item.unit_price_paise / 100)) * (1 + (item.gst_rate || 12) / 100));
+            }
+
+            ordersByEpc[matchedEpcId].count += 1;
+            ordersByEpc[matchedEpcId].total_value += allocValInr;
+          }
+        });
+      });
+    });
+
+    const buyerList = epcs.map((e) => {
+      const rel = relMap[e._id.toString()] || {};
+      const ord = ordersByEpc[e._id.toString()] || { count: 0, total_value: 0 };
+      const assignedByBde = rel.assigned_by_bde_name || e.onboarded_by_bde_id?.full_name || null;
+      const bdeCode = e.onboarded_by_bde_id?.bde_id || null;
+
+      return {
+        id: e._id,
+        _id: e._id,
+        name: e.name,
+        company_name: e.company_name || e.gstin_trade_name || e.gstin_legal_name || e.name,
+        contact_person: e.contact_person || e.name,
+        gstin: e.gstin || null,
+        email: e.email,
+        whatsapp: e.whatsapp || e.mobile,
+        state_name: e.state_name || e.states?.[0]?.name || 'Regional State',
+        district_name: e.district_name || e.districts?.[0]?.name || 'Regional District',
+        status: e.status || 'active',
+        is_assigned_by_bde: !!assignedByBde || e.onboarding_source === 'bde',
+        assigned_by_bde_name: assignedByBde,
+        assigned_by_bde_id: bdeCode,
+        assignment_date: rel.effective_from || e.reseller_assigned_date || e.created_at,
+        orders_count: ord.count,
+        total_order_value_inr: Math.round(ord.total_value * 100) / 100,
+        commission_eligible: true,
+        created_at: e.created_at,
+      };
+    });
+
+    const totalOrdersCount = buyerList.reduce((sum, b) => sum + (b.orders_count || 0), 0);
+    const totalOrderValueInr = buyerList.reduce((sum, b) => sum + (b.total_order_value_inr || 0), 0);
 
     return res.json({
       status: 'success',
-      data: epcs.map((e) => {
-        const rel = relMap[e._id.toString()] || {};
-        const ord = ordersByEpc[e._id.toString()] || { count: 0, total_value: 0 };
-        const assignedByBde = rel.assigned_by_bde_name || e.onboarded_by_bde_id?.full_name || null;
-        const bdeCode = e.onboarded_by_bde_id?.bde_id || null;
-
-        return {
-          id: e._id,
-          _id: e._id,
-          name: e.name,
-          company_name: e.company_name || e.gstin_trade_name || e.gstin_legal_name || e.name,
-          contact_person: e.contact_person || e.name,
-          gstin: e.gstin || null,
-          email: e.email,
-          whatsapp: e.whatsapp || e.mobile,
-          state_name: e.state_name || e.states?.[0]?.name || 'Regional State',
-          district_name: e.district_name || e.districts?.[0]?.name || 'Regional District',
-          status: e.status || 'active',
-          is_assigned_by_bde: !!assignedByBde || e.onboarding_source === 'bde',
-          assigned_by_bde_name: assignedByBde,
-          assigned_by_bde_id: bdeCode,
-          assignment_date: rel.effective_from || e.reseller_assigned_date || e.created_at,
-          orders_count: ord.count,
-          total_order_value_inr: ord.total_value,
-          commission_eligible: true,
-          created_at: e.created_at,
-        };
-      }),
+      data: buyerList,
+      stats: {
+        total_buyers: buyerList.length,
+        total_orders: totalOrdersCount,
+        total_order_value_inr: Math.round(totalOrderValueInr * 100) / 100,
+      },
     });
   } catch (error) {
     console.error('[reseller.portal] list_my_epc_buyers error:', error);
@@ -2032,7 +2103,7 @@ const list_my_epc_buyers = async (req, res) => {
  */
 const list_my_epc_orders = async (req, res) => {
   try {
-    const { EpcAccount, EpcOrder, ResellerWalletLedger } = require('../../admin-panel/models/india_solarshop_db');
+    const { EpcAccount, EpcOrder, ResellerWalletLedger, FpoOrder, FpoCommissionLedger, ResellerPlan } = require('../../admin-panel/models/india_solarshop_db');
     const resellerId = req.reseller._id;
 
     // Find all EPC accounts onboarded by or assigned to this reseller
@@ -2042,13 +2113,13 @@ const list_my_epc_orders = async (req, res) => {
         { primary_reseller_id: resellerId },
       ],
       deleted_at: null,
-    }).select('_id name email whatsapp gstin company_name').lean();
+    }).select('_id name email whatsapp gstin company_name address district_name state_name pincode').lean();
 
     const epcIds = myEpcs.map((e) => e._id);
     const epcMap = {};
     myEpcs.forEach((e) => { epcMap[e._id.toString()] = e; });
 
-    // Fetch all orders attributed to this reseller or placed by their onboarded EPCs
+    // 1. Fetch direct EPC Orders
     const orders = await EpcOrder.find({
       $or: [
         { reseller_id: resellerId },
@@ -2059,18 +2130,42 @@ const list_my_epc_orders = async (req, res) => {
       .sort({ created_at: -1 })
       .lean();
 
-    // Check commission ledger status
-    const ledgers = await ResellerWalletLedger.find({
-      reseller_id: resellerId,
-      transaction_type: 'commission_credit',
-    }).lean();
+    // 2. Fetch Franchisee PO orders with allocations for these EPCs
+    const fpos = await FpoOrder.find({
+      $or: [
+        { franchisee_id: resellerId },
+        { 'items.epc_allocations.epc_buyer_id': { $in: epcIds } },
+      ],
+      status: { $ne: 'CANCELLED' },
+    }).sort({ created_at: -1 }).lean();
+
+    // Check commission ledger status and plan defaults
+    const [ledgers, fpoLedgers, resellerPlan] = await Promise.all([
+      ResellerWalletLedger.find({
+        reseller_id: resellerId,
+        transaction_type: 'commission_credit',
+      }).lean(),
+      FpoCommissionLedger.find({
+        franchisee_id: resellerId,
+      }).lean(),
+      req.reseller.active_plan_id ? ResellerPlan.findById(req.reseller.active_plan_id).lean() : null,
+    ]);
 
     const ledgerMap = {};
     ledgers.forEach((l) => {
       if (l.reference_order_id) ledgerMap[l.reference_order_id.toString()] = l;
     });
 
-    const enrichedOrders = orders.map((o) => {
+    const fpoLedgerMap = {};
+    fpoLedgers.forEach((l) => {
+      if (l.fpo_order_id) fpoLedgerMap[l.fpo_order_id.toString()] = l;
+      if (l.po_number) fpoLedgerMap[l.po_number] = l;
+    });
+
+    const enrichedOrders = [];
+
+    // Map direct EPC store orders
+    orders.forEach((o) => {
       const epc = o.epc_id || epcMap[o.epc_id?.toString()] || {};
       const ledger = ledgerMap[o._id.toString()];
       const totalAmount = (o.grand_total_paise || 0) / 100;
@@ -2079,7 +2174,8 @@ const list_my_epc_orders = async (req, res) => {
       const grossMargin = (o.reseller_total_margin_paise || 0) / 100;
       const platformFee = (o.platform_total_commission_paise || 0) / 100;
       const netCommission = ledger?.net_amount_paise ? (ledger.net_amount_paise / 100) : grossMargin;
-      const commissionRate = subtotal > 0 ? Math.round((grossMargin / subtotal) * 100 * 10) / 10 : 8.0;
+      const defaultPlanRate = resellerPlan?.default_commission_rate ?? 2.0;
+      const commissionRate = subtotal > 0 ? Math.round((grossMargin / subtotal) * 100 * 10) / 10 : (o.reseller_margin_pct || defaultPlanRate);
 
       // Status pipeline
       let timelineStep = 1; // 1: Placed, 2: Verification, 3: Approved, 4: Dispatched, 5: Delivered
@@ -2095,7 +2191,7 @@ const list_my_epc_orders = async (req, res) => {
         walletStatus = 'Payment Rejected';
       }
 
-      return {
+      enrichedOrders.push({
         id: o._id,
         order_number: o.order_number,
         created_at: o.created_at,
@@ -2153,8 +2249,153 @@ const list_my_epc_orders = async (req, res) => {
         order_status: o.order_status,
         timeline_step: timelineStep,
         delivery_address: o.delivery_address || {},
-      };
+      });
     });
+
+    // Map Franchisee PO allocations
+    fpos.forEach((f) => {
+      (f.items || []).forEach((item, itemIdx) => {
+        (item.epc_allocations || []).forEach((alloc, allocIdx) => {
+          let epc = null;
+          const allocEpcId = alloc.epc_buyer_id?.toString();
+          if (allocEpcId && epcMap[allocEpcId]) {
+            epc = epcMap[allocEpcId];
+          } else if (alloc.gstin) {
+            epc = myEpcs.find((e) => e.gstin && e.gstin.trim().toUpperCase() === alloc.gstin.trim().toUpperCase());
+          }
+
+          // If this allocation belongs to this franchisee or one of their EPCs
+          if (epc || f.franchisee_id?.toString() === resellerId.toString()) {
+            const totalPaise = item.total_price_paise || ((item.unit_price_paise + (item.tax_paise || 0)) * (item.quantity || 1));
+            const totalAmount = item.quantity > 0 ? Math.round(((alloc.allocated_quantity / item.quantity) * totalPaise) / 100) : 0;
+            const subtotal = item.unit_price_paise ? Math.round((alloc.allocated_quantity * item.unit_price_paise) / 100) : Math.round(totalAmount / (1 + (item.gst_rate || 12) / 100));
+            const taxAmount = totalAmount - subtotal;
+
+            // Resolve dynamic commission rate from item snapshot, FPO rule snapshot, or plan
+            let commissionRate = 2.0;
+            const commMethod = item.commission_method || f.commission_rule_snapshot?.commission_method || 'PERCENTAGE';
+
+            if (commMethod === 'PERCENTAGE') {
+              if (item.commission_snapshot != null && item.commission_snapshot > 0) {
+                commissionRate = item.commission_snapshot >= 50 ? (item.commission_snapshot / 100) : item.commission_snapshot;
+              } else if (f.commission_rule_snapshot?.commission_percentage != null) {
+                commissionRate = f.commission_rule_snapshot.commission_percentage;
+              } else if (f.plan_snapshot?.default_commission_rate != null) {
+                commissionRate = f.plan_snapshot.default_commission_rate;
+              } else if (resellerPlan?.default_commission_rate != null) {
+                commissionRate = resellerPlan.default_commission_rate;
+              }
+            }
+
+            // Calculate gross margin based on method
+            let grossMargin = 0;
+            if (commMethod === 'FIXED_PER_KIT') {
+              const fixedPaise = (item.commission_snapshot && item.commission_snapshot < 5000000) ? item.commission_snapshot : (f.commission_rule_snapshot?.fixed_amount_per_kit_paise || 0);
+              grossMargin = Math.round((alloc.allocated_quantity * fixedPaise) / 100);
+              commissionRate = subtotal > 0 ? Math.round((grossMargin / subtotal) * 100 * 10) / 10 : 0;
+            } else {
+              // Standard percentage commission on base taxable subtotal
+              grossMargin = Math.round(subtotal * (commissionRate / 100));
+            }
+
+            // Check if settled in FPO commission ledger
+            const fpoLedger = fpoLedgerMap[f._id.toString()] || fpoLedgerMap[f.po_number];
+            if (fpoLedger?.net_commission_paise) {
+              const ratio = (item.quantity > 0 && alloc.allocated_quantity < item.quantity) ? (alloc.allocated_quantity / item.quantity) : 1;
+              grossMargin = Math.round((fpoLedger.commission_paise / 100) * ratio);
+            }
+
+            const isVerified = alloc.payment_status === 'VERIFIED' || f.status === 'PAID';
+            const isReceiptSubmitted = alloc.payment_status === 'RECEIPT_SUBMITTED' || !!alloc.payment_receipt_url;
+
+            let timelineStep = 1;
+            if (f.delivery_date) timelineStep = 5;
+            else if (f.dispatch_date) timelineStep = 4;
+            else if (isVerified) timelineStep = 3;
+            else if (isReceiptSubmitted) timelineStep = 2;
+
+            let paymentStatus = 'pending_verification';
+            if (isVerified) paymentStatus = 'captured';
+            else if (alloc.payment_status === 'REJECTED') paymentStatus = 'rejected';
+
+            let orderStatus = 'pending';
+            if (f.delivery_date) orderStatus = 'delivered';
+            else if (f.dispatch_date) orderStatus = 'dispatched';
+            else if (isVerified) orderStatus = 'confirmed';
+
+            enrichedOrders.push({
+              id: alloc._id ? alloc._id.toString() : `${f._id}_alloc_${itemIdx}_${allocIdx}`,
+              order_number: `${f.po_number}`,
+              created_at: alloc.paid_at || f.created_at,
+              epc_buyer: {
+                id: epc?._id || alloc.epc_buyer_id,
+                name: alloc.buyer_name || epc?.name || 'EPC Contractor',
+                company_name: alloc.company_name || epc?.company_name || epc?.name || 'EPC Contractor',
+                email: epc?.email || 'N/A',
+                whatsapp: epc?.whatsapp || epc?.mobile || 'N/A',
+                gstin: alloc.gstin || epc?.gstin || 'N/A',
+              },
+              items: [{
+                item_name: item.item_name || 'Solar Kit Package',
+                quantity: alloc.allocated_quantity,
+                unit_price: (item.unit_price_paise || 0) / 100,
+                total_price: totalAmount,
+                reseller_margin: grossMargin,
+              }],
+              total_kits: alloc.allocated_quantity,
+              fulfillment_source: 'franchise_warehouse',
+              fulfillment_source_label: 'Franchise Partner Stock / Hub',
+              financials: {
+                total_amount: totalAmount,
+                subtotal,
+                tax_amount: taxAmount,
+                gross_margin: grossMargin,
+                platform_fee: 0,
+                net_commission: grossMargin,
+                commission_rate: Math.round(commissionRate * 10) / 10,
+                wallet_status: isVerified ? 'Credited to Wallet' : 'Pending Verification',
+              },
+              payment_info: {
+                payment_method: 'Franchisee PO Allocation / Bank Transfer',
+                payment_status: paymentStatus,
+                utr_number: f.payment_reference || 'RECEIPT_UPLOADED',
+                amount_paid: totalAmount,
+                payment_date: alloc.paid_at || f.updated_at || f.created_at,
+                receipt_url: alloc.payment_receipt_url || '',
+                receipt_filename: alloc.payment_receipt_url ? 'payment_receipt.png' : '',
+                sender_bank_name: 'Direct Bank Transfer',
+                verification_status: isVerified ? 'approved' : (isReceiptSubmitted ? 'pending' : 'pending'),
+                rejection_reason: null,
+              },
+              invoice: {
+                invoice_number: `INV-${f.po_number}`,
+              },
+              dispatch_tracking: {
+                courier_name: null,
+                tracking_number: null,
+                tracking_url: null,
+                dispatched_at: f.dispatch_date || null,
+                estimated_delivery: f.expected_delivery_date || null,
+                dispatch_notes: null,
+              },
+              order_status: orderStatus,
+              timeline_step: timelineStep,
+              delivery_address: {
+                line: epc?.address || 'Registered EPC Address',
+                district_name: epc?.district_name || 'Ahmedabad',
+                state_name: epc?.state_name || 'Gujarat',
+                pincode: epc?.pincode || '',
+                contact_name: alloc.buyer_name || epc?.name,
+                contact_phone: epc?.whatsapp || epc?.mobile,
+              },
+            });
+          }
+        });
+      });
+    });
+
+    // Sort all by created_at descending
+    enrichedOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     // Summary statistics for Franchise Dashboard
     const totalOrdersCount = enrichedOrders.length;
@@ -2186,17 +2427,75 @@ const list_my_epc_orders = async (req, res) => {
  */
 const get_epc_order_live_tracking = async (req, res) => {
   try {
-    const { EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const mongoose = require('mongoose');
+    const { EpcOrder, FpoOrder, EpcAccount } = require('../../admin-panel/models/india_solarshop_db');
     const { id } = req.params;
 
-    const order = await EpcOrder.findOne({
-      _id: id,
-      reseller_id: req.reseller._id,
-    })
-      .populate('epc_id', 'name email whatsapp gstin company_name address')
-      .lean();
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      order = await EpcOrder.findOne({
+        _id: id,
+        $or: [{ reseller_id: req.reseller._id }, { reseller_id: null }],
+      })
+        .populate('epc_id', 'name email whatsapp gstin company_name address')
+        .lean();
+    }
 
     if (!order) {
+      // Find in FPO Orders or allocations
+      const fpo = await FpoOrder.findOne({
+        $or: [
+          ...(mongoose.Types.ObjectId.isValid(id) ? [{ _id: id }, { 'items.epc_allocations._id': id }] : []),
+          { po_number: id },
+        ],
+        franchisee_id: req.reseller._id,
+      }).lean();
+
+      if (fpo) {
+        let matchedAlloc = null;
+        let matchedItem = null;
+        (fpo.items || []).forEach((item) => {
+          (item.epc_allocations || []).forEach((alloc) => {
+            if (alloc._id?.toString() === id || fpo.po_number === id || fpo._id?.toString() === id) {
+              matchedAlloc = alloc;
+              matchedItem = item;
+            }
+          });
+        });
+
+        const isVerified = matchedAlloc?.payment_status === 'VERIFIED' || fpo.status === 'PAID';
+        const isReceiptSubmitted = matchedAlloc?.payment_status === 'RECEIPT_SUBMITTED' || !!matchedAlloc?.payment_receipt_url;
+
+        let timelineStep = 1;
+        if (fpo.delivery_date) timelineStep = 5;
+        else if (fpo.dispatch_date) timelineStep = 4;
+        else if (isVerified) timelineStep = 3;
+        else if (isReceiptSubmitted) timelineStep = 2;
+
+        return res.status(200).json({
+          status: 'success',
+          data: {
+            order_number: fpo.po_number,
+            created_at: matchedAlloc?.paid_at || fpo.created_at,
+            order_status: isVerified ? (fpo.delivery_date ? 'delivered' : (fpo.dispatch_date ? 'dispatched' : 'confirmed')) : 'pending',
+            payment_status: isVerified ? 'captured' : 'pending_verification',
+            timeline_step: timelineStep,
+            items: [{
+              item_name: matchedItem?.item_name || 'Solar Kit Package',
+              quantity: matchedAlloc?.allocated_quantity || matchedItem?.quantity || 1,
+            }],
+            dispatch_tracking: {
+              courier_name: null,
+              tracking_number: null,
+              tracking_url: null,
+              dispatched_at: fpo.dispatch_date || null,
+              estimated_delivery: fpo.expected_delivery_date || null,
+              dispatch_notes: null,
+            },
+          },
+        });
+      }
+
       return res.status(404).json({ status: 'error', message: 'EPC Order not found or unauthorized.' });
     }
 

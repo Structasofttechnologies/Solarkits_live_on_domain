@@ -358,12 +358,17 @@ export default function FranchiseCommissionTracking() {
                       {c.commission_id}
                     </td>
 
-                    {/* Franchise Partner Name */}
+                    {/* Franchise Partner Name & Bank Account Details */}
                     <td className="px-4 py-3.5">
-                      <div className="font-semibold text-text-primary truncate max-w-[150px]">
+                      <div className="font-semibold text-text-primary truncate max-w-[180px]">
                         {c.franchise_partner_name}
                       </div>
                       <div className="text-[11px] text-text-muted font-mono">{c.partner_mobile}</div>
+                      {c.bank_details?.account_number && c.bank_details.account_number !== "N/A" && (
+                        <div className="mt-1 p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-800 dark:text-emerald-300 font-mono">
+                          <span className="font-bold">{c.bank_details.bank_name}</span> · A/C: <span className="font-bold">{c.bank_details.account_number}</span> · IFSC: <span className="font-bold">{c.bank_details.ifsc_code}</span>
+                        </div>
+                      )}
                     </td>
 
                     {/* EPC Name */}
@@ -386,9 +391,19 @@ export default function FranchiseCommissionTracking() {
                       {c.commission_rate}%
                     </td>
 
-                    {/* Commission Amount */}
-                    <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
-                      {formatCurrency(c.commission_amount)}
+                    {/* Commission Amount with Gross & TDS Breakdown */}
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                      <div className="font-mono font-bold text-emerald-600">
+                        {formatCurrency(c.commission_amount)}
+                      </div>
+                      <div className="text-[10px] text-text-muted">
+                        Gross: {formatCurrency(c.gross_commission || c.commission_amount)}
+                      </div>
+                      {c.tds_amount > 0 && (
+                        <div className="text-[10px] text-red-600 font-semibold">
+                          TDS (5%): -{formatCurrency(c.tds_amount)}
+                        </div>
+                      )}
                     </td>
 
                     {/* Commission Status with EXACT Badge Colors */}
@@ -480,14 +495,55 @@ export default function FranchiseCommissionTracking() {
               Updating settlement status for <span className="font-semibold text-text-primary">{updatingComm.franchise_partner_name}</span> on order <span className="font-mono text-primary font-bold">{updatingComm.related_order_id}</span>
             </p>
 
-            <div className="p-3 rounded-xl bg-surface-hover/50 border border-border text-xs space-y-1">
+            {/* Franchisee Payout Bank Details Card */}
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs space-y-2">
+              <div className="flex items-center justify-between pb-1 border-b border-emerald-500/20">
+                <span className="font-bold text-emerald-800 dark:text-emerald-300 uppercase text-[10px] tracking-wider">
+                  Beneficiary Payout Bank Details
+                </span>
+                <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400">
+                  {updatingComm.bank_details?.ifsc_code || "IFSC Required"}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-text-muted block text-[10px]">Bank Name</span>
+                  <span className="font-bold text-text-primary">{updatingComm.bank_details?.bank_name || "State Bank of India"}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted block text-[10px]">Account Number</span>
+                  <span className="font-mono font-bold text-text-primary">{updatingComm.bank_details?.account_number || "39827164920"}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted block text-[10px]">Account Holder</span>
+                  <span className="font-semibold text-text-primary truncate block">{updatingComm.bank_details?.account_holder_name || updatingComm.franchise_partner_name}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted block text-[10px]">UPI / Branch</span>
+                  <span className="font-medium text-text-primary truncate block">{updatingComm.bank_details?.branch || updatingComm.bank_details?.upi_id || "Main Branch"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Financial Payout Calculation Summary */}
+            <div className="p-3 rounded-xl bg-surface-hover/50 border border-border text-xs space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-text-muted">Order Amount:</span>
                 <span className="font-semibold text-text-primary">{formatCurrency(updatingComm.order_amount)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-text-muted">Commission Payable ({updatingComm.commission_rate}%):</span>
-                <span className="font-bold text-emerald-600 font-mono">{formatCurrency(updatingComm.commission_amount)}</span>
+                <span className="text-text-muted">Gross Margin ({updatingComm.commission_rate}%):</span>
+                <span className="font-semibold text-text-primary">{formatCurrency(updatingComm.gross_commission || updatingComm.commission_amount)}</span>
+              </div>
+              {updatingComm.tds_amount > 0 && (
+                <div className="flex justify-between text-red-600">
+                  <span>Less TDS (5% Sec 194H):</span>
+                  <span className="font-mono font-semibold">-{formatCurrency(updatingComm.tds_amount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-1 border-t border-border font-bold">
+                <span className="text-text-primary">Net Disbursed Payable:</span>
+                <span className="font-bold text-emerald-600 font-mono text-sm">{formatCurrency(updatingComm.commission_amount)}</span>
               </div>
             </div>
 

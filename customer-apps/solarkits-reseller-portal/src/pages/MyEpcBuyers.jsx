@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import {
   FiUsers, FiPlus, FiCheckCircle, FiClock, FiXCircle,
   FiLoader, FiMail, FiPhone, FiShield, FiBriefcase,
-  FiUser, FiLock, FiMapPin, FiArrowRight, FiRefreshCw, FiAlertCircle, FiX
+  FiUser, FiLock, FiMapPin, FiArrowRight, FiRefreshCw, FiAlertCircle, FiX,
+  FiShoppingCart, FiDollarSign
 } from "react-icons/fi";
 import api from "../services/api";
 
@@ -150,20 +151,21 @@ export default function MyEpcBuyers() {
 
     try {
       const payload = {
-        ...form,
-        name:           form.name.trim(),
-        company_name:   form.company_name.trim(),
-        email:          form.email.trim().toLowerCase(),
-        whatsapp:       form.whatsapp.trim(),
-        gstin:          gstInput.trim().toUpperCase(),
-        gst_verified:   !!gstResult,
-        gst_legal_name: gstResult?.legal_name || null,
-        gst_trade_name: gstResult?.trade_name || null,
+        name:         form.name.trim(),
+        email:        form.email.trim(),
+        whatsapp:     form.whatsapp.trim(),
+        company_name: form.company_name.trim(),
+        password:     form.password,
+        state_id:     form.state_id,
+        district_id:  form.district_id,
+        gstin:        gstResult?.gstin || null,
+        gstin_verified: !!gstResult,
+        gstin_trade_name: gstResult?.trade_name || null,
+        gstin_legal_name: gstResult?.legal_name || null,
       };
 
-      const res = await api.post('/india/v1/reseller/epc-buyers/register', payload);
+      const res = await api.post("/india/v1/reseller/epc-buyers/register", payload);
       if (res.data?.status === "success") {
-        alert("🎉 EPC Buyer sub-account registered successfully! Verification request sent to Admin Panel.");
         setModal(false);
         fetchBuyers();
       } else {
@@ -197,6 +199,55 @@ export default function MyEpcBuyers() {
         >
           <FiPlus size={18} /> Register New Buyer
         </button>
+      </div>
+
+      {/* KPI Stats Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <FiUsers size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Buyers</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-0.5">{buyers.length}</h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <FiCheckCircle size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Accounts</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-0.5">
+              {buyers.filter((b) => b.status === "approved" || b.status === "active").length}
+            </h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+            <FiShoppingCart size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Buyer Orders</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-0.5">
+              {buyers.reduce((sum, b) => sum + (b.orders_count || 0), 0)} Orders
+            </h3>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+            <FiDollarSign size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Order Volume</p>
+            <h3 className="text-2xl font-black text-slate-900 mt-0.5">
+              ₹{buyers.reduce((sum, b) => sum + (b.total_order_value_inr || 0), 0).toLocaleString("en-IN")}
+            </h3>
+          </div>
+        </div>
       </div>
 
       {/* Plan Scope & Territory Authorization Banner */}
@@ -337,8 +388,8 @@ export default function MyEpcBuyers() {
                     </td>
                     <td className="px-5 py-4 text-center">
                       <div className="font-bold text-slate-900">{b.orders_count || 0} Orders</div>
-                      <div className="text-[11px] text-slate-500 font-medium">
-                        ₹{(b.total_order_value_inr || 0).toLocaleString()}
+                      <div className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                        ₹{(b.total_order_value_inr || 0).toLocaleString('en-IN')}
                       </div>
                     </td>
                     <td className="px-5 py-4 text-center">

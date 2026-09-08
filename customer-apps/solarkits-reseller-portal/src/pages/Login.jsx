@@ -187,13 +187,13 @@ export default function Login() {
   };
 
   const handleFillDemoPassword = () => {
-    setEmail("structasoftadmin@gmail.com");
-    setPassword("Password@123");
+    setEmail("demo.district@solarkits.in");
+    setPassword("Demo@1234");
   };
 
   const handleFillDemoPin = () => {
-    setEmail("structasoftadmin@gmail.com");
-    setPinDigits(["9", "8", "7", "6"]);
+    setEmail("demo.district@solarkits.in");
+    setPinDigits(["1", "2", "3", "4"]);
   };
 
   return (
@@ -273,7 +273,7 @@ export default function Login() {
         </div>
 
         {/* Demo Credentials Card */}
-        {/* <div
+        <div
           className="p-4 rounded-2xl space-y-2.5"
           style={{
             background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
@@ -327,7 +327,7 @@ export default function Login() {
           >
             ⚡ Click to Auto-Fill {authMode === "password" ? "Password" : "PIN"} Credentials
           </button>
-        </div> */}
+        </div>
 
         {/* Error Notification */}
         {error && (

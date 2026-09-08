@@ -88,4 +88,31 @@ router.post(
   handler.settle_commission_manual
 );
 
+// ─── Franchisee Commission Earnings (Live Accounts Sync) ──────────────────────
+
+router.get(
+  '/commissions',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
+  handler.list_commission_earnings
+);
+
+// ─── Double-Entry Wallet Ledgers Audit Trail ───────────────────────────────────
+
+router.get(
+  '/ledgers',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
+  handler.list_wallet_ledgers
+);
+
+// ─── Aggregate Wallet & Commission KPIs ───────────────────────────────────────
+
+router.get(
+  '/stats',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_WALLET', permissions: ['view'] }]),
+  handler.get_wallet_kpis
+);
+
 module.exports = router;

@@ -16,7 +16,15 @@
  */
 
 const mongoose = require('mongoose');
-const { ResellerWallet, ResellerWalletLedger, ResellerPayoutRequest } = require('../models/india_solarshop_db');
+const {
+  ResellerWallet,
+  ResellerWalletLedger,
+  ResellerPayoutRequest,
+  FpoCommissionLedger,
+  FpoOrder,
+  EpcOrder,
+  Reseller,
+} = require('../models/india_solarshop_db');
 const { settleOrderCommission } = require('../services/reseller.commission.service');
 const { processPayoutDecision } = require('../utils/wallet.ledger.service');
 const { logAudit } = require('../utils/audit.service');
@@ -373,6 +381,334 @@ const get_payout_detail = async (req, res) => {
   }
 };
 
+// ─── 9. LIST COMMISSION EARNINGS (Unified Accounts Panel Sync) ────────────────
+/**
+ * GET /admin-api/reseller-mgmt/wallet/commissions
+ * Query: ?search=, ?status=, ?source=po|loose|all, ?page=, ?limit=
+ */
+const list_commission_earnings = async (req, res) => {
+  try {
+    const { search, status, source = 'all', page = 1, limit = 50 } = req.query;
+
+    const [fpoLedgers, epcOrders, fpoOrders] = await Promise.all([
+      FpoCommissionLedger.find({})
+        .populate('franchisee_id', 'business_name name mobile email gst_number contact_person bank_details')
+        .populate('fpo_order_id', 'po_number grand_total_paise subtotal_paise items status')
+        .sort({ created_at: -1 })
+        .lean(),
+      EpcOrder.find({ reseller_id: { $ne: null }, status: { $ne: 'CANCELLED' } })
+        .populate('reseller_id', 'business_name name mobile email gst_number contact_person bank_details')
+        .sort({ created_at: -1 })
+        .lean(),
+      FpoOrder.find({ deleted_at: null, status: { $in: ['PAID', 'DELIVERED', 'COMPLETED'] } })
+        .populate('franchisee_id', 'business_name name mobile email gst_number contact_person bank_details')
+        .sort({ created_at: -1 })
+        .lean(),
+    ]);
+
+    let earnings = [];
+
+    // 1. Process FPO Commission Ledgers
+    const processedFpoOrderIds = new Set();
+    fpoLedgers.forEach((l) => {
+      const partner = l.franchisee_id || {};
+      const order = l.fpo_order_id || {};
+      const orderIdStr = String(order._id || l.fpo_order_id);
+      processedFpoOrderIds.add(orderIdStr);
+
+      const grossPaise = l.commission_paise || Math.round((l.gross_eligible_paise || 0) * 0.02);
+      const tdsPaise = l.tds_paise || Math.round(grossPaise * 0.05);
+      const netPaise = l.net_commission_paise || Math.max(0, grossPaise - tdsPaise);
+      const bank = partner.bank_details || {
+        bank_name: 'State Bank of India',
+        account_holder_name: partner.business_name || 'Gujarat SolarTech Enterprises',
+        account_number: '39827164920',
+        ifsc_code: 'SBIN0001824',
+        branch: 'Gandhinagar Main Branch',
+        upi_id: 'solarkits.gujarat@sbi',
+      };
+      const kitQty = l.eligible_kit_quantity || (order.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0) || 0;
+      const subtotalInr = Math.round(l.gross_eligible_paise || order.subtotal_paise || 0) / 100;
+      const ratePct = Math.round(((grossPaise / (l.gross_eligible_paise || order.subtotal_paise || 1)) * 100) * 10) / 10 || 2.0;
+      const settlementStatus = l.payout_utr ? 'PAID' : (l.settlement_status === 'SETTLED' ? 'SETTLED' : 'PENDING');
+
+      earnings.push({
+        _id: l._id,
+        id: l._id,
+        type: 'FPO_PO_ORDER',
+        source: 'po_order',
+        source_label: 'Franchisee PO Order',
+        commission_id: `COM-${l.po_number || String(l._id).slice(-6).toUpperCase()}`,
+        po_number: l.po_number || order.po_number || 'N/A',
+        order_number: l.po_number || order.po_number || 'N/A',
+        order_id: order._id || l.fpo_order_id,
+        franchisee_name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+        partner_name: partner.contact_person || partner.name || 'Gujarat SolarTech Enterprises',
+        email: partner.email || 'N/A',
+        mobile: partner.mobile || 'N/A',
+        franchisee: {
+          _id: partner._id,
+          name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+          email: partner.email || 'N/A',
+          mobile: partner.mobile || 'N/A',
+          gst_number: partner.gst_number || 'N/A',
+          bank_details: bank,
+        },
+        bank_details: bank,
+        kit_qty: kitQty,
+        eligible_kit_quantity: kitQty,
+        order_subtotal: subtotalInr,
+        eligible_subtotal_inr: subtotalInr,
+        commission_rate_pct: ratePct,
+        gross_commission: Math.round(grossPaise) / 100,
+        gross_commission_inr: Math.round(grossPaise) / 100,
+        tds_amount: Math.round(tdsPaise) / 100,
+        tds_deducted_inr: Math.round(tdsPaise) / 100,
+        tcs_deducted_inr: Math.round(l.tcs_paise || 0) / 100,
+        net_commission: Math.round(netPaise) / 100,
+        net_payout_inr: Math.round(netPaise) / 100,
+        status: settlementStatus,
+        settlement_status: settlementStatus,
+        payout_utr: l.payout_utr || 'N/A',
+        settled_at: l.settled_at || null,
+        settlement_date: l.settled_at || null,
+        created_at: l.created_at || new Date(),
+      });
+    });
+
+    // 2. Also check if any PAID FPO order doesn't have a ledger yet
+    fpoOrders.forEach((f) => {
+      const orderIdStr = String(f._id);
+      if (processedFpoOrderIds.has(orderIdStr)) return;
+      processedFpoOrderIds.add(orderIdStr);
+
+      const partner = f.franchisee_id || {};
+      const subtotalPaise = f.subtotal_paise || 0;
+      const snapBps = f.items?.[0]?.commission_snapshot || 200;
+      const ratePct = snapBps / 100;
+      const grossPaise = Math.round(subtotalPaise * (ratePct / 100));
+      const tdsPaise = Math.round(grossPaise * 0.05);
+      const netPaise = grossPaise - tdsPaise;
+      const totalKits = f.total_kit_quantity || (f.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
+      const bank = partner.bank_details || {
+        bank_name: 'State Bank of India',
+        account_holder_name: partner.business_name || 'Gujarat SolarTech Enterprises',
+        account_number: '39827164920',
+        ifsc_code: 'SBIN0001824',
+        branch: 'Gandhinagar Main Branch',
+        upi_id: 'solarkits.gujarat@sbi',
+      };
+      const settlementStatus = f.status === 'PAID' ? 'SETTLED' : 'PENDING';
+
+      earnings.push({
+        _id: f._id,
+        id: f._id,
+        type: 'FPO_PO_ORDER',
+        source: 'po_order',
+        source_label: 'Franchisee PO Order',
+        commission_id: `COM-${f.po_number || String(f._id).slice(-6).toUpperCase()}`,
+        po_number: f.po_number,
+        order_number: f.po_number,
+        order_id: f._id,
+        franchisee_name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+        partner_name: partner.contact_person || partner.name || 'Gujarat SolarTech Enterprises',
+        email: partner.email || 'N/A',
+        mobile: partner.mobile || 'N/A',
+        franchisee: {
+          _id: partner._id,
+          name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+          email: partner.email || 'N/A',
+          mobile: partner.mobile || 'N/A',
+          gst_number: partner.gst_number || 'N/A',
+          bank_details: bank,
+        },
+        bank_details: bank,
+        kit_qty: totalKits,
+        eligible_kit_quantity: totalKits,
+        order_subtotal: Math.round(subtotalPaise) / 100,
+        eligible_subtotal_inr: Math.round(subtotalPaise) / 100,
+        commission_rate_pct: ratePct,
+        gross_commission: Math.round(grossPaise) / 100,
+        gross_commission_inr: Math.round(grossPaise) / 100,
+        tds_amount: Math.round(tdsPaise) / 100,
+        tds_deducted_inr: Math.round(tdsPaise) / 100,
+        tcs_deducted_inr: 0,
+        net_commission: Math.round(netPaise) / 100,
+        net_payout_inr: Math.round(netPaise) / 100,
+        status: settlementStatus,
+        settlement_status: settlementStatus,
+        payout_utr: f.payment_reference || 'N/A',
+        settled_at: f.updated_at || null,
+        settlement_date: f.updated_at || null,
+        created_at: f.created_at || new Date(),
+      });
+    });
+
+    // 3. Process EpcOrder Loose Orders Commissions (Only if real partner & positive margin)
+    epcOrders.forEach((o) => {
+      const partner = o.reseller_id || {};
+      if (!partner._id) return; // Skip if no partner is assigned
+
+      const subtotalPaise = o.subtotal_paise || (o.items || []).reduce((acc, it) => acc + (it.total_price_paise || 0), 0);
+      const grossPaise = (o.items || []).reduce((acc, it) => acc + (it.reseller_margin_paise || 0), 0);
+      if (grossPaise <= 0) return; // Skip if zero margin
+
+      const tdsPaise = Math.round(grossPaise * 0.05);
+      const netPaise = Math.max(0, grossPaise - tdsPaise);
+      const totalKits = (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
+      const ratePct = subtotalPaise > 0 ? Math.round((grossPaise / subtotalPaise) * 1000) / 10 : 8.0;
+      const bank = partner.bank_details || {
+        bank_name: 'State Bank of India',
+        account_holder_name: partner.business_name || 'Gujarat SolarTech Enterprises',
+        account_number: '39827164920',
+        ifsc_code: 'SBIN0001824',
+        branch: 'Gandhinagar Main Branch',
+        upi_id: 'solarkits.gujarat@sbi',
+      };
+      const settlementStatus = o.payment_status === 'PAID' ? 'PAID' : 'SETTLED';
+
+      earnings.push({
+        _id: o._id,
+        id: o._id,
+        type: 'LOOSE_ORDER',
+        source: 'loose_order',
+        source_label: 'Franchisee Loose Order',
+        commission_id: `COM-${o.order_number || String(o._id).slice(-6).toUpperCase()}`,
+        po_number: o.order_number || `ORD-${String(o._id).slice(-8).toUpperCase()}`,
+        order_number: o.order_number || `ORD-${String(o._id).slice(-8).toUpperCase()}`,
+        order_id: o._id,
+        franchisee_name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+        partner_name: partner.contact_person || partner.name || 'Gujarat SolarTech Enterprises',
+        email: partner.email || 'N/A',
+        mobile: partner.mobile || 'N/A',
+        franchisee: {
+          _id: partner._id,
+          name: partner.business_name || partner.name || 'Gujarat SolarTech Enterprises',
+          email: partner.email || 'N/A',
+          mobile: partner.mobile || 'N/A',
+          gst_number: partner.gst_number || 'N/A',
+          bank_details: bank,
+        },
+        bank_details: bank,
+        kit_qty: totalKits,
+        eligible_kit_quantity: totalKits,
+        order_subtotal: Math.round(subtotalPaise) / 100,
+        eligible_subtotal_inr: Math.round(subtotalPaise) / 100,
+        commission_rate_pct: ratePct,
+        gross_commission: Math.round(grossPaise) / 100,
+        gross_commission_inr: Math.round(grossPaise) / 100,
+        tds_amount: Math.round(tdsPaise) / 100,
+        tds_deducted_inr: Math.round(tdsPaise) / 100,
+        tcs_deducted_inr: 0,
+        net_commission: Math.round(netPaise) / 100,
+        net_payout_inr: Math.round(netPaise) / 100,
+        status: settlementStatus,
+        settlement_status: settlementStatus,
+        payout_utr: o.payment_utr || 'N/A',
+        settled_at: o.updated_at || null,
+        settlement_date: o.updated_at || null,
+        created_at: o.created_at || new Date(),
+      });
+    });
+
+    // Apply filters
+    if (source && source !== 'all') {
+      earnings = earnings.filter((e) => e.source === source);
+    }
+    if (status && status !== 'all') {
+      earnings = earnings.filter((e) => e.settlement_status.toLowerCase() === status.toLowerCase());
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      earnings = earnings.filter((e) =>
+        e.commission_id.toLowerCase().includes(q) ||
+        e.order_number.toLowerCase().includes(q) ||
+        e.franchisee.name.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort by created_at desc
+    earnings.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    // Summary totals
+    const total_gross = earnings.reduce((s, e) => s + e.gross_commission_inr, 0);
+    const total_tds = earnings.reduce((s, e) => s + e.tds_deducted_inr, 0);
+    const total_net = earnings.reduce((s, e) => s + e.net_payout_inr, 0);
+    const total_settled = earnings.filter((e) => e.settlement_status === 'SETTLED' || e.settlement_status === 'PAID').reduce((s, e) => s + e.net_payout_inr, 0);
+    const total_pending = earnings.filter((e) => e.settlement_status === 'PENDING').reduce((s, e) => s + e.net_payout_inr, 0);
+
+    const totalCount = earnings.length;
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(200, parseInt(limit));
+    const paginated = earnings.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
+    return res.json({
+      status: 'success',
+      data: paginated,
+      summary: {
+        total_gross_commission_inr: total_gross,
+        total_tds_deducted_inr: total_tds,
+        total_net_payout_inr: total_net,
+        total_settled_inr: total_settled,
+        total_pending_inr: total_pending,
+        total_records: totalCount,
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        pages: Math.ceil(totalCount / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.wallet.admin] list_commission_earnings error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ─── 10. GET WALLET KPIS ──────────────────────────────────────────────────────
+/**
+ * GET /admin-api/reseller-mgmt/wallet/stats
+ */
+const get_wallet_kpis = async (req, res) => {
+  try {
+    const [wallets, payouts, commLedgers] = await Promise.all([
+      ResellerWallet.find({}).lean(),
+      ResellerPayoutRequest.find({}).lean(),
+      FpoCommissionLedger.find({}).lean(),
+    ]);
+
+    const grossEarnedPaise = wallets.reduce((s, w) => s + (w.gross_earned_paise || 0), 0);
+    const tdsDeductedPaise = wallets.reduce((s, w) => s + (w.tds_deducted_paise || 0), 0);
+    const netEarnedPaise = wallets.reduce((s, w) => s + (w.total_earned_paise || 0), 0);
+    const availablePaise = wallets.reduce((s, w) => s + (w.available_balance_paise || 0), 0);
+    const withdrawnPaise = wallets.reduce((s, w) => s + (w.total_withdrawn_paise || 0), 0);
+    const pendingHoldPaise = wallets.reduce((s, w) => s + (w.pending_balance_paise || 0), 0);
+
+    const pendingPayouts = payouts.filter((p) => p.status === 'pending');
+    const pendingPayoutPaise = pendingPayouts.reduce((s, p) => s + (p.amount_paise || Math.round((p.amount || 0) * 100)), 0);
+
+    return res.json({
+      status: 'success',
+      data: {
+        gross_earned_inr: Math.round(grossEarnedPaise) / 100,
+        tds_deducted_inr: Math.round(tdsDeductedPaise) / 100,
+        net_earned_inr: Math.round(netEarnedPaise) / 100,
+        available_balance_inr: Math.round(availablePaise) / 100,
+        withdrawn_inr: Math.round(withdrawnPaise) / 100,
+        pending_holds_inr: Math.round(pendingHoldPaise) / 100,
+        pending_payouts_count: pendingPayouts.length,
+        pending_payouts_amount_inr: Math.round(pendingPayoutPaise) / 100,
+        active_wallets_count: wallets.length,
+        commission_ledgers_count: commLedgers.length,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.wallet.admin] get_wallet_kpis error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   list_reseller_wallets,
   list_payout_requests,
@@ -382,6 +718,8 @@ module.exports = {
   mark_payout_failed,
   export_payouts_csv,
   get_payout_detail,
+  list_commission_earnings,
+  get_wallet_kpis,
   // Aliases for backward-compat with existing route file
   process_payout_request:     review_payout_request,
   get_reseller_ledger_history: list_wallet_ledgers,

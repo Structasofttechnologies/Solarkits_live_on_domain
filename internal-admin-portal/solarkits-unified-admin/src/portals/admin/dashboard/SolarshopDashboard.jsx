@@ -231,7 +231,7 @@ const menus = [
                     unique_id: "RSL_MGMT"
                 },
                 {
-                    name: "Wallet & Ledger",
+                    name: "Earnings & Settlement",
                     icon: <FaWallet />,
                     path: "/admin-panel/solar-shop/reseller-management/wallet",
                     unique_id: "RSL_WALLET"

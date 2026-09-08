@@ -305,8 +305,9 @@ async function _transitionStatus(po_id, targetStatus, { changed_by, actor_type =
 
   const now = new Date();
   order.status = targetStatus;
-  order.status_history.push({ status: targetStatus, changed_by, actor_type, note, changed_at: now });
-  order.updated_by = changed_by;
+  const validChangedBy = (changed_by && mongoose.Types.ObjectId.isValid(changed_by)) ? changed_by : null;
+  order.status_history.push({ status: targetStatus, changed_by: validChangedBy, actor_type, note, changed_at: now });
+  order.updated_by = validChangedBy;
 
   Object.assign(order, extra_update);
   await order.save();
@@ -364,6 +365,11 @@ async function confirmPayment({ po_id, payment_reference, razorpay_payment_id, a
       payment_reference:   payment_reference || razorpay_payment_id,
       razorpay_payment_id: razorpay_payment_id || null,
     },
+  });
+
+  // Post commission immediately upon payment confirmation (credits wallet & updates accounts tracking)
+  await postCommission({ fpo_order_id: po_id, actor_id: admin_id, req }).catch((err) => {
+    console.error('[franchisee.po.service] commission post error on confirmPayment (non-fatal):', err.message);
   });
 
   await logAudit({ actor_type: 'cms_user', actor_id: admin_id, action: 'FPO_PAYMENT_CONFIRMED', entity_type: 'fpo_orders', entity_id: po_id, after_snapshot: { status: 'PAID' }, req });

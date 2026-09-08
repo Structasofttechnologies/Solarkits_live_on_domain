@@ -250,6 +250,8 @@ export default function WalletPortal() {
   // Filtered Ledger rows
   const filteredLedger = filterType === "all"
     ? ledger
+    : filterType === "commission_credit"
+    ? ledger.filter((l) => l.transaction_type === "commission_credit" || l.transaction_type === "po_commission_credit")
     : ledger.filter((l) => l.transaction_type === filterType);
 
   return (
@@ -690,7 +692,11 @@ export default function WalletPortal() {
                               : "bg-red-50 text-red-700 border border-red-200"
                               }`}
                           >
-                            {(l.transaction_type || "").replace(/_/g, " ")}
+                            {l.transaction_type === "po_commission_credit"
+                              ? "FPO Commission Credit"
+                              : l.transaction_type === "commission_credit"
+                              ? "Commission Credit"
+                              : (l.transaction_type || "").replace(/_/g, " ")}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-slate-700 max-w-sm truncate" title={l.narration}>
@@ -1000,9 +1006,13 @@ export default function WalletPortal() {
                             📌 How your commission is calculated
                           </p>
                           <p className="text-xs text-slate-600 font-semibold leading-relaxed">
-                            When you place an order for <strong>N kits</strong> of <strong>{currentKitGroup.kitName}</strong>,
-                            your commission = <strong>Commission per kit × Number of kits</strong>.
-                            For example, if the 25-kit PO commission is ₹1,230/kit, you earn ₹{(1230 * 25).toLocaleString("en-IN")} for a 25-kit PO order.
+                            When an order is placed for <strong>N kits</strong> of <strong>{currentKitGroup.kitName}</strong>,
+                            your franchise commission = <strong>Commission per kit × Number of kits</strong>.
+                            {quantities.length > 0 && byQty[quantities[0]]?.po ? (
+                              <span className="block mt-1 text-slate-700">
+                                Live Rate: For a {quantities[0]}-kit order at ₹{(byQty[quantities[0]].po / 100).toLocaleString("en-IN")}/kit, your gross commission is ₹{((byQty[quantities[0]].po / 100) * quantities[0]).toLocaleString("en-IN")}.
+                              </span>
+                            ) : null}
                           </p>
                         </div>
                       </div>

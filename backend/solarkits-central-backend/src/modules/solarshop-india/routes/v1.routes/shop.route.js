@@ -30,8 +30,11 @@ const {
   resubmit_epc_offline_payment,
   get_epc_order_invoice_data,
   get_epc_po_allocations,
-  submit_epc_po_receipt
+  submit_epc_po_receipt,
+  verify_epc_po_payment
 } = require("../../controller/v1.handlers/shop.handler");
+
+const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
 
 const { verify_auth } = require("../../middlewares/auth");
 const { upload_any_files } = require("../../../admin-panel/utils/upload.files");
@@ -78,6 +81,11 @@ router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);
 // ── EPC PO Allocations from Franchisees ───────────────────────────────────
 router.get("/po-allocations", verify_auth, get_epc_po_allocations);
 router.post("/po-allocations/:poId/upload-receipt", verify_auth, epcReceiptUpload, submit_epc_po_receipt);
+
+// ── Reseller/Franchisee verifies an EPC buyer's payment receipt ────────────
+// Called from the Reseller Portal /orders detail modal
+// POST body: { epc_buyer_id, action: 'verify'|'reject', rejection_note? }
+router.post("/po-allocations/:poId/verify-epc-receipt", verify_reseller_auth, verify_epc_po_payment);
 
 
 // ── EPC Industry Content Dashboard Routes ─────────────────────────────────────

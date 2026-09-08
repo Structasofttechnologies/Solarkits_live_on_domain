@@ -19,6 +19,11 @@ migration-checkpoints/
 migration-reports/
 migrate/node_modules/
 
+# Scratch and temporary scripts
+scratch/
+src/scratch/
+**/scratch/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

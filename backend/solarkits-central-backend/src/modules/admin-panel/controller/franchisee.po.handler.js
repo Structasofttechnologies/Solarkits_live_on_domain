@@ -152,8 +152,9 @@ const reject_po = async (req, res) => {
 // ── CONFIRM PAYMENT ───────────────────────────────────────────────────────────
 const confirm_payment = async (req, res) => {
   try {
-    const { po_id, payment_reference, razorpay_payment_id } = req.body;
-    if (!po_id) return res.status(400).json({ status: 'error', message: 'po_id is required' });
+    const po_id = req.body.po_id || req.body.order_id;
+    const { payment_reference, razorpay_payment_id } = req.body;
+    if (!po_id) return res.status(400).json({ status: 'error', message: 'po_id or order_id is required' });
 
     const order = await confirmPayment({ po_id, payment_reference, razorpay_payment_id, admin_id: req.user?.id, req });
     return res.json({ status: 'success', message: 'Payment confirmed', data: { id: order._id, status: order.status } });
@@ -221,6 +222,129 @@ const process_returns = async (req, res) => {
   }
 };
 
+// ── LIST PENDING EPC RECEIPTS ──────────────────────────────────────────────────
+/**
+ * GET /admin-api/franchisee/po/pending-receipts
+ * Returns all FPO orders that have at least one EPC allocation with payment_status = 'RECEIPT_SUBMITTED'
+ */
+const list_pending_epc_receipts = async (req, res) => {
+  try {
+    const { franchisee_id, page = 1, limit = 20 } = req.query;
+    const query = {
+      'items.epc_allocations.payment_status': 'RECEIPT_SUBMITTED',
+      deleted_at: null,
+    };
+    if (franchisee_id) query.franchisee_id = franchisee_id;
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [orders, total] = await Promise.all([
+      FpoOrder.find(query)
+        .populate('franchisee_id', 'business_name mobile email')
+        .populate('plan_id', 'name territory_level')
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      FpoOrder.countDocuments(query),
+    ]);
+
+    return res.json({
+      status: 'success',
+      data: orders,
+      meta: { total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) },
+    });
+  } catch (error) {
+    console.error('[po.handler] list_pending_epc_receipts error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ── ADMIN: VERIFY EPC PAYMENT RECEIPT ─────────────────────────────────────────
+/**
+ * POST /admin-api/franchisee/po/verify-epc-receipt
+ * Body: { po_id, epc_buyer_id, action: 'verify'|'reject', rejection_note? }
+ * - Verifies or rejects an EPC buyer's payment receipt
+ * - If all allocations become VERIFIED → auto-transitions PO to PAID
+ */
+const verify_epc_receipt = async (req, res) => {
+  try {
+    const po_id = req.body.po_id || req.body.order_id;
+    const { epc_buyer_id, action = 'verify', rejection_note } = req.body;
+    if (!po_id || !epc_buyer_id) {
+      return res.status(400).json({ status: 'error', message: 'po_id (or order_id) and epc_buyer_id are required' });
+    }
+
+    const order = await FpoOrder.findOne({ _id: po_id, deleted_at: null });
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'PO not found' });
+    }
+
+    let updated = false;
+    order.items.forEach(item => {
+      (item.epc_allocations || []).forEach(alloc => {
+        if (alloc.epc_buyer_id && alloc.epc_buyer_id.toString() === epc_buyer_id.toString()) {
+          if (action === 'reject') {
+            alloc.payment_status = 'PENDING';
+            alloc.payment_notes = rejection_note || 'Receipt rejected by admin. Please re-upload.';
+            alloc.payment_receipt_url = null;
+          } else {
+            alloc.payment_status = 'VERIFIED';
+            alloc.paid_at = new Date();
+            alloc.payment_notes = null;
+          }
+          updated = true;
+        }
+      });
+    });
+
+    if (!updated) {
+      return res.status(404).json({ status: 'error', message: 'EPC allocation not found in this PO' });
+    }
+
+    // Auto-transition to PAID if all allocations are now VERIFIED
+    if (action !== 'reject') {
+      const allAllocations = order.items.flatMap(item => item.epc_allocations || []);
+      const allVerified = allAllocations.length > 0 &&
+        allAllocations.every(a => a.payment_status === 'VERIFIED');
+
+      if (allVerified) {
+        if (['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED'].includes(order.status)) {
+          order.status = 'AWAITING_PAYMENT';
+          await order.save();
+        }
+
+        if (['AWAITING_PAYMENT', 'PARTIALLY_PAID'].includes(order.status)) {
+          await order.save();
+          const updated_order = await confirmPayment({
+            po_id: order._id,
+            payment_reference: 'ADMIN_EPC_RECEIPTS_VERIFIED',
+            admin_id: req.user?.id,
+            req,
+          });
+          return res.json({
+            status: 'success',
+            message: 'All EPC receipts verified. PO status updated to PAID.',
+            data: { id: updated_order._id, status: updated_order.status },
+            all_verified: true,
+          });
+        }
+      }
+    }
+
+    await order.save();
+    return res.json({
+      status: 'success',
+      message: action === 'reject'
+        ? 'Receipt rejected. EPC buyer will be notified to re-upload.'
+        : 'EPC payment receipt verified.',
+      all_verified: false,
+    });
+  } catch (error) {
+    console.error('[po.handler] verify_epc_receipt error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
   list_po_orders,
   get_po_order,
@@ -233,4 +357,6 @@ module.exports = {
   deliver_po,
   cancel_po,
   process_returns,
+  list_pending_epc_receipts,
+  verify_epc_receipt,
 };

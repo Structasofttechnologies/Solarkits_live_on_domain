@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { Provider, useDispatch, useSelector } from "react-redux"
 import store from "./app/store"
 import Alert from "./Components/Alert"
+import { Toaster } from "react-hot-toast"
 import AuthDialog from "./Components/AuthDialog"
 import { useEffect } from "react"
 import { checkAuth } from "./features/auth.slice"
@@ -42,6 +43,7 @@ function AppContent() {
   return (
     <>
       <Alert />
+      <Toaster position="top-right" />
       <AuthDialog />
       <Routes>
         {/* Public landing and shop pages */}

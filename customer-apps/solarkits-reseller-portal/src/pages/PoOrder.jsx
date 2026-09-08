@@ -155,17 +155,19 @@ export default function PoOrder() {
   }, [allocations]);
 
   // Unit Price Calculation (Paise / INR)
+  // IMPORTANT: We use the pre-tax/base price here, because we apply GST separately below.
+  // Do NOT use `price_with_tax` here — it already includes GST, which would cause double-counting.
   const unitPriceINR = useMemo(() => {
     if (!selectedKit) return 0;
     if (selectedKit.dealer_price) return selectedKit.dealer_price;
     if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
     if (selectedKit.selling_price_cached) return selectedKit.selling_price_cached;
-    if (selectedKit.price_with_tax) return selectedKit.price_with_tax;
     if (selectedKit.unit_price) return selectedKit.unit_price;
     if (selectedKit.price) return selectedKit.price;
     if (selectedKit.base_price) return selectedKit.base_price;
-    return 45000; // Default fallback estimate
+    return 45000; // Default fallback estimate (pre-tax)
   }, [selectedKit]);
+
 
   const gstRatePercent = selectedKit?.gst_rate || 12;
   const subtotalINR = totalAllocatedQty * unitPriceINR;
@@ -259,6 +261,8 @@ export default function PoOrder() {
       setSubmitting(false);
     }
   };
+
+
 
   // Filtered Orders
   const filteredOrders = useMemo(() => {
@@ -1071,7 +1075,7 @@ export default function PoOrder() {
                 {/* EPC Breakdown Table */}
                 <div className="space-y-2">
                   <h4 className="font-bold text-text-primary uppercase tracking-wider text-[11px]">
-                    EPC Buyer Allocations
+                    EPC Buyer Allocations & Payment Status
                   </h4>
                   <div className="border border-border rounded-xl overflow-hidden">
                     <table className="w-full text-left">
@@ -1079,21 +1083,72 @@ export default function PoOrder() {
                         <tr>
                           <th className="py-2.5 px-3">EPC Buyer</th>
                           <th className="py-2.5 px-3">GSTIN</th>
-                          <th className="py-2.5 px-3 text-right">Allocated Kits</th>
+                          <th className="py-2.5 px-3 text-center">Kits</th>
+                          <th className="py-2.5 px-3 text-center">Payment</th>
+                          <th className="py-2.5 px-3 text-right">Receipt / Verification</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {(selectedOrder.items?.[0]?.epc_allocations || []).map((alloc, aIdx) => (
-                          <tr key={aIdx}>
-                            <td className="py-2.5 px-3 font-bold text-text-primary">
-                              {alloc.company_name || alloc.buyer_name}
-                            </td>
-                            <td className="py-2.5 px-3 text-text-muted">{alloc.gstin || "N/A"}</td>
-                            <td className="py-2.5 px-3 text-right font-black text-primary">
-                              {alloc.allocated_quantity} Kits
-                            </td>
-                          </tr>
-                        ))}
+                        {(selectedOrder.items?.[0]?.epc_allocations || []).map((alloc, aIdx) => {
+                          const payStatus = alloc.payment_status || "PENDING";
+                          const statusCfg = {
+                            PENDING: { label: "Pending", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+                            RECEIPT_SUBMITTED: { label: "Receipt Submitted", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+                            VERIFIED: { label: "Verified ✓", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
+                            PAID: { label: "Paid ✓", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
+                          }[payStatus] || { label: payStatus, cls: "bg-gray-100 text-gray-700" };
+
+                          return (
+                            <tr key={aIdx} className="hover:bg-surface-hover/40 transition-colors">
+                              <td className="py-2.5 px-3 font-bold text-text-primary text-xs">
+                                {alloc.company_name || alloc.buyer_name}
+                                {alloc.payment_notes && (
+                                  <div className="text-[10px] text-danger mt-0.5">{alloc.payment_notes}</div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-text-muted text-[11px]">{alloc.gstin || "N/A"}</td>
+                              <td className="py-2.5 px-3 text-center font-black text-primary text-xs">{alloc.allocated_quantity}</td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${statusCfg.cls}`}>
+                                  {statusCfg.label}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <div className="flex items-center justify-end gap-2 flex-wrap">
+                                  {/* View receipt link — read-only for franchisee */}
+                                  {alloc.payment_receipt_url ? (
+                                    <a
+                                      href={
+                                        alloc.payment_receipt_url.startsWith("http")
+                                          ? alloc.payment_receipt_url
+                                          : `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api\/?$/, "")}${alloc.payment_receipt_url.startsWith("/") ? "" : "/"}${alloc.payment_receipt_url}`
+                                      }
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all shadow-sm"
+                                    >
+                                      📄 View Receipt
+                                    </a>
+                                  ) : (
+                                    <span className="text-[10px] text-text-muted italic">Receipt not uploaded</span>
+                                  )}
+
+                                  {/* Verification status indicator (Verification is performed exclusively by Admin / Accounts) */}
+                                  {payStatus === "RECEIPT_SUBMITTED" && (
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
+                                      Awaiting Admin/Accounts Verification
+                                    </span>
+                                  )}
+                                  {(payStatus === "VERIFIED" || payStatus === "PAID") && (
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                      Verified ✓
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
