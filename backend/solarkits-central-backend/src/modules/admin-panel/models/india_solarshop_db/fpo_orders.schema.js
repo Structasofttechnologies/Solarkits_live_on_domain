@@ -213,6 +213,15 @@ const schema = new mongoose.Schema(
     commission_posted: { type: Boolean, default: false },
     commission_ledger_id: { type: mongoose.Schema.Types.ObjectId, ref: 'fpo_commission_ledgers', default: null },
     total_commission_paise: { type: Number, default: 0 },
+    commission_status: {
+      type: String,
+      enum: ['Pending', 'Paid', 'On Hold', 'Failed'],
+      default: 'Pending',
+    },
+    commission_utr: { type: String, default: null, trim: true },
+    commission_paid_date: { type: Date, default: null },
+    commission_notes: { type: String, default: null },
+    payment_utr: { type: String, default: null, trim: true },
 
     // ── Goal ─────────────────────────────────────────────────────────────────
     goal_counted: { type: Boolean, default: false },

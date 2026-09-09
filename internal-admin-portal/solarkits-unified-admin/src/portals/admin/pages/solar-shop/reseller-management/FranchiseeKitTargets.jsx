@@ -29,6 +29,7 @@ const TARGET_TYPES = [
 ];
 
 const CALC_STAGES = [
+  { value: "ORDERED_QUANTITY",     label: "Ordered / Placed PO Quantity" },
   { value: "DELIVERED_QUANTITY",   label: "Delivered Quantity" },
   { value: "DISPATCHED_QUANTITY",  label: "Dispatched Quantity" },
   { value: "PAID_QUANTITY",        label: "Paid Quantity" },

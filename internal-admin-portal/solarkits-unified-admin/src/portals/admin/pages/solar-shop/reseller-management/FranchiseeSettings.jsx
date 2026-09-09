@@ -1878,6 +1878,7 @@ function KitTargetModal({ plan, initialData, saving, onClose, onSave }) {
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Calculation Stage</label>
               <select className="w-full px-3.5 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none focus:ring-2 focus:ring-primary" value={form.calculation_stage} onChange={(e) => setForm({ ...form, calculation_stage: e.target.value })}>
+                <option value="ORDERED_QUANTITY">Ordered / Placed PO Quantity</option>
                 <option value="DELIVERED_QUANTITY">Delivered Quantity (Recommended)</option>
                 <option value="DISPATCHED_QUANTITY">Dispatched Quantity</option>
                 <option value="PAID_QUANTITY">Paid PO Quantity</option>

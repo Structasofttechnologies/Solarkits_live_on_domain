@@ -219,7 +219,25 @@ async function recalculateProgress(paramsOrId, maybeMonth, maybeYear) {
         },
         delivered_quantity: {
           $sum: {
-            $cond: [{ $in: ['$status', ['DELIVERED', 'COMPLETED']] }, { $sum: { $ifNull: ['$items.delivered_quantity', '$items.quantity'] } }, 0],
+            $cond: [
+              { $in: ['$status', ['DELIVERED', 'COMPLETED']] },
+              {
+                $sum: {
+                  $map: {
+                    input: '$items',
+                    as: 'it',
+                    in: {
+                      $cond: [
+                        { $gt: [{ $ifNull: ['$$it.delivered_quantity', 0] }, 0] },
+                        '$$it.delivered_quantity',
+                        { $ifNull: ['$$it.quantity', 0] }
+                      ]
+                    }
+                  }
+                }
+              },
+              0
+            ],
           },
         },
         cancelled_quantity: { $sum: { $sum: { $ifNull: ['$items.cancelled_quantity', 0] } } },
@@ -242,14 +260,15 @@ async function recalculateProgress(paramsOrId, maybeMonth, maybeYear) {
   const stage = target?.calculation_stage || 'DELIVERED_QUANTITY';
 
   let rawStageQty = delivered_quantity;
-  if (stage === 'APPROVED_PO_QUANTITY') {
+  if (stage === 'ORDERED_QUANTITY' || stage === 'ORDERED_PO_QUANTITY') {
+    rawStageQty = ordered_quantity;
+  } else if (stage === 'APPROVED_PO_QUANTITY') {
     rawStageQty = approved_quantity;
   } else if (stage === 'PAID_QUANTITY') {
     rawStageQty = paid_quantity;
   } else if (stage === 'DISPATCHED_QUANTITY') {
     rawStageQty = dispatched_quantity;
   } else {
-    // If delivered_quantity is 0, we can also factor in approved/paid if stage is lenient or use delivered
     rawStageQty = delivered_quantity;
   }
 
@@ -302,17 +321,16 @@ async function getGoalWidget(franchisee_id) {
   const month = now.getMonth() + 1;
   const year  = now.getFullYear();
 
-  // Current month progress
-  let progress = await FranchiseeTargetProgress.findOne({
-    franchisee_id,
-    target_year: year,
-    target_month: month,
-  }).lean();
-
-  if (!progress) {
-    // Recalculate on demand
-    progress = await recalculateProgress({ franchisee_id, month, year });
-    progress = progress.toObject ? progress.toObject() : progress;
+  // Recalculate dynamically to ensure fresh real-time data
+  let progress = await recalculateProgress({ franchisee_id, month, year });
+  if (progress && progress.toObject) {
+    progress = progress.toObject();
+  } else if (!progress) {
+    progress = await FranchiseeTargetProgress.findOne({
+      franchisee_id,
+      target_year: year,
+      target_month: month,
+    }).lean() || {};
   }
 
   // Previous month comparison

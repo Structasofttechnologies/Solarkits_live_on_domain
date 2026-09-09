@@ -62,6 +62,14 @@ const schema = new mongoose.Schema({
     enum: ['pending', 'confirmed', 'processing', 'allocated', 'dispatched', 'delivered', 'cancelled'],
     default: 'pending',
   },
+  commission_status: {
+    type: String,
+    enum: ['Pending', 'Paid', 'On Hold', 'Failed'],
+    default: 'Pending',
+  },
+  commission_utr: { type: String, default: null, trim: true },
+  commission_paid_date: { type: Date, default: null },
+  commission_notes: { type: String, default: null },
   payment_method: {
     type: String,
     enum: ['offline_bank_transfer'],

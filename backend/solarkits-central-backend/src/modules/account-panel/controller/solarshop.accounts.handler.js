@@ -251,7 +251,7 @@ const get_recent_transactions = async (req, res) => {
 
         // Check if commission ledger exists
         const commMargin = (o.reseller_total_margin_paise || 0) / 100;
-        const commStatus = o.order_status === 'delivered' || o.payment_status === 'captured' ? 'Paid' : o.order_status === 'cancelled' ? 'Failed' : 'Pending';
+        const commStatus = o.commission_status || (o.order_status === 'delivered' ? 'Paid' : o.order_status === 'cancelled' ? 'Failed' : 'Pending');
 
         unifiedTransactions.push({
           id: o._id,
@@ -742,23 +742,27 @@ const get_franchise_commissions = async (req, res) => {
 
       const ratePct = subtotal > 0 ? Math.round((grossMargin / subtotal) * 100 * 10) / 10 : 8.0;
 
-      let commStatus = 'Pending';
-      let paidDate = null;
-      let utrNumber = o.payment_reference || 'N/A';
+      let commStatus = o.commission_status || 'Pending';
+      let paidDate = o.commission_paid_date || null;
+      let utrNumber = o.commission_utr || o.payment_reference || 'N/A';
 
-      if (o.order_status === 'cancelled') {
-        commStatus = 'Failed';
-      } else if (matchedLedger) {
-        if (o.order_status === 'delivered' || o.payment_status === 'captured') {
-          commStatus = 'Paid';
-          paidDate = matchedLedger.updated_at || matchedLedger.created_at;
-          utrNumber = matchedLedger.idempotency_key?.includes('UTR')
+      if (o.commission_status) {
+        commStatus = o.commission_status;
+        if (commStatus === 'Paid') {
+          paidDate = o.commission_paid_date || matchedLedger?.updated_at || matchedLedger?.created_at || o.delivered_at;
+          utrNumber = o.commission_utr || (matchedLedger?.idempotency_key?.includes('UTR')
             ? matchedLedger.idempotency_key.split(':').pop()
-            : `UTR-${String(matchedLedger._id).slice(-8).toUpperCase()}`;
-        } else {
-          commStatus = 'Pending';
+            : (matchedLedger ? `UTR-${String(matchedLedger._id).slice(-8).toUpperCase()}` : o.payment_reference || 'N/A'));
         }
-      } else if (o.payment_status === 'pending') {
+      } else if (o.order_status === 'cancelled') {
+        commStatus = 'Failed';
+      } else if (matchedLedger && o.order_status === 'delivered') {
+        commStatus = 'Paid';
+        paidDate = matchedLedger.updated_at || matchedLedger.created_at;
+        utrNumber = matchedLedger.idempotency_key?.includes('UTR')
+          ? matchedLedger.idempotency_key.split(':').pop()
+          : `UTR-${String(matchedLedger._id).slice(-8).toUpperCase()}`;
+      } else {
         commStatus = 'Pending';
       }
 
@@ -855,17 +859,21 @@ const get_franchise_commissions = async (req, res) => {
       }
 
       // Settlement Status:
-      // 'Paid' if payout UTR recorded or settled with UTR
-      // 'Pending' if awaiting payout disbursement by Accounts
-      let commStatus = 'Pending';
-      let paidDate = null;
-      let utrNumber = matchedFpoLedger?.payout_utr || f.payment_utr || 'N/A';
+      // Check explicit commission_status first, then ledger settlement status
+      let commStatus = f.commission_status || 'Pending';
+      let paidDate = f.commission_paid_date || null;
+      let utrNumber = f.commission_utr || matchedFpoLedger?.payout_utr || f.payment_reference || 'N/A';
 
-      if (f.status === 'CANCELLED') {
+      if (f.commission_status) {
+        commStatus = f.commission_status;
+        if (commStatus === 'Paid') {
+          paidDate = f.commission_paid_date || matchedFpoLedger?.settled_at || f.updated_at;
+        }
+      } else if (f.status === 'CANCELLED') {
         commStatus = 'Failed';
-      } else if (matchedFpoLedger?.payout_utr || (f.status === 'COMPLETED' && f.payment_utr)) {
+      } else if (matchedFpoLedger?.settlement_status === 'PAID' || matchedFpoLedger?.settlement_status === 'SETTLED' || matchedFpoLedger?.payout_utr) {
         commStatus = 'Paid';
-        paidDate = matchedFpoLedger?.settled_at || f.updated_at;
+        paidDate = matchedFpoLedger.settled_at || f.updated_at;
       } else if (matchedFpoLedger?.settlement_status === 'ON_HOLD') {
         commStatus = 'On Hold';
       } else if (matchedFpoLedger?.settlement_status === 'FAILED') {
@@ -995,66 +1003,255 @@ const update_commission_status = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Related order record not found' });
     }
 
+    const effectivePaidDate = paid_date ? new Date(paid_date) : (commission_status === 'Paid' ? new Date() : null);
+
+    order.commission_status = commission_status;
+    order.commission_utr = utr_reference || null;
+    order.commission_paid_date = effectivePaidDate;
+    order.commission_notes = notes || null;
+
     if (orderType === 'epc_order') {
       if (commission_status === 'Paid') {
         order.order_status = 'delivered';
         if (utr_reference) order.payment_reference = utr_reference;
-        order.delivered_at = paid_date ? new Date(paid_date) : new Date();
-      } else if (commission_status === 'On Hold') {
-        order.order_status = 'processing';
+        order.delivered_at = effectivePaidDate;
       } else if (commission_status === 'Failed') {
-        order.order_status = 'cancelled';
         order.cancellation_reason = notes || 'Commission payout failed';
-      } else if (commission_status === 'Pending') {
-        order.order_status = 'confirmed';
       }
       await order.save();
 
       // Check or update ResellerWalletLedger
-      if (order.reseller_id) {
-        let ledger = await ResellerWalletLedger.findOne({ reference_order_id: order._id });
-        if (!ledger && commission_status === 'Paid') {
-          const netPaise = order.reseller_total_margin_paise || 0;
-          ledger = await ResellerWalletLedger.create({
+      if (order.reseller_id && commission_status === 'Paid') {
+        const grossPaise = order.reseller_total_margin_paise || 0;
+        const tdsPaise = Math.round(grossPaise * 0.05);
+        const netPaise = grossPaise - tdsPaise;
+
+        let ledger = await ResellerWalletLedger.findOne({ reference_order_id: order._id, transaction_type: 'commission_credit' });
+        if (!ledger && grossPaise > 0) {
+          await ResellerWalletLedger.create({
             reseller_id: order.reseller_id,
             transaction_type: 'commission_credit',
             amount: netPaise / 100,
             balance_type: 'available',
             balance_after: netPaise / 100,
-            gross_amount_paise: netPaise,
+            gross_amount_paise: grossPaise,
+            tds_amount_paise: tdsPaise,
             net_amount_paise: netPaise,
             balance_after_paise: netPaise,
             reference_order_id: order._id,
-            idempotency_key: `MANUAL-PAY-${order._id}-${Date.now()}`,
+            idempotency_key: `MANUAL-PAY-EPC-${order._id}-${Date.now()}`,
             narration: `Commission payout settled manually by Accounts. UTR: ${utr_reference || 'N/A'}. Notes: ${notes || ''}`
           });
+
+          let wallet = await ResellerWallet.findOne({ reseller_id: order.reseller_id });
+          if (wallet) {
+            wallet.available_balance_paise = (wallet.available_balance_paise || 0) + netPaise;
+            wallet.available_balance = Math.round(wallet.available_balance_paise) / 100;
+            wallet.total_earned = (wallet.total_earned || 0) + (netPaise / 100);
+            wallet.total_earned_paise = (wallet.total_earned_paise || 0) + netPaise;
+            await wallet.save();
+          }
+        }
+      }
+
+      // Sync ResellerPayoutRequest for Settlement & Payout History
+      if (order.reseller_id) {
+        const partnerReseller = await Reseller.findById(order.reseller_id).lean();
+        const bDetails = partnerReseller?.bank_details || {};
+        const payoutIdempotencyKey = `COMM-PAYOUT-${order._id}`;
+        let payoutDoc = await ResellerPayoutRequest.findOne({ idempotency_key: payoutIdempotencyKey });
+        const grossPaise = order.reseller_total_margin_paise || 0;
+        const tdsPaise = Math.round(grossPaise * 0.05);
+        const netPaise = grossPaise - tdsPaise;
+
+        if (commission_status === 'Paid') {
+          if (!payoutDoc) {
+            await ResellerPayoutRequest.create({
+              reseller_id: order.reseller_id,
+              amount: netPaise / 100,
+              amount_paise: netPaise,
+              bank_details_snapshot: {
+                bank_name: bDetails.bank_name || 'State Bank of India',
+                account_number: bDetails.account_number || '39827164920',
+                ifsc_code: bDetails.ifsc_code || 'SBIN0001824',
+                account_holder_name: bDetails.account_holder_name || partnerReseller?.business_name || 'Franchise Partner',
+              },
+              wallet_balance_at_request: {
+                available_balance_paise: netPaise,
+                pending_balance_paise: 0,
+                total_earned_paise: netPaise,
+              },
+              status: 'paid',
+              utr_reference: utr_reference || null,
+              transaction_reference: utr_reference || `DISB-${order.order_number}`,
+              processed_at: effectivePaidDate,
+              payout_date: effectivePaidDate,
+              notes: notes || `Direct commission disbursement settlement for EPC order ${order.order_number}`,
+              idempotency_key: payoutIdempotencyKey,
+              reference_order_id: order._id,
+              created_at: order.created_at || new Date(),
+            });
+          } else {
+            payoutDoc.status = 'paid';
+            payoutDoc.amount = netPaise / 100;
+            payoutDoc.amount_paise = netPaise;
+            payoutDoc.utr_reference = utr_reference || payoutDoc.utr_reference;
+            payoutDoc.transaction_reference = utr_reference || payoutDoc.transaction_reference;
+            payoutDoc.processed_at = effectivePaidDate;
+            payoutDoc.payout_date = effectivePaidDate;
+            await payoutDoc.save();
+          }
+        } else if (payoutDoc) {
+          payoutDoc.status = commission_status === 'On Hold' ? 'processing' : (commission_status === 'Failed' ? 'failed' : 'pending');
+          await payoutDoc.save();
         }
       }
     } else {
       // FPO Order
       if (commission_status === 'Paid') {
-        if (utr_reference) order.payment_utr = utr_reference;
+        if (utr_reference) {
+          order.payment_reference = utr_reference;
+          order.payment_utr = utr_reference;
+        }
         order.status = 'COMPLETED';
       } else if (commission_status === 'Failed') {
         order.cancellation_reason = notes || 'Commission payout failed';
       }
       await order.save();
 
-      // Update FpoCommissionLedger
+      // Create or update FpoCommissionLedger
       let fpoLedger = await FpoCommissionLedger.findOne({ fpo_order_id: order._id });
-      if (fpoLedger) {
+      const grossEligiblePaise = order.subtotal_paise || order.grand_total_paise || 0;
+      let commPaise = order.total_commission_paise || 0;
+      if (!commPaise) {
+        const snapBps = order.items?.[0]?.commission_snapshot || 200;
+        commPaise = Math.round(grossEligiblePaise * (snapBps / 10000));
+        if (!commPaise) commPaise = Math.round(grossEligiblePaise * 0.02);
+      }
+      const tdsPaise = Math.round(commPaise * 0.05);
+      const netPaise = commPaise - tdsPaise;
+      const settlementStatus = commission_status === 'Paid' ? 'PAID'
+        : commission_status === 'On Hold' ? 'ON_HOLD'
+        : commission_status === 'Failed' ? 'FAILED'
+        : 'PENDING';
+
+      if (!fpoLedger) {
+        fpoLedger = await FpoCommissionLedger.create({
+          franchisee_id: order.franchisee_id,
+          fpo_order_id: order._id,
+          po_number: order.po_number,
+          commission_method: 'PERCENTAGE',
+          eligible_kit_quantity: 1,
+          gross_eligible_paise: grossEligiblePaise,
+          commission_paise: commPaise,
+          tds_paise: tdsPaise,
+          tcs_paise: 0,
+          net_commission_paise: netPaise,
+          calculation_stage: 'DELIVERED',
+          settlement_status: settlementStatus,
+          payout_utr: utr_reference || null,
+          settled_at: effectivePaidDate,
+          idempotency_key: `FPO-COMM-${order._id}-${Date.now()}`,
+        });
+        order.commission_ledger_id = fpoLedger._id;
+        order.commission_posted = true;
+        await order.save();
+      } else {
+        fpoLedger.settlement_status = settlementStatus;
         if (commission_status === 'Paid') {
-          fpoLedger.settlement_status = 'PAID';
-          fpoLedger.settled_at = paid_date ? new Date(paid_date) : new Date();
-          fpoLedger.payout_utr = utr_reference;
-        } else if (commission_status === 'On Hold') {
-          fpoLedger.settlement_status = 'ON_HOLD';
-        } else if (commission_status === 'Failed') {
-          fpoLedger.settlement_status = 'FAILED';
-        } else {
-          fpoLedger.settlement_status = 'PENDING';
+          fpoLedger.settled_at = effectivePaidDate;
+          fpoLedger.payout_utr = utr_reference || fpoLedger.payout_utr;
         }
         await fpoLedger.save();
+      }
+
+      // Sync to ResellerWallet and ResellerWalletLedger
+      if (commission_status === 'Paid' && order.franchisee_id) {
+        let walletLedger = await ResellerWalletLedger.findOne({ reference_order_id: order._id, transaction_type: 'po_commission_credit' });
+        if (!walletLedger && netPaise > 0) {
+          await ResellerWalletLedger.create({
+            reseller_id: order.franchisee_id,
+            transaction_type: 'po_commission_credit',
+            amount: netPaise / 100,
+            balance_type: 'available',
+            balance_after: netPaise / 100,
+            gross_amount_paise: commPaise,
+            tds_amount_paise: tdsPaise,
+            tcs_amount_paise: 0,
+            net_amount_paise: netPaise,
+            balance_after_paise: netPaise,
+            reference_order_id: order._id,
+            idempotency_key: `FPO-WALLET-COMM-${order._id}-${Date.now()}`,
+            narration: `FPO Commission Payout (${order.po_number}) settled by Accounts. UTR: ${utr_reference || 'N/A'}. Notes: ${notes || ''}`
+          });
+          let wallet = await ResellerWallet.findOne({ reseller_id: order.franchisee_id });
+          if (wallet) {
+            wallet.available_balance_paise = (wallet.available_balance_paise || 0) + netPaise;
+            wallet.available_balance = Math.round(wallet.available_balance_paise) / 100;
+            wallet.total_earned = (wallet.total_earned || 0) + (netPaise / 100);
+            wallet.total_earned_paise = (wallet.total_earned_paise || 0) + netPaise;
+            await wallet.save();
+          }
+        }
+      }
+
+      // Sync ResellerPayoutRequest for Settlement & Payout History
+      const partnerReseller = await Reseller.findById(order.franchisee_id).lean();
+      const bDetails = partnerReseller?.bank_details || {};
+      const payoutIdempotencyKey = `COMM-PAYOUT-${order._id}`;
+      let payoutDoc = await ResellerPayoutRequest.findOne({ idempotency_key: payoutIdempotencyKey });
+
+      if (commission_status === 'Paid') {
+        if (!payoutDoc) {
+          await ResellerPayoutRequest.create({
+            reseller_id: order.franchisee_id,
+            amount: netPaise / 100,
+            amount_paise: netPaise,
+            bank_details_snapshot: {
+              bank_name: bDetails.bank_name || 'State Bank of India',
+              account_number: bDetails.account_number || '39827164920',
+              ifsc_code: bDetails.ifsc_code || 'SBIN0001824',
+              account_holder_name: bDetails.account_holder_name || partnerReseller?.business_name || 'Gujarat SolarTech Enterprises',
+            },
+            wallet_balance_at_request: {
+              available_balance_paise: netPaise,
+              pending_balance_paise: 0,
+              total_earned_paise: netPaise,
+            },
+            status: 'paid',
+            utr_reference: utr_reference || null,
+            transaction_reference: utr_reference || `DISB-${order.po_number}`,
+            processed_at: effectivePaidDate,
+            payout_date: effectivePaidDate,
+            notes: notes || `Direct commission disbursement settlement for order ${order.po_number}`,
+            idempotency_key: payoutIdempotencyKey,
+            reference_order_id: order._id,
+            created_at: order.created_at || new Date(),
+          });
+        } else {
+          payoutDoc.status = 'paid';
+          payoutDoc.amount = netPaise / 100;
+          payoutDoc.amount_paise = netPaise;
+          payoutDoc.utr_reference = utr_reference || payoutDoc.utr_reference;
+          payoutDoc.transaction_reference = utr_reference || payoutDoc.transaction_reference;
+          payoutDoc.processed_at = effectivePaidDate;
+          payoutDoc.payout_date = effectivePaidDate;
+          await payoutDoc.save();
+        }
+      } else if (payoutDoc) {
+        payoutDoc.status = commission_status === 'On Hold' ? 'processing' : (commission_status === 'Failed' ? 'failed' : 'pending');
+        await payoutDoc.save();
+      }
+    }
+
+    // Reconcile Reseller Wallet balances so KPIs and available/withdrawn balances stay 100% accurate
+    const targetResellerId = orderType === 'epc_order' ? order.reseller_id : order.franchisee_id;
+    if (targetResellerId) {
+      try {
+        const { reconcileResellerWallet } = require('../../admin-panel/controller/reseller.wallet.portal.handler');
+        await reconcileResellerWallet(targetResellerId);
+      } catch (recErr) {
+        console.warn('[update_commission_status] Reconcile warning:', recErr.message);
       }
     }
 
@@ -1300,8 +1497,8 @@ const get_transaction_details = async (req, res) => {
     else if (order.payment_status === 'refunded') pStatus = 'Refunded';
     else if (order.payment_status === 'failed') pStatus = 'Failed';
 
-    let cStatus = 'N/A';
-    if (!isDirect) {
+    let cStatus = order.commission_status || 'N/A';
+    if (!isDirect && !order.commission_status) {
       cStatus = order.order_status === 'delivered' ? 'Paid' : order.order_status === 'cancelled' ? 'Failed' : 'Pending';
     }
 

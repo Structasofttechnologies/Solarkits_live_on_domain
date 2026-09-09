@@ -60,6 +60,7 @@ const schema = new mongoose.Schema(
     calculation_stage: {
       type: String,
       enum: [
+        'ORDERED_QUANTITY',
         'APPROVED_PO_QUANTITY',
         'PAID_QUANTITY',
         'DISPATCHED_QUANTITY',

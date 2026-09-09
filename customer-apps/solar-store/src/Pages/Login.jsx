@@ -34,18 +34,40 @@ export default function Login() {
     lockedUntil: null
   });
 
-  // 🧪 Testing Credentials from .env with default fallbacks
+  // 🧪 Testing Credentials with default fallbacks & env support
   const testCredentials = (() => {
+    const defaultAccounts = [
+      {
+        role: "Onboard Franchise / EPC Login",
+        email: "ravi.s@gmail.com",
+        password: "Password@123",
+        tag: "Franchise / EPC"
+      }
+    ];
+
     try {
       const creds = import.meta.env.VITE_LOGIN_CREDENTIALS;
-      if (creds) return JSON.parse(creds.replace(/'/g, '"'));
+      if (creds) {
+        const parsed = JSON.parse(creds.replace(/'/g, '"'));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const rest = parsed.filter(
+            (c) => c.email?.toLowerCase() !== "ravi.s@gmail.com"
+          );
+          return [...defaultAccounts, ...rest];
+        }
+      }
     } catch (e) {
       console.error("Failed to parse VITE_LOGIN_CREDENTIALS", e);
     }
+
     return [
-      { email: "rahil.sunnovative@gmail.com", password: "1234", role: "Super Admin" },
-      { email: "customer@solarkits.com", password: "1234", role: "Customer Account" },
-      { email: "sushilpiprotar@gmail.com", password: "1234", role: "Accountant" }
+      ...defaultAccounts,
+      {
+        role: "Customer Account",
+        email: "customer@solarkits.com",
+        password: "your_password",
+        tag: "Customer"
+      }
     ];
   })();
 
@@ -291,6 +313,21 @@ export default function Login() {
     }
   };
 
+  // 🧪 Auto-fill Credentials into Form
+  const handleFillCredentials = (cred) => {
+    setLoginMethod("email");
+    setFormData(prev => ({
+      ...prev,
+      email: cred.email,
+      password: cred.password
+    }));
+    setErrors({});
+    dispatch(setAlert({
+      type: "info",
+      message: `Form filled with ${cred.email} (${cred.role || "Test Account"}).`
+    }));
+  };
+
   // 🧪 Direct Login Handler
   const handleDirectLogin = async (cred) => {
     setLoading(true);
@@ -336,27 +373,73 @@ export default function Login() {
     if (!testCredentials || testCredentials.length === 0) return null;
 
     return (
-      <div className="px-6 pb-6 pt-2 border-t border-border/50 bg-primary/5">
-        <p className="text-[10px] uppercase tracking-wider text-primary/70 font-bold mb-3">
-          Quick Access (Testing Only)
-        </p>
-        <div className="space-y-2">
+      <div className="px-6 pb-6 pt-3 border-t border-border/50 bg-primary/5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] uppercase tracking-wider text-primary/80 font-bold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+            Quick Access (Testing Only)
+          </p>
+          <span className="text-[10px] text-text-muted font-medium bg-surface px-2 py-0.5 rounded-full border border-border">
+            1-Click Login / Auto-Fill
+          </span>
+        </div>
+
+        <div className="space-y-2.5">
           {testCredentials.map((cred, idx) => (
-            <button
+            <div
               key={idx}
-              type="button"
-              onClick={() => handleDirectLogin(cred)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl bg-surface border border-primary/20 hover:border-primary hover:shadow-md transition-all group"
+              className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-surface border border-primary/25 hover:border-primary hover:shadow-md transition-all group"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary dark:text-info group-hover:bg-primary group-hover:text-white transition-colors">
-                <FiUser size={16} />
+              <button
+                type="button"
+                onClick={() => handleDirectLogin(cred)}
+                disabled={loading}
+                className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+              >
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary dark:text-info group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
+                  <FiUser size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs font-bold text-text-primary dark:text-info truncate">
+                      {cred.role || "Developer Account"}
+                    </p>
+                    {cred.tag && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/15 text-primary">
+                        {cred.tag}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-secondary truncate mt-0.5">
+                    {cred.email}
+                  </p>
+                  <p className="text-[11px] text-text-muted font-mono">
+                    Pass: <span className="text-text-secondary font-semibold">{cred.password}</span>
+                  </p>
+                </div>
+              </button>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  title="Auto-fill form inputs only"
+                  onClick={() => handleFillCredentials(cred)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-surface-hover hover:bg-primary/10 text-text-secondary hover:text-primary border border-border transition-all cursor-pointer"
+                >
+                  Fill
+                </button>
+                <button
+                  type="button"
+                  title="1-Click instant login"
+                  onClick={() => handleDirectLogin(cred)}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-white shadow-sm transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <span>Login</span>
+                  <FiArrowRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                </button>
               </div>
-              <div className="flex-1 text-left overflow-hidden">
-                <p className="text-sm font-semibold text-text-primary dark:text-info truncate">{cred.email}</p>
-                <p className="text-[11px] text-text-secondary">Click to login as developer</p>
-              </div>
-              <FiArrowRight size={14} className="text-primary dark:text-info opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-            </button>
+            </div>
           ))}
         </div>
       </div>

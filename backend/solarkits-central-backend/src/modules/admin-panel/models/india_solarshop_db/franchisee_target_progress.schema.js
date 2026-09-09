@@ -36,6 +36,7 @@ const schema = new mongoose.Schema(
 
     // ── Quantities ────────────────────────────────────────────────────────────
     target_quantity:    { type: Number, default: 0, min: 0 },
+    ordered_quantity:   { type: Number, default: 0, min: 0 },
     approved_quantity:  { type: Number, default: 0, min: 0 },
     paid_quantity:      { type: Number, default: 0, min: 0 },
     dispatched_quantity:{ type: Number, default: 0, min: 0 },
@@ -44,6 +45,7 @@ const schema = new mongoose.Schema(
     returned_quantity:  { type: Number, default: 0, min: 0 },
     eligible_quantity:  { type: Number, default: 0, min: 0 },
     balance_quantity:   { type: Number, default: 0, min: 0 },
+    calculation_stage:  { type: String, default: 'DELIVERED_QUANTITY' },
 
     // ── Achievement ───────────────────────────────────────────────────────────
     achievement_pct: { type: Number, default: 0, min: 0 },

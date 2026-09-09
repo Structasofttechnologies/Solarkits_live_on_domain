@@ -34,9 +34,14 @@ function StatusBadge({ status }) {
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge }) {
+function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge, onClick, action }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+    <div
+      onClick={onClick}
+      className={`bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between transition-all ${
+        onClick ? "cursor-pointer hover:border-blue-400 hover:shadow-md" : "hover:shadow-md"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
@@ -54,6 +59,7 @@ function KpiCard({ icon: Icon, iconBg, iconColor, label, value, sub, badge }) {
         <div className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider truncate">{label}</div>
         <div className="text-xl font-black text-slate-900 mt-0.5 truncate">{value}</div>
         {sub && <div className="text-[11px] text-slate-500 mt-0.5 font-medium">{sub}</div>}
+        {action && <div className="mt-2.5">{action}</div>}
       </div>
     </div>
   );
@@ -72,6 +78,8 @@ export default function WalletPortal() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("ledger"); // "ledger" | "payouts" | "commission_rates"
   const [filterType, setFilterType] = useState("all");
+  const [payoutFilter, setPayoutFilter] = useState("all"); // "all" | "paid" | "pending" | "processing" | "failed"
+  const [payoutSearch, setPayoutSearch] = useState("");
 
   // ── Commission Rates State ──────────────────────────────────────────────────
   const [commissionRates, setCommissionRates] = useState([]);
@@ -235,15 +243,15 @@ export default function WalletPortal() {
     }
   };
 
-  // ── Derived values ──────────────────────────────────────────────────────────
+  // ── Derived values (robust against 0 and undefined) ─────────────────────────
   const fd = wallet?.formula_breakdown || {};
-  const grossEarned = fd.gross_earnings || wallet?.gross_earned || 0;
-  const tdsDeducted = Math.abs(fd.minus_tds || -(wallet?.tds_deducted || 0));
-  const tcsDeducted = Math.abs(fd.minus_tcs || -(wallet?.tcs_deducted || 0));
-  const netEarned = fd.net_earnings || wallet?.total_earned || 0;
-  const totalPaid = Math.abs(fd.minus_completed_withdrawals || -(wallet?.total_withdrawn || 0));
-  const pendingHolds = Math.abs(fd.minus_pending_holds || -(wallet?.pending_balance || 0));
-  const availBalance = fd.equals_available_balance || wallet?.available_balance || 0;
+  const grossEarned = fd.gross_earnings !== undefined ? fd.gross_earnings : (wallet?.gross_earned ?? 0);
+  const tdsDeducted = Math.abs(fd.minus_tds !== undefined ? fd.minus_tds : (wallet?.tds_deducted ?? 0));
+  const tcsDeducted = Math.abs(fd.minus_tcs !== undefined ? fd.minus_tcs : (wallet?.tcs_deducted ?? 0));
+  const netEarned = fd.net_earnings !== undefined ? fd.net_earnings : (wallet?.total_earned ?? 0);
+  const totalPaid = Math.abs(fd.minus_completed_withdrawals !== undefined ? fd.minus_completed_withdrawals : (wallet?.total_withdrawn ?? 0));
+  const pendingHolds = Math.abs(fd.minus_pending_holds !== undefined ? fd.minus_pending_holds : (wallet?.pending_balance ?? 0));
+  const availBalance = fd.equals_available_balance !== undefined ? fd.equals_available_balance : (wallet?.available_balance ?? 0);
 
   const isTdsCut = tdsDeducted > 0;
 
@@ -253,6 +261,36 @@ export default function WalletPortal() {
     : filterType === "commission_credit"
     ? ledger.filter((l) => l.transaction_type === "commission_credit" || l.transaction_type === "po_commission_credit")
     : ledger.filter((l) => l.transaction_type === filterType);
+
+  // Filtered Payout settlements
+  const filteredPayouts = payouts.filter((p) => {
+    // 1. Status Filter
+    if (payoutFilter === "paid" && p.status !== "paid") return false;
+    if (payoutFilter === "pending" && p.status !== "pending") return false;
+    if (payoutFilter === "processing" && p.status !== "processing") return false;
+    if (payoutFilter === "failed" && p.status !== "failed" && p.status !== "rejected") return false;
+
+    // 2. Search Filter
+    if (payoutSearch.trim()) {
+      const q = payoutSearch.trim().toLowerCase();
+      const pId = String(p.id || p._id || "").toLowerCase();
+      const utr = String(p.utr_reference || p.transaction_reference || "").toLowerCase();
+      const bName = String(p.bank_details_snapshot?.bank_name || "").toLowerCase();
+      const accNum = String(p.bank_details_snapshot?.account_number || "").toLowerCase();
+      const ordNum = String(p.order_number || "").toLowerCase();
+      const notes = String(p.notes || "").toLowerCase();
+
+      return (
+        pId.includes(q) ||
+        utr.includes(q) ||
+        bName.includes(q) ||
+        accNum.includes(q) ||
+        ordNum.includes(q) ||
+        notes.includes(q)
+      );
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -389,6 +427,15 @@ export default function WalletPortal() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {availBalance >= 100 && (
+            <button
+              onClick={() => setShowWithdrawModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold text-xs transition-colors shadow-sm cursor-pointer"
+            >
+              <FiSend size={13} />
+              Request Withdrawal
+            </button>
+          )}
           <button
             onClick={() => setShowBankModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
@@ -453,8 +500,8 @@ export default function WalletPortal() {
         </button>
       </div>
 
-      {/* ── KPI Cards (Gross, TDS, Net, Paid, Pending) ────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      {/* ── KPI Cards (Gross, TDS, Net, Available, Paid, Pending) ──────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5">
         <KpiCard
           icon={FiTrendingUp}
           iconBg="#d1fae5"
@@ -488,6 +535,30 @@ export default function WalletPortal() {
         />
 
         <KpiCard
+          icon={FiArrowDownLeft}
+          iconBg={availBalance > 0 ? "#eff6ff" : "#f8fafc"}
+          iconColor={availBalance > 0 ? "#2563eb" : "#64748b"}
+          label="Available Payout"
+          value={fmt(availBalance)}
+          sub="Ready for bank withdrawal"
+          badge={
+            availBalance > 0
+              ? { text: "Available", bg: "bg-blue-100", color: "text-blue-800" }
+              : { text: "Fully Settled", bg: "bg-slate-100", color: "text-slate-600" }
+          }
+          action={
+            availBalance >= 100 ? (
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowWithdrawModal(true); }}
+                className="w-full py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              >
+                <FiSend size={10} /> Request Payout
+              </button>
+            ) : null
+          }
+        />
+
+        <KpiCard
           icon={FiCheckCircle}
           iconBg="#d1fae5"
           iconColor="#059669"
@@ -495,6 +566,7 @@ export default function WalletPortal() {
           value={fmt(totalPaid)}
           sub="Disbursed to Bank A/C"
           badge={{ text: "Paid", bg: "bg-emerald-100", color: "text-emerald-700" }}
+          onClick={() => { setActiveTab("payouts"); setPayoutFilter("paid"); }}
         />
 
         <KpiCard
@@ -505,6 +577,7 @@ export default function WalletPortal() {
           value={fmt(pendingHolds)}
           sub="In settlement process"
           badge={pendingHolds > 0 ? { text: "Pending", bg: "bg-amber-100", color: "text-amber-800" } : null}
+          onClick={() => { setActiveTab("payouts"); setPayoutFilter("pending"); }}
         />
       </div>
 
@@ -567,19 +640,28 @@ export default function WalletPortal() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+            <div
+              onClick={() => setActiveTab("ledger")}
+              className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 cursor-pointer hover:bg-slate-100 transition-colors"
+            >
               <div className="text-[10px] font-extrabold uppercase text-slate-400">Total Transactions</div>
               <div className="text-lg font-black text-slate-900 mt-0.5">{ledger.length}</div>
               <div className="text-[10px] text-slate-500 font-medium mt-0.5">Audit ledger records</div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+            <div
+              onClick={() => { setActiveTab("payouts"); setPayoutFilter("paid"); }}
+              className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 cursor-pointer hover:bg-emerald-100/80 transition-colors"
+            >
               <div className="text-[10px] font-extrabold uppercase text-emerald-700">Settlements Paid</div>
               <div className="text-lg font-black text-emerald-800 mt-0.5">{payouts.filter(p => p.status === 'paid').length}</div>
               <div className="text-[10px] text-emerald-600 font-medium mt-0.5">Transferred to Bank</div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-100">
+            <div
+              onClick={() => { setActiveTab("payouts"); setPayoutFilter("pending"); }}
+              className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-100 cursor-pointer hover:bg-amber-100/80 transition-colors"
+            >
               <div className="text-[10px] font-extrabold uppercase text-amber-700">Pending Settlements</div>
               <div className="text-lg font-black text-amber-800 mt-0.5">{payouts.filter(p => p.status === 'pending' || p.status === 'processing').length}</div>
               <div className="text-[10px] text-amber-600 font-medium mt-0.5">In review / bank dispatch</div>
@@ -637,6 +719,42 @@ export default function WalletPortal() {
                 <option value="adjustment">Admin Adjustments</option>
                 <option value="refund">Reversals / Refunds</option>
               </select>
+            </div>
+          )}
+
+          {activeTab === "payouts" && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={payoutSearch}
+                  onChange={(e) => setPayoutSearch(e.target.value)}
+                  placeholder="Search UTR, ID, order..."
+                  className="pl-3 pr-7 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44 sm:w-52"
+                />
+                {payoutSearch && (
+                  <button
+                    onClick={() => setPayoutSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <FiX size={12} />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500 uppercase">Status:</span>
+                <select
+                  value={payoutFilter}
+                  onChange={(e) => setPayoutFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="all">All Payouts ({payouts.length})</option>
+                  <option value="paid">Paid to Bank ({payouts.filter(p => p.status === 'paid').length})</option>
+                  <option value="pending">Pending ({payouts.filter(p => p.status === 'pending').length})</option>
+                  <option value="processing">In Processing ({payouts.filter(p => p.status === 'processing').length})</option>
+                  <option value="failed">Failed / Rejected ({payouts.filter(p => p.status === 'failed' || p.status === 'rejected').length})</option>
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -739,6 +857,16 @@ export default function WalletPortal() {
             <div className="py-16 text-center text-slate-500 text-sm font-semibold">
               No payout settlements recorded yet.
             </div>
+          ) : filteredPayouts.length === 0 ? (
+            <div className="py-16 text-center text-slate-500 text-sm font-semibold space-y-2">
+              <p>No payout settlements match the selected filter or search query.</p>
+              <button
+                onClick={() => { setPayoutFilter("all"); setPayoutSearch(""); }}
+                className="px-3 py-1 text-xs font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs font-semibold">
@@ -754,7 +882,7 @@ export default function WalletPortal() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {payouts.map((p) => {
+                  {filteredPayouts.map((p) => {
                     const amount = p.amount_paise ? p.amount_paise / 100 : p.amount;
                     return (
                       <tr key={p.id || p._id} className="hover:bg-slate-50/80 transition-colors">

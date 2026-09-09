@@ -17,10 +17,68 @@ import {
   updateBulkCartVariant,
 } from "@/features/slice";
 
-const ImageWithPlaceholder = ({ src, alt }) => {
-  const [hasError, setHasError] = useState(!src || src.includes("default"));
+const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
-  if (hasError) {
+const resolveImageUrl = (url) => {
+  if (!url) return DEFAULT_KIT_IMAGE;
+  if (typeof url !== 'string') return DEFAULT_KIT_IMAGE;
+  if (url.includes("localhost:3001")) {
+    return url.replace("localhost:3001", "localhost:5000");
+  }
+  if (url.startsWith("/")) {
+    return `http://localhost:5000${url}`;
+  }
+  return url;
+};
+
+const FALLBACK_COMPONENT_IMAGES = {
+  Panel: "https://res.cloudinary.com/dggmbagax/image/upload/v1788257426/solarkits/public/uploads/products/tps_mod_540w_mono.jpg",
+  Inverter: "https://res.cloudinary.com/dggmbagax/image/upload/v1788257570/solarkits/public/uploads/products/hav_inv_3kw_1p.jpg",
+  "BOS Kit": "https://res.cloudinary.com/dggmbagax/image/upload/v1788328065/solarkits/solarkits-admin-panel-backend/public/uploads/combo_kits/BOS_1788328062998_421348048.jpg",
+  Battery: "https://res.cloudinary.com/dggmbagax/image/upload/v1788257664/solarkits/public/uploads/products/exi_bat_5_12kwh_lfp.svg",
+  panel: "https://res.cloudinary.com/dggmbagax/image/upload/v1788257426/solarkits/public/uploads/products/tps_mod_540w_mono.jpg",
+  inverter: "https://res.cloudinary.com/dggmbagax/image/upload/v1788257570/solarkits/public/uploads/products/hav_inv_3kw_1p.jpg",
+  bos: "https://res.cloudinary.com/dggmbagax/image/upload/v1788328065/solarkits/solarkits-admin-panel-backend/public/uploads/combo_kits/BOS_1788328062998_421348048.jpg",
+};
+
+const resolveComponentImageUrl = (url, typeOrTitle) => {
+  if (!url || typeof url !== 'string' || url.trim() === "" || url.includes("default")) {
+    return FALLBACK_COMPONENT_IMAGES[typeOrTitle] || null;
+  }
+  if (url.includes("localhost:3001")) {
+    return url.replace("localhost:3001", "localhost:5000");
+  }
+  if (url.startsWith("/")) {
+    return `http://localhost:5000${url}`;
+  }
+  return url;
+};
+
+const ImageWithPlaceholder = ({ src, alt }) => {
+  const getInitial = useCallback(() => {
+    return resolveComponentImageUrl(src, alt) || FALLBACK_COMPONENT_IMAGES[alt] || null;
+  }, [src, alt]);
+
+  const [imgSrc, setImgSrc] = useState(getInitial);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const next = getInitial();
+    setImgSrc(next);
+    setHasError(!next);
+  }, [getInitial]);
+
+  const handleImgError = () => {
+    const fallback = FALLBACK_COMPONENT_IMAGES[alt];
+    if (fallback && imgSrc !== fallback) {
+      setImgSrc(fallback);
+      setHasError(false);
+    } else {
+      setHasError(true);
+    }
+  };
+
+  if (hasError || !imgSrc) {
     return (
       <div className="flex items-center justify-center bg-surface-hover rounded-xl p-3 w-[150px] h-[80px] mx-auto border border-dashed border-border">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
@@ -34,11 +92,11 @@ const ImageWithPlaceholder = ({ src, alt }) => {
 
   return (
     <img
-      src={src}
+      src={imgSrc}
       alt={alt}
-      className="max-w-[150px] max-h-[80px] mx-auto object-contain"
+      className="max-w-[150px] max-h-[80px] mx-auto object-contain rounded-lg transition-transform hover:scale-105"
       loading="lazy"
-      onError={() => setHasError(true)}
+      onError={handleImgError}
     />
   );
 };
@@ -1110,10 +1168,17 @@ const SelectedBulkKitCard = memo(({ kit }) => {
                 )}
               </h4>
 
-              {section.data && section.imageField && (
-                <div className="mb-3 bg-surface-hover rounded-lg p-2">
+              {section.data && (
+                <div className="mb-3 bg-surface-hover rounded-lg p-2 flex items-center justify-center min-h-[96px]">
                   <ImageWithPlaceholder
-                    src={section.data[section.imageField]}
+                    src={
+                      (section.imageField && section.data[section.imageField]) ||
+                      section.data.image ||
+                      section.data.panelImage ||
+                      section.data.inverterImage ||
+                      section.data.BOSKitImage ||
+                      section.data.imageUrl
+                    }
                     alt={section.title}
                   />
                 </div>

@@ -999,7 +999,7 @@ const get_combo_kits_by_district = async (req, res) => {
             });
           }
 
-          const compImg = skuInfo?.image || skuInfo?.product?.image || "";
+          const compImg = bk.image || skuInfo?.image || skuInfo?.product?.image || "";
           let finalCompImage = "";
           if (compImg) {
             if (compImg.startsWith("/")) {
@@ -1025,6 +1025,10 @@ const get_combo_kits_by_district = async (req, res) => {
             bosImage = finalCompImage;
           }
         });
+      }
+
+      if (!bosImage) {
+        bosImage = "https://res.cloudinary.com/dggmbagax/image/upload/v1788328065/solarkits/solarkits-admin-panel-backend/public/uploads/combo_kits/BOS_1788328062998_421348048.jpg";
       }
 
       const catObj = kit.solar_kit_id?.category_id || {};

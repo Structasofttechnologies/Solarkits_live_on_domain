@@ -49,6 +49,12 @@ export default function FranchiseCommissionTracking() {
   const [paidDate, setPaidDate] = useState(new Date().toISOString().split("T")[0]);
   const [settleNotes, setSettleNotes] = useState("");
   const [submittingSettle, setSubmittingSettle] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     fetchCommissions();
@@ -59,14 +65,12 @@ export default function FranchiseCommissionTracking() {
     try {
       const params = { page, limit };
       if (statusFilter !== "all") params.status = statusFilter;
-      if (searchQuery) params.search = searchQuery;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
 
       const res = await getFranchiseCommissions(params);
-      if (res.status === "success") {
-        setCommissions(res.data || []);
-        setTotal(res.total || 0);
-        if (res.stats) setStats(res.stats);
-      }
+      setCommissions(res.data || []);
+      setTotal(res.total || 0);
+      if (res.stats) setStats(res.stats);
     } catch (err) {
       console.error("Error fetching franchise commissions:", err);
     } finally {
@@ -83,9 +87,10 @@ export default function FranchiseCommissionTracking() {
   const handleOpenSettleModal = (comm) => {
     setUpdatingComm(comm);
     setNewStatus(comm.commission_status || "Paid");
-    setNewUtr(comm.payment_reference && comm.payment_reference !== "N/A" ? comm.payment_reference : "");
+    const existingUtr = (comm.utr_number && comm.utr_number !== "N/A" ? comm.utr_number : (comm.payment_reference && comm.payment_reference !== "N/A" ? comm.payment_reference : ""));
+    setNewUtr(existingUtr);
     setPaidDate(comm.paid_date ? new Date(comm.paid_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
-    setSettleNotes("");
+    setSettleNotes(comm.notes || comm.commission_notes || "");
     setSettleModalOpen(true);
   };
 
@@ -94,16 +99,18 @@ export default function FranchiseCommissionTracking() {
     if (!updatingComm) return;
     setSubmittingSettle(true);
     try {
-      await updateCommissionStatus(updatingComm.id, {
+      const res = await updateCommissionStatus(updatingComm.id, {
         commission_status: newStatus,
         utr_reference: newUtr,
         paid_date: paidDate,
         notes: settleNotes
       });
       setSettleModalOpen(false);
-      fetchCommissions();
+      showToast(res?.message || `Commission status updated to ${newStatus} successfully!`, "success");
+      await fetchCommissions();
     } catch (err) {
       console.error("Error updating commission status:", err);
+      showToast(err.response?.data?.message || err.message || "Failed to update commission status", "error");
     } finally {
       setSubmittingSettle(false);
     }
@@ -178,7 +185,21 @@ export default function FranchiseCommissionTracking() {
   const totalPages = Math.ceil(total / limit) || 1;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300 relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed top-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl text-sm font-semibold border backdrop-blur-md transition-all animate-in slide-in-from-top-3 duration-300 ${
+            toast.type === "error"
+              ? "bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-400 bg-surface"
+              : "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-surface"
+          }`}
+        >
+          {toast.type === "error" ? <MdErrorOutline size={20} /> : <MdCheckCircle size={20} />}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
