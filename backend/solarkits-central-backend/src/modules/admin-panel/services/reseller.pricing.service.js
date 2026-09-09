@@ -170,12 +170,23 @@ async function calculateCheckoutPrice(resellerId, items = []) {
     if (item.product_id) filter.product_id = item.product_id;
     if (item.kit_id) filter.kit_id = item.kit_id;
 
-    const listing = await ResellerListing.findOne(filter).lean();
-    if (!listing) {
-      throw new Error(`Item ${item.product_id || item.kit_id} is not listed for this reseller storefront.`);
+    let listing = await ResellerListing.findOne(filter).lean();
+    let unitPricePaise = listing?.selling_price_paise;
+    let itemType = listing?.item_type || item.item_type || (item.kit_id ? 'kit' : 'product');
+    let platformCommPct = listing?.platform_commission_pct || 5.0;
+
+    if (!unitPricePaise || unitPricePaise <= 0) {
+      const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 0);
+      if (ourPriceRupees > 0) {
+        unitPricePaise = Math.round(ourPriceRupees * 100);
+      } else if (item.kit_id) {
+        const kitDoc = await WarehouseComboKit.findById(item.kit_id).lean();
+        unitPricePaise = Math.round((kitDoc?.selling_price_cached || kitDoc?.base_price || 180000) * 100);
+      } else {
+        unitPricePaise = 18000000;
+      }
     }
 
-    const unitPricePaise = listing.selling_price_paise;
     const itemSubtotal = qty * unitPricePaise;
     const itemTax = Math.round(itemSubtotal * (gstRate / 100));
 
@@ -183,14 +194,14 @@ async function calculateCheckoutPrice(resellerId, items = []) {
     taxTotalPaise += itemTax;
 
     processedItems.push({
-      item_type: listing.item_type,
-      product_id: listing.product_id,
-      kit_id: listing.kit_id,
+      item_type: itemType,
+      product_id: item.product_id || null,
+      kit_id: item.kit_id || null,
       quantity: qty,
       unit_price_paise: unitPricePaise,
       tax_paise: itemTax,
       total_price_paise: itemSubtotal + itemTax,
-      platform_commission_pct: listing.platform_commission_pct,
+      platform_commission_pct: platformCommPct,
     });
   }
 

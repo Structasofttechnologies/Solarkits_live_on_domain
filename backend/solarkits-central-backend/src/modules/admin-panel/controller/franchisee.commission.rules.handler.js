@@ -7,7 +7,7 @@
  */
 
 const mongoose = require('mongoose');
-const { FranchiseeCommissionRule, ResellerPlan } = require('../models/india_solarshop_db');
+const { FranchiseeCommissionRule, FranchiseeVariationCommission, ResellerPlan, Reseller } = require('../models/india_solarshop_db');
 const { WarehouseComboKit } = require('../models/core_db');
 const { logAudit } = require('../utils/audit.service');
 
@@ -171,7 +171,6 @@ const delete_commission_rule = async (req, res) => {
     if (!doc) return res.status(404).json({ status: 'error', message: 'Commission rule not found' });
     doc.deleted_at = new Date();
     doc.is_active = false;
-    doc.updated_by = req.user?.id;
     await doc.save();
     await logAudit({ actor_type: 'cms_user', actor_id: req.user?.id, action: 'FPO_COMMISSION_RULE_DELETE', entity_type: 'franchisee_commission_rules', entity_id: id, req });
     return res.json({ status: 'success', message: 'Commission rule deleted' });
@@ -181,4 +180,108 @@ const delete_commission_rule = async (req, res) => {
   }
 };
 
-module.exports = { list_commission_rules, add_commission_rule, update_commission_rule, toggle_commission_rule_status, delete_commission_rule };
+// ── INDIVIDUAL VARIATION COMMISSION RULES: LIST ──────────────────────────────
+const get_individual_commission_rules = async (req, res) => {
+  try {
+    const { reseller_id, combo_kit_id } = req.query;
+    if (!reseller_id || !mongoose.Types.ObjectId.isValid(reseller_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller_id is required' });
+    }
+
+    const query = { reseller_id, deleted_at: null, is_active: true };
+    if (combo_kit_id && mongoose.Types.ObjectId.isValid(combo_kit_id)) {
+      query.combo_kit_id = combo_kit_id;
+    }
+
+    const rows = await FranchiseeVariationCommission.find(query)
+      .populate({ path: 'combo_kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code capacity order_quantities' })
+      .sort({ combo_kit_id: 1, order_quantity: 1 })
+      .lean();
+
+    return res.json({ status: 'success', data: rows });
+  } catch (error) {
+    console.error('[commission.rules] get_individual_commission_rules error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+// ── INDIVIDUAL VARIATION COMMISSION RULES: SAVE ──────────────────────────────
+const save_individual_commission_rules = async (req, res) => {
+  try {
+    const { reseller_id, rules } = req.body;
+    if (!reseller_id || !mongoose.Types.ObjectId.isValid(reseller_id)) {
+      return res.status(400).json({ status: 'error', message: 'Valid reseller_id is required' });
+    }
+
+    if (!Array.isArray(rules) || rules.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'rules array is required' });
+    }
+
+    const reseller = await Reseller.findOne({ _id: reseller_id, deleted_at: null }).lean();
+    if (!reseller) {
+      return res.status(404).json({ status: 'error', message: 'Franchisee / Reseller not found' });
+    }
+
+    const savedDocs = [];
+    for (const r of rules) {
+      const { combo_kit_id, order_quantity, order_type, commission_amount_paise } = r;
+      if (!combo_kit_id || !mongoose.Types.ObjectId.isValid(combo_kit_id)) continue;
+      const qty = parseInt(order_quantity, 10);
+      if (isNaN(qty) || qty <= 0) continue;
+      if (!['po', 'loose'].includes(order_type)) continue;
+
+      const commPaise = Math.max(0, Math.round(Number(commission_amount_paise) || 0));
+
+      const doc = await FranchiseeVariationCommission.findOneAndUpdate(
+        {
+          reseller_id,
+          combo_kit_id,
+          order_quantity: qty,
+          order_type,
+          deleted_at: null,
+        },
+        {
+          $set: {
+            commission_amount_paise: commPaise,
+            is_active: true,
+            updated_by: req.user?.id,
+          },
+          $setOnInsert: {
+            created_by: req.user?.id,
+          },
+        },
+        { upsert: true, new: true }
+      );
+      savedDocs.push(doc);
+    }
+
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: req.user?.id,
+      action: 'FPO_VARIATION_COMMISSION_SAVE',
+      entity_type: 'franchisee_variation_commissions',
+      entity_id: reseller_id,
+      after_snapshot: { reseller_id, saved_count: savedDocs.length },
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      message: `Successfully saved ${savedDocs.length} variation commission rule(s).`,
+      data: savedDocs,
+    });
+  } catch (error) {
+    console.error('[commission.rules] save_individual_commission_rules error:', error);
+    return res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+};
+
+module.exports = {
+  list_commission_rules,
+  add_commission_rule,
+  update_commission_rule,
+  toggle_commission_rule_status,
+  delete_commission_rule,
+  get_individual_commission_rules,
+  save_individual_commission_rules,
+};

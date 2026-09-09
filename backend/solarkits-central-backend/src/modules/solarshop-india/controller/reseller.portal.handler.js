@@ -1841,8 +1841,26 @@ const get_reseller_commission_rates = async (req, res) => {
     const {
       ResellerPlanSubscription,
       FranchiseeCommissionRule,
+      FranchiseeVariationCommission,
     } = require('../../admin-panel/models/india_solarshop_db');
     const { WarehouseComboKit } = require('../../admin-panel/models/core_db');
+
+    // 1. Check if individual variation commission rules are configured for this franchise
+    const individualRules = await FranchiseeVariationCommission.find({
+      reseller_id: resellerId,
+      is_active: true,
+      deleted_at: null,
+    }).populate('combo_kit_id', 'name kit_name kit_code capacity order_quantities').lean();
+
+    if (individualRules && individualRules.length > 0) {
+      const rates = individualRules.map((r) => ({
+        combo_kit_id: r.combo_kit_id?._id || r.combo_kit_id,
+        order_quantity: r.order_quantity,
+        order_type: r.order_type,
+        commission_amount_paise: r.commission_amount_paise,
+      }));
+      return res.json({ status: 'success', data: rates });
+    }
 
     const activeSub = await ResellerPlanSubscription.findOne({
       reseller_id: resellerId,

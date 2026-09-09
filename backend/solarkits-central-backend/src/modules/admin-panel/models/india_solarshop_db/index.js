@@ -58,6 +58,7 @@ const RazorpayWebhookLog = require('./razorpay_webhook_logs.schema');
 
 // --- Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance System ---
 const FranchiseeCommissionRule = require('./franchisee_commission_rules.schema');
+const FranchiseeVariationCommission = require('./franchisee_variation_commissions.schema');
 const FranchiseePlanPoSetting  = require('./franchisee_plan_po_settings.schema');
 const FranchiseeMoqRule        = require('./franchisee_moq_rules.schema');
 const FranchiseeKitTarget      = require('./franchisee_kit_targets.schema');
@@ -146,6 +147,7 @@ module.exports = {
   RazorpayWebhookLog,
   // --- Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance ---
   FranchiseeCommissionRule,
+  FranchiseeVariationCommission,
   FranchiseePlanPoSetting,
   FranchiseePlanPOSetting: FranchiseePlanPoSetting,
   FranchiseeMoqRule,

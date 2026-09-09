@@ -176,6 +176,20 @@ async function postCommission({ fpo_order_id, actor_id = null, req = null }) {
     const itemSubtotal = Math.round((item.unit_price_paise || 0) * eligible);
     gross_eligible_paise  += itemSubtotal;
 
+    // Check individual variation commission for PO order
+    if (order.franchisee_id && (item.combo_kit_id || item.kit_id)) {
+      const varComm = await resolveVariationCommission({
+        reseller_id: order.franchisee_id,
+        combo_kit_id: item.combo_kit_id || item.kit_id,
+        quantity: eligible,
+        order_type: 'po',
+      });
+      if (varComm !== null && varComm >= 0) {
+        computed_commission_paise += varComm;
+        continue;
+      }
+    }
+
     // Check item-level commission_snapshot (e.g. 200 bps = 2.0%)
     if (item.commission_snapshot != null && item.commission_snapshot > 0) {
       const itemComm = Math.round(itemSubtotal * (Number(item.commission_snapshot) / 10000));
@@ -437,9 +451,48 @@ async function reverseCommission({ fpo_order_id, returned_kit_quantity, reason, 
   };
 }
 
+/**
+ * Resolve variation commission for an EPC or Franchise order.
+ *
+ * @param {object} params
+ * @param {string|ObjectId} params.reseller_id
+ * @param {string|ObjectId} params.combo_kit_id
+ * @param {number} params.quantity
+ * @param {string} [params.order_type='loose'] - 'loose' (EPC/retail order) | 'po' (Franchise bulk PO)
+ * @returns {Promise<number|null>} commission in paise for this item, or null if no variation rule configured
+ */
+async function resolveVariationCommission({ reseller_id, combo_kit_id, quantity, order_type = 'loose' }) {
+  if (!reseller_id || !combo_kit_id || !quantity) return null;
+
+  const { FranchiseeVariationCommission } = require('../models/india_solarshop_db');
+  const variationRules = await FranchiseeVariationCommission.find({
+    reseller_id,
+    combo_kit_id,
+    order_type,
+    is_active: true,
+    deleted_at: null,
+  }).sort({ order_quantity: -1 }).lean();
+
+  if (!variationRules || variationRules.length === 0) return null;
+
+  const qty = parseInt(quantity, 10);
+
+  // 1. Exact match on quantity tier (e.g. 5 kits ordered, 5 kits tier defined)
+  const exact = variationRules.find((r) => r.order_quantity === qty);
+  if (exact) return exact.commission_amount_paise;
+
+  // 2. Nearest qualifying lower tier (e.g. 7 kits ordered, 5 kits tier defined)
+  const lower = variationRules.find((r) => r.order_quantity <= qty);
+  if (lower) return lower.commission_amount_paise;
+
+  // 3. Fallback to lowest defined tier if quantity is less than minimum tier
+  return variationRules[variationRules.length - 1]?.commission_amount_paise ?? null;
+}
+
 module.exports = {
   resolveCommissionRule,
   calculateCommissionAmount,
+  resolveVariationCommission,
   postCommission,
   reverseCommission,
 };

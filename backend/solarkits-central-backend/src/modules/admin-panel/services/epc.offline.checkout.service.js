@@ -25,6 +25,7 @@ const { calculateCurrentItemStock } = require('./reseller.procurement.service');
 const { routeEpcOrderToReseller } = require('./epc.order.service');
 const { logAudit } = require('../utils/audit.service');
 const { creditResellerMargin, creditEpcMargin } = require('./wallet.settlement.service');
+const { resolveVariationCommission } = require('./franchisee.commission.service');
 
 // Company Escrow Bank Account Details
 const COMPANY_BANK_DETAILS = {
@@ -260,17 +261,31 @@ async function createEpcOfflineOrder({
   // 3. Process items and margin calculation
   let totalResellerMarginPaise = 0;
   let totalPlatformCommissionPaise = 0;
+  const processedItems = [];
 
-  const processedItems = totals.items.map((item) => {
+  for (const item of totals.items) {
     const costPrice = item.cost_price_paise || Math.round(item.unit_price_paise * 0.85);
     const grossMargin = (item.unit_price_paise - costPrice) * item.quantity;
     const commission = targetResellerId ? Math.round(item.total_price_paise * ((item.platform_commission_pct || 5) / 100)) : 0;
-    const netMargin = targetResellerId ? Math.max(0, grossMargin - commission) : 0;
+    let netMargin = targetResellerId ? Math.max(0, grossMargin - commission) : 0;
+
+    // Check if tiered variation commission is configured for this franchise & combo kit
+    if (targetResellerId && item.kit_id) {
+      const variationComm = await resolveVariationCommission({
+        reseller_id: targetResellerId,
+        combo_kit_id: item.kit_id,
+        quantity: item.quantity,
+        order_type: 'loose',
+      });
+      if (variationComm !== null && variationComm >= 0) {
+        netMargin = variationComm;
+      }
+    }
 
     totalResellerMarginPaise += netMargin;
     totalPlatformCommissionPaise += commission;
 
-    return {
+    processedItems.push({
       scope_type: item.item_type || item.scope_type || 'kit',
       product_id: item.product_id || null,
       kit_id: item.kit_id || null,
@@ -283,8 +298,8 @@ async function createEpcOfflineOrder({
       gst_rate: totals.gst_rate || 13.8,
       tax_paise: item.tax_paise,
       total_price_paise: item.total_price_paise,
-    };
-  });
+    });
+  }
 
   const orderNumber = generateEpcOrderNumber();
   const fulfillmentSource = targetResellerId ? 'franchise_warehouse' : 'company_warehouse';
