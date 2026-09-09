@@ -129,9 +129,13 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
           { headers: authHeaderObj() }
         );
         const allWarehouses = warehousesRes.data?.warehouses || [];
-        const countryWarehouses = allWarehouses.filter(
-          (w) => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString()
-        );
+        const countryWarehouses = currentCountryObj
+          ? allWarehouses.filter(
+              (w) =>
+                (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString() ||
+                (w.country && w.country.toLowerCase() === currentCountryObj.name?.toLowerCase())
+            )
+          : allWarehouses;
         setWarehouses(countryWarehouses);
 
         // 4. Fetch warehouse kit activations for this country
@@ -192,8 +196,23 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter((w) => {
-    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
+    if (stateFilter) {
+      const stateMatches =
+        (w.state_id || w.level_1)?.toString() === stateFilter?.toString() ||
+        states.some((s) => s.id?.toString() === stateFilter?.toString() && s.name?.toLowerCase() === w.state?.toLowerCase());
+      if (!stateMatches) return false;
+    }
+    if (clusterFilter) {
+      const whClusterId = (w.cluster_id || w.cluster?.id || w.cluster?._id)?.toString();
+      const whClusterName = (typeof w.cluster === "string" ? w.cluster : w.cluster?.name)?.toLowerCase();
+      const selectedClusterObj = clusters.find((c) => c.id?.toString() === clusterFilter?.toString());
+      const selectedClusterName = selectedClusterObj?.name?.toLowerCase();
+
+      const idMatches = whClusterId && whClusterId === clusterFilter?.toString();
+      const nameMatches = whClusterName && selectedClusterName && whClusterName === selectedClusterName;
+
+      if (!idMatches && !nameMatches) return false;
+    }
     return true;
   });
 

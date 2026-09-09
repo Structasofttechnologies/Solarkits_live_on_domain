@@ -182,8 +182,13 @@ export default function PreConfiguredKitOrderCart() {
 
     // Calculate cart totals with detailed breakdown
     const cartTotals = useMemo(() => {
-        const total = cart.reduce((sum, kit) => sum + (kit.qty * kit.ourPrice), 0);
-        const totalMarketPrice = cart.reduce((sum, kit) => sum + (kit.qty * kit.marketPrice), 0);
+        const totalDeliveryFreight = cart.reduce(
+            (sum, kit) => sum + (Number(kit.delivery_cost) || 0),
+            0
+        );
+        const itemsTotal = cart.reduce((sum, kit) => sum + (kit.qty * kit.ourPrice), 0);
+        const total = itemsTotal + totalDeliveryFreight;
+        const totalMarketPrice = cart.reduce((sum, kit) => sum + (kit.qty * kit.marketPrice), 0) + totalDeliveryFreight;
         const savings = totalMarketPrice - total;
         const totalItems = cart.reduce((sum, kit) => sum + kit.qty, 0);
         const totalKits = cart.length;
@@ -230,10 +235,11 @@ export default function PreConfiguredKitOrderCart() {
         const avgDiscount = totalMarketPrice > 0
             ? ((totalSavings / totalMarketPrice) * 100).toFixed(1)
             : 0;
-        const { taxable: subtotalExcludingGst, gstAmount, gstRate } = getTaxBreakdown(total);
+        const { taxable: subtotalExcludingGst, gstAmount, gstRate } = getTaxBreakdown(itemsTotal);
 
         return {
             total,
+            itemsTotal,
             totalMarketPrice,
             savings,
             totalSavings,
@@ -243,6 +249,7 @@ export default function PreConfiguredKitOrderCart() {
             tierBreakdown,
             usageBreakdown,
             totalDeliverySavings,
+            totalDeliveryFreight,
             gstRate,
             subtotalExcludingGst,
             gstAmount
@@ -291,53 +298,82 @@ export default function PreConfiguredKitOrderCart() {
     return (
         <div className="min-h-screen">
             {/* Enhanced Header with Theme Gradient and Stats */}
-            <div className="gradient-primary rounded-xl shadow-lg mb-6">
-                <div className="mx-auto px-4 py-8">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="gradient-primary rounded-2xl shadow-xl mb-6">
+                <div className="mx-auto px-6 py-6 lg:py-7">
+                    <div className="flex flex-col gap-6">
                         <div>
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="bg-white/20 backdrop-blur-sm p-3 rounded-xl">
-                                    <FaSolarPanel className="text-text-inverse text-2xl" />
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="bg-white/20 backdrop-blur-sm p-3 rounded-2xl border border-white/20 shadow-xs">
+                                    <FaSolarPanel className="text-white text-2xl" />
                                 </div>
-                                <h1 className="text-3xl lg:text-4xl font-bold text-text-inverse">
+                                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">
                                     Solar Kit Cart
                                 </h1>
                             </div>
-                            <p className="text-text-inverse/90 text-lg max-w-2xl">
+                            <p className="text-white/85 text-sm sm:text-base max-w-2xl font-normal leading-relaxed">
                                 Review and manage your selected pre-configured solar solutions
                             </p>
 
                             {/* Quick Stats Cards */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
-                                <div className="bg-white/10 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <FiPackage className="text-text-inverse/80" size={16} />
-                                        <span className="text-text-inverse/80 text-xs">Total Kits</span>
-                                    </div>
-                                    <p className="text-text-inverse font-bold text-2xl">{cartTotals.totalKits}</p>
-                                </div>
-                                <div className="bg-white/10 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <FiShoppingCart className="text-text-inverse/80" size={16} />
-                                        <span className="text-text-inverse/80 text-xs">Total Items</span>
-                                    </div>
-                                    <p className="text-text-inverse font-bold text-2xl">{cartTotals.totalItems}</p>
-                                </div>
-                                <div className="bg-white/10 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <FiDollarSign className="text-text-inverse/80" size={16} />
-                                        <span className="text-text-inverse/80 text-xs">Cart Value</span>
-                                    </div>
-                                    <p className="text-text-inverse font-bold text-2xl">₹{cartTotals.total.toLocaleString("en-IN")}</p>
-                                </div>
-                                {cartTotals.totalSavings > 0 && (
-                                    <div className="bg-success/30 backdrop-blur-sm px-4 py-3 rounded-xl border border-success/30">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <FiPercent className="text-text-inverse/80" size={16} />
-                                            <span className="text-text-inverse/80 text-xs">You Save</span>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 mt-6">
+                                <div className="bg-white/15 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/25 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-white/20">
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                            <FiPackage className="text-white text-xs" />
                                         </div>
-                                        <p className="text-text-inverse font-bold text-2xl">
+                                        <span className="text-white/80 text-[11px] font-semibold uppercase tracking-wider">Total Kits</span>
+                                    </div>
+                                    <p className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight pl-0.5">
+                                        {cartTotals.totalKits}
+                                    </p>
+                                </div>
+
+                                <div className="bg-white/15 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/25 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-white/20">
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                            <FiShoppingCart className="text-white text-xs" />
+                                        </div>
+                                        <span className="text-white/80 text-[11px] font-semibold uppercase tracking-wider">Total Items</span>
+                                    </div>
+                                    <p className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight pl-0.5">
+                                        {cartTotals.totalItems}
+                                    </p>
+                                </div>
+
+                                <div className="bg-white/15 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/25 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-white/20">
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                            <FiDollarSign className="text-white text-xs" />
+                                        </div>
+                                        <span className="text-white/80 text-[11px] font-semibold uppercase tracking-wider">Cart Value</span>
+                                    </div>
+                                    <p className="text-white font-black text-lg sm:text-xl xl:text-2xl tracking-tight leading-tight truncate pl-0.5" title={`₹${cartTotals.total.toLocaleString("en-IN")}`}>
+                                        ₹{cartTotals.total.toLocaleString("en-IN")}
+                                    </p>
+                                </div>
+
+                                {cartTotals.totalSavings > 0 ? (
+                                    <div className="bg-emerald-500/30 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-emerald-400/40 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-emerald-500/35">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <div className="w-6 h-6 rounded-lg bg-emerald-400/25 flex items-center justify-center shrink-0">
+                                                <FiPercent className="text-emerald-200 text-xs" />
+                                            </div>
+                                            <span className="text-emerald-100 text-[11px] font-semibold uppercase tracking-wider">You Save</span>
+                                        </div>
+                                        <p className="text-white font-black text-lg sm:text-xl xl:text-2xl tracking-tight leading-tight truncate pl-0.5" title={`₹${cartTotals.totalSavings.toLocaleString("en-IN")}`}>
                                             ₹{cartTotals.totalSavings.toLocaleString("en-IN")}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white/10 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/15 shadow-xs flex flex-col justify-center min-h-[76px]">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <div className="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                                                <FiPercent className="text-white/60 text-xs" />
+                                            </div>
+                                            <span className="text-white/60 text-[11px] font-semibold uppercase tracking-wider">Savings</span>
+                                        </div>
+                                        <p className="text-white/80 font-bold text-sm sm:text-base tracking-tight leading-tight pl-0.5">
+                                            Standard Pricing
                                         </p>
                                     </div>
                                 )}
@@ -582,6 +618,15 @@ export default function PreConfiguredKitOrderCart() {
                                             <span className="text-text-secondary">GST ({cartTotals.gstRate}%):</span>
                                             <span className="font-semibold text-text-primary">₹{cartTotals.gstAmount.toLocaleString("en-IN")}</span>
                                         </div>
+                                        {cartTotals.totalDeliveryFreight > 0 && (
+                                            <div className="flex justify-between items-center text-sm mb-2 border-b border-border pb-2">
+                                                <span className="text-text-secondary flex items-center gap-1.5">
+                                                    <FiTruck className="text-primary dark:text-info" size={14} />
+                                                    <span>Delivery Charge {cart.find(k => k.delivery_pincode)?.delivery_pincode ? `(PIN ${cart.find(k => k.delivery_pincode).delivery_pincode})` : ''}:</span>
+                                                </span>
+                                                <span className="font-semibold text-primary dark:text-info">₹{cartTotals.totalDeliveryFreight.toLocaleString("en-IN")}</span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between items-center text-sm mb-2">
                                             <span className="text-text-secondary font-bold">Your Price (Incl. GST):</span>
                                             <span className="font-black text-primary dark:text-info text-base">₹{cartTotals.total.toLocaleString("en-IN")}</span>

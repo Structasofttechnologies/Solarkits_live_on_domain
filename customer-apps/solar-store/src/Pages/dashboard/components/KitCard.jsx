@@ -17,6 +17,7 @@ import {
 } from "@/features/slice";
 import Button from "@/Components/Button";
 import IconButton from "@/Components/IconButton";
+import TrialKitOrderModal from "./TrialKitOrderModal";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -105,6 +106,9 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
   const districtName = isCart ? kit.districtName : selectedDistrict?.name;
   const [selectedVariant, setSelectedVariant] = useState(isCart && kit.variantIndex !== undefined ? kit.variantIndex : 0);
+  const [trialModalOpen, setTrialModalOpen] = useState(false);
+  const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
+  const trialKitQty = Number(kit?.trial_kit_quantity || 10);
 
   useEffect(() => {
     if (isCart) {
@@ -856,6 +860,20 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               Add to Cart
             </Button>
           )}
+
+          {hasTrialKit && !isCart && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTrialModalOpen(true);
+              }}
+              className="w-full mt-2 py-2 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 hover:from-amber-500/20 hover:to-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center justify-center gap-2 shadow-xs transition-all duration-200 cursor-pointer group/trial hover:scale-[1.01]"
+            >
+              <FaTruck className="text-amber-600 dark:text-amber-400 group-hover/trial:animate-pulse" />
+              <span>Order Trial Kit ({trialKitQty} Kits)</span>
+            </button>
+          )}
         </div>
 
         {/* Eco & Generation footer stats */}
@@ -1257,13 +1275,40 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                   </IconButton>
                 </div>
               )}
+
+              {hasTrialKit && !isCart && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTrialModalOpen(true);
+                  }}
+                  className="w-full mt-2 py-2 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 hover:from-amber-500/20 hover:to-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center justify-center gap-2 shadow-xs transition-all duration-200 cursor-pointer group/trial hover:scale-[1.01]"
+                >
+                  <FaTruck className="text-amber-600 dark:text-amber-400 group-hover/trial:animate-pulse" />
+                  <span>Order Trial Kit ({trialKitQty} Kits)</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
   );
 
-  return viewMode ==="list" ? <ListView /> : <GridView />;
+  return (
+    <>
+      {viewMode === "list" ? <ListView /> : <GridView />}
+      {hasTrialKit && (
+        <TrialKitOrderModal
+          isOpen={trialModalOpen}
+          onClose={() => setTrialModalOpen(false)}
+          kit={kit}
+          currentVariant={currentVariant}
+          selectedVariantIndex={selectedVariant}
+        />
+      )}
+    </>
+  );
 });
 
 KitCard.displayName ="KitCard";

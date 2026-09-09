@@ -927,6 +927,89 @@ export default function ComboKitFormDrawer({
                         </div>
                     </section>
 
+                    {/* SECTION: Trial Kits Order Configuration */}
+                    <section className="bg-surface-hover/30 border border-border p-5 rounded-2xl space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${formData.allow_trial_kit ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-surface border border-border text-text-muted'}`}>
+                                    <FaShoppingBag size={14} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xs font-black uppercase tracking-wider text-text-primary">
+                                        Trial Kits Order Configuration
+                                    </h3>
+                                    <p className="text-[10px] text-text-muted mt-0.5">
+                                        Enable a dedicated trial batch order button for EPCs with dynamic pincode delivery freight calculation.
+                                    </p>
+                                </div>
+                            </div>
+                            {/* Toggle Switch */}
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={Boolean(formData.allow_trial_kit)}
+                                    onChange={(e) => handleFormChange("allow_trial_kit", e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-surface-hover peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                            </label>
+                        </div>
+
+                        {formData.allow_trial_kit && (
+                            <div className="pt-2 border-t border-border/60 space-y-3 animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black uppercase tracking-wider text-text-secondary">
+                                        Number of Trial Kits Order (X)
+                                    </label>
+                                    <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                        Active: {formData.trial_kit_quantity || 10} Kits
+                                    </span>
+                                </div>
+
+                                {/* Quick Presets */}
+                                <div className="flex flex-wrap gap-2">
+                                    {[5, 10, 15, 20, 25, 50].map((preset) => (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            onClick={() => handleFormChange("trial_kit_quantity", preset)}
+                                            className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                                                Number(formData.trial_kit_quantity || 10) === preset
+                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                                                    : "bg-surface border-border text-text-secondary hover:border-emerald-500/30 hover:text-emerald-600"
+                                            }`}
+                                        >
+                                            {preset} Kits {preset === 10 ? "(Recommended)" : ""}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Custom Trial Qty Input */}
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="9999"
+                                        value={formData.trial_kit_quantity || 10}
+                                        onChange={(e) => handleFormChange("trial_kit_quantity", Math.max(1, parseInt(e.target.value) || 1))}
+                                        className="w-32 h-10 px-3 bg-surface border-2 border-border focus:border-emerald-500 rounded-xl text-xs font-bold text-text-primary outline-none transition-colors"
+                                        placeholder="10"
+                                    />
+                                    <span className="text-xs text-text-muted font-semibold">
+                                        Kits per trial order
+                                    </span>
+                                </div>
+
+                                <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-start gap-2 text-emerald-700">
+                                    <FaInfoCircle className="mt-0.5 flex-shrink-0" size={13} />
+                                    <p className="text-[11px] leading-relaxed">
+                                        EPC store me is product par <strong>"Order Trial Kit ({formData.trial_kit_quantity || 10} Kits)"</strong> button dikhega. EPC pincode dalega aur admin me configured <strong>Pincode Wise Delivery Cost</strong> calculate hoke transparent breakdown ke sath Add to Cart hoga.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+
                     <div className="space-y-6">
                         {!selectedSolarKitObj ? (
                             <div className="flex min-h-90 h-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-surface-hover/5 p-6 text-center">

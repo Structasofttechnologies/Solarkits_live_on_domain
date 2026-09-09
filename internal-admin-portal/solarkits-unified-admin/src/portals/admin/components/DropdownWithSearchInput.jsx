@@ -55,12 +55,18 @@ export default function DropdownWithSearchInput({
     return '';
   }, []);
 
+  // Helper to extract display text supporting text, label, and name properties
+  const getOptionText = useCallback((opt) => {
+    if (!opt) return "";
+    return opt.text ?? opt.label ?? opt.name ?? "";
+  }, []);
+
   // 🔍 Filter options by search text
   const filteredOptions = useMemo(() => {
     if (!debouncedQuery.trim()) return options;
     const lower = debouncedQuery.toLowerCase();
-    return options.filter((opt) => getTextFromNode(opt.text).toLowerCase().includes(lower));
-  }, [options, debouncedQuery, getTextFromNode]);
+    return options.filter((opt) => getTextFromNode(getOptionText(opt)).toLowerCase().includes(lower));
+  }, [options, debouncedQuery, getTextFromNode, getOptionText]);
 
   const selectedOption = useMemo(() => 
     options.find((opt) => opt.value === value),
@@ -150,7 +156,7 @@ export default function DropdownWithSearchInput({
                     className="w-5 h-5 rounded-md object-contain bg-white border border-border p-0.5"
                   />
                 )}
-                {selectedOption ? selectedOption.text : <span className="text-text-muted">{placeholder}</span>}
+                {selectedOption ? getOptionText(selectedOption) : <span className="text-text-muted">{placeholder}</span>}
               </span>
               <FaChevronDown className="ml-2 text-text-secondary text-xs transition-transform duration-200" />
             </Listbox.Button>
@@ -213,7 +219,7 @@ export default function DropdownWithSearchInput({
                                       className="w-5 h-5 rounded-md object-contain bg-white border border-border p-0.5"
                                     />
                                   )}
-                                  <span>{opt.text}</span>
+                                  <span>{getOptionText(opt)}</span>
                                 </span>
                                 {isSelected && <FaCheck className="text-xs ml-2 shrink-0" />}
                               </div>

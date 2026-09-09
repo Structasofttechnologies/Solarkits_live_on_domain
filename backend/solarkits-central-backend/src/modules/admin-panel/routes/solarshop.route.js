@@ -10,5 +10,6 @@ router.use('/warehouse-kit-activations', require('./solarshop/warehouse_kit_acti
 router.use('/order-settings', require('./solarshop/order_settings.route'));
 router.use('/offers', require('./solarshop/offers.route'));
 router.use('/checkout-cart-settings', require('./solarshop/checkout_cart_settings.route'));
+router.use('/loose-order-settings', require('./solarshop/loose_order_settings.route'));
 
 module.exports = router

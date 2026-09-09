@@ -1531,7 +1531,21 @@ const get_clusters = async (req, res) => {
     const uniqueId = req.query.unique_id;
     let clusters = allClusters;
 
-    if (uniqueId !== 'ADM_CLUSTER_SETUP' && uniqueId !== 'ADM_WAREHOUSES' && uniqueId !== 'ADM_BETCHMARK_PRICE_MASTER' && uniqueId !== 'ADM_BENCHMARK_PRICE_MASTER') {
+    const exemptModules = [
+      'ADM_CLUSTER_SETUP',
+      'ADM_WAREHOUSES',
+      'ADM_BETCHMARK_PRICE_MASTER',
+      'ADM_BENCHMARK_PRICE_MASTER',
+      'ADM_WH_KIT_ACT',
+      'ADM_BULK_COMBO',
+      'ADM_PO_ORDERS',
+      'ADM_CO_MARGIN',
+      'ADM_ORDER_SETTINGS',
+      'ADM_COMBO_KITS',
+      'ADM_CUSTOMIZE_KITS'
+    ];
+
+    if (!exemptModules.includes(uniqueId)) {
       // Fetch active warehouse kit activations
       const { WarehouseKitActivation } = require('../models/core_db');
       const activations = await WarehouseKitActivation.find({

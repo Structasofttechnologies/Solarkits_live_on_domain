@@ -12,6 +12,8 @@ const SolarShopSettings = require('./solarshop_settings.schema');
 const InventoryReservation = require('./inventory_reservations.schema');
 const ComboBundleMaster = require('./combo_bundle_masters.schema');
 const ComboKitVariant = require('./combo_kit_variants.schema');
+const PincodeDeliveryCost = require('./pincode_delivery_costs.schema');
+const LooseOrderSettings = require('./loose_order_settings.schema');
 
 // --- Phase 1: Reseller Management Masters ---
 const ResellerType = require('./reseller_types.schema');
@@ -111,6 +113,8 @@ module.exports = {
   InventoryReservation,
   ComboBundleMaster,
   ComboKitVariant,
+  PincodeDeliveryCost,
+  LooseOrderSettings,
   // --- Phase 1: Reseller Management Masters ---
   ResellerType,
   // --- Phase 2: Reseller Accounts, KYC, Plans & Audit ---

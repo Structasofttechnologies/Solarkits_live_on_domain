@@ -10,6 +10,7 @@ import {
   FaSlidersH,
   FaWarehouse,
   FaLayerGroup,
+  FaSync,
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -35,14 +36,36 @@ export default function BulkComboKits({ moduleUniqueId }) {
 
   // Table & UI Loading State
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Filters State
   const [stateFilter, setStateFilter] = useState("");
   const [clusterFilter, setClusterFilter] = useState("");
 
+  // Fetch clusters for a selected state
+  const fetchClustersForState = async (stateId) => {
+    if (!stateId) {
+      setClusters([]);
+      return;
+    }
+    try {
+      const res = await axios.get(
+        `${API_URL}/geolocation/clusters/${stateId}?unique_id=${moduleUniqueId}&req_for=view`,
+        { headers: authHeaderObj() }
+      );
+      setClusters(res.data?.clusters || []);
+    } catch (err) {
+      console.error("Error fetching clusters:", err);
+    }
+  };
+
   // Fetch active countries & warehouses
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const isIndiaUrl = (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
       const bulkEndpoint = isIndiaUrl ? "india/bulk-kit-settings" : "bulk-kit-settings";
@@ -105,7 +128,11 @@ export default function BulkComboKits({ moduleUniqueId }) {
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const countryWarehouses = currentCountryObj
-        ? allWarehouses.filter((w) => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString())
+        ? allWarehouses.filter(
+            (w) =>
+              (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString() ||
+              (w.country && w.country.toLowerCase() === currentCountryObj.name?.toLowerCase())
+          )
         : allWarehouses;
 
       setWarehouses(countryWarehouses);
@@ -167,8 +194,23 @@ export default function BulkComboKits({ moduleUniqueId }) {
 
   // Filter warehouses based on page filter selections
   const displayWarehouses = warehouses.filter((w) => {
-    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
+    if (stateFilter) {
+      const stateMatches =
+        (w.state_id || w.level_1)?.toString() === stateFilter?.toString() ||
+        states.some((s) => s.id?.toString() === stateFilter?.toString() && s.name?.toLowerCase() === w.state?.toLowerCase());
+      if (!stateMatches) return false;
+    }
+    if (clusterFilter) {
+      const whClusterId = (w.cluster_id || w.cluster?.id || w.cluster?._id)?.toString();
+      const whClusterName = (typeof w.cluster === "string" ? w.cluster : w.cluster?.name)?.toLowerCase();
+      const selectedClusterObj = clusters.find((c) => c.id?.toString() === clusterFilter?.toString());
+      const selectedClusterName = selectedClusterObj?.name?.toLowerCase();
+
+      const idMatches = whClusterId && whClusterId === clusterFilter?.toString();
+      const nameMatches = whClusterName && selectedClusterName && whClusterName === selectedClusterName;
+
+      if (!idMatches && !nameMatches) return false;
+    }
     return true;
   });
 
@@ -232,7 +274,17 @@ export default function BulkComboKits({ moduleUniqueId }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                onClick={handleRefresh}
+                disabled={loading || refreshing}
+                variant="secondary"
+                size="sm"
+                leftIcon={<FaSync className={refreshing ? "animate-spin" : ""} />}
+                className="bg-white/20 backdrop-blur-sm border-white/30 text-white hover:bg-white/30 hover:border-white/40 hover:text-white"
+              >
+                {refreshing ? "Refreshing..." : "Refresh Page"}
+              </Button>
               {currentCountry && (
                 <div className="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/30 flex items-center gap-2">
                   <ReactCountryFlag

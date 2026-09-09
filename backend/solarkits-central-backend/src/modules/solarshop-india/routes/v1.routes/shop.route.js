@@ -26,6 +26,7 @@ const {
   get_shop_hierarchy,
   get_company_bank_details,
   check_warehouse_stock,
+  calculate_pincode_delivery_cost,
   create_epc_offline_checkout,
   resubmit_epc_offline_payment,
   get_epc_order_invoice_data,
@@ -46,6 +47,7 @@ router.get("/hierarchy", get_shop_hierarchy);
 router.get("/industry-types", get_shop_hierarchy);
 router.get("/stores", get_nearby_stores);
 router.get("/combo-kits", get_combo_kits_by_district);
+router.get("/delivery-cost/calculate", calculate_pincode_delivery_cost);
 router.get("/epc-catalogue", verify_auth, get_epc_catalogue);
 router.get("/epc-catalogue/status", verify_auth, require("../../controller/epc.catalogue.handler").get_epc_catalogue_status);
 router.get("/bos-kits", get_bos_kits);

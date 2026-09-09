@@ -21,13 +21,14 @@ export default function Cart() {
   const [expiredToast, setExpiredToast] = useState(false);
   const intervalRef = useRef(null);
 
-  // Fetch the latest cart from backend on mount.
-  // fetchLiveInventory is intentionally NOT dispatched here — doing so used
-  // to appear in the middleware cartActions list and caused a sync storm
-  // (an extra POST /cart fired on every page load, racing with fetchCart).
+  const { isAuthenticated } = useSelector((state) => state.auth_slice);
+
+  // Fetch the latest cart from backend on mount (only for authenticated users).
   useEffect(() => {
-    dispatch(fetchCart());
-  }, [dispatch]);
+    if (isAuthenticated) {
+      dispatch(fetchCart());
+    }
+  }, [isAuthenticated, dispatch]);
 
   // Compute seconds left whenever expiry changes
   const computeSeconds = useCallback(() => {

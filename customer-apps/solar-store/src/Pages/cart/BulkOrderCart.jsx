@@ -407,36 +407,65 @@ export default function BulkOrderCart() {
                             </p>
 
                             {/* Quick Stats Cards */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
-                                <div className="bg-white/10 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <FaPallet className="text-text-inverse/80" size={16} />
-                                        <span className="text-text-inverse/80 text-xs">Total Packs</span>
-                                    </div>
-                                    <p className="text-text-inverse font-bold text-2xl">{cartTotals.totalPacks}</p>
-                                </div>
-                                <div className="bg-white/10 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <FaBoxOpen className="text-text-inverse/80" size={16} />
-                                        <span className="text-text-inverse/80 text-xs">Total Kits</span>
-                                    </div>
-                                    <p className="text-text-inverse font-bold text-2xl">{cartTotals.totalKits}</p>
-                                </div>
-                                <div className="bg-white/10 backdrop-blur-sm px-4 py-3 rounded-xl border border-white/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <FiPackage className="text-text-inverse/80" size={16} />
-                                        <span className="text-text-inverse/80 text-xs">Products</span>
-                                    </div>
-                                    <p className="text-text-inverse font-bold text-2xl">{cartTotals.totalProducts}</p>
-                                </div>
-                                {cartTotals.totalSavings > 0 && (
-                                    <div className="bg-success/30 backdrop-blur-sm px-4 py-3 rounded-xl border border-success/30">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <FiPercent className="text-text-inverse/80" size={16} />
-                                            <span className="text-text-inverse/80 text-xs">You Save</span>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 mt-6">
+                                <div className="bg-white/15 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/25 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-white/20">
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                            <FaPallet className="text-white text-xs" />
                                         </div>
-                                        <p className="text-text-inverse font-bold text-2xl">
+                                        <span className="text-white/80 text-[11px] font-semibold uppercase tracking-wider">Total Packs</span>
+                                    </div>
+                                    <p className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight pl-0.5">
+                                        {cartTotals.totalPacks}
+                                    </p>
+                                </div>
+
+                                <div className="bg-white/15 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/25 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-white/20">
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                            <FaBoxOpen className="text-white text-xs" />
+                                        </div>
+                                        <span className="text-white/80 text-[11px] font-semibold uppercase tracking-wider">Total Kits</span>
+                                    </div>
+                                    <p className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight pl-0.5">
+                                        {cartTotals.totalKits}
+                                    </p>
+                                </div>
+
+                                <div className="bg-white/15 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/25 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-white/20">
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <div className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                                            <FiPackage className="text-white text-xs" />
+                                        </div>
+                                        <span className="text-white/80 text-[11px] font-semibold uppercase tracking-wider">Products</span>
+                                    </div>
+                                    <p className="text-white font-black text-xl sm:text-2xl tracking-tight leading-tight pl-0.5">
+                                        {cartTotals.totalProducts}
+                                    </p>
+                                </div>
+
+                                {cartTotals.totalSavings > 0 ? (
+                                    <div className="bg-emerald-500/30 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-emerald-400/40 shadow-xs flex flex-col justify-center min-h-[76px] transition-all hover:bg-emerald-500/35">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <div className="w-6 h-6 rounded-lg bg-emerald-400/25 flex items-center justify-center shrink-0">
+                                                <FiPercent className="text-emerald-200 text-xs" />
+                                            </div>
+                                            <span className="text-emerald-100 text-[11px] font-semibold uppercase tracking-wider">You Save</span>
+                                        </div>
+                                        <p className="text-white font-black text-lg sm:text-xl xl:text-2xl tracking-tight leading-tight truncate pl-0.5" title={`₹${cartTotals.totalSavings.toLocaleString("en-IN")}`}>
                                             ₹{cartTotals.totalSavings.toLocaleString("en-IN")}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white/10 backdrop-blur-md px-4 py-3.5 rounded-2xl border border-white/15 shadow-xs flex flex-col justify-center min-h-[76px]">
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <div className="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                                                <FiPercent className="text-white/60 text-xs" />
+                                            </div>
+                                            <span className="text-white/60 text-[11px] font-semibold uppercase tracking-wider">Savings</span>
+                                        </div>
+                                        <p className="text-white/80 font-bold text-sm sm:text-base tracking-tight leading-tight pl-0.5">
+                                            Standard Pricing
                                         </p>
                                     </div>
                                 )}

@@ -150,7 +150,7 @@ export default function WarehouseLooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDER
               {warehouse ? warehouse.warehouse_code || warehouse.name : "Warehouse Setup"}
             </h1>
             <p className="text-xs text-text-muted mt-0.5">
-              {warehouse?.address} • {warehouse?.state_name} ({warehouse?.cluster_name || "General Cluster"})
+              {warehouse?.address} • {warehouse?.state_name || warehouse?.state || "N/A"} ({warehouse?.cluster_name || warehouse?.cluster || "General Cluster"})
             </p>
           </div>
         </div>

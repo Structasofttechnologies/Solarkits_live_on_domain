@@ -9,7 +9,9 @@ import { clearUser } from "./auth.slice";
 
 export const fetchCart = createAsyncThunk(
   "solar/fetchCart",
-  async (_, { dispatch, rejectWithValue }) => {
+  async (_, { getState, dispatch, rejectWithValue }) => {
+    const { isAuthenticated } = getState().auth_slice;
+    if (!isAuthenticated) return { cart: [] };
     try {
       const response = await axiosInstance.get("/india/v1/shop/cart");
       return response.data;
@@ -249,7 +251,17 @@ const slice = createSlice({
         const districtId = state.selectedDistrict?.id || state.selectedDistrict?._id || null;
         const districtName = state.selectedDistrict?.name || null;
 
-        const cartItemId = generateCartItemId(kit.id, variantIndex, districtId);
+        const isTrialKit = Boolean(payload?.is_trial_kit);
+        const deliveryCost = Number(payload?.delivery_cost || 0);
+        const deliveryPincode = payload?.delivery_pincode || null;
+        const deliveryDistrict = payload?.delivery_district || districtName;
+        const deliveryState = payload?.delivery_state || null;
+        const deliveryEstimatedDays = payload?.delivery_estimated_days || null;
+
+        const cartItemId = isTrialKit
+          ? `${kit.id}-${variantIndex}-trial-${deliveryPincode || 'pincode'}`
+          : generateCartItemId(kit.id, variantIndex, districtId);
+
         const exists = state.cart.find((c) => c.cartItemId === cartItemId);
 
         const effectiveGstRate = Number(currentVariant.gstRate ?? kit.gstRate ?? kit.pricing?.gstRate ?? 13.8);
@@ -265,6 +277,13 @@ const slice = createSlice({
           cartItemId,
           variantIndex,
           qty: requestedQty,
+          is_trial_kit: isTrialKit,
+          trial_kit_quantity: isTrialKit ? (payload?.trial_kit_quantity || requestedQty) : null,
+          delivery_cost: deliveryCost,
+          delivery_pincode: deliveryPincode,
+          delivery_district: deliveryDistrict,
+          delivery_state: deliveryState,
+          delivery_estimated_days: deliveryEstimatedDays,
           orderQuantities,
           order_quantities: orderQuantities,
           productTier: currentVariant.productTier,
@@ -304,7 +323,9 @@ const slice = createSlice({
 
         state.alert = {
           status: "success",
-          message: `${kit.kitName} (${currentVariant.productTier}) added to cart.`,
+          message: isTrialKit
+            ? `${requestedQty} Trial Kits for ${kit.kitName} added to cart (PIN ${deliveryPincode || 'Specified'}).`
+            : `${kit.kitName} (${currentVariant.productTier}) added to cart.`,
           undoItem: null,
         };
       }
@@ -592,6 +613,10 @@ const slice = createSlice({
       }
     },
 
+    setAlert: (state, action) => {
+      state.alert = action.payload;
+    },
+
     setLiveStock: (state, action) => {
       state.liveStock = action.payload || {};
       
@@ -726,7 +751,10 @@ const slice = createSlice({
 // ─────────────────────────────────────────────────────────────────
 export const selectCartItems = (state) => state.slice.cart;
 export const selectCartTotal = (state) => {
-  return state.slice.cart.reduce((sum, item) => sum + (item.qty * item.ourPrice), 0);
+  return state.slice.cart.reduce((sum, item) => sum + (item.qty * item.ourPrice) + (Number(item.delivery_cost) || 0), 0);
+};
+export const selectCartDeliveryTotal = (state) => {
+  return state.slice.cart.reduce((sum, item) => sum + (Number(item.delivery_cost) || 0), 0);
 };
 export const selectCartTotalItems = (state) => {
   return state.slice.cart.reduce((sum, item) => sum + item.qty, 0);
@@ -760,6 +788,7 @@ export const {
   addCustomKitToCart,
   clearCart,
   setShowAuthDialog,
+  setAlert,
   setLiveStock,
 } = slice.actions;
 

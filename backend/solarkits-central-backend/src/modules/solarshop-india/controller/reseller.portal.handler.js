@@ -3367,7 +3367,7 @@ const list_my_po_orders = async (req, res) => {
 const create_my_po_order = async (req, res) => {
   try {
     const resellerId = req.reseller?._id || req.reseller?.id;
-    const { items, auto_submit } = req.body;
+    const { items, auto_submit, order_type, destination_type, destination_address, destination_pincode, offline_payment } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ status: 'error', message: 'Items array is required' });
@@ -3378,7 +3378,13 @@ const create_my_po_order = async (req, res) => {
     const result = await createPoDraft({
       franchisee_id: resellerId,
       items,
+      order_type: order_type || 'po_order',
+      destination_type: destination_type || 'hub_stock',
+      destination_address: destination_address || null,
+      destination_pincode: destination_pincode || null,
+      offline_payment: offline_payment || null,
       actor_id: resellerId,
+      req,
     });
 
     let finalOrder = result.order;

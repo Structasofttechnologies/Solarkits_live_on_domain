@@ -1123,6 +1123,10 @@ const get_combo_kits_by_district = async (req, res) => {
         capacityKW: kit.capacity || 0,
         orderQuantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
         order_quantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        allow_trial_kit: Boolean(kit.allow_trial_kit),
+        allowTrialKit: Boolean(kit.allow_trial_kit),
+        trial_kit_quantity: Number(kit.trial_kit_quantity) || 10,
+        trialKitQuantity: Number(kit.trial_kit_quantity) || 10,
         description: kit.description || (kit.capacity ? `High quality solar kit of ${kit.capacity}kW capacity.` : ""),
         warrantyYears: (firstPanel && firstPanel.warrantyYears) || (firstInverter && firstInverter.warrantyYears) || null,
         generationEstimateKWhPerYear: kit.capacity ? Math.round(kit.capacity * 1400) : null,
@@ -2562,6 +2566,118 @@ const check_warehouse_stock = async (req, res) => {
 };
 
 /**
+ * GET /api/india/v1/shop/delivery-cost/calculate
+ * Calculate delivery freight for a given pincode and product/kit
+ * Query: { pincode, kit_id, quantity }
+ */
+const calculate_pincode_delivery_cost = async (req, res) => {
+  try {
+    const { pincode, kit_id, quantity = 1 } = req.query;
+
+    if (!pincode || !String(pincode).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "PIN code is required to calculate delivery cost.",
+      });
+    }
+
+    const cleanPincode = String(pincode).trim();
+    if (!/^\d{6}$/.test(cleanPincode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please enter a valid 6-digit PIN code.",
+      });
+    }
+
+    const qty = Math.max(1, parseInt(quantity, 10) || 1);
+    const { PincodeDeliveryCost } = require("../../../admin-panel/models/india_solarshop_db");
+    const ComboKit = require("../../../admin-panel/models/india_solarshop_db/combo_kits.schema");
+
+    let kitDoc = null;
+    let targetKitId = null;
+    if (kit_id && mongoose.Types.ObjectId.isValid(kit_id)) {
+      targetKitId = new mongoose.Types.ObjectId(kit_id);
+      kitDoc = await ComboKit.findById(targetKitId).lean();
+    }
+
+    // 1. Look for specific kit rate for this pincode
+    let rateRule = null;
+    if (targetKitId) {
+      rateRule = await PincodeDeliveryCost.findOne({
+        pincode: cleanPincode,
+        combo_kit_id: targetKitId,
+        is_active: true,
+      }).lean();
+    }
+
+    // 2. Fallback to general pincode rate (combo_kit_id: null)
+    if (!rateRule) {
+      rateRule = await PincodeDeliveryCost.findOne({
+        pincode: cleanPincode,
+        combo_kit_id: null,
+        is_active: true,
+      }).lean();
+    }
+
+    // 3. Fallback: check if pincode has any active rate rule (to get state/district)
+    let locationFallback = null;
+    if (!rateRule) {
+      locationFallback = await PincodeDeliveryCost.findOne({
+        pincode: cleanPincode,
+        is_active: true,
+      }).lean();
+    }
+
+    const isServiceable = Boolean(rateRule);
+    const deliveryCost = rateRule ? Number(rateRule.delivery_cost) : 0;
+    const stateName = rateRule?.state_name || locationFallback?.state_name || null;
+    const districtName = rateRule?.district_name || locationFallback?.district_name || null;
+    const estMin = rateRule?.estimated_days_min || 3;
+    const estMax = rateRule?.estimated_days_max || 7;
+
+    // Calculate item pricing if kitDoc or unit_price query param is found
+    const unitPrice = req.query.unit_price
+      ? Number(req.query.unit_price)
+      : kitDoc
+      ? Number(kitDoc.selling_price_inr || kitDoc.selling_price_cached || kitDoc.base_price_cached || 0)
+      : 0;
+    const itemsSubtotal = unitPrice * qty;
+    const gstRate = 13.8; // Standard Solar Kit GST in India
+    const gstAmount = Math.round((itemsSubtotal * gstRate) / 100);
+    const totalPayable = itemsSubtotal + deliveryCost;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        pincode: cleanPincode,
+        is_serviceable: isServiceable,
+        state_name: stateName,
+        district_name: districtName,
+        delivery_cost: deliveryCost,
+        formatted_delivery_cost: `₹${deliveryCost.toLocaleString("en-IN")}`,
+        estimated_days_min: estMin,
+        estimated_days_max: estMax,
+        estimated_timeline: `${estMin} - ${estMax} Business Days`,
+        pricing: {
+          unit_price: unitPrice,
+          quantity: qty,
+          items_subtotal: itemsSubtotal,
+          delivery_cost: deliveryCost,
+          total_payable: totalPayable,
+          gst_rate: gstRate,
+        },
+        message: isServiceable
+          ? `Delivery available to ${districtName ? districtName + ', ' : ''}${stateName || ''} (${cleanPincode})`
+          : `Delivery charge not configured for PIN ${cleanPincode}. Standard rates may apply.`,
+      },
+    });
+  } catch (error) {
+    console.error("calculate_pincode_delivery_cost error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
  * POST Create EPC Offline Bank Transfer Checkout with Payment Receipt
  */
 const create_epc_offline_checkout = async (req, res) => {
@@ -3409,6 +3525,7 @@ module.exports = {
   get_shop_hierarchy,
   get_company_bank_details,
   check_warehouse_stock,
+  calculate_pincode_delivery_cost,
   create_epc_offline_checkout,
   resubmit_epc_offline_payment,
   get_epc_order_invoice_data,

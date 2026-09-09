@@ -12,6 +12,7 @@ const h = require('../controller/franchisee.po.handler');
 const PERM_VIEW = [
   { unique_code: 'FPO_ORDER', permissions: ['view'] },
   { unique_code: 'ADM_PO_ORDERS', permissions: ['view'] },
+  { unique_code: 'ADM_LOOSE_ORDERS', permissions: ['view'] },
   { unique_code: 'RSL_MGMT', permissions: ['view'] },
   { unique_code: 'ACC_PO', permissions: ['view'] },
   { unique_code: 'ACC_PAYMENTS', permissions: ['view'] },
@@ -19,12 +20,14 @@ const PERM_VIEW = [
 const PERM_ADD  = [
   { unique_code: 'FPO_ORDER', permissions: ['add'] },
   { unique_code: 'ADM_PO_ORDERS', permissions: ['add'] },
+  { unique_code: 'ADM_LOOSE_ORDERS', permissions: ['add'] },
   { unique_code: 'RSL_MGMT', permissions: ['add'] },
   { unique_code: 'ACC_PO', permissions: ['add'] },
 ];
 const PERM_EDIT = [
   { unique_code: 'FPO_ORDER', permissions: ['edit'] },
   { unique_code: 'ADM_PO_ORDERS', permissions: ['edit'] },
+  { unique_code: 'ADM_LOOSE_ORDERS', permissions: ['edit'] },
   { unique_code: 'RSL_MGMT', permissions: ['edit'] },
   { unique_code: 'ACC_PO', permissions: ['edit'] },
   { unique_code: 'ACC_PAYMENTS', permissions: ['edit'] },

@@ -126,6 +126,8 @@ const create_combo_kit = async (req, res) => {
             ? variant_ids.map(id => id.id || id._id || id)
             : (variant_id ? [variant_id] : []);
         const order_quantities = parseJSON(req.body.order_quantities, []);
+        const allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
+        const trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -225,6 +227,8 @@ const create_combo_kit = async (req, res) => {
                 variant_id: targetVariantIds[0] || null,
                 variant_ids: targetVariantIds,
                 order_quantities: (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+                allow_trial_kit,
+                trial_kit_quantity,
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -501,6 +505,12 @@ const update_combo_kit = async (req, res) => {
             const order_quantities = parseJSON(req.body.order_quantities, []);
             existingKit.order_quantities = (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
         }
+        if (req.body.allow_trial_kit !== undefined) {
+            existingKit.allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
+        }
+        if (req.body.trial_kit_quantity !== undefined) {
+            existingKit.trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
+        }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
         existingKit.inverter_mode = inverter_mode !== undefined ? inverter_mode : existingKit.inverter_mode;
@@ -586,6 +596,8 @@ const create_combo_kit_india = async (req, res) => {
             ? variant_ids.map(id => id.id || id._id || id)
             : (variant_id ? [variant_id] : []);
         const order_quantities = parseJSON(req.body.order_quantities, []);
+        const allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
+        const trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -686,6 +698,8 @@ const create_combo_kit_india = async (req, res) => {
                 variant_id: targetVariantIds[0] || null,
                 variant_ids: targetVariantIds,
                 order_quantities: (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+                allow_trial_kit,
+                trial_kit_quantity,
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -1022,6 +1036,12 @@ const update_combo_kit_india = async (req, res) => {
             const order_quantities = parseJSON(req.body.order_quantities, []);
             existingKit.order_quantities = (order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
         }
+        if (req.body.allow_trial_kit !== undefined) {
+            existingKit.allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
+        }
+        if (req.body.trial_kit_quantity !== undefined) {
+            existingKit.trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
+        }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
         existingKit.inverter_mode = inverter_mode !== undefined ? inverter_mode : existingKit.inverter_mode;
@@ -1066,16 +1086,19 @@ const update_combo_kit_india = async (req, res) => {
 
         await existingKit.save();
 
-        if (req.body.order_quantities !== undefined) {
+        if (req.body.order_quantities !== undefined || req.body.allow_trial_kit !== undefined || req.body.trial_kit_quantity !== undefined) {
             try {
                 const otherModel = existingKit.constructor.modelName === 'pc_combo_kits' ? ComboKitIndia : IndiaComboKit;
-                const syncQty = (existingKit.order_quantities || []);
+                const syncData = {};
+                if (req.body.order_quantities !== undefined) syncData.order_quantities = (existingKit.order_quantities || []);
+                if (req.body.allow_trial_kit !== undefined) syncData.allow_trial_kit = existingKit.allow_trial_kit;
+                if (req.body.trial_kit_quantity !== undefined) syncData.trial_kit_quantity = existingKit.trial_kit_quantity;
                 await otherModel.updateMany(
                     { name: { $regex: new RegExp(`^${existingKit.name.trim()}$`, 'i') }, deleted_at: null },
-                    { $set: { order_quantities: syncQty } }
+                    { $set: syncData }
                 );
             } catch (e) {
-                console.warn('Dual-sync order_quantities error:', e.message);
+                console.warn('Dual-sync order_quantities/trial_kit error:', e.message);
             }
         }
 

@@ -88,6 +88,7 @@ adminRouter.use('/solarshop', require('./modules/admin-panel/routes/solarshop.ro
 adminRouter.use('/saas-products', require('./modules/admin-panel/routes/saas_products.route'));
 adminRouter.use('/combo-kits', require('./modules/admin-panel/routes/combo_kits.route'));
 adminRouter.use('/combo-kit-variants', require('./modules/admin-panel/routes/combo_kit_variants.route'));
+adminRouter.use('/pincode-delivery-costs', require('./modules/admin-panel/routes/pincode_delivery_costs.route'));
 adminRouter.use('/product-sku-prices', require('./modules/admin-panel/routes/product_sku_prices.route'));
 adminRouter.use('/price-requests', require('./modules/admin-panel/routes/price_requests.route'));
 adminRouter.use('/industry-types', require('./modules/admin-panel/routes/industry.types.route'));

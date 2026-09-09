@@ -72,13 +72,21 @@ axios.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
+      const storedRefreshToken = localStorage.getItem('refresh_token');
+      if (!storedRefreshToken) {
+        localStorage.removeItem('login');
+        localStorage.removeItem('refresh_token');
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+
       try {
         const refreshUrl = `${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5000/auth-api')}/refresh-access-token`;
-        const storedRefreshToken = localStorage.getItem('refresh_token');
-        const headers = {};
-        if (storedRefreshToken) {
-          headers['x-refresh-token'] = storedRefreshToken;
-        }
+        const headers = {
+          'x-refresh-token': storedRefreshToken
+        };
         const res = await axios.post(
           refreshUrl,
           { refresh_token: storedRefreshToken },
@@ -100,6 +108,11 @@ axios.interceptors.response.use(
         }
       } catch (refreshErr) {
         processQueue(refreshErr, null);
+        localStorage.removeItem('login');
+        localStorage.removeItem('refresh_token');
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;

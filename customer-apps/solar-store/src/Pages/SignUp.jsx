@@ -19,101 +19,7 @@ const api = axios.create({
   },
 });
 
-// Fallback Indian States Dataset
-const FALLBACK_INDIAN_STATES = [
-  { id: "st_1", name: "Maharashtra" },
-  { id: "st_2", name: "Gujarat" },
-  { id: "st_3", name: "Delhi (NCT)" },
-  { id: "st_4", name: "Karnataka" },
-  { id: "st_5", name: "Telangana" },
-  { id: "st_6", name: "Tamil Nadu" },
-  { id: "st_7", name: "Uttar Pradesh" },
-  { id: "st_8", name: "Rajasthan" },
-  { id: "st_9", name: "Madhya Pradesh" },
-  { id: "st_10", name: "Haryana" },
-  { id: "st_11", name: "Punjab" },
-  { id: "st_12", name: "West Bengal" },
-  { id: "st_13", name: "Kerala" },
-  { id: "st_14", name: "Andhra Pradesh" },
-  { id: "st_15", name: "Bihar" },
-  { id: "st_16", name: "Odisha" },
-  { id: "st_17", name: "Jharkhand" },
-  { id: "st_18", name: "Chhattisgarh" },
-  { id: "st_19", name: "Assam" },
-  { id: "st_20", name: "Uttarakhand" },
-  { id: "st_21", name: "Himachal Pradesh" },
-  { id: "st_22", name: "Goa" },
-  { id: "st_23", name: "Jammu and Kashmir" },
-  { id: "st_24", name: "Chandigarh" }
-];
 
-// Fallback Indian Districts Dataset
-const FALLBACK_INDIAN_DISTRICTS = {
-  "Maharashtra": [
-    { id: "dt_101", name: "Mumbai City" }, { id: "dt_102", name: "Mumbai Suburban" },
-    { id: "dt_103", name: "Pune" }, { id: "dt_104", name: "Thane" },
-    { id: "dt_105", name: "Nagpur" }, { id: "dt_106", name: "Nashik" },
-    { id: "dt_107", name: "Aurangabad (Chhatrapati Sambhajinagar)" }, { id: "dt_108", name: "Solapur" },
-    { id: "dt_109", name: "Kolhapur" }, { id: "dt_110", name: "Ahmednagar" }
-  ],
-  "Gujarat": [
-    { id: "dt_201", name: "Ahmedabad" }, { id: "dt_202", name: "Surat" },
-    { id: "dt_203", name: "Vadodara" }, { id: "dt_204", name: "Rajkot" },
-    { id: "dt_205", name: "Bhavnagar" }, { id: "dt_206", name: "Jamnagar" },
-    { id: "dt_207", name: "Gandhinagar" }, { id: "dt_208", name: "Junagadh" }
-  ],
-  "Delhi (NCT)": [
-    { id: "dt_301", name: "New Delhi" }, { id: "dt_302", name: "Central Delhi" },
-    { id: "dt_303", name: "South Delhi" }, { id: "dt_304", name: "North Delhi" },
-    { id: "dt_305", name: "East Delhi" }, { id: "dt_306", name: "West Delhi" }
-  ],
-  "Karnataka": [
-    { id: "dt_401", name: "Bengaluru Urban" }, { id: "dt_402", name: "Bengaluru Rural" },
-    { id: "dt_403", name: "Mysuru" }, { id: "dt_404", name: "Hubballi-Dharwad" },
-    { id: "dt_405", name: "Mangaluru (Dakshina Kannada)" }, { id: "dt_406", name: "Belagavi" }
-  ],
-  "Telangana": [
-    { id: "dt_501", name: "Hyderabad" }, { id: "dt_502", name: "Medchal-Malkajgiri" },
-    { id: "dt_503", name: "Rangareddy" }, { id: "dt_504", name: "Warangal" },
-    { id: "dt_505", name: "Karimnagar" }, { id: "dt_506", name: "Nizamabad" }
-  ],
-  "Tamil Nadu": [
-    { id: "dt_601", name: "Chennai" }, { id: "dt_602", name: "Coimbatore" },
-    { id: "dt_603", name: "Madurai" }, { id: "dt_604", name: "Tiruchirappalli" },
-    { id: "dt_605", name: "Salem" }, { id: "dt_606", name: "Tiruppur" }
-  ],
-  "Uttar Pradesh": [
-    { id: "dt_701", name: "Gautam Buddha Nagar (Noida)" }, { id: "dt_702", name: "Ghaziabad" },
-    { id: "dt_703", name: "Lucknow" }, { id: "dt_704", name: "Kanpur" },
-    { id: "dt_705", name: "Varanasi" }, { id: "dt_706", name: "Agra" },
-    { id: "dt_707", name: "Prayagraj" }, { id: "dt_708", name: "Meerut" }
-  ],
-  "Rajasthan": [
-    { id: "dt_801", name: "Jaipur" }, { id: "dt_802", name: "Jodhpur" },
-    { id: "dt_803", name: "Udaipur" }, { id: "dt_804", name: "Kota" },
-    { id: "dt_805", name: "Ajmer" }, { id: "dt_806", name: "Bikaner" }
-  ],
-  "Madhya Pradesh": [
-    { id: "dt_901", name: "Indore" }, { id: "dt_902", name: "Bhopal" },
-    { id: "dt_903", name: "Jabalpur" }, { id: "dt_904", name: "Gwalior" },
-    { id: "dt_905", name: "Ujjain" }
-  ],
-  "Haryana": [
-    { id: "dt_1001", name: "Gurugram" }, { id: "dt_1002", name: "Faridabad" },
-    { id: "dt_1003", name: "Panipat" }, { id: "dt_1004", name: "Ambala" },
-    { id: "dt_1005", name: "Karnal" }, { id: "dt_1006", name: "Hisar" }
-  ],
-  "Punjab": [
-    { id: "dt_1101", name: "Ludhiana" }, { id: "dt_1102", name: "Amritsar" },
-    { id: "dt_1103", name: "Jalandhar" }, { id: "dt_1104", name: "Patiala" },
-    { id: "dt_1105", name: "SAS Nagar (Mohali)" }
-  ],
-  "West Bengal": [
-    { id: "dt_1201", name: "Kolkata" }, { id: "dt_1202", name: "Howrah" },
-    { id: "dt_1203", name: "North 24 Parganas" }, { id: "dt_1204", name: "South 24 Parganas" },
-    { id: "dt_1205", name: "Darjeeling" }
-  ]
-};
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -233,7 +139,7 @@ export default function SignUp() {
     }
   }, [useSameWhatsapp, formData.registeredNumber]);
 
-  // Fetch states from API with fallback
+  // Fetch states from API (only real states activated in admin panel)
   const fetchStates = async () => {
     setLoadingStates(true);
     try {
@@ -242,11 +148,27 @@ export default function SignUp() {
       if (response.data?.states && Array.isArray(response.data.states) && response.data.states.length > 0) {
         setStates(response.data.states);
       } else {
-        setStates(FALLBACK_INDIAN_STATES);
+        // Backup query to active states endpoint
+        const backupRes = await api.get('/geolocation/active-states');
+        if (backupRes.data?.states && Array.isArray(backupRes.data.states)) {
+          setStates(backupRes.data.states);
+        } else {
+          setStates([]);
+        }
       }
     } catch (error) {
       console.error('Error fetching states:', error);
-      setStates(FALLBACK_INDIAN_STATES);
+      try {
+        const backupRes = await api.get('/geolocation/active-states');
+        if (backupRes.data?.states && Array.isArray(backupRes.data.states)) {
+          setStates(backupRes.data.states);
+        } else {
+          setStates([]);
+        }
+      } catch (backupErr) {
+        console.error('Error in backup fetch states:', backupErr);
+        setStates([]);
+      }
     } finally {
       setLoadingStates(false);
     }
@@ -254,7 +176,7 @@ export default function SignUp() {
 
   // Handle state selection
   const handleStateChange = async (selectedStateId) => {
-    const selectedState = states.find(s => s.id.toString() === selectedStateId.toString());
+    const selectedState = states.find(s => (s.id || s._id).toString() === selectedStateId.toString());
     const selectedStateName = selectedState?.name || "";
 
     setFormData(prev => ({
@@ -350,7 +272,7 @@ const FALLBACK_EPCS = [
     }
   };
 
-  // Fetch districts by state with fallback
+  // Fetch districts by state (only real districts activated in admin panel)
   const fetchDistrictsByState = async (stateId, stateName = "") => {
     setLoadingDistricts(true);
     try {
@@ -361,27 +283,37 @@ const FALLBACK_EPCS = [
         setLoadingDistricts(false);
         return;
       }
+
+      // Secondary check against active districts endpoint
+      const backupRes = await api.get(`/geolocation/active-districts?state_id=${stateId}`);
+      if (backupRes.data?.districts && Array.isArray(backupRes.data.districts) && backupRes.data.districts.length > 0) {
+        setDistricts(backupRes.data.districts);
+        setLoadingDistricts(false);
+        return;
+      }
+      setDistricts([]);
     } catch (error) {
       console.error('Error fetching districts:', error);
+      try {
+        const backupRes = await api.get(`/geolocation/active-districts?state_id=${stateId}`);
+        if (backupRes.data?.districts && Array.isArray(backupRes.data.districts)) {
+          setDistricts(backupRes.data.districts);
+        } else {
+          setDistricts([]);
+        }
+      } catch (backupErr) {
+        console.error('Error in backup fetch districts:', backupErr);
+        setDistricts([]);
+      }
+    } finally {
+      setLoadingDistricts(false);
     }
-
-    // Fallback if API returned empty or errored
-    const targetState = stateName || states.find(s => s.id.toString() === stateId.toString())?.name || "";
-    const fallbackList = FALLBACK_INDIAN_DISTRICTS[targetState] || [
-      { id: `${stateId}_d1`, name: `${targetState || "District"} Central` },
-      { id: `${stateId}_d2`, name: `${targetState || "District"} North` },
-      { id: `${stateId}_d3`, name: `${targetState || "District"} South` },
-      { id: `${stateId}_d4`, name: `${targetState || "District"} East` },
-      { id: `${stateId}_d5`, name: `${targetState || "District"} West` },
-    ];
-    setDistricts(fallbackList);
-    setLoadingDistricts(false);
   };
 
   // Transform states for dropdown
   const stateOptions = useMemo(() => {
     return states.map(state => ({
-      value: state.id.toString(),
+      value: (state.id || state._id).toString(),
       text: state.name
     }));
   }, [states]);
@@ -389,7 +321,7 @@ const FALLBACK_EPCS = [
   // Transform districts for dropdown
   const districtOptions = useMemo(() => {
     return districts.map(district => ({
-      value: district.id.toString(),
+      value: (district.id || district._id).toString(),
       text: district.name
     }));
   }, [districts]);
@@ -477,7 +409,7 @@ const FALLBACK_EPCS = [
 
   // Handle district selection
   const handleDistrictChange = (selectedDistrictId) => {
-    const selectedDistrict = districts.find(d => d.id.toString() === selectedDistrictId.toString());
+    const selectedDistrict = districts.find(d => (d.id || d._id).toString() === selectedDistrictId.toString());
 
     setFormData(prev => ({
       ...prev,
@@ -1431,7 +1363,15 @@ const FALLBACK_EPCS = [
                         value={formData.districtId}
                         onChange={handleDistrictChange}
                         options={districtOptions}
-                        placeholder={formData.stateId ?"Select your district" :"Select a state first"}
+                        placeholder={
+                          !formData.stateId
+                            ? "Select a state first"
+                            : loadingDistricts
+                            ? "Loading districts..."
+                            : districts.length === 0
+                            ? "No active districts available"
+                            : "Select your district"
+                        }
                         searchPlaceholder="Search districts..."
                         disabled={!formData.stateId || loadingDistricts}
                         className={errors.districtId ?"border-danger" :""}

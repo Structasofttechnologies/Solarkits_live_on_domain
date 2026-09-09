@@ -13,14 +13,19 @@ import Loader from "./Loader";
  * @param {String} props.className - Additional class names for the container
  */
 const CustomTable = ({
-  headers = [],
+  headers: headersProp,
+  columns,
   data = [],
   loading = false,
-  emptyMessage = "No data found",
+  emptyMessage,
+  emptyText,
   renderRow,
   className = "",
   containerClassName = ""
 }) => {
+  const headers = headersProp || columns || [];
+  const message = emptyMessage || emptyText || "No data found";
+
   return (
     <div className={`card overflow-hidden transition-all duration-300 ${containerClassName}`}>
       <div className="overflow-x-auto scrollbar-hover">
@@ -33,7 +38,7 @@ const CustomTable = ({
                   style={{ width: header.width, textAlign: header.align || 'left' }}
                   className="px-6 py-4 text-xs font-black uppercase tracking-widest text-text-secondary whitespace-nowrap"
                 >
-                  {header.label}
+                  {header.label || header.header || header.title || header.name}
                 </th>
               ))}
             </tr>
@@ -41,7 +46,7 @@ const CustomTable = ({
           <tbody className="divide-y divide-border/60">
             {loading ? (
               <tr>
-                <td colSpan={headers.length} className="px-6 py-20 text-center">
+                <td colSpan={Math.max(1, headers.length)} className="px-6 py-20 text-center">
                   <div className="flex flex-col items-center gap-4">
                     <Loader size="lg" />
                     <p className="text-text-secondary font-medium animate-pulse tracking-wide">
@@ -52,17 +57,17 @@ const CustomTable = ({
               </tr>
             ) : data.length > 0 ? (
               data.map((item, index) => (
-                <motion.tr
-                  key={item.id || item._id || index}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="group hover:bg-primary/2 transition-colors duration-300"
-                >
-                  {renderRow ? (
-                    renderRow(item, index)
-                  ) : (
-                    headers.map((header, colIndex) => (
+                renderRow ? (
+                  renderRow(item, index)
+                ) : (
+                  <motion.tr
+                    key={item.id || item._id || index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className="group hover:bg-primary/2 transition-colors duration-300"
+                  >
+                    {headers.map((header, colIndex) => (
                       <td
                         key={`td-${colIndex}`}
                         style={{ textAlign: header.align || 'left' }}
@@ -70,10 +75,11 @@ const CustomTable = ({
                       >
                         {header.render ? header.render(item[header.accessor || header.key], item) : item[header.accessor || header.key]}
                       </td>
-                    ))
-                  )}
-                </motion.tr>
+                    ))}
+                  </motion.tr>
+                )
               ))
+
             ) : (
               <tr>
                 <td colSpan={headers.length} className="px-6 py-20 text-center">

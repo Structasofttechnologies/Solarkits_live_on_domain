@@ -6,28 +6,25 @@ const CompanyWarehouse = require("../../models/india_core_db/company_warehouses.
 
 const get_states = async (req, res) => {
     try {
-        // Get India ID (Assuming Level 0 name 'India')
-        const india = await GeoLevel0.findOne({ name: 'India' });
+        // Query active states (as configured/activated from admin panel)
+        const india = await GeoLevel0.findOne({ name: { $regex: /^India$/i } });
 
-        if (!india) {
-            return res.status(404).json({ error: "India not found" });
+        const query = {
+            is_active: true,
+            $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+        };
+
+        if (india) {
+            query.level_0 = india._id;
         }
 
-        // Fetch active warehouse states
-        const activeWarehouses = await CompanyWarehouse.find({ is_active: true, deleted_at: null }).select('level_1').lean();
-        const activeStateIds = [...new Set(activeWarehouses.map(w => w.level_1?.toString()).filter(Boolean))].map(id => new mongoose.Types.ObjectId(id));
+        const states = await GeoLevel1.find(query).sort({ name: 1 }).select('_id name is_active');
 
-        // Get states
-        const states = await GeoLevel1.find({ 
-            _id: { $in: activeStateIds },
-            level_0: india._id,
-            deleted_at: null
-        }).sort({ name: 1 }).select('_id name');
-
-        // Map response to match legacy SQL format (id instead of _id)
+        // Map response to match standard format (id instead of _id)
         const formattedStates = states.map(s => ({
-            id: s._id,
-            name: s.name
+            id: s._id.toString(),
+            name: s.name,
+            is_active: s.is_active
         }));
 
         return res.status(200).json({ states: formattedStates });
@@ -46,34 +43,35 @@ const get_districts_by_state = async (req, res) => {
             return res.status(400).json({ error: "state_id is required" });
         }
 
-        // 1. Fetch active master warehouses
-        const masterWarehouses = await CompanyWarehouse.find({
-            warehouse_type: 'master',
+        const query = {
             is_active: true,
-            deleted_at: null
-        }).select('level_2').lean();
+            $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+        };
 
-        const masterDistrictIds = masterWarehouses.map(w => w.level_2).filter(Boolean);
+        if (mongoose.Types.ObjectId.isValid(state_id)) {
+            query.level_1 = new mongoose.Types.ObjectId(state_id);
+        } else {
+            // Find by state name
+            const stateDoc = await GeoLevel1.findOne({
+                name: { $regex: new RegExp(`^${state_id.trim()}$`, "i") },
+                $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+            });
+            if (stateDoc) {
+                query.level_1 = stateDoc._id;
+            } else {
+                return res.status(200).json({ districts: [] });
+            }
+        }
 
-        // 2. Fetch districts of these master warehouses to get their cluster IDs
-        const masterWarehouseDistricts = await GeoLevel2.find({
-            _id: { $in: masterDistrictIds },
-            deleted_at: null
-        }).select('cluster').lean();
+        // Fetch all active districts for this state as activated from admin panel
+        const districts = await GeoLevel2.find(query).sort({ name: 1 }).select('_id name level_1 is_active');
 
-        const masterClusterIds = [...new Set(masterWarehouseDistricts.map(d => d.cluster?.toString()).filter(Boolean))].map(id => new mongoose.Types.ObjectId(id));
-
-        // 3. Find all active districts in the requested state that have one of these cluster IDs
-        const districts = await GeoLevel2.find({
-            level_1: state_id,
-            cluster: { $in: masterClusterIds },
-            deleted_at: null
-        }).sort({ name: 1 }).select('_id name');
-
-        // Map response to match legacy SQL format
+        // Map response to match standard format
         const formattedDistricts = districts.map(d => ({
-            id: d._id,
-            name: d.name
+            id: d._id.toString(),
+            name: d.name,
+            state_id: d.level_1 ? d.level_1.toString() : null,
+            is_active: d.is_active
         }));
 
         return res.status(200).json({ districts: formattedDistricts });

@@ -38,6 +38,12 @@ export default function Login() {
   const testCredentials = (() => {
     const defaultAccounts = [
       {
+        role: "Devbhumi Dwarka EPC Partner",
+        email: "dwarka.epc@solarkits.com",
+        password: "Password@123",
+        tag: "Gujarat - Devbhumi Dwarka"
+      },
+      {
         role: "Onboard Franchise / EPC Login",
         email: "ravi.s@gmail.com",
         password: "Password@123",

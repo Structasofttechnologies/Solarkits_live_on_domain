@@ -17,6 +17,8 @@ const schema = new mongoose.Schema({
   variant_id:         { type: mongoose.Schema.Types.ObjectId, default: null },
   variant_ids:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'combo_kit_variants' }],
   order_quantities:   [{ type: Number }],
+  allow_trial_kit:    { type: Boolean, default: false },
+  trial_kit_quantity: { type: Number, default: 10 },
   
   base_components: [{
     template_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_templates', required: true },

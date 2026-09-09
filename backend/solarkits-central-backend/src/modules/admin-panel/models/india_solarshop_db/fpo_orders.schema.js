@@ -130,6 +130,26 @@ const schema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    order_type: {
+      type: String,
+      enum: ['po_order', 'loose_order', 'loose_kit_order', 'bulk_po'],
+      default: 'po_order',
+    },
+    destination_type: {
+      type: String,
+      enum: ['hub_stock', 'epc_allocation', 'warehouse', 'direct'],
+      default: 'hub_stock',
+    },
+    destination_address: { type: String, default: null },
+    destination_pincode: { type: String, default: null },
+    offline_payment: {
+      payment_method: { type: String, default: null },
+      utr_number: { type: String, default: null },
+      amount_paid: { type: Number, default: 0 },
+      payment_date: { type: Date, default: null },
+      sender_bank_name: { type: String, default: null },
+      receipt_url: { type: String, default: null },
+    },
 
     // ── Ownership ─────────────────────────────────────────────────────────────
     franchisee_id: {

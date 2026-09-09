@@ -13,7 +13,7 @@ import ConfirmationPopup from "@/components/ConfirmationPopup";
 import DropdownWithSearchInput from "@/components/DropdownWithSearchInput";
 import Pagination from "@/components/Pagination";
 
-import { FaPlus, FaShoppingBag, FaEye, FaTrash, FaImage, FaEdit, FaSearch } from "react-icons/fa";
+import { FaPlus, FaShoppingBag, FaEye, FaTrash, FaImage, FaEdit, FaSearch, FaTruck } from "react-icons/fa";
 import SkuDetailsModal from "../components/SkuDetailsModal";
 import ComboKitFormDrawer from "../components/ComboKitFormDrawer";
 import ComboKitDetailsModal from "../components/ComboKitDetailsModal";
@@ -61,7 +61,9 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     kit_image: null,
     base_components: [],
     bos_kits: [],
-    order_quantities: [] // e.g. [10, 25, 50, 100] — allowed order kit quantities
+    order_quantities: [], // e.g. [10, 25, 50, 100] — allowed order kit quantities
+    allow_trial_kit: false,
+    trial_kit_quantity: 10
   });
 
   const [kitImageFile, setKitImageFile] = useState(null);
@@ -1336,7 +1338,9 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
           kit_image: null,
           base_components: [],
           bos_kits: [],
-          order_quantities: []
+          order_quantities: [],
+          allow_trial_kit: false,
+          trial_kit_quantity: 10
         });
       } finally {
         setLoadingDrawerData(false);
@@ -1357,7 +1361,9 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         kit_image: null,
         base_components: [],
         bos_kits: [],
-        order_quantities: []
+        order_quantities: [],
+        allow_trial_kit: false,
+        trial_kit_quantity: 10
       });
       setLoadingDrawerData(false);
     }
@@ -1502,6 +1508,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         brand_id: row.brand_id?._id || row.brand_id?.id || row.brand_id || "",
         project_range_id: row.project_range_id?.id || row.project_range_id?._id || row.project_range_id || "",
         order_quantities: Array.isArray(row.order_quantities) ? row.order_quantities.map(Number).filter(n => !isNaN(n) && n > 0) : [],
+        allow_trial_kit: Boolean(row.allow_trial_kit),
+        trial_kit_quantity: Number(row.trial_kit_quantity) || 10,
         capacity: row.capacity || 0,
         inverter_tolerance: row.inverter_tolerance || 10,
         inverter_mode: row.inverter_mode || (hasMultiInverter ? "multi" : "single"),
@@ -1571,6 +1579,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       payload.append("variant_id", rawVariantId);
       payload.append("variant_ids", JSON.stringify(cleanVariantIds));
       payload.append("order_quantities", JSON.stringify((formData.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)));
+      payload.append("allow_trial_kit", formData.allow_trial_kit ? "true" : "false");
+      payload.append("trial_kit_quantity", formData.trial_kit_quantity || 10);
 
       const cleanBaseComponents = (formData.base_components || []).map(bc => ({
         template_id: bc.template_id?._id || bc.template_id?.id || bc.template_id,
@@ -1900,20 +1910,31 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       )
     },
     {
-      header: "Order Qty Options",
-      label: "Order Qty Options",
-      accessor: "order_quantities",
-      render: (val) => {
-        const qtys = Array.isArray(val) ? val.filter(n => n > 0).sort((a, b) => a - b) : [];
+      header: "Trial Kits / MOQ",
+      label: "Trial Kits / MOQ",
+      accessor: "allow_trial_kit",
+      render: (val, row) => {
+        const isTrialAllowed = Boolean(val || row.allow_trial_kit);
+        const trialQty = row.trial_kit_quantity || 10;
+        const qtys = Array.isArray(row.order_quantities) ? row.order_quantities.filter(n => n > 0).sort((a, b) => a - b) : [];
         return (
-          <div className="flex flex-wrap gap-1 max-w-60">
-            {qtys.length > 0 ? qtys.map((q, idx) => (
-              <span key={idx} className="bg-amber-500/10 text-amber-700 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/20">
-                {q} Kits
+          <div className="space-y-1 max-w-60">
+            {isTrialAllowed ? (
+              <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-500/25 shadow-2xs">
+                ✓ Trial: {trialQty} Kits
               </span>
-            )) : (
-              <span className="text-[10px] text-text-muted font-bold italic">No Qty Limits</span>
+            ) : (
+              <span className="inline-block text-[10px] text-text-muted font-bold opacity-60">Trial Disabled</span>
             )}
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {qtys.length > 0 ? qtys.map((q, idx) => (
+                <span key={idx} className="bg-amber-500/10 text-amber-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/20">
+                  {q} Kits
+                </span>
+              )) : (
+                <span className="text-[9px] text-text-muted italic">No Qty Limits</span>
+              )}
+            </div>
           </div>
         );
       }
@@ -1969,9 +1990,20 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
           { label: "Configured Kits", value: configuredKits.length, description: `Active ${countryName || 'Global'} combo kits` }
         ]}
         actions={
-          <Button variant="primary" size="md" onClick={openAddKit} leftIcon={<FaPlus />}>
-            Configure Combo Kit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={() => navigate(`/admin-panel/solar-shop/${countryName || "india"}/combokit-configurations/pincode-delivery-costs`)}
+              leftIcon={<FaTruck />}
+              className="border-primary/40 text-primary hover:bg-primary/5"
+            >
+              Pincode Delivery Costs
+            </Button>
+            <Button variant="primary" size="md" onClick={openAddKit} leftIcon={<FaPlus />}>
+              Configure Combo Kit
+            </Button>
+          </div>
         }
       />
 

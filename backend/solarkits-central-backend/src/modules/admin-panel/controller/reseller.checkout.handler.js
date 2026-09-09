@@ -288,39 +288,53 @@ const list_fpo_orders = async (req, res) => {
 const list_loose_orders = async (req, res) => {
   try {
     const { reseller_id, routing_source, status, search, page = 1, limit = 50 } = req.query;
-    const query = {};
+    const epcQuery = {};
+    const fpoQuery = { deleted_at: null, order_type: { $in: ['loose_kit_order', 'loose_order'] } };
 
     if (reseller_id && mongoose.Types.ObjectId.isValid(reseller_id)) {
-      query.reseller_id = reseller_id;
+      epcQuery.reseller_id = reseller_id;
+      fpoQuery.franchisee_id = reseller_id;
     }
     if (routing_source && routing_source !== 'ALL') {
-      query.routing_source = routing_source;
+      epcQuery.routing_source = routing_source;
+      if (routing_source === 'direct_fallback') {
+        fpoQuery._id = null; // FPO loose orders are always franchise attributed
+      }
     }
     if (status && status !== 'ALL') {
-      query.status = { $in: status.split(',') };
+      const statusList = status.split(',');
+      epcQuery.order_status = { $in: statusList.map(s => s.toLowerCase()) };
+      fpoQuery.status = { $in: statusList.map(s => s.toUpperCase()) };
     }
     if (search && search.trim()) {
       const q = search.trim();
-      query.$or = [
+      epcQuery.$or = [
         { order_number: { $regex: q, $options: 'i' } },
         { 'items.item_name': { $regex: q, $options: 'i' } },
         { payment_utr: { $regex: q, $options: 'i' } },
       ];
+      fpoQuery.$or = [
+        { po_number: { $regex: q, $options: 'i' } },
+        { 'items.item_name': { $regex: q, $options: 'i' } },
+        { payment_reference: { $regex: q, $options: 'i' } },
+        { payment_utr: { $regex: q, $options: 'i' } },
+        { 'offline_payment.utr_number': { $regex: q, $options: 'i' } },
+      ];
     }
 
-    const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
-    const [orders, total] = await Promise.all([
-      EpcOrder.find(query)
+    const [epcOrders, fpoOrders] = await Promise.all([
+      EpcOrder.find(epcQuery)
         .populate('reseller_id', 'business_name name mobile email gst_number')
         .populate('epc_id', 'company_name full_name name email mobile gstin')
         .sort({ created_at: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
         .lean(),
-      EpcOrder.countDocuments(query),
+      FpoOrder.find(fpoQuery)
+        .populate('franchisee_id', 'business_name name mobile email gst_number address')
+        .sort({ created_at: -1 })
+        .lean(),
     ]);
 
-    const formatted = orders.map((o) => {
+    const formattedEpc = epcOrders.map((o) => {
       const partner = o.reseller_id || {};
       const buyer = o.epc_id || {};
       const totalKits = (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
@@ -332,6 +346,7 @@ const list_loose_orders = async (req, res) => {
         _id: o._id,
         id: o._id,
         order_type: 'loose_order',
+        source_model: 'epc_orders',
         order_number: o.order_number || `ORD-${String(o._id).slice(-8).toUpperCase()}`,
         routing_source: o.routing_source || 'direct_fallback',
         is_franchise_attributed: o.routing_source === 'primary_reseller' || Boolean(o.reseller_id),
@@ -356,9 +371,9 @@ const list_loose_orders = async (req, res) => {
         grand_total_paise: grandTotalPaise,
         grand_total_inr: Math.round(grandTotalPaise) / 100,
         reseller_margin_inr: Math.round((o.items || []).reduce((acc, it) => acc + (it.reseller_margin_paise || 0), 0)) / 100,
-        status: o.status || 'CONFIRMED',
-        payment_status: o.payment_status || (o.status === 'PAID' || o.status === 'COMPLETED' ? 'PAID' : 'PENDING'),
-        payment_utr: o.payment_utr || null,
+        status: (o.order_status || o.status || 'CONFIRMED').toUpperCase(),
+        payment_status: (o.payment_status || (o.status === 'PAID' || o.status === 'COMPLETED' ? 'PAID' : 'PENDING')).toUpperCase(),
+        payment_utr: o.payment_utr || o.payment_reference || null,
         delivery_address: o.delivery_address || null,
         items: (o.items || []).map((it) => ({
           item_name: it.item_name || 'Solar Combo Kit',
@@ -373,9 +388,80 @@ const list_loose_orders = async (req, res) => {
       };
     });
 
+    const formattedFpo = fpoOrders.map((o) => {
+      const partner = o.franchisee_id || {};
+      const totalKits = (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0);
+      const subtotalPaise = o.subtotal_paise || (o.items || []).reduce((acc, it) => acc + (it.total_price_paise || 0), 0);
+      const taxPaise = o.tax_total_paise || (o.items || []).reduce((acc, it) => acc + (it.tax_paise || 0), 0);
+      const grandTotalPaise = o.grand_total_paise || (subtotalPaise + taxPaise);
+      const firstAlloc = (o.items || []).flatMap(it => it.epc_allocations || [])[0];
+
+      return {
+        _id: o._id,
+        id: o._id,
+        order_type: 'loose_order',
+        source_model: 'fpo_orders',
+        order_number: o.po_number || `FPO-${String(o._id).slice(-8).toUpperCase()}`,
+        routing_source: 'franchise_portal',
+        is_franchise_attributed: true,
+        reseller: {
+          _id: partner._id,
+          business_name: partner.business_name || partner.name || 'Franchise Partner',
+          mobile: partner.mobile || 'N/A',
+          email: partner.email || 'N/A',
+        },
+        buyer: firstAlloc ? {
+          _id: firstAlloc.epc_buyer_id,
+          name: firstAlloc.company_name || firstAlloc.buyer_name || 'Allocated EPC Partner',
+          email: partner.email || 'N/A',
+          mobile: partner.mobile || 'N/A',
+          gstin: firstAlloc.gstin || 'N/A',
+        } : {
+          _id: partner._id,
+          name: partner.business_name || partner.name || 'Regional Franchise Hub',
+          email: partner.email || 'N/A',
+          mobile: partner.mobile || 'N/A',
+          gstin: partner.gst_number || 'N/A',
+        },
+        total_kit_quantity: totalKits,
+        subtotal_paise: subtotalPaise,
+        subtotal_inr: Math.round(subtotalPaise) / 100,
+        tax_total_paise: taxPaise,
+        tax_total_inr: Math.round(taxPaise) / 100,
+        grand_total_paise: grandTotalPaise,
+        grand_total_inr: Math.round(grandTotalPaise) / 100,
+        reseller_margin_inr: 0,
+        status: o.status || 'SUBMITTED',
+        payment_status: o.status === 'PAID' ? 'PAID' : (o.offline_payment?.utr_number || o.payment_reference ? 'VERIFICATION_PENDING' : 'PENDING'),
+        payment_utr: o.offline_payment?.utr_number || o.payment_reference || o.payment_utr || null,
+        delivery_address: o.destination_address || 'Franchise Regional Hub Warehouse',
+        destination_type: o.destination_type || 'hub_stock',
+        destination_pincode: o.destination_pincode || null,
+        offline_payment: o.offline_payment || null,
+        items: (o.items || []).map((it) => ({
+          item_name: it.item_name || 'Solar Combo Kit',
+          quantity: it.quantity || 1,
+          unit_price_inr: Math.round(it.unit_price_paise || 0) / 100,
+          total_price_inr: Math.round(it.total_price_paise || 0) / 100,
+          gst_rate: it.gst_rate || 12,
+          epc_allocations: it.epc_allocations || [],
+        })),
+        created_at: o.created_at,
+        updated_at: o.updated_at,
+      };
+    });
+
+    const combined = [...formattedFpo, ...formattedEpc].sort(
+      (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    );
+
+    const total = combined.length;
+    const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+    const paginated = combined.slice(skip, skip + parseInt(limit));
+
     return res.json({
       status: 'success',
-      data: formatted,
+      data: paginated,
       pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) },
     });
   } catch (error) {
@@ -390,20 +476,29 @@ const list_loose_orders = async (req, res) => {
  */
 const get_orders_stats = async (req, res) => {
   try {
-    const [fpoOrders, epcOrders] = await Promise.all([
-      FpoOrder.find({ deleted_at: null }).select('status grand_total_paise total_kit_quantity').lean(),
+    const [allFpoOrders, epcOrders] = await Promise.all([
+      FpoOrder.find({ deleted_at: null }).select('status grand_total_paise total_kit_quantity items order_type').lean(),
       EpcOrder.find({}).select('status grand_total_paise routing_source reseller_id items').lean(),
     ]);
 
-    const po_count = fpoOrders.length;
-    const po_volume_inr = Math.round(fpoOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0)) / 100;
-    const po_kits = fpoOrders.reduce((s, o) => s + (o.total_kit_quantity || 0), 0);
-    const po_paid_count = fpoOrders.filter((o) => o.status === 'PAID' || o.status === 'COMPLETED').length;
+    const bulkPoOrders = allFpoOrders.filter(o => o.order_type !== 'loose_kit_order' && o.order_type !== 'loose_order');
+    const fpoLooseOrders = allFpoOrders.filter(o => o.order_type === 'loose_kit_order' || o.order_type === 'loose_order');
 
-    const loose_count = epcOrders.length;
-    const loose_volume_inr = Math.round(epcOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0)) / 100;
-    const loose_kits = epcOrders.reduce((s, o) => s + (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0), 0);
-    const loose_attributed_count = epcOrders.filter((o) => o.reseller_id || o.routing_source === 'primary_reseller').length;
+    const po_count = bulkPoOrders.length;
+    const po_volume_inr = Math.round(bulkPoOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0)) / 100;
+    const po_kits = bulkPoOrders.reduce((s, o) => s + (o.total_kit_quantity || (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0)), 0);
+    const po_paid_count = bulkPoOrders.filter((o) => o.status === 'PAID' || o.status === 'COMPLETED').length;
+
+    const fpo_loose_kits = fpoLooseOrders.reduce((s, o) => s + (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0), 0);
+    const epc_loose_kits = epcOrders.reduce((s, o) => s + (o.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0), 0);
+
+    const fpo_loose_vol = fpoLooseOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0);
+    const epc_loose_vol = epcOrders.reduce((s, o) => s + (o.grand_total_paise || 0), 0);
+
+    const loose_count = epcOrders.length + fpoLooseOrders.length;
+    const loose_volume_inr = Math.round(fpo_loose_vol + epc_loose_vol) / 100;
+    const loose_kits = fpo_loose_kits + epc_loose_kits;
+    const loose_attributed_count = epcOrders.filter((o) => o.reseller_id || o.routing_source === 'primary_reseller').length + fpoLooseOrders.length;
 
     return res.json({
       status: 'success',

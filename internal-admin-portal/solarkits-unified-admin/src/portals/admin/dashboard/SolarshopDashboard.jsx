@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -76,6 +76,12 @@ const menus = [
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/combokit-configurations/combo-kit-variants",
                     unique_id: "ADM_COMBO_KIT_VARIANTS"
+                },
+                {
+                    name: "Pincode Delivery Costs",
+                    icon: <FaTruck />,
+                    path: "/admin-panel/solar-shop/combokit-configurations/pincode-delivery-costs",
+                    unique_id: "ADM_COMBO_KITS"
                 }
             ]
         },

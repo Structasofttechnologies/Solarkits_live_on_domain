@@ -385,13 +385,15 @@ export default function CheckOut() {
       activeOfferType = "Discount";
     }
 
-    const finalTotal = Math.max(0, subtotal - appliedDiscountValue);
+    const totalDeliveryFreight = cart.reduce((sum, item) => sum + (Number(item.delivery_cost) || 0), 0);
+    const finalTotal = Math.max(0, subtotal - appliedDiscountValue) + totalDeliveryFreight;
 
     return {
       discountAmount: appliedDiscountValue,
       offersApplied: selectedOffers,
       offerName: activeOfferName,
       offerType: activeOfferType,
+      totalDeliveryFreight,
       finalTotal,
     };
   }, [cart, totalKitsQuantity, totalCapacityKW, appliedCoupon, activeOffers, subtotal]);
@@ -492,6 +494,9 @@ export default function CheckOut() {
         ourPrice: item.ourPrice,
         gstRate: item.gstRate,
         districtId: item.districtId,
+        is_trial_kit: Boolean(item.is_trial_kit),
+        delivery_cost: Number(item.delivery_cost || 0),
+        delivery_pincode: item.delivery_pincode || null,
       }));
 
       const addressData = Object.values(deliveryAddresses)[0] || {
@@ -683,7 +688,14 @@ export default function CheckOut() {
                     <img src={item.kitImage} alt={item.kitName} className="object-contain w-12 h-12" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-sm text-text-primary dark:text-white truncate">{item.kitName}</h4>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="font-bold text-sm text-text-primary dark:text-white truncate">{item.kitName}</h4>
+                      {item.is_trial_kit && (
+                        <span className="inline-block bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-500/30">
+                          Trial Order ({item.qty} Units • PIN: {item.delivery_pincode || 'Specified'})
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
                       <span>{item.is_custom ? "Custom Configured" : `${item.productTier || "Standard"} Kit`} • {item.capacityKW} kW</span>
                       {item.districtName && (
@@ -944,6 +956,12 @@ export default function CheckOut() {
                       <span className="font-bold">{offerStr.split(":")[1]}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {calculatedDiscounts.totalDeliveryFreight > 0 && (
+                <div className="flex justify-between text-text-secondary text-emerald-600 dark:text-emerald-400 font-bold border-t border-dashed border-border pt-2">
+                  <span>Delivery Charge:</span>
+                  <span>+₹{calculatedDiscounts.totalDeliveryFreight.toLocaleString("en-IN")}</span>
                 </div>
               )}
             </div>

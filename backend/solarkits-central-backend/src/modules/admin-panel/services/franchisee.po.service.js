@@ -93,7 +93,19 @@ async function generatePoNumber() {
  * @param {string|ObjectId} [params.actor_id]
  * @param {object} [params.req]
  */
-async function createPoDraft({ franchisee_id, items, idempotency_key, payment_terms, actor_id, req }) {
+async function createPoDraft({
+  franchisee_id,
+  items,
+  idempotency_key,
+  payment_terms,
+  order_type = 'po_order',
+  destination_type = 'hub_stock',
+  destination_address = null,
+  destination_pincode = null,
+  offline_payment = null,
+  actor_id,
+  req,
+}) {
   // Idempotency check
   if (idempotency_key) {
     const existing = await FpoOrder.findOne({ idempotency_key }).lean();
@@ -274,6 +286,13 @@ async function createPoDraft({ franchisee_id, items, idempotency_key, payment_te
     plan_snapshot:     subscription,
     po_settings_snapshot: po_settings,
     industry_type_id:  items[0]?.industry_type_id || null,
+    order_type,
+    destination_type,
+    destination_address,
+    destination_pincode,
+    offline_payment,
+    payment_reference: offline_payment?.utr_number || null,
+    payment_utr: offline_payment?.utr_number || null,
     items: builtItems,
     subtotal_paise,
     tax_total_paise,

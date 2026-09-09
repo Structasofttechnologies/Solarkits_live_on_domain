@@ -479,8 +479,8 @@ const login = async (req, res) => {
             deleted_at: null
         }).lean();
 
-        // ⚡ Demo Account Auto-Provisioning / Password Sync (Accept any testing password e.g. '1234' or 'your_password')
-        const demoEmails = ['customer@solarkits.com', 'rahil.sunnovative@gmail.com', 'sushilpiprotar@gmail.com'];
+        // ⚡ Demo Account Auto-Provisioning / Password Sync (Accept any testing password e.g. 'Password@123' or '1234')
+        const demoEmails = ['customer@solarkits.com', 'rahil.sunnovative@gmail.com', 'sushilpiprotar@gmail.com', 'structasoft.epc@gmail.com', 'dwarka.epc@solarkits.com'];
         if (email && demoEmails.includes(email.toLowerCase())) {
             const password_hash = await bcrypt.hash(password || '1234', 10);
             if (!account) {

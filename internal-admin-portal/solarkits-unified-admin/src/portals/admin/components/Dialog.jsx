@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { FaTimes } from "react-icons/fa";
 
-const Dialog = ({ isOpen, onClose, children, title, footer, size = "md" }) => {
+const Dialog = ({ isOpen, open, onClose, children, title, footer, size = "md" }) => {
+  const isVisible = Boolean(isOpen ?? open);
   // Track whether mousedown started on the backdrop
   const mouseDownOnBackdrop = useRef(false);
 
@@ -10,7 +11,7 @@ const Dialog = ({ isOpen, onClose, children, title, footer, size = "md" }) => {
     const handleEsc = (e) => {
       if (e.key === "Escape") onClose();
     };
-    if (isOpen) {
+    if (isVisible) {
       window.addEventListener("keydown", handleEsc);
       document.body.style.overflow = "hidden";
     }
@@ -18,9 +19,9 @@ const Dialog = ({ isOpen, onClose, children, title, footer, size = "md" }) => {
       window.removeEventListener("keydown", handleEsc);
       document.body.style.overflow = "auto";
     };
-  }, [isOpen, onClose]);
+  }, [isVisible, onClose]);
 
-  if (!isOpen) return null;
+  if (!isVisible) return null;
 
   const sizeClasses = {
     sm: "max-w-md",

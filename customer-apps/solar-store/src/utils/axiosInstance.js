@@ -80,16 +80,33 @@ axiosInstance.interceptors.response.use(
     //  - Non-401 errors
     //  - Requests that have already been retried (_retry flag)
     //  - Auth endpoints (avoid infinite loops): refresh-token, login, me
+    //  - Public endpoints: delivery-cost/calculate, stores, combo-kits, hierarchy
     const isAuthEndpoint =
       originalRequest.url?.includes("/auth/refresh-token") ||
       originalRequest.url?.includes("/auth/login") ||
-      originalRequest.url?.includes("/auth/me");
+      originalRequest.url?.includes("/auth/me") ||
+      originalRequest.url?.includes("/delivery-cost/calculate") ||
+      originalRequest.url?.includes("/inventory-status");
 
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !isAuthEndpoint
     ) {
+      const storedRefreshToken = getStoredRefreshToken();
+
+      // If there is no refresh token at all, do not fire a guaranteed-to-fail refresh request
+      if (!storedRefreshToken) {
+        try {
+          sessionStorage.removeItem("user");
+          sessionStorage.removeItem("access_token");
+          sessionStorage.removeItem("refresh_token");
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+        } catch (_) {}
+        return Promise.reject(error);
+      }
+
       if (isRefreshing) {
         // Another refresh is already in flight — queue this request
         return new Promise((resolve, reject) => {
@@ -103,7 +120,6 @@ axiosInstance.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const storedRefreshToken = getStoredRefreshToken();
         // Attempt to get a new access_token using cookie or stored refresh_token
         const refreshResponse = await axios.post(
           `${API_BASE}/india/v1/auth/refresh-token`,
