@@ -39,7 +39,7 @@ const {
 
 const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
 
-const { verify_auth } = require("../../middlewares/auth");
+const { verify_auth, optional_auth } = require("../../middlewares/auth");
 const { upload_any_files } = require("../../../admin-panel/utils/upload.files");
 const epcReceiptUpload = upload_any_files('public/uploads/epc_receipts', 10);
 
@@ -82,7 +82,7 @@ router.put("/orders/:id/address", verify_auth, update_order_address);
 
 // ── EPC Offline Bank Transfer Checkout & Order Tracking Routes ─────────────
 router.get("/bank-details", get_company_bank_details);
-router.get("/check-warehouse-stock", verify_auth, check_warehouse_stock);
+router.get("/check-warehouse-stock", optional_auth, check_warehouse_stock);
 router.post("/offline-checkout/create", verify_auth, epcReceiptUpload, create_epc_offline_checkout);
 router.post("/offline-checkout/:id/resubmit", verify_auth, epcReceiptUpload, resubmit_epc_offline_payment);
 router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);

@@ -259,7 +259,7 @@ export default function TrialKitOrderModal({
                 leftIcon={<FaTruck className={loading ? "animate-bounce" : ""} />}
                 className="shrink-0 font-bold px-4"
               >
-                {loading ? "Checking..." : "Check Charge"}
+                {loading ? "Checking..." : "Check Delivery Cost"}
               </Button>
             </div>
             <p className="text-[11px] text-text-muted mt-2">
@@ -365,7 +365,7 @@ export default function TrialKitOrderModal({
             leftIcon={<FaShoppingCart />}
             className="font-black px-6 bg-gradient-to-r from-primary to-primary-end shadow-md hover:shadow-lg transition-all"
           >
-            Add {trialQty} Trial Kits to Cart • ₹{grandTotal.toLocaleString("en-IN")}
+            Add to Cart
           </Button>
         </div>
       </div>

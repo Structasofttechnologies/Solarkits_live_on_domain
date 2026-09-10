@@ -50,9 +50,10 @@ function StatusBadge({ status }) {
   const cfg = STATUS_BADGES[status] || { label: status || "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" };
   return (
     <span
-      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-xs"
+      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs"
       style={{ backgroundColor: cfg.bg, color: cfg.text, border: `1px solid ${cfg.border}` }}
     >
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: cfg.text }} />
       {cfg.label}
     </span>
   );
@@ -534,6 +535,18 @@ export default function PoOrders({ moduleUniqueId }) {
                 <option value="DELIVERED">Delivered</option>
               </select>
 
+              {(fpoSearch || fpoStatusFilter) && (
+                <button
+                  onClick={() => {
+                    setFpoSearch("");
+                    setFpoStatusFilter("");
+                  }}
+                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-text-muted hover:text-text-primary hover:bg-surface-hover border border-border transition-all cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+
               <button
                 onClick={fetchFpoOrders}
                 className="px-4 py-2.5 rounded-xl bg-surface-hover hover:bg-border text-text-primary text-xs font-bold border border-border transition-all cursor-pointer"
@@ -552,116 +565,138 @@ export default function PoOrders({ moduleUniqueId }) {
               { key: "product", label: "Product & Kit" },
               { key: "epc_allocations", label: "EPC Allocations" },
               { key: "total_quantity", label: "Total Quantity", align: "center" },
-              { key: "grand_total", label: "Grand Total (₹)" },
-              { key: "status", label: "Status" },
+              { key: "grand_total", label: "Grand Total" },
+              { key: "status", label: "Workflow Status", align: "center" },
               { key: "actions", label: "Actions", align: "right" },
             ]}
             data={filteredFpoOrders}
             loading={fpoLoading}
             emptyMessage="No Franchisee Purchase Orders Found"
-            renderRow={(order) => {
+            renderRow={(order, index) => {
               const item = order.items?.[0] || {};
               const allocationsList = item.epc_allocations || [];
               const grandTotal = (order.grand_total_paise || 0) / 100;
+              const hasPendingReceipt = allocationsList.some((a) => a.payment_status === "RECEIPT_SUBMITTED");
 
               return (
-                <>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-mono font-black text-text-primary text-xs tracking-tight">
-                      {order.po_number}
-                    </div>
-                    <div className="text-[11px] font-medium text-text-muted mt-0.5">
-                      {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                <tr
+                  key={order._id || order.id || order.po_number || index}
+                  className="group hover:bg-primary/[0.03] transition-colors border-b border-border/60"
+                >
+                  {/* PO Number & Date */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 group-hover:scale-105 transition-transform">
+                        <FaFileInvoiceDollar size={18} />
+                      </div>
+                      <div>
+                        <div className="font-mono font-black text-text-primary text-xs tracking-tight">
+                          {order.po_number}
+                        </div>
+                        <div className="text-[11px] font-medium text-text-muted mt-0.5 flex items-center gap-1">
+                          <FaClock size={10} className="opacity-60" />
+                          {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </td>
 
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-text-primary text-xs">
+                  {/* Franchisee Partner */}
+                  <td className="px-5 py-4">
+                    <div className="font-bold text-text-primary text-xs max-w-[170px] truncate" title={order.franchisee_id?.business_name}>
                       {order.franchisee_id?.business_name || "Franchisee Account"}
                     </div>
-                    <div className="text-[11px] text-text-muted font-medium mt-0.5">
+                    <div className="text-[11px] text-text-muted font-medium mt-0.5 max-w-[170px] truncate">
                       {order.franchisee_id?.mobile || order.franchisee_id?.email || "Partner"}
                     </div>
                   </td>
 
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20">
+                  {/* Plan Badge */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-3 py-1 rounded-lg text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20">
                       {order.plan_id?.name || "Franchise Plan"}
                     </span>
                   </td>
 
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-text-primary text-xs truncate max-w-xs" title={item.item_name}>
+                  {/* Product & Kit */}
+                  <td className="px-5 py-4">
+                    <div className="font-bold text-text-primary text-xs max-w-[190px] truncate" title={item.item_name}>
                       {item.item_name || "Solar Kit"}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5">
+                      {item.variant_name || "Kit Package"}
                     </div>
                   </td>
 
-                  <td className="px-6 py-4">
+                  {/* EPC Allocations */}
+                  <td className="px-5 py-4">
                     {allocationsList.length > 0 ? (
-                      <div className="flex flex-col gap-1.5 max-w-xs">
-                        {allocationsList.map((a, i) => (
-                          <div
-                            key={i}
-                            className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-surface-hover border border-border flex items-center justify-between gap-3 shadow-2xs text-text-primary"
-                          >
-                            <span className="truncate">{a.company_name || a.buyer_name}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="px-2 py-0.5 rounded-lg bg-primary text-white text-[10px] font-black">
-                                {a.allocated_quantity} Kits
-                              </span>
-                              {a.payment_status === "RECEIPT_SUBMITTED" && (
-                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                                  Receipt ⏳
-                                </span>
-                              )}
-                              {a.payment_status === "VERIFIED" && (
-                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                  ✓
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {allocationsList.some((a) => a.payment_status === "RECEIPT_SUBMITTED") && (
-                          <div className="mt-0.5">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300">
-                              ⚡ Receipt Verification Required
+                      <div className="space-y-1.5 max-w-[240px]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-surface-hover text-text-primary border border-border">
+                            <FaUsers size={11} className="text-primary" /> {allocationsList.length} {allocationsList.length === 1 ? "Buyer" : "Buyers"}
+                          </span>
+                          {hasPendingReceipt && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-300 animate-pulse">
+                              ⚡ Receipt Verification
                             </span>
-                          </div>
-                        )}
+                          )}
+                          {allocationsList.every((a) => ["VERIFIED", "PAID"].includes(a.payment_status)) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                              ✓ Verified
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className="text-[11px] text-text-secondary truncate font-medium"
+                          title={allocationsList.map((a) => `${a.company_name || a.buyer_name} (${a.allocated_quantity} Kits)`).join(", ")}
+                        >
+                          {allocationsList.map((a) => `${a.company_name || a.buyer_name} (${a.allocated_quantity})`).join(", ")}
+                        </div>
                       </div>
                     ) : (
-                      <span className="text-[11px] font-medium text-text-muted italic">Direct Purchase</span>
+                      <span className="text-xs text-text-muted italic">Direct Purchase</span>
                     )}
                   </td>
 
-                  <td className="px-6 py-4 text-center font-extrabold text-xs text-primary whitespace-nowrap">
-                    {order.total_quantity || item.quantity || 0} Kits
+                  {/* Total Quantity */}
+                  <td className="px-5 py-4 text-center whitespace-nowrap">
+                    <span className="inline-flex items-center justify-center px-3 py-1 rounded-xl text-xs font-black bg-primary/10 text-primary border border-primary/20">
+                      {order.total_quantity || item.quantity || 0} Kits
+                    </span>
                   </td>
 
-                  <td className="px-6 py-4 font-black text-text-primary text-xs whitespace-nowrap">
-                    ₹{grandTotal.toLocaleString("en-IN")}
+                  {/* Grand Total */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <div className="font-black text-text-primary text-xs">
+                      ₹{grandTotal.toLocaleString("en-IN")}
+                    </div>
+                    <div className="text-[10px] text-text-muted mt-0.5 font-medium">
+                      Landed Cost Incl. GST
+                    </div>
                   </td>
 
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  {/* Status */}
+                  <td className="px-5 py-4 text-center whitespace-nowrap">
                     <StatusBadge status={order.status} />
                   </td>
 
-                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                  {/* Actions */}
+                  <td className="px-5 py-4 text-right whitespace-nowrap">
                     <Button
                       onClick={() => setSelectedOrder(order)}
                       size="sm"
                       leftIcon={<FaEye size={12} />}
-                      className="rounded-xl text-xs font-black uppercase tracking-wider py-2 px-3"
+                      className="rounded-xl text-xs font-black py-2 px-3.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
                     >
                       Review & Actions
                     </Button>
                   </td>
-                </>
+                </tr>
               );
             }}
           />
@@ -735,46 +770,54 @@ export default function PoOrders({ moduleUniqueId }) {
                 loading={loading}
                 emptyMessage="No warehouses identified matching filters."
                 containerClassName="border-none shadow-none rounded-none bg-transparent"
-                renderRow={({ warehouse, plans }) => {
+                renderRow={({ warehouse, plans }, index) => {
                   return (
-                    <>
-                      <td className="px-6 py-4 font-black text-text-primary tracking-tight text-sm">
-                        <div className="flex items-center gap-2">
-                          <FaWarehouse className="text-primary opacity-60 shrink-0" size={14} />
-                          <span>{warehouse.warehouse_code || "N/A"}</span>
+                    <tr
+                      key={warehouse.id || warehouse._id || index}
+                      className="group hover:bg-primary/[0.03] transition-colors border-b border-border/60"
+                    >
+                      <td className="px-6 py-4 font-black text-text-primary tracking-tight text-sm whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 group-hover:scale-105 transition-transform">
+                            <FaWarehouse size={15} />
+                          </div>
+                          <span>{warehouse.warehouse_code || warehouse.name || "N/A"}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-xs font-semibold text-text-secondary truncate max-w-xs">
                         {warehouse.address || "N/A"}
                       </td>
-                      <td className="px-6 py-4 text-xs font-bold text-text-secondary">
-                        <span className="flex items-center gap-1">
-                          <FaMapMarkerAlt className="text-primary/50 text-[10px]" /> {warehouse.state || "N/A"}
-                        </span>
-                        <span className="text-text-muted text-[10px]">Cluster: {warehouse.cluster || "N/A"}</span>
+                      <td className="px-6 py-4 text-xs font-bold text-text-secondary whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-text-primary font-bold">
+                          <FaMapMarkerAlt className="text-primary text-[11px]" />
+                          <span>{warehouse.state || "N/A"}</span>
+                        </div>
+                        <div className="text-text-muted text-[10px] font-normal mt-0.5">
+                          Cluster: {warehouse.cluster || "N/A"}
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-black ${
                             plans.length > 0
-                              ? "bg-success/10 text-success border border-success/20"
-                              : "bg-danger/10 text-danger border border-danger/20"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
                           }`}
                         >
-                          {plans.length} Configured
+                          {plans.length > 0 ? `✓ ${plans.length} Configured` : "No Plans Configured"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
                         <Button
                           onClick={() => handleConfigurePO(warehouse)}
                           size="sm"
-                          leftIcon={<FaEdit />}
-                          className="rounded-lg text-[10px] font-bold uppercase tracking-wider py-1.5"
+                          leftIcon={<FaEdit size={12} />}
+                          className="rounded-xl text-xs font-black py-2 px-3.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
                         >
                           Configure PO Settings
                         </Button>
                       </td>
-                    </>
+                    </tr>
                   );
                 }}
               />

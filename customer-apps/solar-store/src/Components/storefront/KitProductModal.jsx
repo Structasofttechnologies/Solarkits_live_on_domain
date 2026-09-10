@@ -198,7 +198,7 @@ export default function KitProductModal({
 
       {/* Modal Dialog */}
       <div className="relative bg-surface rounded-3xl border border-border shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-200">
-        
+
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-slate-50 dark:bg-slate-900/50">
           <div className="flex items-center gap-2.5">
@@ -222,10 +222,10 @@ export default function KitProductModal({
 
         {/* Modal Body Scrollable */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hover">
-          
+
           {/* Top Section: Gallery + Purchase Column */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
+
             {/* Left: Product Image & Badges */}
             <div className="space-y-4">
               <div className="relative bg-gradient-to-tr from-slate-50 to-slate-100 dark:from-slate-800/40 dark:to-slate-900/60 rounded-2xl p-6 border border-border flex items-center justify-center h-64 sm:h-80 overflow-hidden">
@@ -313,11 +313,10 @@ export default function KitProductModal({
                           key={idx}
                           type="button"
                           onClick={() => setSelectedVariantIndex(idx)}
-                          className={`p-2.5 rounded-xl border text-center transition-all ${
-                            selectedVariantIndex === idx
-                              ? "bg-primary text-white border-primary shadow-md font-bold"
-                              : "bg-surface hover:bg-slate-100 dark:hover:bg-slate-800 border-border text-text-secondary"
-                          }`}
+                          className={`p-2.5 rounded-xl border text-center transition-all ${selectedVariantIndex === idx
+                            ? "bg-primary text-white border-primary shadow-md font-bold"
+                            : "bg-surface hover:bg-slate-100 dark:hover:bg-slate-800 border-border text-text-secondary"
+                            }`}
                         >
                           <p className="text-xs font-bold">{v.productTier}</p>
                           <p className={`text-[10px] ${selectedVariantIndex === idx ? "text-white/80" : "text-primary font-bold"}`}>
@@ -360,11 +359,10 @@ export default function KitProductModal({
                         key={qtyPreset}
                         type="button"
                         onClick={() => setQuantity(qtyPreset)}
-                        className={`py-1.5 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                          quantity === qtyPreset
-                            ? "bg-primary text-white shadow-sm"
-                            : "bg-surface-hover hover:bg-border text-text-primary border border-border"
-                        }`}
+                        className={`py-1.5 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${quantity === qtyPreset
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-surface-hover hover:bg-border text-text-primary border border-border"
+                          }`}
                       >
                         {qtyPreset} Kits
                       </button>
@@ -398,11 +396,10 @@ export default function KitProductModal({
                     </button>
                   </div>
                   {pincodeResult && (
-                    <div className={`p-2.5 rounded-xl border text-xs font-medium mt-2 space-y-1 ${
-                      pincodeResult.available
+                    <div className={`p-2.5 rounded-xl border text-xs font-medium mt-2 space-y-1 ${pincodeResult.available
                         ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-300"
                         : "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
-                    }`}>
+                      }`}>
                       <p className="font-bold flex items-center gap-1">
                         {pincodeResult.available ? "✓ Stock Available" : "✗ Out of Stock"}
                         {pincodeResult.warehouse_name && ` — ${pincodeResult.warehouse_name}`}
@@ -458,11 +455,10 @@ export default function KitProductModal({
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer ${
-                      activeTab === tab.id
-                        ? "bg-primary text-white shadow-xs"
-                        : "text-text-secondary hover:text-text-primary hover:bg-slate-100 dark:hover:bg-slate-800"
-                    }`}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer ${activeTab === tab.id
+                      ? "bg-primary text-white shadow-xs"
+                      : "text-text-secondary hover:text-text-primary hover:bg-slate-100 dark:hover:bg-slate-800"
+                      }`}
                   >
                     <Icon size={14} />
                     <span>{tab.label}</span>

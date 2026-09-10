@@ -290,10 +290,13 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       dispatch(setShowAuthDialog(true));
       return;
     }
+
+    const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1;
+
     dispatch(addToCart({
       id: kit.id,
       variantIndex: selectedVariant,
-      qty: hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1
+      qty: qtyToAdd,
     }));
   }, [dispatch, kit?.id, selectedVariant, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
@@ -1066,6 +1069,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                 </>
               ) : (
                 <div className="space-y-3">
+
                   <div className="flex flex-wrap gap-2">
                     {orderQuantities.map((qty) => (
                       <button

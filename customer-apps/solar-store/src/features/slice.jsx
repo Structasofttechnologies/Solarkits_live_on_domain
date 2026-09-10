@@ -281,6 +281,8 @@ const slice = createSlice({
           trial_kit_quantity: isTrialKit ? (payload?.trial_kit_quantity || requestedQty) : null,
           delivery_cost: deliveryCost,
           delivery_pincode: deliveryPincode,
+          warehouse_name: payload?.warehouse_name || null,
+          fulfillment_source: payload?.fulfillment_source || null,
           delivery_district: deliveryDistrict,
           delivery_state: deliveryState,
           delivery_estimated_days: deliveryEstimatedDays,

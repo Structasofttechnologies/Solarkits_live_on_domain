@@ -9,8 +9,22 @@ const options = {
     { text: "₹0-25,000/kW", value: "0-25000" },
     { text: "₹25,000-50,000/kW", value: "25000-60000" },
     { text: "₹50,000-75,000/kW", value: "50000-75000" },
-    { text: "₹75,000-50,000/kW", value: "75000-100000" },
+    { text: "₹75,000-100,000/kW", value: "75000-100000" },
     { text: "Above ₹100,000/kW", value: "100000+" },
+  ],
+  popularKits: [
+    { text: "All Kits", value: "all" },
+    { text: "Popular Kits", value: "popular" },
+    { text: "Most Popular", value: "most_popular" },
+    { text: "Trending Kits", value: "trending" },
+    { text: "Top Rated", value: "top_rated" },
+  ],
+  frequencyBuyer: [
+    { text: "All Buyers", value: "all" },
+    { text: "Frequent Buyer", value: "frequent" },
+    { text: "Regular Buyer", value: "regular" },
+    { text: "High Volume Buyer", value: "high_volume" },
+    { text: "Bulk / EPC Buyer", value: "bulk" },
   ],
   wattPerPanel: [
     { text: "All Wattages", value: "all" },

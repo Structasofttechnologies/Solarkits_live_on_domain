@@ -63,6 +63,8 @@ export default function PreconfiguredComboKit() {
     comboKitType: "all",
     projectRange: "all",
     pricePerKw: "all",
+    popularKits: "all",
+    frequencyBuyer: "all",
     panelBrand: "all",
     panelTechnology: "all",
     panelWattage: "all",
@@ -423,16 +425,21 @@ export default function PreconfiguredComboKit() {
         return systemTypeOptions;
       case "projectRange":
         return projectRangeOptions;
+      case "popularKits":
+        return options.popularKits || [];
+      case "frequencyBuyer":
+        return options.frequencyBuyer || [];
       default:
         return options[key] || [];
     }
   };
 
   const mainFilterKeys = ["industryType", "category", "subCategory", "systemType", "projectRange"];
-  const subFilterKeys = ["comboKitType", "pricePerKw"];
+  const subFilterKeys = ["comboKitType", "pricePerKw", "popularKits", "frequencyBuyer"];
 
   const clearAllFilters = () => {
     setFilters({
+      industryType: "all",
       category: "all",
       subCategory: "all",
       systemType: "all",
@@ -440,6 +447,8 @@ export default function PreconfiguredComboKit() {
       comboKitType: "all",
       projectRange: "all",
       pricePerKw: "all",
+      popularKits: "all",
+      frequencyBuyer: "all",
       panelBrand: "all",
       panelTechnology: "all",
       panelWattage: "all",
@@ -608,6 +617,54 @@ export default function PreconfiguredComboKit() {
               return pricePerKw >= min && pricePerKw <= max;
             });
             return hasVariantInRange;
+          }
+
+          case "popularKits": {
+            if (value === "all") return true;
+            const hasExplicitFlag = Boolean(
+              k.isPopular ||
+              k.is_popular ||
+              k.popular ||
+              (k.badge && /popular|best|trending/i.test(k.badge)) ||
+              (k.tags && k.tags.some(t => /popular|trending|bestseller/i.test(t)))
+            );
+            if (hasExplicitFlag) return true;
+
+            // Frontend fallback when backend is not connected yet
+            if (value === "popular" || value === "most_popular") {
+              return k.capacityKW === 3 || k.capacityKW === 5 || Boolean(k.isPopular);
+            }
+            if (value === "trending") {
+              return k.capacityKW === 5 || k.capacityKW === 10;
+            }
+            if (value === "top_rated") {
+              return (k.rating && k.rating >= 4.5) || k.capacityKW === 3;
+            }
+            return true;
+          }
+
+          case "frequencyBuyer": {
+            if (value === "all") return true;
+            const hasExplicitFlag = Boolean(
+              k.frequencyBuyer ||
+              k.frequentBuyer ||
+              k.isFrequentBuyer ||
+              (k.buyerType && k.buyerType.toLowerCase() === value.toLowerCase()) ||
+              (k.targetBuyer && k.targetBuyer.toLowerCase().includes(value.toLowerCase()))
+            );
+            if (hasExplicitFlag) return true;
+
+            // Frontend fallback when backend is not connected yet
+            if (value === "frequent") {
+              return (k.capacityKW || 0) <= 5;
+            }
+            if (value === "regular") {
+              return (k.capacityKW || 0) <= 3;
+            }
+            if (value === "bulk" || value === "high_volume") {
+              return (k.capacityKW || 0) >= 5;
+            }
+            return true;
           }
 
           case "projectRange": {
@@ -966,8 +1023,18 @@ export default function PreconfiguredComboKit() {
                   {subFilterKeys.map((key) => (
                     <Dropdown
                       key={key}
-                      label={key === "comboKitType" ? "Combo Kit Type" : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())}
-                      options={key === "comboKitType" ? getDropdownOptions(key) : options[key]}
+                      label={
+                        key === "comboKitType"
+                          ? "Combo Kit Type"
+                          : key === "popularKits"
+                          ? "Popular Kits"
+                          : key === "frequencyBuyer"
+                          ? "Frequency Buyer"
+                          : key === "pricePerKw"
+                          ? "Price Per Kw"
+                          : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())
+                      }
+                      options={key === "comboKitType" ? getDropdownOptions(key) : (options[key] || getDropdownOptions(key))}
                       value={filters[key]}
                       onChange={(val) => setFilters((prev) => ({ ...prev, [key]: val }))}
                       className="w-full"
@@ -1353,12 +1420,22 @@ export default function PreconfiguredComboKit() {
                   Clear Performance
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {subFilterKeys.map((key) => (
                   <Dropdown
                     key={key}
-                    label={key === "comboKitType" ? "Combo Kit Type" : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())}
-                    options={key === "comboKitType" ? getDropdownOptions(key) : options[key]}
+                    label={
+                      key === "comboKitType"
+                        ? "Combo Kit Type"
+                        : key === "popularKits"
+                        ? "Popular Kits"
+                        : key === "frequencyBuyer"
+                        ? "Frequency Buyer"
+                        : key === "pricePerKw"
+                        ? "Price Per Kw"
+                        : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())
+                    }
+                    options={key === "comboKitType" ? getDropdownOptions(key) : (options[key] || getDropdownOptions(key))}
                     value={filters[key]}
                     onChange={(val) => setFilters((prev) => ({ ...prev, [key]: val }))}
                     className="w-full"

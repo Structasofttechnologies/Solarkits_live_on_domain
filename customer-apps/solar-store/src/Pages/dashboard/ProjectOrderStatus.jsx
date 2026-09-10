@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axiosInstance from "@/utils/axiosInstance";
-import { 
-  FaShoppingCart, FaEye, FaRegClock, FaCheckCircle, 
+import {
+  FaShoppingCart, FaEye, FaRegClock, FaCheckCircle,
   FaTimesCircle, FaMapMarkerAlt, FaEdit, FaTimes, FaTruck,
   FaWarehouse, FaTruckLoading, FaFileInvoice, FaRedo, FaUpload,
   FaBuilding, FaExclamationTriangle, FaCopy, FaCheck, FaExternalLinkAlt,
@@ -269,22 +269,20 @@ export default function ProjectOrderStatus() {
       <div className="flex items-center gap-2 p-1.5 bg-surface border border-border rounded-2xl w-fit shadow-xs">
         <button
           onClick={() => setMainTab("direct")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-            mainTab === "direct"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${mainTab === "direct"
               ? "bg-primary text-white shadow-sm"
               : "text-text-secondary hover:text-text-primary"
-          }`}
+            }`}
         >
           <FaShoppingCart size={13} />
           <span>Direct Kit Orders ({orders.length})</span>
         </button>
         <button
           onClick={() => setMainTab("po_allocations")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-            mainTab === "po_allocations"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${mainTab === "po_allocations"
               ? "bg-primary text-white shadow-sm"
               : "text-text-secondary hover:text-text-primary"
-          }`}
+            }`}
         >
           <FaBuilding size={13} />
           <span>Franchisee PO Allocations ({poAllocations.length})</span>
@@ -293,660 +291,655 @@ export default function ProjectOrderStatus() {
               (i.epc_allocations || []).some((a) => a.payment_status === "RECEIPT_SUBMITTED")
             )
           ) && (
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-          )}
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+            )}
         </button>
       </div>
 
       {mainTab === "direct" ? (
         <>
 
-      {/* Search & Stats Bar (Status Filter Pills Removed as requested) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-3 rounded-2xl border border-border shadow-xs">
-        <div className="relative flex-1">
-          <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted text-xs" />
-          <input
-            type="text"
-            placeholder="Search by Order #, UTR number, Kit package, or Waybill/LR..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 bg-surface-hover/50 hover:bg-surface-hover border border-border rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-0.5"
-            >
-              <FaTimes size={11} />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 text-xs font-bold text-text-secondary px-2">
-          <span>
-            Showing <strong className="text-text-primary dark:text-white">{filteredOrders.length}</strong> of {orders.length} order{orders.length === 1 ? "" : "s"}
-          </span>
-        </div>
-      </div>
+          {/* Search & Stats Bar (Status Filter Pills Removed as requested) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-3 rounded-2xl border border-border shadow-xs">
+            <div className="relative flex-1">
+              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted text-xs" />
+              <input
+                type="text"
+                placeholder="Search by Order #, UTR number, Kit package, or Waybill/LR..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-surface-hover/50 hover:bg-surface-hover border border-border rounded-xl text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary/50 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-0.5"
+                >
+                  <FaTimes size={11} />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-xs font-bold text-text-secondary px-2">
+              <span>
+                Showing <strong className="text-text-primary dark:text-white">{filteredOrders.length}</strong> of {orders.length} order{orders.length === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
 
-      {/* Loading & Empty States */}
-      {loading ? (
-        <div className="py-20 text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-xs font-bold text-text-secondary">Loading your order history & live tracking...</p>
-        </div>
-      ) : filteredOrders.length === 0 ? (
-        <div className="py-20 text-center bg-surface rounded-3xl border border-border shadow-sm p-8 space-y-3">
-          <FaShoppingCart className="mx-auto text-text-muted text-4xl" />
-          <h3 className="text-base font-bold text-text-primary dark:text-white">
-            {searchQuery ? "No Matching Orders Found" : "No Orders Placed Yet"}
-          </h3>
-          <p className="text-xs text-text-secondary max-w-sm mx-auto">
-            {searchQuery
-              ? `No purchase orders match your search query "${searchQuery}".`
-              : "When you place an order for Solar Combo Kits, real-time live journey tracking will appear here."}
-          </p>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="px-4 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-opacity"
-            >
-              Clear Search
-            </button>
-          )}
-        </div>
-      ) : (
-        /* Orders List */
-        <div className="space-y-6">
-          {filteredOrders.map((order) => {
-            const isEpcOrder = order.is_epc_order || order.order_type === "offline_epc_order";
-            const orderId = order.order_number || order.id || order._id;
-            const items = order.items || [];
+          {/* Loading & Empty States */}
+          {loading ? (
+            <div className="py-20 text-center space-y-3">
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-bold text-text-secondary">Loading your order history & live tracking...</p>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="py-20 text-center bg-surface rounded-3xl border border-border shadow-sm p-8 space-y-3">
+              <FaShoppingCart className="mx-auto text-text-muted text-4xl" />
+              <h3 className="text-base font-bold text-text-primary dark:text-white">
+                {searchQuery ? "No Matching Orders Found" : "No Orders Placed Yet"}
+              </h3>
+              <p className="text-xs text-text-secondary max-w-sm mx-auto">
+                {searchQuery
+                  ? `No purchase orders match your search query "${searchQuery}".`
+                  : "When you place an order for Solar Combo Kits, real-time live journey tracking will appear here."}
+              </p>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="px-4 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-opacity"
+                >
+                  Clear Search
+                </button>
+              )}
+            </div>
+          ) : (
+            /* Orders List */
+            <div className="space-y-6">
+              {filteredOrders.map((order) => {
+                const isEpcOrder = order.is_epc_order || order.order_type === "offline_epc_order";
+                const orderId = order.order_number || order.id || order._id;
+                const items = order.items || [];
 
-            const isPendingVerification = order.payment_status === "pending_verification" || order.status === "pending_verification";
-            const isApproved = order.payment_status === "captured" || order.status === "confirmed";
-            const isDispatched = order.order_status === "dispatched" || order.status === "dispatched" || Boolean(order.dispatch_tracking?.tracking_number);
-            const isDelivered = order.order_status === "delivered" || order.status === "completed" || order.status === "delivered";
-            const isRejected = order.payment_status === "rejected" || order.status === "rejected";
+                const isPendingVerification = order.payment_status === "pending_verification" || order.status === "pending_verification";
+                const isApproved = order.payment_status === "captured" || order.status === "confirmed";
+                const isDispatched = order.order_status === "dispatched" || order.status === "dispatched" || Boolean(order.dispatch_tracking?.tracking_number);
+                const isDelivered = order.order_status === "delivered" || order.status === "completed" || order.status === "delivered";
+                const isRejected = order.payment_status === "rejected" || order.status === "rejected";
 
-            // Determine timeline step progression (1: Order Placed, 2: Verification, 3: Approved & Packaged, 4: Dispatched & In Transit, 5: Delivered)
-            let step = 1;
-            if (isDelivered) step = 5;
-            else if (isDispatched) step = 4;
-            else if (isApproved) step = 3;
-            else if (isPendingVerification) step = 2;
+                // Determine timeline step progression (1: Order Placed, 2: Verification, 3: Approved & Packaged, 4: Dispatched & In Transit, 5: Delivered)
+                let step = 1;
+                if (isDelivered) step = 5;
+                else if (isDispatched) step = 4;
+                else if (isApproved) step = 3;
+                else if (isPendingVerification) step = 2;
 
-            const orderNumStr = order.order_number || `#${String(order._id).slice(-8).toUpperCase()}`;
-            const utrStr = order.offline_payment?.utr_number || order.payment_reference || "N/A";
-            const courierName = order.dispatch_tracking?.courier_name || "Express Logistics";
-            const lrNumber = order.dispatch_tracking?.tracking_number || "";
-            const trackingUrl = order.dispatch_tracking?.tracking_url || "";
-            const dispatchedDate = order.dispatch_tracking?.dispatched_at;
-            const estimatedDate = order.dispatch_tracking?.estimated_delivery;
+                const orderNumStr = order.order_number || `#${String(order._id).slice(-8).toUpperCase()}`;
+                const utrStr = order.offline_payment?.utr_number || order.payment_reference || "N/A";
+                const courierName = order.dispatch_tracking?.courier_name || "Express Logistics";
+                const lrNumber = order.dispatch_tracking?.tracking_number || "";
+                const trackingUrl = order.dispatch_tracking?.tracking_url || "";
+                const dispatchedDate = order.dispatch_tracking?.dispatched_at;
+                const estimatedDate = order.dispatch_tracking?.estimated_delivery;
 
-            return (
-              <div
-                key={orderId}
-                className="bg-surface rounded-3xl border border-border shadow-sm overflow-hidden transition-all hover:border-primary/40"
-              >
-                {/* ── Order Top Header ────────────────────────────────────── */}
-                <div className="p-5 sm:p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-hover/30">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-black text-base text-text-primary dark:text-white">
-                        {orderNumStr}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(orderNumStr, `order-${orderId}`)}
-                        className="p-1 text-text-secondary hover:text-primary transition-colors cursor-pointer"
-                        title="Copy Order Number"
-                      >
-                        {copiedKey === `order-${orderId}` ? (
-                          <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
-                            <FaCheck size={9} /> Copied
+                return (
+                  <div
+                    key={orderId}
+                    className="bg-surface rounded-3xl border border-border shadow-sm overflow-hidden transition-all hover:border-primary/40"
+                  >
+                    {/* ── Order Top Header ────────────────────────────────────── */}
+                    <div className="p-5 sm:p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-hover/30">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-black text-base text-text-primary dark:text-white">
+                            {orderNumStr}
                           </span>
-                        ) : (
-                          <FaCopy size={12} />
-                        )}
-                      </button>
-
-                      {isEpcOrder && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                          Direct EPC Order
-                        </span>
-                      )}
-
-                      {order.reseller?.business_name ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                          <FaBuilding size={10} /> Franchise: {order.reseller.business_name}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                          <FaWarehouse size={10} /> Central Company Fulfillment
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-text-secondary">
-                      Ordered on {new Date(order.created_at).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {/* Live Order Status Badge */}
-                    {isRejected ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/20">
-                        <FaTimesCircle /> Payment Rejected
-                      </span>
-                    ) : isPendingVerification ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                        <FaRegClock /> Accounts Verification Pending
-                      </span>
-                    ) : isApproved && !isDispatched && !isDelivered ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                        <FaCheckCircle /> Payment Approved • Packing
-                      </span>
-                    ) : isDispatched && !isDelivered ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                        <span className="w-2 h-2 rounded-full bg-purple-600 animate-ping" />
-                        <FaTruck /> Dispatched & In Transit
-                      </span>
-                    ) : isDelivered ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                        <FaCheckCircle /> Delivered & Completed
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-black bg-surface text-text-secondary border border-border">
-                        {order.status}
-                      </span>
-                    )}
-
-                    <div className="text-right">
-                      <span className="text-base font-black text-text-primary dark:text-white block">
-                        ₹{(order.total_amount || order.selling_price_snapshot || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-[10px] text-text-muted font-semibold">Incl. of GST</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Industry Standard Order Journey Stepper ─────────────── */}
-                {!isRejected && (
-                  <div className="p-6 border-b border-border bg-surface">
-                    <div className="relative max-w-4xl mx-auto">
-                      {/* Connecting Progress Track */}
-                      <div className="absolute top-4 left-6 right-6 h-1 bg-border rounded-full -z-0 hidden sm:block" />
-                      <div
-                        className="absolute top-4 left-6 h-1 bg-gradient-to-r from-primary via-indigo-600 to-emerald-500 rounded-full transition-all duration-500 -z-0 hidden sm:block"
-                        style={{ width: `${Math.min(100, Math.max(0, ((step - 1) / 4) * 100))}%` }}
-                      />
-
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 sm:gap-2 relative z-10">
-                        {/* Step 1: Order Placed */}
-                        <div className="flex flex-col items-center text-center space-y-1.5">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                            step >= 1 ? "bg-primary text-white shadow-md shadow-primary/25" : "bg-surface-hover border border-border text-text-muted"
-                          }`}>
-                            ✓
-                          </div>
-                          <p className="text-xs font-extrabold text-text-primary dark:text-white">Order Placed</p>
-                          <p className="text-[10px] text-text-secondary font-mono">
-                            UTR: {utrStr.slice(0, 10)}{utrStr.length > 10 ? "..." : ""}
-                          </p>
-                          <p className="text-[10px] text-text-muted hidden sm:block">
-                            {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                          </p>
-                        </div>
-
-                        {/* Step 2: Accounts Verification */}
-                        <div className="flex flex-col items-center text-center space-y-1.5">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                            step >= 2 && !isApproved
-                              ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 ring-4 ring-amber-500/20"
-                              : step >= 3
-                              ? "bg-primary text-white shadow-md shadow-primary/25"
-                              : "bg-surface-hover border border-border text-text-muted"
-                          }`}>
-                            {step >= 3 ? "✓" : step === 2 ? "⏳" : "2"}
-                          </div>
-                          <p className="text-xs font-extrabold text-text-primary dark:text-white">Accounts Review</p>
-                          <p className="text-[10px] text-text-secondary">
-                            {step >= 3 ? "Verified & Settled" : "Verifying Bank UTR"}
-                          </p>
-                          {order.invoice?.invoice_number && (
-                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                              Tax Invoice Ready
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Step 3: Payment Approved & Packed */}
-                        <div className="flex flex-col items-center text-center space-y-1.5">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                            step >= 3 ? "bg-primary text-white shadow-md shadow-primary/25" : "bg-surface-hover border border-border text-text-muted"
-                          }`}>
-                            {step >= 3 ? "✓" : "3"}
-                          </div>
-                          <p className="text-xs font-extrabold text-text-primary dark:text-white">Payment Approved</p>
-                          <p className="text-[10px] text-text-secondary">
-                            {step >= 4 ? "Stock Allocated" : step === 3 ? "Packing Solar Kit" : "Awaiting Approval"}
-                          </p>
-                          <p className="text-[10px] text-text-muted hidden sm:block">
-                            {order.fulfillment_source === "franchise_warehouse" ? "Franchise Stock" : "Central Hub"}
-                          </p>
-                        </div>
-
-                        {/* Step 4: Dispatched & In Transit */}
-                        <div className="flex flex-col items-center text-center space-y-1.5">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                            step === 4
-                              ? "bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-4 ring-purple-600/20"
-                              : step >= 5
-                              ? "bg-primary text-white shadow-md shadow-primary/25"
-                              : "bg-surface-hover border border-border text-text-muted"
-                          }`}>
-                            {step >= 5 ? "✓" : step === 4 ? <FaTruck size={12} /> : "4"}
-                          </div>
-                          <p className="text-xs font-extrabold text-text-primary dark:text-white">Dispatched</p>
-                          <p className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">
-                            {isDispatched ? courierName : "Awaiting Dispatch"}
-                          </p>
-                          {dispatchedDate && (
-                            <p className="text-[10px] text-text-muted hidden sm:block">
-                              {new Date(dispatchedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Step 5: Delivered */}
-                        <div className="flex flex-col items-center text-center space-y-1.5">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                            step >= 5
-                              ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30 ring-4 ring-emerald-500/20"
-                              : "bg-surface-hover border border-border text-text-muted"
-                          }`}>
-                            {step >= 5 ? "✓" : "5"}
-                          </div>
-                          <p className="text-xs font-extrabold text-text-primary dark:text-white">Delivered</p>
-                          <p className="text-[10px] text-text-secondary">
-                            {isDelivered
-                              ? "Completed & Installed"
-                              : estimatedDate
-                              ? `Est: ${new Date(estimatedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
-                              : "Site Handover"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── High-visibility Rejection Notice if Accounts Rejected Payment ── */}
-                {isRejected && (
-                  <div className="p-6 bg-red-500/10 border-b border-red-500/20 text-red-800 dark:text-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <FaExclamationTriangle className="text-red-500 text-2xl shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="font-extrabold text-sm text-red-600 dark:text-red-400">
-                          Payment Verification Rejected by Accounts
-                        </h4>
-                        <p className="text-xs mt-0.5 text-text-secondary">
-                          <strong>Reason:</strong> {order.offline_payment?.rejection_reason || "Payment amount or UTR could not be verified."}
-                        </p>
-                        <p className="text-[11px] text-text-muted mt-1">
-                          Please verify your bank transaction and re-upload the receipt with the correct UTR number.
-                        </p>
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={() => handleOpenResubmit(order)}
-                      variant="primary"
-                      className="py-2.5 px-4 text-xs font-black shrink-0 shadow bg-red-600 hover:bg-red-700 border-none cursor-pointer"
-                    >
-                      <FaRedo className="mr-1.5" /> Re-submit Receipt & UTR
-                    </Button>
-                  </div>
-                )}
-
-                {/* ── DEDICATED LOGISTICS & DISPATCH TRACKING CARD (Industry Standard) ── */}
-                {(isDispatched || lrNumber) && (
-                  <div className="p-5 sm:p-6 bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border-b border-purple-500/25 text-xs space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className="p-2.5 rounded-2xl bg-purple-600 text-white shadow-md shadow-purple-600/30 shrink-0">
-                          <FaTruck size={16} />
-                        </span>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-black text-sm text-purple-950 dark:text-purple-100">
-                              Logistics & Waybill Tracking
-                            </h4>
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-ping" />
-                              {isDelivered ? "Delivered" : "In Transit with Courier"}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-text-secondary mt-0.5">
-                            Official transport consignment recorded by Operations & Warehouse team
-                          </p>
-                        </div>
-                      </div>
-
-                      {trackingUrl && (
-                        <a
-                          href={trackingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/25 transition-all self-start sm:self-auto cursor-pointer shrink-0"
-                        >
-                          <span>Track Live on Courier Portal</span>
-                          <FaExternalLinkAlt size={11} />
-                        </a>
-                      )}
-                    </div>
-
-                    {/* 4-Column Shipment Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                      {/* Courier Partner */}
-                      <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
-                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
-                          Logistics Partner
-                        </span>
-                        <p className="font-black text-sm text-text-primary dark:text-white flex items-center gap-1.5">
-                          <FaRoute className="text-purple-600" />
-                          {courierName}
-                        </p>
-                        <span className="text-[10px] text-text-secondary block">Express Road Transport</span>
-                      </div>
-
-                      {/* LR / Tracking Number with One-Click Copy */}
-                      <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
-                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
-                          LR / Consignment No.
-                        </span>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono font-black text-sm text-purple-700 dark:text-purple-300">
-                            {lrNumber || "Pending Entry"}
-                          </span>
-                          {lrNumber && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(lrNumber, `lr-${orderId}`)}
-                              className="p-1 rounded-lg text-text-secondary hover:text-purple-600 hover:bg-purple-500/10 transition-colors cursor-pointer"
-                              title="Copy LR / Tracking Number"
-                            >
-                              {copiedKey === `lr-${orderId}` ? (
-                                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
-                                  <FaCheck size={9} /> Copied
-                                </span>
-                              ) : (
-                                <FaCopy size={13} />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-text-secondary block">Docket Reference ID</span>
-                      </div>
-
-                      {/* Dispatched Date */}
-                      <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
-                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
-                          Dispatched On
-                        </span>
-                        <p className="font-extrabold text-xs text-text-primary dark:text-white">
-                          {dispatchedDate
-                            ? new Date(dispatchedDate).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            : "Handed over to carrier"}
-                        </p>
-                        <span className="text-[10px] text-text-secondary block">Warehouse Exit Timestamp</span>
-                      </div>
-
-                      {/* Estimated Delivery */}
-                      <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
-                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
-                          Estimated Delivery
-                        </span>
-                        <p className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">
-                          {estimatedDate
-                            ? new Date(estimatedDate).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })
-                            : "Within 3 - 5 business days"}
-                        </p>
-                        <span className="text-[10px] text-text-secondary block">Destination Site ETA</span>
-                      </div>
-                    </div>
-
-                    {order.dispatch_tracking?.dispatch_notes && (
-                      <div className="p-3 rounded-xl bg-surface/70 border border-purple-500/20 text-xs text-text-secondary">
-                        <strong className="text-text-primary font-bold">Consignment Notes / Remarks:</strong>{" "}
-                        {order.dispatch_tracking.dispatch_notes}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── Order Details & Site Address Body ───────────────────── */}
-                <div className="p-6 space-y-4 text-xs">
-                  {/* Equipment & Payment Details Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-text-secondary block">Ordered Equipment / Kit:</span>
-                        {(items.length > 1) && (
-                          <span className="text-[11px] font-semibold text-text-muted">
-                            {items.length} Items
-                          </span>
-                        )}
-                      </div>
-
-                      {(() => {
-                        const displayItems = items && items.length > 0
-                          ? items
-                          : [
-                              {
-                                item_name: order.combo_kit_id?.name || order.combo_kit_id?.kitName || "Solar Kit Package",
-                                image: order.combo_kit_id?.image || order.combo_kit_id?.kit_image || null,
-                                capacity: order.combo_kit_id?.capacity || null,
-                                description: order.combo_kit_id?.description || null,
-                                quantity: order.total_kits || 1,
-                                scope_type: "kit",
-                              },
-                            ];
-
-                        return (
-                          <div className="bg-surface-hover/70 rounded-2xl border border-border overflow-hidden divide-y divide-border/60">
-                            {displayItems.map((item, idx) => {
-                              const itemImg = item.image || item.kit_image || (idx === 0 && (order.combo_kit_id?.image || order.combo_kit_id?.kit_image));
-                              const itemName = item.item_name || (idx === 0 && (order.combo_kit_id?.name || order.combo_kit_id?.kitName)) || "Solar Kit Package";
-                              const itemCapacity = item.capacity || (idx === 0 && order.combo_kit_id?.capacity);
-                              const itemDesc = item.description || (idx === 0 && order.combo_kit_id?.description);
-                              const itemQty = item.quantity || (idx === 0 ? order.total_kits : 1) || 1;
-                              const scope = item.scope_type || (item.kit_id ? "kit" : "product");
-
-                              return (
-                                <div key={idx} className="p-3.5 sm:p-4 flex gap-3.5 items-start">
-                                  {/* Product / Kit Image */}
-                                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden border border-border bg-surface shadow-xs flex items-center justify-center">
-                                    {itemImg ? (
-                                      <img
-                                        src={itemImg}
-                                        alt={itemName}
-                                        className="w-full h-full object-cover rounded-xl transition-transform hover:scale-105 duration-300"
-                                        onError={(e) => {
-                                          e.currentTarget.style.display = "none";
-                                          if (e.currentTarget.nextSibling) {
-                                            e.currentTarget.nextSibling.style.display = "flex";
-                                          }
-                                        }}
-                                      />
-                                    ) : null}
-                                    <div
-                                      className="w-full h-full flex items-center justify-center bg-primary/5 text-primary"
-                                      style={{ display: itemImg ? "none" : "flex" }}
-                                    >
-                                      <FaBoxOpen size={24} />
-                                    </div>
-                                  </div>
-
-                                  {/* Details Column */}
-                                  <div className="flex-1 min-w-0 space-y-1.5">
-                                    <h4
-                                      className="font-black text-sm text-text-primary dark:text-white leading-snug line-clamp-2"
-                                      title={itemName}
-                                    >
-                                      {itemName}
-                                    </h4>
-
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      {itemCapacity && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25">
-                                          ⚡ {itemCapacity}
-                                        </span>
-                                      )}
-                                      <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-wide border border-primary/20">
-                                        Scope: {scope}
-                                      </span>
-                                      <span className="text-xs text-text-secondary">
-                                        Qty: <strong className="text-text-primary font-bold">{itemQty} {scope === "kit" ? "Kit(s)" : "Unit(s)"}</strong>
-                                      </span>
-                                    </div>
-
-                                    {itemDesc && (
-                                      <p className="text-[11px] text-text-secondary/80 line-clamp-2 leading-relaxed">
-                                        {itemDesc}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div className="space-y-2">
-                      <span className="font-bold text-text-secondary block">Bank Transfer / Payment Proof:</span>
-                      <div className="bg-surface-hover/70 p-4 rounded-2xl border border-border space-y-1.5 font-mono">
-                        <div className="flex justify-between items-center">
-                          <span className="text-text-secondary font-sans">UTR Ref:</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-text-primary dark:text-white">
-                              {utrStr}
-                            </span>
-                            {utrStr !== "N/A" && (
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(utrStr, `utr-${orderId}`)}
-                                className="p-0.5 text-text-secondary hover:text-primary transition-colors cursor-pointer"
-                                title="Copy UTR"
-                              >
-                                {copiedKey === `utr-${orderId}` ? (
-                                  <span className="text-[10px] font-bold text-emerald-600 font-sans">Copied!</span>
-                                ) : (
-                                  <FaCopy size={11} />
-                                )}
-                              </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(orderNumStr, `order-${orderId}`)}
+                            className="p-1 text-text-secondary hover:text-primary transition-colors cursor-pointer"
+                            title="Copy Order Number"
+                          >
+                            {copiedKey === `order-${orderId}` ? (
+                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+                                <FaCheck size={9} /> Copied
+                              </span>
+                            ) : (
+                              <FaCopy size={12} />
                             )}
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-text-secondary font-sans">Amount Paid:</span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">
-                            ₹{(order.offline_payment?.amount_paid || order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        {order.offline_payment?.sender_bank_name && (
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="text-text-secondary font-sans">Bank:</span>
-                            <span className="text-text-primary font-sans">{order.offline_payment.sender_bank_name}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                          </button>
 
-                  {/* Delivery / Installation Site Address */}
-                  {order.delivery_address && (order.delivery_address.line || order.delivery_address.district_name || order.delivery_address.state_name) && (
-                    <div className="bg-surface-hover/60 p-4 rounded-2xl border border-border flex items-start gap-3">
-                      <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5">
-                        <FaMapMarkerAlt size={14} />
-                      </div>
-                      <div className="space-y-0.5 flex-1 min-w-0">
-                        <div className="flex items-center justify-between flex-wrap gap-1">
-                          <span className="font-extrabold text-xs text-text-primary dark:text-white">
-                            Installation Site & Delivery Destination
-                          </span>
-                          {order.delivery_address.pincode && (
-                            <span className="text-[11px] font-mono font-bold text-text-muted bg-surface px-2 py-0.5 rounded border border-border">
-                              PIN: {order.delivery_address.pincode}
+                          {isEpcOrder && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                              Direct EPC Order
+                            </span>
+                          )}
+
+                          {order.reseller?.business_name ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                              <FaBuilding size={10} /> Franchise: {order.reseller.business_name}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                              <FaWarehouse size={10} /> Central Company Fulfillment
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-text-secondary">
-                          {order.delivery_address.line}
-                          {order.delivery_address.district_name ? `, ${order.delivery_address.district_name}` : ""}
-                          {order.delivery_address.state_name ? `, ${order.delivery_address.state_name}` : ""}
+                          Ordered on {new Date(order.created_at).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </p>
-                        {(order.delivery_address.contact_name || order.delivery_address.contact_phone) && (
-                          <p className="text-[11px] text-text-muted pt-0.5">
-                            Site Contact: <strong>{order.delivery_address.contact_name || "Site Supervisor"}</strong>
-                            {order.delivery_address.contact_phone ? ` • Phone: ${order.delivery_address.contact_phone}` : ""}
-                          </p>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Live Order Status Badge */}
+                        {isRejected ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/20">
+                            <FaTimesCircle /> Payment Rejected
+                          </span>
+                        ) : isPendingVerification ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                            <FaRegClock /> Accounts Verification Pending
+                          </span>
+                        ) : isApproved && !isDispatched && !isDelivered ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            <FaCheckCircle /> Payment Approved • Packing
+                          </span>
+                        ) : isDispatched && !isDelivered ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                            <span className="w-2 h-2 rounded-full bg-purple-600 animate-ping" />
+                            <FaTruck /> Dispatched & In Transit
+                          </span>
+                        ) : isDelivered ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <FaCheckCircle /> Delivered & Completed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-black bg-surface text-text-secondary border border-border">
+                            {order.status}
+                          </span>
                         )}
+
+                        <div className="text-right">
+                          <span className="text-base font-black text-text-primary dark:text-white block">
+                            ₹{(order.total_amount || order.selling_price_snapshot || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-text-muted font-semibold">Incl. of GST</span>
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Actions & Documents Row */}
-                  <div className="flex items-center justify-between pt-3 border-t border-border flex-wrap gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {order.invoice?.invoice_number && (
-                        <button
-                          onClick={() => handleViewInvoice(order)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-xs font-bold text-primary transition-colors cursor-pointer"
+                    {/* ── Industry Standard Order Journey Stepper ─────────────── */}
+                    {!isRejected && (
+                      <div className="p-6 border-b border-border bg-surface">
+                        <div className="relative max-w-4xl mx-auto">
+                          {/* Connecting Progress Track */}
+                          <div className="absolute top-4 left-6 right-6 h-1 bg-border rounded-full -z-0 hidden sm:block" />
+                          <div
+                            className="absolute top-4 left-6 h-1 bg-gradient-to-r from-primary via-indigo-600 to-emerald-500 rounded-full transition-all duration-500 -z-0 hidden sm:block"
+                            style={{ width: `${Math.min(100, Math.max(0, ((step - 1) / 4) * 100))}%` }}
+                          />
+
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 sm:gap-2 relative z-10">
+                            {/* Step 1: Order Placed */}
+                            <div className="flex flex-col items-center text-center space-y-1.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 1 ? "bg-primary text-white shadow-md shadow-primary/25" : "bg-surface-hover border border-border text-text-muted"
+                                }`}>
+                                ✓
+                              </div>
+                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Order Placed</p>
+                              <p className="text-[10px] text-text-secondary font-mono">
+                                UTR: {utrStr.slice(0, 10)}{utrStr.length > 10 ? "..." : ""}
+                              </p>
+                              <p className="text-[10px] text-text-muted hidden sm:block">
+                                {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              </p>
+                            </div>
+
+                            {/* Step 2: Accounts Verification */}
+                            <div className="flex flex-col items-center text-center space-y-1.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 2 && !isApproved
+                                  ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 ring-4 ring-amber-500/20"
+                                  : step >= 3
+                                    ? "bg-primary text-white shadow-md shadow-primary/25"
+                                    : "bg-surface-hover border border-border text-text-muted"
+                                }`}>
+                                {step >= 3 ? "✓" : step === 2 ? "⏳" : "2"}
+                              </div>
+                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Accounts Review</p>
+                              <p className="text-[10px] text-text-secondary">
+                                {step >= 3 ? "Verified & Settled" : "Verifying Bank UTR"}
+                              </p>
+                              {order.invoice?.invoice_number && (
+                                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                  Tax Invoice Ready
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Step 3: Payment Approved & Packed */}
+                            <div className="flex flex-col items-center text-center space-y-1.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 3 ? "bg-primary text-white shadow-md shadow-primary/25" : "bg-surface-hover border border-border text-text-muted"
+                                }`}>
+                                {step >= 3 ? "✓" : "3"}
+                              </div>
+                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Payment Approved</p>
+                              <p className="text-[10px] text-text-secondary">
+                                {step >= 4 ? "Stock Allocated" : step === 3 ? "Packing Solar Kit" : "Awaiting Approval"}
+                              </p>
+                              <p className="text-[10px] text-text-muted hidden sm:block">
+                                {order.fulfillment_source === "franchise_warehouse" ? "Franchise Stock" : "Central Hub"}
+                              </p>
+                            </div>
+
+                            {/* Step 4: Dispatched & In Transit */}
+                            <div className="flex flex-col items-center text-center space-y-1.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step === 4
+                                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-4 ring-purple-600/20"
+                                  : step >= 5
+                                    ? "bg-primary text-white shadow-md shadow-primary/25"
+                                    : "bg-surface-hover border border-border text-text-muted"
+                                }`}>
+                                {step >= 5 ? "✓" : step === 4 ? <FaTruck size={12} /> : "4"}
+                              </div>
+                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Dispatched</p>
+                              <p className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">
+                                {isDispatched ? courierName : "Awaiting Dispatch"}
+                              </p>
+                              {dispatchedDate && (
+                                <p className="text-[10px] text-text-muted hidden sm:block">
+                                  {new Date(dispatchedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Step 5: Delivered */}
+                            <div className="flex flex-col items-center text-center space-y-1.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 5
+                                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30 ring-4 ring-emerald-500/20"
+                                  : "bg-surface-hover border border-border text-text-muted"
+                                }`}>
+                                {step >= 5 ? "✓" : "5"}
+                              </div>
+                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Delivered</p>
+                              <p className="text-[10px] text-text-secondary">
+                                {isDelivered
+                                  ? "Completed & Installed"
+                                  : estimatedDate
+                                    ? `Est: ${new Date(estimatedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                                    : "Site Handover"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── High-visibility Rejection Notice if Accounts Rejected Payment ── */}
+                    {isRejected && (
+                      <div className="p-6 bg-red-500/10 border-b border-red-500/20 text-red-800 dark:text-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <FaExclamationTriangle className="text-red-500 text-2xl shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="font-extrabold text-sm text-red-600 dark:text-red-400">
+                              Payment Verification Rejected by Accounts
+                            </h4>
+                            <p className="text-xs mt-0.5 text-text-secondary">
+                              <strong>Reason:</strong> {order.offline_payment?.rejection_reason || "Payment amount or UTR could not be verified."}
+                            </p>
+                            <p className="text-[11px] text-text-muted mt-1">
+                              Please verify your bank transaction and re-upload the receipt with the correct UTR number.
+                            </p>
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={() => handleOpenResubmit(order)}
+                          variant="primary"
+                          className="py-2.5 px-4 text-xs font-black shrink-0 shadow bg-red-600 hover:bg-red-700 border-none cursor-pointer"
                         >
-                          <FaFileInvoice /> View Tax Invoice ({order.invoice.invoice_number})
-                        </button>
+                          <FaRedo className="mr-1.5" /> Re-submit Receipt & UTR
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* ── DEDICATED LOGISTICS & DISPATCH TRACKING CARD (Industry Standard) ── */}
+                    {(isDispatched || lrNumber) && (
+                      <div className="p-5 sm:p-6 bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border-b border-purple-500/25 text-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="p-2.5 rounded-2xl bg-purple-600 text-white shadow-md shadow-purple-600/30 shrink-0">
+                              <FaTruck size={16} />
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-black text-sm text-purple-950 dark:text-purple-100">
+                                  Logistics & Waybill Tracking
+                                </h4>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-ping" />
+                                  {isDelivered ? "Delivered" : "In Transit with Courier"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-text-secondary mt-0.5">
+                                Official transport consignment recorded by Operations & Warehouse team
+                              </p>
+                            </div>
+                          </div>
+
+                          {trackingUrl && (
+                            <a
+                              href={trackingUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/25 transition-all self-start sm:self-auto cursor-pointer shrink-0"
+                            >
+                              <span>Track Live on Courier Portal</span>
+                              <FaExternalLinkAlt size={11} />
+                            </a>
+                          )}
+                        </div>
+
+                        {/* 4-Column Shipment Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          {/* Courier Partner */}
+                          <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
+                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                              Logistics Partner
+                            </span>
+                            <p className="font-black text-sm text-text-primary dark:text-white flex items-center gap-1.5">
+                              <FaRoute className="text-purple-600" />
+                              {courierName}
+                            </p>
+                            <span className="text-[10px] text-text-secondary block">Express Road Transport</span>
+                          </div>
+
+                          {/* LR / Tracking Number with One-Click Copy */}
+                          <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
+                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                              LR / Consignment No.
+                            </span>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono font-black text-sm text-purple-700 dark:text-purple-300">
+                                {lrNumber || "Pending Entry"}
+                              </span>
+                              {lrNumber && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(lrNumber, `lr-${orderId}`)}
+                                  className="p-1 rounded-lg text-text-secondary hover:text-purple-600 hover:bg-purple-500/10 transition-colors cursor-pointer"
+                                  title="Copy LR / Tracking Number"
+                                >
+                                  {copiedKey === `lr-${orderId}` ? (
+                                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+                                      <FaCheck size={9} /> Copied
+                                    </span>
+                                  ) : (
+                                    <FaCopy size={13} />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-text-secondary block">Docket Reference ID</span>
+                          </div>
+
+                          {/* Dispatched Date */}
+                          <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
+                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                              Dispatched On
+                            </span>
+                            <p className="font-extrabold text-xs text-text-primary dark:text-white">
+                              {dispatchedDate
+                                ? new Date(dispatchedDate).toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                                : "Handed over to carrier"}
+                            </p>
+                            <span className="text-[10px] text-text-secondary block">Warehouse Exit Timestamp</span>
+                          </div>
+
+                          {/* Estimated Delivery */}
+                          <div className="bg-surface/90 backdrop-blur-sm p-3.5 rounded-2xl border border-purple-500/20 space-y-1">
+                            <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                              Estimated Delivery
+                            </span>
+                            <p className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">
+                              {estimatedDate
+                                ? new Date(estimatedDate).toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                                : "Within 3 - 5 business days"}
+                            </p>
+                            <span className="text-[10px] text-text-secondary block">Destination Site ETA</span>
+                          </div>
+                        </div>
+
+                        {order.dispatch_tracking?.dispatch_notes && (
+                          <div className="p-3 rounded-xl bg-surface/70 border border-purple-500/20 text-xs text-text-secondary">
+                            <strong className="text-text-primary font-bold">Consignment Notes / Remarks:</strong>{" "}
+                            {order.dispatch_tracking.dispatch_notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Order Details & Site Address Body ───────────────────── */}
+                    <div className="p-6 space-y-4 text-xs">
+                      {/* Equipment & Payment Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-text-secondary block">Ordered Equipment / Kit:</span>
+                            {(items.length > 1) && (
+                              <span className="text-[11px] font-semibold text-text-muted">
+                                {items.length} Items
+                              </span>
+                            )}
+                          </div>
+
+                          {(() => {
+                            const displayItems = items && items.length > 0
+                              ? items
+                              : [
+                                {
+                                  item_name: order.combo_kit_id?.name || order.combo_kit_id?.kitName || "Solar Kit Package",
+                                  image: order.combo_kit_id?.image || order.combo_kit_id?.kit_image || null,
+                                  capacity: order.combo_kit_id?.capacity || null,
+                                  description: order.combo_kit_id?.description || null,
+                                  quantity: order.total_kits || 1,
+                                  scope_type: "kit",
+                                },
+                              ];
+
+                            return (
+                              <div className="bg-surface-hover/70 rounded-2xl border border-border overflow-hidden divide-y divide-border/60">
+                                {displayItems.map((item, idx) => {
+                                  const itemImg = item.image || item.kit_image || (idx === 0 && (order.combo_kit_id?.image || order.combo_kit_id?.kit_image));
+                                  const itemName = item.item_name || (idx === 0 && (order.combo_kit_id?.name || order.combo_kit_id?.kitName)) || "Solar Kit Package";
+                                  const itemCapacity = item.capacity || (idx === 0 && order.combo_kit_id?.capacity);
+                                  const itemDesc = item.description || (idx === 0 && order.combo_kit_id?.description);
+                                  const itemQty = item.quantity || (idx === 0 ? order.total_kits : 1) || 1;
+                                  const scope = item.scope_type || (item.kit_id ? "kit" : "product");
+
+                                  return (
+                                    <div key={idx} className="p-3.5 sm:p-4 flex gap-3.5 items-start">
+                                      {/* Product / Kit Image */}
+                                      <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden border border-border bg-surface shadow-xs flex items-center justify-center">
+                                        {itemImg ? (
+                                          <img
+                                            src={itemImg}
+                                            alt={itemName}
+                                            className="w-full h-full object-cover rounded-xl transition-transform hover:scale-105 duration-300"
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = "none";
+                                              if (e.currentTarget.nextSibling) {
+                                                e.currentTarget.nextSibling.style.display = "flex";
+                                              }
+                                            }}
+                                          />
+                                        ) : null}
+                                        <div
+                                          className="w-full h-full flex items-center justify-center bg-primary/5 text-primary"
+                                          style={{ display: itemImg ? "none" : "flex" }}
+                                        >
+                                          <FaBoxOpen size={24} />
+                                        </div>
+                                      </div>
+
+                                      {/* Details Column */}
+                                      <div className="flex-1 min-w-0 space-y-1.5">
+                                        <h4
+                                          className="font-black text-sm text-text-primary dark:text-white leading-snug line-clamp-2"
+                                          title={itemName}
+                                        >
+                                          {itemName}
+                                        </h4>
+
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {itemCapacity && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                              ⚡ {itemCapacity}
+                                            </span>
+                                          )}
+                                          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-wide border border-primary/20">
+                                            Scope: {scope}
+                                          </span>
+                                          <span className="text-xs text-text-secondary">
+                                            Qty: <strong className="text-text-primary font-bold">{itemQty} {scope === "kit" ? "Kit(s)" : "Unit(s)"}</strong>
+                                          </span>
+                                        </div>
+
+                                        {itemDesc && (
+                                          <p className="text-[11px] text-text-secondary/80 line-clamp-2 leading-relaxed">
+                                            {itemDesc}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="font-bold text-text-secondary block">Bank Transfer / Payment Proof:</span>
+                          <div className="bg-surface-hover/70 p-4 rounded-2xl border border-border space-y-1.5 font-mono">
+                            <div className="flex justify-between items-center">
+                              <span className="text-text-secondary font-sans">UTR Ref:</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-text-primary dark:text-white">
+                                  {utrStr}
+                                </span>
+                                {utrStr !== "N/A" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopy(utrStr, `utr-${orderId}`)}
+                                    className="p-0.5 text-text-secondary hover:text-primary transition-colors cursor-pointer"
+                                    title="Copy UTR"
+                                  >
+                                    {copiedKey === `utr-${orderId}` ? (
+                                      <span className="text-[10px] font-bold text-emerald-600 font-sans">Copied!</span>
+                                    ) : (
+                                      <FaCopy size={11} />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-text-secondary font-sans">Amount Paid:</span>
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">
+                                ₹{(order.offline_payment?.amount_paid || order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            {order.offline_payment?.sender_bank_name && (
+                              <div className="flex justify-between items-center text-[11px]">
+                                <span className="text-text-secondary font-sans">Bank:</span>
+                                <span className="text-text-primary font-sans">{order.offline_payment.sender_bank_name}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Delivery / Installation Site Address */}
+                      {order.delivery_address && (order.delivery_address.line || order.delivery_address.district_name || order.delivery_address.state_name) && (
+                        <div className="bg-surface-hover/60 p-4 rounded-2xl border border-border flex items-start gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5">
+                            <FaMapMarkerAlt size={14} />
+                          </div>
+                          <div className="space-y-0.5 flex-1 min-w-0">
+                            <div className="flex items-center justify-between flex-wrap gap-1">
+                              <span className="font-extrabold text-xs text-text-primary dark:text-white">
+                                Delivery Destination
+                              </span>
+                              {order.delivery_address.pincode && (
+                                <span className="text-[11px] font-mono font-bold text-text-muted bg-surface px-2 py-0.5 rounded border border-border">
+                                  PIN: {order.delivery_address.pincode}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-text-secondary">
+                              {order.delivery_address.line}
+                              {order.delivery_address.district_name ? `, ${order.delivery_address.district_name}` : ""}
+                              {order.delivery_address.state_name ? `, ${order.delivery_address.state_name}` : ""}
+                            </p>
+                            {(order.delivery_address.contact_name || order.delivery_address.contact_phone) && (
+                              <p className="text-[11px] text-text-muted pt-0.5">
+                                Site Contact: <strong>{order.delivery_address.contact_name || "Site Supervisor"}</strong>
+                                {order.delivery_address.contact_phone ? ` • Phone: ${order.delivery_address.contact_phone}` : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       )}
-                      {order.offline_payment?.receipt_url && (
-                        <a
-                          href={order.offline_payment.receipt_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-secondary transition-colors cursor-pointer"
-                        >
-                          <FaEye /> View Uploaded Receipt
-                        </a>
-                      )}
+
+                      {/* Actions & Documents Row */}
+                      <div className="flex items-center justify-between pt-3 border-t border-border flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {order.invoice?.invoice_number && (
+                            <button
+                              onClick={() => handleViewInvoice(order)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-xl text-xs font-bold text-primary transition-colors cursor-pointer"
+                            >
+                              <FaFileInvoice /> View Tax Invoice ({order.invoice.invoice_number})
+                            </button>
+                          )}
+                          {order.offline_payment?.receipt_url && (
+                            <a
+                              href={order.offline_payment.receipt_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs font-semibold text-text-secondary transition-colors cursor-pointer"
+                            >
+                              <FaEye /> View Uploaded Receipt
+                            </a>
+                          )}
+                        </div>
+
+                        <span className="text-text-muted text-[11px]">
+                          Fulfillment: {order.fulfillment_source === "franchise_warehouse" ? "Franchise Partner Stock" : "Central Company Hub"}
+                        </span>
+                      </div>
                     </div>
-
-                    <span className="text-text-muted text-[11px]">
-                      Fulfillment: {order.fulfillment_source === "franchise_warehouse" ? "Franchise Partner Stock" : "Central Company Hub"}
-                    </span>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                );
+              })}
+            </div>
+          )}
         </>
       ) : (
         /* ── Franchisee PO Allocations Tracking Tab ────────────────────────── */
@@ -1037,11 +1030,10 @@ export default function ProjectOrderStatus() {
                           return (
                             <div key={idx} className="flex flex-col items-center gap-1.5 relative z-10 bg-surface px-1">
                               <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                                  isDone
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${isDone
                                     ? "bg-primary text-white shadow-md shadow-primary/20 scale-105"
                                     : "bg-surface-hover text-text-muted border border-border"
-                                }`}
+                                  }`}
                               >
                                 {isDone ? "✓" : num}
                               </div>

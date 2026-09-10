@@ -111,7 +111,7 @@ export default function CheckOut() {
       const pinFromCart = cart.find((k) => k.delivery_pincode)?.delivery_pincode;
       setDeliveryAddress((prev) => ({
         line: prev.line || user?.address || "",
-        pincode: prev.pincode || pinFromCart || user?.pincode || "380001",
+        pincode: pinFromCart || prev.pincode || user?.pincode || "380001",
         district_name: prev.district_name || selectedDistrict?.name || user?.district_name || "",
         state_name: prev.state_name || selectedState?.name || user?.state_name || "",
         contact_name: prev.contact_name || user?.name || "EPC Contractor",
@@ -136,6 +136,7 @@ export default function CheckOut() {
 
   // Stock reservation on mount
   const handleReserveStock = async () => {
+    if (orderConfirmed || !cart || cart.length === 0) return;
     setReserving(true);
     setErrorMsg("");
     try {
@@ -144,6 +145,12 @@ export default function CheckOut() {
         qty: item.qty,
         is_custom: item.is_custom || false,
       }));
+
+      if (payloadItems.length === 0) {
+        setReserving(false);
+        setLoading(false);
+        return;
+      }
 
       const res = await axios.post(
         `${API_URL}/india/v1/shop/reserve-stock`,
@@ -164,7 +171,9 @@ export default function CheckOut() {
       }
     } catch (error) {
       console.error("Reservation failed:", error);
-      setErrorMsg(error.response?.data?.message || "Stock reservation failed. Some items may no longer be available in warehouse.");
+      if (!orderConfirmed) {
+        setErrorMsg(error.response?.data?.message || "Stock reservation failed. Some items may no longer be available in warehouse.");
+      }
     } finally {
       setReserving(false);
       setLoading(false);
@@ -210,14 +219,15 @@ export default function CheckOut() {
   }, []);
 
   useEffect(() => {
-    if (cart.length === 0 && !orderConfirmed) {
+    if (orderConfirmed) return;
+    if (cart.length === 0) {
       navigate("/cart");
       return;
     }
     handleReserveStock();
     fetchActiveOffers();
     checkGstStatus();
-  }, [cart, navigate, selectedDistrict, selectedState]);
+  }, [cart, navigate, selectedDistrict, selectedState, orderConfirmed]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -496,6 +506,8 @@ export default function CheckOut() {
         is_trial_kit: Boolean(item.is_trial_kit),
         delivery_cost: Number(item.delivery_cost || 0),
         delivery_pincode: item.delivery_pincode || null,
+        warehouse_name: item.warehouse_name || null,
+        fulfillment_source: item.fulfillment_source || null,
       }));
 
       if (!deliveryAddress.line || !deliveryAddress.line.trim()) {
@@ -543,6 +555,8 @@ export default function CheckOut() {
         const orderData = res.data.data?.order || res.data.data;
         setConfirmedOrderData(orderData);
         setOrderConfirmed(true);
+        setErrorMsg("");
+        setLoading(false);
         dispatch(clearCart());
         dispatch(
           setAlert({
@@ -566,26 +580,7 @@ export default function CheckOut() {
     }
   };
 
-  if (loading) {
-    return <Loader text="Securing warehouse inventory and loading checkout..." />;
-  }
-
-  if (errorMsg) {
-    return (
-      <div className="max-w-md mx-auto my-12 bg-surface p-8 rounded-2xl border border-border shadow-lg text-center space-y-4">
-        <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-500 rounded-full flex items-center justify-center mx-auto">
-          <FiAlertTriangle size={32} />
-        </div>
-        <h3 className="text-xl font-bold text-text-primary dark:text-white">Inventory Lock Blocked</h3>
-        <p className="text-sm text-text-secondary">{errorMsg}</p>
-        <Button onClick={() => navigate("/cart")} variant="secondary" className="w-full">
-          Return to Cart
-        </Button>
-      </div>
-    );
-  }
-
-  // ── Success State: Order Submitted for Accounts Verification ──────────────
+  // ── Success State: Order Submitted for Accounts Verification (Render First) ──────────────
   if (orderConfirmed && confirmedOrderData) {
     return (
       <div className="max-w-xl mx-auto my-10 bg-surface p-8 rounded-3xl border border-border shadow-2xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
@@ -594,12 +589,12 @@ export default function CheckOut() {
         </div>
 
         <div>
-          <span className="inline-block px-3 py-1 bg-amber-500/15 text-amber-600 dark:text-amber-400 rounded-full text-xs font-black uppercase tracking-wider mb-2">
-            Offline Bank Transfer Submitted
+          <span className="inline-block px-3 py-1 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded-full text-xs font-black uppercase tracking-wider mb-2">
+            ✓ Order Placed Successfully
           </span>
-          <h2 className="text-2xl font-black text-text-primary dark:text-white">Payment Under Verification</h2>
-          <p className="text-xs text-text-secondary mt-1.5 max-w-md mx-auto">
-            Your payment receipt & UTR reference have been forwarded to our <strong>Accounts Department</strong> for authorization.
+          <h2 className="text-3xl font-black text-text-primary dark:text-white">Order Confirmed!</h2>
+          <p className="text-sm text-text-secondary mt-1.5 max-w-md mx-auto">
+            Aapka Order Confirm Ho Gaya Hai! Your payment receipt & UTR reference have been forwarded to our <strong>Accounts Department</strong> for authorization.
           </p>
         </div>
 
@@ -628,8 +623,18 @@ export default function CheckOut() {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-text-secondary">Warehouse Stock:</span>
-            <span className="text-xs font-semibold text-text-secondary">Reserved (48-hr Hold)</span>
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Reserved (48-hr Hold)</span>
           </div>
+          {deliveryAddress.pincode && (
+            <div className="flex justify-between items-center pt-2 border-t border-border text-xs">
+              <span className="text-text-secondary flex items-center gap-1">
+                <FiMapPin size={12} className="text-primary" /> Delivery PIN:
+              </span>
+              <span className="font-mono font-bold text-text-primary dark:text-white">
+                {deliveryAddress.pincode}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -641,13 +646,32 @@ export default function CheckOut() {
             Track Live Order Status
           </Button>
           <Button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate("/preconfigured-combo-kit")}
             variant="secondary"
             className="py-3.5 text-sm font-semibold"
           >
-            Return to Dashboard
+            Return to Product Catalogue
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <Loader text="Securing warehouse inventory and loading checkout..." />;
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="max-w-md mx-auto my-12 bg-surface p-8 rounded-2xl border border-border shadow-lg text-center space-y-4">
+        <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-500 rounded-full flex items-center justify-center mx-auto">
+          <FiAlertTriangle size={32} />
+        </div>
+        <h3 className="text-xl font-bold text-text-primary dark:text-white">Inventory Lock Blocked</h3>
+        <p className="text-sm text-text-secondary">{errorMsg}</p>
+        <Button onClick={() => navigate("/cart")} variant="secondary" className="w-full">
+          Return to Cart
+        </Button>
       </div>
     );
   }

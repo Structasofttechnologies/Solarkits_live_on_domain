@@ -1594,7 +1594,7 @@ const reserve_stock = async (req, res) => {
     const { items, duration_minutes } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: "No items provided for reservation." });
+      return res.status(200).json({ success: true, message: "No items provided for reservation.", timer_enabled: false });
     }
 
     const settings = await SolarShopSettings.findOne({}).lean() || { checkout_timer_duration: 10 };

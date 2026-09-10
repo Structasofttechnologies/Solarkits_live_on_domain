@@ -277,15 +277,13 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       dispatch(setShowAuthDialog(true));
       return;
     }
-    if (kit.limitedStock?.displayPopup) {
-      alert(`⚠️ Limited Stock Warning!\nOnly ${kit.limitedStock.quantityLeft} kits are available in inventory for this configuration. Hurry and complete your checkout!`);
-    }
+    const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1;
     dispatch(addToCart({
       id: kit.id,
       variantIndex: selectedVariant,
-      qty: hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1
+      qty: qtyToAdd,
     }));
-  }, [dispatch, kit.id, selectedVariant, kit.limitedStock, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
+  }, [dispatch, kit.id, selectedVariant, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseQty = useCallback((e) => {
     e.stopPropagation();

@@ -31,20 +31,20 @@ import {
 import api from "../services/api";
 
 const STATUS_CONFIG = {
-  DRAFT:               { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300", icon: FiFileText },
-  SUBMITTED:           { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400", icon: FiClock },
-  PENDING_APPROVAL:    { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400", icon: FiClock },
-  CHANGES_REQUESTED:   { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400", icon: FiAlertCircle },
-  APPROVED:            { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  REJECTED:            { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400", icon: FiX },
-  AWAITING_PAYMENT:    { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FiDollarSign },
-  PARTIALLY_PAID:      { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", icon: FiDollarSign },
-  PAID:                { label: "Paid", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  PROCESSING:          { label: "Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400", icon: FiRefreshCw },
-  DISPATCHED:          { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400", icon: FiBox },
-  DELIVERED:           { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  COMPLETED:           { label: "Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
-  CANCELLED:           { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
+  DRAFT: { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300", icon: FiFileText },
+  SUBMITTED: { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400", icon: FiClock },
+  PENDING_APPROVAL: { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400", icon: FiClock },
+  CHANGES_REQUESTED: { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400", icon: FiAlertCircle },
+  APPROVED: { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  REJECTED: { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400", icon: FiX },
+  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FiDollarSign },
+  PARTIALLY_PAID: { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", icon: FiDollarSign },
+  PAID: { label: "Paid", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  PROCESSING: { label: "Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400", icon: FiRefreshCw },
+  DISPATCHED: { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400", icon: FiBox },
+  DELIVERED: { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  COMPLETED: { label: "Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  CANCELLED: { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
 };
 
 function StatusBadge({ status }) {
@@ -342,11 +342,10 @@ export default function PoOrder() {
                 <span className="text-[11px] font-black uppercase tracking-wider text-text-muted">
                   {goalData.period || "Monthly Target Goal"}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                  (goalData.achievement_pct || 0) >= 100
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${(goalData.achievement_pct || 0) >= 100
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                     : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                }`}>
+                  }`}>
                   {goalData.achievement_pct || 0}% Achieved
                 </span>
               </div>
@@ -366,9 +365,8 @@ export default function PoOrder() {
             </div>
             <div className="h-2.5 w-full bg-bg rounded-full overflow-hidden p-0.5 border border-border">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  (goalData.achievement_pct || 0) >= 100 ? "bg-emerald-500" : "bg-blue-600"
-                }`}
+                className={`h-full rounded-full transition-all duration-500 ${(goalData.achievement_pct || 0) >= 100 ? "bg-emerald-500" : "bg-blue-600"
+                  }`}
                 style={{ width: `${Math.min(Math.max(goalData.achievement_pct || 0, 4), 100)}%` }}
               />
             </div>
@@ -496,18 +494,16 @@ export default function PoOrder() {
           >
             <button
               onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-              }`}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+                }`}
               title="Table View"
             >
               <FiList size={15} />
             </button>
             <button
               onClick={() => setViewMode("card")}
-              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-              }`}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+                }`}
               title="Card View"
             >
               <FiGrid size={15} />
@@ -856,9 +852,8 @@ export default function PoOrder() {
                         return (
                           <div
                             key={buyerId}
-                            className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                              qty > 0 ? "border-primary/50 bg-primary/5" : "border-border bg-surface"
-                            }`}
+                            className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${qty > 0 ? "border-primary/50 bg-primary/5" : "border-border bg-surface"
+                              }`}
                           >
                             <div className="min-w-0">
                               <div className="font-bold text-xs text-text-primary truncate">
@@ -932,9 +927,8 @@ export default function PoOrder() {
 
                   <div className="w-full h-2 rounded-full bg-border overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        isMoqSatisfied ? "bg-emerald-500" : "bg-amber-500"
-                      }`}
+                      className={`h-full rounded-full transition-all duration-300 ${isMoqSatisfied ? "bg-emerald-500" : "bg-amber-500"
+                        }`}
                       style={{ width: `${Math.min(100, (totalAllocatedQty / minPoQty) * 100)}%` }}
                     />
                   </div>
