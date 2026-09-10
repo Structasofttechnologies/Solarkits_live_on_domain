@@ -3,8 +3,8 @@ import {
   FaPlus, FaMinus, FaRupeeSign, FaCheck,
   FaShoppingCart, FaTag, FaStar, FaGem, FaHome, FaBolt,
   FaInfoCircle, FaTruck, FaPiggyBank, FaAward,
-  FaShieldAlt, FaClock, FaLeaf, FaChevronDown, FaChevronUp,
-  FaMapMarkerAlt, FaCogs, FaSolarPanel
+  FaShieldAlt, FaLeaf, FaChevronDown, FaChevronUp,
+  FaCogs, FaSolarPanel
 } from"react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -103,8 +103,6 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const cart = useSelector((state) => state.slice.cart);
   const liveStock = useSelector(selectLiveStock);
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
-  const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
-  const districtName = isCart ? kit.districtName : selectedDistrict?.name;
   const [selectedVariant, setSelectedVariant] = useState(isCart && kit.variantIndex !== undefined ? kit.variantIndex : 0);
   const [trialModalOpen, setTrialModalOpen] = useState(false);
   const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
@@ -373,14 +371,6 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     return kit?.kitName || kit?.title || kit?.name || "Solar Module";
   }, [kit?.kitName, kit?.title, kit?.name]);
 
-  const generationEstimateDisplay = useMemo(() => {
-    if (kit?.generationEstimateKWhPerYear && !isNaN(kit.generationEstimateKWhPerYear)) {
-      return Number(kit.generationEstimateKWhPerYear).toLocaleString("en-IN");
-    }
-    const capNum = parseFloat(displayCapacity) || 0.55;
-    return Math.round(capNum * 4 * 365).toLocaleString("en-IN");
-  }, [kit?.generationEstimateKWhPerYear, displayCapacity]);
-
   // Use backend-computed discount percent (showcase price vs our price)
   // Falls back to frontend calculation if field is missing (backwards compat)
   const discountPercentage = useMemo(() => {
@@ -458,34 +448,24 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
 
       {/* Header Row */}
       <div className="flex justify-between items-center mb-4 gap-2">
-        {kit.hasNoAssignedVariants ? (
-          kit.brand ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border border-border bg-surface-hover text-text-primary">
-              <span>{kit.brand}</span>
-            </div>
-          ) : (
-            <div />
-          )
-        ) : kit.variants && kit.variants.length > 0 ? (
+        {!kit.hasNoAssignedVariants && kit.variants && kit.variants.length > 0 ? (
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all duration-200 group-hover:scale-105 ${!currentVariant?.tierColor ?`${tierConfig.border} ${tierConfig.bg}` :""}`}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all duration-200 group-hover:scale-105 ${!currentVariant?.tierColor ? `${tierConfig.border} ${tierConfig.bg}` : ""}`}
             style={currentVariant?.tierColor ? {
-              backgroundColor:`${currentVariant.tierColor}15`,
+              backgroundColor: `${currentVariant.tierColor}15`,
               color: currentVariant.tierColor,
-              borderColor:`${currentVariant.tierColor}35`
+              borderColor: `${currentVariant.tierColor}35`
             } : undefined}
           >
-            <span className={!currentVariant?.tierColor ? tierConfig.text :""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
+            <span className={!currentVariant?.tierColor ? tierConfig.text : ""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
               {tierConfig.icon}
             </span>
-            <span className={!currentVariant?.tierColor ? tierConfig.text :""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
-              {kit.brand ? `${kit.brand} • ` : ""}{currentVariant?.productTier}
+            <span className={!currentVariant?.tierColor ? tierConfig.text : ""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
+              {currentVariant?.productTier}
             </span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border border-border bg-surface-hover text-text-primary">
-            <span>{kit.brand}</span>
-          </div>
+          <div />
         )}
         <span
           className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border shadow-xs ${!kit.usageTypeColor ? usageTypeClass :""}`}
@@ -511,9 +491,10 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       <div className={`relative z-[2] mb-4 flex justify-center items-center bg-gradient-to-tr from-gray-50/50 to-slate-100/50 rounded-xl overflow-hidden border border-border w-full ${compact ? 'h-36' : 'h-64'}`}>
         {/* Badges Overlay */}
         <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10">
-          {districtName && (
-            <span className="bg-primary/90 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-md flex items-center gap-1">
-              <FaMapMarkerAlt size={9} className="text-white shrink-0" /> {districtName}
+          {(kit.is_best_seller || kit.best_seller_badge) && (
+            <span className="bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow-md flex items-center gap-1 uppercase tracking-wider">
+              <FaStar className="text-yellow-200 text-[9px]" />
+              <span>{kit.best_seller_badge || kit.best_seller_info?.badge_text || "Our Best Seller"}</span>
             </span>
           )}
           {kit.limitedStock?.displayBadge && (
@@ -874,12 +855,8 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
           )}
         </div>
 
-        {/* Eco & Generation footer stats */}
-        <div className="mt-4 flex justify-between items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
-          <span className="flex items-center gap-1">
-            <FaClock className="text-primary/70 dark:text-info/70" />
-            {generationEstimateDisplay} kWh/Yr
-          </span>
+        {/* Eco footer stats */}
+        <div className="mt-4 flex justify-end items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
           <span className="flex items-center gap-1 text-primary dark:text-info">
             <FaLeaf />
             Clean Energy
@@ -916,9 +893,10 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
         }`}>
           {/* Badges Overlay */}
           <div className="absolute top-1 left-1 flex flex-col gap-1 z-10">
-            {districtName && (
-              <span className="bg-primary/90 text-white text-[7px] font-black px-1 py-0.5 rounded shadow flex items-center gap-1">
-                <FaMapMarkerAlt size={7} className="text-white shrink-0" /> {districtName}
+            {(kit.is_best_seller || kit.best_seller_badge) && (
+              <span className="bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow flex items-center gap-1 uppercase tracking-wider">
+                <FaStar className="text-yellow-200 text-[8px]" />
+                <span>{kit.best_seller_badge || kit.best_seller_info?.badge_text || "Our Best Seller"}</span>
               </span>
             )}
             {kit.limitedStock?.displayBadge && (
@@ -974,26 +952,20 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
             <div>
               {/* Badges Row */}
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                {kit.hasNoAssignedVariants ? (
-                  kit.brand ? (
-                    <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-border bg-surface-hover text-text-primary">
-                      <span>{kit.brand}</span>
-                    </div>
-                  ) : null
-                ) : (
+                {!kit.hasNoAssignedVariants && kit.variants && kit.variants.length > 0 && (
                   <div
-                    className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${!currentVariant?.tierColor ?`${tierConfig.border} ${tierConfig.bg}` :""}`}
+                    className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${!currentVariant?.tierColor ? `${tierConfig.border} ${tierConfig.bg}` : ""}`}
                     style={currentVariant?.tierColor ? {
-                      backgroundColor:`${currentVariant.tierColor}15`,
+                      backgroundColor: `${currentVariant.tierColor}15`,
                       color: currentVariant.tierColor,
-                      borderColor:`${currentVariant.tierColor}35`
+                      borderColor: `${currentVariant.tierColor}35`
                     } : undefined}
                   >
-                    <span className={!currentVariant?.tierColor ? tierConfig.text :""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
+                    <span className={!currentVariant?.tierColor ? tierConfig.text : ""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
                       {tierConfig.icon}
                     </span>
-                    <span className={!currentVariant?.tierColor ? tierConfig.text :""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
-                      {kit.brand ? `${kit.brand} • ` : ""}{currentVariant?.productTier}
+                    <span className={!currentVariant?.tierColor ? tierConfig.text : ""} style={currentVariant?.tierColor ? { color: currentVariant.tierColor } : undefined}>
+                      {currentVariant?.productTier}
                     </span>
                   </div>
                 )}

@@ -50,7 +50,7 @@ export default function Board() {
   // Menu items for Direct EPC Solar Store
   const menuItems = useMemo(() => {
     const defaultGroup = [
-      { name: "Product Catalogue", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
+      { name: "Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
       { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
       { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
       { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },

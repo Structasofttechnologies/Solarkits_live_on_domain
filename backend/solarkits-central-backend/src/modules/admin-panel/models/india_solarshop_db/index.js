@@ -13,6 +13,7 @@ const InventoryReservation = require('./inventory_reservations.schema');
 const ComboBundleMaster = require('./combo_bundle_masters.schema');
 const ComboKitVariant = require('./combo_kit_variants.schema');
 const PincodeDeliveryCost = require('./pincode_delivery_costs.schema');
+const BestSellerKit = require('./best_seller_kits.schema');
 const LooseOrderSettings = require('./loose_order_settings.schema');
 
 // --- Phase 1: Reseller Management Masters ---
@@ -114,6 +115,7 @@ module.exports = {
   ComboBundleMaster,
   ComboKitVariant,
   PincodeDeliveryCost,
+  BestSellerKit,
   LooseOrderSettings,
   // --- Phase 1: Reseller Management Masters ---
   ResellerType,

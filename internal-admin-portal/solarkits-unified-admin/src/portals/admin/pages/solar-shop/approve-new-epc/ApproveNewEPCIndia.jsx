@@ -1,4 +1,4 @@
-﻿// components/ApproveNewEPCIndia.jsx
+// components/ApproveNewEPCIndia.jsx
 import { useState, useEffect } from "react";
 import { useDispatch } from "react-redux";
 import axios from "axios";
@@ -17,7 +17,12 @@ import {
   FaBuilding,
   FaWhatsapp,
   FaEye,
-  FaPhoneAlt
+  FaPhoneAlt,
+  FaCopy,
+  FaSyncAlt,
+  FaUserTie,
+  FaStore,
+  FaGlobe
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -79,7 +84,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     requestId: null,
     action: null,
     companyName: "",
-    email: ""
+    email: "",
+    request: null
   });
 
   // Image modal state
@@ -100,9 +106,21 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     thisWeek: 0
   });
 
+  // Copied GST clipboard indicator
+  const [copiedGst, setCopiedGst] = useState(null);
+
+  const handleCopyGst = (gst, e) => {
+    e?.stopPropagation();
+    if (!gst) return;
+    navigator.clipboard.writeText(gst);
+    setCopiedGst(gst);
+    setTimeout(() => setCopiedGst(null), 1800);
+  };
+
   // Status options
   const statusOptions = [
-    { text: "Pending", value: "pending" },
+    { text: "All Statuses", value: "all" },
+    { text: "Pending Only", value: "pending" },
     { text: "Approved", value: "approved" },
     { text: "Rejected", value: "rejected" }
   ];
@@ -168,45 +186,6 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       }
     }
 
-    // 3. Fallback sample requests if no local requests exist yet
-    if (!localRequests || localRequests.length === 0) {
-      localRequests = [
-        {
-          id: 'req-demo-001',
-          company_name: 'Prince Solar EPC',
-          full_name: 'Prince Mehta',
-          email: 'prince@solarkits.com',
-          whatsapp: '+91 9876543210',
-          state_name: 'Gujarat',
-          district_name: 'Ahmedabad',
-          is_registered_same_as_whatsapp: 1,
-          registered_whatsapp: '+91 9876543210',
-          gst_number: '27AAAAA0000A1Z5',
-          country: 'India',
-          status: 'pending',
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: 'req-demo-002',
-          company_name: 'Sunnovative EPC Solutions',
-          full_name: 'Rahil Shah',
-          email: 'rahil.sunnovative@gmail.com',
-          whatsapp: '+91 9988776655',
-          state_name: 'Maharashtra',
-          district_name: 'Mumbai Suburban',
-          is_registered_same_as_whatsapp: 1,
-          registered_whatsapp: '+91 9988776655',
-          gst_number: '27BBBBB1111B1Z2',
-          country: 'India',
-          status: 'pending',
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-        }
-      ];
-      try {
-        localStorage.setItem('pending_epc_requests', JSON.stringify(localRequests));
-      } catch (e) {}
-    }
-
     try {
       const params = new URLSearchParams({
         page: currentPage,
@@ -232,7 +211,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     const combinedMap = new Map();
     localRequests.forEach((req) => combinedMap.set(req.id, req));
     apiRequests.forEach((req) => combinedMap.set(req.id, req));
-    let combined = Array.from(combinedMap.values());
+    const rawAll = Array.from(combinedMap.values());
+    let combined = [...rawAll];
 
     // Filter combined list
     if (debouncedSearchQuery) {
@@ -241,7 +221,19 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
         r.company_name?.toLowerCase().includes(q) ||
         r.email?.toLowerCase().includes(q) ||
         r.full_name?.toLowerCase().includes(q) ||
-        r.whatsapp?.toLowerCase().includes(q)
+        r.whatsapp?.toLowerCase().includes(q) ||
+        r.bde_name?.toLowerCase().includes(q) ||
+        r.assigned_reseller_name?.toLowerCase().includes(q) ||
+        r.gst_number?.toLowerCase().includes(q)
+      );
+    }
+
+    if (selectedState !== "all") {
+      const stateObj = states.find((s) => s.value === selectedState);
+      const stateName = stateObj?.text?.toLowerCase();
+      combined = combined.filter((r) =>
+        r.state_id?.toString() === selectedState.toString() ||
+        (stateName && r.state_name?.toLowerCase() === stateName)
       );
     }
 
@@ -253,18 +245,18 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     setTotalRecords(combined.length);
     setTotalPages(Math.max(1, Math.ceil(combined.length / itemsPerPage)));
 
-    // Calculate stats
+    // Calculate stats from total records (unfiltered)
     const todayStr = new Date().toISOString().split('T')[0];
     setStats({
-      total: combined.filter((r) => (r.status || 'pending').toLowerCase() === 'pending').length,
-      today: combined.filter((r) => r.created_at?.startsWith(todayStr)).length,
-      thisWeek: combined.length
+      total: rawAll.filter((r) => (r.status || 'pending').toLowerCase() === 'pending').length,
+      today: rawAll.filter((r) => r.created_at?.startsWith(todayStr)).length,
+      thisWeek: rawAll.length
     });
 
     setLoading(false);
   };
 
-  // Update request status (approve with image, reject without)
+  // Update request status (approve with image or direct for BDE, reject without)
   const updateRequestStatus = async (requestId, action) => {
     setProcessingId(requestId);
     const isApproval = action === "approve";
@@ -326,7 +318,7 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
 
         fetchRequests();
         setProcessingId(null);
-        setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "" });
+        setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null });
         setSelectedFile(null);
         setFileError("");
         return;
@@ -337,8 +329,9 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
 
     try {
       if (action === "approve") {
-        // Validate image is selected
-        if (!selectedFile) {
+        // Validate image is selected only if NOT BDE-onboarded
+        const isBdeRequest = confirmDialog.request?.onboarding_source === 'bde';
+        if (!selectedFile && !isBdeRequest && !confirmDialog.request?.reference_image) {
           setFileError("Reference image is required for approval");
           dispatch(setAlert({
             type: "error",
@@ -350,22 +343,33 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
 
         setUploadingImage(true);
 
-        // Use FormData for approve with image
-        const formData = new FormData();
-        formData.append("request_id", requestId);
-        formData.append("action", "approve");
-        formData.append("reference_image", selectedFile);
+        let response;
+        if (selectedFile) {
+          const formData = new FormData();
+          formData.append("request_id", requestId);
+          formData.append("action", "approve");
+          formData.append("reference_image", selectedFile);
 
-        const response = await axios.post(
-          `${API_URL}/solarshop/india/epcs/update-status?unique_id=${moduleUniqueId}&req_for=edit`,
-          formData,
-          {
-            headers: {
-              ...authHeaderObj(),
-              "Content-Type": "multipart/form-data"
+          response = await axios.post(
+            `${API_URL}/solarshop/india/epcs/update-status?unique_id=${moduleUniqueId}&req_for=edit`,
+            formData,
+            {
+              headers: {
+                ...authHeaderObj(),
+                "Content-Type": "multipart/form-data"
+              }
             }
-          }
-        );
+          );
+        } else {
+          response = await axios.post(
+            `${API_URL}/solarshop/india/epcs/update-status?unique_id=${moduleUniqueId}&req_for=edit`,
+            {
+              request_id: requestId,
+              action: "approve"
+            },
+            { headers: { ...authHeaderObj() } }
+          );
+        }
 
         setUploadingImage(false);
 
@@ -375,11 +379,8 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
             message: response.data.message || "Request approved successfully"
           }));
 
-          // Reset file selection and error
           setSelectedFile(null);
           setFileError("");
-
-          // Refetch the current page to get updated data
           fetchRequests();
         } else {
           throw new Error(response.data.message || "Failed to approve request");
@@ -401,7 +402,6 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
             message: response.data.message || `Request rejected successfully`
           }));
 
-          // Refetch the current page to get updated data
           fetchRequests();
         } else {
           throw new Error(response.data.message || "Failed to reject request");
@@ -416,15 +416,14 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       setUploadingImage(false);
     } finally {
       setProcessingId(null);
-      setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "" });
+      setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null });
       setSelectedFile(null);
       setFileError("");
     }
   };
 
   // Handle approve/reject click
-  const handleAction = (requestId, action, companyName, email, status) => {
-    // Disable action if request is not pending
+  const handleAction = (requestId, action, companyName, email, status, requestObj = null) => {
     if (status?.toLowerCase() !== "pending") {
       dispatch(setAlert({
         type: "warning",
@@ -438,10 +437,10 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       requestId,
       action,
       companyName,
-      email
+      email,
+      request: requestObj
     });
 
-    // Reset file selection for new approval
     if (action === "approve") {
       setSelectedFile(null);
       setFileError("");
@@ -519,38 +518,52 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
     setCurrentPage(1);
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    return date.toLocaleString();
+  // Format date display
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return "—";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      return dateString;
+    }
   };
 
   // Get relative time
   const getRelativeTime = (dateString) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "N/A";
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    return `${Math.floor(diffDays / 30)} months ago`;
+      if (diffDays === 0) return "Today";
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) return `${diffDays} days ago`;
+      if (diffDays < 30) return `${Math.floor(diffDays / 7)} wk${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+      return `${Math.floor(diffDays / 30)} mo ago`;
+    } catch {
+      return "N/A";
+    }
   };
 
   // Get status badge color
   const getStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case "approved":
-        return "bg-success/10 text-success border-success/20 font-black text-[10px]";
+        return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
       case "rejected":
-        return "bg-danger/10 text-danger border-danger/20 font-black text-[10px]";
+        return "bg-rose-500/10 text-rose-600 border-rose-500/20";
       case "pending":
       default:
-        return "bg-warning/10 text-warning border-warning/20 font-black text-[10px]";
+        return "bg-amber-500/10 text-amber-600 border-amber-500/20";
     }
   };
 
@@ -594,19 +607,20 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
   }, [currentPage, itemsPerPage, debouncedSearchQuery, selectedState, selectedStatus]);
 
   // Calculate displayed record range
-  const startIndex = (currentPage - 1) * itemsPerPage + 1;
+  const startIndex = totalRecords === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endIndex = Math.min(currentPage * itemsPerPage, totalRecords);
+  const displayedRequests = requests.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   // Table Headers
   const tableHeaders = [
-    { key: 'company_name', label: 'Company Entity' },
-    { key: 'contact_info', label: 'Contact Metadata' },
-    { key: 'location', label: 'Geography' },
-    { key: 'verification', label: 'Identity Verification' },
-    { key: 'status', label: 'Status', align: 'center' },
-    { key: 'reference', label: 'Asset Reference', align: 'center' },
-    { key: 'timeline', label: 'Timeline' },
-    { key: 'actions', label: 'Actions', align: 'right' }
+    { key: 'company_name', label: 'Company Entity & GST', width: '22%' },
+    { key: 'contact_info', label: 'Contact Metadata', width: '18%' },
+    { key: 'location', label: 'Geography', width: '13%' },
+    { key: 'attribution', label: 'BDE & Franchise Assignment', width: '18%' },
+    { key: 'status', label: 'Status', align: 'center', width: '10%' },
+    { key: 'reference', label: 'Asset Reference', align: 'center', width: '7%' },
+    { key: 'timeline', label: 'Timeline', width: '12%' },
+    { key: 'actions', label: 'Actions', align: 'right', width: '10%' }
   ];
 
   return (
@@ -623,198 +637,364 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       />
 
       {/* Control Bar */}
-      <div className="bg-surface rounded-2xl border-2 border-border/60 p-6 shadow-sm">
-        <div className="flex flex-col lg:flex-row gap-6">
+      <div className="bg-surface rounded-2xl border-2 border-border/60 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row gap-4">
           {/* Search Bar */}
           <div className="flex-1">
+            <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">Search Registry</label>
             <div className="relative group">
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">Search Registry</label>
-              <div className="relative">
-                <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  placeholder="Company, Email, WhatsApp..."
-                  className="w-full h-11 pl-11 pr-12 bg-surface border-2 border-border rounded-xl text-sm font-bold text-text-primary focus:ring-4 focus:ring-primary/5 focus:border-primary outline-none transition-all placeholder:text-text-muted/40"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => clearFilters()}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-danger transition-colors"
-                  >
-                    ×
-                  </button>
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors text-sm" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder="Company, Email, WhatsApp, BDE, Franchise..."
+                className="w-full h-11 pl-11 pr-12 bg-surface border-2 border-border rounded-xl text-sm font-bold text-text-primary focus:ring-4 focus:ring-primary/5 focus:border-primary outline-none transition-all placeholder:text-text-muted/50"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted hover:text-danger transition-colors font-bold text-lg"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* State Filter */}
+          <div className="lg:w-64">
+            <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">State Context</label>
+            <Dropdown
+              value={selectedState}
+              onChange={handleStateChange}
+              options={states}
+              placeholder="All States"
+              className="w-full h-11"
+            />
+          </div>
+
+          {/* Status Dropdown */}
+          <div className="lg:w-48">
+            <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">Request Status</label>
+            <Dropdown
+              value={selectedStatus}
+              onChange={handleStatusChange}
+              options={statusOptions}
+              placeholder="All Statuses"
+              className="w-full h-11"
+            />
+          </div>
+
+          {/* Actions: Refresh & Reset */}
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => fetchRequests()}
+              disabled={loading}
+              className="h-11 px-4 rounded-xl bg-surface-hover hover:bg-primary/10 text-text-secondary hover:text-primary border border-border/80 transition-all active:scale-95 flex items-center gap-2 text-xs font-bold cursor-pointer"
+              title="Refresh records"
+            >
+              <FaSyncAlt className={`${loading ? 'animate-spin' : ''} text-xs`} />
+              <span>Refresh</span>
+            </button>
+
+            {(searchQuery || selectedState !== "all" || selectedStatus !== "pending") && (
+              <Button
+                onClick={clearFilters}
+                variant="ghost"
+                size="md"
+                leftIcon={<FaTrash size={12} />}
+                className="h-11 rounded-xl bg-danger/5 text-danger border border-danger/10 hover:bg-danger hover:text-white"
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Filter Status Tabs */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
+          <span className="text-[10px] font-black uppercase tracking-widest text-text-muted mr-1">Quick Filter:</span>
+          {[
+            { id: "pending", label: "Pending", count: stats.total, color: "text-amber-600 bg-amber-500/10 border-amber-500/20" },
+            { id: "approved", label: "Approved", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" },
+            { id: "rejected", label: "Rejected", color: "text-rose-600 bg-rose-500/10 border-rose-500/20" },
+            { id: "all", label: "All Requests", color: "text-primary bg-primary/10 border-primary/20" }
+          ].map((tab) => {
+            const isActive = selectedStatus === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleStatusChange(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer flex items-center gap-2 ${
+                  isActive
+                    ? `${tab.color} ring-2 ring-primary/20 shadow-xs`
+                    : "bg-surface text-text-secondary border-border/60 hover:bg-surface-hover"
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${isActive ? 'bg-amber-600 text-white' : 'bg-surface-hover text-text-muted'}`}>
+                    {tab.count}
+                  </span>
                 )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-4 lg:w-[40%]">
-             {/* State Filter */}
-             <div className="flex-1">
-               <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">State Context</label>
-               <Dropdown
-                 value={selectedState}
-                 onChange={handleStateChange}
-                 options={states}
-                 placeholder="All States"
-                 className="w-full h-11"
-               />
-             </div>
-
-             {/* Status Filter */}
-             <div className="flex-1">
-               <label className="text-[10px] font-black text-text-muted uppercase tracking-[0.2em] ml-1 mb-2 block">Request Status</label>
-               <Dropdown
-                 value={selectedStatus}
-                 onChange={handleStatusChange}
-                 options={statusOptions}
-                 placeholder="Pending Only"
-                 className="w-full h-11"
-               />
-             </div>
-          </div>
-
-          {/* Clear Filters */}
-          {(searchQuery || selectedState !== "all" || selectedStatus !== "pending") && (
-            <div className="flex items-end">
-               <Button
-                 onClick={clearFilters}
-                 variant="ghost"
-                 size="md"
-                 leftIcon={<FaTrash size={12} />}
-                 className="h-11 rounded-xl bg-danger/5 text-danger border border-danger/10 hover:bg-danger hover:text-white"
-               >
-                 Reset
-               </Button>
-            </div>
-          )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Data Section */}
       <div className="bg-surface rounded-2xl border-2 border-border/60 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
-         <div className="px-6 py-4 bg-surface-hover/30 border-b border-border flex items-center justify-between">
-            <h2 className="text-xs font-black text-text-primary flex items-center gap-3 uppercase tracking-[0.2em]">
-               <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/10 shadow-inner">
-                  <FaBuilding size={14} />
-               </div>
-               Incoming Requests Registry
-            </h2>
-            <div className="flex items-center gap-2">
-               <span className="text-[10px] font-black text-text-muted uppercase tracking-widest bg-surface-hover px-3 py-1.5 rounded-lg border border-border/40">
-                  Showing {startIndex}-{endIndex} of {totalRecords}
-               </span>
+        <div className="px-6 py-4 bg-surface-hover/30 border-b border-border flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/10 shadow-inner">
+              <FaBuilding size={14} />
             </div>
-         </div>
+            <div>
+              <h2 className="text-xs font-black text-text-primary uppercase tracking-[0.2em]">
+                Incoming Requests Registry
+              </h2>
+              <p className="text-[10px] font-medium text-text-muted mt-0.5">
+                Real-time queue of EPC contractor verification submissions
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black text-text-muted uppercase tracking-widest bg-surface-hover px-3 py-1.5 rounded-lg border border-border/40">
+              Showing {startIndex}-{endIndex} of {totalRecords}
+            </span>
+          </div>
+        </div>
 
-         <div className="flex-1 p-6">
-            <CustomTable
-              headers={tableHeaders}
-              data={requests}
-              loading={loading}
-              emptyMessage={searchQuery || selectedState !== "all" || selectedStatus !== "all" ? "No matching records identified." : "No incoming EPC requests detected."}
-              containerClassName="border-none shadow-none rounded-none bg-transparent"
-              renderRow={(request) => (
-                <>
-                  <td className="px-6 py-4">
-                    <div className="font-black text-text-primary tracking-tight text-sm">
-                      {request.company_name}
+        <div className="flex-1">
+          <CustomTable
+            headers={tableHeaders}
+            data={displayedRequests}
+            loading={loading}
+            emptyMessage={searchQuery || selectedState !== "all" || selectedStatus !== "all" ? "No matching records identified for current filters." : "No incoming EPC requests detected."}
+            containerClassName="border-none shadow-none rounded-none bg-transparent"
+            className="min-w-[1100px]"
+            renderRow={(request, index) => (
+              <tr
+                key={request.id || index}
+                className="group hover:bg-primary/[0.02] dark:hover:bg-white/[0.02] transition-colors border-b border-border/60"
+              >
+                {/* Column 1: Company Entity & GST */}
+                <td className="px-6 py-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-linear-to-br from-primary/15 to-primary/5 text-primary border border-primary/20 flex items-center justify-center font-black text-sm shrink-0 shadow-xs mt-0.5">
+                      {request.company_name ? request.company_name.charAt(0).toUpperCase() : <FaBuilding size={12} />}
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-text-secondary">
-                        <FaEnvelope className="text-primary opacity-40" />
-                        {request.email}
+                      <div className="font-bold text-text-primary text-sm tracking-tight group-hover:text-primary transition-colors leading-snug">
+                        {request.company_name}
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-text-secondary">
-                        <FaWhatsapp className="text-success opacity-40" />
-                        {request.whatsapp}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-[10px] font-black text-text-secondary">
-                        <FaMapMarkerAlt className="text-primary opacity-40" />
-                        {request.state_name || "-"}
-                      </div>
-                      <div className="text-[10px] font-bold text-text-muted ml-5 opacity-60">
-                        {request.district_name || "Region N/A"}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-text-primary">
-                        <FaPhoneAlt className="text-primary opacity-40" size={10} />
-                        {request.is_registered_same_as_whatsapp ? request.whatsapp : (request.registered_whatsapp || "-")}
-                      </div>
-                      <div className="flex">
-                        {getSameAsWhatsAppBadge(request.is_registered_same_as_whatsapp)}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-3 py-1 rounded-full border shadow-sm ${getStatusBadge(request.status)}`}>
-                      {request.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {request.reference_image ? (
-                      <button
-                        onClick={() => handleImageClick(request.reference_image.startsWith('http') ? request.reference_image : `${API_URL}${request.reference_image}`)}
-                        className="p-1 rounded-xl bg-surface border border-border shadow-sm hover:border-primary/40 hover:shadow-lg transition-all active:scale-95 group mx-auto"
-                      >
-                        <div className="w-12 h-12 rounded-lg overflow-hidden relative">
-                          <img src={request.reference_image.startsWith('http') ? request.reference_image : `${API_URL}${request.reference_image}`} alt="Ref" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                          <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                             <FaEye className="text-white" />
-                          </div>
+                      {request.full_name && (
+                        <div className="text-[11px] font-medium text-text-muted flex items-center gap-1">
+                          <span className="opacity-70">👤</span> {request.full_name}
                         </div>
+                      )}
+                      {request.gst_number ? (
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyGst(request.gst_number, e)}
+                          className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-surface-hover hover:bg-primary/10 border border-border hover:border-primary/40 text-text-secondary hover:text-primary transition-colors cursor-pointer group/gst"
+                          title="Click to copy GST Number"
+                        >
+                          <span className="text-[9px] font-black uppercase tracking-wider text-text-muted">GST:</span>
+                          <span>{request.gst_number}</span>
+                          {copiedGst === request.gst_number ? (
+                            <span className="text-[9px] font-bold text-emerald-600 ml-1">Copied!</span>
+                          ) : (
+                            <FaCopy size={9} className="opacity-0 group-hover/gst:opacity-70 transition-opacity ml-0.5" />
+                          )}
+                        </button>
+                      ) : (
+                        <div className="text-[10px] text-text-muted/60 italic">No GST Provided</div>
+                      )}
+                    </div>
+                  </div>
+                </td>
+
+                {/* Column 2: Contact Metadata */}
+                <td className="px-6 py-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
+                      <div className="w-5 h-5 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <FaEnvelope size={10} />
+                      </div>
+                      <a
+                        href={`mailto:${request.email}`}
+                        className="hover:text-primary transition-colors truncate max-w-[190px] inline-block font-medium"
+                        title={request.email}
+                      >
+                        {request.email}
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
+                      <div className="w-5 h-5 rounded-md bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                        <FaWhatsapp size={11} />
+                      </div>
+                      <a
+                        href={`https://wa.me/${(request.whatsapp || request.phone_number || '').replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-emerald-600 transition-colors font-mono"
+                        title="Click to open WhatsApp"
+                      >
+                        {request.whatsapp || request.phone_number || "—"}
+                      </a>
+                    </div>
+                  </div>
+                </td>
+
+                {/* Column 3: Geography */}
+                <td className="px-6 py-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-text-primary">
+                      <FaMapMarkerAlt className="text-rose-500 shrink-0" size={11} />
+                      <span>{request.state_name || "—"}</span>
+                    </div>
+                    <div className="text-[11px] font-medium text-text-muted pl-4">
+                      {request.district_name || "Region N/A"}
+                    </div>
+                  </div>
+                </td>
+
+                {/* Column 4: Attribution & Routing */}
+                <td className="px-6 py-4">
+                  <div className="space-y-1.5">
+                    {request.onboarding_source === 'bde' ? (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            <FaUserTie size={10} />
+                            <span>BDE: {request.bde_name || 'Assisted'}</span>
+                          </span>
+                        </div>
+                        {request.assigned_reseller_name ? (
+                          <div
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 max-w-[210px]"
+                            title={`Assigned Franchise: ${request.assigned_reseller_name}`}
+                          >
+                            <FaBuilding size={10} className="shrink-0 text-emerald-600" />
+                            <span className="truncate">{request.assigned_reseller_name}</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/20">
+                            <FaStore size={10} className="shrink-0" />
+                            <span>Direct Store (No Franchise)</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-surface-hover text-text-secondary border border-border">
+                        <FaGlobe size={10} className="text-text-muted" />
+                        <span>Direct Web Signup</span>
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                {/* Column 5: Status */}
+                <td className="px-6 py-4 text-center">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-xs ${getStatusBadge(request.status)}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      request.status?.toLowerCase() === 'approved' ? 'bg-emerald-500' :
+                      request.status?.toLowerCase() === 'rejected' ? 'bg-rose-500' :
+                      'bg-amber-500 animate-pulse'
+                    }`} />
+                    <span className="capitalize">{request.status || 'pending'}</span>
+                  </span>
+                </td>
+
+                {/* Column 6: Asset Reference */}
+                <td className="px-6 py-4 text-center">
+                  {request.reference_image ? (
+                    <button
+                      type="button"
+                      onClick={() => handleImageClick(request.reference_image.startsWith('http') ? request.reference_image : `${API_URL}${request.reference_image}`)}
+                      className="group/img relative w-11 h-11 rounded-xl overflow-hidden border-2 border-border hover:border-primary transition-all shadow-xs hover:shadow-md mx-auto block cursor-pointer"
+                      title="Click to view reference image"
+                    >
+                      <img
+                        src={request.reference_image.startsWith('http') ? request.reference_image : `${API_URL}${request.reference_image}`}
+                        alt="Ref"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity text-white text-xs">
+                        <FaEye />
+                      </div>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-medium text-text-muted opacity-40 italic">—</span>
+                  )}
+                </td>
+
+                {/* Column 7: Timeline */}
+                <td className="px-6 py-4">
+                  <div className="space-y-1">
+                    <div className="text-xs font-bold text-text-primary">
+                      {formatDateDisplay(request.created_at)}
+                    </div>
+                    <div className="text-[10px] font-medium text-text-muted flex items-center gap-1">
+                      <FaClock size={9} className="opacity-60" />
+                      <span>{getRelativeTime(request.created_at)}</span>
+                    </div>
+                  </div>
+                </td>
+
+                {/* Column 8: Actions */}
+                <td className="px-6 py-4 text-right">
+                  {request.status?.toLowerCase() === "pending" ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleAction(request.id, "approve", request.company_name, request.email, request.status, request)}
+                        disabled={processingId === request.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs hover:shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                        title="Approve Contractor"
+                      >
+                        {processingId === request.id && confirmDialog.action === "approve" ? (
+                          <FaSpinner className="animate-spin text-xs" />
+                        ) : (
+                          <FaCheck className="text-xs" />
+                        )}
+                        <span>Approve</span>
                       </button>
-                    ) : <span className="text-text-muted opacity-20 font-black">—</span>}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-1">
-                       <div className="text-[10px] font-black text-text-primary">{formatDate(request.created_at).split(',')[0]}</div>
-                       <div className="text-[9px] font-bold text-text-muted opacity-40 flex items-center gap-1">
-                          <FaClock size={9} />
-                          {getRelativeTime(request.created_at)}
-                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                       <IconButton
-                         onClick={() => handleAction(request.id, "approve", request.company_name, request.email, request.status)}
-                         disabled={processingId === request.id || request.status?.toLowerCase() !== "pending"}
-                         variant="ghost"
-                         size="sm"
-                         className="bg-success/5 text-success hover:bg-success hover:text-white rounded-xl h-9 w-9 transition-all active:scale-90"
-                       >
-                         {processingId === request.id && confirmDialog.action === "approve" ? <FaSpinner className="animate-spin" /> : <FaCheck />}
-                       </IconButton>
 
-                       <IconButton
-                         onClick={() => handleAction(request.id, "reject", request.company_name, request.email, request.status)}
-                         disabled={processingId === request.id || request.status?.toLowerCase() !== "pending"}
-                         variant="ghost"
-                         size="sm"
-                         className="bg-danger/5 text-danger hover:bg-danger hover:text-white rounded-xl h-9 w-9 transition-all active:scale-90"
-                       >
-                         {processingId === request.id && confirmDialog.action === "reject" ? <FaSpinner className="animate-spin" /> : <FaTrash />}
-                       </IconButton>
+                      <button
+                        onClick={() => handleAction(request.id, "reject", request.company_name, request.email, request.status, request)}
+                        disabled={processingId === request.id}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-800 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                        title="Reject Contractor"
+                      >
+                        {processingId === request.id && confirmDialog.action === "reject" ? (
+                          <FaSpinner className="animate-spin text-xs" />
+                        ) : (
+                          <FaTrash className="text-xs" />
+                        )}
+                        <span>Reject</span>
+                      </button>
                     </div>
-                  </td>
-                </>
-              )}
-            />
-         </div>
+                  ) : (
+                    <div className="flex items-center justify-end">
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md border ${
+                        request.status?.toLowerCase() === 'approved'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400'
+                          : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-400'
+                      }`}>
+                        {request.status?.toLowerCase() === 'approved' ? '✓ Approved' : '✕ Rejected'}
+                      </span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            )}
+          />
+        </div>
 
-         <div className="p-6 border-t border-border bg-surface-hover/20">
+        <div className="p-6 border-t border-border bg-surface-hover/20">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -830,7 +1010,7 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
       <Dialog
         isOpen={confirmDialog.isOpen}
         onClose={() => {
-          setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "" });
+          setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null });
           setSelectedFile(null);
           setFileError("");
         }}
@@ -868,10 +1048,37 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
                </div>
             </div>
 
+            {confirmDialog.request?.onboarding_source === 'bde' && (
+              <div className="p-4 rounded-2xl border bg-blue-50/70 border-blue-200 text-left space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider">
+                    BDE Onboarded
+                  </span>
+                  <span className="text-[11px] font-bold text-blue-900">
+                    BDE: {confirmDialog.request?.bde_name || 'BDE Representative'}
+                  </span>
+                </div>
+                <div className="text-slate-800 text-xs pt-1 border-t border-blue-200/60 leading-relaxed">
+                  {confirmDialog.request?.assigned_reseller_name ? (
+                    <p>
+                      Contractor is registered in <strong>{confirmDialog.request?.district_name || 'District'}</strong> and will be auto-assigned to Franchise Partner{' '}
+                      <strong className="text-emerald-700 font-bold">{confirmDialog.request?.assigned_reseller_name}</strong>.
+                    </p>
+                  ) : (
+                    <p className="text-indigo-900">
+                      No operational franchisee exists in <strong>{confirmDialog.request?.district_name || 'District'}</strong>. Contractor will be granted <strong>Direct Solar Store login credentials</strong>.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {confirmDialog.action === "approve" && (
               <div className="space-y-4 text-left">
                 <div className="space-y-2">
-                   <label className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] ml-1">Asset Verification *</label>
+                   <label className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] ml-1">
+                     Asset Verification {confirmDialog.request?.onboarding_source === 'bde' ? '(Optional for BDE GST-Verified)' : '*'}
+                   </label>
                    <CustomFilePicker
                      name="reference_image"
                      onChange={handleFileChange}
@@ -880,10 +1087,12 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
                      className="w-full"
                    />
                 </div>
-                <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 flex gap-3">
-                   <FaInfoCircle className="text-primary mt-0.5" size={14} />
-                   <p className="text-[10px] font-bold text-primary uppercase leading-relaxed tracking-tight">Approval requires a verified reference document (JPEG/PNG). Max payload capacity: 5MB.</p>
-                </div>
+                {confirmDialog.request?.onboarding_source !== 'bde' && (
+                  <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 flex gap-3">
+                     <FaInfoCircle className="text-primary mt-0.5" size={14} />
+                     <p className="text-[10px] font-bold text-primary uppercase leading-relaxed tracking-tight">Approval requires a verified reference document (JPEG/PNG). Max payload capacity: 5MB.</p>
+                  </div>
+                )}
                 {fileError && <p className="text-xs font-black text-danger uppercase tracking-widest text-center animate-pulse">{fileError}</p>}
               </div>
             )}
@@ -892,13 +1101,13 @@ export default function ApproveNewEPCIndia({ moduleUniqueId, countryId }) {
           </div>
 
           <div className="flex gap-3 pt-6 border-t border-border">
-             <Button variant="secondary" onClick={() => setConfirmDialog({ isOpen: false })} className="flex-1 rounded-xl">Cancel</Button>
+             <Button variant="secondary" onClick={() => setConfirmDialog({ isOpen: false, requestId: null, action: null, companyName: "", email: "", request: null })} className="flex-1 rounded-xl">Cancel</Button>
              <Button
                variant={confirmDialog.action === "approve" ? "success" : "danger"}
                onClick={confirmAction}
                loading={uploadingImage || (processingId === confirmDialog.requestId)}
                className="flex-1 rounded-xl shadow-lg font-black uppercase tracking-widest text-xs"
-               disabled={confirmDialog.action === "approve" && !selectedFile}
+               disabled={confirmDialog.action === "approve" && !selectedFile && confirmDialog.request?.onboarding_source !== 'bde' && !confirmDialog.request?.reference_image}
              >
                Confirm {confirmDialog.action}
              </Button>

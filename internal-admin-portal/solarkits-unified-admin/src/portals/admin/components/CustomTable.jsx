@@ -56,10 +56,25 @@ const CustomTable = ({
                 </td>
               </tr>
             ) : data.length > 0 ? (
-              data.map((item, index) => (
-                renderRow ? (
-                  renderRow(item, index)
-                ) : (
+              data.map((item, index) => {
+                if (renderRow) {
+                  const rendered = renderRow(item, index);
+                  if (rendered && (rendered.type === 'tr' || rendered.type === motion.tr || rendered.type?.name === 'motion.tr')) {
+                    return rendered;
+                  }
+                  return (
+                    <motion.tr
+                      key={item.id || item._id || index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      className="group hover:bg-primary/2 transition-colors duration-300"
+                    >
+                      {rendered}
+                    </motion.tr>
+                  );
+                }
+                return (
                   <motion.tr
                     key={item.id || item._id || index}
                     initial={{ opacity: 0, y: 10 }}
@@ -77,8 +92,8 @@ const CustomTable = ({
                       </td>
                     ))}
                   </motion.tr>
-                )
-              ))
+                );
+              })
 
             ) : (
               <tr>

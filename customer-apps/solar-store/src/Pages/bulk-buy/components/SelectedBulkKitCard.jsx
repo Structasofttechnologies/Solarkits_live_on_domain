@@ -764,13 +764,6 @@ const SelectedBulkKitCard = memo(({ kit }) => {
               <div className="text-sm font-black text-text-primary">{kit.capacityKW} kW</div>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-3 bg-surface-hover/60 border border-border rounded-xl">
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400"><FaSolarPanel size={14} /></div>
-            <div>
-              <div className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Annual Generation</div>
-              <div className="text-sm font-black text-text-primary">{kit.generationEstimateKWhPerYear?.toLocaleString("en-IN") || "-"} kWh</div>
-            </div>
-          </div>
           {kit.warrantyYears && (
             <div className="flex items-center gap-3 p-3 bg-surface-hover/60 border border-border rounded-xl">
               <div className="p-2 rounded-lg bg-success/10 text-success font-semibold"><FaCheck size={14} /></div>

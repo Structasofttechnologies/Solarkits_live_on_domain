@@ -21,6 +21,7 @@ const STATE_CODE_MAP = {
 async function verifyGstinMock(cleanGstin) {
   const stateCode = cleanGstin.substring(0, 2);
   const stateName = STATE_CODE_MAP[stateCode] || 'Gujarat';
+  const districtName = stateCode === '24' ? 'Ahmedabad' : (stateCode === '27' ? 'Pune' : 'Ahmedabad');
   const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : 'AABCS1234F';
 
   // Treat GSTINs ending with "0" as invalid for testing invalid responses
@@ -39,6 +40,9 @@ async function verifyGstinMock(cleanGstin) {
       business_status: 'CANCELLED',
       gstin_status: 'Cancelled',
       registration_state: stateName,
+      state_name: stateName,
+      district_name: districtName,
+      district: districtName,
       state_code: stateCode,
       provider_reference_id: null,
       registration_date: null,
@@ -61,6 +65,9 @@ async function verifyGstinMock(cleanGstin) {
     business_status: 'Active',
     gstin_status: 'Active',
     registration_state: stateName,
+    state_name: stateName,
+    district_name: districtName,
+    district: districtName,
     state_code: stateCode,
     center_jurisdiction: `Center Jurisdiction ${stateName}`,
     state_jurisdiction: `State Jurisdiction ${stateName}`,
@@ -69,8 +76,8 @@ async function verifyGstinMock(cleanGstin) {
     taxpayer_type: 'Regular',
     nature_bus_activities: ['Office / Sale Office'],
     nature_of_core_business_activity_description: 'Manufacturer',
-    address: `101, Solar Hub Commercial Complex, ${stateName} Pin-380001`,
-    principal_address: `101, Solar Hub Commercial Complex, ${stateName} Pin-380001`,
+    address: `101, Solar Hub Commercial Complex, ${districtName}, ${stateName} Pin-380001`,
+    principal_address: `101, Solar Hub Commercial Complex, ${districtName}, ${stateName} Pin-380001`,
     provider_reference_id: `MOCK-REF-${Date.now()}`,
     normalized_status: 'active',
     error_message: null,

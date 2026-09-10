@@ -351,6 +351,39 @@ const get_combo_kits_by_district = async (req, res) => {
     const districtDoc = await GeoLevel2.findById(targetDistrictId).lean();
     const clusterId = districtDoc?.cluster || null;
 
+    // Best Seller lookup for this district and state
+    const BestSellerKit = require("../../../admin-panel/models/india_solarshop_db").BestSellerKit;
+    const stateId = districtDoc?.level_1 || null;
+    let bestSellerMap = new Map();
+    try {
+      const bsQuery = { deleted_at: null, is_active: true };
+      if (stateId && targetDistrictId) {
+        bsQuery.$or = [
+          { district_id: new mongoose.Types.ObjectId(targetDistrictId) },
+          { state_id: new mongoose.Types.ObjectId(stateId), district_id: null }
+        ];
+      } else if (stateId) {
+        bsQuery.state_id = new mongoose.Types.ObjectId(stateId);
+      }
+      const bsDocs = await BestSellerKit.find(bsQuery).sort({ priority: 1, created_at: -1 }).lean();
+      bsDocs.forEach(bs => {
+        if (bs.combo_kit_id) {
+          const kId = bs.combo_kit_id.toString();
+          if (!bestSellerMap.has(kId) || bs.district_id) {
+            bestSellerMap.set(kId, {
+              badge_text: bs.badge_text || 'Our Best Seller',
+              priority: bs.priority || 1,
+              state_name: bs.state_name,
+              district_name: bs.district_name,
+              is_district_level: Boolean(bs.district_id)
+            });
+          }
+        }
+      });
+    } catch (bsErr) {
+      console.warn('Error querying BestSellerKit for district:', bsErr.message);
+    }
+
     // Find sub warehouses in this district
     let warehouses = await CompanyWarehouse.find({
       level_2: new mongoose.Types.ObjectId(targetDistrictId),
@@ -1308,6 +1341,12 @@ const get_combo_kits_by_district = async (req, res) => {
         } : null
       };
 
+      const bsInfo = bestSellerMap.get(kit._id.toString()) || null;
+      mappedKit.is_best_seller = !!bsInfo;
+      mappedKit.best_seller_badge = bsInfo ? bsInfo.badge_text : null;
+      mappedKit.best_seller_priority = bsInfo ? bsInfo.priority : 999;
+      mappedKit.best_seller_info = bsInfo;
+
       processedKits.push(mappedKit);
     }
 
@@ -1319,6 +1358,89 @@ const get_combo_kits_by_district = async (req, res) => {
 
   } catch (error) {
     console.error("get_combo_kits_by_district error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────
+// GET /shop/best-sellers?district_id=...&state_id=...
+// Returns curated Best Seller combo kits for the selected district/state
+// ─────────────────────────────────────────────────────────────────
+const get_best_seller_kits = async (req, res) => {
+  try {
+    const { district_id, state_id } = req.query;
+
+    let resolvedKits = [];
+    const mockRes = {
+      status: () => mockRes,
+      json: (payload) => {
+        if (payload && payload.data) resolvedKits = payload.data;
+        return mockRes;
+      }
+    };
+
+    await get_combo_kits_by_district(req, mockRes);
+
+    let locationMeta = {
+      state_name: "Gujarat",
+      district_name: "Rajkot",
+      is_fallback: false
+    };
+
+    let targetDistrictId = district_id;
+    if (targetDistrictId && mongoose.Types.ObjectId.isValid(targetDistrictId)) {
+      const distDoc = await GeoLevel2.findById(targetDistrictId).lean().catch(() => null);
+      if (distDoc) {
+        locationMeta.district_name = distDoc.name;
+        locationMeta.district_id = distDoc._id;
+        if (distDoc.level_1) {
+          const stateDoc = await GeoLevel1.findById(distDoc.level_1).lean().catch(() => null);
+          if (stateDoc) {
+            locationMeta.state_name = stateDoc.name;
+            locationMeta.state_id = stateDoc._id;
+          }
+        }
+      }
+    } else if (state_id && mongoose.Types.ObjectId.isValid(state_id)) {
+      const stateDoc = await GeoLevel1.findById(state_id).lean().catch(() => null);
+      if (stateDoc) {
+        locationMeta.state_name = stateDoc.name;
+        locationMeta.state_id = stateDoc._id;
+        locationMeta.district_name = "All Districts";
+      }
+    }
+
+    // Filter kits marked as best seller
+    let bestSellers = resolvedKits
+      .filter(k => k.is_best_seller)
+      .sort((a, b) => (a.best_seller_priority || 999) - (b.best_seller_priority || 999));
+
+    // If none are tagged for this specific location, fallback gracefully to top kits from catalog
+    if (bestSellers.length === 0 && resolvedKits.length > 0) {
+      bestSellers = resolvedKits.slice(0, 4).map((k, idx) => ({
+        ...k,
+        is_best_seller: true,
+        best_seller_badge: idx === 0 ? "Top Rated" : "Our Best Seller",
+        best_seller_priority: idx + 1,
+        best_seller_info: {
+          badge_text: idx === 0 ? "Top Rated" : "Our Best Seller",
+          priority: idx + 1,
+          state_name: locationMeta.state_name,
+          district_name: locationMeta.district_name,
+          is_fallback: true
+        }
+      }));
+      locationMeta.is_fallback = true;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: bestSellers,
+      location: locationMeta
+    });
+
+  } catch (error) {
+    console.error("get_best_seller_kits error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -3744,6 +3866,7 @@ const verify_epc_po_payment = async (req, res) => {
 
 module.exports = {
   get_combo_kits_by_district,
+  get_best_seller_kits,
   get_inventory_status,
   get_checkout_settings,
   get_active_offers,

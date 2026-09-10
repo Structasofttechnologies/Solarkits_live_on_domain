@@ -984,18 +984,18 @@ export default function SolarBosKit() {
           </div>
         </div>
 
-        {/* Performance Filters Group */}
+        {/* Details Filters Group */}
         <div className="border border-border/80 rounded-xl p-3.5 bg-surface-hover/30 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider">
-              <FiSliders size={14} /> Performance Filters
+              <FiSliders size={14} /> Details Filters
             </div>
             <button
               type="button"
               onClick={clearPerformanceFilters}
               className="text-xs text-primary hover:underline font-semibold"
             >
-              Clear Performance
+              Clear Details
             </button>
           </div>
 

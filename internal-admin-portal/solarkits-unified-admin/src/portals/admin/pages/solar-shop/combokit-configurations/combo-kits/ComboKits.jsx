@@ -13,7 +13,7 @@ import ConfirmationPopup from "@/components/ConfirmationPopup";
 import DropdownWithSearchInput from "@/components/DropdownWithSearchInput";
 import Pagination from "@/components/Pagination";
 
-import { FaPlus, FaShoppingBag, FaEye, FaTrash, FaImage, FaEdit, FaSearch, FaTruck } from "react-icons/fa";
+import { FaPlus, FaShoppingBag, FaEye, FaTrash, FaImage, FaEdit, FaSearch, FaTruck, FaAward } from "react-icons/fa";
 import SkuDetailsModal from "../components/SkuDetailsModal";
 import ComboKitFormDrawer from "../components/ComboKitFormDrawer";
 import ComboKitDetailsModal from "../components/ComboKitDetailsModal";
@@ -1992,13 +1992,20 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         actions={
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="md"
-              onClick={() => navigate(`/admin-panel/solar-shop/${countryName || "india"}/combokit-configurations/pincode-delivery-costs`)}
               leftIcon={<FaTruck />}
-              className="border-primary/40 text-primary hover:bg-primary/5"
+              onClick={() => navigate(`/admin-panel/solar-shop/${countryName || "india"}/combokit-configurations/pincode-delivery-costs`)}
             >
               Pincode Delivery Costs
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              leftIcon={<FaAward className="text-amber-500" />}
+              onClick={() => navigate(`/admin-panel/solar-shop/${countryName || "india"}/combokit-configurations/best-seller`)}
+            >
+              Best Seller Configuration
             </Button>
             <Button variant="primary" size="md" onClick={openAddKit} leftIcon={<FaPlus />}>
               Configure Combo Kit

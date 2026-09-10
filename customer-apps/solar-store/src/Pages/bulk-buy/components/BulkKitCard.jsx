@@ -669,12 +669,8 @@ const BulkKitCard = memo(({ kit, selected, setSelected, viewMode ="grid", compac
           )}
         </div>
 
-        {/* Eco & Generation footer stats */}
-        <div className="mt-4 flex justify-between items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
-          <span className="flex items-center gap-1">
-            <FaClock className="text-primary/70 dark:text-info /70" />
-            {kit.generationEstimateKWhPerYear?.toLocaleString()} kWh/Yr
-          </span>
+        {/* Eco footer stats */}
+        <div className="mt-4 flex justify-end items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
           <span className="flex items-center gap-1 text-primary dark:text-info">
             <FaLeaf />
             Clean Energy

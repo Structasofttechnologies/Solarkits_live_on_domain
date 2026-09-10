@@ -87,6 +87,7 @@ export default function BdeEpcOnboardingWizard() {
       if (res.data?.status === 'success') {
         const d = res.data.data;
         setGstResult(d);
+        setSelectedFranchisee(d.matched_franchisee || null);
         setFormData((prev) => ({
           ...prev,
           company_name: d.legal_name || d.trade_name || prev.company_name,
@@ -106,82 +107,62 @@ export default function BdeEpcOnboardingWizard() {
     }
   };
 
-  // ── Step 2: Confirm & Create EPC Account ──
-  const handleCreateEpcAccount = async (e) => {
+  // ── Step 2: Proceed to Assignment Review ──
+  const handleProceedToAssignment = (e) => {
     e.preventDefault();
+    setStep(3);
+  };
+
+  // ── Step 3: Submit EPC Onboarding for Admin Approval ──
+  const handleSubmitEpcForApproval = async () => {
     setOnboardingLoading(true);
     try {
       const res = await api.post('/epc/onboard-with-gst', {
         ...formData,
         gstin: gstResult?.gstin || gstInput.trim().toUpperCase(),
+        reseller_id: selectedFranchisee?.id || undefined,
       });
 
       if (res.data?.status === 'success') {
         setCreatedEpcAccount(res.data.data);
-        setStep(3);
-        fetchEligibleFranchisees(formData.district_name, formData.state_name);
+        setStep(4);
+
+        // Notify Admin Panel & other listening tabs
+        try {
+          if (typeof BroadcastChannel !== 'undefined') {
+            const channel = new BroadcastChannel('epc_registration_channel');
+            channel.postMessage({ type: 'NEW_REGISTRATION', request: res.data.data });
+            channel.close();
+          }
+        } catch (bcErr) {}
+      } else {
+        alert(res.data?.message || 'Failed to submit EPC onboarding');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to onboard EPC');
+      alert(err.response?.data?.message || 'Failed to submit EPC onboarding');
     } finally {
       setOnboardingLoading(false);
     }
   };
 
-  // ── Step 3: Fetch Eligible Franchisees for District ──
-  const fetchEligibleFranchisees = async (district, state) => {
-    setLoadingFranchisees(true);
-    try {
-      const res = await api.get('/epc/eligible-franchisees', {
-        params: {
-          district_name: district,
-          state_name: state,
-          search: franchiseeSearch,
-        },
-      });
-      if (res.data?.status === 'success') {
-        setEligibleFranchisees(res.data.data || []);
-        if (res.data.data?.length > 0) {
-          setSelectedFranchisee(res.data.data[0]);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load eligible franchisees', err);
-    } finally {
-      setLoadingFranchisees(false);
-    }
-  };
-
-  useEffect(() => {
-    if (step === 3 && formData.district_name) {
-      fetchEligibleFranchisees(formData.district_name, formData.state_name);
-    }
-  }, [step, franchiseeSearch]);
-
-  // ── Step 4: Assign Franchise Partner ──
-  const handleAssignFranchisee = async () => {
-    if (!selectedFranchisee || !createdEpcAccount?.epc_account_id) {
-      alert('Please select a franchise partner to assign.');
-      return;
-    }
-
-    setAssignmentLoading(true);
-    try {
-      const res = await api.post('/epc/assign-franchisee', {
-        epc_account_id: createdEpcAccount.epc_account_id,
-        reseller_id: selectedFranchisee.id,
-        lead_id: initialLead?._id || undefined,
-      });
-
-      if (res.data?.status === 'success') {
-        setAssignmentResult(res.data.data);
-        setStep(4);
-      }
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to assign franchisee');
-    } finally {
-      setAssignmentLoading(false);
-    }
+  const handleResetWizard = () => {
+    setStep(1);
+    setGstInput('');
+    setGstResult(null);
+    setSelectedFranchisee(null);
+    setCreatedEpcAccount(null);
+    setFormData({
+      lead_id: '',
+      company_name: '',
+      contact_person: '',
+      mobile: '',
+      email: '',
+      password: '',
+      address: '',
+      state_name: 'Gujarat',
+      district_name: 'Ahmedabad',
+      pincode: '',
+    });
   };
 
   return (
@@ -262,8 +243,8 @@ export default function BdeEpcOnboardingWizard() {
               3
             </div>
             <div className="hidden sm:block">
-              <span className="text-xs font-bold text-slate-800 block">Franchisee Assignment</span>
-              <span className="text-[10px] text-slate-400">District match & alert</span>
+              <span className="text-xs font-bold text-slate-800 block">District Match</span>
+              <span className="text-[10px] text-slate-400">Auto-assign & review</span>
             </div>
           </div>
 
@@ -279,8 +260,8 @@ export default function BdeEpcOnboardingWizard() {
               <Check className="w-4 h-4" />
             </div>
             <div className="hidden sm:block">
-              <span className="text-xs font-bold text-slate-800 block">Completed</span>
-              <span className="text-[10px] text-slate-400">Ready for orders</span>
+              <span className="text-xs font-bold text-slate-800 block">Submitted</span>
+              <span className="text-[10px] text-slate-400">Pending Admin Approval</span>
             </div>
           </div>
         </div>
@@ -391,7 +372,7 @@ export default function BdeEpcOnboardingWizard() {
             </div>
           </div>
 
-          <form onSubmit={handleCreateEpcAccount} className="space-y-5 text-xs">
+          <form onSubmit={handleProceedToAssignment} className="space-y-5 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Company Trade / Legal Name *</label>
@@ -501,117 +482,173 @@ export default function BdeEpcOnboardingWizard() {
               </button>
               <button
                 type="submit"
-                disabled={onboardingLoading}
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-2"
               >
-                {onboardingLoading ? (
-                  <>
-                    <RotateCw className="w-4 h-4 animate-spin" /> Creating EPC Account...
-                  </>
-                ) : (
-                  <>
-                    Confirm & Proceed to Franchisee Assignment <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                Confirm & Review District Assignment <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* STEP 3: MATCH & ASSIGN TO FRANCHISEE */}
+      {/* STEP 3: AUTOMATIC DISTRICT FRANCHISEE MATCH OR DIRECT STORE ROUTING */}
       {step === 3 && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="space-y-1">
-              <span className="text-[11px] font-bold text-teal-600 uppercase flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> EPC Created: {createdEpcAccount?.name}
+              <span className="text-[11px] font-bold text-blue-600 uppercase flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" /> Auto-Territory Assignment
               </span>
               <h2 className="text-lg font-black text-slate-900">
-                Select Franchise Partner for District: {formData.district_name}
+                District Franchisee Assignment & Request Submission
               </h2>
+              <p className="text-xs text-slate-500">
+                EPC registered district: <strong className="text-slate-800 font-semibold">{formData.district_name}, {formData.state_name}</strong>
+              </p>
             </div>
+            <button
+              onClick={() => setStep(2)}
+              className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 self-start sm:self-auto"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Edit Details
+            </button>
           </div>
 
-          {/* Search bar */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs">
-            <Search className="w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={franchiseeSearch}
-              onChange={(e) => setFranchiseeSearch(e.target.value)}
-              placeholder="Search eligible franchise partners..."
-              className="w-full bg-transparent text-slate-800 focus:outline-none placeholder-slate-400"
-            />
-          </div>
-
-          {/* Franchisee Cards List */}
-          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-            {loadingFranchisees ? (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                <RotateCw className="w-6 h-6 animate-spin text-blue-600 mx-auto mb-2" />
-                Finding eligible district franchise partners...
-              </div>
-            ) : eligibleFranchisees.length === 0 ? (
-              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500">
-                No eligible franchise partners found in this district. Contact admin to assign a district franchisee.
-              </div>
-            ) : (
-              eligibleFranchisees.map((f) => {
-                const isSelected = selectedFranchisee?.id === f.id;
-                return (
-                  <div
-                    key={f.id}
-                    onClick={() => setSelectedFranchisee(f)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                      isSelected
-                        ? 'bg-blue-50/80 border-blue-600 ring-2 ring-blue-600/20 shadow-xs'
-                        : 'bg-white border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded">
-                          {f.reseller_code}
-                        </span>
-                        {f.is_district_match && (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                            District Match
-                          </span>
-                        )}
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            f.is_operational ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-                          }`}
-                        >
-                          {f.is_operational ? 'Operational Live' : 'Under Setup'}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-900">{f.business_name}</h4>
-                      <div className="text-xs text-slate-500 flex flex-wrap items-center gap-3">
-                        <span>Contact: {f.contact_person}</span>
-                        <span>Mobile: {f.mobile}</span>
-                        <span>District: {f.district}</span>
-                      </div>
+          {/* Franchisee Matched Scenario */}
+          {selectedFranchisee ? (
+            <div className="space-y-4">
+              <div className="p-5 bg-gradient-to-r from-emerald-50/80 to-teal-50/80 rounded-2xl border border-emerald-200 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Auto-Matched District Partner
+                      </span>
+                      <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                        {selectedFranchisee.reseller_code || 'FRANCHISE'}
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-200/60 px-2 py-0.5 rounded-full">
+                        District: {formData.district_name}
+                      </span>
                     </div>
-
-                    <div className="flex items-center gap-3 self-end sm:self-center">
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 block font-bold uppercase">EPC Network</span>
-                        <span className="text-xs font-bold text-slate-700">{f.assigned_epc_count} Active EPCs</span>
-                      </div>
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center border ${
-                          isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                    </div>
+                    <h3 className="text-base font-black text-slate-900">
+                      {selectedFranchisee.business_name}
+                    </h3>
                   </div>
-                );
-              })
-            )}
+
+                  <div className="text-left sm:text-right">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Operating Jurisdiction</span>
+                    <span className="text-xs font-bold text-emerald-800">{formData.district_name}, {formData.state_name}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-emerald-200/60 text-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Contact Person</span>
+                    <span className="font-semibold text-slate-800">{selectedFranchisee.contact_person || 'Authorized Representative'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Contact Mobile</span>
+                    <span className="font-semibold text-slate-800">{selectedFranchisee.mobile || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">GST Number</span>
+                    <span className="font-mono font-semibold text-slate-800">{selectedFranchisee.gst_number || 'Registered'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notice Pill */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3 text-xs text-blue-800">
+                <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Automatic Admin Approval Routing</p>
+                  <p className="text-[11px] text-blue-700">
+                    Once submitted, a formal approval request will be dispatched to the Admin Panel at{' '}
+                    <span className="font-mono font-bold">/admin-panel/solar-shop/india/approve-new-epc</span> notifying that BDE{' '}
+                    is onboarding this EPC and assigning them to <strong>{selectedFranchisee.business_name}</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* No Franchisee in District Scenario -> Direct Store Access */
+            <div className="space-y-4">
+              <div className="p-5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-2xl border border-blue-200 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-600/20 shrink-0">
+                    <Store className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wider">
+                        Direct Solar Store Routing
+                      </span>
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                        No Franchise in {formData.district_name}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-black text-slate-900 mt-1">
+                      Direct Solar Store Contractor Access
+                    </h3>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  No operational franchisee partner is registered in district <strong className="text-slate-900">{formData.district_name}</strong>.
+                  Upon Admin approval, this EPC will be provisioned with direct Solar Store credentials to place procurement orders directly.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-blue-200/60 text-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Territory</span>
+                    <span className="font-semibold text-slate-800">{formData.district_name}, {formData.state_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Order Fulfillment</span>
+                    <span className="font-semibold text-slate-800">Central SolarKits Warehouse / Direct Store</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notice Pill */}
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs text-amber-800">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Direct Store Login Activation Notice</p>
+                  <p className="text-[11px] text-amber-700">
+                    The request will be sent to the Admin Panel at{' '}
+                    <span className="font-mono font-bold">/admin-panel/solar-shop/india/approve-new-epc</span> specifying that no franchise exists in this territory and direct store access should be granted upon approval.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Submission Summary Table */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+            <div className="flex justify-between py-1 border-b border-slate-200/60">
+              <span className="text-slate-500">Contractor Trade Name:</span>
+              <span className="font-bold text-slate-900">{formData.company_name}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-slate-200/60">
+              <span className="text-slate-500">Contractor GSTIN:</span>
+              <span className="font-mono font-bold text-slate-900">{gstResult?.gstin}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-slate-200/60">
+              <span className="text-slate-500">Contact Person / Phone:</span>
+              <span className="font-semibold text-slate-800">{formData.contact_person} ({formData.mobile})</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-slate-500">Assigned Routing:</span>
+              <span className="font-bold text-slate-900">
+                {selectedFranchisee ? (
+                  <span className="text-emerald-700">Franchise: {selectedFranchisee.business_name}</span>
+                ) : (
+                  <span className="text-blue-700">Direct Solar Store Access</span>
+                )}
+              </span>
+            </div>
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -622,17 +659,17 @@ export default function BdeEpcOnboardingWizard() {
               Back
             </button>
             <button
-              onClick={handleAssignFranchisee}
-              disabled={!selectedFranchisee || assignmentLoading}
-              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-emerald-600/20 flex items-center gap-2"
+              onClick={handleSubmitEpcForApproval}
+              disabled={onboardingLoading}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md shadow-blue-600/20 flex items-center gap-2"
             >
-              {assignmentLoading ? (
+              {onboardingLoading ? (
                 <>
-                  <RotateCw className="w-4 h-4 animate-spin" /> Assigning & Sending Alert...
+                  <RotateCw className="w-4 h-4 animate-spin" /> Submitting Request to Admin...
                 </>
               ) : (
                 <>
-                  Confirm Assignment to {selectedFranchisee?.business_name || 'Partner'} <Check className="w-4 h-4" />
+                  Submit EPC for Admin Approval <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
@@ -640,7 +677,7 @@ export default function BdeEpcOnboardingWizard() {
         </div>
       )}
 
-      {/* STEP 4: ONBOARDING & ASSIGNMENT COMPLETED */}
+      {/* STEP 4: REQUEST SUBMITTED FOR ADMIN APPROVAL */}
       {step === 4 && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 text-center space-y-6">
           <div className="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-md shadow-emerald-600/10">
@@ -648,31 +685,49 @@ export default function BdeEpcOnboardingWizard() {
           </div>
 
           <div className="space-y-2 max-w-lg mx-auto">
-            <h2 className="text-2xl font-black text-slate-900">EPC Onboarding Successfully Completed!</h2>
+            <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-black uppercase tracking-wider">
+              Pending Admin Approval
+            </span>
+            <h2 className="text-2xl font-black text-slate-900">
+              EPC Onboarding Request Submitted!
+            </h2>
             <p className="text-xs text-slate-500">
-              EPC <strong className="text-slate-800">{createdEpcAccount?.name}</strong> has been onboarded with verified GST{' '}
-              <strong className="font-mono text-slate-800">{gstResult?.gstin}</strong> and assigned to Franchise Partner{' '}
-              <strong className="text-emerald-700">{assignmentResult?.reseller_name}</strong>.
+              Contractor <strong className="text-slate-800">{formData.company_name}</strong> (GST:{' '}
+              <strong className="font-mono text-slate-800">{gstResult?.gstin}</strong>) has been onboarded and the approval request is routed to the central Admin Panel.
             </p>
           </div>
 
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto text-xs text-left space-y-2">
-            <div className="flex justify-between">
-              <span className="text-slate-400">EPC Account:</span>
-              <span className="font-bold text-slate-900">{createdEpcAccount?.name}</span>
+          <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 max-w-lg mx-auto text-xs text-left space-y-3">
+            <div className="flex justify-between items-center py-1 border-b border-slate-200">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">EPC Company:</span>
+              <span className="font-bold text-slate-900">{formData.company_name}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Assigned Franchisee:</span>
-              <span className="font-bold text-emerald-700">{assignmentResult?.reseller_name}</span>
+            <div className="flex justify-between items-center py-1 border-b border-slate-200">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Territory Jurisdiction:</span>
+              <span className="font-semibold text-slate-900">{formData.district_name}, {formData.state_name}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">District:</span>
-              <span className="font-semibold text-slate-900">{formData.district_name}</span>
+            <div className="flex justify-between items-center py-1 border-b border-slate-200">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Assignment Target:</span>
+              {selectedFranchisee ? (
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  Franchise: {selectedFranchisee.business_name}
+                </span>
+              ) : (
+                <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  Direct Solar Store Access
+                </span>
+              )}
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Franchisee Alert:</span>
-              <span className="text-emerald-600 font-bold flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> In-App Notification Sent
+            <div className="flex justify-between items-center py-1 border-b border-slate-200">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Admin Approval Desk:</span>
+              <span className="font-mono text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                /admin-panel/solar-shop/india/approve-new-epc
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-400 font-bold uppercase text-[10px]">Current Status:</span>
+              <span className="text-amber-600 font-bold flex items-center gap-1.5">
+                <RotateCw className="w-3 h-3 animate-spin text-amber-500" /> Awaiting Admin Approval
               </span>
             </div>
           </div>
@@ -685,10 +740,10 @@ export default function BdeEpcOnboardingWizard() {
               View EPC Leads Pipeline
             </button>
             <button
-              onClick={() => navigate('/franchisees')}
+              onClick={handleResetWizard}
               className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 transition"
             >
-              View Franchisee Goals & Orders
+              Onboard Another EPC
             </button>
           </div>
         </div>

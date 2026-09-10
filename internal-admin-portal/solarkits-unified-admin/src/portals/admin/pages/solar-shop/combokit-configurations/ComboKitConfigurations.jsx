@@ -10,6 +10,7 @@ const WarehouseBulkConfig = lazy(() => import("./bulk-combo-kits/WarehouseBulkCo
 const ComboKitVariants = lazy(() => import("./combo-kit-variants/ComboKitVariants"));
 const BosKitManager = lazy(() => import("./bos-kits/BosKitManager"));
 const PincodeDeliveryCosts = lazy(() => import("./pincode-delivery-costs/PincodeDeliveryCosts"));
+const BestSellerConfiguration = lazy(() => import("./best-seller-configuration/BestSellerConfiguration"));
 
 function ComboKitConfigurations() {
     return (
@@ -58,6 +59,20 @@ function ComboKitConfigurations() {
                 <PermissionGuard requiredUniqueId="ADM_COMBO_KITS">
                     <Suspense fallback={<Loader text="Loading Pincode Delivery Costs..." />}>
                         <PincodeDeliveryCosts moduleUniqueId="ADM_COMBO_KITS" />
+                    </Suspense>
+                </PermissionGuard>
+            } />
+            <Route path="/best-seller" element={
+                <PermissionGuard requiredUniqueId="ADM_COMBO_KITS">
+                    <Suspense fallback={<Loader text="Loading Best Seller Configurations..." />}>
+                        <BestSellerConfiguration moduleUniqueId="ADM_COMBO_KITS" />
+                    </Suspense>
+                </PermissionGuard>
+            } />
+            <Route path="/best-seller-configuration" element={
+                <PermissionGuard requiredUniqueId="ADM_COMBO_KITS">
+                    <Suspense fallback={<Loader text="Loading Best Seller Configurations..." />}>
+                        <BestSellerConfiguration moduleUniqueId="ADM_COMBO_KITS" />
                     </Suspense>
                 </PermissionGuard>
             } />

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { 
   get_combo_kits_by_district,
+  get_best_seller_kits,
   get_inventory_status,
   get_checkout_settings,
   get_active_offers,
@@ -49,6 +50,7 @@ router.get("/hierarchy", get_shop_hierarchy);
 router.get("/industry-types", get_shop_hierarchy);
 router.get("/stores", get_nearby_stores);
 router.get("/combo-kits", get_combo_kits_by_district);
+router.get("/best-sellers", get_best_seller_kits);
 router.get("/delivery-cost/calculate", calculate_pincode_delivery_cost);
 router.get("/epc-catalogue", verify_auth, get_epc_catalogue);
 router.get("/epc-catalogue/status", verify_auth, require("../../controller/epc.catalogue.handler").get_epc_catalogue_status);

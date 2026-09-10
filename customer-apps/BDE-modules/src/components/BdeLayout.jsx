@@ -31,7 +31,7 @@ export default function BdeLayout() {
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'EPC Leads', path: '/epc-leads', icon: Users },
-    { name: 'GST Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
+    { name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
     { name: 'Franchisee Goals', path: '/franchisees', icon: Store },
     { name: 'Order History & Kits', path: '/order-history', icon: Package },
     { name: 'Leaderboard Ranking', path: '/ranking', icon: Award },

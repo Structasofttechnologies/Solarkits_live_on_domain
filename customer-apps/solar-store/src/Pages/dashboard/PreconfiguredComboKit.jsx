@@ -22,6 +22,7 @@ import {
 } from "react-icons/fi";
 import Dropdown from "@/Components/Dropdown";
 import KitComparisonDrawer from "@/Components/storefront/KitComparisonDrawer";
+import OurBestSellerSection from "@/Components/storefront/OurBestSellerSection";
 import { fetchShopHierarchy } from "../../features/slice";
 
 const SYSTEM_CAPACITIES = [
@@ -33,7 +34,7 @@ const SYSTEM_CAPACITIES = [
   { kw: 15, label: "15 kW+", units: "~60+ Units/Day", note: "Industrial / Enterprise" },
 ];
 
-export default function PreconfiguredComboKit() {
+export default function PreconfiguredComboKit({ showBestSellers = true }) {
   const dispatch = useDispatch();
   const rawKits = useSelector((state) => state.slice?.availableKits);
   const availableKits = useMemo(() => (Array.isArray(rawKits) ? rawKits : []), [rawKits]);
@@ -435,7 +436,7 @@ export default function PreconfiguredComboKit() {
   };
 
   const mainFilterKeys = ["industryType", "category", "subCategory", "systemType", "projectRange"];
-  const subFilterKeys = ["comboKitType", "pricePerKw", "popularKits", "frequencyBuyer"];
+  const subFilterKeys = ["comboKitType", "pricePerKw", "popularKits",];
 
   const clearAllFilters = () => {
     setFilters({
@@ -1008,12 +1009,12 @@ export default function PreconfiguredComboKit() {
                 </div>
               </div>
 
-              {/* Performance Filters */}
+              {/* Details Filters */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FiTrendingUp className="text-primary dark:text-info" size={16} />
-                    <h4 className="font-semibold text-text-primary dark:text-info">Performance Filters</h4>
+                    <h4 className="font-semibold text-text-primary dark:text-info">Details Filters</h4>
                   </div>
                   <Button onClick={clearSubFilters} variant="link" size="sm">
                     Clear
@@ -1027,12 +1028,12 @@ export default function PreconfiguredComboKit() {
                         key === "comboKitType"
                           ? "Combo Kit Type"
                           : key === "popularKits"
-                          ? "Popular Kits"
-                          : key === "frequencyBuyer"
-                          ? "Frequency Buyer"
-                          : key === "pricePerKw"
-                          ? "Price Per Kw"
-                          : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())
+                            ? "Popular Kits"
+                            : key === "frequencyBuyer"
+                              ? "Frequency Buyer"
+                              : key === "pricePerKw"
+                                ? "Price Per Kw"
+                                : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())
                       }
                       options={key === "comboKitType" ? getDropdownOptions(key) : (options[key] || getDropdownOptions(key))}
                       value={filters[key]}
@@ -1259,6 +1260,19 @@ export default function PreconfiguredComboKit() {
                 </IconButton>
               </div>
 
+              {/* Best Sellers Quick Jump */}
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById("our-best-sellers");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-500/15 to-amber-500/5 hover:from-amber-500/25 hover:to-amber-500/10 text-amber-600 dark:text-amber-400 font-black text-xs rounded-xl border border-amber-500/30 shadow-xs transition-all cursor-pointer"
+                title="Jump to regional Best Seller kits"
+              >
+                <span>⭐ Our Best Sellers</span>
+              </button>
+
               {/* In Stock Toggle */}
               <Button
                 onClick={() => setShowInStockOnly(!showInStockOnly)}
@@ -1409,15 +1423,15 @@ export default function PreconfiguredComboKit() {
               </div>
             </div>
 
-            {/* Performance Filters */}
+            {/* Details Filters */}
             <div className="bg-surface-hover rounded-xl p-4 border border-border mt-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <FiTrendingUp className="text-primary dark:text-info" size={18} />
-                  <h3 className="font-semibold text-text-primary dark:text-info">Performance Filters</h3>
+                  <h3 className="font-semibold text-text-primary dark:text-info">Details Filters</h3>
                 </div>
                 <Button onClick={clearSubFilters} variant="link" size="sm">
-                  Clear Performance
+                  Clear Details
                 </Button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1428,12 +1442,12 @@ export default function PreconfiguredComboKit() {
                       key === "comboKitType"
                         ? "Combo Kit Type"
                         : key === "popularKits"
-                        ? "Popular Kits"
-                        : key === "frequencyBuyer"
-                        ? "Frequency Buyer"
-                        : key === "pricePerKw"
-                        ? "Price Per Kw"
-                        : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())
+                          ? "Popular Kits"
+                          : key === "frequencyBuyer"
+                            ? "Frequency Buyer"
+                            : key === "pricePerKw"
+                              ? "Price Per Kw"
+                              : key.replace(/([A-Z])/g, " $1").replace(/^./, str => str.toUpperCase())
                     }
                     options={key === "comboKitType" ? getDropdownOptions(key) : (options[key] || getDropdownOptions(key))}
                     value={filters[key]}
@@ -1536,6 +1550,15 @@ export default function PreconfiguredComboKit() {
           </main>
         </div>
       </div>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* OUR BEST SELLER COMBO KITS (EPC DASHBOARD & STOREFRONT)    */}
+      {/* ────────────────────────────────────────────────────────── */}
+      {showBestSellers && (
+        <div className="mt-14 pt-10 border-t-2 border-border/80">
+          <OurBestSellerSection />
+        </div>
+      )}
 
       <MobileFiltersDrawer />
 

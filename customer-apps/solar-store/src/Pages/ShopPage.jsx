@@ -34,7 +34,7 @@ export default function ShopPage() {
       <Navbar />
 
       {/* Main Shop Container — Full Width Outside the ERP Dashboard */}
-      <main className="flex-1 w-full max-w-[1480px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 py-6">
+      <main className="flex-1 w-full max-w-[1480px] mx-auto px-3 sm:px-5 lg:px-6 xl:px-8 py-6 space-y-12">
         <PreconfiguredComboKit />
       </main>
 

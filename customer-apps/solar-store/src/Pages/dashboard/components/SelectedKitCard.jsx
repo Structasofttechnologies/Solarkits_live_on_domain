@@ -387,14 +387,6 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
     return "0.55 kW";
   }, [kit?.capacityKW, currentVariant?.capacityKW, kit?.wattage]);
 
-  const generationEstimateDisplay = useMemo(() => {
-    if (kit?.generationEstimateKWhPerYear && !isNaN(kit.generationEstimateKWhPerYear)) {
-      return Number(kit.generationEstimateKWhPerYear).toLocaleString("en-IN");
-    }
-    const capNum = parseFloat(displayCapacity) || 0.55;
-    return Math.round(capNum * 4 * 365).toLocaleString("en-IN");
-  }, [kit?.generationEstimateKWhPerYear, displayCapacity]);
-
   // Cart calculations
   const cartCalculations = useMemo(() => {
     if (!cartItem || !currentVariant) {
@@ -830,13 +822,6 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
             <div>
               <div className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Capacity</div>
               <div className="text-sm font-black text-text-primary">{displayCapacity}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 p-3 bg-surface-hover/60 border border-border rounded-xl">
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400"><FaSolarPanel size={14} /></div>
-            <div>
-              <div className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Annual Generation</div>
-              <div className="text-sm font-black text-text-primary">{generationEstimateDisplay} kWh</div>
             </div>
           </div>
           {kit.warrantyYears && (

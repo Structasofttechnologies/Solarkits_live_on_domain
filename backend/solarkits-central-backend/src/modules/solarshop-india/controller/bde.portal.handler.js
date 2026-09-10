@@ -46,8 +46,10 @@ const {
   EpcOrder,
   WarehouseComboKit,
   FranchiseeAlert,
+  EpcSignupRequest,
 } = require('../../admin-panel/models/india_solarshop_db');
 const { EpcCompany } = require('../../admin-panel/models/india_core_db');
+const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { generate_token } = require('../utils/jsonwebtoken');
 const {
   createLead,
@@ -1043,9 +1045,89 @@ exports.update_epc_lead_status = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. GST VERIFICATION & EPC ONBOARDING JOURNEY
 // ─────────────────────────────────────────────────────────────────────────────
+async function _findDistrictFranchisee(districtName, stateName) {
+  if (!districtName) return null;
+  const cleanDistrict = districtName.trim();
+  const districtRegex = new RegExp(`^${cleanDistrict}$`, 'i');
+
+  try {
+    // 1. Try finding district in Geolocation DB
+    const geoDistrict = await GeoLevel2.findOne({
+      name: districtRegex,
+      deleted_at: null,
+    }).lean();
+
+    let matchedReseller = null;
+
+    // 2. Check active ResellerTerritory for this district_id
+    if (geoDistrict) {
+      const activeTerritory = await ResellerTerritory.findOne({
+        district_id: geoDistrict._id,
+        status: 'active',
+        deleted_at: null,
+      })
+        .populate({
+          path: 'reseller_id',
+          select: 'business_name reseller_code contact_person mobile email is_operational activation_status address gst_number',
+        })
+        .lean();
+
+      if (activeTerritory?.reseller_id && !activeTerritory.reseller_id.deleted_at) {
+        matchedReseller = activeTerritory.reseller_id;
+      }
+    }
+
+    // 3. Fallback: Check Reseller direct address (district_id, city, district_name) or business_name
+    if (!matchedReseller) {
+      const fallbackQuery = {
+        deleted_at: null,
+        $or: [
+          ...(geoDistrict ? [{ 'address.district_id': geoDistrict._id }] : []),
+          { 'address.city': districtRegex },
+          { 'address.district_name': districtRegex },
+          { business_name: new RegExp(cleanDistrict, 'i') },
+        ],
+      };
+
+      const candidates = await Reseller.find(fallbackQuery)
+        .select('business_name reseller_code contact_person mobile email is_operational activation_status address gst_number')
+        .lean();
+
+      if (candidates && candidates.length > 0) {
+        // Prioritize operational ones first, then active
+        candidates.sort((a, b) => {
+          if (a.is_operational && !b.is_operational) return -1;
+          if (!a.is_operational && b.is_operational) return 1;
+          if (a.activation_status === 'active' && b.activation_status !== 'active') return -1;
+          return 0;
+        });
+        matchedReseller = candidates[0];
+      }
+    }
+
+    if (!matchedReseller) return null;
+
+    return {
+      id: matchedReseller._id,
+      reseller_code: matchedReseller.reseller_code,
+      business_name: matchedReseller.business_name,
+      contact_person: matchedReseller.contact_person,
+      email: matchedReseller.email,
+      mobile: matchedReseller.mobile,
+      gst_number: matchedReseller.gst_number,
+      district: cleanDistrict,
+      is_operational: Boolean(matchedReseller.is_operational),
+      activation_status: matchedReseller.activation_status,
+    };
+  } catch (err) {
+    console.error('[_findDistrictFranchisee error]', err);
+    return null;
+  }
+}
+
 exports.verify_epc_gstin = async (req, res) => {
   try {
-    const bdeId = req.user.id;
+    const bdeId = req.user?.id || req.user?._id;
     const { gstin, lead_id } = req.body;
 
     if (!gstin) return res.status(400).json({ status: 'error', message: 'gstin is required' });
@@ -1106,6 +1188,9 @@ exports.verify_epc_gstin = async (req, res) => {
     const address = verification.address || '';
     const pincode = verification.pincode || '';
 
+    // 4. Auto-detect district franchise match
+    const matchedFranchisee = await _findDistrictFranchisee(districtName, stateName);
+
     // If lead_id provided, update lead
     if (lead_id) {
       const lead = await EPCLead.findById(lead_id);
@@ -1141,6 +1226,8 @@ exports.verify_epc_gstin = async (req, res) => {
         address: address,
         pincode: pincode,
         registration_status: verification.business_status || verification.gstin_status || 'Active',
+        matched_franchisee: matchedFranchisee || null,
+        has_franchisee_in_district: Boolean(matchedFranchisee),
       },
     });
   } catch (err) {
@@ -1151,29 +1238,35 @@ exports.verify_epc_gstin = async (req, res) => {
 
 exports.onboard_epc_with_gst = async (req, res) => {
   try {
-    const bdeId = req.user.id;
+    const bdeId = req.user?.id || req.user?._id;
     const {
       lead_id,
       gstin,
       company_name,
+      trade_name,
+      legal_name,
       contact_person,
       mobile,
+      phone,
       email,
       password,
       state_name,
       district_name,
       address,
       pincode,
+      reseller_id,
     } = req.body;
 
-    if (!company_name || !email || !contact_person || !mobile) {
+    const epcCompanyName = company_name || trade_name || legal_name;
+    const epcMobile = mobile || phone;
+    if (!epcCompanyName || !email || !contact_person || !epcMobile) {
       return res.status(400).json({ status: 'error', message: 'Company name, contact person, mobile, and email are required' });
     }
 
     const cleanGst = gstin ? gstin.trim().toUpperCase() : null;
     const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.trim();
-    const cleanName = company_name.trim();
+    const cleanMobile = epcMobile.trim();
+    const cleanName = epcCompanyName.trim();
 
     // Duplicate Check
     if (cleanGst) {
@@ -1187,14 +1280,29 @@ exports.onboard_epc_with_gst = async (req, res) => {
     const resolvedState = state_name || territory?.state_name || 'Maharashtra';
     const resolvedDistrict = district_name || (territory?.district_names && territory.district_names[0]) || 'Pune';
 
+    // Auto-detect district franchise if not passed
+    let targetFranchisee = null;
+    if (reseller_id) {
+      targetFranchisee = await Reseller.findById(reseller_id)
+        .select('business_name reseller_code contact_person mobile email is_operational activation_status address gst_number')
+        .lean();
+    }
+    if (!targetFranchisee) {
+      targetFranchisee = await _findDistrictFranchisee(resolvedDistrict, resolvedState);
+    }
+
+    // Geolocation matching
+    const geoState = await GeoLevel1.findOne({ name: new RegExp(`^${resolvedState.trim()}$`, 'i') }).lean();
+    const geoDistrict = await GeoLevel2.findOne({ name: new RegExp(`^${resolvedDistrict.trim()}$`, 'i') }).lean();
+
     // 1. Create or Find EpcCompany in Core DB
     let epcCompany = await EpcCompany.findOne({ email: cleanEmail, deleted_at: null });
     if (!epcCompany) {
       epcCompany = await EpcCompany.create({
         name: cleanName,
         email: cleanEmail,
-        source: 'bde_onboarding',
-        working_states: territory?.state_id ? [territory.state_id] : [],
+        source: 'verified',
+        working_states: geoState ? [geoState._id] : (territory?.state_id ? [territory.state_id] : []),
       });
     }
 
@@ -1202,7 +1310,11 @@ exports.onboard_epc_with_gst = async (req, res) => {
     const initialPassword = password && password.trim() ? password.trim() : 'SolarEPC@2026';
     const passwordHash = await bcrypt.hash(initialPassword, 10);
 
-    // 3. Create EpcAccount
+    const isDirectStoreEpc = !targetFranchisee;
+    const assignedResellerId = targetFranchisee ? (targetFranchisee.id || targetFranchisee._id) : null;
+    const assignedResellerName = targetFranchisee ? targetFranchisee.business_name : null;
+
+    // 3. Create EpcAccount with 'pending' status (Awaiting Admin Approval)
     const epcAccount = await EpcAccount.create({
       name: cleanName,
       contact_person: contact_person.trim(),
@@ -1213,50 +1325,95 @@ exports.onboard_epc_with_gst = async (req, res) => {
       company_name: cleanName,
       gstin: cleanGst,
       password_hash: passwordHash,
-      states: territory?.state_id ? [territory.state_id] : [],
+      states: geoState ? [geoState._id] : (territory?.state_id ? [territory.state_id] : []),
+      districts: geoDistrict ? [geoDistrict._id] : [],
       state_name: resolvedState,
       district_name: resolvedDistrict,
       address: address ? address.trim() : null,
       pincode: pincode ? pincode.trim() : null,
-      status: 'active',
+      status: 'pending', // Pending Admin Approval
       is_email_verified: true,
       onboarding_source: 'bde',
       onboarded_by_bde_id: bdeId,
+      primary_reseller_id: assignedResellerId,
+      onboarded_by_reseller_id: assignedResellerId,
     });
 
-    // 4. Update EPCLead if linked
+    // 4. Create EpcSignupRequest for Admin Approval at /admin-panel/solar-shop/india/approve-new-epc
+    const signupRequest = await EpcSignupRequest.create({
+      account_id: epcAccount._id,
+      company_name: cleanName,
+      email: cleanEmail,
+      whatsapp: cleanMobile,
+      status: 'pending',
+      state_id: geoState?._id || territory?.state_id || null,
+      district_id: geoDistrict?._id || null,
+      state_name: resolvedState,
+      district_name: resolvedDistrict,
+      gstin: cleanGst,
+      onboarding_source: 'bde',
+      onboarded_by_bde_id: bdeId,
+      bde_name: req.user.full_name || 'BDE Representative',
+      assigned_reseller_id: assignedResellerId,
+      assigned_reseller_name: assignedResellerName,
+      is_direct_store_epc: isDirectStoreEpc,
+      auto_assigned: Boolean(assignedResellerId),
+    });
+
+    // 5. Update EPCLead if linked
     if (lead_id) {
       await EPCLead.findByIdAndUpdate(lead_id, {
         gst_number: cleanGst,
         gst_verified: true,
-        lead_status: 'Onboarded',
+        lead_status: 'Under Verification',
         onboarded_at: new Date(),
         onboarded_epc_account_id: epcAccount._id,
         onboarded_epc_company_id: epcCompany._id,
+        assigned_franchisee_id: assignedResellerId,
+        assigned_franchisee_name: assignedResellerName,
       });
     }
 
-    // Log Activity
+    // 6. Log Activity
     await BDEActivityLog.create({
       bde_id: bdeId,
       actor_type: 'bde',
       actor_id: bdeId,
       actor_name: req.user.full_name,
       action: 'EPC_ONBOARDED',
-      notes: `Completed GST-based EPC Onboarding for "${cleanName}" (${cleanGst || 'No GST'}) in ${resolvedDistrict}, ${resolvedState}`,
+      notes: assignedResellerId
+        ? `Submitted EPC Onboarding for "${cleanName}" (${cleanGst || 'No GST'}). Auto-assigned to Franchisee "${assignedResellerName}" (${resolvedDistrict}). Pending Admin Approval.`
+        : `Submitted EPC Onboarding for "${cleanName}" (${cleanGst || 'No GST'}). No franchise in ${resolvedDistrict} - routed for Direct Solar Store Access. Pending Admin Approval.`,
     });
 
     return res.status(201).json({
       status: 'success',
-      message: `EPC "${cleanName}" successfully onboarded. Proceed to assign a franchise partner.`,
+      message: assignedResellerId
+        ? `EPC "${cleanName}" successfully submitted and auto-assigned to Franchise Partner "${assignedResellerName}". Routed to Admin Panel for approval.`
+        : `EPC "${cleanName}" successfully submitted for Direct Solar Store access (No franchise in ${resolvedDistrict}). Routed to Admin Panel for approval.`,
       data: {
+        epc_id: epcAccount._id,
         epc_account_id: epcAccount._id,
+        request_id: signupRequest._id,
+        signup_request_id: signupRequest._id,
         company_id: epcCompany._id,
         name: epcAccount.name,
         email: epcAccount.email,
         gstin: epcAccount.gstin,
         state_name: resolvedState,
         district_name: resolvedDistrict,
+        assigned_reseller_name: assignedResellerName,
+        assigned_reseller_id: assignedResellerId,
+        matched_franchisee: targetFranchisee ? {
+          id: assignedResellerId,
+          reseller_code: targetFranchisee.reseller_code,
+          business_name: assignedResellerName,
+          contact_person: targetFranchisee.contact_person,
+          mobile: targetFranchisee.mobile,
+          is_operational: targetFranchisee.is_operational,
+        } : null,
+        is_direct_store_epc: isDirectStoreEpc,
+        status: 'pending_admin_approval',
       },
     });
   } catch (err) {

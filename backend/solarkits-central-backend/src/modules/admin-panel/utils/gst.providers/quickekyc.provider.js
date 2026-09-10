@@ -121,7 +121,7 @@ async function verifyGstinQuickEkyc(cleanGstin) {
       {
         key: apiKey,
         id_number: cleanGstin,
-        gstin: cleanGstin,
+        filing_status_get: false,
       },
       {
         headers: {
