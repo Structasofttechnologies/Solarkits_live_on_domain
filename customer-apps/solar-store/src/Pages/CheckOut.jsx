@@ -25,7 +25,7 @@ export default function CheckOut() {
 
   // Settings & Status
   const [loading, setLoading] = useState(true);
-  const [reserving, setReserving] = useState(false);
+  const [_reserving, setReserving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   // GST State Verification
@@ -50,7 +50,7 @@ export default function CheckOut() {
   const [amountPaid, setAmountPaid] = useState("");
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [senderBankName, setSenderBankName] = useState("");
-  const [accountHolderName, setAccountHolderName] = useState("");
+  const [accountHolderName, _setAccountHolderName] = useState("");
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
 
@@ -71,6 +71,7 @@ export default function CheckOut() {
   const [couponCodeInput, setCouponCodeInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState("");
+  const [showCouponInput, setShowCouponInput] = useState(false); // collapsed by default
 
   // Submission State
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +79,7 @@ export default function CheckOut() {
   const [confirmedOrderData, setConfirmedOrderData] = useState(null);
 
   // Multi-district delivery addresses
-  const groupedCart = useMemo(() => {
+  const _groupedCart = useMemo(() => {
     const groups = {};
     cart.forEach((item) => {
       const distId = item.districtId || "default";
@@ -95,33 +96,29 @@ export default function CheckOut() {
     return Object.values(groups);
   }, [cart]);
 
-  const [deliveryAddresses, setDeliveryAddresses] = useState({});
+  // Delivery Address State
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    line: "",
+    pincode: "",
+    district_name: "",
+    state_name: "",
+    contact_name: "",
+    contact_phone: "",
+  });
 
   useEffect(() => {
-    if (cart.length > 0) {
-      const initialAddresses = {};
-      groupedCart.forEach((group) => {
-        const distId = group.districtId;
-        const defaultStateName = group.items[0]?.state_name || selectedState?.name || "";
-        const defaultStateId = group.items[0]?.state_id || selectedState?.id || selectedState?._id || "";
-
-        initialAddresses[distId] = {
-          address_line: deliveryAddresses[distId]?.address_line || user?.address || "",
-          state_id: defaultStateId,
-          state_name: defaultStateName,
-          district_id: distId === "default" ? null : distId,
-          district_name: distId === "default" ? null : group.districtName,
-          pincode: deliveryAddresses[distId]?.pincode || user?.pincode || "",
-          contact_name: deliveryAddresses[distId]?.contact_name || user?.name || "",
-          contact_phone: deliveryAddresses[distId]?.contact_phone || user?.whatsapp || user?.mobile || "",
-        };
-      });
-      setDeliveryAddresses((prev) => ({
-        ...prev,
-        ...initialAddresses,
+    if (user || selectedState || selectedDistrict || cart.length > 0) {
+      const pinFromCart = cart.find((k) => k.delivery_pincode)?.delivery_pincode;
+      setDeliveryAddress((prev) => ({
+        line: prev.line || user?.address || "",
+        pincode: prev.pincode || pinFromCart || user?.pincode || "380001",
+        district_name: prev.district_name || selectedDistrict?.name || user?.district_name || "",
+        state_name: prev.state_name || selectedState?.name || user?.state_name || "",
+        contact_name: prev.contact_name || user?.name || "EPC Contractor",
+        contact_phone: prev.contact_phone || user?.whatsapp || user?.mobile || "",
       }));
     }
-  }, [cart, groupedCart, selectedState, user]);
+  }, [user, selectedState, selectedDistrict, cart]);
 
   const checkGstStatus = async () => {
     const stateId = selectedState?.id || selectedState?._id;
@@ -320,16 +317,15 @@ export default function CheckOut() {
 
     if (bundleOffer && bundleKitsQuantity >= minQty) {
       bundleDiscount = bundleCapacityKW * bundleOffer.discount_value;
-    } else if (bundleKitsQuantity >= 5 && (!bundleOffer || !bundleOffer.products_applicable || bundleOffer.products_applicable.length === 0)) {
-      bundleDiscount = bundleCapacityKW * 500;
     }
+    // NOTE: No fallback hardcoded discount — only apply when admin has configured a Bundle Offer
 
     if (appliedCoupon) {
       const applicableSubtotal =
         appliedCoupon.products_applicable && appliedCoupon.products_applicable.length > 0
           ? cart
-              .filter((item) => appliedCoupon.products_applicable.some((pId) => pId.toString() === item.id.toString()))
-              .reduce((sum, item) => sum + item.qty * item.ourPrice, 0)
+            .filter((item) => appliedCoupon.products_applicable.some((pId) => pId.toString() === item.id.toString()))
+            .reduce((sum, item) => sum + item.qty * item.ourPrice, 0)
           : subtotal;
 
       if (applicableSubtotal > 0) {
@@ -490,6 +486,9 @@ export default function CheckOut() {
         product_id: item.is_custom ? item.id : null,
         kit_id: item.is_custom ? null : item.id,
         item_name: item.kitName || item.name || "Solar Kit",
+        image: item.image || item.kit_image || item.img || (item.images && item.images[0]) || null,
+        capacity: item.capacity ? `${item.capacity} kW` : null,
+        description: item.description || null,
         quantity: item.qty || 1,
         ourPrice: item.ourPrice,
         gstRate: item.gstRate,
@@ -499,11 +498,25 @@ export default function CheckOut() {
         delivery_pincode: item.delivery_pincode || null,
       }));
 
-      const addressData = Object.values(deliveryAddresses)[0] || {
-        line: user?.address || "Registered Address",
-        pincode: user?.pincode || "380001",
-        contact_name: user?.name || "EPC Contractor",
-        contact_phone: user?.whatsapp || user?.mobile || "",
+      if (!deliveryAddress.line || !deliveryAddress.line.trim()) {
+        dispatch(setAlert({ type: "error", message: "Please provide Delivery / Installation Site Address." }));
+        return;
+      }
+      if (!deliveryAddress.pincode || deliveryAddress.pincode.trim().length < 6) {
+        dispatch(setAlert({ type: "error", message: "Please enter a valid 6-digit Delivery PIN Code." }));
+        return;
+      }
+
+      const addressData = {
+        line: deliveryAddress.line.trim(),
+        address_line: deliveryAddress.line.trim(),
+        pincode: deliveryAddress.pincode.trim(),
+        district_name: deliveryAddress.district_name?.trim() || selectedDistrict?.name || "",
+        district_id: selectedDistrict?.id || selectedDistrict?._id || null,
+        state_name: deliveryAddress.state_name?.trim() || selectedState?.name || "",
+        state_id: selectedState?.id || selectedState?._id || null,
+        contact_name: deliveryAddress.contact_name?.trim() || user?.name || "EPC Contractor",
+        contact_phone: deliveryAddress.contact_phone?.trim() || user?.whatsapp || user?.mobile || "",
       };
 
       const formData = new FormData();
@@ -803,116 +816,213 @@ export default function CheckOut() {
             </div>
           </div>
 
-          {/* Payment Receipt Upload & UTR Submission Form */}
-          <form onSubmit={handleSubmitOfflineOrder} className="bg-surface p-6 rounded-2xl border border-border shadow-sm space-y-5">
-            <div className="border-b border-border pb-3">
-              <h3 className="text-lg font-black text-text-primary dark:text-white flex items-center gap-2">
-                <FiUploadCloud className="text-primary" /> Step 2: Upload Payment Receipt & Enter UTR
-              </h3>
-              <p className="text-xs text-text-secondary mt-0.5">
-                Complete bank transfer using above details and enter transaction confirmation below.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
-                  UTR / Transaction Ref No. <span className="text-red-500">*</span>
-                </label>
-                <CustomInput
-                  placeholder="e.g. HDFC0001928374 or 239847192834"
-                  value={utrNumber}
-                  onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
-                  required
-                  className="font-mono uppercase font-bold"
-                />
+          {/* Checkout Submission Form */}
+          <form onSubmit={handleSubmitOfflineOrder} className="space-y-6">
+            {/* Step 1: Delivery & Installation Site Address */}
+            <div className="bg-surface p-6 rounded-2xl border border-border shadow-sm space-y-4">
+              <div className="border-b border-border pb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-text-primary dark:text-white flex items-center gap-2">
+                    <FiMapPin className="text-primary" /> Step 1: Delivery Site Address
+                  </h3>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    Physical site location where the solar kit equipment will be dispatched and delivered.
+                  </p>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-primary/10 text-primary rounded-md">
+                  Required
+                </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
-                  Amount Paid (₹) <span className="text-red-500">*</span>
-                </label>
-                <CustomInput
-                  type="number"
-                  placeholder="Order Total Amount"
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  required
-                  className="font-bold font-mono"
-                />
-              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                    Site Street Address / Plot / Industrial Area <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    placeholder="e.g. Survey No. 42, GIDC Industrial Estate, Ring Road"
+                    value={deliveryAddress.line}
+                    onChange={(e) => setDeliveryAddress((prev) => ({ ...prev, line: e.target.value }))}
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
-                  Payment Date <span className="text-red-500">*</span>
-                </label>
-                <CustomInput
-                  type="date"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
-                  Sender Bank Name
-                </label>
-                <CustomInput
-                  placeholder="e.g. State Bank of India / ICICI"
-                  value={senderBankName}
-                  onChange={(e) => setSenderBankName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Receipt Upload Box */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-text-primary dark:text-white">
-                Upload Payment Transfer Receipt / Screenshot <span className="text-red-500">*</span>
-              </label>
-
-              <div className="border-2 border-dashed border-border hover:border-primary rounded-2xl p-5 text-center transition-colors bg-surface-hover cursor-pointer relative">
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={handleFileChange}
-                  required={!receiptFile}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
-                {receiptPreview ? (
-                  <div className="space-y-2">
-                    <img src={receiptPreview} alt="Receipt preview" className="max-h-36 mx-auto rounded-lg object-contain border border-border" />
-                    <p className="text-xs font-bold text-primary">{receiptFile?.name}</p>
-                    <p className="text-[11px] text-text-muted">Click to change receipt file</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                      Delivery PIN Code <span className="text-red-500">*</span>
+                    </label>
+                    <CustomInput
+                      placeholder="e.g. 380001"
+                      value={deliveryAddress.pincode}
+                      maxLength={6}
+                      onChange={(e) => setDeliveryAddress((prev) => ({ ...prev, pincode: e.target.value.replace(/\D/g, '') }))}
+                      required
+                      className="font-mono font-bold"
+                    />
                   </div>
-                ) : receiptFile ? (
-                  <div className="flex items-center justify-center gap-2 text-primary font-bold text-sm">
-                    <FiFileText size={24} />
-                    <span>{receiptFile.name} (Ready to upload)</span>
+
+                  <div>
+                    <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                      District / City
+                    </label>
+                    <CustomInput
+                      placeholder="e.g. Ahmedabad"
+                      value={deliveryAddress.district_name}
+                      onChange={(e) => setDeliveryAddress((prev) => ({ ...prev, district_name: e.target.value }))}
+                    />
                   </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    <FiUploadCloud size={32} className="mx-auto text-primary" />
-                    <p className="text-xs font-bold text-text-primary dark:text-white">
-                      Drag & Drop payment receipt or <span className="text-primary underline">browse</span>
-                    </p>
-                    <p className="text-[11px] text-text-muted">Supports JPG, PNG, PDF (Max 10MB)</p>
+
+                  <div>
+                    <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                      State
+                    </label>
+                    <CustomInput
+                      placeholder="e.g. Gujarat"
+                      value={deliveryAddress.state_name}
+                      onChange={(e) => setDeliveryAddress((prev) => ({ ...prev, state_name: e.target.value }))}
+                    />
                   </div>
-                )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                      Site Contact Person
+                    </label>
+                    <CustomInput
+                      placeholder="Receiver / Site Engineer Name"
+                      value={deliveryAddress.contact_name}
+                      onChange={(e) => setDeliveryAddress((prev) => ({ ...prev, contact_name: e.target.value }))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                      Site Contact Phone / WhatsApp <span className="text-red-500">*</span>
+                    </label>
+                    <CustomInput
+                      placeholder="e.g. 9876543210"
+                      value={deliveryAddress.contact_phone}
+                      onChange={(e) => setDeliveryAddress((prev) => ({ ...prev, contact_phone: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              fullWidth
-              loading={submitting}
-              className="py-4 shadow-lg font-black text-base"
-            >
-              Submit Payment for Accounts Verification
-            </Button>
+            {/* Step 2: Payment Receipt Upload & UTR Submission Form */}
+            <div className="bg-surface p-6 rounded-2xl border border-border shadow-sm space-y-5">
+              <div className="border-b border-border pb-3">
+                <h3 className="text-lg font-black text-text-primary dark:text-white flex items-center gap-2">
+                  <FiUploadCloud className="text-primary" /> Step 2: Upload Payment Receipt & Enter UTR
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Complete bank transfer using company bank account details above and attach verification proof below.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                    UTR / Transaction Ref No. <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    placeholder="e.g. HDFC0001928374 or 239847192834"
+                    value={utrNumber}
+                    onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
+                    required
+                    className="font-mono uppercase font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                    Amount Paid (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="number"
+                    placeholder="Order Total Amount"
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
+                    required
+                    className="font-bold font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                    Payment Date <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="date"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1.5">
+                    Sender Bank Name
+                  </label>
+                  <CustomInput
+                    placeholder="e.g. State Bank of India / ICICI"
+                    value={senderBankName}
+                    onChange={(e) => setSenderBankName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Receipt Upload Box */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-text-primary dark:text-white">
+                  Upload Payment Transfer Receipt / Screenshot <span className="text-red-500">*</span>
+                </label>
+
+                <div className="border-2 border-dashed border-border hover:border-primary rounded-2xl p-5 text-center transition-colors bg-surface-hover cursor-pointer relative">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileChange}
+                    required={!receiptFile}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {receiptPreview ? (
+                    <div className="space-y-2">
+                      <img src={receiptPreview} alt="Receipt preview" className="max-h-36 mx-auto rounded-lg object-contain border border-border" />
+                      <p className="text-xs font-bold text-primary">{receiptFile?.name}</p>
+                      <p className="text-[11px] text-text-muted">Click to change receipt file</p>
+                    </div>
+                  ) : receiptFile ? (
+                    <div className="flex items-center justify-center gap-2 text-primary font-bold text-sm">
+                      <FiFileText size={24} />
+                      <span>{receiptFile.name} (Ready to upload)</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <FiUploadCloud size={32} className="mx-auto text-primary" />
+                      <p className="text-xs font-bold text-text-primary dark:text-white">
+                        Drag & Drop payment receipt or <span className="text-primary underline">browse</span>
+                      </p>
+                      <p className="text-[11px] text-text-muted">Supports JPG, PNG, PDF (Max 10MB)</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={submitting}
+                className="py-4 shadow-lg font-black text-base"
+              >
+                Submit Payment for Accounts Verification
+              </Button>
+            </div>
           </form>
         </div>
 
@@ -974,40 +1084,59 @@ export default function CheckOut() {
             </div>
           </div>
 
-          {/* Coupon Code Entry */}
-          <div className="bg-surface p-6 rounded-2xl border border-border shadow-sm space-y-3">
-            <h4 className="font-bold text-text-primary dark:text-white text-sm flex items-center gap-1.5">
-              <FiTag className="text-primary" /> Apply Coupon Code
-            </h4>
-
+          {/* Coupon Code Entry — collapsed by default */}
+          <div className="bg-surface px-5 py-4 rounded-2xl border border-border shadow-sm">
             {appliedCoupon ? (
-              <div className="bg-primary/10 p-3 rounded-xl border border-primary/20 flex justify-between items-center text-xs">
-                <div>
+              /* Applied state — always visible when active */
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <FiTag className="text-primary" />
                   <span className="font-bold text-primary font-mono">{appliedCoupon.coupon_code}</span>
-                  <span className="text-text-muted ml-2">applied</span>
+                  <span className="text-text-muted text-xs">applied</span>
                 </div>
-                <button onClick={handleRemoveCoupon} className="text-text-secondary hover:text-red-500 font-bold text-sm">
+                <button
+                  onClick={() => { handleRemoveCoupon(); setShowCouponInput(false); }}
+                  className="text-text-secondary hover:text-red-500 font-bold text-lg leading-none"
+                  title="Remove coupon"
+                >
                   &times;
                 </button>
               </div>
             ) : (
-              <div className="flex gap-2">
-                <CustomInput
-                  placeholder="PROMO500"
-                  value={couponCodeInput}
-                  onChange={(e) => setCouponCodeInput(e.target.value)}
-                  className="flex-1 uppercase font-mono"
-                />
-                <Button onClick={handleApplyCoupon} variant="primary" className="py-2.5 px-4 shadow-sm">
-                  Apply
-                </Button>
-              </div>
-            )}
+              <>
+                {/* Toggle link */}
+                <button
+                  type="button"
+                  onClick={() => setShowCouponInput((v) => !v)}
+                  className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-primary transition-colors w-full text-left"
+                >
+                  <FiTag size={14} className="text-primary" />
+                  <span className="font-medium">Have a coupon code?</span>
+                  <span className="ml-auto text-xs text-text-muted">{showCouponInput ? "▲ Hide" : "▼ Enter code"}</span>
+                </button>
 
-            {couponError && (
-              <div className="text-xs text-red-500 font-semibold bg-red-500/10 p-2.5 rounded-lg border border-red-500/20 flex items-center gap-1 mt-2">
-                <FiAlertTriangle /> {couponError}
-              </div>
+                {/* Expandable input */}
+                {showCouponInput && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex gap-2">
+                      <CustomInput
+                        placeholder="Enter coupon code"
+                        value={couponCodeInput}
+                        onChange={(e) => setCouponCodeInput(e.target.value)}
+                        className="flex-1 uppercase font-mono"
+                      />
+                      <Button onClick={handleApplyCoupon} variant="primary" className="py-2.5 px-4 shadow-sm">
+                        Apply
+                      </Button>
+                    </div>
+                    {couponError && (
+                      <div className="text-xs text-red-500 font-semibold bg-red-500/10 p-2.5 rounded-lg border border-red-500/20 flex items-center gap-1">
+                        <FiAlertTriangle /> {couponError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

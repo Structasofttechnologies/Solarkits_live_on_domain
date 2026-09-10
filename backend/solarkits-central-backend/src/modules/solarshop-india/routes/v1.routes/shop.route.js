@@ -13,6 +13,8 @@ const {
   get_gst_status,
   gst_generate_otp,
   gst_verify_otp,
+  checkout_send_phone_otp,
+  checkout_verify_phone_otp,
   get_orders,
   update_order_address,
   get_bos_kits,
@@ -68,6 +70,11 @@ router.post("/request-order", verify_auth, create_request_order);
 router.get("/gst/status", verify_auth, get_gst_status);
 router.post("/gst/generate-otp", verify_auth, gst_generate_otp);
 router.post("/gst/verify-otp", verify_auth, gst_verify_otp);
+
+// ── Checkout phone OTP (same proven flow as forgot-password OTP) ──────────────
+router.post("/checkout/send-phone-otp",   verify_auth, checkout_send_phone_otp);
+router.post("/checkout/verify-phone-otp", verify_auth, checkout_verify_phone_otp);
+
 router.get("/cart", verify_auth, get_cart);
 router.post("/cart", verify_auth, update_cart);
 router.get("/orders", verify_auth, get_orders);

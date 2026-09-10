@@ -9,7 +9,8 @@ import {
   MdErrorOutline,
   MdReceipt,
   MdShoppingCart,
-  MdInfoOutline
+  MdInfoOutline,
+  MdLocationOn
 } from "react-icons/md";
 import { FaBolt, FaRupeeSign, FaShieldAlt } from "react-icons/fa";
 import { getDirectEpcTransactions } from "../../api/solarshopAccounts";
@@ -248,10 +249,10 @@ export default function DirectEpcTransactions() {
                 <th className="px-4 sm:px-6 py-3.5">Transaction ID</th>
                 <th className="px-4 py-3.5">EPC Name</th>
                 <th className="px-4 py-3.5">Order / Product Name</th>
-                <th className="px-4 py-3.5">Customer Name</th>
-                <th className="px-4 py-3.5 text-right">Total Amount</th>
-                <th className="px-4 py-3.5 text-right">EPC Amount</th>
-                <th className="px-4 py-3.5 text-right">Company Amount</th>
+                <th className="px-4 py-3.5">Customer / Delivery Site</th>
+                <th className="px-4 py-3.5 text-right">Total Amount (Paid)</th>
+                <th className="px-4 py-3.5 text-right">Base Subtotal (Excl. Tax)</th>
+                <th className="px-4 py-3.5 text-right">Company Net Received</th>
                 <th className="px-4 py-3.5">Payment Date</th>
                 <th className="px-4 py-3.5 text-center">Payment Status</th>
                 <th className="px-4 sm:px-6 py-3.5 text-center">Action</th>
@@ -288,28 +289,84 @@ export default function DirectEpcTransactions() {
                     </td>
 
                     {/* Order or Product Name */}
-                    <td className="px-4 py-3.5 font-medium text-text-primary max-w-[200px] truncate" title={o.order_name}>
-                      {o.order_name}
+                    <td className="px-4 py-3.5 max-w-[260px]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-border bg-surface shrink-0 shadow-xs flex items-center justify-center">
+                          {o.primary_image ? (
+                            <img
+                              src={o.primary_image}
+                              alt={o.order_name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className="w-full h-full flex items-center justify-center bg-primary/10 text-primary"
+                            style={{ display: o.primary_image ? "none" : "flex" }}
+                          >
+                            <MdShoppingCart size={16} />
+                          </div>
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-xs text-text-primary leading-tight line-clamp-2" title={o.order_name}>
+                            {o.order_name}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {o.primary_capacity && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                ⚡ {o.primary_capacity}
+                              </span>
+                            )}
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-600 border border-purple-500/20 uppercase">
+                              {o.primary_scope || 'Kit'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </td>
 
-                    {/* Customer Name */}
-                    <td className="px-4 py-3.5 text-text-secondary max-w-[160px] truncate" title={o.customer_name}>
-                      {o.customer_name}
+                    {/* Customer & Delivery Site */}
+                    <td className="px-4 py-3.5 max-w-[220px]">
+                      <div className="font-semibold text-text-primary text-xs truncate" title={o.customer_name}>
+                        {o.customer_name.split(' (Site:')[0]}
+                      </div>
+                      <div className="text-[11px] text-text-muted flex items-center gap-1 mt-0.5 truncate" title={o.delivery_address?.line || 'Registered Site Address'}>
+                        <MdLocationOn size={13} className="text-primary shrink-0" />
+                        <span className="truncate">
+                          {o.delivery_address?.line || 'Registered Site Address'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-text-muted font-mono flex items-center gap-2 mt-0.5">
+                        <span>
+                          {[o.delivery_address?.district_name, o.delivery_address?.state_name].filter(Boolean).join(', ') || 'Direct Dispatch'}
+                          {o.delivery_address?.pincode ? ` (${o.delivery_address.pincode})` : ''}
+                        </span>
+                      </div>
                     </td>
 
-                    {/* Total Transaction Amount */}
+                    {/* Total Transaction Amount Paid by EPC */}
                     <td className="px-4 py-3.5 text-right font-mono font-bold text-text-primary whitespace-nowrap">
-                      {formatCurrency(o.total_transaction_amount)}
+                      <div>{formatCurrency(o.total_transaction_amount)}</div>
+                      <div className="text-[10px] text-text-muted font-sans font-normal">Paid by EPC (Incl. GST)</div>
                     </td>
 
-                    {/* EPC Amount */}
+                    {/* Base Subtotal (Excl. Tax) + Delivery breakdown */}
                     <td className="px-4 py-3.5 text-right font-mono text-text-secondary whitespace-nowrap">
-                      {formatCurrency(o.epc_amount)}
+                      <div>{formatCurrency(o.base_subtotal ?? o.epc_amount)}</div>
+                      <div className="text-[10px] text-amber-600 font-sans font-normal">+ {formatCurrency(o.tax_amount)} GST</div>
+                      {(o.delivery_amount > 0) && (
+                        <div className="text-[10px] text-sky-600 font-sans font-normal">+ {formatCurrency(o.delivery_amount)} Delivery</div>
+                      )}
                     </td>
 
-                    {/* Company Amount */}
+                    {/* Company Net Received */}
                     <td className="px-4 py-3.5 text-right font-mono font-bold text-purple-600 whitespace-nowrap">
-                      {formatCurrency(o.company_amount)}
+                      <div>{formatCurrency(o.company_amount)}</div>
+                      <div className="text-[10px] text-purple-500/80 font-sans font-normal">Grand Total (0% Comm.)</div>
                     </td>
 
                     {/* Payment Date */}

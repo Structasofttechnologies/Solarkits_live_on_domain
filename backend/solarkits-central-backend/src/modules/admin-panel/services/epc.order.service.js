@@ -131,13 +131,21 @@ async function processEpcCheckout({
         );
       }
 
-      // Round to integer paise (1 INR = 100 Paise).
-      const unitPricePaise = Math.round(ourPriceRupees * 100);
-      const itemSubtotal = qty * unitPricePaise;
-      const itemTax = Math.round(itemSubtotal * (gstRate / 100));
+      // ── CRITICAL: ourPrice from the shop API is GST-INCLUSIVE ──
+      // Formula in shop.handler.js: standardPrice = base × (1 + margin%) × (1 + gst%)
+      // So: ourPrice = baseExclGst × (1 + gstRate/100)
+      // Therefore: baseExclGst = ourPrice / (1 + gstRate/100)
+      // We store subtotal as base (excl. GST) and tax separately.
+      // grand_total = subtotal + tax = ourPrice × qty  ✓
+      const unitPriceInclGstPaise = Math.round(ourPriceRupees * 100);  // what EPC pays per kit
+      const unitBaseExclGstPaise  = Math.round(unitPriceInclGstPaise / (1 + gstRate / 100));
+      const unitTaxPaise          = unitPriceInclGstPaise - unitBaseExclGstPaise;
 
-      subtotalPaise += itemSubtotal;
-      taxTotalPaise += itemTax;
+      const itemBaseSubtotal = qty * unitBaseExclGstPaise;
+      const itemTax          = qty * unitTaxPaise;
+
+      subtotalPaise  += itemBaseSubtotal;
+      taxTotalPaise  += itemTax;
 
       directItems.push({
         item_type: item.item_type || (item.kit_id ? 'kit' : 'product'),
@@ -145,11 +153,13 @@ async function processEpcCheckout({
         kit_id: item.kit_id || item.id || null,
         item_name: item.kitName || item.title || item.name || 'Solar Kit',
         quantity: qty,
-        unit_price_paise: unitPricePaise,
-        cost_price_paise: Math.round(unitPricePaise * 0.85), // estimate until CompanyMargin lookup added
+        unit_price_paise: unitBaseExclGstPaise,       // base excl. GST (stored for subtotal)
+        unit_price_incl_gst_paise: unitPriceInclGstPaise, // what EPC actually pays per kit
+        cost_price_paise: Math.round(unitBaseExclGstPaise * 0.85),
+        gst_rate: gstRate,
         tax_paise: itemTax,
-        total_price_paise: itemSubtotal + itemTax,
-        platform_commission_pct: 0, // no commission on direct-fallback orders
+        total_price_paise: itemBaseSubtotal + itemTax, // = qty × ourPrice (incl. GST)
+        platform_commission_pct: 0,
       });
     }
 

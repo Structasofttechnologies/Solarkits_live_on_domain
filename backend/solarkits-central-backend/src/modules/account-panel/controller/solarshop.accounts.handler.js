@@ -534,6 +534,124 @@ const update_plan_payment_status = async (req, res) => {
 };
 
 /**
+ * Helper to resolve combo kit details including:
+ * - Full combo kit name & description
+ * - Cloudinary kit image
+ * - System capacity & type
+ * - Base components breakdown (Solar Panels & Inverter with SKU, brand, wattage, qty)
+ * - BOS kits breakdown (Electrical protection, structure, cabling with images and qty)
+ */
+async function enrichComboKitDetails(kitIds, productIds) {
+  const kitLookup = {};
+  const productLookup = {};
+
+  try {
+    const validKitObjIds = (kitIds || []).filter(id => id && mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+    const validProdObjIds = (productIds || []).filter(id => id && mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+
+    const db = mongoose.connection.db;
+    const [matchedKits1, matchedKits2, matchedProducts] = await Promise.all([
+      validKitObjIds.length > 0 ? db.collection('pc_comobo_kit').find({ _id: { $in: validKitObjIds } }).toArray() : [],
+      validKitObjIds.length > 0 ? db.collection('pc_combo_kits').find({ _id: { $in: validKitObjIds } }).toArray() : [],
+      validProdObjIds.length > 0 ? db.collection('products').find({ _id: { $in: validProdObjIds } }).toArray() : [],
+    ]);
+
+    const allKits = [...(matchedKits1 || [])];
+    (matchedKits2 || []).forEach(k => {
+      if (!allKits.find(x => x._id.toString() === k._id.toString())) allKits.push(k);
+    });
+
+    const templateIds = [];
+    const brandIds = [];
+    const skuIds = [];
+
+    allKits.forEach(k => {
+      if (k.brand_id && mongoose.Types.ObjectId.isValid(k.brand_id)) brandIds.push(new mongoose.Types.ObjectId(k.brand_id));
+      (k.base_components || []).forEach(bc => {
+        if (bc.template_id && mongoose.Types.ObjectId.isValid(bc.template_id)) templateIds.push(new mongoose.Types.ObjectId(bc.template_id));
+        if (bc.brand_id && mongoose.Types.ObjectId.isValid(bc.brand_id)) brandIds.push(new mongoose.Types.ObjectId(bc.brand_id));
+        if (bc.sku_id && mongoose.Types.ObjectId.isValid(bc.sku_id)) skuIds.push(new mongoose.Types.ObjectId(bc.sku_id));
+      });
+      (k.bos_kits || []).forEach(bk => {
+        if (bk.brand_id && mongoose.Types.ObjectId.isValid(bk.brand_id)) brandIds.push(new mongoose.Types.ObjectId(bk.brand_id));
+      });
+    });
+
+    const [templates, brands, skus] = await Promise.all([
+      templateIds.length > 0 ? db.collection('pc_product_templates').find({ _id: { $in: templateIds } }).toArray() : [],
+      brandIds.length > 0 ? db.collection('brands').find({ _id: { $in: brandIds } }).toArray() : [],
+      skuIds.length > 0 ? db.collection('pc_product_skus').find({ _id: { $in: skuIds } }).toArray() : [],
+    ]);
+
+    const templateMap = {};
+    (templates || []).forEach(t => { templateMap[t._id.toString()] = t.name; });
+    const brandMap = {};
+    (brands || []).forEach(b => { brandMap[b._id.toString()] = b.name; });
+    const skuMap = {};
+    (skus || []).forEach(s => { skuMap[s._id.toString()] = s.name || s.sku_code; });
+
+    allKits.forEach(k => {
+      const kitBrandName = brandMap[k.brand_id?.toString()] || '';
+
+      const resolvedBaseComponents = (k.base_components || []).map(bc => {
+        const typeName = templateMap[bc.template_id?.toString()] || 'Component';
+        const brandName = brandMap[bc.brand_id?.toString()] || kitBrandName || 'Standard Brand';
+        const skuName = skuMap[bc.sku_id?.toString()] || 'Standard Specification';
+        const isPanel = typeName.toLowerCase().includes('panel');
+        const isInverter = typeName.toLowerCase().includes('inverter');
+
+        return {
+          type: typeName,
+          category: isPanel ? 'panel' : isInverter ? 'inverter' : 'bos',
+          brand: brandName,
+          sku: skuName,
+          quantity_per_kit: bc.quantity || 1,
+        };
+      });
+
+      const resolvedBosKits = (k.bos_kits || []).map(bk => ({
+        name: bk.name,
+        brand: brandMap[bk.brand_id?.toString()] || 'Standard Industrial Grade',
+        image: bk.image || null,
+        quantity_per_kit: bk.quantity || 1,
+      }));
+
+      const panelComp = resolvedBaseComponents.find(c => c.category === 'panel') || null;
+      const inverterComp = resolvedBaseComponents.find(c => c.category === 'inverter') || null;
+
+      kitLookup[k._id.toString()] = {
+        id: k._id.toString(),
+        name: k.name || k.kitName,
+        image: k.kit_image || k.image || (k.images && k.images[0]),
+        capacity: k.capacity ? `${k.capacity} kW` : null,
+        system_type: k.system_type || 'on_grid',
+        inverter_mode: k.inverter_mode || 'single',
+        description: k.description,
+        brand_name: kitBrandName,
+        panel_component: panelComp,
+        inverter_component: inverterComp,
+        base_components: resolvedBaseComponents,
+        bos_kits: resolvedBosKits,
+      };
+    });
+
+    (matchedProducts || []).forEach(p => {
+      productLookup[p._id.toString()] = {
+        id: p._id.toString(),
+        name: p.name || p.title,
+        image: p.image || p.image_url || (p.images && p.images[0]),
+        sku: p.sku_code,
+        description: p.description,
+      };
+    });
+  } catch (err) {
+    console.error('enrichComboKitDetails error:', err);
+  }
+
+  return { kitLookup, productLookup };
+}
+
+/**
  * ─────────────────────────────────────────────────────────────────────────────
  * 4. Direct EPC Transactions (Page 2)
  * ─────────────────────────────────────────────────────────────────────────────
@@ -573,15 +691,53 @@ const get_direct_epc_transactions = async (req, res) => {
 
     const orders = await EpcOrder.find(query)
       .sort({ created_at: -1 })
-      .populate('epc_id', 'name email whatsapp gstin status')
+      .populate('epc_id', 'name email whatsapp gstin status address pincode district_name state_name')
       .lean();
 
+    // Collect all kit and product IDs to resolve images and accurate names
+    const allKitIds = [];
+    const allProductIds = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(i => {
+        if (i.kit_id) allKitIds.push(i.kit_id);
+        if (i.product_id) allProductIds.push(i.product_id);
+      });
+    });
+
+    const { kitLookup, productLookup } = await enrichComboKitDetails(allKitIds, allProductIds);
+
     const enriched = orders.map((o) => {
-      const itemNames = (o.items || []).map(i => `${i.item_name} (x${i.quantity})`).join(', ') || 'Solar Equipment / Kit';
-      const totalAmount = (o.grand_total_paise || 0) / 100;
-      const epcAmount = (o.subtotal_paise || 0) / 100;
-      const taxAmount = (o.tax_total_paise || 0) / 100;
-      const companyAmount = totalAmount; // For direct EPC, full amount flows to company (0 franchise commission)
+      const enrichedItems = (o.items || []).map(i => {
+        const kitInfo = i.kit_id ? kitLookup[i.kit_id.toString()] : null;
+        const prodInfo = i.product_id ? productLookup[i.product_id.toString()] : null;
+        const resolvedName = (i.item_name && i.item_name !== 'Solar Kit') ? i.item_name : (kitInfo?.name || prodInfo?.name || i.item_name || 'Solar Kit');
+        const resolvedImage = kitInfo?.image || prodInfo?.image || i.image || null;
+        return {
+          ...i,
+          item_name: resolvedName,
+          image: resolvedImage,
+          capacity: kitInfo?.capacity || null,
+          description: kitInfo?.description || prodInfo?.description || null,
+          combo_kit_breakdown: kitInfo || null,
+        };
+      });
+
+      const firstItem = enrichedItems[0] || {};
+      const itemNames = enrichedItems.map(i => `${i.item_name} (x${i.quantity})`).join(', ') || 'Solar Equipment / Kit';
+
+      // ── Correct Financial Calculation for Direct EPC ──
+      // grand_total_paise = subtotal_paise + tax_total_paise + shipping_fee_paise
+      // EPC pays the full grand total (incl. GST & delivery)
+      // Company net received = grand_total (no franchise commission for direct orders)
+      const subtotalAmount = (o.subtotal_paise || 0) / 100;           // Base price excl. tax
+      const taxAmount = (o.tax_total_paise || 0) / 100;               // GST amount
+      const deliveryAmount = (o.shipping_fee_paise || 0) / 100;       // Delivery / shipping charges
+      const totalAmount = (o.grand_total_paise || 0) / 100;           // What EPC actually paid
+      // Sanity-check: if grand_total_paise was not set correctly, recalculate
+      const recalcTotal = subtotalAmount + taxAmount + deliveryAmount;
+      const effectiveTotalAmount = totalAmount > 0 ? totalAmount : recalcTotal;
+      // For direct EPC: company receives full payment (no franchise cut)
+      const companyAmount = effectiveTotalAmount;
 
       let pStatus = 'Pending';
       if (o.payment_status === 'captured' || o.payment_status === 'paid') pStatus = 'Paid';
@@ -590,6 +746,18 @@ const get_direct_epc_transactions = async (req, res) => {
       else if (o.payment_status === 'pending_verification' || o.payment_status === 'pending') pStatus = 'Pending';
 
       const cleanUtr = o.offline_payment?.utr_number || o.payment_reference || 'N/A';
+
+      // Fallback delivery address from EPC profile if not saved during checkout
+      const resolvedAddress = {
+        line: o.delivery_address?.line || o.epc_id?.address || 'Direct Site Address',
+        pincode: o.delivery_address?.pincode || o.epc_id?.pincode || '',
+        district_name: o.delivery_address?.district_name || o.epc_id?.district_name || '',
+        state_name: o.delivery_address?.state_name || o.epc_id?.state_name || '',
+        contact_name: o.delivery_address?.contact_name || o.epc_id?.name || 'Site Manager',
+        contact_phone: o.delivery_address?.contact_phone || o.epc_id?.whatsapp || ''
+      };
+
+      const siteLabel = resolvedAddress.line ? ` (Site: ${resolvedAddress.line}${resolvedAddress.pincode ? ` - ${resolvedAddress.pincode}` : ''})` : '';
 
       return {
         id: o._id,
@@ -600,13 +768,19 @@ const get_direct_epc_transactions = async (req, res) => {
         epc_email: o.epc_id?.email || 'N/A',
         epc_phone: o.epc_id?.whatsapp || 'N/A',
         order_name: itemNames,
-        customer_name: o.delivery_address?.line ? `${o.epc_id?.name || 'Client'} (Site: ${o.delivery_address.line})` : o.epc_id?.name || 'Direct Client',
-        total_transaction_amount: totalAmount,
-        epc_amount: epcAmount,
-        tax_amount: taxAmount,
-        company_amount: companyAmount,
-        franchise_commission: 0, // Explicitly zero
-        commission_rate: 0,      // Explicitly zero
+        primary_item_name: firstItem.item_name || itemNames,
+        primary_image: firstItem.image || null,
+        primary_capacity: firstItem.capacity || null,
+        primary_scope: firstItem.scope_type || 'kit',
+        customer_name: `${o.epc_id?.name || 'Direct Client'}${siteLabel}`,
+        total_transaction_amount: effectiveTotalAmount,
+        base_subtotal: subtotalAmount,        // Base price excl. GST
+        epc_amount: subtotalAmount,           // Kept for backward compat (= base subtotal)
+        tax_amount: taxAmount,                // GST component
+        delivery_amount: deliveryAmount,       // Shipping / delivery charges
+        company_amount: companyAmount,         // Net received by company (= grand_total for direct)
+        franchise_commission: 0,              // Explicitly zero
+        commission_rate: 0,                   // Explicitly zero
         payment_date: o.offline_payment?.payment_date || o.created_at,
         payment_status: pStatus,
         order_status: o.order_status || 'confirmed',
@@ -620,9 +794,9 @@ const get_direct_epc_transactions = async (req, res) => {
         offline_payment: o.offline_payment || {},
         invoice: o.invoice || {},
         dispatch_tracking: o.dispatch_tracking || {},
-        items_count: (o.items || []).length,
-        items: o.items || [],
-        delivery_address: o.delivery_address,
+        items_count: enrichedItems.length,
+        items: enrichedItems,
+        delivery_address: resolvedAddress,
         created_at: o.created_at
       };
     });
@@ -1479,18 +1653,35 @@ const get_transaction_details = async (req, res) => {
 
     // Direct EPC or Franchise Order
     const order = await EpcOrder.findById(id)
-      .populate('epc_id', 'name email whatsapp gstin onboarding_source address')
+      .populate('epc_id', 'name email whatsapp gstin onboarding_source address pincode district_name state_name')
       .populate('reseller_id', 'business_name mobile email gst_number contact_person address')
       .lean();
 
     if (!order) return res.status(404).json({ status: 'error', message: 'Order transaction not found' });
 
+    // Collect and enrich combo kit details for all order items
+    const orderKitIds = [];
+    const orderProductIds = [];
+    (order.items || []).forEach(i => {
+      if (i.kit_id) orderKitIds.push(i.kit_id);
+      if (i.product_id) orderProductIds.push(i.product_id);
+    });
+
+    const { kitLookup, productLookup } = await enrichComboKitDetails(orderKitIds, orderProductIds);
+
     const isDirect = !order.reseller_id || order.routing_source === 'direct_fallback';
-    const totalAmount = (order.grand_total_paise || 0) / 100;
-    const subtotal = (order.subtotal_paise || 0) / 100;
-    const taxTotal = (order.tax_total_paise || 0) / 100;
+
+    // ── Authoritative Financial Breakdown ──
+    // grand_total = subtotal (base excl. tax) + tax + shipping_fee
+    const subtotal = (order.subtotal_paise || 0) / 100;                       // Base price excl. GST
+    const taxTotal = (order.tax_total_paise || 0) / 100;                      // GST amount
+    const deliveryCharge = (order.shipping_fee_paise || 0) / 100;             // Shipping/delivery charges
+    const storedTotal = (order.grand_total_paise || 0) / 100;                 // Grand total as stored
+    // Recalculate total from components for accuracy
+    const totalAmount = storedTotal > 0 ? storedTotal : (subtotal + taxTotal + deliveryCharge);
     const franchiseCommission = isDirect ? 0 : ((order.reseller_total_margin_paise || 0) / 100);
-    const companyAmount = isDirect ? totalAmount : (totalAmount - franchiseCommission);
+    // Company net = grand_total minus franchise commission (if any)
+    const companyAmount = totalAmount - franchiseCommission;
 
     let pStatus = 'Pending';
     if (order.payment_status === 'captured' || order.payment_status === 'paid') pStatus = 'Paid';
@@ -1502,6 +1693,67 @@ const get_transaction_details = async (req, res) => {
       cStatus = order.order_status === 'delivered' ? 'Paid' : order.order_status === 'cancelled' ? 'Failed' : 'Pending';
     }
 
+    // Resolved delivery address with fallback to EPC profile
+    const resolvedDeliveryAddress = {
+      line: order.delivery_address?.line || order.epc_id?.address || 'Site delivery address registered with EPC account',
+      pincode: order.delivery_address?.pincode || order.epc_id?.pincode || '',
+      district_name: order.delivery_address?.district_name || order.epc_id?.district_name || '',
+      state_name: order.delivery_address?.state_name || order.epc_id?.state_name || '',
+      contact_name: order.delivery_address?.contact_name || order.epc_id?.name || 'Site Contact',
+      contact_phone: order.delivery_address?.contact_phone || order.epc_id?.whatsapp || ''
+    };
+
+    const enrichedItems = (order.items || []).map(i => {
+      const kitInfo = i.kit_id ? kitLookup[i.kit_id.toString()] : null;
+      const prodInfo = i.product_id ? productLookup[i.product_id.toString()] : null;
+      const resolvedName = (i.item_name && i.item_name !== 'Solar Kit') ? i.item_name : (kitInfo?.name || prodInfo?.name || i.item_name || 'Solar Kit');
+      const resolvedImage = kitInfo?.image || prodInfo?.image || i.image || null;
+
+      let breakdown = null;
+      if (kitInfo) {
+        breakdown = {
+          kit_name: kitInfo.name,
+          kit_image: kitInfo.image,
+          capacity: kitInfo.capacity,
+          system_type: kitInfo.system_type,
+          inverter_mode: kitInfo.inverter_mode,
+          description: kitInfo.description,
+          brand_name: kitInfo.brand_name,
+          panel_component: kitInfo.panel_component ? {
+            ...kitInfo.panel_component,
+            total_quantity: (kitInfo.panel_component.quantity_per_kit || 1) * (i.quantity || 1),
+          } : null,
+          inverter_component: kitInfo.inverter_component ? {
+            ...kitInfo.inverter_component,
+            total_quantity: (kitInfo.inverter_component.quantity_per_kit || 1) * (i.quantity || 1),
+          } : null,
+          base_components: (kitInfo.base_components || []).map(bc => ({
+            ...bc,
+            total_quantity: (bc.quantity_per_kit || 1) * (i.quantity || 1),
+          })),
+          bos_kits: (kitInfo.bos_kits || []).map(bk => ({
+            ...bk,
+            total_quantity: (bk.quantity_per_kit || 1) * (i.quantity || 1),
+          })),
+        };
+      }
+
+      return {
+        item_name: resolvedName,
+        scope_type: i.scope_type || 'kit',
+        quantity: i.quantity || 1,
+        unit_price: (i.unit_price_paise || 0) / 100,
+        cost_price: (i.cost_price_paise || 0) / 100,
+        reseller_margin: isDirect ? 0 : ((i.reseller_margin_paise || 0) / 100),
+        tax_paise: (i.tax_paise || 0) / 100,
+        total_price: (i.total_price_paise || 0) / 100,
+        image: resolvedImage,
+        capacity: kitInfo?.capacity || null,
+        description: kitInfo?.description || prodInfo?.description || null,
+        combo_kit_breakdown: breakdown,
+      };
+    });
+
     return res.status(200).json({
       status: 'success',
       data: {
@@ -1509,6 +1761,7 @@ const get_transaction_details = async (req, res) => {
         transaction_type: isDirect ? 'Direct EPC Transaction' : 'Franchise Onboarded EPC Order',
         type_key: isDirect ? 'direct_epc' : 'commission',
         is_direct: isDirect,
+        delivery_address: resolvedDeliveryAddress,
         epc_details: {
           id: order.epc_id?._id,
           name: order.epc_id?.name || 'EPC Buyer',
@@ -1525,23 +1778,28 @@ const get_transaction_details = async (req, res) => {
           email: order.reseller_id?.email,
           gst_number: order.reseller_id?.gst_number || 'N/A',
         },
-        items: (order.items || []).map(i => ({
-          item_name: i.item_name,
-          scope_type: i.scope_type,
-          quantity: i.quantity,
-          unit_price: (i.unit_price_paise || 0) / 100,
-          cost_price: (i.cost_price_paise || 0) / 100,
-          reseller_margin: isDirect ? 0 : ((i.reseller_margin_paise || 0) / 100),
-          tax_paise: (i.tax_paise || 0) / 100,
-          total_price: (i.total_price_paise || 0) / 100
-        })),
+        items: enrichedItems,
         financial_breakdown: {
+          // EPC paid = grand total (base + GST + delivery)
           total_amount: totalAmount,
-          epc_amount: subtotal,
+          // Base product subtotal (excl. all taxes and charges)
+          base_subtotal: subtotal,
+          epc_amount: subtotal,            // Backward compat alias = base subtotal
+          // Tax breakdown
           tax_amount: taxTotal,
+          // Delivery / logistics charges
+          delivery_charge: deliveryCharge,
+          // Company net received = grand_total - franchise commission
           company_amount: companyAmount,
           franchise_commission: franchiseCommission,
-          currency: 'INR'
+          currency: 'INR',
+          // Calculation audit trail
+          _audit: {
+            formula: 'total_amount = base_subtotal + tax_amount + delivery_charge',
+            check_sum: Math.round((subtotal + taxTotal + deliveryCharge) * 100) === Math.round(totalAmount * 100),
+            stored_grand_total: storedTotal,
+            recalculated_total: subtotal + taxTotal + deliveryCharge,
+          }
         },
         payment_info: {
           payment_status: pStatus,
@@ -1555,7 +1813,7 @@ const get_transaction_details = async (req, res) => {
           sender_bank_name: order.offline_payment?.sender_bank_name || '',
           rejection_reason: order.offline_payment?.rejection_reason || '',
           order_status: order.order_status,
-          delivery_address: order.delivery_address,
+          delivery_address: resolvedDeliveryAddress,
           invoice: order.invoice || {},
           dispatch_tracking: order.dispatch_tracking || {},
         },
@@ -1577,7 +1835,7 @@ const verify_epc_order_payment = async (req, res) => {
     const { decision, rejection_reason, notes } = req.body;
     const admin_user_id = req.user?.id || req.user?._id;
 
-    const { reviewEpcOfflinePayment } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const { reviewEpcOfflinePayment } = require('../../admin-panel/services/epc.offline.checkout.service');
     const updatedOrder = await reviewEpcOfflinePayment({
       order_id: id,
       admin_user_id,
@@ -1609,7 +1867,7 @@ const dispatch_epc_order = async (req, res) => {
     const { courier_name, tracking_number, tracking_url, estimated_delivery, dispatch_notes } = req.body;
     const admin_user_id = req.user?.id || req.user?._id;
 
-    const { updateEpcOrderDispatch } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const { updateEpcOrderDispatch } = require('../../admin-panel/services/epc.offline.checkout.service');
     const updatedOrder = await updateEpcOrderDispatch({
       order_id: id,
       admin_user_id,
@@ -1640,7 +1898,7 @@ const deliver_epc_order = async (req, res) => {
     const { id } = req.params;
     const admin_user_id = req.user?.id || req.user?._id;
 
-    const { markEpcOrderDelivered } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const { markEpcOrderDelivered } = require('../../admin-panel/services/epc.offline.checkout.service');
     const updatedOrder = await markEpcOrderDelivered(id, admin_user_id, req);
 
     return res.status(200).json({
@@ -1656,7 +1914,7 @@ const deliver_epc_order = async (req, res) => {
 
 const get_epc_po_payments = async (req, res) => {
   try {
-    const { FpoOrder } = require('../../models/india_solarshop_db');
+    const { FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
     const orders = await FpoOrder.find({
       "items.epc_allocations.payment_status": { $in: ["RECEIPT_SUBMITTED", "VERIFIED"] }
     }).populate('franchisee_id', 'business_name mobile email').sort({ updated_at: -1 }).lean();
@@ -1676,7 +1934,7 @@ const verify_epc_po_payment = async (req, res) => {
     const { poId, epcId } = req.params;
     const { action } = req.body; // 'approve' or 'reject'
     
-    const { FpoOrder } = require('../../models/india_solarshop_db');
+    const { FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
     const order = await FpoOrder.findOne({ _id: poId });
 
     if (!order) {

@@ -49,10 +49,10 @@ export default function TrialKitOrderModal({
   const unitPrice = useMemo(() => {
     return Number(
       currentVariant?.ourPrice ||
-        kit?.ourPrice ||
-        kit?.selling_price_inr ||
-        kit?.price ||
-        0
+      kit?.ourPrice ||
+      kit?.selling_price_inr ||
+      kit?.price ||
+      0
     );
   }, [currentVariant, kit]);
 
@@ -94,7 +94,7 @@ export default function TrialKitOrderModal({
         console.error("Delivery freight calculation error:", err);
         setErrorMsg(
           err.response?.data?.message ||
-            "Unable to calculate freight for this PIN code. Please try again."
+          "Unable to calculate freight for this PIN code. Please try again."
         );
       } finally {
         setLoading(false);
@@ -259,7 +259,7 @@ export default function TrialKitOrderModal({
                 leftIcon={<FaTruck className={loading ? "animate-bounce" : ""} />}
                 className="shrink-0 font-bold px-4"
               >
-                {loading ? "Checking..." : "Check Freight"}
+                {loading ? "Checking..." : "Check Charge"}
               </Button>
             </div>
             <p className="text-[11px] text-text-muted mt-2">

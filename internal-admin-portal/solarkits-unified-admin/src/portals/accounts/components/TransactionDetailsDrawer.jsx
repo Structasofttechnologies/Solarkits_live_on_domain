@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,8 +17,8 @@ import {
   MdDoneAll,
   MdOutlineAccessTime
 } from "react-icons/md";
-import { FaRupeeSign, FaShieldAlt } from "react-icons/fa";
-import { getTransactionDetails, verifyEpcOrderPayment, dispatchEpcOrder, deliverEpcOrder } from "../api/solarshopAccounts";
+import { FaRupeeSign, FaShieldAlt, FaSolarPanel, FaBolt, FaBoxOpen, FaTools } from "react-icons/fa";
+import { getTransactionDetails, verifyEpcOrderPayment, dispatchEpcOrder } from "../api/solarshopAccounts";
 import Button from "./Button";
 
 export default function TransactionDetailsDrawer({ isOpen, onClose, transaction, onStatusUpdated }) {
@@ -306,7 +307,7 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                   <div className="p-5 rounded-2xl bg-linear-135 from-primary/5 via-surface to-primary/10 border border-primary/20 shadow-sm relative overflow-hidden">
                     <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-primary/10 rounded-full blur-xl pointer-events-none" />
                     <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1">
-                      Total Transaction Value
+                      Total Amount Paid by EPC (Incl. GST & Delivery)
                     </span>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl sm:text-3xl font-extrabold text-text-primary font-mono tracking-tight">
@@ -315,59 +316,103 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                             ? details.financial_breakdown.total_amount
                             : details?.total_amount != null
                             ? details.total_amount
-                            : transaction?.total_amount || transaction?.plan_amount || 0
+                            : transaction?.total_transaction_amount || transaction?.total_amount || transaction?.plan_amount || 0
                         )}
                       </span>
                       <span className="text-xs font-semibold text-text-muted">INR</span>
                     </div>
 
-                    {/* Split details */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-border/60">
+                    {/* Split details — correct financial formula */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
+                      {/* 1. Base Subtotal (excl. all charges) */}
                       <div>
-                        <span className="text-[10px] font-bold text-text-muted uppercase block">Company Share</span>
+                        <span className="text-[10px] font-bold text-text-muted uppercase block">Base Subtotal</span>
+                        <span className="text-sm font-bold text-text-primary">
+                          {formatCurrency(
+                            details?.financial_breakdown?.base_subtotal != null
+                              ? details.financial_breakdown.base_subtotal
+                              : details?.financial_breakdown?.epc_amount != null
+                              ? details.financial_breakdown.epc_amount
+                              : details?.base_subtotal ?? details?.epc_amount ?? transaction?.epc_amount ?? 0
+                          )}
+                        </span>
+                        <span className="text-[10px] text-text-muted block mt-0.5">Excl. GST & Delivery</span>
+                      </div>
+
+                      {/* 2. GST / Tax */}
+                      <div>
+                        <span className="text-[10px] font-bold text-text-muted uppercase block">GST / Tax</span>
+                        <span className="text-sm font-bold text-amber-600">
+                          {formatCurrency(
+                            details?.financial_breakdown?.tax_amount != null
+                              ? details.financial_breakdown.tax_amount
+                              : details?.tax_amount ?? transaction?.tax_amount ?? 0
+                          )}
+                        </span>
+                        <span className="text-[10px] text-amber-600/80 block mt-0.5">GST @ 13.8%</span>
+                      </div>
+
+                      {/* 3. Delivery Charges (Direct EPC) OR Franchise Commission (onboarded) */}
+                      {!isPlan && (
+                        <div>
+                          {isDirectEpc ? (
+                            <>
+                              <span className="text-[10px] font-bold text-sky-700 dark:text-sky-400 uppercase block">Delivery Charges</span>
+                              <span className="text-sm font-bold text-sky-600">
+                                {formatCurrency(
+                                  details?.financial_breakdown?.delivery_charge != null
+                                    ? details.financial_breakdown.delivery_charge
+                                    : details?.delivery_amount ?? transaction?.delivery_amount ?? 0
+                                )}
+                              </span>
+                              <span className="text-[10px] text-sky-600/80 block mt-0.5">Logistics / Shipping</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block">Franchise Comm.</span>
+                              <span className="text-sm font-bold text-emerald-600">
+                                {formatCurrency(
+                                  details?.financial_breakdown?.franchise_commission != null
+                                    ? details.financial_breakdown.franchise_commission
+                                    : details?.franchise_commission ?? transaction?.franchise_commission ?? 0
+                                )}
+                              </span>
+                              <span className="text-[10px] text-text-muted block mt-0.5">Partner Share</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 4. Company Net Received */}
+                      <div>
+                        <span className="text-[10px] font-bold text-primary uppercase block">Company Net Received</span>
                         <span className="text-sm font-bold text-primary">
                           {formatCurrency(
                             details?.financial_breakdown?.company_amount != null
                               ? details.financial_breakdown.company_amount
-                              : details?.company_amount != null
-                              ? details.company_amount
-                              : transaction?.company_amount || 0
+                              : details?.company_amount ?? transaction?.company_amount ?? 0
                           )}
                         </span>
+                        <span className="text-[10px] text-primary/80 block mt-0.5">
+                          {isDirectEpc ? 'Grand Total (No Commission)' : 'After Partner Comm.'}
+                        </span>
                       </div>
-
-                      {!isPlan && (
-                        <div>
-                          <span className="text-[10px] font-bold text-text-muted uppercase block">EPC Amount</span>
-                          <span className="text-sm font-bold text-text-primary">
-                            {formatCurrency(
-                              details?.financial_breakdown?.epc_amount != null
-                                ? details.financial_breakdown.epc_amount
-                                : details?.epc_amount != null
-                                ? details.epc_amount
-                                : transaction?.epc_amount || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {!isPlan && (
-                        <div>
-                          <span className="text-[10px] font-bold text-text-muted uppercase block">
-                            Franchise Commission
-                          </span>
-                          <span className={`text-sm font-bold ${isDirectEpc ? 'text-text-muted line-through' : 'text-emerald-600'}`}>
-                            {isDirectEpc ? '₹0.00 (0%)' : formatCurrency(
-                              details?.financial_breakdown?.franchise_commission != null
-                                ? details.financial_breakdown.franchise_commission
-                                : details?.franchise_commission != null
-                                ? details.franchise_commission
-                                : transaction?.franchise_commission || 0
-                            )}
-                          </span>
-                        </div>
-                      )}
                     </div>
+
+                    {/* Formula annotation for full transparency */}
+                    {!isPlan && (
+                      <div className="mt-3 pt-3 border-t border-border/40 text-[10px] text-text-muted font-mono flex flex-wrap items-center gap-1">
+                        <span className="text-text-muted/60">Ledger:</span>
+                        <span>Base Subtotal</span>
+                        <span className="text-amber-500">+ GST</span>
+                        {isDirectEpc && <span className="text-sky-500">+ Delivery</span>}
+                        {!isDirectEpc && <span className="text-emerald-500">− Franchise Comm.</span>}
+                        <span>=</span>
+                        <span className="font-bold text-primary">
+                          {isDirectEpc ? 'Total Paid = Company Net' : 'Company Net Received'}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Context Cards: Franchise Partner & EPC Details */}
@@ -452,7 +497,7 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
 
                     {/* EPC Contractor Details (For Direct EPC or Onboarded Orders) */}
                     {(details?.epc_details || !isPlan || transaction?.epc_name) && (
-                      <div className={`p-4 rounded-xl bg-surface-hover/30 border border-border space-y-2.5 ${isDirectEpc ? 'md:col-span-2' : ''}`}>
+                      <div className="p-4 rounded-xl bg-surface-hover/30 border border-border space-y-2.5">
                         <div className="flex items-center gap-2 text-purple-600 font-bold text-xs uppercase tracking-wider pb-1 border-b border-border/50">
                           <MdPerson size={16} />
                           EPC Contractor Details
@@ -491,6 +536,51 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                         </div>
                       </div>
                     )}
+
+                    {/* Delivery & Installation Site Address Card */}
+                    {(!isPlan && (details?.delivery_address || details?.payment_info?.delivery_address || transaction?.delivery_address)) && (
+                      <div className="p-4 rounded-xl bg-surface-hover/30 border border-border space-y-2.5">
+                        <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider pb-1 border-b border-border/50">
+                          <MdLocalShipping size={16} />
+                          Delivery & Site Address
+                        </div>
+                        <div>
+                          <p className="text-xs text-text-muted font-medium">Site Street Address</p>
+                          <p className="text-sm font-semibold text-text-primary">
+                            {details?.delivery_address?.line || details?.payment_info?.delivery_address?.line || transaction?.delivery_address?.line || 'Registered Site Address'}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-text-muted block">District & State</span>
+                            <span className="font-semibold text-text-primary">
+                              {[
+                                details?.delivery_address?.district_name || details?.payment_info?.delivery_address?.district_name || transaction?.delivery_address?.district_name,
+                                details?.delivery_address?.state_name || details?.payment_info?.delivery_address?.state_name || transaction?.delivery_address?.state_name
+                              ].filter(Boolean).join(', ') || 'N/A'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-text-muted block">PIN Code</span>
+                            <span className="font-mono font-bold text-primary">
+                              {details?.delivery_address?.pincode || details?.payment_info?.delivery_address?.pincode || transaction?.delivery_address?.pincode || 'N/A'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-text-muted block">Site Contact Person</span>
+                            <span className="font-semibold text-text-primary">
+                              {details?.delivery_address?.contact_name || details?.payment_info?.delivery_address?.contact_name || transaction?.delivery_address?.contact_name || details?.epc_details?.name || 'Site Manager'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-text-muted block">Contact Phone</span>
+                            <span className="font-semibold text-text-primary font-mono">
+                              {details?.delivery_address?.contact_phone || details?.payment_info?.delivery_address?.contact_phone || transaction?.delivery_address?.contact_phone || details?.epc_details?.whatsapp || 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Plan / Product Line Items Breakdown Table */}
@@ -522,38 +612,210 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                         </div>
                       </div>
                     ) : (
-                      <div className="border border-border rounded-xl overflow-hidden bg-surface">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs">
-                            <thead className="bg-surface-hover/50 text-text-muted font-semibold border-b border-border">
-                              <tr>
-                                <th className="px-3 py-2.5">Item Name</th>
-                                <th className="px-3 py-2.5 text-center">Qty</th>
-                                <th className="px-3 py-2.5 text-right">Unit Price</th>
-                                {!isDirectEpc && <th className="px-3 py-2.5 text-right">Margin / Comm</th>}
-                                <th className="px-3 py-2.5 text-right">Total Price</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/50">
-                              {(details?.items || transaction?.items || []).map((item, idx) => (
-                                <tr key={idx} className="hover:bg-surface-hover/30 transition-colors">
-                                  <td className="px-3 py-2.5 font-medium text-text-primary max-w-[200px] truncate">
+                      <div className="space-y-4">
+                        {/* Detailed Equipment & Component Bill of Materials (BOM) Cards */}
+                        {(details?.items || transaction?.items || []).map((item, idx) => {
+                          const breakdown = item.combo_kit_breakdown;
+                          const hasBOM = Boolean(breakdown && (breakdown.base_components?.length > 0 || breakdown.bos_kits?.length > 0));
+
+                          return (
+                            <div key={idx} className="border border-border rounded-2xl overflow-hidden bg-surface shadow-xs space-y-3 p-4">
+                              {/* Primary Kit / Equipment Header */}
+                              <div className="flex items-start gap-3.5 pb-3 border-b border-border/60">
+                                <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-xl overflow-hidden border border-border bg-surface shadow-xs flex items-center justify-center">
+                                  {item.image || breakdown?.kit_image ? (
+                                    <img
+                                      src={item.image || breakdown?.kit_image}
+                                      alt={item.item_name}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                        if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = "flex";
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    className="w-full h-full flex items-center justify-center bg-primary/10 text-primary"
+                                    style={{ display: (item.image || breakdown?.kit_image) ? "none" : "flex" }}
+                                  >
+                                    <FaBoxOpen size={24} />
+                                  </div>
+                                </div>
+
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <h4 className="font-extrabold text-sm text-text-primary leading-snug">
                                     {item.item_name}
-                                  </td>
-                                  <td className="px-3 py-2.5 text-center font-bold text-text-secondary">{item.quantity}</td>
-                                  <td className="px-3 py-2.5 text-right font-mono">{formatCurrency(item.unit_price)}</td>
-                                  {!isDirectEpc && (
-                                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-emerald-600">
-                                      {formatCurrency(item.reseller_margin)}
-                                    </td>
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {(item.capacity || breakdown?.capacity) && (
+                                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                        ⚡ {item.capacity || breakdown?.capacity}
+                                      </span>
+                                    )}
+                                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase">
+                                      Scope: {item.scope_type || 'Kit'}
+                                    </span>
+                                    <span className="text-xs text-text-secondary">
+                                      Ordered: <strong className="text-text-primary font-bold">{item.quantity} Kit(s)</strong>
+                                    </span>
+                                    {breakdown?.system_type && (
+                                      <span className="text-[10px] text-text-muted bg-surface-hover px-1.5 py-0.5 rounded border border-border">
+                                        {breakdown.system_type === 'on_grid' ? 'On-Grid' : breakdown.system_type}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {(item.description || breakdown?.description) && (
+                                    <p className="text-[11px] text-text-muted line-clamp-2 leading-relaxed mt-1">
+                                      {item.description || breakdown?.description}
+                                    </p>
                                   )}
-                                  <td className="px-3 py-2.5 text-right font-mono font-bold text-text-primary">
-                                    {formatCurrency(item.total_price)}
-                                  </td>
+                                </div>
+                              </div>
+
+                              {/* Technical Bill of Materials (BOM) Breakdown: Panels, Inverter & BOS Kits */}
+                              {hasBOM && (
+                                <div className="space-y-3 pt-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
+                                      <FaTools className="text-primary" size={13} />
+                                      Included System Components & Hardware Bill of Materials (BOM)
+                                    </span>
+                                    <span className="text-[10px] text-text-muted font-mono">
+                                      Per Kit & Total Dispatch Quantity
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {/* 1. Solar Panels (PV Modules) */}
+                                    {breakdown.panel_component && (
+                                      <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                                            <FaSolarPanel className="text-amber-500" size={15} />
+                                            Solar Panels (PV Modules)
+                                          </span>
+                                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded">
+                                            {breakdown.panel_component.quantity_per_kit} panels / kit
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-text-primary font-semibold">
+                                          {breakdown.panel_component.sku || 'High-Efficiency Mono PERC Solar Panels'}
+                                        </div>
+                                        <div className="flex justify-between items-center text-[11px] text-text-muted pt-1.5 border-t border-border/50">
+                                          <span>Brand: <strong className="text-text-primary">{breakdown.panel_component.brand || 'Tata Power Solar'}</strong></span>
+                                          <span className="font-bold text-primary font-mono text-xs">
+                                            Total: {breakdown.panel_component.total_quantity || breakdown.panel_component.quantity_per_kit * item.quantity} Panels
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 2. Solar Inverter */}
+                                    {breakdown.inverter_component && (
+                                      <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                                            <FaBolt className="text-primary" size={15} />
+                                            Solar Inverter
+                                          </span>
+                                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                                            {breakdown.inverter_component.quantity_per_kit} unit / kit
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-text-primary font-semibold">
+                                          {breakdown.inverter_component.sku || 'Single-Phase String Inverter'}
+                                        </div>
+                                        <div className="flex justify-between items-center text-[11px] text-text-muted pt-1.5 border-t border-border/50">
+                                          <span>Mode: <strong className="text-text-primary">{breakdown.inverter_mode === 'single' ? 'Single-Phase String' : '3-Phase String'}</strong></span>
+                                          <span className="font-bold text-primary font-mono text-xs">
+                                            Total: {breakdown.inverter_component.total_quantity || breakdown.inverter_component.quantity_per_kit * item.quantity} Units
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* 3. Balance of System (BOS) Protection & Mounting Bundles */}
+                                  {breakdown.bos_kits?.length > 0 && (
+                                    <div className="space-y-2 pt-1">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted block">
+                                        Balance of System (BOS) Bundles & Electrical Protection:
+                                      </span>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        {breakdown.bos_kits.map((bk, bIdx) => (
+                                          <div key={bIdx} className="p-2.5 rounded-xl bg-surface-hover/40 border border-border flex items-center gap-2.5">
+                                            {bk.image ? (
+                                              <img
+                                                src={bk.image}
+                                                alt={bk.name}
+                                                className="w-12 h-12 rounded-lg object-cover border border-border bg-surface shrink-0"
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                              />
+                                            ) : (
+                                              <div className="w-12 h-12 rounded-lg bg-surface border border-border flex items-center justify-center text-primary shrink-0">
+                                                <FaBoxOpen size={18} />
+                                              </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                              <p className="text-xs font-semibold text-text-primary truncate" title={bk.name}>
+                                                {bk.name}
+                                              </p>
+                                              <div className="flex justify-between items-center text-[10px] text-text-muted mt-0.5">
+                                                <span>{bk.quantity_per_kit} bundle/kit</span>
+                                                <strong className="text-text-primary font-mono font-bold">
+                                                  Total: {bk.total_quantity || bk.quantity_per_kit * item.quantity} Bundles
+                                                </strong>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Commercial Financial Summary Line Items Table */}
+                        <div className="border border-border rounded-xl overflow-hidden bg-surface">
+                          <div className="px-3.5 py-2.5 bg-surface-hover/60 border-b border-border text-[11px] font-bold uppercase text-text-secondary flex items-center justify-between">
+                            <span>Commercial Billing Line Items</span>
+                            <span className="text-[10px] text-text-muted font-normal">Official Order Ledger</span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-surface-hover/30 text-text-muted font-semibold border-b border-border">
+                                <tr>
+                                  <th className="px-3 py-2.5">Item Name</th>
+                                  <th className="px-3 py-2.5 text-center">Qty</th>
+                                  <th className="px-3 py-2.5 text-right">Unit Price</th>
+                                  {!isDirectEpc && <th className="px-3 py-2.5 text-right">Margin / Comm</th>}
+                                  <th className="px-3 py-2.5 text-right">Total Price</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody className="divide-y divide-border/50">
+                                {(details?.items || transaction?.items || []).map((item, idx) => (
+                                  <tr key={idx} className="hover:bg-surface-hover/30 transition-colors">
+                                    <td className="px-3 py-2.5 font-medium text-text-primary max-w-[200px] truncate" title={item.item_name}>
+                                      {item.item_name}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center font-bold text-text-secondary">{item.quantity}</td>
+                                    <td className="px-3 py-2.5 text-right font-mono">{formatCurrency(item.unit_price)}</td>
+                                    {!isDirectEpc && (
+                                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-emerald-600">
+                                        {formatCurrency(item.reseller_margin)}
+                                      </td>
+                                    )}
+                                    <td className="px-3 py-2.5 text-right font-mono font-bold text-text-primary">
+                                      {formatCurrency(item.total_price)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
                     )}

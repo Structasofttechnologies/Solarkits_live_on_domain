@@ -206,6 +206,11 @@ async function createEpcOfflineOrder({
     throw new Error(`UTR "${cleanUtr}" is already submitted for Order #${duplicateUtr.order_number}.`);
   }
 
+  // Lookup EPC account for address fallback & profiling
+  const epc = (epc_id && mongoose.Types.ObjectId.isValid(epc_id))
+    ? await EpcAccount.findById(epc_id).lean()
+    : null;
+
   // 1. Route order to reseller (Primary Reseller > Territory Match > Direct Fallback)
   const route = await routeEpcOrderToReseller(epc_id, delivery_address);
   const targetResellerId = route.reseller_id;
@@ -225,26 +230,37 @@ async function createEpcOfflineOrder({
     for (const item of items) {
       const qty = parseInt(item.quantity, 10) || parseInt(item.qty, 10) || 1;
       const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 180000);
-      const unitPricePaise = Math.round(ourPriceRupees * 100);
-      const itemSubtotal = qty * unitPricePaise;
-      const itemTax = Math.round(itemSubtotal * (gstRate / 100));
+      // ── CRITICAL: ourPrice from the shop API is GST-INCLUSIVE ──
+      // standardPrice = base × (1 + margin%) × (1 + gst%) — already incl. GST
+      // So: baseExclGst = ourPrice / (1 + gstRate/100)
+      // grand_total = subtotal (base) + tax = ourPrice × qty  ✓
+      const unitPriceInclGstPaise = Math.round(ourPriceRupees * 100); // what EPC pays per kit
+      const unitBaseExclGstPaise  = Math.round(unitPriceInclGstPaise / (1 + gstRate / 100));
+      const unitTaxPaise          = unitPriceInclGstPaise - unitBaseExclGstPaise;
 
-      subtotalPaise += itemSubtotal;
+      const itemBaseSubtotal = qty * unitBaseExclGstPaise;
+      const itemTax          = qty * unitTaxPaise;
+
+      subtotalPaise += itemBaseSubtotal;
       taxTotalPaise += itemTax;
 
       directItems.push({
         scope_type: item.scope_type || (item.kit_id ? 'kit' : 'product'),
         product_id: item.product_id || null,
         kit_id: item.kit_id || item.id || null,
-        item_name: item.kitName || item.title || item.name || 'Solar Kit',
+        item_name: item.kitName || item.title || item.name || item.item_name || 'Solar Kit',
+        image: item.image || item.kit_image || null,
+        capacity: item.capacity || null,
+        description: item.description || null,
         quantity: qty,
-        unit_price_paise: unitPricePaise,
-        cost_price_paise: Math.round(unitPricePaise * 0.85),
+        unit_price_paise: unitBaseExclGstPaise,           // base excl. GST
+        unit_price_incl_gst_paise: unitPriceInclGstPaise, // EPC-facing price per kit
+        cost_price_paise: Math.round(unitBaseExclGstPaise * 0.85),
         reseller_margin_paise: 0,
         platform_commission_paise: 0,
         gst_rate: gstRate,
         tax_paise: itemTax,
-        total_price_paise: itemSubtotal + itemTax,
+        total_price_paise: itemBaseSubtotal + itemTax,    // = qty × ourPrice (incl. GST)
       });
     }
 
@@ -289,7 +305,10 @@ async function createEpcOfflineOrder({
       scope_type: item.item_type || item.scope_type || 'kit',
       product_id: item.product_id || null,
       kit_id: item.kit_id || null,
-      item_name: item.item_name || 'Solar Component',
+      item_name: item.item_name || item.name || 'Solar Component',
+      image: item.image || item.kit_image || null,
+      capacity: item.capacity || null,
+      description: item.description || null,
       quantity: item.quantity,
       unit_price_paise: item.unit_price_paise,
       cost_price_paise: costPrice,
@@ -335,14 +354,14 @@ async function createEpcOfflineOrder({
     },
     is_end_customer_sale: true,
     delivery_address: {
-      line: delivery_address.line || delivery_address.address_line || null,
-      state_id: delivery_address.state_id || null,
-      state_name: delivery_address.state_name || null,
-      district_id: delivery_address.district_id || null,
-      district_name: delivery_address.district_name || null,
-      pincode: delivery_address.pincode || null,
-      contact_name: delivery_address.contact_name || null,
-      contact_phone: delivery_address.contact_phone || delivery_address.contact_number || null,
+      line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
+      state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
+      state_name: delivery_address.state_name || epc?.state_name || null,
+      district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
+      district_name: delivery_address.district_name || epc?.district_name || null,
+      pincode: delivery_address.pincode || epc?.pincode || null,
+      contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
+      contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
     },
     reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
   });
