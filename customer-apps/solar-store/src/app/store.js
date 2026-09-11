@@ -2,6 +2,7 @@ import { configureStore } from "@reduxjs/toolkit"
 import slice, { syncCartWithBackend } from "../features/slice";
 import alertReducer from "../features/alert.slice";
 import authReducer from "../features/auth.slice";
+import estimatorReducer from "../features/estimator.slice";
 
 let syncTimeout = null;
 let isSyncing = false;
@@ -68,7 +69,8 @@ const store = configureStore({
     reducer: {
         slice: slice,
         alert_slice: alertReducer,
-        auth_slice: authReducer
+        auth_slice: authReducer,
+        estimator_slice: estimatorReducer
     },
     middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(cartSyncMiddleware)
 });

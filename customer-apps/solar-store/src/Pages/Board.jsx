@@ -18,6 +18,7 @@ import ProjectOrderStatus from "./dashboard/ProjectOrderStatus";
 import EpcCatalogue from "./dashboard/EpcCatalogue";
 import EpcPoAllocations from "./dashboard/EpcPoAllocations";
 import StoreLocatorPage from "./store-locator/StoreLocatorPage";
+import KnowMyMargin from "./know-my-margin/KnowMyMargin";
 import {
   MdDashboard,
   MdShoppingCart,
@@ -25,6 +26,7 @@ import {
   MdSettings,
 } from "react-icons/md";
 import { FaBoxes, FaSolarPanel, FaShoppingBag, FaMapMarkerAlt } from "react-icons/fa";
+import { FiTrendingUp } from "react-icons/fi";
 
 const INVENTORY_POLL_INTERVAL_MS = 30000; // 30 seconds
 
@@ -52,6 +54,7 @@ export default function Board() {
     const defaultGroup = [
       { name: "Combo Kit", icon: <FaSolarPanel />, path: "/preconfigured-combo-kit" },
       { name: "Custom Combo Kit", icon: <MdSettings />, path: "/custom-combo-kit", requiresAuth: true },
+      { name: "Know My Margin", icon: <FiTrendingUp />, path: "/know-my-margin" },
       { name: "Bulk Buy", icon: <FaBoxes />, path: "/bulk-buy", requiresAuth: true },
       { name: "Request Order", icon: <MdListAlt />, path: "/request-order", requiresAuth: true },
       { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
@@ -132,6 +135,10 @@ export default function Board() {
             <Route path="/preconfigured-combo-kit" element={<PreconfiguredComboKit />} />
             <Route path="/custom-combo-kit" element={<ProtectedRoute><CustomComboKit /></ProtectedRoute>} />
             {/* <Route path="/solar-bos-kit" element={<ProtectedRoute><SolarBosKit /></ProtectedRoute>} /> */}
+
+            {/* Know My Margin Calculator Module */}
+            <Route path="/know-my-margin/*" element={<KnowMyMargin />} />
+            <Route path="/know-my-margin" element={<KnowMyMargin />} />
 
             {/* Franchisee Product Catalogue (optional fallback) */}
             <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />

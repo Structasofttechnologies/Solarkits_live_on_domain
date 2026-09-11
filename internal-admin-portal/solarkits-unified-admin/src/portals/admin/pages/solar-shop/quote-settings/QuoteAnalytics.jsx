@@ -9,7 +9,6 @@ import {
   FiClock,
   FiSearch,
   FiRefreshCw,
-  FiDollarSign,
   FiLayers,
   FiUsers,
   FiDownload,
@@ -22,7 +21,9 @@ import {
   FiPackage,
   FiShield,
   FiAlertCircle,
+  FiDollarSign,
 } from "react-icons/fi";
+import { TbCurrencyRupee } from "react-icons/tb";
 
 const rawApiUrl = (
   import.meta.env.VITE_ADMIN_API_URL ||
@@ -98,8 +99,8 @@ export default function QuoteAnalytics() {
       rawSummary.conversion_rate_pct != null
         ? rawSummary.conversion_rate_pct
         : rawSummary.total > 0
-        ? Math.round((rawSummary.converted / rawSummary.total) * 100)
-        : 0,
+          ? Math.round((rawSummary.converted / rawSummary.total) * 100)
+          : 0,
     avg_deal_paise:
       rawSummary.avg_deal_paise ??
       (rawSummary.total > 0 ? Math.round(rawSummary.total_quoted_paise / rawSummary.total) : 0),
@@ -234,7 +235,7 @@ export default function QuoteAnalytics() {
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Avg Deal Size</span>
             <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600">
-              <FiDollarSign size={14} />
+              <TbCurrencyRupee size={14} />
             </span>
           </div>
           <div className="mt-2 text-2xl font-black text-purple-600 dark:text-purple-400">
@@ -271,11 +272,10 @@ export default function QuoteAnalytics() {
                   key={st.label}
                   type="button"
                   onClick={() => setStatusFilter(active ? "" : st.key)}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                    active
-                      ? "border-amber-500 bg-amber-500/10 shadow-sm ring-1 ring-amber-500"
-                      : `border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 ${st.color}`
-                  }`}
+                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${active
+                    ? "border-amber-500 bg-amber-500/10 shadow-sm ring-1 ring-amber-500"
+                    : `border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 ${st.color}`
+                    }`}
                 >
                   <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">{st.label}</span>
                   <span className="text-lg font-black text-slate-900 dark:text-white mt-1">{st.count}</span>
@@ -453,9 +453,8 @@ export default function QuoteAnalytics() {
                           type="button"
                           onClick={(e) => handleDownloadPdf(e, q)}
                           disabled={downloadingId === q._id || q.status === "draft"}
-                          className={`p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition cursor-pointer ${
-                            q.status === "draft" ? "opacity-40 cursor-not-allowed" : ""
-                          }`}
+                          className={`p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition cursor-pointer ${q.status === "draft" ? "opacity-40 cursor-not-allowed" : ""
+                            }`}
                           title={q.status === "draft" ? "Generate quote first" : "Download Official PDF"}
                         >
                           {downloadingId === q._id ? (

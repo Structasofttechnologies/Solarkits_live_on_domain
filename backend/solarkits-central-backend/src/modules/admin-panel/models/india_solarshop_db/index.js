@@ -105,6 +105,12 @@ const EpcQuoteActivity         = require('./epc_quote_activities.schema');
 const QuoteSettings            = require('./quote_settings.schema');
 const QuoteWarrantyOption      = require('./quote_warranty_options.schema');
 
+// --- Phase KMM: Know My Margin Module ---
+const ProjectBomItem           = require('./project_bom_items.schema');
+const BomRateHistory           = require('./bom_rate_history.schema');
+const EpcMarginEstimate        = require('./epc_margin_estimates.schema');
+const EstimatorSettings        = require('./estimator_settings.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
@@ -210,4 +216,9 @@ module.exports = {
   EpcQuoteActivity,
   QuoteSettings,
   QuoteWarrantyOption,
+  // --- Phase KMM: Know My Margin Module ---
+  ProjectBomItem,
+  BomRateHistory,
+  EpcMarginEstimate,
+  EstimatorSettings,
 };

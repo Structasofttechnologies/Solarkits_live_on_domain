@@ -142,6 +142,10 @@ adminRouter.use('/service-tickets',              require('./modules/admin-panel/
 // ─── EPC Quotation Management Settings ─────────────────────────────────────
 adminRouter.use('/quote-settings',               require('./modules/admin-panel/routes/admin.quote.settings.route'));
 
+// ─── Know My Margin (KMM) Estimator & BOM Settings ───────────────────────────
+adminRouter.use('/estimator',                    require('./modules/admin-panel/routes/estimator.admin.route'));
+adminRouter.use('/project-boms',                 require('./modules/admin-panel/routes/estimator.admin.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/admin-api', adminRouter);

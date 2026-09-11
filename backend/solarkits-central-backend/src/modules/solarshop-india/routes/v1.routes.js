@@ -6,5 +6,7 @@ router.use("/geo", require("./v1.routes/geo.route"));
 router.use("/shop", require("./v1.routes/shop.route"));
 router.use("/reseller", require("./v1.routes/reseller.portal.route"));
 router.use("/bde", require("./v1.routes/bde.portal.route"));
+router.use("/estimator", require("./v1.routes/estimator.route"));
+router.use("/estimates", require("./v1.routes/estimates.route"));
 
 module.exports = router;

@@ -52,6 +52,13 @@ const schema = new mongoose.Schema(
       ref: 'epc_quotes',
       default: null,
     },
+    estimate_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'epc_margin_estimates',
+      default: null,
+    },
+    items: { type: Array, default: [] },
+    financials: { type: Object, default: null },
 
     status: {
       type: String,
@@ -61,13 +68,13 @@ const schema = new mongoose.Schema(
 
     quote_source: {
       type: String,
-      enum: ['bde_direct', 'franchisee_generated', 'bde_for_franchisee', 'admin_generated'],
+      enum: ['bde_direct', 'franchisee_generated', 'bde_for_franchisee', 'admin_generated', 'epc_self_service'],
       default: 'franchisee_generated',
     },
 
     // ── Creator ───────────────────────────────────────────────────────────────
     created_by:      { type: mongoose.Schema.Types.ObjectId, required: true },
-    created_by_role: { type: String, enum: ['reseller', 'bde', 'cms_user'], required: true },
+    created_by_role: { type: String, enum: ['reseller', 'bde', 'cms_user', 'epc'], required: true },
 
     // ── BDE Attribution ───────────────────────────────────────────────────────
     bde_id: { type: mongoose.Schema.Types.ObjectId, ref: 'bde_profiles', default: null },
@@ -75,7 +82,7 @@ const schema = new mongoose.Schema(
     // bde_snapshot shape: { bde_id_code, full_name, mobile, email }
 
     // ── Franchisee Attribution ────────────────────────────────────────────────
-    franchisee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', required: true },
+    franchisee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
     franchisee_snapshot: { type: Object, default: null },
     // franchisee_snapshot shape: { business_name, gst_number, mobile, email, address, plan_name }
 

@@ -33,6 +33,10 @@ const QuoteSettingsAdmin = lazy(() => import("../pages/solar-shop/quote-settings
 const WarrantyOptionsAdmin = lazy(() => import("../pages/solar-shop/quote-settings/WarrantyOptions"));
 const QuoteAnalyticsAdmin = lazy(() => import("../pages/solar-shop/quote-settings/QuoteAnalytics"));
 
+// ── Know My Margin (KMM) Estimator Module ────────────────────────────────────
+const ProjectBomSettingsAdmin = lazy(() => import("../pages/solar-shop/project-bom-settings/ProjectBomSettings"));
+const EstimatorSettingsAdmin = lazy(() => import("../pages/solar-shop/estimator-settings/EstimatorSettings"));
+
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
 const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
@@ -284,6 +288,27 @@ const menus = [
                     name: "Quote Analytics",
                     icon: <FiBarChart2 />,
                     path: "/admin-panel/solar-shop/quote-settings/analytics",
+                    unique_id: "00000000"
+                },
+            ]
+        },
+        // ── Know My Margin (KMM) Module ─────────────────────────────────────
+        {
+            name: "Know My Margin",
+            icon: <FiDollarSign />,
+            path: "/admin-panel/solar-shop/project-bom-settings",
+            unique_id: "00000000",
+            subMenu: [
+                {
+                    name: "Project BOM Settings",
+                    icon: <FiSliders />,
+                    path: "/admin-panel/solar-shop/project-bom-settings",
+                    unique_id: "00000000"
+                },
+                {
+                    name: "Estimator Settings",
+                    icon: <FiSettings />,
+                    path: "/admin-panel/solar-shop/estimator-settings",
                     unique_id: "00000000"
                 },
             ]
@@ -854,6 +879,40 @@ export default function SolarShopDashboard() {
                                         element={
                                             <Suspense fallback={<Loader text="Loading Quote Analytics..." />}>
                                                 <QuoteAnalyticsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+
+                                    {/* ── Know My Margin (KMM) Estimator Module ────────────────── */}
+                                    <Route
+                                        path="/project-bom-settings"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Project BOM Settings..." />}>
+                                                <ProjectBomSettingsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/project-bom-settings"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Project BOM Settings..." />}>
+                                                <ProjectBomSettingsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/estimator-settings"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Estimator Settings..." />}>
+                                                <EstimatorSettingsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/estimator-settings"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Estimator Settings..." />}>
+                                                <EstimatorSettingsAdmin />
                                             </Suspense>
                                         }
                                     />
