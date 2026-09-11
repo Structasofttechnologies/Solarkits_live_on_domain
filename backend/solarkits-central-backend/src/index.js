@@ -139,8 +139,12 @@ adminRouter.use('/company/margin-goals',         require('./modules/admin-panel/
 // ─── Service Ticket / Kit Item Replacement Module ─────────────────────────────
 adminRouter.use('/service-tickets',              require('./modules/admin-panel/routes/service_ticket.admin.route'));
 
+// ─── EPC Quotation Management Settings ─────────────────────────────────────
+adminRouter.use('/quote-settings',               require('./modules/admin-panel/routes/admin.quote.settings.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
+app.use('/api/admin-api', adminRouter);
 
 // 3. Developer Panel routes
 const developerRouter = express.Router();

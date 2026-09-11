@@ -149,5 +149,8 @@ router.get('/epc/service-tickets',                     verify_auth, serviceTicke
 router.get('/epc/service-tickets/:id',                 verify_auth, serviceTicketHandler.get_epc_ticket_detail);
 router.post('/epc/service-tickets/:id/confirm-delivery', verify_auth, serviceTicketHandler.confirm_epc_replacement);
 
+// ── EPC Quotation & Follow-up Module ──────────────────────────────────────
+router.use('/quotes', require('./reseller.quotes.route'));
+
 module.exports = router;
 

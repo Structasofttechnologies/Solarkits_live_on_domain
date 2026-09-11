@@ -18,6 +18,10 @@ import PoOrder from "./pages/PoOrder";
 import LooseOrder from "./pages/LooseOrder";
 import OnboardingPortal from "./pages/OnboardingPortal";
 import ServiceTickets from "./pages/ServiceTickets";
+import EpcQuotes from "./pages/EpcQuotes";
+import CreateEpcQuote from "./pages/CreateEpcQuote";
+import EpcQuoteDetail from "./pages/EpcQuoteDetail";
+import EpcQuoteFollowupList from "./pages/EpcQuoteFollowupList";
 
 export default function App() {
   return (
@@ -54,6 +58,10 @@ export default function App() {
           <Route path='/po-order' element={<PoOrder />} />
           <Route path='/loose-order' element={<LooseOrder />} />
           <Route path='/service-tickets' element={<ServiceTickets />} />
+          <Route path='/epc-quotes' element={<EpcQuotes />} />
+          <Route path='/epc-quotes/create' element={<CreateEpcQuote />} />
+          <Route path='/epc-quotes/:id' element={<EpcQuoteDetail />} />
+          <Route path='/epc-quote-followups' element={<EpcQuoteFollowupList />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

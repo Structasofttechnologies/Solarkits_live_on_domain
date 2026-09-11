@@ -23,6 +23,8 @@ import {
   FiChevronDown,
   FiKey,
   FiTool,
+  FiFileText,
+  FiCalendar,
 } from "react-icons/fi";
 import api from "../services/api";
 import logoImg from "@/assets/images/logo.png";
@@ -32,6 +34,14 @@ const NAV_ITEMS = [
   { name: "Home", icon: FiHome, path: "/dashboard" },
   { name: "Browse Products", icon: FiPackage, path: "/catalog" },
   { name: "My Listings", icon: FiTag, path: "/storefront-listings" },
+  {
+    name: "EPC Quotes",
+    icon: FiFileText,
+    children: [
+      { name: "All Quotes", icon: FiFileText, path: "/epc-quotes" },
+      { name: "Quote Follow-ups", icon: FiCalendar, path: "/epc-quote-followups" },
+    ],
+  },
   {
     name: "My Orders",
     icon: FiShoppingCart,

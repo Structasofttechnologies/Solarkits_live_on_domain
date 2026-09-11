@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield } from "react-icons/fi";
 
 // ── Margin & Commission Settings Module ─────────────────────────────────────────
 const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
@@ -27,6 +27,11 @@ const ServiceTicketsAdmin = lazy(() => import("../pages/solar-shop/service-ticke
 // ── Phase 1: Reseller Management ────────────────────────────────────────────
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
 const ResellerSettings = lazy(() => import("../pages/solar-shop/reseller-management/ResellerSettings"));
+
+// ── Quote Settings & Analytics Module ─────────────────────────────────────
+const QuoteSettingsAdmin = lazy(() => import("../pages/solar-shop/quote-settings/QuoteSettings"));
+const WarrantyOptionsAdmin = lazy(() => import("../pages/solar-shop/quote-settings/WarrantyOptions"));
+const QuoteAnalyticsAdmin = lazy(() => import("../pages/solar-shop/quote-settings/QuoteAnalytics"));
 
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
@@ -253,6 +258,33 @@ const menus = [
                     icon: <FiFileText />,
                     path: "/admin-panel/solar-shop/reseller-management/settings",
                     unique_id: "RSL_SETTINGS"
+                },
+            ]
+        },
+        // ── EPC Quotation Management Module ─────────────────────────────────
+        {
+            name: "EPC Quote Management",
+            icon: <FiFileText />,
+            path: "/admin-panel/solar-shop/quote-settings",
+            unique_id: "00000000",
+            subMenu: [
+                {
+                    name: "Quote Settings",
+                    icon: <FiSettings />,
+                    path: "/admin-panel/solar-shop/quote-settings",
+                    unique_id: "00000000"
+                },
+                {
+                    name: "Warranty Options",
+                    icon: <FiShield />,
+                    path: "/admin-panel/solar-shop/quote-settings/warranties",
+                    unique_id: "00000000"
+                },
+                {
+                    name: "Quote Analytics",
+                    icon: <FiBarChart2 />,
+                    path: "/admin-panel/solar-shop/quote-settings/analytics",
+                    unique_id: "00000000"
                 },
             ]
         },
@@ -772,6 +804,56 @@ export default function SolarShopDashboard() {
                                         element={
                                             <Suspense fallback={<Loader text="Loading Service Tickets..." />}>
                                                 <ServiceTicketsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+
+                                    {/* ── EPC Quotation Management Settings & Analytics ─────── */}
+                                    <Route
+                                        path="/quote-settings"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Quote Settings..." />}>
+                                                <QuoteSettingsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/quote-settings"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Quote Settings..." />}>
+                                                <QuoteSettingsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/quote-settings/warranties"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Warranty Options..." />}>
+                                                <WarrantyOptionsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/quote-settings/warranties"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Warranty Options..." />}>
+                                                <WarrantyOptionsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/quote-settings/analytics"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Quote Analytics..." />}>
+                                                <QuoteAnalyticsAdmin />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/quote-settings/analytics"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Quote Analytics..." />}>
+                                                <QuoteAnalyticsAdmin />
                                             </Suspense>
                                         }
                                     />

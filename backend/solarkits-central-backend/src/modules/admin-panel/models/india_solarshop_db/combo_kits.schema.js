@@ -44,6 +44,7 @@ const s = new mongoose.Schema({
  
   base_price_cached:    { type: Number, default: 0 },
   selling_price_cached: { type: Number, default: 0 },
+  gst_rate:             { type: Number, default: 13.8 },
   is_custom:          { type: Boolean, default: false },
   is_active:          { type: Boolean, default: true },
   deleted_at:         { type: Date, default: null },

@@ -20,6 +20,8 @@ import {
   Zap,
   Package,
   Award,
+  FileText,
+  CalendarCheck,
 } from 'lucide-react';
 
 export default function BdeLayout() {
@@ -32,6 +34,8 @@ export default function BdeLayout() {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'EPC Leads', path: '/epc-leads', icon: Users },
     { name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
+    { name: 'EPC Quotes', path: '/epc-quotes', icon: FileText },
+    { name: 'Quote Follow-ups', path: '/epc-quote-followups', icon: CalendarCheck },
     { name: 'Franchisee Goals', path: '/franchisees', icon: Store },
     { name: 'Order History & Kits', path: '/order-history', icon: Package },
     { name: 'Leaderboard Ranking', path: '/ranking', icon: Award },

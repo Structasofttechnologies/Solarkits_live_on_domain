@@ -94,4 +94,7 @@ router.get('/analytics/kit-sales',          verify_bde_auth, handler.get_kit_sal
 // ── 11. Performance Ranking ───────────────────────────────────────────────────
 router.get('/ranking/franchisees',          verify_bde_auth, handler.get_franchisee_ranking);
 
+// ── 12. EPC Quotation & Follow-up Module ─────────────────────────────────────
+router.use('/quotes', require('./bde.quotes.route'));
+
 module.exports = router;

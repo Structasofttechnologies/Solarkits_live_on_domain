@@ -98,6 +98,13 @@ const ExpansionPlan            = require('./expansion_plans.schema');
 // --- BDE EPC Management ---
 const EPCLead                  = require('./epc_leads.schema');
 
+// --- Phase Q: EPC Quotation & Follow-up Module ---
+const EpcQuote                 = require('./epc_quotes.schema');
+const EpcQuoteFollowup         = require('./epc_quote_followups.schema');
+const EpcQuoteActivity         = require('./epc_quote_activities.schema');
+const QuoteSettings            = require('./quote_settings.schema');
+const QuoteWarrantyOption      = require('./quote_warranty_options.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
@@ -197,4 +204,10 @@ module.exports = {
   ExpansionPlan,
   EPCLead,
   EpcLead: EPCLead,
+  // --- Phase Q: EPC Quotation & Follow-up Module ---
+  EpcQuote,
+  EpcQuoteFollowup,
+  EpcQuoteActivity,
+  QuoteSettings,
+  QuoteWarrantyOption,
 };
