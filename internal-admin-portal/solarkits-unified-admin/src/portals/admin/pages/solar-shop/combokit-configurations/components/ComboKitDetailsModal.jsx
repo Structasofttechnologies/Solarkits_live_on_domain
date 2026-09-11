@@ -83,10 +83,22 @@ export default function ComboKitDetailsModal({
                                     </div>
                                     {Array.isArray(viewingKit.order_quantities) && viewingKit.order_quantities.length > 0 && (
                                         <div className="border-t border-border/50 pt-2 space-y-1">
-                                            <span className="font-semibold text-text-secondary text-[11px]">Order Quantity Options:</span>
+                                            <span className="font-semibold text-text-secondary text-[11px]">PO Order Quantity Options:</span>
                                             <div className="flex flex-wrap gap-1.5 mt-1">
                                                 {viewingKit.order_quantities.filter(n => n > 0).sort((a, b) => a - b).map((qty, idx) => (
                                                     <span key={idx} className="bg-orange-500/10 text-orange-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-orange-500/20">
+                                                        {qty} Kits
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {Array.isArray(viewingKit.loose_order_quantities) && viewingKit.loose_order_quantities.length > 0 && (
+                                        <div className="border-t border-border/50 pt-2 space-y-1">
+                                            <span className="font-semibold text-text-secondary text-[11px]">Loose Order Quantity Options:</span>
+                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                {viewingKit.loose_order_quantities.filter(n => n > 0).sort((a, b) => a - b).map((qty, idx) => (
+                                                    <span key={idx} className="bg-sky-500/10 text-sky-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-sky-500/20">
                                                         {qty} Kits
                                                     </span>
                                                 ))}

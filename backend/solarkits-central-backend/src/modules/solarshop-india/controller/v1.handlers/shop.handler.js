@@ -468,7 +468,7 @@ const get_combo_kits_by_district = async (req, res) => {
       kits = Array.from(map.values());
     }
 
-    // Safety check: ensure every kit has valid order_quantities
+    // Safety check: ensure every kit has valid order_quantities and loose_order_quantities
     kits.forEach(k => {
       const validQtys = (k.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
       if (validQtys.length > 0) {
@@ -484,6 +484,13 @@ const get_combo_kits_by_district = async (req, res) => {
         } else {
           k.order_quantities = [10, 25, 50];
         }
+      }
+
+      const validLooseQtys = (k.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+      if (validLooseQtys.length > 0) {
+        k.loose_order_quantities = validLooseQtys.sort((a, b) => a - b);
+      } else {
+        k.loose_order_quantities = [5, 10, 15, 20, 25, 30, 50];
       }
     });
 
@@ -1281,6 +1288,8 @@ const get_combo_kits_by_district = async (req, res) => {
         capacityKW: kit.capacity || 0,
         orderQuantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
         order_quantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        looseOrderQuantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        loose_order_quantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
         allow_trial_kit: Boolean(kit.allow_trial_kit),
         allowTrialKit: Boolean(kit.allow_trial_kit),
         trial_kit_quantity: Number(kit.trial_kit_quantity) || 10,

@@ -149,6 +149,16 @@ export default function PoOrder() {
   const maxPoQty = selectedKit?.max_po_quantity ?? (activePoSetting?.max_po_quantity ?? (planData?.po_settings?.max_po_quantity || 0)); // 0 = unlimited
   const validityDays = selectedKit?.po_validity_days ?? (activePoSetting?.po_validity_days ?? (planData?.po_settings?.po_validity_days || 30));
 
+  // Configured PO Order Quantity Variations for Selected Kit
+  const kitPoQuantities = useMemo(() => {
+    if (!selectedKit) return [];
+    const raw = selectedKit.order_quantities || selectedKit.orderQuantities;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
+    }
+    return [];
+  }, [selectedKit]);
+
   // Total Allocated Quantity
   const totalAllocatedQty = useMemo(() => {
     return Object.values(allocations).reduce((sum, q) => sum + (parseInt(q, 10) || 0), 0);
@@ -160,8 +170,8 @@ export default function PoOrder() {
   const unitPriceINR = useMemo(() => {
     if (!selectedKit) return 0;
     if (selectedKit.dealer_price) return selectedKit.dealer_price;
-    if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
     if (selectedKit.selling_price_cached) return selectedKit.selling_price_cached;
+    if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
     if (selectedKit.unit_price) return selectedKit.unit_price;
     if (selectedKit.price) return selectedKit.price;
     if (selectedKit.base_price) return selectedKit.base_price;
@@ -795,8 +805,8 @@ export default function PoOrder() {
                         const kitId = kit._id || kit.id;
                         const price =
                           kit.dealer_price ||
-                          kit.base_price_cached ||
                           kit.selling_price_cached ||
+                          kit.base_price_cached ||
                           kit.price_with_tax ||
                           kit.unit_price ||
                           kit.price ||
@@ -823,6 +833,21 @@ export default function PoOrder() {
                       <p className="text-[11px] text-text-muted">
                         Enter quantities for each EPC. Total across all buyers must be at least {minPoQty} kits.
                       </p>
+                      {kitPoQuantities.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                            Allowed PO Variations:
+                          </span>
+                          {kitPoQuantities.map((q) => (
+                            <span
+                              key={q}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20"
+                            >
+                              {q} Kits
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <Link
                       to="/epc-buyers"
@@ -844,7 +869,7 @@ export default function PoOrder() {
                       </Link>
                     </div>
                   ) : (
-                    <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
                       {epcBuyers.map((buyer) => {
                         const buyerId = buyer._id || buyer.id;
                         const qty = allocations[buyerId] || 0;
@@ -852,58 +877,86 @@ export default function PoOrder() {
                         return (
                           <div
                             key={buyerId}
-                            className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${qty > 0 ? "border-primary/50 bg-primary/5" : "border-border bg-surface"
-                              }`}
+                            className={`p-3.5 rounded-2xl border transition-all flex flex-col gap-2.5 ${
+                              qty > 0 ? "border-primary/50 bg-primary/5 shadow-2xs" : "border-border bg-surface"
+                            }`}
                           >
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs text-text-primary truncate">
-                                {buyer.company_name || buyer.name}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-text-primary truncate">
+                                  {buyer.company_name || buyer.name}
+                                </div>
+                                <div className="text-[10px] text-text-muted mt-0.5">
+                                  GSTIN: {buyer.gstin || "Unregistered"} • {buyer.state?.name || "India"}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-text-muted">
-                                GSTIN: {buyer.gstin || "Unregistered"} • {buyer.state?.name || "India"}
+
+                              {/* Stepper Input */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepQty(buyerId, -1)}
+                                  className="w-7 h-7 rounded-lg bg-surface-hover hover:bg-border text-text-primary font-black text-xs flex items-center justify-center cursor-pointer transition-colors"
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={qty || ""}
+                                  placeholder="0"
+                                  onChange={(e) => handleQuantityChange(buyerId, e.target.value)}
+                                  className="w-14 text-center py-1 rounded-lg text-xs font-black border text-text-primary focus:border-primary outline-none"
+                                  style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleStepQty(buyerId, 1)}
+                                  className="w-7 h-7 rounded-lg bg-surface-hover hover:bg-border text-text-primary font-black text-xs flex items-center justify-center cursor-pointer transition-colors"
+                                >
+                                  +
+                                </button>
                               </div>
                             </div>
 
-                            {/* Stepper Input */}
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleStepQty(buyerId, -5)}
-                                className="w-7 h-7 rounded-lg bg-surface-hover hover:bg-border text-text-primary font-black text-xs flex items-center justify-center cursor-pointer"
-                              >
-                                -5
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleStepQty(buyerId, -1)}
-                                className="w-7 h-7 rounded-lg bg-surface-hover hover:bg-border text-text-primary font-black text-xs flex items-center justify-center cursor-pointer"
-                              >
-                                -1
-                              </button>
-                              <input
-                                type="number"
-                                min="0"
-                                value={qty || ""}
-                                placeholder="0"
-                                onChange={(e) => handleQuantityChange(buyerId, e.target.value)}
-                                className="w-14 text-center py-1 rounded-lg text-xs font-black border text-text-primary"
-                                style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleStepQty(buyerId, 1)}
-                                className="w-7 h-7 rounded-lg bg-surface-hover hover:bg-border text-text-primary font-black text-xs flex items-center justify-center cursor-pointer"
-                              >
-                                +1
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleStepQty(buyerId, 5)}
-                                className="w-7 h-7 rounded-lg bg-surface-hover hover:bg-border text-text-primary font-black text-xs flex items-center justify-center cursor-pointer"
-                              >
-                                +5
-                              </button>
-                            </div>
+                            {/* Kit PO Quantity Variations */}
+                            {kitPoQuantities.length > 0 ? (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/40">
+                                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                                  PO Variations:
+                                </span>
+                                {kitPoQuantities.map((preset) => {
+                                  const isSelected = qty === preset;
+                                  return (
+                                    <button
+                                      key={preset}
+                                      type="button"
+                                      onClick={() => handleQuantityChange(buyerId, isSelected ? 0 : preset)}
+                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer border ${
+                                        isSelected
+                                          ? "bg-primary text-white border-primary shadow-xs"
+                                          : "bg-surface hover:bg-surface-hover text-text-primary border-border hover:border-primary/40"
+                                      }`}
+                                    >
+                                      {preset} Kits
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 pt-1.5 border-t border-border/30">
+                                {[-5, -1, 1, 5].map((delta) => (
+                                  <button
+                                    key={delta}
+                                    type="button"
+                                    onClick={() => handleStepQty(buyerId, delta)}
+                                    className="px-2 py-0.5 rounded-md text-[10px] font-black bg-surface-hover hover:bg-border text-text-secondary cursor-pointer transition-colors"
+                                  >
+                                    {delta > 0 ? `+${delta}` : delta}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

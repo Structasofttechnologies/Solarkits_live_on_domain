@@ -159,6 +159,23 @@ export default function LooseOrder() {
     );
   }, [planData, selectedKitId]);
 
+  // Dynamic Loose Order Quantity Variations for Selected Kit
+  const kitLooseQuantities = useMemo(() => {
+    if (!selectedKit) return [5, 10, 15, 20, 25, 30, 50];
+    const raw = selectedKit.loose_order_quantities || selectedKit.looseOrderQuantities;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const valid = raw.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b);
+      if (valid.length > 0) return valid;
+    }
+    return [5, 10, 15, 20, 25, 30, 50];
+  }, [selectedKit]);
+
+  useEffect(() => {
+    if (kitLooseQuantities.length > 0 && !kitLooseQuantities.includes(looseQuantity)) {
+      setLooseQuantity(kitLooseQuantities[0]);
+    }
+  }, [kitLooseQuantities]);
+
   // Total Quantity determination based on destination mode
   const totalLooseQuantity = useMemo(() => {
     if (destinationMode === "epc_allocation") {
@@ -171,8 +188,8 @@ export default function LooseOrder() {
   const unitPriceINR = useMemo(() => {
     if (!selectedKit) return 0;
     if (selectedKit.dealer_price) return selectedKit.dealer_price;
-    if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
     if (selectedKit.selling_price_cached) return selectedKit.selling_price_cached;
+    if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
     if (selectedKit.price_with_tax) return selectedKit.price_with_tax;
     if (selectedKit.unit_price) return selectedKit.unit_price;
     if (selectedKit.price) return selectedKit.price;
@@ -769,13 +786,13 @@ export default function LooseOrder() {
                 </div>
 
                 {destinationMode === "hub_stock" && (
-                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 pt-1">
-                    {[5, 10, 15, 20, 25, 30, 50].map((presetQty) => (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {kitLooseQuantities.map((presetQty) => (
                       <button
                         key={presetQty}
                         type="button"
                         onClick={() => setLooseQuantity(presetQty)}
-                        className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${looseQuantity === presetQty
+                        className={`py-2 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${looseQuantity === presetQty
                             ? "bg-primary text-white shadow-sm"
                             : "bg-surface hover:bg-surface-hover text-text-primary border border-border"
                           }`}
@@ -854,7 +871,7 @@ export default function LooseOrder() {
                                   <button
                                     type="button"
                                     onClick={() => handleStepQty(bId, -1)}
-                                    className="w-6 h-6 rounded bg-surface-hover font-bold text-xs"
+                                    className="w-6 h-6 rounded bg-surface-hover hover:bg-border text-text-primary font-bold text-xs cursor-pointer transition-colors"
                                   >
                                     -
                                   </button>
@@ -864,16 +881,34 @@ export default function LooseOrder() {
                                     value={currentQty || ""}
                                     onChange={(e) => handleQuantityChange(bId, e.target.value)}
                                     placeholder="0"
-                                    className="w-12 text-center font-mono font-bold py-1 bg-surface border border-border rounded text-xs"
+                                    className="w-12 text-center font-mono font-bold py-1 bg-surface border border-border rounded text-xs text-text-primary outline-none focus:border-primary"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => handleStepQty(bId, 1)}
-                                    className="w-6 h-6 rounded bg-surface-hover font-bold text-xs"
+                                    className="w-6 h-6 rounded bg-surface-hover hover:bg-border text-text-primary font-bold text-xs cursor-pointer transition-colors"
                                   >
                                     +
                                   </button>
                                 </div>
+                                {kitLooseQuantities.length > 0 && (
+                                  <div className="flex flex-wrap justify-center gap-1 mt-1.5">
+                                    {kitLooseQuantities.slice(0, 5).map((q) => (
+                                      <button
+                                        key={q}
+                                        type="button"
+                                        onClick={() => handleQuantityChange(bId, currentQty === q ? 0 : q)}
+                                        className={`px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer border transition-colors ${
+                                          currentQty === q
+                                            ? "bg-primary text-white border-primary shadow-2xs"
+                                            : "bg-surface hover:bg-surface-hover text-text-secondary border-border"
+                                        }`}
+                                      >
+                                        {q}K
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );

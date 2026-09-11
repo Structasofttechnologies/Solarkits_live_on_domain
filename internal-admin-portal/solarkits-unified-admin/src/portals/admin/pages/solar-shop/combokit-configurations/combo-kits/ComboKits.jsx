@@ -62,6 +62,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     base_components: [],
     bos_kits: [],
     order_quantities: [], // e.g. [10, 25, 50, 100] — allowed order kit quantities
+    loose_order_quantities: [], // e.g. [5, 10, 15, 20, 25, 30, 50] — allowed loose order kit quantities
     allow_trial_kit: false,
     trial_kit_quantity: 10
   });
@@ -1339,6 +1340,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
           base_components: [],
           bos_kits: [],
           order_quantities: [],
+          loose_order_quantities: [],
           allow_trial_kit: false,
           trial_kit_quantity: 10
         });
@@ -1362,6 +1364,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         base_components: [],
         bos_kits: [],
         order_quantities: [],
+        loose_order_quantities: [],
         allow_trial_kit: false,
         trial_kit_quantity: 10
       });
@@ -1508,6 +1511,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         brand_id: row.brand_id?._id || row.brand_id?.id || row.brand_id || "",
         project_range_id: row.project_range_id?.id || row.project_range_id?._id || row.project_range_id || "",
         order_quantities: Array.isArray(row.order_quantities) ? row.order_quantities.map(Number).filter(n => !isNaN(n) && n > 0) : [],
+        loose_order_quantities: Array.isArray(row.loose_order_quantities) ? row.loose_order_quantities.map(Number).filter(n => !isNaN(n) && n > 0) : [],
         allow_trial_kit: Boolean(row.allow_trial_kit),
         trial_kit_quantity: Number(row.trial_kit_quantity) || 10,
         capacity: row.capacity || 0,
@@ -1579,6 +1583,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       payload.append("variant_id", rawVariantId);
       payload.append("variant_ids", JSON.stringify(cleanVariantIds));
       payload.append("order_quantities", JSON.stringify((formData.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)));
+      payload.append("loose_order_quantities", JSON.stringify((formData.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)));
       payload.append("allow_trial_kit", formData.allow_trial_kit ? "true" : "false");
       payload.append("trial_kit_quantity", formData.trial_kit_quantity || 10);
 
@@ -1917,8 +1922,9 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         const isTrialAllowed = Boolean(val || row.allow_trial_kit);
         const trialQty = row.trial_kit_quantity || 10;
         const qtys = Array.isArray(row.order_quantities) ? row.order_quantities.filter(n => n > 0).sort((a, b) => a - b) : [];
+        const looseQtys = Array.isArray(row.loose_order_quantities) ? row.loose_order_quantities.filter(n => n > 0).sort((a, b) => a - b) : [];
         return (
-          <div className="space-y-1 max-w-60">
+          <div className="space-y-1.5 max-w-64">
             {isTrialAllowed ? (
               <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-500/25 shadow-2xs">
                 ✓ Trial: {trialQty} Kits
@@ -1926,14 +1932,35 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
             ) : (
               <span className="inline-block text-[10px] text-text-muted font-bold opacity-60">Trial Disabled</span>
             )}
-            <div className="flex flex-wrap gap-1 mt-0.5">
-              {qtys.length > 0 ? qtys.map((q, idx) => (
-                <span key={idx} className="bg-amber-500/10 text-amber-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/20">
-                  {q} Kits
-                </span>
-              )) : (
-                <span className="text-[9px] text-text-muted italic">No Qty Limits</span>
-              )}
+            {/* PO Quantities */}
+            <div className="space-y-0.5">
+              <div className="text-[9px] font-black uppercase tracking-wider text-amber-700">
+                PO Qty:
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {qtys.length > 0 ? qtys.map((q, idx) => (
+                  <span key={idx} className="bg-amber-500/10 text-amber-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-amber-500/20">
+                    {q} Kits
+                  </span>
+                )) : (
+                  <span className="text-[9px] text-text-muted italic">No Qty Limits</span>
+                )}
+              </div>
+            </div>
+            {/* Loose Quantities */}
+            <div className="space-y-0.5">
+              <div className="text-[9px] font-black uppercase tracking-wider text-sky-700">
+                Loose Qty:
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {looseQtys.length > 0 ? looseQtys.map((q, idx) => (
+                  <span key={idx} className="bg-sky-500/10 text-sky-700 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border border-sky-500/20">
+                    {q} Kits
+                  </span>
+                )) : (
+                  <span className="text-[9px] text-text-muted italic">Default (5-50 Kits)</span>
+                )}
+              </div>
             </div>
           </div>
         );

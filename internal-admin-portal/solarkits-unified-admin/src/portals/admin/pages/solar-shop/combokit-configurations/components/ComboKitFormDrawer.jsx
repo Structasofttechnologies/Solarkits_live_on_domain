@@ -89,6 +89,7 @@ export default function ComboKitFormDrawer({
 }) {
     const [filterInfoData, setFilterInfoData] = useState(null);
     const [orderQtyInput, setOrderQtyInput] = useState("");
+    const [looseQtyInput, setLooseQtyInput] = useState("");
 
     const comboKitBrandOptions = useMemo(() => {
         return (brands || []).map((b) => ({
@@ -788,7 +789,7 @@ export default function ComboKitFormDrawer({
                         </div>
                     </div>
 
-                    {/* ─── ORDER QUANTITY OPTIONS SECTION ─────────────────────────── */}
+                    {/* ─── PO ORDER QUANTITY OPTIONS SECTION ─────────────────────────── */}
                     <section className="rounded-2xl border border-border bg-surface-hover/20 p-5 space-y-4">
                         <div className="flex items-center gap-2 px-1">
                             <div className="rounded-lg bg-orange-500/10 p-1.5 text-orange-600">
@@ -796,10 +797,10 @@ export default function ComboKitFormDrawer({
                             </div>
                             <div>
                                 <h3 className="text-xs font-black uppercase tracking-widest text-text-primary">
-                                    Order Quantity Options (Kits)
+                                    PO Order Quantity Options (Kits)
                                 </h3>
                                 <p className="text-[10px] text-text-muted mt-0.5">
-                                    Define how many kits a customer can order at a time. Store mein sirf yahi quantities dikhenge.
+                                    Define kit batch sizes for Purchase Orders (PO Orders). Store &amp; Reseller PO modal (/po-order) mein yahi quantities dikhenge.
                                 </p>
                             </div>
                         </div>
@@ -839,7 +840,7 @@ export default function ComboKitFormDrawer({
                         {/* Custom Qty Input */}
                         <div className="space-y-2">
                             <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                                Add Custom Quantity
+                                Add Custom PO Quantity
                             </label>
                             <div className="flex gap-2">
                                 <input
@@ -872,7 +873,7 @@ export default function ComboKitFormDrawer({
                                             setOrderQtyInput("");
                                         }
                                     }}
-                                    className="h-10 px-4 bg-orange-500 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5"
+                                    className="h-10 px-4 bg-orange-500 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <FaPlus size={11} /> Add
                                 </button>
@@ -883,13 +884,13 @@ export default function ComboKitFormDrawer({
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                                    Configured Quantities ({(formData.order_quantities || []).length})
+                                    Configured PO Quantities ({(formData.order_quantities || []).length})
                                 </label>
                                 {(formData.order_quantities || []).length > 0 && (
                                     <button
                                         type="button"
                                         onClick={() => handleFormChange("order_quantities", [])}
-                                        className="text-[9px] text-rose-500 font-black uppercase tracking-wider hover:text-rose-700 transition-colors"
+                                        className="text-[9px] text-rose-500 font-black uppercase tracking-wider hover:text-rose-700 transition-colors cursor-pointer"
                                     >
                                         Clear All
                                     </button>
@@ -909,7 +910,7 @@ export default function ComboKitFormDrawer({
                                                     const updated = (formData.order_quantities || []).filter(q => q !== qty);
                                                     handleFormChange("order_quantities", updated);
                                                 }}
-                                                className="w-3.5 h-3.5 rounded-full bg-orange-500/20 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors text-orange-700"
+                                                className="w-3.5 h-3.5 rounded-full bg-orange-500/20 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors text-orange-700 cursor-pointer"
                                                 title={`Remove ${qty} Kits`}
                                             >
                                                 <FaTrash size={7} />
@@ -920,7 +921,146 @@ export default function ComboKitFormDrawer({
                             ) : (
                                 <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/5 text-center">
                                     <p className="text-[11px] text-text-muted italic">
-                                        No quantity options set — store mein +/- counter dikhega (unlimited orders)
+                                        No PO quantity options set — store/PO modal mein standard +/- counter dikhega
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* ─── LOOSE ORDER QUANTITY OPTIONS SECTION ─────────────────────── */}
+                    <section className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-5 space-y-4">
+                        <div className="flex items-center gap-2 px-1">
+                            <div className="rounded-lg bg-sky-500/10 p-1.5 text-sky-600">
+                                <FaLayerGroup size={14} />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-black uppercase tracking-widest text-text-primary">
+                                    Loose Order Quantity Options (Kits)
+                                </h3>
+                                <p className="text-[10px] text-text-muted mt-0.5">
+                                    Define flexible quantities for Loose Orders. Reseller Loose Order portal (/loose-order) Step 2 mein yahi variations dikhenge.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Quick Preset Chips */}
+                        <div className="space-y-2">
+                            <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                Quick Add Presets
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {[5, 10, 15, 20, 25, 30, 50, 100].map((preset) => {
+                                    const alreadyAdded = (formData.loose_order_quantities || []).includes(preset);
+                                    return (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            disabled={alreadyAdded}
+                                            onClick={() => {
+                                                if (!alreadyAdded) {
+                                                    const updated = [...(formData.loose_order_quantities || []), preset].sort((a, b) => a - b);
+                                                    handleFormChange("loose_order_quantities", updated);
+                                                }
+                                            }}
+                                            className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border transition-all duration-150 
+                                                ${alreadyAdded
+                                                    ? "bg-sky-500/15 text-sky-800 border-sky-500/35 cursor-not-allowed opacity-60"
+                                                    : "bg-surface border-border text-text-secondary hover:bg-sky-500/10 hover:text-sky-700 hover:border-sky-500/30 cursor-pointer"
+                                                }`}
+                                        >
+                                            {alreadyAdded ? `✓ ${preset} Kits` : `+ ${preset} Kits`}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Custom Loose Qty Input */}
+                        <div className="space-y-2">
+                            <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                Add Custom Loose Quantity
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="99999"
+                                    value={looseQtyInput}
+                                    onChange={(e) => setLooseQtyInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            const val = parseInt(looseQtyInput);
+                                            if (!isNaN(val) && val > 0 && !(formData.loose_order_quantities || []).includes(val)) {
+                                                const updated = [...(formData.loose_order_quantities || []), val].sort((a, b) => a - b);
+                                                handleFormChange("loose_order_quantities", updated);
+                                                setLooseQtyInput("");
+                                            }
+                                        }
+                                    }}
+                                    placeholder="e.g. 75"
+                                    className="flex-1 h-10 px-4 bg-surface border-2 border-border focus:border-sky-500 rounded-xl text-xs font-bold text-text-primary placeholder:text-text-muted outline-none transition-colors"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const val = parseInt(looseQtyInput);
+                                        if (!isNaN(val) && val > 0 && !(formData.loose_order_quantities || []).includes(val)) {
+                                            const updated = [...(formData.loose_order_quantities || []), val].sort((a, b) => a - b);
+                                            handleFormChange("loose_order_quantities", updated);
+                                            setLooseQtyInput("");
+                                        }
+                                    }}
+                                    className="h-10 px-4 bg-sky-600 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-sky-700 transition-colors flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <FaPlus size={11} /> Add
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Configured Loose Quantities Display */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="ml-1 text-[10px] font-bold uppercase tracking-wider text-text-secondary">
+                                    Configured Loose Quantities ({(formData.loose_order_quantities || []).length})
+                                </label>
+                                {(formData.loose_order_quantities || []).length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFormChange("loose_order_quantities", [])}
+                                        className="text-[9px] text-rose-500 font-black uppercase tracking-wider hover:text-rose-700 transition-colors cursor-pointer"
+                                    >
+                                        Clear All
+                                    </button>
+                                )}
+                            </div>
+                            {(formData.loose_order_quantities || []).length > 0 ? (
+                                <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-sky-500/5 border border-sky-500/15">
+                                    {[...(formData.loose_order_quantities || [])].sort((a, b) => a - b).map((qty, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-center gap-1.5 bg-sky-500/10 text-sky-800 border border-sky-500/25 px-3 py-1 rounded-full group"
+                                        >
+                                            <span className="text-[11px] font-black">{qty} Kits</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const updated = (formData.loose_order_quantities || []).filter(q => q !== qty);
+                                                    handleFormChange("loose_order_quantities", updated);
+                                                }}
+                                                className="w-3.5 h-3.5 rounded-full bg-sky-500/20 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors text-sky-800 cursor-pointer"
+                                                title={`Remove ${qty} Kits`}
+                                            >
+                                                <FaTrash size={7} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/5 text-center">
+                                    <p className="text-[11px] text-text-muted italic">
+                                        No loose quantity options set — /loose-order will display default presets (5, 10, 15, 20, 25, 30, 50 Kits)
                                     </p>
                                 </div>
                             )}

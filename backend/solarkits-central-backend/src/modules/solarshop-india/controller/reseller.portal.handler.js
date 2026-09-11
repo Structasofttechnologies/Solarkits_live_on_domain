@@ -1850,7 +1850,7 @@ const get_reseller_commission_rates = async (req, res) => {
       reseller_id: resellerId,
       is_active: true,
       deleted_at: null,
-    }).populate('combo_kit_id', 'name kit_name kit_code capacity order_quantities').lean();
+    }).populate('combo_kit_id', 'name kit_name kit_code capacity order_quantities loose_order_quantities').lean();
 
     if (individualRules && individualRules.length > 0) {
       const rates = individualRules.map((r) => ({
