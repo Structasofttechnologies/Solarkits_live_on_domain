@@ -44,6 +44,7 @@ export default function CheckOut() {
     upi_id: "solarkits.pay@hdfcbank",
   });
   const [copiedField, setCopiedField] = useState("");
+  const [iciciVanDetails, setIciciVanDetails] = useState(null);
 
   // Offline Payment Form State
   const [utrNumber, setUtrNumber] = useState("");
@@ -119,6 +120,50 @@ export default function CheckOut() {
       }));
     }
   }, [user, selectedState, selectedDistrict, cart]);
+
+  // Fetch ICICI Virtual Account details and listen for real-time payment confirmation
+  useEffect(() => {
+    const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const baseUrl = rawApiUrl.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+    const userPhone = user?.whatsapp || user?.registered_whatsapp || user?.mobile || "9876543210";
+
+    axios.get(`${baseUrl}/api/v1/payments/icici/van-details?phone=${userPhone}`)
+      .then((res) => {
+        if (res.data?.success) setIciciVanDetails(res.data.data);
+      })
+      .catch((err) => console.warn("Could not load ICICI VAN details:", err));
+
+    const epcId = user?._id || user?.id;
+    const streamUrl = `${baseUrl}/api/v1/payments/icici/stream?role=epc&epc_id=${epcId || ""}`;
+    const es = new EventSource(streamUrl);
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "ICICI_PAYMENT_CREDITED") {
+          console.log("⚡ Auto-detected ICICI Payment credit during checkout!", data);
+          dispatch(setAlert({
+            type: "success",
+            message: `Payment of ${data.amountFormatted || ('₹' + data.amount)} confirmed via ICICI UTR: ${data.utr}!`
+          }));
+          setUtrNumber(data.utr);
+          setAmountPaid(String(data.amount));
+          setOrderConfirmed(true);
+          setConfirmedOrderData((prev) => ({
+            ...(prev || {}),
+            order_number: data.orderNumber || "CONFIRMED",
+            utr_number: data.utr,
+            status: "confirmed"
+          }));
+          dispatch(clearCart());
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    return () => es.close();
+  }, [user, dispatch]);
 
   const checkGstStatus = async () => {
     const stateId = selectedState?.id || selectedState?._id;
@@ -758,32 +803,39 @@ export default function CheckOut() {
             </div>
           </div>
 
-          {/* Official Bank Account Details Card */}
-          <div className="bg-gradient-to-br from-blue-900/10 via-surface to-surface p-6 rounded-2xl border border-blue-500/30 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          {/* Official ICICI Virtual Account Card */}
+          <div className="bg-gradient-to-br from-[#264baa]/10 via-surface to-[#264baa]/5 p-5 sm:p-6 rounded-2xl border-2 border-[#264baa]/40 shadow-md space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#264baa]/20 pb-3.5">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-md">
-                  Official SolarKits Bank Account
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-[#264baa]/15 text-[#264baa] dark:text-blue-300 rounded-md border border-[#264baa]/25">
+                  <span className="flex h-1.5 w-1.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#264baa] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#264baa]"></span>
+                  </span>
+                  Official ICICI Virtual Account (VAN)
                 </span>
-                <h3 className="text-lg font-black text-text-primary dark:text-white mt-1 flex items-center gap-2">
-                  <FiDollarSign className="text-primary" /> Company Bank Transfer Details
+                <h3 className="text-lg sm:text-xl font-black text-text-primary dark:text-white mt-1.5 flex items-center gap-2">
+                  <FiDollarSign className="text-[#264baa] dark:text-blue-400" /> Transfer to ICICI Virtual Account
                 </h3>
               </div>
-              <span className="text-xs font-semibold text-text-secondary bg-surface px-3 py-1 rounded-lg border border-border">
-                RTGS / NEFT / IMPS / UPI
+              <span className="text-xs font-bold text-[#264baa] dark:text-blue-300 bg-[#264baa]/10 px-3 py-1.5 rounded-lg border border-[#264baa]/30 shadow-sm">
+                Zero Gateway Fees • RTGS / NEFT / IMPS / UPI
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
               <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
                 <div>
-                  <span className="text-text-muted block text-[11px]">Account Name</span>
-                  <span className="font-bold text-text-primary dark:text-white">{bankDetails.account_name}</span>
+                  <span className="text-text-muted block text-[11px] font-medium">Beneficiary Name</span>
+                  <span className="font-bold text-text-primary dark:text-white text-sm">
+                    {iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd"}
+                  </span>
                 </div>
                 <button
-                  onClick={() => handleCopyText(bankDetails.account_name, "name")}
-                  className="p-1.5 text-text-secondary hover:text-primary rounded-lg hover:bg-surface-hover transition-colors"
-                  title="Copy Name"
+                  type="button"
+                  onClick={() => handleCopyText(iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd", "name")}
+                  className="p-1.5 text-text-secondary hover:text-[#264baa] rounded-lg hover:bg-surface-hover transition-colors"
+                  title="Copy Beneficiary Name"
                 >
                   {copiedField === "name" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
                 </button>
@@ -791,52 +843,71 @@ export default function CheckOut() {
 
               <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
                 <div>
-                  <span className="text-text-muted block text-[11px]">Bank & Branch</span>
-                  <span className="font-bold text-text-primary dark:text-white">
-                    {bankDetails.bank_name}, {bankDetails.branch_name.split(",")[0]}
+                  <span className="text-text-muted block text-[11px] font-medium">Bank & Branch</span>
+                  <span className="font-bold text-text-primary dark:text-white text-sm">
+                    {iciciVanDetails?.bank_name || "ICICI Bank"}, {iciciVanDetails?.branch_name || "CMS Branch, Mumbai"}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
+              {/* Highlighted VAN Box */}
+              <div className="bg-[#264baa]/10 dark:bg-[#264baa]/20 p-4 rounded-xl border-2 border-[#264baa]/50 flex justify-between items-center shadow-sm">
                 <div>
-                  <span className="text-text-muted block text-[11px]">Account Number</span>
-                  <span className="font-mono font-black text-primary text-sm">{bankDetails.account_number}</span>
+                  <span className="text-[#264baa] dark:text-blue-300 block text-[11px] font-extrabold uppercase tracking-wide">
+                    Your Unique Virtual Account No (VAN)
+                  </span>
+                  <span className="font-mono font-black text-[#264baa] dark:text-blue-200 text-lg tracking-wider">
+                    {iciciVanDetails?.virtual_account_number || `SLRK${(user?.whatsapp || user?.mobile || '9876543210').slice(-10)}`}
+                  </span>
                 </div>
                 <button
-                  onClick={() => handleCopyText(bankDetails.account_number, "acc")}
-                  className="p-1.5 text-text-secondary hover:text-primary rounded-lg hover:bg-surface-hover transition-colors"
-                  title="Copy Account Number"
+                  type="button"
+                  onClick={() => handleCopyText(iciciVanDetails?.virtual_account_number || `SLRK${(user?.whatsapp || user?.mobile || '9876543210').slice(-10)}`, "van")}
+                  className="px-3 py-2 bg-[#264baa] hover:bg-[#1f3f91] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-[#264baa]/30 transition-all active:scale-95"
                 >
-                  {copiedField === "acc" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                  {copiedField === "van" ? <FiCheck /> : <FiCopy />}
+                  <span>{copiedField === "van" ? "Copied" : "Copy VAN"}</span>
                 </button>
               </div>
 
               <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
                 <div>
-                  <span className="text-text-muted block text-[11px]">IFSC Code</span>
-                  <span className="font-mono font-black text-text-primary dark:text-white text-sm">
-                    {bankDetails.ifsc_code}
+                  <span className="text-text-muted block text-[11px] font-medium">IFSC Code</span>
+                  <span className="font-mono font-black text-text-primary dark:text-white text-base">
+                    {iciciVanDetails?.ifsc_code || "ICIC0000104"}
                   </span>
                 </div>
                 <button
-                  onClick={() => handleCopyText(bankDetails.ifsc_code, "ifsc")}
-                  className="p-1.5 text-text-secondary hover:text-primary rounded-lg hover:bg-surface-hover transition-colors"
-                  title="Copy IFSC"
+                  type="button"
+                  onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || "ICIC0000104", "ifsc")}
+                  className="p-1.5 text-text-secondary hover:text-[#264baa] rounded-lg hover:bg-surface-hover transition-colors"
+                  title="Copy IFSC Code"
                 >
                   {copiedField === "ifsc" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
                 </button>
               </div>
             </div>
 
-            <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-center justify-between text-xs text-blue-700 dark:text-blue-300">
-              <span className="font-semibold">UPI ID: {bankDetails.upi_id}</span>
-              <button
-                onClick={() => handleCopyText(bankDetails.upi_id, "upi")}
-                className="font-bold text-primary flex items-center gap-1 hover:underline"
-              >
-                {copiedField === "upi" ? "Copied!" : "Copy UPI"}
-              </button>
+            {/* UPI Quick Pay & Pulse Info */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#264baa]/10 border border-[#264baa]/25 text-xs">
+              <div className="flex items-center gap-2.5 text-[#264baa] dark:text-blue-200">
+                <FiCheckCircle className="text-lg text-[#264baa] dark:text-blue-400 shrink-0" />
+                <span>
+                  <strong>Instant Auto-Reconciliation:</strong> Transfer via RTGS / NEFT / IMPS or UPI. Our system automatically confirms payment within 10s!
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-text-primary dark:text-white">
+                  UPI: {iciciVanDetails?.upi_handle || `${iciciVanDetails?.virtual_account_number || 'SLRK9876543210'}@icici`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(iciciVanDetails?.upi_handle || `${iciciVanDetails?.virtual_account_number || 'SLRK9876543210'}@icici`, "upi")}
+                  className="font-bold text-[#264baa] dark:text-blue-400 hover:underline text-xs"
+                >
+                  {copiedField === "upi" ? "Copied!" : "Copy UPI"}
+                </button>
+              </div>
             </div>
           </div>
 

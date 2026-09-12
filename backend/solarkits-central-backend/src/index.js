@@ -198,6 +198,14 @@ supplierRouter.use('/admin', require('./modules/supplier-panel/routes/admin.rout
 app.use('/supplier-api', supplierRouter);
 
 
+// 11. ICICI Bank E-Collection Webhooks & Real-Time Stream
+const iciciEcollectionRouter = require('./modules/icici-ecollection/routes/iciciEcollection.route');
+app.use('/api/v1/payments/icici', iciciEcollectionRouter);
+app.use('/admin-api/payments/icici', iciciEcollectionRouter);
+app.use('/account-api/payments/icici', iciciEcollectionRouter);
+app.use('/admin-api/api/v1/payments/icici', iciciEcollectionRouter);
+app.use('/account-api/api/v1/payments/icici', iciciEcollectionRouter);
+
 // Initialize Schedulers / Cron routines & Auto-seed demo accounts
 require('./modules/solarshop-india/utils/scheduler');
 require('./modules/warehouse-panel/utils/scheduler');

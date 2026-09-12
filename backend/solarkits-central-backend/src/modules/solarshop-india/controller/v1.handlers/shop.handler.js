@@ -3793,7 +3793,34 @@ const get_epc_po_allocations = async (req, res) => {
     // Find all FPO orders where this account is allocated in any item
     const orders = await FpoOrder.find({
       "items.epc_allocations.epc_buyer_id": accountId
-    }).populate('franchisee_id', 'business_name mobile email').sort({ created_at: -1 }).lean();
+    }).populate('franchisee_id', 'business_name mobile email contact_person').sort({ created_at: -1 }).lean();
+
+    // Collect kit IDs to enrich with image, description, capacity
+    const kitIds = [];
+    orders.forEach(o => {
+      o.items?.forEach(item => {
+        if (item.kit_id) kitIds.push(item.kit_id);
+      });
+    });
+
+    if (kitIds.length > 0) {
+      const kits = await ComboKit.find({ _id: { $in: kitIds } }).lean();
+      const kitMap = new Map();
+      kits.forEach(k => kitMap.set(k._id.toString(), k));
+
+      orders.forEach(o => {
+        o.items?.forEach(item => {
+          if (item.kit_id && kitMap.has(item.kit_id.toString())) {
+            const k = kitMap.get(item.kit_id.toString());
+            item.kit_image = k.kit_image || (k.images && k.images[0]) || null;
+            item.capacity = k.capacity || k.capacity_kw || null;
+            item.description = k.description || null;
+            item.brand_name = k.brand_name || null;
+            item.inverter_mode = k.inverter_mode || null;
+          }
+        });
+      });
+    }
 
     return res.json({
       status: "success",

@@ -43,6 +43,16 @@ export default function DirectEpcTransactions() {
     fetchDirectOrders();
   }, [page, statusFilter]);
 
+  useEffect(() => {
+    const handlePaymentReceived = (event) => {
+      console.log("⚡ [DirectEpcTransactions] Live payment event received, refreshing direct orders...", event.detail);
+      fetchDirectOrders();
+    };
+
+    window.addEventListener("ICICI_PAYMENT_RECEIVED", handlePaymentReceived);
+    return () => window.removeEventListener("ICICI_PAYMENT_RECEIVED", handlePaymentReceived);
+  }, []);
+
   const fetchDirectOrders = async () => {
     setLoading(true);
     try {

@@ -11,6 +11,8 @@ import { ms_conversion } from "./utils/msConversion.jsx";
 const Dashboard = lazy(() => import("./dashboard/Dashboard"));
 const SolarShopAccountsDashboard = lazy(() => import("./dashboard/SolarShopAccountsDashboard"));
 
+import PaymentAlertPopup from "./components/PaymentAlertPopup";
+
 function AccountsPortalInner() {
   const dispatch = useDispatch();
 
@@ -32,6 +34,7 @@ function AccountsPortalInner() {
         </Route>
       </Routes>
       <Alert />
+      <PaymentAlertPopup role="accounts" />
     </>
   );
 }

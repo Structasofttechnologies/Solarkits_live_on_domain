@@ -48,6 +48,15 @@ export default function SolarShopAccountsHome() {
 
   useEffect(() => {
     fetchDashboardData();
+
+    // Auto-refresh live when ICICI payment event is received
+    const handlePaymentReceived = (event) => {
+      console.log("⚡ [SolarShopAccountsHome] Live payment event received, refreshing data...", event.detail);
+      fetchDashboardData();
+    };
+
+    window.addEventListener("ICICI_PAYMENT_RECEIVED", handlePaymentReceived);
+    return () => window.removeEventListener("ICICI_PAYMENT_RECEIVED", handlePaymentReceived);
   }, []);
 
   useEffect(() => {

@@ -62,6 +62,8 @@ export default function EstimatorWizard({ onEstimateSaved, onQuoteGenerated }) {
     const addKit = (k) => {
       const id = String(k.id || k._id);
       if (!id || seen.has(id)) return;
+      if (k.sku && k.sku.startsWith("SK-DEF-")) return;
+      if ((k.brand_name === "Solarkits Certified Blueprint" || k.brand === "Solarkits Certified Blueprint") && !(k.selling_price || k.customer_price || k.base_price)) return;
       seen.add(id);
 
       const cap = Number(k.capacityKW || k.capacity_kw || k.capacity || 0);
@@ -72,6 +74,7 @@ export default function EstimatorWizard({ onEstimateSaved, onQuoteGenerated }) {
       if (!price) {
         price = Number(k.selling_price || k.customer_price || k.base_price || 0);
       }
+      if (price <= 0) return; // Only show configured kits with active pricing
 
       list.push({
         _id: id,

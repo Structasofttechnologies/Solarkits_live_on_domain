@@ -40,6 +40,16 @@ export default function OnboardedEpcPurchases() {
     fetchPurchases();
   }, [page]);
 
+  useEffect(() => {
+    const handlePaymentReceived = (event) => {
+      console.log("⚡ [OnboardedEpcPurchases] Live payment event received, refreshing purchases...", event.detail);
+      fetchPurchases();
+    };
+
+    window.addEventListener("ICICI_PAYMENT_RECEIVED", handlePaymentReceived);
+    return () => window.removeEventListener("ICICI_PAYMENT_RECEIVED", handlePaymentReceived);
+  }, []);
+
   const fetchPurchases = async () => {
     setLoading(true);
     try {

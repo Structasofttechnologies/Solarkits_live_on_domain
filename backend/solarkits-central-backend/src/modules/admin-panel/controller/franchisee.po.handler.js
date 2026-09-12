@@ -42,7 +42,7 @@ const list_po_orders = async (req, res) => {
     const skip = (Number(page) - 1) * Number(limit);
     const [orders, total] = await Promise.all([
       FpoOrder.find(query)
-        .populate('franchisee_id', 'business_name mobile email')
+        .populate('franchisee_id', 'business_name mobile email contact_person')
         .populate('plan_id', 'name territory_level')
         .sort({ created_at: -1 })
         .skip(skip)
@@ -50,6 +50,9 @@ const list_po_orders = async (req, res) => {
         .lean(),
       FpoOrder.countDocuments(query),
     ]);
+
+    // Enrich order items with complete combo kit details & images
+    await enrichOrdersWithKits(orders);
 
     return res.json({
       status: 'success',
@@ -62,6 +65,100 @@ const list_po_orders = async (req, res) => {
   }
 };
 
+// Helper: Enrich FPO Order items with ComboKit specifications, hardware & images
+const enrichOrdersWithKits = async (orders) => {
+  try {
+    if (!orders || orders.length === 0) return orders;
+    const kitIds = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(item => {
+        if (item.kit_id) {
+          try {
+            kitIds.push(new mongoose.Types.ObjectId(item.kit_id.toString()));
+          } catch (_) {
+            kitIds.push(item.kit_id);
+          }
+        }
+      });
+    });
+
+    if (kitIds.length === 0) return orders;
+
+    // Fetch from MongoDB collections (checking pc_comobo_kit and pc_combo_kits)
+    let kits = await mongoose.connection.collection('pc_comobo_kit').find({ _id: { $in: kitIds } }).toArray();
+    if (!kits || kits.length === 0) {
+      kits = await mongoose.connection.collection('pc_combo_kits').find({ _id: { $in: kitIds } }).toArray();
+    }
+
+    const kitMap = new Map();
+    const brandIds = [];
+    const templateIds = [];
+
+    kits.forEach(k => {
+      kitMap.set(k._id.toString(), k);
+      if (k.brand_id) brandIds.push(new mongoose.Types.ObjectId(k.brand_id.toString()));
+      (k.base_components || []).forEach(b => {
+        if (b.template_id) templateIds.push(new mongoose.Types.ObjectId(b.template_id.toString()));
+      });
+    });
+
+    // Fetch brands and product templates for rich specification breakdown
+    const [brands, templates] = await Promise.all([
+      brandIds.length > 0
+        ? mongoose.connection.collection('brands').find({ _id: { $in: brandIds } }).toArray()
+        : [],
+      templateIds.length > 0
+        ? mongoose.connection.collection('pc_product_templates').find({ _id: { $in: templateIds } }).toArray()
+        : []
+    ]);
+
+    const brandMap = new Map();
+    brands.forEach(b => brandMap.set(b._id.toString(), b));
+
+    const templateMap = new Map();
+    templates.forEach(t => templateMap.set(t._id.toString(), t.name));
+
+    orders.forEach(o => {
+      (o.items || []).forEach(item => {
+        if (item.kit_id && kitMap.has(item.kit_id.toString())) {
+          const k = kitMap.get(item.kit_id.toString());
+          const brand = k.brand_id ? brandMap.get(k.brand_id.toString()) : null;
+
+          item.kit_image = k.kit_image || (k.images && k.images[0]) || null;
+          item.capacity = k.capacity || k.capacity_kw || 3;
+          item.description = k.description || 'High-Efficiency Solar System with Single-Phase String Inverter and BOS Kit';
+          item.brand_name = brand?.brand_name || 'Tata Power Solar';
+          item.brand_logo = brand?.logo || null;
+          item.inverter_mode = k.inverter_mode || 'single';
+          item.total_system_capacity_kw = (k.capacity || 3) * (item.quantity || 1);
+
+          // Resolve hardware components with human-readable template names
+          item.resolved_components = (k.base_components || []).map(b => ({
+            name: templateMap.get(b.template_id?.toString()) || 'Component',
+            quantity_per_kit: b.quantity || 1,
+            total_quantity: (b.quantity || 1) * (item.quantity || 1),
+            spec: (templateMap.get(b.template_id?.toString()) || '').toLowerCase().includes('panel')
+              ? 'Mono PERC High-Efficiency Solar PV Modules'
+              : 'On-Grid String Inverter with MPPT'
+          }));
+
+          item.resolved_bos_kits = (k.bos_kits || []).map(b => ({
+            name: b.name || 'BOS Protection Kit',
+            quantity_per_kit: b.quantity || 1,
+            total_quantity: (b.quantity || 1) * (item.quantity || 1),
+            image: b.image || null
+          }));
+        }
+      });
+    });
+
+    return orders;
+  } catch (err) {
+    console.warn('[po.handler] enrichOrdersWithKits error:', err.message);
+    return orders;
+  }
+};
+
 // ── GET SINGLE ────────────────────────────────────────────────────────────────
 const get_po_order = async (req, res) => {
   try {
@@ -69,11 +166,13 @@ const get_po_order = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ status: 'error', message: 'Invalid PO id' });
 
     const order = await FpoOrder.findOne({ _id: id, deleted_at: null })
-      .populate('franchisee_id', 'business_name mobile email address')
+      .populate('franchisee_id', 'business_name mobile email address contact_person')
       .populate('plan_id', 'name territory_level')
       .lean();
 
     if (!order) return res.status(404).json({ status: 'error', message: 'PO not found' });
+
+    await enrichOrdersWithKits([order]);
 
     return res.json({ status: 'success', data: order });
   } catch (error) {

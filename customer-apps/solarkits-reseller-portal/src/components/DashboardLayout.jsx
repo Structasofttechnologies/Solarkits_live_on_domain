@@ -29,6 +29,7 @@ import {
 import api from "../services/api";
 import logoImg from "@/assets/images/logo.png";
 import PinSetupModal from "./PinSetupModal";
+import FranchisePaymentPopup from "./FranchisePaymentPopup";
 
 const NAV_ITEMS = [
   { name: "Home", icon: FiHome, path: "/dashboard" },
@@ -863,6 +864,9 @@ export default function DashboardLayout() {
           fetchMe();
         }}
       />
+
+      {/* Real-time ICICI E-Collection Payment Alerts for Franchise Partner */}
+      <FranchisePaymentPopup resellerId={reseller?._id || reseller?.id} />
     </div>
   );
 }

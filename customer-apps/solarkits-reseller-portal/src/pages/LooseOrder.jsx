@@ -147,6 +147,32 @@ export default function LooseOrder() {
 
   useEffect(() => {
     fetchData();
+
+    // Real-time listener for ICICI Loose Order payments
+    const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const baseUrl = rawApiUrl.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+    let resellerId = null;
+    try {
+      const saved = localStorage.getItem("reseller_user");
+      if (saved) resellerId = JSON.parse(saved)?._id || JSON.parse(saved)?.id;
+    } catch (_e) {}
+
+    const streamUrl = `${baseUrl}/api/v1/payments/icici/stream?role=reseller&reseller_id=${resellerId || ""}`;
+    const es = new EventSource(streamUrl);
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "ICICI_PAYMENT_CREDITED") {
+          console.log("⚡ Loose Orders auto-refreshing on ICICI payment credit:", data);
+          fetchData();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    return () => es.close();
   }, [fetchData]);
 
   // Selected Authorized Solar Kit Object

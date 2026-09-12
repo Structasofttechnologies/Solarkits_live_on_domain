@@ -225,8 +225,8 @@ const get_recent_transactions = async (req, res) => {
           payment_status: pStatus,
           commission_status: 'N/A',
           payment_date: o.created_at,
-          payment_method: o.payment_reference ? 'Razorpay Gateway' : 'Bank Transfer',
-          utr_reference: o.payment_reference || o.razorpay_order_id || 'N/A',
+          payment_method: o.offline_payment?.utr_number ? 'ICICI Bank Transfer (UTR)' : o.payment_reference ? 'Razorpay Gateway' : 'Bank Transfer',
+          utr_reference: o.offline_payment?.utr_number || o.payment_reference || o.razorpay_order_id || 'N/A',
           created_at: o.created_at,
           raw_data: o
         });
@@ -271,10 +271,47 @@ const get_recent_transactions = async (req, res) => {
           payment_status: pStatus,
           commission_status: commStatus,
           payment_date: o.created_at,
-          payment_method: 'Wallet / Direct Credit',
-          utr_reference: o.payment_reference || 'N/A',
+          payment_method: o.offline_payment?.utr_number ? 'ICICI Bank Transfer (UTR)' : 'Wallet / Direct Credit',
+          utr_reference: o.offline_payment?.utr_number || o.payment_reference || 'N/A',
           created_at: o.created_at,
           raw_data: o
+        });
+      }
+    }
+
+    // 4. Fetch recent Franchise PO Orders
+    if (!type || type === 'all' || type === 'po_order') {
+      const fpoOrders = await FpoOrder.find()
+        .sort({ created_at: -1 })
+        .limit(maxLimit)
+        .populate('franchisee_id', 'business_name mobile email gst_number contact_person')
+        .lean();
+
+      for (const f of fpoOrders) {
+        const itemNames = (f.items || []).map(i => i.item_name).join(', ') || 'Franchise PO Supply';
+        const pStatus = (f.status === 'PAID' || f.payment_status === 'Paid') ? 'Paid' : f.status === 'CANCELLED' ? 'Cancelled' : 'Pending';
+
+        unifiedTransactions.push({
+          id: f._id,
+          transaction_id: f.po_number || `FPO-${String(f._id).slice(-6).toUpperCase()}`,
+          transaction_type: 'Franchisee PO',
+          type_key: 'po_order',
+          party_name: f.franchisee_id?.business_name || 'Franchise Partner',
+          party_type: 'Franchise Partner',
+          contact: f.franchisee_id?.mobile || f.franchisee_id?.email || '-',
+          related_item: itemNames,
+          territory: 'Franchise Territory',
+          total_amount: (f.total_price_paise || 0) / 100,
+          company_amount: (f.total_price_paise || 0) / 100,
+          epc_amount: 0,
+          franchise_commission: (f.total_commission_paise || 0) / 100,
+          payment_status: pStatus,
+          commission_status: f.commission_status || 'Pending',
+          payment_date: f.created_at,
+          payment_method: f.offline_payment?.utr_number || f.utr_number ? 'ICICI Bank Transfer (UTR)' : 'Bank Transfer',
+          utr_reference: f.offline_payment?.utr_number || f.utr_number || f.payment_reference || 'N/A',
+          created_at: f.created_at,
+          raw_data: f
         });
       }
     }

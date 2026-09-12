@@ -132,6 +132,27 @@ export default function ProjectOrderStatus() {
     fetchOrders();
     fetchPoAllocations();
     fetchStates();
+
+    // Listen for ICICI real-time payment credits to auto-refresh order statuses
+    const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const baseUrl = rawApiUrl.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+    const streamUrl = `${baseUrl}/api/v1/payments/icici/stream?role=epc`;
+    const es = new EventSource(streamUrl);
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "ICICI_PAYMENT_CREDITED") {
+          console.log("⚡ Auto-refreshing orders due to ICICI payment credit:", data);
+          fetchOrders();
+          fetchPoAllocations();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    return () => es.close();
   }, []);
 
   const fetchStates = async () => {

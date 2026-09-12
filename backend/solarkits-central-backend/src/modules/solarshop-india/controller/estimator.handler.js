@@ -233,46 +233,7 @@ exports.get_eligible_solutions = async (req, res) => {
       });
     });
 
-    // Also include blueprint definitions from SolarKit so all categories/types can be selected in estimator
-    solarKits.forEach((sk) => {
-      const idStr = String(sk._id);
-      if (seenIds.has(idStr)) return;
-      seenIds.add(idStr);
 
-      const cat = categories.find((c) => String(c._id) === String(sk.category_id)) || {};
-      const ind = industries.find((i) => String(i._id) === String(cat.industry_type_id)) || {};
-      const sub = subcategories.find((s) => String(s._id) === String(sk.subcategory_id)) || {};
-      const tm = typeMaps.find((t) => String(t._id) === String(sk.type_id)) || {};
-      const typeObj = types.find((t) => String(t._id) === String(tm.type)) || {};
-
-      const matchCap = (sk.name || '').match(/(\d+(?:\.\d+)?)\s*(?:kW|HP)/i);
-      const cap = matchCap ? Number(matchCap[1]) : 5;
-
-      formatted.push({
-        _id: sk._id,
-        id: idStr,
-        name: sk.name,
-        sku: `SK-DEF-${idStr.slice(-6).toUpperCase()}`,
-        brand_name: 'Solarkits Certified Blueprint',
-        capacity_kw: cap,
-        capacityKW: cap,
-        selling_price: 0,
-        base_price: 0,
-        image: null,
-        description: sk.description || null,
-        specifications: [],
-        base_components: sk.base_components || [],
-        variants: [],
-        industryType: ind.name || null,
-        industry_type_id: ind._id || null,
-        category: cat.name || null,
-        project_category_id: cat._id || null,
-        subCategory: sub.name || null,
-        project_subcategory_id: sub._id || null,
-        projectType: typeObj.name || null,
-        projectRange: `${cap} - ${cap * 2} kW`,
-      });
-    });
 
     // Filtering
     let filtered = formatted;

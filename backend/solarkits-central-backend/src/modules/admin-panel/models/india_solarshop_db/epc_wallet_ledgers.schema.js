@@ -21,7 +21,7 @@ const schema = new mongoose.Schema({
   // ── Reference ────────────────────────────────────────────────────────────────
   reference_type: {
     type: String,
-    enum: ['epc_order_commission', 'refund_reversal', 'cancellation_reversal', 'admin_adjustment', 'withdrawal'],
+    enum: ['epc_order_commission', 'refund_reversal', 'cancellation_reversal', 'admin_adjustment', 'withdrawal', 'icici_ecollection'],
     required: true,
   },
   reference_id: {

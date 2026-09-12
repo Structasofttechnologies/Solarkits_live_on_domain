@@ -15,6 +15,8 @@ const SolarShopDashboard = lazy(() => import("./dashboard/SolarshopDashboard"));
 const SolarShopBosKitDashboard = lazy(() => import("./dashboard/SolarShopBosKitDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
+import PaymentAlertPopup from "./components/PaymentAlertPopup";
+
 // Inner component that uses dispatch (must be inside Provider)
 function AdminPortalInner() {
   const dispatch = useDispatch();
@@ -40,6 +42,7 @@ function AdminPortalInner() {
         <Route path='*' element={<Suspense fallback={<Loader />}><NotFound /></Suspense>} />
       </Routes>
       <Alert />
+      <PaymentAlertPopup role="admin" />
     </>
   );
 }
