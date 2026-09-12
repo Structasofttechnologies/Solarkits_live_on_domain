@@ -126,167 +126,200 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
   }, [shopHierarchy, hierarchy]);
 
   const categoryOptions = useMemo(() => {
+    if (!filters.industryType || filters.industryType === "all") {
+      return [{ value: "all", text: "Select Industry Type First" }];
+    }
     const catMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
-        );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        selectedInd.categories.forEach((cat) => {
           if (cat.name && !catMap.has(cat.name.toLowerCase())) {
             catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat.id });
           }
         });
-      });
+      }
     } else if (hierarchy?.categories && hierarchy.categories.length > 0) {
-      hierarchy.categories.forEach((cat) => {
-        if (cat.name && !catMap.has(cat.name.toLowerCase())) {
-          catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat._id });
-        }
-      });
+      const matchedInd = (hierarchy?.industries || []).find(
+        (i) =>
+          i.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(i._id) === String(filters.industryType)
+      );
+      if (matchedInd) {
+        hierarchy.categories.forEach((cat) => {
+          if (
+            String(cat.industry_type_id) === String(matchedInd._id) &&
+            cat.name &&
+            !catMap.has(cat.name.toLowerCase())
+          ) {
+            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat._id });
+          }
+        });
+      }
     }
     return [{ value: "all", text: "All Categories" }, ...Array.from(catMap.values())];
   }, [shopHierarchy, hierarchy, filters.industryType]);
 
   const subCategoryOptions = useMemo(() => {
+    if (!filters.industryType || filters.industryType === "all" || !filters.category || filters.category === "all") {
+      return [{ value: "all", text: "Select Category First" }];
+    }
     const subsMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === filters.category.toLowerCase() ||
+            String(cat.id) === String(filters.category)
         );
+        if (selectedCat && selectedCat.subcategories) {
+          selectedCat.subcategories.forEach((sub) => {
+            if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+              subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name, id: sub.id });
+            }
+          });
+        }
       }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
+    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
+      const matchedCat = (hierarchy?.categories || []).find(
+        (c) =>
+          c.name?.toLowerCase() === filters.category.toLowerCase() ||
+          String(c._id) === String(filters.category)
+      );
+      if (matchedCat) {
+        hierarchy.subcategories.forEach((sub) => {
           if (
-            filters.category === "all" ||
-            cat.name?.toLowerCase() === filters.category?.toLowerCase()
+            String(sub.category) === String(matchedCat._id) &&
+            sub.name &&
+            !subsMap.has(sub.name.toLowerCase())
           ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
-                subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name, id: sub.id });
-              }
-            });
+            subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name, id: sub._id });
           }
         });
-      });
-    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
-      hierarchy.subcategories.forEach((sub) => {
-        if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
-          subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name, id: sub._id });
-        }
-      });
+      }
     }
     return [{ value: "all", text: "All Sub-Categories" }, ...Array.from(subsMap.values())];
   }, [shopHierarchy, hierarchy, filters.industryType, filters.category]);
 
   const systemTypeOptions = useMemo(() => {
+    if (
+      !filters.category ||
+      filters.category === "all" ||
+      !filters.subCategory ||
+      filters.subCategory === "all"
+    ) {
+      return [{ value: "all", text: "Select Sub-Category First" }];
+    }
     const typesMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === filters.category.toLowerCase() ||
+            String(cat.id) === String(filters.category)
         );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            filters.category === "all" ||
-            cat.name?.toLowerCase() === filters.category?.toLowerCase()
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (
-                filters.subCategory === "all" ||
-                sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()
-              ) {
-                (sub.mappedTypes || []).forEach((mt) => {
-                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
-                    typesMap.set(mt.name.toLowerCase(), {
-                      value: mt.name,
-                      text: mt.name,
-                      id: mt.id || mt.type_id,
-                    });
-                  }
+        if (selectedCat && selectedCat.subcategories) {
+          const selectedSub = selectedCat.subcategories.find(
+            (sub) =>
+              sub.name?.toLowerCase() === filters.subCategory.toLowerCase() ||
+              String(sub.id) === String(filters.subCategory)
+          );
+          if (selectedSub && selectedSub.mappedTypes) {
+            selectedSub.mappedTypes.forEach((mt) => {
+              if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                typesMap.set(mt.name.toLowerCase(), {
+                  value: mt.name,
+                  text: mt.name,
+                  id: mt.id || mt.type_id,
                 });
               }
             });
           }
-        });
-      });
-    } else if (hierarchy?.types && hierarchy.types.length > 0) {
-      hierarchy.types.forEach((t) => {
-        if (t.name && !typesMap.has(t.name.toLowerCase())) {
-          typesMap.set(t.name.toLowerCase(), { value: t.name, text: t.name, id: t._id });
         }
-      });
+      }
+    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
+      const matchedSub = (hierarchy?.subcategories || []).find(
+        (s) =>
+          s.name?.toLowerCase() === filters.subCategory.toLowerCase() ||
+          String(s._id) === String(filters.subCategory)
+      );
+      if (matchedSub && hierarchy.types) {
+        hierarchy.types.forEach((t) => {
+          if (t.name && !typesMap.has(t.name.toLowerCase())) {
+            typesMap.set(t.name.toLowerCase(), { value: t.name, text: t.name, id: t._id });
+          }
+        });
+      }
     }
     return [{ value: "all", text: "All System Types" }, ...Array.from(typesMap.values())];
   }, [shopHierarchy, hierarchy, filters.industryType, filters.category, filters.subCategory]);
 
   const projectRangeOptions = useMemo(() => {
+    if (
+      !filters.subCategory ||
+      filters.subCategory === "all" ||
+      !filters.systemType ||
+      filters.systemType === "all"
+    ) {
+      return [{ value: "all", text: "Select System Type First" }];
+    }
     const rangesMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === filters.category.toLowerCase() ||
+            String(cat.id) === String(filters.category)
         );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            filters.category === "all" ||
-            cat.name?.toLowerCase() === filters.category?.toLowerCase()
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (
-                filters.subCategory === "all" ||
-                sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()
-              ) {
-                (sub.mappedTypes || []).forEach((mt) => {
-                  if (
-                    filters.systemType === "all" ||
-                    mt.name?.toLowerCase() === filters.systemType?.toLowerCase()
-                  ) {
-                    (mt.ranges || []).forEach((r) => {
-                      const idVal = String(r.id || r.range_label);
-                      if (idVal && !rangesMap.has(idVal)) {
-                        rangesMap.set(idVal, {
-                          value: r.range_label || idVal,
-                          text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
-                        });
-                      }
-                    });
-                  }
-                });
-              }
-            });
+        if (selectedCat && selectedCat.subcategories) {
+          const selectedSub = selectedCat.subcategories.find(
+            (sub) =>
+              sub.name?.toLowerCase() === filters.subCategory.toLowerCase() ||
+              String(sub.id) === String(filters.subCategory)
+          );
+          if (selectedSub && selectedSub.mappedTypes) {
+            const selectedMt = selectedSub.mappedTypes.find(
+              (mt) =>
+                mt.name?.toLowerCase() === filters.systemType.toLowerCase() ||
+                String(mt.id || mt.type_id) === String(filters.systemType)
+            );
+            if (selectedMt && selectedMt.ranges) {
+              selectedMt.ranges.forEach((r) => {
+                const idVal = String(r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`);
+                if (idVal && !rangesMap.has(idVal.toLowerCase())) {
+                  rangesMap.set(idVal.toLowerCase(), {
+                    value: r.range_label || idVal,
+                    text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
+                  });
+                }
+              });
+            }
           }
-        });
-      });
-    } else if (hierarchy?.ranges && hierarchy.ranges.length > 0) {
-      hierarchy.ranges.forEach((r) => {
-        const lbl = `${r.min_value} - ${r.max_value} ${r.unit_id?.symbol || 'kW'}`;
-        rangesMap.set(lbl, { value: lbl, text: lbl });
-      });
+        }
+      }
     }
     return [{ value: "all", text: "All Project Ranges" }, ...Array.from(rangesMap.values())];
   }, [
     shopHierarchy,
-    hierarchy,
     filters.industryType,
     filters.category,
     filters.subCategory,
@@ -582,6 +615,7 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                 </label>
                 <select
                   value={filters.category}
+                  disabled={filters.industryType === "all"}
                   onChange={(e) =>
                     setFilters((prev) => ({
                       ...prev,
@@ -591,7 +625,7 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                       projectRange: "all",
                     }))
                   }
-                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 >
                   {categoryOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -608,6 +642,7 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                 </label>
                 <select
                   value={filters.subCategory}
+                  disabled={filters.category === "all"}
                   onChange={(e) =>
                     setFilters((prev) => ({
                       ...prev,
@@ -616,7 +651,7 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                       projectRange: "all",
                     }))
                   }
-                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 >
                   {subCategoryOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -633,6 +668,7 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                 </label>
                 <select
                   value={filters.systemType}
+                  disabled={filters.subCategory === "all"}
                   onChange={(e) =>
                     setFilters((prev) => ({
                       ...prev,
@@ -640,7 +676,7 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                       projectRange: "all",
                     }))
                   }
-                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 >
                   {systemTypeOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -657,13 +693,14 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                 </label>
                 <select
                   value={filters.projectRange}
+                  disabled={filters.systemType === "all"}
                   onChange={(e) =>
                     setFilters((prev) => ({
                       ...prev,
                       projectRange: e.target.value,
                     }))
                   }
-                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800"
                 >
                   {projectRangeOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -700,21 +737,30 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
               </div>
             </div>
 
-            {/* If Specific Selection Mode */}
-            {!applyToAllMatching && (
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="relative flex-1 max-w-sm">
-                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
-                    <input
-                      type="text"
-                      placeholder="Search kits by name, capacity, SKU..."
-                      value={kitSearchQuery}
-                      onChange={(e) => setKitSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                    />
-                  </div>
+            {/* Always Display Kits Section */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-3">
+              {applyToAllMatching ? (
+                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                  <FiCheck className="shrink-0 text-emerald-600 dark:text-emerald-400" size={16} />
+                  <span>
+                    All <strong>{availableKits.length}</strong> matching ComboKit{availableKits.length !== 1 ? "s" : ""} below will be automatically assigned to this BOM item. Uncheck "Apply to All Matching Kits" above if you wish to handpick specific kits.
+                  </span>
+                </div>
+              ) : null}
 
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="relative flex-1 max-w-sm">
+                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+                  <input
+                    type="text"
+                    placeholder="Search kits by name, capacity, SKU..."
+                    value={kitSearchQuery}
+                    onChange={(e) => setKitSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                {!applyToAllMatching && (
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -734,67 +780,77 @@ export default function BomItemForm({ item, onClose, onSaved, hierarchy }) {
                       {selectedKitIds.length} Selected
                     </span>
                   </div>
-                </div>
-
-                {loadingKits ? (
-                  <div className="py-8 text-center text-xs text-slate-400">Loading matching kits...</div>
-                ) : displayedKits.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400 italic">
-                    No ComboKits match the selected filters.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {displayedKits.map((kit) => {
-                      const isSelected = selectedKitIds.includes(String(kit._id || kit.id));
-                      return (
-                        <div
-                          key={kit._id || kit.id}
-                          onClick={() => handleToggleKitSelection(kit._id || kit.id)}
-                          className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center gap-3 ${
-                            isSelected
-                              ? "bg-amber-50/70 dark:bg-amber-950/30 border-amber-400 dark:border-amber-600 shadow-sm"
-                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300"
-                          }`}
-                        >
-                          <div className="shrink-0">
-                            {isSelected ? (
-                              <FiCheckSquare className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                            ) : (
-                              <FiSquare className="w-4 h-4 text-slate-400" />
-                            )}
-                          </div>
-
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
-                            {kit.image ? (
-                              <img src={kit.image} alt={kit.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <FiPackage className="w-5 h-5 text-slate-400" />
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-                              {kit.name}
-                            </p>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                              <span className="font-mono">{kit.sku}</span>
-                              {kit.capacity_kw > 0 && (
-                                <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded font-semibold text-amber-600 dark:text-amber-400">
-                                  {kit.capacity_kw} kW
-                                </span>
-                              )}
-                              {kit.projectType && (
-                                <span className="truncate">{kit.projectType}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
                 )}
               </div>
-            )}
+
+              {loadingKits ? (
+                <div className="py-8 text-center text-xs text-slate-400">Loading matching kits...</div>
+              ) : displayedKits.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-400 italic">
+                  No ComboKits match the selected filters.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {displayedKits.map((kit) => {
+                    const isSelected = selectedKitIds.includes(String(kit._id || kit.id));
+                    return (
+                      <div
+                        key={kit._id || kit.id}
+                        onClick={() => {
+                          if (!applyToAllMatching) {
+                            handleToggleKitSelection(kit._id || kit.id);
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border transition flex items-center gap-3 ${
+                          applyToAllMatching
+                            ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/60 cursor-default"
+                            : isSelected
+                            ? "bg-amber-50/70 dark:bg-amber-950/30 border-amber-400 dark:border-amber-600 shadow-sm cursor-pointer"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700/80 hover:border-slate-300 cursor-pointer"
+                        }`}
+                      >
+                        <div className="shrink-0">
+                          {applyToAllMatching ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/60">
+                              Auto
+                            </span>
+                          ) : isSelected ? (
+                            <FiCheckSquare className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                          ) : (
+                            <FiSquare className="w-4 h-4 text-slate-400" />
+                          )}
+                        </div>
+
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
+                          {kit.image ? (
+                            <img src={kit.image} alt={kit.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <FiPackage className="w-5 h-5 text-slate-400" />
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                            {kit.name}
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+                            <span className="font-mono">{kit.sku}</span>
+                            {kit.capacity_kw > 0 && (
+                              <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-slate-800 rounded font-semibold text-amber-600 dark:text-amber-400">
+                                {kit.capacity_kw} kW
+                              </span>
+                            )}
+                            {kit.projectType && (
+                              <span className="truncate">{kit.projectType}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── SECTION 3: Item Basic Details ────────────────────────────────── */}

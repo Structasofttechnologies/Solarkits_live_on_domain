@@ -5,21 +5,19 @@ export default function MarginInput({
   marginType = "percentage",
   marginValue = 5,
   allowedModes = "both",
-  minPercentage = 0,
   maxPercentage = 100,
-  minAmount = 0,
   maxAmount = 10000000,
   onTypeChange,
   onValueChange,
   projectCost = 0,
 }) {
-  const effectiveMinPct = minPercentage !== undefined && minPercentage !== null ? Number(minPercentage) : 0;
+  const effectiveMinPct = 0;
   const effectiveMaxPct = maxPercentage !== undefined && maxPercentage !== null ? Number(maxPercentage) : 100;
-  const effectiveMinAmt = minAmount !== undefined && minAmount !== null ? Number(minAmount) : 0;
+  const effectiveMinAmt = 0;
   const effectiveMaxAmt = maxAmount !== undefined && maxAmount !== null ? Number(maxAmount) : 10000000;
 
   const isPercentage = marginType === "percentage";
-  const min = isPercentage ? effectiveMinPct : effectiveMinAmt;
+  const min = 0;
   const max = isPercentage ? effectiveMaxPct : effectiveMaxAmt;
 
   // Enforce allowed mode if Admin restricted to percentage or amount only
@@ -31,45 +29,42 @@ export default function MarginInput({
     }
   }, [allowedModes, marginType, onTypeChange]);
 
-  // Enforce boundary clamping if current marginValue exceeds Admin max or is below min
+  // Enforce maximum clamping if current marginValue exceeds allowed max
   useEffect(() => {
     const numVal = Number(marginValue);
     if (numVal > max) {
       onValueChange && onValueChange(max);
-    } else if (numVal < min && min > 0) {
-      onValueChange && onValueChange(min);
+    } else if (numVal < 0) {
+      onValueChange && onValueChange(0);
     }
-  }, [max, min, marginValue, onValueChange]);
+  }, [max, marginValue, onValueChange]);
 
-  // Dynamic quick percentage presets constrained strictly within [min, max]
+  // Dynamic quick percentage presets constrained strictly within [0, max]
   const quickPercentages = useMemo(() => {
     const candidatePcts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 18, 20, 25, 30, 40, 50, 75, 100];
-    let filtered = candidatePcts.filter((p) => p >= effectiveMinPct && p <= effectiveMaxPct);
+    let filtered = candidatePcts.filter((p) => p <= effectiveMaxPct);
 
-    if (effectiveMinPct > 0 && !filtered.includes(effectiveMinPct)) {
-      filtered.unshift(effectiveMinPct);
-    }
-    if (effectiveMaxPct > 0 && !filtered.includes(effectiveMaxPct)) {
+    if (effectiveMaxPct > 0 && !filtered.includes(effectiveMaxPct) && effectiveMaxPct <= 100) {
       filtered.push(effectiveMaxPct);
     }
 
     filtered = Array.from(new Set(filtered)).sort((a, b) => a - b);
     if (filtered.length === 0) {
-      filtered = [effectiveMinPct, effectiveMaxPct].filter((p) => p >= 0);
+      filtered = [effectiveMaxPct].filter((p) => p >= 0);
     }
     return filtered;
-  }, [effectiveMinPct, effectiveMaxPct]);
+  }, [effectiveMaxPct]);
 
-  // Dynamic quick amount presets constrained strictly within [min, max]
+  // Dynamic quick amount presets constrained strictly within [0, max]
   const quickAmounts = useMemo(() => {
     const candidateAmts = [5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000, 150000, 200000];
-    let filtered = candidateAmts.filter((a) => a >= effectiveMinAmt && a <= effectiveMaxAmt);
+    let filtered = candidateAmts.filter((a) => a <= effectiveMaxAmt);
 
     if (filtered.length === 0) {
-      filtered = [effectiveMinAmt, effectiveMaxAmt].filter((a) => a > 0);
+      filtered = [effectiveMaxAmt].filter((a) => a > 0);
     }
     return filtered;
-  }, [effectiveMinAmt, effectiveMaxAmt]);
+  }, [effectiveMaxAmt]);
 
   // Calculated profit preview
   const estimatedProfit = isPercentage
@@ -95,8 +90,8 @@ export default function MarginInput({
 
   const handleBlur = () => {
     const current = Number(marginValue);
-    if (current < min) {
-      onValueChange && onValueChange(min);
+    if (current < 0) {
+      onValueChange && onValueChange(0);
     }
   };
 
@@ -109,10 +104,10 @@ export default function MarginInput({
             <FiTrendingUp className="w-4 h-4" /> Your EPC Margin
           </label>
 
-          {/* Admin Constraint Badge */}
+          {/* Admin Constraint Badge - Max Margin Only */}
           <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-primary/10 dark:bg-blue-900/30 text-primary dark:text-blue-300 border border-primary/20">
             <FiLock className="w-3 h-3 text-primary dark:text-blue-400" />
-            Admin Limit: {isPercentage ? `${effectiveMinPct}% – ${effectiveMaxPct}%` : `₹${effectiveMinAmt.toLocaleString("en-IN")} – ₹${effectiveMaxAmt.toLocaleString("en-IN")}`}
+            Max Allowed Margin: {effectiveMaxAmt < 10000000 ? (isPercentage ? `${effectiveMaxPct}%` : `₹${effectiveMaxAmt.toLocaleString("en-IN")}`) : "Open"}
           </span>
         </div>
 

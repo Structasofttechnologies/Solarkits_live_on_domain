@@ -8,7 +8,6 @@ import {
   selectSolution,
   setQuantity,
   setActiveStep,
-  resetWizard,
   addToComparison,
 } from "../../features/estimator.slice";
 import { fetchShopHierarchy, getAvailableKitData } from "../../features/slice";
@@ -86,6 +85,7 @@ export default function EstimatorWizard({ onEstimateSaved, onQuoteGenerated }) {
         capacityKW: cap,
         selling_price: price,
         base_price: price,
+        max_margin: Number(k.max_margin || 0),
         variants: k.variants || [],
         image: k.image || k.thumbnail || (k.images && k.images[0]) || null,
         industryType: k.industryType || k.industry_type_name || null,
@@ -102,11 +102,11 @@ export default function EstimatorWizard({ onEstimateSaved, onQuoteGenerated }) {
       });
     };
 
-    if (Array.isArray(rawKits) && rawKits.length > 0) {
-      rawKits.forEach(addKit);
-    }
     if (Array.isArray(solutions) && solutions.length > 0) {
       solutions.forEach(addKit);
+    }
+    if (Array.isArray(rawKits) && rawKits.length > 0) {
+      rawKits.forEach(addKit);
     }
 
     return list;

@@ -23,7 +23,6 @@ import {
   saveEstimateThunk,
   generateQuoteThunk,
   addToComparison,
-  setActiveStep,
   fetchGstSettings,
 } from "../../features/estimator.slice";
 import { setShowAuthDialog } from "../../features/slice";
@@ -46,12 +45,11 @@ export default function MarginEstimatorPanel({ onBack, onSaved, onQuoteGenerated
     calculationResult,
     calcLoading,
     loading,
-    error,
     successMessage,
   } = useSelector((state) => state.estimator_slice);
 
   const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
-  const { user, isAuthenticated } = useSelector((state) => state.auth_slice);
+  const { isAuthenticated } = useSelector((state) => state.auth_slice);
 
   const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const [isSavingEstimate, setIsSavingEstimate] = useState(false);
@@ -285,18 +283,30 @@ export default function MarginEstimatorPanel({ onBack, onSaved, onQuoteGenerated
           />
 
           {/* Margin Input */}
-          <MarginInput
-            marginType={marginType}
-            marginValue={marginValue}
-            allowedModes={gstSettings?.allowed_margin_types || "both"}
-            minPercentage={gstSettings?.min_margin_percentage !== undefined && gstSettings?.min_margin_percentage !== null ? Number(gstSettings.min_margin_percentage) : 0}
-            maxPercentage={gstSettings?.max_margin_percentage !== undefined && gstSettings?.max_margin_percentage !== null ? Number(gstSettings.max_margin_percentage) : 100}
-            minAmount={gstSettings?.min_margin !== undefined && gstSettings?.min_margin !== null ? Number(gstSettings.min_margin) : 0}
-            maxAmount={gstSettings?.max_margin !== undefined && gstSettings?.max_margin !== null ? Number(gstSettings.max_margin) : 10000000}
-            onTypeChange={(type) => dispatch(setMarginType(type))}
-            onValueChange={(val) => dispatch(setMarginValue(val))}
-            projectCost={cr.project_cost_before_gst}
-          />
+          {(() => {
+            const kitMaxMargin = Number(selectedSolution?.max_margin || 0);
+            const costBeforeGst = Number(cr?.project_cost_before_gst || selectedSolution?.selling_price || 0);
+            const effectiveMaxAmount = kitMaxMargin > 0 ? kitMaxMargin : 10000000;
+            const effectiveMaxPercentage = (kitMaxMargin > 0 && costBeforeGst > 0)
+              ? Math.min(100, Math.round((kitMaxMargin / costBeforeGst) * 1000) / 10)
+              : 100;
+
+            return (
+              <MarginInput
+                marginType={marginType}
+                marginValue={marginValue}
+                allowedModes={gstSettings?.allowed_margin_types || "both"}
+                minPercentage={0}
+                maxPercentage={effectiveMaxPercentage}
+                minAmount={0}
+                maxAmount={effectiveMaxAmount}
+                kitMaxMargin={kitMaxMargin}
+                onTypeChange={(type) => dispatch(setMarginType(type))}
+                onValueChange={(val) => dispatch(setMarginValue(val))}
+                projectCost={cr.project_cost_before_gst}
+              />
+            );
+          })()}
 
           {/* GST Selector */}
           <GstSelector

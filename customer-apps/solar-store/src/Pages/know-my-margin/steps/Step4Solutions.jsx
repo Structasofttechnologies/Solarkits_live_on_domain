@@ -65,20 +65,20 @@ export default function Step4Solutions({
   }, [shopHierarchy, solutions]);
 
   const categoryOptions = useMemo(() => {
+    if (!filters.industryType || filters.industryType === "all") {
+      return [{ value: "all", text: "Select Industry Type First" }];
+    }
     const catMap = new Map();
 
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType) ||
-            ind.slug?.toLowerCase() === filters.industryType.toLowerCase()
-        );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType) ||
+          ind.slug?.toLowerCase() === filters.industryType.toLowerCase()
+      );
+      if (selectedInd && selectedInd.categories) {
+        selectedInd.categories.forEach((cat) => {
           if (cat.name && !catMap.has(cat.name.toLowerCase())) {
             catMap.set(cat.name.toLowerCase(), {
               value: cat.name,
@@ -87,263 +87,151 @@ export default function Step4Solutions({
             });
           }
         });
-      });
-    }
-
-    let filteredKits = solutions;
-    if (filters.industryType && filters.industryType !== "all") {
-      filteredKits = filteredKits.filter((kit) => {
-        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
-        const sel = filters.industryType.toLowerCase();
-        return (
-          ind === sel ||
-          (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) ||
-          ind.includes(sel) ||
-          sel.includes(ind)
-        );
-      });
-    }
-    filteredKits.forEach((kit) => {
-      if (kit.category && !catMap.has(kit.category.toLowerCase())) {
-        catMap.set(kit.category.toLowerCase(), { value: kit.category, text: kit.category });
       }
-    });
+    }
 
     return [{ value: "all", text: "All Categories" }, ...Array.from(catMap.values())];
-  }, [shopHierarchy, solutions, filters.industryType]);
+  }, [shopHierarchy, filters.industryType]);
 
   const subCategoryOptions = useMemo(() => {
+    if (
+      !filters.industryType ||
+      filters.industryType === "all" ||
+      !filters.category ||
+      filters.category === "all"
+    ) {
+      return [{ value: "all", text: "Select Category First" }];
+    }
     const subsMap = new Map();
 
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
-        );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            filters.category === "all" ||
-            cat.name?.toLowerCase() === filters.category?.toLowerCase() ||
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType) ||
+          ind.slug?.toLowerCase() === filters.industryType.toLowerCase()
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === filters.category.toLowerCase() ||
             String(cat.id) === String(filters.category)
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
-                subsMap.set(sub.name.toLowerCase(), {
-                  value: sub.name,
-                  text: sub.name,
-                  id: sub.id,
-                });
-              }
-            });
-          }
-        });
-      });
-    }
-
-    let filteredKits = solutions;
-    if (filters.industryType && filters.industryType !== "all") {
-      filteredKits = filteredKits.filter((kit) => {
-        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
-        const sel = filters.industryType.toLowerCase();
-        return (
-          ind === sel ||
-          (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) ||
-          ind.includes(sel) ||
-          sel.includes(ind)
         );
-      });
-    }
-    if (filters.category && filters.category !== "all") {
-      filteredKits = filteredKits.filter(
-        (kit) => kit.category?.toLowerCase() === filters.category.toLowerCase()
-      );
-    }
-    filteredKits.forEach((kit) => {
-      const subName = kit.subCategory || kit.usageType;
-      if (subName && !subsMap.has(subName.toLowerCase())) {
-        subsMap.set(subName.toLowerCase(), {
-          value: subName,
-          text: subName,
-        });
-      }
-    });
-
-    return [{ value: "all", text: "All Sub-Categories" }, ...Array.from(subsMap.values())];
-  }, [shopHierarchy, solutions, filters.industryType, filters.category]);
-
-  const systemTypeOptions = useMemo(() => {
-    const typesMap = new Map();
-
-    if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
-        );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            filters.category === "all" ||
-            cat.name?.toLowerCase() === filters.category?.toLowerCase()
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (
-                filters.subCategory === "all" ||
-                sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()
-              ) {
-                (sub.mappedTypes || []).forEach((mt) => {
-                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
-                    typesMap.set(mt.name.toLowerCase(), {
-                      value: mt.name,
-                      text: mt.name,
-                      id: mt.id || mt.type_id,
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
-      });
-    }
-
-    let filteredKits = solutions;
-    if (filters.industryType && filters.industryType !== "all") {
-      filteredKits = filteredKits.filter((kit) => {
-        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
-        const sel = filters.industryType.toLowerCase();
-        return (
-          ind === sel ||
-          (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) ||
-          ind.includes(sel) ||
-          sel.includes(ind)
-        );
-      });
-    }
-    if (filters.category && filters.category !== "all") {
-      filteredKits = filteredKits.filter(
-        (kit) => kit.category?.toLowerCase() === filters.category.toLowerCase()
-      );
-    }
-    if (filters.subCategory && filters.subCategory !== "all") {
-      filteredKits = filteredKits.filter(
-        (kit) =>
-          kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() ||
-          kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()
-      );
-    }
-    filteredKits.forEach((kit) => {
-      const typeName = kit.projectType || kit.inverter?.type || kit.systemType;
-      if (typeName && !typesMap.has(typeName.toLowerCase())) {
-        typesMap.set(typeName.toLowerCase(), { value: typeName, text: typeName });
-      }
-    });
-
-    return [{ value: "all", text: "All System Types" }, ...Array.from(typesMap.values())];
-  }, [shopHierarchy, solutions, filters.industryType, filters.category, filters.subCategory]);
-
-  const projectRangeOptions = useMemo(() => {
-    const rangesMap = new Map();
-
-    if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (filters.industryType && filters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
-            String(ind.id) === String(filters.industryType)
-        );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            filters.category === "all" ||
-            cat.name?.toLowerCase() === filters.category?.toLowerCase()
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (
-                filters.subCategory === "all" ||
-                sub.name?.toLowerCase() === filters.subCategory?.toLowerCase()
-              ) {
-                (sub.mappedTypes || []).forEach((mt) => {
-                  if (
-                    filters.systemType === "all" ||
-                    mt.name?.toLowerCase() === filters.systemType?.toLowerCase()
-                  ) {
-                    (mt.ranges || []).forEach((r) => {
-                      const idVal = String(r.id || r.range_label);
-                      if (idVal && !rangesMap.has(idVal)) {
-                        rangesMap.set(idVal, {
-                          value: idVal,
-                          text:
-                            r.range_label ||
-                            `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
-                          min: r.min_value || 0,
-                        });
-                      }
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
-      });
-    }
-
-    let filteredKits = solutions;
-    if (filters.industryType && filters.industryType !== "all") {
-      filteredKits = filteredKits.filter((kit) => {
-        const ind = (kit.industryType || kit.industry_type_name || "").toLowerCase();
-        const sel = filters.industryType.toLowerCase();
-        return (
-          ind === sel ||
-          (kit.industry_type_id && String(kit.industry_type_id) === String(filters.industryType)) ||
-          ind.includes(sel) ||
-          sel.includes(ind)
-        );
-      });
-    }
-    if (filters.category && filters.category !== "all") {
-      filteredKits = filteredKits.filter(
-        (kit) => kit.category?.toLowerCase() === filters.category.toLowerCase()
-      );
-    }
-    if (filters.subCategory && filters.subCategory !== "all") {
-      filteredKits = filteredKits.filter(
-        (kit) =>
-          kit.subCategory?.toLowerCase() === filters.subCategory.toLowerCase() ||
-          kit.usageType?.toLowerCase() === filters.subCategory.toLowerCase()
-      );
-    }
-    if (filters.systemType && filters.systemType !== "all") {
-      filteredKits = filteredKits.filter(
-        (kit) =>
-          kit.projectType?.toLowerCase() === filters.systemType.toLowerCase() ||
-          kit.inverter?.type?.toLowerCase() === filters.systemType.toLowerCase() ||
-          kit.systemType?.toLowerCase() === filters.systemType.toLowerCase()
-      );
-    }
-    filteredKits.forEach((kit) => {
-      if (kit.projectRange) {
-        const idVal = String(kit.projectRange.id || kit.projectRange.text);
-        if (idVal && !rangesMap.has(idVal)) {
-          rangesMap.set(idVal, {
-            value: idVal,
-            text: kit.projectRange.text || idVal,
-            min: kit.projectRange.min || 0,
+        if (selectedCat && selectedCat.subcategories) {
+          selectedCat.subcategories.forEach((sub) => {
+            if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+              subsMap.set(sub.name.toLowerCase(), {
+                value: sub.name,
+                text: sub.name,
+                id: sub.id,
+              });
+            }
           });
         }
       }
-    });
+    }
+
+    return [{ value: "all", text: "All Sub-Categories" }, ...Array.from(subsMap.values())];
+  }, [shopHierarchy, filters.industryType, filters.category]);
+
+  const systemTypeOptions = useMemo(() => {
+    if (
+      !filters.category ||
+      filters.category === "all" ||
+      !filters.subCategory ||
+      filters.subCategory === "all"
+    ) {
+      return [{ value: "all", text: "Select Sub-Category First" }];
+    }
+    const typesMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === filters.category.toLowerCase() ||
+            String(cat.id) === String(filters.category)
+        );
+        if (selectedCat && selectedCat.subcategories) {
+          const selectedSub = selectedCat.subcategories.find(
+            (sub) =>
+              sub.name?.toLowerCase() === filters.subCategory.toLowerCase() ||
+              String(sub.id) === String(filters.subCategory)
+          );
+          if (selectedSub && selectedSub.mappedTypes) {
+            selectedSub.mappedTypes.forEach((mt) => {
+              if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                typesMap.set(mt.name.toLowerCase(), {
+                  value: mt.name,
+                  text: mt.name,
+                  id: mt.id || mt.type_id,
+                });
+              }
+            });
+          }
+        }
+      }
+    }
+
+    return [{ value: "all", text: "All System Types" }, ...Array.from(typesMap.values())];
+  }, [shopHierarchy, filters.industryType, filters.category, filters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    if (
+      !filters.subCategory ||
+      filters.subCategory === "all" ||
+      !filters.systemType ||
+      filters.systemType === "all"
+    ) {
+      return [{ value: "all", text: "Select System Type First" }];
+    }
+    const rangesMap = new Map();
+
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === filters.industryType.toLowerCase() ||
+          String(ind.id) === String(filters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === filters.category.toLowerCase() ||
+            String(cat.id) === String(filters.category)
+        );
+        if (selectedCat && selectedCat.subcategories) {
+          const selectedSub = selectedCat.subcategories.find(
+            (sub) =>
+              sub.name?.toLowerCase() === filters.subCategory.toLowerCase() ||
+              String(sub.id) === String(filters.subCategory)
+          );
+          if (selectedSub && selectedSub.mappedTypes) {
+            const selectedMt = selectedSub.mappedTypes.find(
+              (mt) =>
+                mt.name?.toLowerCase() === filters.systemType.toLowerCase() ||
+                String(mt.id || mt.type_id) === String(filters.systemType)
+            );
+            if (selectedMt && selectedMt.ranges) {
+              selectedMt.ranges.forEach((r) => {
+                const idVal = String(r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`);
+                if (idVal && !rangesMap.has(idVal.toLowerCase())) {
+                  rangesMap.set(idVal.toLowerCase(), {
+                    value: r.range_label || idVal,
+                    text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
+                    min: r.min_value || 0,
+                  });
+                }
+              });
+            }
+          }
+        }
+      }
+    }
 
     const uniqueRanges = Array.from(rangesMap.values()).sort(
       (a, b) => (a.min || 0) - (b.min || 0)
@@ -355,7 +243,6 @@ export default function Step4Solutions({
     ];
   }, [
     shopHierarchy,
-    solutions,
     filters.industryType,
     filters.category,
     filters.subCategory,
@@ -492,6 +379,7 @@ export default function Step4Solutions({
       selling_price: finalPrice,
       base_price: finalPrice,
       selected_tier: finalTierName,
+      max_margin: Number(sol.max_margin || 0),
     };
 
     onSelect(resolvedKit);
@@ -564,6 +452,7 @@ export default function Step4Solutions({
           />
           <Dropdown
             label="Category"
+            disabled={filters.industryType === "all"}
             options={categoryOptions}
             value={filters.category}
             onChange={(val) =>
@@ -579,30 +468,36 @@ export default function Step4Solutions({
           />
           <Dropdown
             label="Sub Category"
+            disabled={filters.category === "all"}
             options={subCategoryOptions}
             value={filters.subCategory}
             onChange={(val) =>
               setFilters((prev) => ({
                 ...prev,
                 subCategory: val,
+                systemType: "all",
+                projectRange: "all",
               }))
             }
             className="w-full"
           />
           <Dropdown
             label="System Type"
+            disabled={filters.subCategory === "all"}
             options={systemTypeOptions}
             value={filters.systemType}
             onChange={(val) =>
               setFilters((prev) => ({
                 ...prev,
                 systemType: val,
+                projectRange: "all",
               }))
             }
             className="w-full"
           />
           <Dropdown
             label="Project Range"
+            disabled={filters.systemType === "all"}
             options={projectRangeOptions}
             value={filters.projectRange}
             onChange={(val) =>
@@ -781,6 +676,17 @@ export default function Step4Solutions({
                         ₹{currentPrice.toLocaleString("en-IN")}
                       </div>
                     </div>
+
+                    {Number(sol.max_margin || 0) > 0 && (
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">
+                          Max Margin Cap
+                        </div>
+                        <div className="text-sm font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                          ₹{Number(sol.max_margin).toLocaleString("en-IN")}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">

@@ -32,4 +32,7 @@ router.get('/settings',                      check_auth, check_permissions(PERM_
 router.put('/settings',                      check_auth, check_permissions(PERM_EDIT), h.update_estimator_settings);
 router.post('/settings',                     check_auth, check_permissions(PERM_EDIT), h.update_estimator_settings);
 
+/* ── Kit Maximum Margin Management ────────────────────────────────────────── */
+router.put('/kits/max-margins',               check_auth, check_permissions(PERM_EDIT), h.update_kits_max_margin);
+
 module.exports = router;

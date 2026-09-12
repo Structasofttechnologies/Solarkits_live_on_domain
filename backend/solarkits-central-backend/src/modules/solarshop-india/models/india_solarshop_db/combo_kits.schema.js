@@ -43,6 +43,7 @@ const schema = new mongoose.Schema({
 
   base_price_cached:    { type: Number, default: 0 },
   selling_price_cached: { type: Number, default: 0 },
+  max_margin:           { type: Number, default: 0, min: 0 },
   is_custom:          { type: Boolean, default: false },
   is_active:          { type: Boolean, default: true },
   deleted_at:         { type: Date, default: null },

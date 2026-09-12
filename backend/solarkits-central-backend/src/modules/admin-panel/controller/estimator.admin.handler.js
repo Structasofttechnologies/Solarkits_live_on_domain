@@ -523,6 +523,7 @@ exports.get_available_kits = async (req, res) => {
         sku: k.sku || `SK-KIT-${idStr.slice(-6).toUpperCase()}`,
         capacity_kw: cap,
         selling_price: Number(k.selling_price_cached || k.selling_price || k.base_price_cached || 0),
+        max_margin: Number(k.max_margin || 0),
         image: k.kit_image || (k.images && k.images[0]) || null,
         description: k.description || null,
         industryType: ind.name || k.industryType || k.industry_type_name || null,
@@ -539,8 +540,6 @@ exports.get_available_kits = async (req, res) => {
             : k.projectRange || null),
       });
     });
-
-
 
     // In-memory filter based on search
     if (search && search.trim()) {
@@ -593,3 +592,73 @@ exports.get_available_kits = async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Failed to fetch available combo kits' });
   }
 };
+
+/* ── Update Kit Maximum Margins ────────────────────────────────────────── */
+
+exports.update_kits_max_margin = async (req, res) => {
+  try {
+    const { updates, kit_ids, max_margin } = req.body;
+
+    // Mode 1: Bulk update array of kit_ids with uniform max_margin
+    if (Array.isArray(kit_ids) && kit_ids.length > 0 && max_margin !== undefined) {
+      const targetMargin = Math.max(0, Number(max_margin) || 0);
+      const objectIds = kit_ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+
+      await Promise.all([
+        IndiaComboKit.updateMany({ _id: { $in: objectIds } }, { $set: { max_margin: targetMargin } }),
+        CoreComboKit.updateMany({ _id: { $in: objectIds } }, { $set: { max_margin: targetMargin } }),
+      ]);
+
+      return res.json({
+        status: 'success',
+        message: `Maximum margin ₹${targetMargin.toLocaleString('en-IN')} applied to ${objectIds.length} kits successfully`,
+      });
+    }
+
+    // Mode 2: Individual updates list [{ id / kit_id, max_margin }, ...]
+    if (Array.isArray(updates) && updates.length > 0) {
+      const writeOpsIndia = [];
+      const writeOpsCore = [];
+
+      updates.forEach((u) => {
+        const kId = u.kit_id || u.id || u._id;
+        if (!kId || !mongoose.Types.ObjectId.isValid(kId)) return;
+        const val = Math.max(0, Number(u.max_margin) || 0);
+
+        writeOpsIndia.push({
+          updateOne: {
+            filter: { _id: kId },
+            update: { $set: { max_margin: val } },
+          },
+        });
+        writeOpsCore.push({
+          updateOne: {
+            filter: { _id: kId },
+            update: { $set: { max_margin: val } },
+          },
+        });
+      });
+
+      if (writeOpsIndia.length > 0) {
+        await Promise.all([
+          IndiaComboKit.bulkWrite(writeOpsIndia).catch(() => {}),
+          CoreComboKit.bulkWrite(writeOpsCore).catch(() => {}),
+        ]);
+      }
+
+      return res.json({
+        status: 'success',
+        message: `Updated maximum margins for ${writeOpsIndia.length} kits successfully`,
+      });
+    }
+
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid payload. Provide updates array or kit_ids with max_margin',
+    });
+  } catch (err) {
+    console.error('[estimator.admin] update_kits_max_margin:', err.message);
+    return res.status(500).json({ status: 'error', message: 'Failed to update kit maximum margins' });
+  }
+};
+

@@ -283,32 +283,26 @@ const estimatorSlice = createSlice({
     setMarginType(state, action) {
       state.marginType = action.payload;
       const isPct = action.payload === "percentage";
-      const min = isPct
-        ? Number(state.gstSettings?.min_margin_percentage ?? 0)
-        : Number(state.gstSettings?.min_margin ?? 0);
       const max = isPct
         ? Number(state.gstSettings?.max_margin_percentage ?? 100)
         : Number(state.gstSettings?.max_margin ?? 10000000);
 
       if (state.marginValue > max) state.marginValue = max;
-      if (state.marginValue < min) state.marginValue = min;
+      if (state.marginValue < 0) state.marginValue = 0;
     },
     setMarginValue(state, action) {
       let val = Number(action.payload || 0);
       const isPct = state.marginType === "percentage";
-      const min = isPct
-        ? Number(state.gstSettings?.min_margin_percentage ?? 0)
-        : Number(state.gstSettings?.min_margin ?? 0);
       const max = isPct
         ? Number(state.gstSettings?.max_margin_percentage ?? 100)
         : Number(state.gstSettings?.max_margin ?? 10000000);
 
       if (val > max) val = max;
-      if (val < min && val !== 0) val = min;
+      if (val < 0) val = 0;
       state.marginValue = val;
     },
     setSelectedGstRate(state, action) {
-      state.selectedGstRate = Number(action.payload || 0);
+      state.selectedGstRate = Number(action.payload);
     },
     addToComparison(state, action) {
       const solution = action.payload || state.selectedSolution;
@@ -341,8 +335,8 @@ const estimatorSlice = createSlice({
       state.quantity = 1;
       state.selectedBoms = [];
       state.calculationResult = null;
-      state.marginValue = 10;
-      state.marginType = "percentage";
+      state.comparisonSolutions = [];
+      state.comparisonResults = [];
     },
     clearMessages(state) {
       state.error = null;
@@ -351,9 +345,10 @@ const estimatorSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Industries
+      // Eligible Industries
       .addCase(fetchEligibleIndustries.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchEligibleIndustries.fulfilled, (state, action) => {
         state.loading = false;
@@ -374,9 +369,10 @@ const estimatorSlice = createSlice({
         state.projectSubTypes = action.payload;
       })
 
-      // Solutions
+      // Eligible Solutions
       .addCase(fetchEligibleSolutions.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchEligibleSolutions.fulfilled, (state, action) => {
         state.loading = false;
@@ -388,20 +384,27 @@ const estimatorSlice = createSlice({
       })
 
       // Eligible BOMs
+      .addCase(fetchEligibleBoms.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(fetchEligibleBoms.fulfilled, (state, action) => {
-        state.eligibleBoms = action.payload?.data || [];
-        // By default, pre-select all mandatory BOM items
-        state.selectedBoms = state.eligibleBoms.filter((b) => b.is_mandatory !== false);
+        state.loading = false;
+        state.eligibleBoms = action.payload.data || [];
+        // Auto-select mandatory items
+        state.selectedBoms = (action.payload.data || []).filter((b) => b.is_mandatory);
+      })
+      .addCase(fetchEligibleBoms.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       })
 
       // GST Settings
       .addCase(fetchGstSettings.fulfilled, (state, action) => {
-        state.gstSettings = { ...state.gstSettings, ...action.payload };
+        state.gstSettings = action.payload;
         if (action.payload.default_gst_rate !== undefined) {
           state.selectedGstRate = action.payload.default_gst_rate;
         }
-
-        // Lock marginType if Admin restricted mode
         if (action.payload.allowed_margin_types === "percentage") {
           state.marginType = "percentage";
         } else if (action.payload.allowed_margin_types === "amount") {
@@ -410,17 +413,14 @@ const estimatorSlice = createSlice({
 
         // Clamp marginValue to Admin limits
         const isPct = state.marginType === "percentage";
-        const min = isPct
-          ? Number(action.payload.min_margin_percentage ?? 0)
-          : Number(action.payload.min_margin ?? 0);
         const max = isPct
           ? Number(action.payload.max_margin_percentage ?? 100)
           : Number(action.payload.max_margin ?? 10000000);
 
         if (state.marginValue > max) {
           state.marginValue = max;
-        } else if (state.marginValue < min) {
-          state.marginValue = min;
+        } else if (state.marginValue < 0) {
+          state.marginValue = 0;
         }
       })
 

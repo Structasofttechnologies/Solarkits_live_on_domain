@@ -155,6 +155,11 @@ exports.get_eligible_solutions = async (req, res) => {
       industry_type_id,
       project_category_id,
       project_subcategory_id,
+      industry_type_name,
+      category_name,
+      sub_category_name,
+      system_type_name,
+      project_range_name,
       district_id,
       min_capacity,
       max_capacity,
@@ -213,6 +218,7 @@ exports.get_eligible_solutions = async (req, res) => {
         capacityKW: capacity,
         selling_price: price,
         base_price: Number(k.base_price_cached || k.base_price || price),
+        max_margin: Number(k.max_margin || 0),
         image: k.kit_image || k.image || (k.images && k.images[0]) || null,
         description: k.description || null,
         specifications: k.specifications || [],
@@ -233,8 +239,6 @@ exports.get_eligible_solutions = async (req, res) => {
       });
     });
 
-
-
     // Filtering
     let filtered = formatted;
 
@@ -246,6 +250,35 @@ exports.get_eligible_solutions = async (req, res) => {
     }
     if (project_subcategory_id && mongoose.Types.ObjectId.isValid(project_subcategory_id)) {
       filtered = filtered.filter((k) => String(k.project_subcategory_id) === String(project_subcategory_id));
+    }
+
+    // Quick Filters by name
+    if (industry_type_name && industry_type_name !== 'all') {
+      const sel = industry_type_name.toLowerCase();
+      filtered = filtered.filter((k) => {
+        const ind = (k.industryType || '').toLowerCase();
+        return ind === sel || ind.includes(sel) || sel.includes(ind);
+      });
+    }
+
+    if (category_name && category_name !== 'all') {
+      const sel = category_name.toLowerCase();
+      filtered = filtered.filter((k) => (k.category || '').toLowerCase() === sel);
+    }
+
+    if (sub_category_name && sub_category_name !== 'all') {
+      const sel = sub_category_name.toLowerCase();
+      filtered = filtered.filter((k) => (k.subCategory || '').toLowerCase() === sel);
+    }
+
+    if (system_type_name && system_type_name !== 'all') {
+      const sel = system_type_name.toLowerCase();
+      filtered = filtered.filter((k) => (k.projectType || '').toLowerCase() === sel);
+    }
+
+    if (project_range_name && project_range_name !== 'all') {
+      const sel = project_range_name.toLowerCase();
+      filtered = filtered.filter((k) => (k.projectRange || '').toLowerCase() === sel);
     }
 
     if (min_capacity) {
@@ -264,11 +297,6 @@ exports.get_eligible_solutions = async (req, res) => {
           (k.description || '').toLowerCase().includes(q)
         );
       });
-    }
-
-    // Fallback: if category filter produced empty, return all so user always sees kits
-    if (filtered.length === 0 && formatted.length > 0) {
-      filtered = formatted;
     }
 
     return res.json({ success: true, data: filtered });
@@ -389,10 +417,10 @@ exports.get_eligible_gst = async (req, res) => {
         default_gst_rate: settings.default_gst_rate !== undefined ? settings.default_gst_rate : 18,
         allowed_gst_options: settings.allowed_gst_options || [0, 5, 12, 13.8, 18],
         allowed_margin_types: settings.allowed_margin_types || 'both',
-        min_margin: settings.min_margin !== undefined && settings.min_margin !== null ? Number(settings.min_margin) : 0,
-        max_margin: settings.max_margin !== undefined && settings.max_margin !== null ? Number(settings.max_margin) : 10000000,
-        min_margin_percentage: settings.min_margin_percentage !== undefined && settings.min_margin_percentage !== null ? Number(settings.min_margin_percentage) : 0,
-        max_margin_percentage: settings.max_margin_percentage !== undefined && settings.max_margin_percentage !== null ? Number(settings.max_margin_percentage) : 100,
+        min_margin: 0,
+        max_margin: 10000000,
+        min_margin_percentage: 0,
+        max_margin_percentage: 100,
       },
     });
   } catch (err) {
@@ -434,19 +462,23 @@ exports.calculate = async (req, res) => {
       });
     }
 
-    if (marginType === 'amount') {
-      if (marginVal < (settings.min_margin || 0)) {
-        return res.status(400).json({ success: false, message: `Margin cannot be less than ₹${settings.min_margin}` });
-      }
-      if (settings.max_margin && marginVal > settings.max_margin) {
-        return res.status(400).json({ success: false, message: `Margin cannot exceed ₹${settings.max_margin}` });
-      }
-    } else {
-      if (marginVal < (settings.min_margin_percentage || 0)) {
-        return res.status(400).json({ success: false, message: `Margin cannot be less than ${settings.min_margin_percentage}%` });
-      }
-      if (settings.max_margin_percentage && marginVal > settings.max_margin_percentage) {
-        return res.status(400).json({ success: false, message: `Margin cannot exceed ${settings.max_margin_percentage}%` });
+    if (marginVal < 0) {
+      return res.status(400).json({ success: false, message: 'Margin cannot be negative' });
+    }
+
+    // Validate margin against Kit-specific max_margin (configured by Admin via Quick Filters)
+    const kitMaxMargin = Number(kit.max_margin || 0);
+    if (kitMaxMargin > 0) {
+      const kitBasePrice = Number(kit.selling_price || kit.base_price || 0);
+      const effectiveMarginAmt = marginType === 'percentage'
+        ? Math.round((kitBasePrice * marginVal) / 100)
+        : marginVal;
+
+      if (effectiveMarginAmt > kitMaxMargin) {
+        return res.status(400).json({
+          success: false,
+          message: `Margin cannot exceed the maximum allowed limit of ₹${kitMaxMargin.toLocaleString('en-IN')} for this kit`,
+        });
       }
     }
 

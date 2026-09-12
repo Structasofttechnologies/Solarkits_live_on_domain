@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
+import KitMarginManager from "./KitMarginManager";
 import {
   FiSettings,
   FiSave,
@@ -321,60 +322,8 @@ export default function EstimatorSettings() {
           </div>
         </div>
 
-        {/* Margin Limits & Input Types */}
-        <div className="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-2">
-            <FiDollarSign className="w-4 h-4" /> Margin Input Constraints
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Allowed Input Mode
-              </label>
-              <select
-                name="allowed_margin_types"
-                value={form.allowed_margin_types}
-                onChange={handleChange}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-              >
-                <option value="both">Both (Amount or Percentage)</option>
-                <option value="amount">Amount Only (₹)</option>
-                <option value="percentage">Percentage Only (%)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Min Margin (%)
-              </label>
-              <input
-                type="number"
-                name="min_margin_percentage"
-                value={form.min_margin_percentage}
-                onChange={handleChange}
-                min="0"
-                max="100"
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Max Margin (%)
-              </label>
-              <input
-                type="number"
-                name="max_margin_percentage"
-                value={form.max_margin_percentage}
-                onChange={handleChange}
-                min="0"
-                max="100"
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-              />
-            </div>
-          </div>
-        </div>
+        {/* Kit Maximum Margin Constraints via Quick Filters */}
+        <KitMarginManager />
 
         {/* BOM Visibility & Solution Comparison */}
         <div className="p-6 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">

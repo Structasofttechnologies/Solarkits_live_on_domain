@@ -141,163 +141,205 @@ export default function ProjectBomSettings() {
   }, [shopHierarchy, hierarchy]);
 
   const categoryOptions = useMemo(() => {
+    if (!quickFilters.industryType || quickFilters.industryType === "all") {
+      return [{ value: "all", text: "Select Industry Type First" }];
+    }
     const catMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (quickFilters.industryType && quickFilters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-            String(ind.id) === String(quickFilters.industryType)
-        );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+          String(ind.id) === String(quickFilters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        selectedInd.categories.forEach((cat) => {
           if (cat.name && !catMap.has(cat.name.toLowerCase())) {
-            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name });
+            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat.id });
           }
         });
-      });
+      }
     } else if (hierarchy?.categories && hierarchy.categories.length > 0) {
-      hierarchy.categories.forEach((cat) => {
-        if (cat.name && !catMap.has(cat.name.toLowerCase())) {
-          catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name });
-        }
-      });
+      const matchedInd = (hierarchy?.industries || []).find(
+        (i) =>
+          i.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+          String(i._id) === String(quickFilters.industryType)
+      );
+      if (matchedInd) {
+        hierarchy.categories.forEach((cat) => {
+          if (
+            String(cat.industry_type_id) === String(matchedInd._id) &&
+            cat.name &&
+            !catMap.has(cat.name.toLowerCase())
+          ) {
+            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name, id: cat._id });
+          }
+        });
+      }
     }
     return [{ value: "all", text: "All Categories" }, ...Array.from(catMap.values())];
   }, [shopHierarchy, hierarchy, quickFilters.industryType]);
 
   const subCategoryOptions = useMemo(() => {
+    if (
+      !quickFilters.industryType ||
+      quickFilters.industryType === "all" ||
+      !quickFilters.category ||
+      quickFilters.category === "all"
+    ) {
+      return [{ value: "all", text: "Select Category First" }];
+    }
     const subsMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (quickFilters.industryType && quickFilters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-            String(ind.id) === String(quickFilters.industryType)
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+          String(ind.id) === String(quickFilters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id) === String(quickFilters.category)
         );
+        if (selectedCat && selectedCat.subcategories) {
+          selectedCat.subcategories.forEach((sub) => {
+            if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+              subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name, id: sub.id });
+            }
+          });
+        }
       }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
+    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
+      const matchedCat = (hierarchy?.categories || []).find(
+        (c) =>
+          c.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+          String(c._id) === String(quickFilters.category)
+      );
+      if (matchedCat) {
+        hierarchy.subcategories.forEach((sub) => {
           if (
-            quickFilters.category === "all" ||
-            cat.name?.toLowerCase() === quickFilters.category?.toLowerCase()
+            String(sub.category) === String(matchedCat._id) &&
+            sub.name &&
+            !subsMap.has(sub.name.toLowerCase())
           ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
-                subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name });
-              }
-            });
+            subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name, id: sub._id });
           }
         });
-      });
-    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
-      hierarchy.subcategories.forEach((sub) => {
-        if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
-          subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name });
-        }
-      });
+      }
     }
     return [{ value: "all", text: "All Sub-Categories" }, ...Array.from(subsMap.values())];
   }, [shopHierarchy, hierarchy, quickFilters.industryType, quickFilters.category]);
 
   const systemTypeOptions = useMemo(() => {
+    if (
+      !quickFilters.category ||
+      quickFilters.category === "all" ||
+      !quickFilters.subCategory ||
+      quickFilters.subCategory === "all"
+    ) {
+      return [{ value: "all", text: "Select Sub-Category First" }];
+    }
     const typesMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (quickFilters.industryType && quickFilters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-            String(ind.id) === String(quickFilters.industryType)
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+          String(ind.id) === String(quickFilters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id) === String(quickFilters.category)
         );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            quickFilters.category === "all" ||
-            cat.name?.toLowerCase() === quickFilters.category?.toLowerCase()
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (
-                quickFilters.subCategory === "all" ||
-                sub.name?.toLowerCase() === quickFilters.subCategory?.toLowerCase()
-              ) {
-                (sub.mappedTypes || []).forEach((mt) => {
-                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
-                    typesMap.set(mt.name.toLowerCase(), { value: mt.name, text: mt.name });
-                  }
+        if (selectedCat && selectedCat.subcategories) {
+          const selectedSub = selectedCat.subcategories.find(
+            (sub) =>
+              sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase() ||
+              String(sub.id) === String(quickFilters.subCategory)
+          );
+          if (selectedSub && selectedSub.mappedTypes) {
+            selectedSub.mappedTypes.forEach((mt) => {
+              if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                typesMap.set(mt.name.toLowerCase(), {
+                  value: mt.name,
+                  text: mt.name,
+                  id: mt.id || mt.type_id,
                 });
               }
             });
           }
-        });
-      });
-    } else if (hierarchy?.types && hierarchy.types.length > 0) {
-      hierarchy.types.forEach((t) => {
-        if (t.name && !typesMap.has(t.name.toLowerCase())) {
-          typesMap.set(t.name.toLowerCase(), { value: t.name, text: t.name });
         }
-      });
+      }
+    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
+      const matchedSub = (hierarchy?.subcategories || []).find(
+        (s) =>
+          s.name?.toLowerCase() === quickFilters.subCategory.toLowerCase() ||
+          String(s._id) === String(quickFilters.subCategory)
+      );
+      if (matchedSub && hierarchy.types) {
+        hierarchy.types.forEach((t) => {
+          if (t.name && !typesMap.has(t.name.toLowerCase())) {
+            typesMap.set(t.name.toLowerCase(), { value: t.name, text: t.name, id: t._id });
+          }
+        });
+      }
     }
     return [{ value: "all", text: "All System Types" }, ...Array.from(typesMap.values())];
   }, [shopHierarchy, hierarchy, quickFilters.industryType, quickFilters.category, quickFilters.subCategory]);
 
   const projectRangeOptions = useMemo(() => {
+    if (
+      !quickFilters.subCategory ||
+      quickFilters.subCategory === "all" ||
+      !quickFilters.systemType ||
+      quickFilters.systemType === "all"
+    ) {
+      return [{ value: "all", text: "Select System Type First" }];
+    }
     const rangesMap = new Map();
     if (shopHierarchy && shopHierarchy.length > 0) {
-      let relevantInds = shopHierarchy;
-      if (quickFilters.industryType && quickFilters.industryType !== "all") {
-        relevantInds = shopHierarchy.filter(
-          (ind) =>
-            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-            String(ind.id) === String(quickFilters.industryType)
+      const selectedInd = shopHierarchy.find(
+        (ind) =>
+          ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+          String(ind.id) === String(quickFilters.industryType)
+      );
+      if (selectedInd && selectedInd.categories) {
+        const selectedCat = selectedInd.categories.find(
+          (cat) =>
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id) === String(quickFilters.category)
         );
-      }
-      relevantInds.forEach((ind) => {
-        (ind.categories || []).forEach((cat) => {
-          if (
-            quickFilters.category === "all" ||
-            cat.name?.toLowerCase() === quickFilters.category?.toLowerCase()
-          ) {
-            (cat.subcategories || []).forEach((sub) => {
-              if (
-                quickFilters.subCategory === "all" ||
-                sub.name?.toLowerCase() === quickFilters.subCategory?.toLowerCase()
-              ) {
-                (sub.mappedTypes || []).forEach((mt) => {
-                  if (
-                    quickFilters.systemType === "all" ||
-                    mt.name?.toLowerCase() === quickFilters.systemType?.toLowerCase()
-                  ) {
-                    (mt.ranges || []).forEach((r) => {
-                      const idVal = String(r.id || r.range_label);
-                      if (idVal && !rangesMap.has(idVal)) {
-                        rangesMap.set(idVal, {
-                          value: r.range_label || idVal,
-                          text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
-                        });
-                      }
-                    });
-                  }
-                });
-              }
-            });
+        if (selectedCat && selectedCat.subcategories) {
+          const selectedSub = selectedCat.subcategories.find(
+            (sub) =>
+              sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase() ||
+              String(sub.id) === String(quickFilters.subCategory)
+          );
+          if (selectedSub && selectedSub.mappedTypes) {
+            const selectedMt = selectedSub.mappedTypes.find(
+              (mt) =>
+                mt.name?.toLowerCase() === quickFilters.systemType.toLowerCase() ||
+                String(mt.id || mt.type_id) === String(quickFilters.systemType)
+            );
+            if (selectedMt && selectedMt.ranges) {
+              selectedMt.ranges.forEach((r) => {
+                const idVal = String(r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`);
+                if (idVal && !rangesMap.has(idVal.toLowerCase())) {
+                  rangesMap.set(idVal.toLowerCase(), {
+                    value: r.range_label || idVal,
+                    text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
+                  });
+                }
+              });
+            }
           }
-        });
-      });
-    } else if (hierarchy?.ranges && hierarchy.ranges.length > 0) {
-      hierarchy.ranges.forEach((r) => {
-        const lbl = `${r.min_value} - ${r.max_value} ${r.unit_id?.symbol || 'kW'}`;
-        rangesMap.set(lbl, { value: lbl, text: lbl });
-      });
+        }
+      }
     }
     return [{ value: "all", text: "All Project Ranges" }, ...Array.from(rangesMap.values())];
   }, [
     shopHierarchy,
-    hierarchy,
     quickFilters.industryType,
     quickFilters.category,
     quickFilters.subCategory,
@@ -333,6 +375,7 @@ export default function ProjectBomSettings() {
         fetchBomItems();
       }
     } catch (err) {
+      console.error("Failed to update status:", err);
       notify("Failed to update status", "error");
     }
   };
@@ -351,6 +394,7 @@ export default function ProjectBomSettings() {
         fetchBomItems();
       }
     } catch (err) {
+      console.error("Failed to delete item:", err);
       notify("Failed to delete item", "error");
     }
   };
@@ -481,6 +525,7 @@ export default function ProjectBomSettings() {
             </label>
             <select
               value={quickFilters.category}
+              disabled={quickFilters.industryType === "all"}
               onChange={(e) =>
                 setQuickFilters((prev) => ({
                   ...prev,
@@ -490,7 +535,7 @@ export default function ProjectBomSettings() {
                   projectRange: "all",
                 }))
               }
-              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/50"
             >
               {categoryOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -507,6 +552,7 @@ export default function ProjectBomSettings() {
             </label>
             <select
               value={quickFilters.subCategory}
+              disabled={quickFilters.category === "all"}
               onChange={(e) =>
                 setQuickFilters((prev) => ({
                   ...prev,
@@ -515,7 +561,7 @@ export default function ProjectBomSettings() {
                   projectRange: "all",
                 }))
               }
-              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/50"
             >
               {subCategoryOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -532,6 +578,7 @@ export default function ProjectBomSettings() {
             </label>
             <select
               value={quickFilters.systemType}
+              disabled={quickFilters.subCategory === "all"}
               onChange={(e) =>
                 setQuickFilters((prev) => ({
                   ...prev,
@@ -539,7 +586,7 @@ export default function ProjectBomSettings() {
                   projectRange: "all",
                 }))
               }
-              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/50"
             >
               {systemTypeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -556,13 +603,14 @@ export default function ProjectBomSettings() {
             </label>
             <select
               value={quickFilters.projectRange}
+              disabled={quickFilters.systemType === "all"}
               onChange={(e) =>
                 setQuickFilters((prev) => ({
                   ...prev,
                   projectRange: e.target.value,
                 }))
               }
-              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-100 dark:disabled:bg-slate-800/50"
             >
               {projectRangeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
