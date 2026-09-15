@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   FiArrowLeft,
   FiSave,
-  FiFileText,
   FiLayers,
   FiTrendingUp,
   FiSun,
@@ -21,7 +20,6 @@ import {
   setSelectedGstRate,
   calculateMargin,
   saveEstimateThunk,
-  generateQuoteThunk,
   addToComparison,
   fetchGstSettings,
 } from "../../features/estimator.slice";
@@ -51,7 +49,6 @@ export default function MarginEstimatorPanel({ onBack, onSaved, onQuoteGenerated
   const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
 
-  const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const [isSavingEstimate, setIsSavingEstimate] = useState(false);
 
   // Fetch fresh global settings on mount
@@ -136,59 +133,7 @@ export default function MarginEstimatorPanel({ onBack, onSaved, onQuoteGenerated
     }
   };
 
-  const handleGenerateQuote = async () => {
-    if (!isAuthenticated) {
-      dispatch(setShowAuthDialog(true));
-      return;
-    }
-    setIsGeneratingQuote(true);
-    try {
-      // First save estimate if not saved
-      const payload = {
-        title: `Quote Estimate: ${selectedSolution?.name} (${calculationResult?.total_kw || 0} kW)`,
-        solution: selectedSolution,
-        quantity,
-        bom_items: selectedBoms,
-        location: {
-          district_id: selectedDistrict?.id,
-          district_name: selectedDistrict?.name,
-        },
-        margin: { type: marginType, value: marginValue },
-        gst_settings: {
-          method: gstSettings.gst_calculation_method,
-          rate: selectedGstRate,
-        },
-        industry_type_snapshot: selectedIndustry,
-        project_type_snapshot: selectedProjectType,
-        project_sub_type_snapshot: selectedProjectSubType,
-      };
 
-      const saveAction = await dispatch(saveEstimateThunk(payload));
-      if (saveEstimateThunk.fulfilled.match(saveAction)) {
-        const savedDoc = saveAction.payload;
-        const estimateId = savedDoc?._id || savedDoc?.id;
-        if (estimateId) {
-          const quoteAction = await dispatch(generateQuoteThunk(estimateId));
-          if (generateQuoteThunk.fulfilled.match(quoteAction)) {
-            const quoteNumber = quoteAction.payload?.quote_number || "Generated";
-            alert(`Formal Quote ${quoteNumber} generated successfully!`);
-            if (onQuoteGenerated) onQuoteGenerated(quoteAction.payload);
-          } else {
-            alert(quoteAction.payload || "Failed to generate customer quote. Please try again.");
-          }
-        }
-      } else {
-        const errMsg = String(saveAction.payload || saveAction.error?.message || "");
-        if (errMsg.includes("Unauthorized") || errMsg.includes("401")) {
-          dispatch(setShowAuthDialog(true));
-        } else {
-          alert(errMsg || "Failed to save estimate before generating quote.");
-        }
-      }
-    } finally {
-      setIsGeneratingQuote(false);
-    }
-  };
 
   const cr = calculationResult || {
     kit_total_price: (selectedSolution?.selling_price || 0) * quantity,
@@ -415,28 +360,9 @@ export default function MarginEstimatorPanel({ onBack, onSaved, onQuoteGenerated
             <div className="space-y-3 pt-2">
               <button
                 type="button"
-                onClick={handleGenerateQuote}
-                disabled={isGeneratingQuote || isSavingEstimate || calcLoading}
-                className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover active:scale-98 shadow-lg shadow-primary/25 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isGeneratingQuote ? (
-                  <>
-                    <FiRefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Generating Customer Quote...</span>
-                  </>
-                ) : (
-                  <>
-                    <FiFileText className="w-4 h-4" />
-                    <span>Generate Customer Quote</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
                 onClick={handleSaveEstimate}
-                disabled={isGeneratingQuote || isSavingEstimate || loading}
-                className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-98 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isSavingEstimate || loading}
+                className="w-full py-3.5 px-4 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary-hover active:scale-98 shadow-lg shadow-primary/25 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isSavingEstimate ? (
                   <>

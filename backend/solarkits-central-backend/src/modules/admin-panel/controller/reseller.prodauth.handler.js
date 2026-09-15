@@ -22,35 +22,59 @@ const { logAudit } = require('../utils/audit.service');
 const list_product_authorizations = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+    const isAll = !id || id === 'all';
+    if (!isAll && !mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ status: 'error', message: 'Valid reseller ID is required' });
     }
 
-    const rows = await ResellerProductAuthorization.find({ reseller_id: id })
+    const query = isAll ? {} : { reseller_id: id };
+
+    const rows = await ResellerProductAuthorization.find(query)
+      .populate({ path: 'reseller_id', model: Reseller, select: 'business_name email mobile city address commercial_mode activation_status' })
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
-      .populate({ path: 'product_id', model: Product, select: 'name sku_code stock_quantity' })
-      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code' })
+      .populate({ path: 'product_id', model: Product, select: 'name sku_code stock_quantity image base_price_paise' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code kit_image base_price_cached selling_price_cached' })
       .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name' })
       .populate({ path: 'assigned_by', model: CmsUser, select: 'name email' })
       .sort({ created_at: -1 })
       .lean();
 
-    const listings = await ResellerListing.find({ reseller_id: id }).lean();
+    const listings = await ResellerListing.find(isAll ? {} : { reseller_id: id }).lean();
     const listingStockMap = {};
     listings.forEach((l) => {
-      if (l.product_id) listingStockMap[l.product_id.toString()] = l.stock_quantity;
+      const resId = l.reseller_id?.toString() || '';
+      const prodId = l.product_id?.toString() || '';
+      const kitId = l.kit_id?.toString() || '';
+      if (resId && prodId) listingStockMap[`${resId}_${prodId}`] = l.stock_quantity;
+      if (resId && kitId) listingStockMap[`${resId}_${kitId}`] = l.stock_quantity;
+      if (prodId) listingStockMap[prodId] = l.stock_quantity;
+      if (kitId) listingStockMap[kitId] = l.stock_quantity;
     });
 
     const data = rows.map((r) => {
+      const resObj = r.reseller_id && typeof r.reseller_id === 'object' ? r.reseller_id : null;
+      const resIdStr = resObj?._id ? resObj._id.toString() : (r.reseller_id ? r.reseller_id.toString() : '');
       const pId = r.product_id?._id ? r.product_id._id.toString() : (r.product_id ? r.product_id.toString() : null);
-      const stockQty = pId && listingStockMap[pId] !== undefined
-        ? listingStockMap[pId]
-        : (r.product_id?.stock_quantity !== undefined ? r.product_id.stock_quantity : 100);
+      const kId = r.kit_id?._id ? r.kit_id._id.toString() : (r.kit_id ? r.kit_id.toString() : null);
+
+      let stockQty = 100;
+      if (resIdStr && pId && listingStockMap[`${resIdStr}_${pId}`] !== undefined) {
+        stockQty = listingStockMap[`${resIdStr}_${pId}`];
+      } else if (resIdStr && kId && listingStockMap[`${resIdStr}_${kId}`] !== undefined) {
+        stockQty = listingStockMap[`${resIdStr}_${kId}`];
+      } else if (pId && listingStockMap[pId] !== undefined) {
+        stockQty = listingStockMap[pId];
+      } else if (kId && listingStockMap[kId] !== undefined) {
+        stockQty = listingStockMap[kId];
+      } else if (r.product_id?.stock_quantity !== undefined) {
+        stockQty = r.product_id.stock_quantity;
+      }
 
       return {
         id:                       r._id,
-        reseller_id:              r.reseller_id,
+        reseller_id:              resIdStr,
+        reseller:                 resObj,
         district_id:             r.district_id,
         scope_type:               r.scope_type,
         category:                 r.category_id,

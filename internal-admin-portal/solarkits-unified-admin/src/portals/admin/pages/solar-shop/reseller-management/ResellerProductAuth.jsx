@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useDispatch } from "react-redux";
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import {
@@ -14,8 +15,15 @@ import {
   FiGrid,
   FiLayers,
   FiBox,
-  FiZap,
-  FiEdit3,
+  FiList,
+  FiFilter,
+  FiRefreshCw,
+  FiMapPin,
+  FiUser,
+  FiTag,
+  FiInfo,
+  FiCheck,
+  FiSliders,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -26,39 +34,74 @@ const MODULE_UID = "RSL_PROD_AUTH";
 const apiFetch = (method, endpoint, data) =>
   axios({ method, url: `${API_BASE}/reseller-mgmt/product-auth${endpoint}`, headers: authHeaderObj(), data });
 
-const SCOPE_ICONS = {
-  all:         FiGrid,
-  category:    FiLayers,
-  subcategory: FiLayers,
-  product:     FiPackage,
-  kit:         FiBox,
+const SCOPE_CONFIG = {
+  all: {
+    label: "All Solar Kits",
+    icon: FiGrid,
+    badgeBg: "bg-slate-100 text-slate-700 border-slate-200",
+  },
+  category: {
+    label: "Category Scope",
+    icon: FiLayers,
+    badgeBg: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  },
+  subcategory: {
+    label: "Subcategory Scope",
+    icon: FiLayers,
+    badgeBg: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+  product: {
+    label: "Product SKU",
+    icon: FiPackage,
+    badgeBg: "bg-purple-50 text-purple-700 border-purple-200",
+  },
+  kit: {
+    label: "Combo Kit Scope",
+    icon: FiBox,
+    badgeBg: "bg-blue-50 text-blue-700 border-blue-200",
+  },
 };
 
-function AuthStatusBadge({ isAuthorized }) {
+function AuthStatusBadge({ isAuthorized, size = "normal" }) {
+  const isSm = size === "small";
   return isAuthorized ? (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success-soft text-success border border-success/20">
-      <FiCheckCircle size={11} /> Authorized (Whitelist)
+    <span
+      className={`inline-flex items-center gap-1.5 font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs ${
+        isSm ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
+      }`}
+    >
+      <FiCheckCircle className="text-emerald-600 flex-shrink-0" size={isSm ? 12 : 14} />
+      <span>Authorized (Whitelist)</span>
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-danger-soft text-danger border border-danger/20">
-      <FiXCircle size={11} /> Restricted (Blacklist)
+    <span
+      className={`inline-flex items-center gap-1.5 font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200 shadow-xs ${
+        isSm ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
+      }`}
+    >
+      <FiXCircle className="text-rose-600 flex-shrink-0" size={isSm ? 12 : 14} />
+      <span>Restricted (Blacklist)</span>
     </span>
   );
 }
 
+
 function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) {
   const dispatch = useDispatch();
   const [form, setForm] = useState({
-    reseller_id:      defaultResellerId || (resellers[0]?.id || ""),
+    reseller_id:
+      defaultResellerId && defaultResellerId !== "all"
+        ? defaultResellerId
+        : resellers[0]?.id || "",
     industry_type_id: "",
-    scope_type:       "kit",
-    category_id:      "",
-    subcategory_id:   "",
-    system_type_id:   "",
+    scope_type: "kit",
+    category_id: "",
+    subcategory_id: "",
+    system_type_id: "",
     project_range_id: "",
-    kit_id:           "",
-    is_authorized:    true,
-    override_reason:  "",
+    kit_id: "",
+    is_authorized: true,
+    override_reason: "",
   });
 
   const [industries, setIndustries] = useState([]);
@@ -71,15 +114,30 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
 
   // Load Industries and Project Ranges on mount
   useEffect(() => {
-    axios.get(`${API_BASE}/industry-types/list?unique_id=${MODULE_UID}&req_for=view&active_only=true`, { headers: authHeaderObj() })
+    axios
+      .get(`${API_BASE}/industry-types/list?unique_id=${MODULE_UID}&req_for=view&active_only=true`, {
+        headers: authHeaderObj(),
+      })
       .then((res) => {
-        if (res.data?.status === "success") setIndustries(res.data.data);
+        if (res.data?.status === "success") setIndustries(res.data.data || []);
       })
       .catch((e) => console.error(e));
 
-    axios.get(`${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view`, { headers: authHeaderObj() })
+    axios
+      .get(`${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view`, {
+        headers: authHeaderObj(),
+      })
       .then((res) => {
-        if (res.data?.status === "success") setProjectRanges(res.data.data);
+        if (res.data?.status === "success") setProjectRanges(res.data.data || []);
+      })
+      .catch((e) => console.error(e));
+
+    axios
+      .get(`${API_BASE}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`, {
+        headers: authHeaderObj(),
+      })
+      .then((res) => {
+        if (res.data?.status === "success") setKits(res.data.data || []);
       })
       .catch((e) => console.error(e));
   }, []);
@@ -91,9 +149,13 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
       setForm((prev) => ({ ...prev, category_id: "", subcategory_id: "", system_type_id: "", kit_id: "" }));
       return;
     }
-    axios.get(`${API_BASE}/project-types/get-categories?unique_id=${MODULE_UID}&req_for=view&industry_type_id=${form.industry_type_id}`, { headers: authHeaderObj() })
+    axios
+      .get(
+        `${API_BASE}/project-types/get-categories?unique_id=${MODULE_UID}&req_for=view&industry_type_id=${form.industry_type_id}`,
+        { headers: authHeaderObj() }
+      )
       .then((res) => {
-        if (res.data?.status === "success") setCategories(res.data.data);
+        if (res.data?.status === "success") setCategories(res.data.data || []);
       })
       .catch((e) => console.error(e));
   }, [form.industry_type_id]);
@@ -105,9 +167,13 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
       setForm((prev) => ({ ...prev, subcategory_id: "", system_type_id: "", kit_id: "" }));
       return;
     }
-    axios.get(`${API_BASE}/project-types/get-subcategories?unique_id=${MODULE_UID}&req_for=view&category_id=${form.category_id}`, { headers: authHeaderObj() })
+    axios
+      .get(
+        `${API_BASE}/project-types/get-subcategories?unique_id=${MODULE_UID}&req_for=view&category_id=${form.category_id}`,
+        { headers: authHeaderObj() }
+      )
       .then((res) => {
-        if (res.data?.status === "success") setSubcategories(res.data.data);
+        if (res.data?.status === "success") setSubcategories(res.data.data || []);
       })
       .catch((e) => console.error(e));
   }, [form.category_id]);
@@ -119,73 +185,62 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
       setForm((prev) => ({ ...prev, system_type_id: "", project_range_id: "", kit_id: "" }));
       return;
     }
-    axios.get(`${API_BASE}/project-types/get-subcategory-types?unique_id=${MODULE_UID}&req_for=view&subcategory_id=${form.subcategory_id}`, { headers: authHeaderObj() })
+    axios
+      .get(
+        `${API_BASE}/project-types/get-subcategory-types?unique_id=${MODULE_UID}&req_for=view&subcategory_id=${form.subcategory_id}`,
+        { headers: authHeaderObj() }
+      )
       .then((res) => {
-        if (res.data?.status === "success") setSystemTypes(res.data.data);
+        if (res.data?.status === "success") setSystemTypes(res.data.data || []);
       })
       .catch((e) => console.error(e));
   }, [form.subcategory_id]);
 
-  // Load project ranges when system type changes or on fallback
-  useEffect(() => {
-    const url = form.system_type_id
-      ? `${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view&subcategory_type_id=${form.system_type_id}`
-      : `${API_BASE}/project-types/get-ranges?unique_id=${MODULE_UID}&req_for=view`;
+  // Filter combo kits based on cascading dropdown selections
+  const filteredKits = useMemo(() => {
+    return kits.filter((k) => {
+      const kitCatId = k.category_id?._id || k.category_id || k.solar_kit_id?.category_id?._id || k.solar_kit_id?.category_id;
+      const kitSubcatId =
+        k.subcategory_id?._id || k.subcategory_id || k.solar_kit_id?.subcategory_id?._id || k.solar_kit_id?.subcategory_id;
+      const kitTypeId =
+        k.project_type_id?._id ||
+        k.project_type_id ||
+        k.type_id?._id ||
+        k.type_id ||
+        k.solar_kit_id?.type_id?._id ||
+        k.solar_kit_id?.type_id;
+      const kitRangeId = k.project_range_id?._id || k.project_range_id;
+      const kitIndId =
+        k.industry_type_id?._id || k.industry_type_id || k.solar_kit_id?.industry_type_id?._id || k.solar_kit_id?.industry_type_id;
 
-    axios.get(url, { headers: authHeaderObj() })
-      .then((res) => {
-        if (res.data?.status === "success") setProjectRanges(res.data.data);
-      })
-      .catch((e) => console.error(e));
-  }, [form.system_type_id]);
-
-  // Load kits on mount or when scope is kit
-  useEffect(() => {
-    axios.get(`${API_BASE}/combo-kits/india/get-kits?unique_id=ADM_COMBO_KITS&req_for=view&is_custom=false`, { headers: authHeaderObj() })
-      .then((res) => {
-        if (res.data?.status === "success") setKits(res.data.data);
-      })
-      .catch((e) => console.error(e));
-  }, []);
-
-  // Filter combo kits based on 5 cascading dropdown selections
-  const filteredKits = kits.filter((k) => {
-    const kitCatId = k.category_id?._id || k.category_id || k.solar_kit_id?.category_id?._id || k.solar_kit_id?.category_id;
-    const kitSubcatId = k.subcategory_id?._id || k.subcategory_id || k.solar_kit_id?.subcategory_id?._id || k.solar_kit_id?.subcategory_id;
-    const kitTypeId = k.project_type_id?._id || k.project_type_id || k.type_id?._id || k.type_id || k.solar_kit_id?.type_id?._id || k.solar_kit_id?.type_id;
-    const kitRangeId = k.project_range_id?._id || k.project_range_id;
-    const kitIndId = k.industry_type_id?._id || k.industry_type_id || k.solar_kit_id?.industry_type_id?._id || k.solar_kit_id?.industry_type_id;
-
-    if (form.industry_type_id && kitIndId && String(kitIndId) !== String(form.industry_type_id)) {
-      return false;
-    }
-    if (form.category_id && kitCatId && String(kitCatId) !== String(form.category_id)) {
-      return false;
-    }
-    if (form.subcategory_id && kitSubcatId && String(kitSubcatId) !== String(form.subcategory_id)) {
-      return false;
-    }
-    if (form.system_type_id && kitTypeId && String(kitTypeId) !== String(form.system_type_id)) {
-      return false;
-    }
-    if (form.project_range_id && kitRangeId && String(kitRangeId) !== String(form.project_range_id)) {
-      return false;
-    }
-    return true;
-  });
+      if (form.industry_type_id && kitIndId && String(kitIndId) !== String(form.industry_type_id)) return false;
+      if (form.category_id && kitCatId && String(kitCatId) !== String(form.category_id)) return false;
+      if (form.subcategory_id && kitSubcatId && String(kitSubcatId) !== String(form.subcategory_id)) return false;
+      if (form.system_type_id && kitTypeId && String(kitTypeId) !== String(form.system_type_id)) return false;
+      if (form.project_range_id && kitRangeId && String(kitRangeId) !== String(form.project_range_id)) return false;
+      return true;
+    });
+  }, [kits, form.industry_type_id, form.category_id, form.subcategory_id, form.system_type_id, form.project_range_id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.reseller_id || !form.scope_type) return;
-    setSaving(true);
+    if (!form.reseller_id || !form.scope_type) {
+      dispatch(setAlert({ type: "error", message: "Please select a franchisee and scope type" }));
+      return;
+    }
+    if (form.scope_type === "kit" && !form.kit_id) {
+      dispatch(setAlert({ type: "error", message: "Please select a Combo Kit" }));
+      return;
+    }
 
+    setSaving(true);
     try {
       const payload = {
-        scope_type:      form.scope_type,
-        category_id:     form.category_id || undefined,
-        subcategory_id:  form.subcategory_id || undefined,
-        kit_id:          form.scope_type === "kit" ? form.kit_id : undefined,
-        is_authorized:   form.is_authorized,
+        scope_type: form.scope_type,
+        category_id: form.category_id || undefined,
+        subcategory_id: form.subcategory_id || undefined,
+        kit_id: form.scope_type === "kit" ? form.kit_id : undefined,
+        is_authorized: form.is_authorized,
         override_reason: form.override_reason.trim() || undefined,
         allowed_industry_type_ids: form.industry_type_id ? [form.industry_type_id] : [],
       };
@@ -206,153 +261,207 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl shadow-2xl border border-border w-full max-w-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <h3 className="text-lg font-semibold text-text-primary">Add Solar Kit Authorization Rule</h3>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
-            <FiXCircle size={18} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 overflow-y-auto">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl my-8 overflow-hidden text-slate-800"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-100 bg-slate-50/70">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-blue-100/70 text-blue-700 flex items-center justify-center font-bold">
+              <FiShield size={18} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Add Franchise Kit Authorization Rule</h3>
+              <p className="text-xs text-slate-500">Configure equipment whitelisting or catalog restriction</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors"
+          >
+            <FiXCircle size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4.5 max-h-[75vh] overflow-y-auto">
           {/* Select Reseller */}
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">Select Franchisee / Reseller <span className="text-danger">*</span></label>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Select Franchisee Partner <span className="text-rose-500">*</span>
+            </label>
             <select
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
               value={form.reseller_id}
               onChange={(e) => setForm({ ...form, reseller_id: e.target.value })}
               required
             >
-              <option value="">Select Franchisee...</option>
+              <option value="">Select Franchisee Account...</option>
               {resellers.map((r) => (
-                <option key={r.id} value={r.id}>{r.business_name} ({r.email})</option>
+                <option key={r.id} value={r.id}>
+                  {r.business_name} {r.city ? `(${r.city})` : ""} - {r.email}
+                </option>
               ))}
             </select>
           </div>
 
           {/* Authorization Type: Whitelist vs Blacklist */}
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2">Rule Mode <span className="text-danger">*</span></label>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Authorization Rule Mode <span className="text-rose-500">*</span>
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setForm({ ...form, is_authorized: true })}
-                className={`p-3 rounded-xl border-2 text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-                  form.is_authorized ? "border-success bg-success-soft text-success shadow-sm" : "border-border bg-bg text-text-muted"
+                className={`p-3.5 rounded-xl border-2 text-xs font-bold flex items-center justify-center gap-2.5 transition-all ${
+                  form.is_authorized
+                    ? "border-emerald-500 bg-emerald-50/70 text-emerald-800 shadow-xs"
+                    : "border-slate-200 bg-slate-50/50 text-slate-600 hover:bg-slate-100/50"
                 }`}
               >
-                <FiCheckCircle size={16} /> Authorize (Whitelist)
+                <FiCheckCircle size={17} className={form.is_authorized ? "text-emerald-600" : "text-slate-400"} />
+                <div className="text-left">
+                  <div className="font-bold">Authorize (Whitelist)</div>
+                  <div className="text-[11px] font-normal opacity-80">Grant exclusive kit selling rights</div>
+                </div>
               </button>
+
               <button
                 type="button"
                 onClick={() => setForm({ ...form, is_authorized: false })}
-                className={`p-3 rounded-xl border-2 text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-                  !form.is_authorized ? "border-danger bg-danger-soft text-danger shadow-sm" : "border-border bg-bg text-text-muted"
+                className={`p-3.5 rounded-xl border-2 text-xs font-bold flex items-center justify-center gap-2.5 transition-all ${
+                  !form.is_authorized
+                    ? "border-rose-500 bg-rose-50/70 text-rose-800 shadow-xs"
+                    : "border-slate-200 bg-slate-50/50 text-slate-600 hover:bg-slate-100/50"
                 }`}
               >
-                <FiXCircle size={16} /> Restrict (Blacklist)
+                <FiXCircle size={17} className={!form.is_authorized ? "text-rose-600" : "text-slate-400"} />
+                <div className="text-left">
+                  <div className="font-bold">Restrict (Blacklist)</div>
+                  <div className="text-[11px] font-normal opacity-80">Block equipment from catalog</div>
+                </div>
               </button>
             </div>
           </div>
 
-          {/* Target Scope Level: ONLY Solar Kits and Combo Kits */}
+          {/* Scope Level */}
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">Target Scope Level <span className="text-danger">*</span></label>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Target Scope Level <span className="text-rose-500">*</span>
+            </label>
             <select
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 capitalize font-semibold"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold"
               value={form.scope_type}
               onChange={(e) => setForm({ ...form, scope_type: e.target.value })}
             >
-              <option value="kit">Combo Kit Scope</option>
-              <option value="all">All Solar Kits & Combo Kits</option>
+              <option value="kit">Specific Solar Combo Kit</option>
+              <option value="all">All Solar Combo Kits (Full Franchise Catalog)</option>
             </select>
           </div>
 
-          {/* 5 Cascading Filter Bar (Industry Type, Category, Subcategory, System Type, Project Range) */}
+          {/* Cascading Filter Bar */}
           {form.scope_type === "kit" && (
-            <div className="p-4 rounded-xl bg-surface-hover/60 border border-border space-y-3">
-              <span className="text-xs font-bold text-text-primary uppercase tracking-wider block">
-                Combo Kit Cascading Filters
-              </span>
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <FiSliders size={14} className="text-blue-600" />
+                  Combo Kit Cascading Filters
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium">Filter kits down to specific model</span>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 1. INDUSTRY TYPE */}
+                {/* 1. Industry Type */}
                 <div>
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Industry Type</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Industry Type</label>
                   <select
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500 font-medium"
                     value={form.industry_type_id}
                     onChange={(e) => setForm({ ...form, industry_type_id: e.target.value })}
                   >
-                    <option value="">Select Industry Type...</option>
+                    <option value="">All Industries...</option>
                     {industries.map((ind) => (
-                      <option key={ind.id} value={ind.id}>{ind.name}</option>
+                      <option key={ind.id} value={ind.id}>
+                        {ind.name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* 2. CATEGORY */}
+                {/* 2. Category */}
                 <div>
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Category</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Category</label>
                   <select
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500 font-medium disabled:opacity-50"
                     value={form.category_id}
                     onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                     disabled={!form.industry_type_id}
                   >
-                    <option value="">Select Category...</option>
+                    <option value="">All Categories...</option>
                     {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* 3. SUB-CATEGORY */}
+                {/* 3. Sub-Category */}
                 <div>
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Sub-Category</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Sub-Category</label>
                   <select
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500 font-medium disabled:opacity-50"
                     value={form.subcategory_id}
                     onChange={(e) => setForm({ ...form, subcategory_id: e.target.value })}
                     disabled={!form.category_id}
                   >
-                    <option value="">Select Subcategory...</option>
+                    <option value="">All Subcategories...</option>
                     {subcategories.map((sc) => (
-                      <option key={sc.id} value={sc.id}>{sc.name}</option>
+                      <option key={sc.id} value={sc.id}>
+                        {sc.name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* 4. SYSTEM TYPE (Project Type) */}
+                {/* 4. System Type */}
                 <div>
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">System Type</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">System Type</label>
                   <select
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500 font-medium disabled:opacity-50"
                     value={form.system_type_id}
                     onChange={(e) => setForm({ ...form, system_type_id: e.target.value })}
                     disabled={!form.subcategory_id}
                   >
-                    <option value="">Select System Type...</option>
+                    <option value="">All System Types...</option>
                     {systemTypes.map((st) => (
-                      <option key={st.subcategory_type_id || st.id || st._id} value={st.subcategory_type_id || st.id || st._id}>{st.name || st.type_name}</option>
+                      <option key={st.subcategory_type_id || st.id || st._id} value={st.subcategory_type_id || st.id || st._id}>
+                        {st.name || st.type_name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* 5. PROJECT RANGE */}
+                {/* 5. Project Range */}
                 <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-text-secondary uppercase mb-1">Project Range</label>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Project Range (Capacity)</label>
                   <select
-                    className="w-full px-3 py-2 rounded-xl border border-border bg-bg text-text-primary text-xs focus:outline-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:ring-1 focus:ring-blue-500 font-medium"
                     value={form.project_range_id}
                     onChange={(e) => setForm({ ...form, project_range_id: e.target.value })}
                   >
-                    <option value="">Select Project Range...</option>
+                    <option value="">All Project Ranges...</option>
                     {projectRanges.map((pr) => (
                       <option key={pr.id || pr._id} value={pr.id || pr._id}>
-                        {pr.range_label || (pr.min_value !== undefined && pr.max_value !== undefined ? `${pr.min_value} - ${pr.max_value} ${pr.unit_symbol || 'kW'}` : (pr.name || 'Project Range'))}
+                        {pr.range_label ||
+                          (pr.min_value !== undefined && pr.max_value !== undefined
+                            ? `${pr.min_value} - ${pr.max_value} ${pr.unit_symbol || "kW"}`
+                            : pr.name || "Project Range")}
                       </option>
                     ))}
                   </select>
@@ -364,46 +473,61 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
           {/* Kit Picker */}
           {form.scope_type === "kit" && (
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">Combo Kit <span className="text-danger">*</span></label>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Target Solar Combo Kit <span className="text-rose-500">*</span>
+              </label>
               <select
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 font-semibold"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold"
                 value={form.kit_id}
                 onChange={(e) => setForm({ ...form, kit_id: e.target.value })}
                 required
               >
                 <option value="">Select Combo Kit...</option>
                 {filteredKits.map((k) => (
-                  <option key={k.id || k._id} value={k.id || k._id}>{k.kit_name || k.name}</option>
+                  <option key={k.id || k._id} value={k.id || k._id}>
+                    {k.kit_name || k.name} {k.kit_code ? `(${k.kit_code})` : ""}
+                  </option>
                 ))}
               </select>
-              <span className="text-[11px] text-text-muted mt-1 block">
-                Showing {filteredKits.length} combo kits matching selected filters.
-              </span>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1.5 px-1">
+                <span>
+                  Showing <strong>{filteredKits.length}</strong> matching combo kits
+                </span>
+                {filteredKits.length === 0 && <span className="text-rose-600 font-medium">Try broadening your filter criteria</span>}
+              </div>
             </div>
           )}
 
+          {/* Reason / Notes */}
           <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">Override Reason / Notes</label>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Override Reason / Operational Notes
+            </label>
             <textarea
-              placeholder="e.g. Approved combo kit access for high-volume district franchise"
-              className="w-full px-3 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              placeholder="e.g. Exclusive regional distribution authorization granted for high-volume district franchise."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
               rows={2}
               value={form.override_reason}
               onChange={(e) => setForm({ ...form, override_reason: e.target.value })}
             />
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-border text-text-secondary text-sm font-medium hover:bg-surface-hover transition-colors">
+          {/* Actions */}
+          <div className="flex gap-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 text-sm font-semibold transition-colors"
+            >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !form.reseller_id}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-hover transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold shadow-md shadow-blue-700/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {saving ? <FiLoader className="animate-spin" size={16} /> : null}
-              Save Authorization
+              {saving ? <FiLoader className="animate-spin" size={16} /> : <FiCheck size={16} />}
+              Save Authorization Rule
             </button>
           </div>
         </form>
@@ -412,112 +536,50 @@ function AssignAuthModal({ resellers, defaultResellerId, onClose, onAssigned }) 
   );
 }
 
-function EditStockModal({ rule, resellerId, onClose, onUpdated }) {
+
+export default function ResellerProductAuth() {
   const dispatch = useDispatch();
-  const [stockQty, setStockQty] = useState(rule?.stock_quantity ?? 100);
-  const [saving, setSaving] = useState(false);
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const res = await apiFetch("put", `/stock/${rule.id}?req_for=edit&unique_id=${MODULE_UID}`, {
-        stock_quantity: Number(stockQty),
-        reseller_id: resellerId || rule.reseller_id,
-        product_id: rule.product?._id || rule.product,
-      });
-
-      if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: res.data.message || "Stock updated successfully!" }));
-        onUpdated();
-        onClose();
-      } else {
-        dispatch(setAlert({ type: "error", message: res.data?.message || "Failed to update stock" }));
-      }
-    } catch (err) {
-      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to update stock" }));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-md p-6">
-        <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
-          <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
-            <FiBox className="text-primary" size={20} /> Edit / Refill Product Stock
-          </h3>
-          <button onClick={onClose} className="p-1 rounded-lg text-text-muted hover:text-text-primary">
-            <FiXCircle size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Solar Combo Kit</label>
-            <div className="p-3 bg-bg border border-border rounded-xl font-semibold text-text-primary text-sm">
-              {rule.kit?.kit_name || (rule.kit?.kit_code ? `Kit: ${rule.kit.kit_code}` : (rule.product?.name || "Combo Kit Scope"))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider block mb-1">Allocated Kit Stock (Units)</label>
-            <input
-              type="number"
-              min="0"
-              required
-              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:ring-2 focus:ring-primary/30"
-              value={stockQty}
-              onChange={(e) => setStockQty(e.target.value)}
-              placeholder="e.g. 100, 200..."
-            />
-            <p className="text-xs text-text-muted mt-1">Set available inventory count for this franchise kit. Kit turns Out of Stock when quantity reaches 0.</p>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-semibold border border-border text-text-secondary hover:bg-surface-hover">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary-hover shadow-md">
-              {saving ? <FiLoader className="animate-spin" size={16} /> : <FiCheckCircle size={16} />}
-              Update Stock Quantity
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
-
-export default function ResellerProductAuth({ moduleUniqueId }) {
-  const dispatch = useDispatch();
   const [resellers, setResellers] = useState([]);
-  const [selectedResellerId, setSelectedResellerId] = useState("");
+  const [selectedResellerId, setSelectedResellerId] = useState("all");
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [seeding, setSeeding] = useState(false);
-  const [modal, setModal] = useState(false);
-  const [stockModalRule, setStockModalRule] = useState(null);
 
-  // Load Resellers
+  const [modal, setModal] = useState(false);
+
+  // View switch: "cards" (Big Card Format) vs "table" (Table View)
+  const [viewMode, setViewMode] = useState("cards");
+
+  // Filters & Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [scopeFilter, setScopeFilter] = useState("all");
+  const [authFilter, setAuthFilter] = useState("all");
+
+  // Load Resellers on mount
   useEffect(() => {
-    axios.get(`${API_BASE}/reseller-mgmt/list?req_for=view&unique_id=${MODULE_UID}&limit=100`, { headers: authHeaderObj() })
+    axios
+      .get(`${API_BASE}/reseller-mgmt/list?req_for=view&unique_id=${MODULE_UID}&limit=100`, { headers: authHeaderObj() })
       .then((res) => {
         if (res.data?.status === "success") {
-          setResellers(res.data.data);
-          if (res.data.data.length > 0) setSelectedResellerId(res.data.data[0].id);
+          setResellers(res.data.data || []);
         }
       })
       .catch((e) => console.error(e));
   }, []);
 
+  // Fetch Rules (all or single reseller)
   const fetchRules = useCallback(async () => {
-    if (!selectedResellerId) return;
     setLoading(true);
     try {
-      const res = await apiFetch("get", `/list/${selectedResellerId}?req_for=view&unique_id=${MODULE_UID}`);
-      if (res.data?.status === "success") setRules(res.data.data);
+      const endpoint =
+        selectedResellerId === "all" || !selectedResellerId
+          ? `/list-all?req_for=view&unique_id=${MODULE_UID}`
+          : `/list/${selectedResellerId}?req_for=view&unique_id=${MODULE_UID}`;
+
+      const res = await apiFetch("get", endpoint);
+      if (res.data?.status === "success") {
+        setRules(res.data.data || []);
+      }
     } catch {
       dispatch(setAlert({ type: "error", message: "Failed to load product authorizations" }));
     } finally {
@@ -530,7 +592,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
   }, [fetchRules]);
 
   const handleAssigned = (assignedResellerId) => {
-    if (assignedResellerId && assignedResellerId !== selectedResellerId) {
+    if (selectedResellerId !== "all" && assignedResellerId && assignedResellerId !== selectedResellerId) {
       setSelectedResellerId(assignedResellerId);
     } else {
       fetchRules();
@@ -538,6 +600,7 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
   };
 
   const handleRevoke = async (ruleId) => {
+    if (!window.confirm("Are you sure you want to revoke this authorization rule?")) return;
     try {
       const res = await apiFetch("put", `/revoke/${ruleId}?req_for=edit&unique_id=${MODULE_UID}`);
       if (res.data?.status === "success") {
@@ -549,194 +612,590 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
     }
   };
 
-  const handleSeedDummy = async () => {
-    if (!selectedResellerId) return;
-    setSeeding(true);
-    try {
-      const res = await apiFetch("post", `/seed-dummy/${selectedResellerId}?req_for=add&unique_id=${MODULE_UID}`);
-      if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: res.data?.message || "Dummy kit authorization rules seeded successfully!" }));
-        fetchRules();
-      } else {
-        dispatch(setAlert({ type: "error", message: res.data?.message || "Seeding failed" }));
+  // Filtered Rules
+  const filteredRules = useMemo(() => {
+    return rules.filter((r) => {
+      // Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const kitName = (r.kit?.kit_name || r.kit?.name || "").toLowerCase();
+        const kitCode = (r.kit?.kit_code || "").toLowerCase();
+        const prodName = (r.product?.name || "").toLowerCase();
+        const prodSku = (r.product?.sku_code || "").toLowerCase();
+        const franchiseName = (r.reseller?.business_name || "").toLowerCase();
+        const franchiseEmail = (r.reseller?.email || "").toLowerCase();
+        const franchiseCity = (r.reseller?.city || "").toLowerCase();
+        const reason = (r.override_reason || "").toLowerCase();
+
+        const matches =
+          kitName.includes(q) ||
+          kitCode.includes(q) ||
+          prodName.includes(q) ||
+          prodSku.includes(q) ||
+          franchiseName.includes(q) ||
+          franchiseEmail.includes(q) ||
+          franchiseCity.includes(q) ||
+          reason.includes(q);
+
+        if (!matches) return false;
       }
-    } catch (err) {
-      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Seeding failed" }));
-    } finally {
-      setSeeding(false);
-    }
+
+      // Scope Filter
+      if (scopeFilter !== "all" && r.scope_type !== scopeFilter) return false;
+
+      // Auth Filter
+      if (authFilter === "authorized" && !r.is_authorized) return false;
+      if (authFilter === "restricted" && r.is_authorized) return false;
+
+      return true;
+    });
+  }, [rules, searchQuery, scopeFilter, authFilter]);
+
+  // Executive KPI Stats computed from rules
+  const stats = useMemo(() => {
+    const total = rules.length;
+    const authorized = rules.filter((r) => r.is_authorized).length;
+    const restricted = rules.filter((r) => !r.is_authorized).length;
+    const uniqueFranchisees = new Set(rules.map((r) => r.reseller_id || r.reseller?.id)).size;
+
+    return { total, authorized, restricted, uniqueFranchisees };
+  }, [rules]);
+
+  const activeFiltersCount =
+    (selectedResellerId !== "all" ? 1 : 0) +
+    (searchQuery ? 1 : 0) +
+    (scopeFilter !== "all" ? 1 : 0) +
+    (authFilter !== "all" ? 1 : 0);
+
+  const resetFilters = () => {
+    setSelectedResellerId("all");
+    setSearchQuery("");
+    setScopeFilter("all");
+    setAuthFilter("all");
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-            <FiBox className="text-primary" size={24} />
-            Solar Kit & Combo Kit Authorization Matrix
-          </h1>
-          <p className="text-sm text-text-muted mt-1">
-            Manage solar combo kit authorizations, whitelist kits, and exclusive franchise equipment allocations
-          </p>
+    <div className="p-6 space-y-6 bg-slate-50/60 min-h-screen text-slate-800">
+      {/* ── 1. Top Header & Action Bar ── */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-xs">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-700 text-white flex items-center justify-center shadow-md shadow-blue-700/20">
+              <FiShield size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight">
+                Franchise Product & Kit Authorization Matrix
+              </h1>
+              <p className="text-xs lg:text-sm text-slate-500 font-medium">
+                Manage solar combo kit authorizations, whitelist exclusive kits, and inspect franchise inventory
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={handleSeedDummy}
-            disabled={seeding || !selectedResellerId}
-            className="flex items-center gap-2 px-4 py-2.5 bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/20 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
-            title="Seed dummy solar kit authorization rules for testing"
+            onClick={fetchRules}
+            disabled={loading}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200"
+            title="Refresh rules list"
           >
-            {seeding ? <FiLoader className="animate-spin" size={16} /> : <FiZap size={16} />}
-            Seed Dummy Rules
+            <FiRefreshCw className={loading ? "animate-spin" : ""} size={14} />
+            <span>Refresh</span>
           </button>
+
+
           <button
             onClick={() => setModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30"
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs lg:text-sm font-bold shadow-md shadow-blue-700/20 hover:shadow-lg transition-all"
           >
             <FiPlus size={16} />
-            Add Kit Authorization Rule
+            <span>Add Authorization Rule</span>
           </button>
         </div>
       </div>
 
-      {/* Franchisee Selector Bar */}
-      <div className="bg-surface p-4 rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row items-center gap-4">
-        <label className="text-sm font-semibold text-text-secondary flex-shrink-0">Select Franchisee Account:</label>
-        <select
-          className="w-full sm:w-80 px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          value={selectedResellerId}
-          onChange={(e) => setSelectedResellerId(e.target.value)}
-        >
-          {resellers.map((r) => (
-            <option key={r.id} value={r.id}>{r.business_name} ({r.email})</option>
-          ))}
-        </select>
+      {/* ── 2. Executive KPI Metric Cards (Clean Light Theme) ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Rules */}
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center flex-shrink-0">
+            <FiShield size={20} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Rules</div>
+            <div className="text-2xl font-black text-slate-900 mt-0.5">{stats.total}</div>
+          </div>
+        </div>
+
+        {/* Whitelisted Kits */}
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+            <FiCheckCircle size={20} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Whitelisted</div>
+            <div className="text-2xl font-black text-emerald-700 mt-0.5">
+              {stats.authorized}{" "}
+              <span className="text-xs font-bold text-slate-400">
+                ({stats.total > 0 ? Math.round((stats.authorized / stats.total) * 100) : 0}%)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Restricted Kits */}
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center flex-shrink-0">
+            <FiXCircle size={20} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Restricted</div>
+            <div className="text-2xl font-black text-rose-700 mt-0.5">{stats.restricted}</div>
+          </div>
+        </div>
+
+        {/* Franchise Partners */}
+        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center flex-shrink-0">
+            <FiUser size={20} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Franchises</div>
+            <div className="text-2xl font-black text-indigo-700 mt-0.5">{stats.uniqueFranchisees}</div>
+          </div>
+        </div>
       </div>
 
-      {/* Rules Table */}
-      <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-text-muted gap-3">
-            <FiLoader className="animate-spin" size={20} />
-            <span className="text-sm">Loading kit authorization rules...</span>
+      {/* ── 3. Filters & View Switcher Bar ── */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs space-y-3.5">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Franchisee Selector */}
+          <div className="flex items-center gap-2 flex-1 max-w-md">
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider flex-shrink-0">Franchise:</label>
+            <select
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 text-slate-900 text-xs font-bold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+              value={selectedResellerId}
+              onChange={(e) => setSelectedResellerId(e.target.value)}
+            >
+              <option value="all">🌟 All Franchisees (Cross-Network Matrix)</option>
+              {resellers.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.business_name} {r.city ? `• ${r.city}` : ""} ({r.email})
+                </option>
+              ))}
+            </select>
           </div>
-        ) : rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="w-14 h-14 rounded-full bg-surface-hover flex items-center justify-center">
-              <FiBox size={24} className="text-text-muted" />
-            </div>
-            <p className="text-sm text-text-muted">No explicit kit authorization rules configured for this franchisee</p>
+
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-sm">
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+            <input
+              type="text"
+              placeholder="Search kit, SKU, franchise, or note..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50/70 text-slate-900 text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <FiXCircle size={14} />
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg">
-                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Industry</th>
-                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Scope Level</th>
-                  <th className="text-left text-text-muted font-medium px-5 py-3.5">Target Entity</th>
-                  <th className="text-center text-text-muted font-medium px-4 py-3.5">Authorization State</th>
-                  <th className="text-center text-text-muted font-medium px-4 py-3.5">Stock Quantity</th>
-                  <th className="text-left text-text-muted font-medium px-5 py-3.5 hidden md:table-cell">Reason / Notes</th>
-                  <th className="text-center text-text-muted font-medium px-4 py-3.5">Status</th>
-                  <th className="text-right text-text-muted font-medium px-5 py-3.5">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                <AnimatePresence>
-                  {rules.map((r) => {
-                    const ScopeIcon = SCOPE_ICONS[r.scope_type] || FiBox;
-                    let targetName = "All Solar Kits & Combo Kits";
-                    if (r.scope_type === "kit") {
-                      targetName = r.kit?.name || r.kit?.kit_name || (r.kit?.kit_code ? `Kit: ${r.kit.kit_code}` : "Combo Kit Scope");
-                    } else if (r.scope_type === "product") {
-                      targetName = r.product?.name || (r.product?.sku_code ? `SKU: ${r.product.sku_code}` : "Product Scope");
-                    } else if (r.scope_type === "subcategory") {
-                      targetName = r.subcategory?.name || "Subcategory Scope";
-                    } else if (r.scope_type === "category") {
-                      targetName = r.category?.name || "Category Scope";
-                    }
 
-                    const industryName = r.allowed_industry_type_ids?.[0]?.name || "—";
-                    const stockQty = r.stock_quantity ?? 100;
+          {/* View Toggle Button: Big Cards vs Table */}
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200 self-start md:self-auto">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === "cards"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FiGrid size={14} />
+              <span>Big Card Format</span>
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                viewMode === "table"
+                  ? "bg-white text-blue-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FiList size={14} />
+              <span>Table View</span>
+            </button>
+          </div>
+        </div>
 
-                    return (
-                      <motion.tr key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="hover:bg-surface-hover transition-colors">
-                        <td className="px-5 py-3.5">
-                          <span className="font-semibold text-text-primary">
+        {/* Filter Pills Bar */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs font-semibold">
+          <span className="text-slate-400 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider">
+            <FiFilter size={12} /> Filters:
+          </span>
+
+          {/* Scope Filter */}
+          <select
+            className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium focus:ring-1 focus:ring-blue-500"
+            value={scopeFilter}
+            onChange={(e) => setScopeFilter(e.target.value)}
+          >
+            <option value="all">All Scopes</option>
+            <option value="kit">Combo Kits Only</option>
+            <option value="product">Products (SKU)</option>
+            <option value="category">Category Scope</option>
+          </select>
+
+          {/* Auth State Filter */}
+          <select
+            className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-medium focus:ring-1 focus:ring-blue-500"
+            value={authFilter}
+            onChange={(e) => setAuthFilter(e.target.value)}
+          >
+            <option value="all">All Rule Modes</option>
+            <option value="authorized">Whitelist (Authorized)</option>
+            <option value="restricted">Blacklist (Restricted)</option>
+          </select>
+
+          {activeFiltersCount > 0 && (
+            <button
+              onClick={resetFilters}
+              className="text-[11px] font-bold text-rose-600 hover:text-rose-700 underline ml-auto transition-colors"
+            >
+              Reset Filters ({activeFiltersCount})
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── 4. Main Content Area ── */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-20 flex flex-col items-center justify-center gap-3 text-slate-400">
+          <FiLoader className="animate-spin text-blue-600" size={28} />
+          <span className="text-sm font-semibold text-slate-600">Loading franchise kit authorization rules...</span>
+        </div>
+      ) : filteredRules.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-200 p-16 flex flex-col items-center justify-center text-center gap-3">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+            <FiBox size={30} />
+          </div>
+          <h3 className="text-base font-bold text-slate-800">No authorization rules found</h3>
+          <p className="text-xs text-slate-500 max-w-md">
+            {activeFiltersCount > 0
+              ? "No authorization rules matched your current search or filter criteria. Try resetting filters."
+              : "No authorization rules have been configured for the selected franchise yet."}
+          </p>
+          <div className="flex items-center gap-3 mt-2">
+            {activeFiltersCount > 0 ? (
+              <button
+                onClick={resetFilters}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700"
+              >
+                Clear Filters
+              </button>
+            ) : (
+              <button
+                onClick={() => setModal(true)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white shadow-sm"
+              >
+                <FiPlus className="inline mr-1" /> Add Rule Now
+              </button>
+            )}
+          </div>
+        </div>
+      ) : viewMode === "cards" ? (
+        /* ════════════════════════════════════════════════════════════
+           BIG CARD FORMAT VIEW
+           ════════════════════════════════════════════════════════════ */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <AnimatePresence>
+            {filteredRules.map((r) => {
+              const scopeConfig = SCOPE_CONFIG[r.scope_type] || SCOPE_CONFIG.kit;
+              const ScopeIcon = scopeConfig.icon;
+
+              let targetName = "All Solar Kits & Combo Kits";
+              let targetCode = "";
+              if (r.scope_type === "kit") {
+                targetName = r.kit?.kit_name || r.kit?.name || "Combo Kit Scope";
+                targetCode = r.kit?.kit_code || "";
+              } else if (r.scope_type === "product") {
+                targetName = r.product?.name || "Product Scope";
+                targetCode = r.product?.sku_code ? `SKU: ${r.product.sku_code}` : "";
+              } else if (r.scope_type === "subcategory") {
+                targetName = r.subcategory?.name || "Subcategory Scope";
+              } else if (r.scope_type === "category") {
+                targetName = r.category?.name || "Category Scope";
+              }
+
+              const franchiseName = r.reseller?.business_name || "Franchise Partner";
+              const franchiseCity = r.reseller?.city || r.reseller?.address?.city;
+              const franchiseEmail = r.reseller?.email;
+              const industryName = r.allowed_industry_type_ids?.[0]?.name;
+
+              return (
+                <motion.div
+                  key={r.id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden"
+                >
+                  {/* Card Header: Franchisee Info & Scope Pill */}
+                  <div className="p-5 pb-4 border-b border-slate-100 bg-slate-50/50">
+                    <div className="flex items-start justify-between gap-3">
+                      {/* Franchise Profile */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 to-indigo-800 text-white flex items-center justify-center font-black text-sm flex-shrink-0 shadow-xs">
+                          {franchiseName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-extrabold text-slate-900 truncate" title={franchiseName}>
+                            {franchiseName}
+                          </h4>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                            {franchiseCity && (
+                              <span className="inline-flex items-center gap-0.5 text-slate-600 font-medium">
+                                <FiMapPin size={11} className="text-slate-400" />
+                                {franchiseCity}
+                              </span>
+                            )}
+                            {franchiseCity && franchiseEmail && <span>•</span>}
+                            {franchiseEmail && <span className="truncate">{franchiseEmail}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Scope Badge */}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border flex-shrink-0 ${scopeConfig.badgeBg}`}
+                      >
+                        <ScopeIcon size={12} />
+                        {scopeConfig.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Body: Equipment Name, Auth Status & Stock */}
+                  <div className="p-5 space-y-4 flex-1">
+                    {/* Hero Equipment Title */}
+                    <div>
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        Equipment / Item
+                      </div>
+                      <h3 className="text-base font-extrabold text-slate-900 leading-snug line-clamp-2" title={targetName}>
+                        {targetName}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                        {targetCode && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-mono font-semibold">
+                            <FiTag size={10} /> {targetCode}
+                          </span>
+                        )}
+                        {industryName && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-semibold">
                             {industryName}
                           </span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <span className="font-semibold text-text-primary capitalize flex items-center gap-1.5">
-                            <ScopeIcon size={14} className="text-primary" />
-                            {r.scope_type === 'kit' ? 'Combo Kit' : r.scope_type === 'all' ? 'All Kits' : r.scope_type}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <div className="font-semibold text-text-primary">{targetName}</div>
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <AuthStatusBadge isAuthorized={r.is_authorized} />
-                        </td>
-                        <td className="px-4 py-3.5 text-center font-medium">
-                          {r.scope_type === "kit" || r.scope_type === "product" ? (
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                              stockQty > 10
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : stockQty > 0
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
-                            }`}>
-                              {stockQty > 0 ? `In Stock (${stockQty} units)` : "Out of Stock (0)"}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-text-muted italic">—</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3.5 hidden md:table-cell text-text-secondary text-xs max-w-xs truncate">
-                          {r.override_reason || <span className="text-text-muted italic">—</span>}
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${
-                            r.status === 'active' ? 'bg-success-soft text-success' : 'bg-surface-hover text-text-muted'
-                          }`}>
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {(r.scope_type === "kit" || r.scope_type === "product") && r.status === "active" && (
-                              <button
-                                onClick={() => setStockModalRule(r)}
-                                className="p-2 rounded-lg text-primary hover:text-primary-hover hover:bg-primary-soft transition-colors"
-                                title="Edit / Refill Kit Stock Quantity"
-                              >
-                                <FiEdit3 size={16} />
-                              </button>
-                            )}
-                            {r.status === 'active' && (
-                              <button
-                                onClick={() => handleRevoke(r.id)}
-                                className="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger-soft transition-colors"
-                                title="Revoke Rule"
-                              >
-                                <FiTrash2 size={16} />
-                              </button>
-                            )}
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Authorization Status Badge */}
+                    <div>
+                      <AuthStatusBadge isAuthorized={r.is_authorized} />
+                    </div>
+
+                    {/* Override Reason / Notes */}
+                    {r.override_reason ? (
+                      <div className="p-3 rounded-xl bg-slate-100/70 border border-slate-200/60 text-xs text-slate-600 space-y-1">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                          <FiInfo size={11} /> Admin Note
+                        </div>
+                        <p className="line-clamp-2 italic">"{r.override_reason}"</p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Card Footer: Metadata & Actions */}
+                  <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between">
+                    <div className="text-[11px] text-slate-400">
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : "Active Rule"}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {r.status === "active" && (
+                        <button
+                          onClick={() => handleRevoke(r.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Revoke Rule"
+                        >
+                          <FiTrash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      ) : (
+        /* ════════════════════════════════════════════════════════════
+           TABLE VIEW FORMAT
+           ════════════════════════════════════════════════════════════ */
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="px-5 py-3.5">Franchisee Account</th>
+                  <th className="px-5 py-3.5">Scope</th>
+                  <th className="px-5 py-3.5">Target Equipment / Kit</th>
+                  <th className="px-5 py-3.5 text-center">Auth Rule</th>
+                  <th className="px-5 py-3.5 hidden lg:table-cell">Reason / Notes</th>
+                  <th className="px-5 py-3.5 text-center">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredRules.map((r) => {
+                  const scopeConfig = SCOPE_CONFIG[r.scope_type] || SCOPE_CONFIG.kit;
+                  const ScopeIcon = scopeConfig.icon;
+
+                  let targetName = "All Solar Kits & Combo Kits";
+                  let targetCode = "";
+                  if (r.scope_type === "kit") {
+                    targetName = r.kit?.kit_name || r.kit?.name || "Combo Kit Scope";
+                    targetCode = r.kit?.kit_code || "";
+                  } else if (r.scope_type === "product") {
+                    targetName = r.product?.name || "Product Scope";
+                    targetCode = r.product?.sku_code ? `SKU: ${r.product.sku_code}` : "";
+                  } else if (r.scope_type === "subcategory") {
+                    targetName = r.subcategory?.name || "Subcategory Scope";
+                  } else if (r.scope_type === "category") {
+                    targetName = r.category?.name || "Category Scope";
+                  }
+
+                  const franchiseName = r.reseller?.business_name || "Franchise Partner";
+                  const franchiseCity = r.reseller?.city || r.reseller?.address?.city;
+                  const franchiseEmail = r.reseller?.email;
+                  const industryName = r.allowed_industry_type_ids?.[0]?.name;
+
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                      {/* Franchise */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-blue-700 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                            {franchiseName.charAt(0).toUpperCase()}
                           </div>
-                        </td>
-                      </motion.tr>
-                    );
-                  })}
-                </AnimatePresence>
+                          <div>
+                            <div className="font-extrabold text-slate-900 leading-tight">{franchiseName}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              {franchiseCity ? `${franchiseCity} • ` : ""}
+                              {franchiseEmail || "—"}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Scope */}
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${scopeConfig.badgeBg}`}
+                        >
+                          <ScopeIcon size={12} />
+                          {scopeConfig.label}
+                        </span>
+                      </td>
+
+                      {/* Target Equipment */}
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-slate-900 leading-tight">{targetName}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {targetCode && (
+                            <span className="text-[11px] font-mono font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {targetCode}
+                            </span>
+                          )}
+                          {industryName && (
+                            <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                              {industryName}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Auth Rule */}
+                      <td className="px-5 py-4 text-center">
+                        <AuthStatusBadge isAuthorized={r.is_authorized} size="small" />
+                      </td>
+
+                      {/* Reason / Notes */}
+                      <td className="px-5 py-4 hidden lg:table-cell max-w-xs">
+                        {r.override_reason ? (
+                          <span className="text-xs text-slate-600 truncate block" title={r.override_reason}>
+                            {r.override_reason}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">—</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-5 py-4 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
+                            r.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {r.status === "active" && (
+                            <button
+                              onClick={() => handleRevoke(r.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Revoke Rule"
+                            >
+                              <FiTrash2 size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
 
+          {/* Table Footer */}
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs text-slate-500 font-semibold">
+            <span>
+              Showing <strong>{filteredRules.length}</strong> of <strong>{rules.length}</strong> authorization rules
+            </span>
+            {selectedResellerId !== "all" && (
+              <button onClick={() => setSelectedResellerId("all")} className="text-blue-600 hover:underline">
+                View All Franchisees
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 5. Modals ── */}
       <AnimatePresence>
         {modal && (
           <AssignAuthModal
@@ -744,14 +1203,6 @@ export default function ResellerProductAuth({ moduleUniqueId }) {
             defaultResellerId={selectedResellerId}
             onClose={() => setModal(false)}
             onAssigned={handleAssigned}
-          />
-        )}
-        {stockModalRule && (
-          <EditStockModal
-            rule={stockModalRule}
-            resellerId={selectedResellerId}
-            onClose={() => setStockModalRule(null)}
-            onUpdated={fetchRules}
           />
         )}
       </AnimatePresence>

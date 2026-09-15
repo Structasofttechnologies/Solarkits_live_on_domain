@@ -16,6 +16,16 @@ const check_permissions = require('../middlewares/check.permissions');
 const handler = require('../controller/reseller.prodauth.handler');
 
 router.get(
+  '/list-all',
+  check_auth,
+  check_permissions([{ unique_code: 'RSL_PROD_AUTH', permissions: ['view'] }]),
+  (req, res) => {
+    req.params.id = 'all';
+    return handler.list_product_authorizations(req, res);
+  }
+);
+
+router.get(
   '/list/:id',
   check_auth,
   check_permissions([{ unique_code: 'RSL_PROD_AUTH', permissions: ['view'] }]),
