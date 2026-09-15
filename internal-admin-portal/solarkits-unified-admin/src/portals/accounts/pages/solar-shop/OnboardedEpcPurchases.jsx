@@ -11,9 +11,10 @@ import {
   MdInventory2,
   MdReceipt
 } from "react-icons/md";
-import { FaHandshake, FaUserCheck, FaRupeeSign } from "react-icons/fa";
+import { FaHandshake, FaUserCheck, FaRupeeSign, FaTruckMoving } from "react-icons/fa";
 import { getOnboardedEpcPurchases } from "../../api/solarshopAccounts";
 import TransactionDetailsDrawer from "../../components/TransactionDetailsDrawer";
+import Product8StageJourneyModal from "../../components/Product8StageJourneyModal";
 import Button from "../../components/Button";
 
 export default function OnboardedEpcPurchases() {
@@ -32,9 +33,10 @@ export default function OnboardedEpcPurchases() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Drawer
+  // Drawer & Journey Modal
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [journeyOrder, setJourneyOrder] = useState(null);
 
   useEffect(() => {
     fetchPurchases();
@@ -271,22 +273,45 @@ export default function OnboardedEpcPurchases() {
 
                     {/* Action */}
                     <td className="px-4 sm:px-6 py-3.5 text-center whitespace-nowrap">
-                      <Button
-                        variant={i.payment_status === "Pending" ? "primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setSelectedTxn({ id: i.order_id, type_key: "commission", transaction_type: "Franchise Onboarded EPC Order", payment_status: i.payment_status });
-                          setIsDrawerOpen(true);
-                        }}
-                        className={`text-xs font-bold px-3 py-1 gap-1 ${
-                          i.payment_status === "Pending"
-                            ? "bg-amber-500 hover:bg-amber-600 text-white border-none shadow-xs animate-pulse"
-                            : "border-primary/30 text-primary hover:bg-primary hover:text-white"
-                        }`}
-                      >
-                        <MdVisibility size={14} />
-                        {i.payment_status === "Pending" ? "Verify Payment" : "View"}
-                      </Button>
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() =>
+                            setJourneyOrder({
+                              _id: i.order_id,
+                              id: i.order_id,
+                              order_number: i.order_number,
+                              product_name: i.product_name,
+                              quantity: i.quantity,
+                              total_transaction_amount: i.total_product_amount,
+                              epc_name: i.epc_name,
+                              franchise_partner_name: i.franchise_partner_name,
+                              order_status: i.payment_status === "Paid" ? "confirmed" : "pending",
+                              status: i.payment_status === "Paid" ? "CONFIRMED" : "PENDING",
+                            })
+                          }
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                          title="Open 8-Step Product Journey"
+                        >
+                          <FaTruckMoving size={11} />
+                          <span>8-Step Journey</span>
+                        </button>
+                        <Button
+                          variant={i.payment_status === "Pending" ? "primary" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTxn({ id: i.order_id, type_key: "commission", transaction_type: "Franchise Onboarded EPC Order", payment_status: i.payment_status });
+                            setIsDrawerOpen(true);
+                          }}
+                          className={`text-xs font-bold px-3 py-1 gap-1 ${
+                            i.payment_status === "Pending"
+                              ? "bg-amber-500 hover:bg-amber-600 text-white border-none shadow-xs animate-pulse"
+                              : "border-primary/30 text-primary hover:bg-primary hover:text-white"
+                          }`}
+                        >
+                          <MdVisibility size={14} />
+                          {i.payment_status === "Pending" ? "Verify Payment" : "View"}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -327,6 +352,19 @@ export default function OnboardedEpcPurchases() {
         transaction={selectedTxn}
         onStatusUpdated={fetchPurchases}
       />
+
+      {/* ── PRODUCT 8-STAGE JOURNEY MODAL ──────────────────────────────────── */}
+      {journeyOrder && (
+        <Product8StageJourneyModal
+          isOpen={!!journeyOrder}
+          onClose={() => setJourneyOrder(null)}
+          order={journeyOrder}
+          orderType="onboarded_epc"
+          onStageUpdated={() => {
+            fetchPurchases();
+          }}
+        />
+      )}
     </div>
   );
 }

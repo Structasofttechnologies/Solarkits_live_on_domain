@@ -498,105 +498,137 @@ export default function ProjectOrderStatus() {
                     {/* ── Industry Standard Order Journey Stepper ─────────────── */}
                     {!isRejected && (
                       <div className="p-6 border-b border-border bg-surface">
-                        <div className="relative max-w-4xl mx-auto">
-                          {/* Connecting Progress Track */}
-                          <div className="absolute top-4 left-6 right-6 h-1 bg-border rounded-full -z-0 hidden sm:block" />
-                          <div
-                            className="absolute top-4 left-6 h-1 bg-gradient-to-r from-primary via-indigo-600 to-emerald-500 rounded-full transition-all duration-500 -z-0 hidden sm:block"
-                            style={{ width: `${Math.min(100, Math.max(0, ((step - 1) / 4) * 100))}%` }}
-                          />
+                        <div className="relative max-w-5xl mx-auto">
+                          {(() => {
+                            const STAGE_ORDER = [
+                              { key: "confirmed",           label: "1. Confirmed",      sub: "Payment verified" },
+                              { key: "processing",          label: "2. Processing",     sub: "Warehouse picking" },
+                              { key: "vehicle_assigned",    label: "3. Fleet Assigned", sub: "Vehicle & Driver" },
+                              { key: "ready_for_dispatch",  label: "4. Ready",          sub: "Staged at gate" },
+                              { key: "dispatched",          label: "5. Dispatched",     sub: "Out for delivery" },
+                              { key: "in_transit",          label: "6. In Transit",     sub: "En route" },
+                              { key: "reached_destination", label: "7. Arrived",        sub: "At site / hub" },
+                              { key: "delivered",           label: "8. Delivered",      sub: "Delivery complete" },
+                            ];
 
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 sm:gap-2 relative z-10">
-                            {/* Step 1: Order Placed */}
-                            <div className="flex flex-col items-center text-center space-y-1.5">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 1 ? "bg-primary text-white shadow-md shadow-primary/25" : "bg-surface-hover border border-border text-text-muted"
-                                }`}>
-                                ✓
-                              </div>
-                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Order Placed</p>
-                              <p className="text-[10px] text-text-secondary font-mono">
-                                UTR: {utrStr.slice(0, 10)}{utrStr.length > 10 ? "..." : ""}
-                              </p>
-                              <p className="text-[10px] text-text-muted hidden sm:block">
-                                {new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                              </p>
-                            </div>
+                            const rawStatus = String(order.order_status || order.status || "").toLowerCase();
+                            let stageIndex = 0;
+                            if (rawStatus === "delivered" || rawStatus === "completed") stageIndex = 7;
+                            else if (rawStatus === "reached_destination") stageIndex = 6;
+                            else if (rawStatus === "in_transit") stageIndex = 5;
+                            else if (rawStatus === "dispatched" || Boolean(order.dispatch_tracking?.tracking_number)) stageIndex = 4;
+                            else if (rawStatus === "ready_for_dispatch") stageIndex = 3;
+                            else if (rawStatus === "vehicle_assigned" || Boolean(order.assigned_vehicle?.vehicle_id || order.assigned_vehicle?.vehicle_name)) stageIndex = 2;
+                            else if (rawStatus === "processing") stageIndex = 1;
+                            else if (rawStatus === "confirmed" || order.payment_status === "captured" || order.payment_status === "paid") stageIndex = 0;
+                            else stageIndex = 0;
 
-                            {/* Step 2: Accounts Verification */}
-                            <div className="flex flex-col items-center text-center space-y-1.5">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 2 && !isApproved
-                                  ? "bg-amber-500 text-white shadow-md shadow-amber-500/25 ring-4 ring-amber-500/20"
-                                  : step >= 3
-                                    ? "bg-primary text-white shadow-md shadow-primary/25"
-                                    : "bg-surface-hover border border-border text-text-muted"
-                                }`}>
-                                {step >= 3 ? "✓" : step === 2 ? "⏳" : "2"}
-                              </div>
-                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Accounts Review</p>
-                              <p className="text-[10px] text-text-secondary">
-                                {step >= 3 ? "Verified & Settled" : "Verifying Bank UTR"}
-                              </p>
-                              {order.invoice?.invoice_number && (
-                                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                                  Tax Invoice Ready
-                                </span>
-                              )}
-                            </div>
+                            return (
+                              <div className="space-y-5">
+                                {/* Connecting Progress Track & Steps */}
+                                <div className="overflow-x-auto pb-2">
+                                  <div className="relative min-w-[680px]">
+                                    <div className="absolute top-4 left-6 right-6 h-1 bg-border rounded-full -z-0" />
+                                    <div
+                                      className="absolute top-4 left-6 h-1 bg-gradient-to-r from-primary via-indigo-600 to-emerald-500 rounded-full transition-all duration-500 -z-0"
+                                      style={{ width: `${Math.min(100, Math.max(0, (stageIndex / (STAGE_ORDER.length - 1)) * 100))}%` }}
+                                    />
 
-                            {/* Step 3: Payment Approved & Packed */}
-                            <div className="flex flex-col items-center text-center space-y-1.5">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 3 ? "bg-primary text-white shadow-md shadow-primary/25" : "bg-surface-hover border border-border text-text-muted"
-                                }`}>
-                                {step >= 3 ? "✓" : "3"}
-                              </div>
-                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Payment Approved</p>
-                              <p className="text-[10px] text-text-secondary">
-                                {step >= 4 ? "Stock Allocated" : step === 3 ? "Packing Solar Kit" : "Awaiting Approval"}
-                              </p>
-                              <p className="text-[10px] text-text-muted hidden sm:block">
-                                {order.fulfillment_source === "franchise_warehouse" ? "Franchise Stock" : "Central Hub"}
-                              </p>
-                            </div>
+                                    <div className="grid grid-cols-8 gap-2 relative z-10">
+                                      {STAGE_ORDER.map((st, sIdx) => {
+                                        const isCompleted = sIdx < stageIndex;
+                                        const isCurrent = sIdx === stageIndex;
 
-                            {/* Step 4: Dispatched & In Transit */}
-                            <div className="flex flex-col items-center text-center space-y-1.5">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step === 4
-                                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-4 ring-purple-600/20"
-                                  : step >= 5
-                                    ? "bg-primary text-white shadow-md shadow-primary/25"
-                                    : "bg-surface-hover border border-border text-text-muted"
-                                }`}>
-                                {step >= 5 ? "✓" : step === 4 ? <FaTruck size={12} /> : "4"}
-                              </div>
-                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Dispatched</p>
-                              <p className="text-[10px] text-purple-700 dark:text-purple-300 font-bold">
-                                {isDispatched ? courierName : "Awaiting Dispatch"}
-                              </p>
-                              {dispatchedDate && (
-                                <p className="text-[10px] text-text-muted hidden sm:block">
-                                  {new Date(dispatchedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                                </p>
-                              )}
-                            </div>
+                                        return (
+                                          <div key={st.key} className="flex flex-col items-center text-center space-y-1">
+                                            <div
+                                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                                                isCompleted
+                                                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/25"
+                                                  : isCurrent
+                                                  ? "bg-primary text-white shadow-md shadow-primary/30 ring-4 ring-primary/20 scale-110 animate-pulse"
+                                                  : "bg-surface-hover border border-border text-text-muted"
+                                              }`}
+                                            >
+                                              {isCompleted ? "✓" : sIdx + 1}
+                                            </div>
+                                            <p className={`text-[11px] font-bold leading-tight ${isCurrent ? "text-primary font-black" : isCompleted ? "text-emerald-700 dark:text-emerald-300" : "text-text-muted"}`}>
+                                              {st.label.replace(/^\d+\.\s*/, "")}
+                                            </p>
+                                            <p className="text-[9px] text-text-muted leading-tight">
+                                              {st.sub}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
 
-                            {/* Step 5: Delivered */}
-                            <div className="flex flex-col items-center text-center space-y-1.5">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${step >= 5
-                                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/30 ring-4 ring-emerald-500/20"
-                                  : "bg-surface-hover border border-border text-text-muted"
-                                }`}>
-                                {step >= 5 ? "✓" : "5"}
+                                {/* Assigned Fleet & Logistics Card if vehicle assigned */}
+                                {order.assigned_vehicle?.vehicle_name && (
+                                  <div className="p-3.5 bg-primary/5 rounded-2xl border border-primary/20 flex flex-wrap items-center justify-between gap-3 text-xs">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                        <FaTruck size={18} />
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-black text-text-primary">
+                                            🚚 {order.assigned_vehicle.vehicle_name}
+                                          </span>
+                                          <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface border border-border text-primary font-bold">
+                                            {order.assigned_vehicle.vehicle_registration}
+                                          </span>
+                                          {order.assigned_vehicle.is_recommended && (
+                                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700">
+                                              Optimal Fit Fleet
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-[11px] text-text-secondary mt-0.5">
+                                          Driver: <strong>{order.assigned_vehicle.driver_name || "Assigned Driver"}</strong>
+                                          {order.assigned_vehicle.driver_contact && (
+                                            <span className="ml-2 font-mono text-text-primary">📞 {order.assigned_vehicle.driver_contact}</span>
+                                          )}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    {order.dispatch_tracking?.tracking_number && (
+                                      <div className="text-right">
+                                        <span className="text-[10px] text-text-muted block">Tracking / LR Number</span>
+                                        <span className="font-mono font-black text-primary text-xs">
+                                          {order.dispatch_tracking.tracking_number}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* In-transit Milestones if recorded */}
+                                {order.milestones && order.milestones.length > 0 && (
+                                  <div className="p-3 bg-surface-hover/60 rounded-xl border border-border text-xs space-y-1.5">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted block">
+                                      Transit Milestones & Checkpoints:
+                                    </span>
+                                    <div className="space-y-1">
+                                      {order.milestones.map((ms, mIdx) => (
+                                        <div key={mIdx} className="flex items-center justify-between text-[11px] text-text-secondary bg-surface px-2.5 py-1 rounded-lg border border-border/50">
+                                          <span className="flex items-center gap-1.5">
+                                            <FaRoute className="text-primary" size={11} /> {ms.description || ms.status}
+                                          </span>
+                                          <span className="text-[10px] text-text-muted">
+                                            {new Date(ms.recorded_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              <p className="text-xs font-extrabold text-text-primary dark:text-white">Delivered</p>
-                              <p className="text-[10px] text-text-secondary">
-                                {isDelivered
-                                  ? "Completed & Installed"
-                                  : estimatedDate
-                                    ? `Est: ${new Date(estimatedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
-                                    : "Site Handover"}
-                              </p>
-                            </div>
-                          </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}

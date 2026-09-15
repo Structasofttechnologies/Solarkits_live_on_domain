@@ -40,15 +40,20 @@ const ALLOWED_TRANSITIONS = {
   SUBMITTED:           ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED'],
   PENDING_APPROVAL:    ['CHANGES_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'],
   CHANGES_REQUESTED:   ['SUBMITTED', 'CANCELLED'],
-  APPROVED:            ['AWAITING_PAYMENT', 'CANCELLED'],
+  APPROVED:            ['AWAITING_PAYMENT', 'CONFIRMED', 'PAID', 'PROCESSING', 'CANCELLED'],
   REJECTED:            [],
-  AWAITING_PAYMENT:    ['PARTIALLY_PAID', 'PAID', 'CANCELLED'],
-  PARTIALLY_PAID:      ['PAID', 'CANCELLED'],
-  PAID:                ['STOCK_ALLOCATED', 'CANCELLED'],
-  STOCK_ALLOCATED:     ['PROCESSING', 'CANCELLED'],
-  PROCESSING:          ['PARTIALLY_DISPATCHED', 'DISPATCHED', 'CANCELLED'],
+  AWAITING_PAYMENT:    ['PARTIALLY_PAID', 'PAID', 'CONFIRMED', 'CANCELLED'],
+  PARTIALLY_PAID:      ['PAID', 'CONFIRMED', 'CANCELLED'],
+  PAID:                ['CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED', 'CANCELLED'],
+  CONFIRMED:           ['STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED', 'CANCELLED'],
+  STOCK_ALLOCATED:     ['PROCESSING', 'VEHICLE_ASSIGNED', 'CANCELLED'],
+  PROCESSING:          ['VEHICLE_ASSIGNED', 'READY_FOR_DISPATCH', 'PARTIALLY_DISPATCHED', 'DISPATCHED', 'CANCELLED'],
+  VEHICLE_ASSIGNED:    ['READY_FOR_DISPATCH', 'PROCESSING', 'DISPATCHED', 'CANCELLED'],
+  READY_FOR_DISPATCH:  ['DISPATCHED', 'CANCELLED'],
   PARTIALLY_DISPATCHED:['DISPATCHED', 'CANCELLED'],
-  DISPATCHED:          ['PARTIALLY_DELIVERED', 'DELIVERED'],
+  DISPATCHED:          ['IN_TRANSIT', 'REACHED_DESTINATION', 'PARTIALLY_DELIVERED', 'DELIVERED'],
+  IN_TRANSIT:          ['IN_TRANSIT', 'REACHED_DESTINATION', 'DELIVERED'],
+  REACHED_DESTINATION: ['DELIVERED', 'COMPLETED'],
   PARTIALLY_DELIVERED: ['DELIVERED'],
   DELIVERED:           ['COMPLETED'],
   COMPLETED:           [],
@@ -509,6 +514,133 @@ async function returnItems({ po_id, return_items, reason, actor_id, req }) {
   return order;
 }
 
+// ── 10. ADVANCE 8-STAGE LIFECYCLE ─────────────────────────────────────────────
+/**
+ * Advance an FPO order through the 8-stage lifecycle.
+ * Stages:
+ *   CONFIRMED → PROCESSING → VEHICLE_ASSIGNED → READY_FOR_DISPATCH
+ *             → DISPATCHED → IN_TRANSIT → REACHED_DESTINATION → DELIVERED
+ */
+async function advancePoStage({ po_id, new_stage, extra_data = {}, actor_id, req }) {
+  const order = await FpoOrder.findById(po_id);
+  if (!order) throw new Error(`PO "${po_id}" not found`);
+
+  const upperStage = String(new_stage).toUpperCase();
+  assertTransition(order.status, upperStage);
+
+  if (upperStage === 'DISPATCHED' && extra_data.dispatch_data) {
+    order.dispatch_tracking = {
+      courier_name:       extra_data.dispatch_data.courier_name    || 'Company Fleet',
+      tracking_number:    extra_data.dispatch_data.tracking_number || null,
+      tracking_url:       extra_data.dispatch_data.tracking_url    || null,
+      dispatched_at:      new Date(),
+      estimated_delivery: extra_data.dispatch_data.estimated_delivery || null,
+      dispatched_by:      actor_id,
+      dispatch_notes:     extra_data.dispatch_data.dispatch_notes  || null,
+    };
+    order.dispatch_date = new Date();
+  }
+
+  if (upperStage === 'IN_TRANSIT' && extra_data.milestone) {
+    order.milestones = order.milestones || [];
+    order.milestones.push({
+      status:      extra_data.milestone.status || 'En Route',
+      description: extra_data.milestone.description || null,
+      recorded_by: actor_id,
+      recorded_at: new Date(),
+    });
+  }
+
+  if (upperStage === 'DELIVERED') {
+    order.delivery_date = new Date();
+    (order.items || []).forEach((it) => {
+      it.delivered_quantity = it.quantity;
+    });
+    // Trigger commission and goals if not yet posted
+    if (!order.commission_posted) {
+      await postCommission({ fpo_order: order, actor_id, req }).catch(() => {});
+    }
+    const now = new Date();
+    await recalculateProgress({ franchisee_id: order.franchisee_id, month: now.getMonth() + 1, year: now.getFullYear(), req }).catch(() => {});
+  }
+
+  order.status = upperStage;
+  order.status_history = order.status_history || [];
+  order.status_history.push({
+    status:     upperStage,
+    changed_by: actor_id,
+    actor_type: 'cms_user',
+    note:       extra_data.note || `Stage updated to ${upperStage}`,
+    changed_at: new Date(),
+  });
+  order.updated_by = actor_id;
+  await order.save();
+
+  await logAudit({
+    actor_type: 'cms_user',
+    actor_id,
+    action:     `FPO_STAGE_${upperStage}`,
+    entity_type:'fpo_orders',
+    entity_id:  order._id,
+    after_snapshot: { status: upperStage, order_number: order.po_number },
+    req,
+  });
+
+  return order;
+}
+
+// ── 11. ASSIGN VEHICLE (STAGE 3) ──────────────────────────────────────────────
+async function assignVehicleToPo({ po_id, vehicle_id, driver, is_recommended, override_reason, actor_id, req }) {
+  const order = await FpoOrder.findById(po_id);
+  if (!order) throw new Error(`PO "${po_id}" not found`);
+
+  const { DeliveryVehicle } = require('../../warehouse-panel/models/company_warehouse_db');
+  const vehicle = await DeliveryVehicle.findById(vehicle_id).populate('assigned_driver_id').lean();
+  if (!vehicle) throw new Error('Vehicle not found');
+
+  order.assigned_vehicle = {
+    vehicle_id:          vehicle._id || vehicle.id,
+    vehicle_name:        vehicle.name,
+    vehicle_type:        vehicle.vehicle_type || 'Commercial Fleet',
+    registration_number: vehicle.registration_number,
+    driver_id:           driver?.driver_id    || vehicle.assigned_driver_id?._id || null,
+    driver_name:         driver?.driver_name  || vehicle.assigned_driver_id?.name || null,
+    driver_contact:      driver?.driver_contact || vehicle.assigned_driver_id?.contact || null,
+    is_recommended:      is_recommended !== false,
+    override_reason:     is_recommended === false ? (override_reason || null) : null,
+    assigned_by:         actor_id,
+    assigned_at:         new Date(),
+  };
+
+  const allowedPrior = ['APPROVED', 'PAID', 'CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED'];
+  if (allowedPrior.includes(order.status)) {
+    order.status = 'VEHICLE_ASSIGNED';
+    order.status_history = order.status_history || [];
+    order.status_history.push({
+      status:     'VEHICLE_ASSIGNED',
+      changed_by: actor_id,
+      actor_type: 'cms_user',
+      note:       `Vehicle "${vehicle.registration_number}" assigned to order`,
+      changed_at: new Date(),
+    });
+  }
+
+  order.updated_by = actor_id;
+  await order.save();
+
+  await logAudit({
+    actor_type: 'cms_user',
+    actor_id,
+    action:     'FPO_VEHICLE_ASSIGNED',
+    entity_type:'fpo_orders',
+    entity_id:  order._id,
+    after_snapshot: { status: order.status, assigned_vehicle: order.assigned_vehicle },
+    req,
+  });
+
+  return order;
+}
+
 module.exports = {
   createPoDraft,
   submitPo,
@@ -520,5 +652,7 @@ module.exports = {
   cancelPo,
   returnItems,
   generatePoNumber,
+  advancePoStage,
+  assignVehicleToPo,
   ALLOWED_TRANSITIONS,
 };

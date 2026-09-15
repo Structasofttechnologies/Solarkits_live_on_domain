@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import ReactCountryFlag from "react-country-flag";
@@ -17,7 +17,6 @@ import {
   FaEye,
   FaCheckCircle,
   FaClock,
-  FaTimesCircle,
   FaTruck,
   FaMoneyBillWave,
   FaTimes,
@@ -25,7 +24,12 @@ import {
   FaBuilding,
   FaStore,
   FaReceipt,
-  FaCheck
+  FaCheck,
+  FaRoute,
+  FaMapPin,
+  FaCheckDouble,
+  FaCogs,
+  FaExclamationTriangle
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -59,10 +63,14 @@ function fmtAddress(addr) {
 const STATUS_BADGES = {
   PENDING:             { label: "Pending", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
   SUBMITTED:           { label: "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
-  CONFIRMED:           { label: "Confirmed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  PROCESSING:          { label: "Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
-  DISPATCHED:          { label: "Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
-  DELIVERED:           { label: "Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  CONFIRMED:           { label: "1. Confirmed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  PROCESSING:          { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+  VEHICLE_ASSIGNED:    { label: "3. Vehicle Assigned", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+  READY_FOR_DISPATCH:  { label: "4. Ready for Dispatch", bg: "#fefce8", text: "#a16207", border: "#fde047" },
+  DISPATCHED:          { label: "5. Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
+  IN_TRANSIT:          { label: "6. In Transit", bg: "#fff7ed", text: "#c2410c", border: "#fed7aa" },
+  REACHED_DESTINATION: { label: "7. Reached Dest.", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  DELIVERED:           { label: "8. Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
   COMPLETED:           { label: "Completed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
   CANCELLED:           { label: "Cancelled", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
 };
@@ -101,9 +109,33 @@ function PaymentBadge({ status }) {
   );
 }
 
+function getStageBadgeText(status) {
+  const norm = String(status || "SUBMITTED").toUpperCase();
+  const map = {
+    CONFIRMED: "Stage 1/8",
+    PAID: "Stage 1/8",
+    APPROVED: "Stage 1/8",
+    SUBMITTED: "Stage 1/8",
+    PROCESSING: "Stage 2/8",
+    STOCK_ALLOCATED: "Stage 2/8",
+    VEHICLE_ASSIGNED: "Stage 3/8",
+    READY_FOR_DISPATCH: "Stage 4/8",
+    PARTIALLY_DISPATCHED: "Stage 5/8",
+    DISPATCHED: "Stage 5/8",
+    IN_TRANSIT: "Stage 6/8",
+    REACHED_DESTINATION: "Stage 7/8",
+    DELIVERED: "Stage 8/8 ✓",
+    COMPLETED: "Stage 8/8 ✓",
+  };
+  return map[norm] || "Stage 1/8";
+}
+
 export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
   const { countryName } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isWarehousePanel = location.pathname.startsWith("/warehouse-management-panel");
+  const isAccountsPanel = location.pathname.startsWith("/account-panel");
   const dispatch = useDispatch();
   const token = useSelector((state) => state.auth.token);
 
@@ -123,6 +155,27 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
   // Payment Confirmation Modal State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentRefInput, setPaymentRefInput] = useState("");
+
+  // ── Module 1: 8-Stage Pipeline & Vehicle Assignment States ─────────────────
+  const [stageLoading, setStageLoading] = useState(false);
+  const [showVehicleModal, setShowVehicleModal] = useState(false);
+  const [availableVehicles, setAvailableVehicles] = useState([]);
+  const [recommendedVehicle, setRecommendedVehicle] = useState(null);
+  const [recommendationNotes, setRecommendationNotes] = useState("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [isOverride, setIsOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+
+  // Dispatch modal state
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [dispatchCourier, setDispatchCourier] = useState("");
+  const [dispatchTrackingNum, setDispatchTrackingNum] = useState("");
+  const [dispatchNotes, setDispatchNotes] = useState("");
+
+  // In-transit milestone modal
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [milestoneDesc, setMilestoneDesc] = useState("");
 
   // ── Warehouse Loose Configurations State ───────────────────────────────────
   const [activeCountries, setActiveCountries] = useState([]);
@@ -167,7 +220,7 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
   const fetchCountriesAndSettings = useCallback(async () => {
     setWarehouseLoading(true);
     try {
-      const isIndiaUrl = (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
+      const isIndiaUrl = isWarehousePanel || isAccountsPanel || (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
       const looseEndpoint = isIndiaUrl ? "india/loose-order-settings" : "loose-order-settings";
 
       const [countriesRes, warehousesRes, looseRes] = await Promise.all([
@@ -188,7 +241,9 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
       if (activeCountriesList.length > 0) {
         const activeCountriesNames = activeCountriesList.map(c => c.name.toLowerCase());
 
-        if (!countryName) {
+        if (isWarehousePanel || isAccountsPanel) {
+          // Do not redirect out to admin portal when inside warehouse or accounts panel
+        } else if (!countryName) {
           const storedCountry = localStorage.getItem('selected_country_solar-shop');
           const defaultCountry = (storedCountry && activeCountriesNames.includes(storedCountry.toLowerCase()))
             ? storedCountry.toLowerCase()
@@ -206,9 +261,10 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
         }
       }
 
+      const effectiveCountry = countryName || ((isWarehousePanel || isAccountsPanel) ? (localStorage.getItem('selected_country_solar-shop') || activeCountriesList[0]?.name?.toLowerCase() || "india") : "");
       const currentCountryObj = activeCountriesList.find(
-        c => c.name.toLowerCase() === countryName?.toLowerCase()
-      );
+        c => c.name.toLowerCase() === effectiveCountry?.toLowerCase()
+      ) || activeCountriesList[0];
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
       const countryWarehouses = currentCountryObj
@@ -234,7 +290,7 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
     } finally {
       setWarehouseLoading(false);
     }
-  }, [countryName, moduleUniqueId, navigate, dispatch]);
+  }, [countryName, moduleUniqueId, navigate, dispatch, isWarehousePanel, isAccountsPanel]);
 
   useEffect(() => {
     if (token) {
@@ -244,9 +300,10 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
   }, [token, fetchLooseOrders, fetchCountriesAndSettings]);
 
   // Current Country
+  const effectiveCountry = countryName || ((isWarehousePanel || isAccountsPanel) ? (localStorage.getItem('selected_country_solar-shop') || activeCountries[0]?.name?.toLowerCase() || "india") : "");
   const currentCountry = activeCountries.find(
-    c => c.name.toLowerCase() === countryName?.toLowerCase()
-  );
+    c => c.name.toLowerCase() === effectiveCountry?.toLowerCase()
+  ) || activeCountries[0];
 
   // Fetch clusters for selected state filter
   useEffect(() => {
@@ -320,7 +377,13 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
 
   const handleConfigureLooseOrders = (w) => {
     const targetId = w.id || w._id;
-    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/loose-orders/${targetId}`);
+    if (isWarehousePanel) {
+      navigate(`/warehouse-management-panel/loose-orders/${targetId}`);
+    } else if (isAccountsPanel) {
+      navigate(`/account-panel/solar-shop/loose-orders/${targetId}`);
+    } else {
+      navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/loose-orders/${targetId}`);
+    }
   };
 
   const configuredWarehouseIds = [...new Set(settings.map(s => s.warehouse_id?.toString()).filter(Boolean))];
@@ -396,6 +459,113 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
       dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to mark delivered." }));
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // ─── Module 1: 8-Stage Progression & Vehicle Assignment Handlers ─────────
+
+  const handleOpenVehicleAssignment = async (order) => {
+    setSelectedVehicleId("");
+    setIsOverride(false);
+    setOverrideReason("");
+    setRecommendedVehicle(null);
+    setRecommendationNotes("");
+    setShowVehicleModal(true);
+    setLoadingVehicles(true);
+
+    try {
+      // 1. Fetch available vehicles
+      const vRes = await axios.get(`${API_URL}/warehouse/vehicles`, { headers: authHeaderObj() });
+      const vehicles = vRes.data?.data || [];
+      setAvailableVehicles(vehicles);
+
+      // 2. Fetch recommendation
+      const rRes = await axios.get(
+        `${API_URL}/warehouse/vehicles/recommend-for-order?order_id=${order._id}`,
+        { headers: authHeaderObj() }
+      );
+      if (rRes.data?.status === "success" && rRes.data?.data?.recommended_vehicle) {
+        const rec = rRes.data.data.recommended_vehicle;
+        setRecommendedVehicle(rec);
+        setSelectedVehicleId(rec._id);
+        setRecommendationNotes(rRes.data.data.notes || "Optimal capacity & weight fit for this load.");
+      } else if (vehicles.length > 0) {
+        setSelectedVehicleId(vehicles[0]._id);
+      }
+    } catch (err) {
+      console.error("Failed to load vehicle recommendations:", err);
+    } finally {
+      setLoadingVehicles(false);
+    }
+  };
+
+  const handleAssignVehicleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedVehicleId) {
+      dispatch(setAlert({ type: "error", message: "Please select a vehicle." }));
+      return;
+    }
+    const isOverridden = recommendedVehicle && String(selectedVehicleId) !== String(recommendedVehicle._id);
+    if (isOverridden && (!overrideReason || overrideReason.trim().length < 5)) {
+      dispatch(setAlert({ type: "error", message: "Admin Override requires a reason of at least 5 characters." }));
+      return;
+    }
+
+    setStageLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/reseller-mgmt/orders/${selectedOrder._id}/assign-vehicle`,
+        {
+          vehicle_id: selectedVehicleId,
+          is_override: isOverridden,
+          override_reason: isOverridden ? overrideReason.trim() : undefined,
+        },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: "Stage 3: Vehicle assigned successfully!" }));
+        setShowVehicleModal(false);
+        if (res.data.data) setSelectedOrder(prev => ({ ...prev, ...res.data.data, status: "VEHICLE_ASSIGNED" }));
+        fetchLooseOrders();
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to assign vehicle." }));
+    } finally {
+      setStageLoading(false);
+    }
+  };
+
+  const handleAdvanceStage = async (nextStage, extraPayload = {}) => {
+    setStageLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/reseller-mgmt/orders/${selectedOrder._id}/stage/${nextStage}`,
+        extraPayload,
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({
+          type: "success",
+          message: `Order transitioned to ${nextStage.replace(/_/g, ' ').toUpperCase()} successfully!`
+        }));
+        if (res.data.data) {
+          setSelectedOrder(prev => ({
+            ...prev,
+            ...res.data.data,
+            status: nextStage.toUpperCase()
+          }));
+        }
+        fetchLooseOrders();
+        setShowDispatchModal(false);
+        setShowMilestoneModal(false);
+      }
+    } catch (err) {
+      dispatch(setAlert({
+        type: "error",
+        message: err.response?.data?.message || `Failed to transition to ${nextStage}.`
+      }));
+    } finally {
+      setStageLoading(false);
     }
   };
 
@@ -557,16 +727,20 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
               </div>
 
               {/* Status Filter */}
-              <div className="w-full sm:w-44">
+              <div className="w-full sm:w-48">
                 <Dropdown
                   placeholder="Status Filter"
                   options={[
                     { value: "ALL", text: "All Statuses" },
                     { value: "SUBMITTED", text: "Submitted" },
-                    { value: "CONFIRMED", text: "Confirmed" },
-                    { value: "PROCESSING", text: "Processing" },
-                    { value: "DISPATCHED", text: "Dispatched" },
-                    { value: "DELIVERED", text: "Delivered" },
+                    { value: "CONFIRMED", text: "1. Confirmed" },
+                    { value: "PROCESSING", text: "2. Processing" },
+                    { value: "VEHICLE_ASSIGNED", text: "3. Vehicle Assigned" },
+                    { value: "READY_FOR_DISPATCH", text: "4. Ready for Dispatch" },
+                    { value: "DISPATCHED", text: "5. Dispatched" },
+                    { value: "IN_TRANSIT", text: "6. In Transit" },
+                    { value: "REACHED_DESTINATION", text: "7. Reached Destination" },
+                    { value: "DELIVERED", text: "8. Delivered" },
                     { value: "COMPLETED", text: "Completed" },
                     { value: "CANCELLED", text: "Cancelled" },
                   ]}
@@ -683,15 +857,28 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
 
                     {/* Actions */}
                     <td className="p-4 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedOrder(row)}
-                        className="text-xs font-bold gap-1.5 shadow-xs"
-                      >
-                        <FaEye size={12} />
-                        View Details
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setSelectedOrder(row)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-primary hover:opacity-95 text-white shadow-xs hover:shadow-md transition-all cursor-pointer whitespace-nowrap"
+                          title="Open 8-Step Product Journey Lifecycle"
+                        >
+                          <FaTruck size={12} />
+                          <span>8-Step Journey</span>
+                          <span className="ml-1 px-1.5 py-0.2 rounded-md bg-white/20 text-[10px] font-extrabold">
+                            {getStageBadgeText(row.status)}
+                          </span>
+                        </button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedOrder(row)}
+                          className="text-xs font-bold gap-1.5 shadow-xs"
+                        >
+                          <FaEye size={12} />
+                          View Details
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -746,6 +933,207 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
 
                 {/* Modal Body */}
                 <div className="p-6 space-y-6">
+                  {/* ─── 8-STAGE LIVE TRACKER STEPPER ─── */}
+                  {(() => {
+                    const STAGES_LIST = [
+                      { key: "CONFIRMED", label: "1. Confirmed", sub: "Payment verified" },
+                      { key: "PROCESSING", label: "2. Processing", sub: "Warehouse staging" },
+                      { key: "VEHICLE_ASSIGNED", label: "3. Vehicle Assigned", sub: "Assigned to fleet" },
+                      { key: "READY_FOR_DISPATCH", label: "4. Ready for Dispatch", sub: "Ready at gate" },
+                      { key: "DISPATCHED", label: "5. Dispatched", sub: "Leaves warehouse" },
+                      { key: "IN_TRANSIT", label: "6. In Transit", sub: "En route" },
+                      { key: "REACHED_DESTINATION", label: "7. Reached Dest.", sub: "Arrived at hub/site" },
+                      { key: "DELIVERED", label: "8. Delivered", sub: "Delivery confirmed" },
+                    ];
+
+                    const currStatus = String(selectedOrder.order_status || selectedOrder.status || "CONFIRMED").toUpperCase();
+                    let activeIdx = STAGES_LIST.findIndex(s => s.key === currStatus);
+                    if (activeIdx === -1) {
+                      if (currStatus === "COMPLETED") activeIdx = 7;
+                      else if (currStatus === "PAID" || currStatus === "SUBMITTED") activeIdx = 0;
+                      else activeIdx = 0;
+                    }
+
+                    return (
+                      <div className="card p-5 border border-border bg-surface shadow-xs space-y-4 rounded-2xl">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border/60">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 bg-primary/10 text-primary rounded-full">
+                              Module 1: 8-Stage Order Lifecycle Pipeline
+                            </span>
+                            <h3 className="text-sm font-extrabold text-text-primary mt-1 flex items-center gap-2">
+                              <span>Live Stage:</span>
+                              <span className="text-primary font-black">
+                                {STAGES_LIST[activeIdx]?.label || currStatus}
+                              </span>
+                            </h3>
+                          </div>
+                          {selectedOrder.fulfillment_mode && (
+                            <div className="text-xs bg-surface-hover px-3 py-1.5 rounded-xl border border-border flex items-center gap-1.5">
+                              <span className="text-text-muted">Fulfillment:</span>
+                              <strong className="text-text-primary capitalize">{selectedOrder.fulfillment_mode.replace(/_/g, " ")}</strong>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Stepper Progress Bar */}
+                        <div className="overflow-x-auto pb-2">
+                          <div className="flex items-center min-w-[700px] justify-between relative">
+                            <div className="absolute top-4 left-6 right-6 h-1 bg-border -z-0">
+                              <div
+                                className="h-full bg-emerald-500 transition-all duration-500"
+                                style={{ width: `${(activeIdx / (STAGES_LIST.length - 1)) * 100}%` }}
+                              />
+                            </div>
+
+                            {STAGES_LIST.map((stage, idx) => {
+                              const isCompleted = idx < activeIdx;
+                              const isCurrent = idx === activeIdx;
+                              return (
+                                <div key={stage.key} className="flex flex-col items-center text-center relative z-10 w-24">
+                                  <div
+                                    className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-md transition-all ${
+                                      isCompleted
+                                        ? "bg-emerald-600 text-white"
+                                        : isCurrent
+                                        ? "bg-primary text-white ring-4 ring-primary/20 scale-110 animate-pulse"
+                                        : "bg-surface border-2 border-border text-text-muted"
+                                    }`}
+                                  >
+                                    {isCompleted ? <FaCheck size={12} /> : idx + 1}
+                                  </div>
+                                  <p className={`text-[11px] font-bold mt-2 leading-tight ${isCurrent ? "text-primary font-black" : isCompleted ? "text-emerald-700 dark:text-emerald-400" : "text-text-muted"}`}>
+                                    {stage.label.replace(/^\d+\.\s*/, "")}
+                                  </p>
+                                  <p className="text-[9px] text-text-muted mt-0.5">{stage.sub}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* ── Order Load Metrics & Vehicle Status Info ── */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                          {/* Load Metrics Card */}
+                          <div className="p-3.5 bg-surface-hover/50 rounded-xl border border-border text-xs space-y-2">
+                            <div className="font-bold text-text-secondary flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                              <FaBoxes className="text-primary" /> Order Load Metrics
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                              <div className="p-2 bg-surface rounded-lg border border-border/70">
+                                <span className="text-[10px] text-text-muted block">Total Kits</span>
+                                <strong className="text-xs text-text-primary">
+                                  {selectedOrder.order_load_metrics?.total_kits ?? (selectedOrder.items || []).reduce((acc, it) => acc + (it.quantity || 0), 0)} Units
+                                </strong>
+                              </div>
+                              <div className="p-2 bg-surface rounded-lg border border-border/70">
+                                <span className="text-[10px] text-text-muted block">Total kW</span>
+                                <strong className="text-xs text-text-primary">
+                                  {selectedOrder.order_load_metrics?.total_kw ?? (selectedOrder.items || []).reduce((acc, it) => acc + ((it.kw || it.capacity_kw || 5) * (it.quantity || 1)), 0)} kW
+                                </strong>
+                              </div>
+                              <div className="p-2 bg-surface rounded-lg border border-border/70">
+                                <span className="text-[10px] text-text-muted block">Est. Weight</span>
+                                <strong className="text-xs text-text-primary">
+                                  {selectedOrder.order_load_metrics?.total_weight_kg ?? (selectedOrder.items || []).reduce((acc, it) => acc + (it.quantity || 1) * 250, 0)} kg
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Assigned Vehicle & Logistics Card */}
+                          <div className="p-3.5 bg-surface-hover/50 rounded-xl border border-border text-xs space-y-2">
+                            <div className="font-bold text-text-secondary flex items-center justify-between text-[11px] uppercase tracking-wider">
+                              <span className="flex items-center gap-1.5">
+                                <FaTruck className="text-purple-600" /> Assigned Vehicle & Fleet
+                              </span>
+                              {selectedOrder.assigned_vehicle?.is_override ? (
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 font-bold border border-amber-500/30">
+                                  Admin Overridden
+                                </span>
+                              ) : selectedOrder.assigned_vehicle?.is_recommended ? (
+                                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 font-bold border border-emerald-500/30">
+                                  AI Recommended
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {selectedOrder.assigned_vehicle?.vehicle_name ? (
+                              <div className="space-y-1.5 pt-1">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-extrabold text-text-primary text-xs">
+                                    {selectedOrder.assigned_vehicle.vehicle_name} ({selectedOrder.assigned_vehicle.vehicle_registration})
+                                  </span>
+                                  <span className="text-[11px] text-text-secondary font-mono">
+                                    {selectedOrder.assigned_vehicle.vehicle_type || "Commercial Fleet"}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-text-secondary flex items-center gap-3">
+                                  <span>Driver: <strong>{selectedOrder.assigned_vehicle.driver_name || "Assigned Driver"}</strong></span>
+                                  <span>Contact: <strong>{selectedOrder.assigned_vehicle.driver_contact || "N/A"}</strong></span>
+                                </div>
+                                {selectedOrder.assigned_vehicle?.override_reason && (
+                                  <div className="text-[10px] p-2 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 text-amber-800 dark:text-amber-300">
+                                    <strong>Override Reason:</strong> {selectedOrder.assigned_vehicle.override_reason}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="pt-2 text-text-muted italic flex items-center justify-between">
+                                <span>No vehicle assigned yet. Proceed to Stage 3 to allocate fleet.</span>
+                                {activeIdx === 1 && (
+                                  <Button
+                                    size="xs"
+                                    variant="primary"
+                                    onClick={() => handleOpenVehicleAssignment(selectedOrder)}
+                                    className="text-[10px] font-bold"
+                                  >
+                                    Assign Fleet
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Dispatch & Milestone tracking details if present */}
+                        {(selectedOrder.dispatch_tracking?.tracking_number || (selectedOrder.milestones && selectedOrder.milestones.length > 0)) && (
+                          <div className="p-3 bg-purple-500/5 rounded-xl border border-purple-500/20 text-xs space-y-2">
+                            {selectedOrder.dispatch_tracking?.tracking_number && (
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-text-muted">Courier/Tracking: </span>
+                                  <strong className="text-text-primary">{selectedOrder.dispatch_tracking.courier_name || "Company Transport"}</strong>
+                                  <span className="font-mono ml-2 px-2 py-0.5 bg-surface rounded border border-border text-primary font-bold">
+                                    {selectedOrder.dispatch_tracking.tracking_number}
+                                  </span>
+                                </div>
+                                {selectedOrder.dispatch_tracking.dispatched_at && (
+                                  <span className="text-[11px] text-text-muted">
+                                    Dispatched on: {new Date(selectedOrder.dispatch_tracking.dispatched_at).toLocaleString("en-IN")}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {selectedOrder.milestones && selectedOrder.milestones.length > 0 && (
+                              <div className="pt-2 border-t border-purple-500/10 space-y-1">
+                                <span className="text-[10px] font-bold text-text-muted uppercase">In-Transit Milestones:</span>
+                                <div className="space-y-1">
+                                  {selectedOrder.milestones.map((m, mIdx) => (
+                                    <div key={mIdx} className="text-[11px] flex items-center justify-between text-text-secondary bg-surface/50 px-2 py-1 rounded">
+                                      <span className="flex items-center gap-1.5"><FaRoute className="text-primary" size={10} /> {m.description || m.status}</span>
+                                      <span className="text-[10px] text-text-muted">{new Date(m.recorded_at).toLocaleTimeString("en-IN")}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Two Column Summary Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Franchisee Partner Info */}
@@ -871,8 +1259,8 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
                     Order Status: <span className="font-bold text-text-primary">{selectedOrder.status}</span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    {/* Confirm Payment Action */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Confirm Payment Action (if not yet verified/paid) */}
                     {selectedOrder.payment_status !== "PAID" && (
                       <Button
                         variant="primary"
@@ -889,33 +1277,144 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
                       </Button>
                     )}
 
-                    {/* Dispatch Action */}
-                    {selectedOrder.status !== "DISPATCHED" && selectedOrder.status !== "DELIVERED" && selectedOrder.status !== "COMPLETED" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={actionLoading}
-                        onClick={() => handleDispatchOrder(selectedOrder._id)}
-                        className="text-xs font-bold gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50"
-                      >
-                        <FaTruck size={12} />
-                        Mark Dispatched
-                      </Button>
-                    )}
+                    {/* ─── 8-Stage Pipeline Progression Action Buttons ─── */}
+                    {(() => {
+                      const currStatus = String(selectedOrder.order_status || selectedOrder.status || "CONFIRMED").toUpperCase();
 
-                    {/* Deliver Action */}
-                    {selectedOrder.status === "DISPATCHED" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={actionLoading}
-                        onClick={() => handleDeliverOrder(selectedOrder._id)}
-                        className="text-xs font-bold gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                      >
-                        <FaCheckCircle size={12} />
-                        Mark Delivered
-                      </Button>
-                    )}
+                      return (
+                        <>
+                          {/* Stage 1 -> 2: Mark Processing */}
+                          {(currStatus === "CONFIRMED" || currStatus === "PAID" || currStatus === "SUBMITTED") && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={stageLoading}
+                              onClick={() => handleAdvanceStage("processing")}
+                              className="text-xs font-bold gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white"
+                            >
+                              <FaCogs size={12} />
+                              {stageLoading ? "Updating..." : "Stage 2: Mark Processing"}
+                            </Button>
+                          )}
+
+                          {/* Stage 2 -> 3: Assign Vehicle */}
+                          {currStatus === "PROCESSING" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={stageLoading}
+                              onClick={() => handleOpenVehicleAssignment(selectedOrder)}
+                              className="text-xs font-bold gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                            >
+                              <FaTruck size={12} />
+                              Stage 3: Assign Vehicle
+                            </Button>
+                          )}
+
+                          {/* Stage 3 -> 4: Ready for Dispatch (STATUS ONLY - NO E-WAY BILL / INVOICE GENERATION) */}
+                          {currStatus === "VEHICLE_ASSIGNED" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={stageLoading}
+                              onClick={() => handleAdvanceStage("ready_for_dispatch")}
+                              className="text-xs font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                            >
+                              <FaBoxOpen size={12} />
+                              {stageLoading ? "Updating..." : "Stage 4: Ready for Dispatch"}
+                            </Button>
+                          )}
+
+                          {/* Stage 4 -> 5: Dispatch Order */}
+                          {currStatus === "READY_FOR_DISPATCH" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={stageLoading}
+                              onClick={() => {
+                                setDispatchCourier(selectedOrder.assigned_vehicle?.vehicle_name || "Company Transport Fleet");
+                                setDispatchTrackingNum("TRK-" + Math.floor(100000 + Math.random() * 900000));
+                                setShowDispatchModal(true);
+                              }}
+                              className="text-xs font-bold gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              <FaTruck size={12} />
+                              Stage 5: Mark Dispatched
+                            </Button>
+                          )}
+
+                          {/* Stage 5 -> 6: Mark In Transit */}
+                          {currStatus === "DISPATCHED" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={stageLoading}
+                              onClick={() => {
+                                setMilestoneDesc("Departed warehouse facility en route to destination");
+                                setShowMilestoneModal(true);
+                              }}
+                              className="text-xs font-bold gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+                            >
+                              <FaRoute size={12} />
+                              Stage 6: Mark In Transit
+                            </Button>
+                          )}
+
+                          {/* Stage 6 -> 7: Reached Destination */}
+                          {currStatus === "IN_TRANSIT" && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={stageLoading}
+                                onClick={() => {
+                                  setMilestoneDesc("");
+                                  setShowMilestoneModal(true);
+                                }}
+                                className="text-xs font-bold gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
+                              >
+                                + Add Milestone
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={stageLoading}
+                                onClick={() => handleAdvanceStage("reached_destination")}
+                                className="text-xs font-bold gap-1.5 bg-teal-600 hover:bg-teal-700 text-white"
+                              >
+                                <FaMapPin size={12} />
+                                Stage 7: Mark Reached Destination
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Stage 7 -> 8: Mark Delivered (DIRECT CONFIRMATION - NO OTP VERIFICATION) */}
+                          {currStatus === "REACHED_DESTINATION" && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={stageLoading}
+                              onClick={() => {
+                                if (window.confirm("Confirm this order has been successfully delivered? (No OTP verification required)")) {
+                                  handleAdvanceStage("delivered");
+                                }
+                              }}
+                              className="text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                              <FaCheckDouble size={12} />
+                              {stageLoading ? "Updating..." : "Stage 8: Mark Delivered (Direct Confirmation)"}
+                            </Button>
+                          )}
+
+                          {/* Stage 8 Completed */}
+                          {(currStatus === "DELIVERED" || currStatus === "COMPLETED") && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-300">
+                              <FaCheckCircle size={14} /> Delivered & Completed
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     <Button
                       variant="secondary"
@@ -927,6 +1426,247 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
                     </Button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Module 1: Vehicle Assignment Sub-Modal ─── */}
+          {showVehicleModal && (
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+              <div className="bg-surface rounded-2xl border border-border shadow-2xl p-6 w-full max-w-xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                      <FaTruck size={16} />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-text-primary text-base">Stage 3: Assign Delivery Vehicle</h3>
+                      <p className="text-[11px] text-text-muted">Smart Auto-Recommendation & Admin Override Engine</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowVehicleModal(false)} className="text-text-muted hover:text-text-primary">
+                    <FaTimes size={16} />
+                  </button>
+                </div>
+
+                {loadingVehicles ? (
+                  <div className="p-8 text-center text-text-muted text-xs">
+                    <FaSyncAlt className="animate-spin mx-auto mb-2" size={20} />
+                    Computing optimal vehicle recommendation...
+                  </div>
+                ) : (
+                  <form onSubmit={handleAssignVehicleSubmit} className="space-y-4 text-xs">
+                    {/* Recommended Vehicle Highlight Box */}
+                    {recommendedVehicle ? (
+                      <div className="p-4 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-600 text-white flex items-center gap-1">
+                            <FaCheck size={10} /> AI Recommended Vehicle
+                          </span>
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold">
+                            Closest Capacity & Weight Fit
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center pt-1">
+                          <div>
+                            <p className="font-black text-sm text-text-primary">{recommendedVehicle.name}</p>
+                            <p className="text-xs font-mono text-text-secondary">{recommendedVehicle.registration_number}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 block">
+                              Cap: {recommendedVehicle.capacity_kg} kg
+                            </span>
+                            <span className="text-[10px] text-text-muted">
+                              Max: {recommendedVehicle.max_kits || "∞"} kits / {recommendedVehicle.max_kw || "∞"} kW
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-emerald-800 dark:text-emerald-300 italic pt-1 border-t border-emerald-500/20">
+                          {recommendationNotes}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700 text-xs">
+                        No specific optimal match calculated. Please select an active vehicle from fleet below.
+                      </div>
+                    )}
+
+                    {/* Vehicle Select Dropdown */}
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-text-secondary block">Select Delivery Vehicle from Fleet</label>
+                      <select
+                        value={selectedVehicleId}
+                        onChange={(e) => setSelectedVehicleId(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border border-border bg-surface text-text-primary font-medium text-xs focus:ring-2 focus:ring-primary"
+                        required
+                      >
+                        <option value="">-- Choose a Vehicle --</option>
+                        {availableVehicles.map((v) => {
+                          const isRec = recommendedVehicle && String(v._id) === String(recommendedVehicle._id);
+                          return (
+                            <option key={v._id} value={v._id}>
+                              {isRec ? "⭐ [RECOMMENDED] " : ""}{v.name} ({v.registration_number}) - Cap: {v.capacity_kg} kg | {v.vehicle_type || "Fleet"}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Admin Override Warning & Mandatory Reason */}
+                    {recommendedVehicle && selectedVehicleId && String(selectedVehicleId) !== String(recommendedVehicle._id) && (
+                      <div className="p-3.5 bg-amber-500/10 border-2 border-amber-500/30 rounded-xl space-y-2">
+                        <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-400 text-xs">
+                          <FaExclamationTriangle />
+                          <span>Admin Override Triggered</span>
+                        </div>
+                        <p className="text-[11px] text-text-secondary">
+                          You are overriding the system's recommended vehicle. Please provide a mandatory reason for this manual allocation.
+                        </p>
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. Recommended vehicle is currently scheduled for preventative maintenance, or destination has height restrictions."
+                          value={overrideReason}
+                          onChange={(e) => setOverrideReason(e.target.value)}
+                          className="w-full p-2 text-xs border border-amber-300 rounded-lg bg-surface text-text-primary focus:outline-none"
+                          required
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                      <Button variant="secondary" size="sm" type="button" onClick={() => setShowVehicleModal(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="primary" size="sm" type="submit" disabled={stageLoading}>
+                        {stageLoading ? "Assigning..." : "Confirm & Assign Vehicle"}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Module 1: Dispatch Details Sub-Modal ─── */}
+          {showDispatchModal && (
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+              <div className="bg-surface rounded-2xl border border-border shadow-2xl p-6 w-full max-w-md space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <h3 className="font-bold text-text-primary text-base flex items-center gap-2">
+                    <FaTruck className="text-purple-600" /> Stage 5: Dispatch Order
+                  </h3>
+                  <button onClick={() => setShowDispatchModal(false)} className="text-text-muted hover:text-text-primary">
+                    <FaTimes size={16} />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAdvanceStage("dispatched", {
+                      dispatch_data: {
+                        courier_name: dispatchCourier,
+                        tracking_number: dispatchTrackingNum,
+                        dispatch_notes: dispatchNotes,
+                      },
+                    });
+                  }}
+                  className="space-y-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <label className="font-bold text-text-secondary block">Courier / Vehicle Transporter Name</label>
+                    <input
+                      type="text"
+                      value={dispatchCourier}
+                      onChange={(e) => setDispatchCourier(e.target.value)}
+                      placeholder="e.g. SolarKits Logistics Fleet or VRL Logistics"
+                      className="w-full p-2.5 rounded-xl border border-border bg-surface text-text-primary text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-text-secondary block">LR / Dispatch Tracking Number</label>
+                    <input
+                      type="text"
+                      value={dispatchTrackingNum}
+                      onChange={(e) => setDispatchTrackingNum(e.target.value)}
+                      placeholder="e.g. TRK-892102"
+                      className="w-full p-2.5 rounded-xl border border-border bg-surface text-text-primary font-mono text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-text-secondary block">Dispatch Notes (Optional)</label>
+                    <textarea
+                      rows={2}
+                      value={dispatchNotes}
+                      onChange={(e) => setDispatchNotes(e.target.value)}
+                      placeholder="e.g. Inspected and verified by warehouse gate manager"
+                      className="w-full p-2 rounded-xl border border-border bg-surface text-text-primary text-xs"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setShowDispatchModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button variant="primary" size="sm" type="submit" disabled={stageLoading} className="bg-purple-600 hover:bg-purple-700 text-white">
+                      {stageLoading ? "Dispatching..." : "Confirm Dispatch"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Module 1: In-Transit Milestone Sub-Modal ─── */}
+          {showMilestoneModal && (
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+              <div className="bg-surface rounded-2xl border border-border shadow-2xl p-6 w-full max-w-md space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <h3 className="font-bold text-text-primary text-base flex items-center gap-2">
+                    <FaRoute className="text-orange-600" /> Stage 6: In-Transit Milestone
+                  </h3>
+                  <button onClick={() => setShowMilestoneModal(false)} className="text-text-muted hover:text-text-primary">
+                    <FaTimes size={16} />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAdvanceStage("in_transit", {
+                      milestone: {
+                        status: "in_transit",
+                        description: milestoneDesc || "In Transit update recorded",
+                      },
+                    });
+                  }}
+                  className="space-y-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <label className="font-bold text-text-secondary block">Milestone Description / Checkpoint</label>
+                    <input
+                      type="text"
+                      value={milestoneDesc}
+                      onChange={(e) => setMilestoneDesc(e.target.value)}
+                      placeholder="e.g. Crossed State Toll Plaza / Checkpoint Alpha"
+                      className="w-full p-2.5 rounded-xl border border-border bg-surface text-text-primary text-xs"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                    <Button variant="secondary" size="sm" type="button" onClick={() => setShowMilestoneModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button variant="primary" size="sm" type="submit" disabled={stageLoading} className="bg-orange-600 hover:bg-orange-700 text-white">
+                      {stageLoading ? "Saving..." : "Log In-Transit Milestone"}
+                    </Button>
+                  </div>
+                </form>
               </div>
             </div>
           )}

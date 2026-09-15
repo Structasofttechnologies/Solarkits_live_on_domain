@@ -525,6 +525,12 @@ const get_reseller_me = async (req, res) => {
       is_pin_set:        Boolean(reseller.is_pin_set && reseller.security_pin_hash),
       pin_set_at:        reseller.pin_set_at || null,
       bank_details:      reseller.bank_details || null,
+      warehouse_capacity: reseller.warehouse_capacity || {
+        max_kits: 50,
+        max_weight_kg: 10000,
+        current_stock_kits: 0,
+        allocated_incoming_kits: 0,
+      },
     };
 
     return res.json({

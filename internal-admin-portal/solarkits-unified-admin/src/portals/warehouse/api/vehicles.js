@@ -78,3 +78,11 @@ export const compareVehicles = async () => {
   );
   return res.data;
 };
+
+export const recommendVehicleForOrder = async (orderId) => {
+  const res = await axios.get(
+    `${API_URL}/warehouse/vehicles/recommend-for-order?order_id=${orderId}`,
+    { headers: authHeaderObj() }
+  );
+  return res.data;
+};

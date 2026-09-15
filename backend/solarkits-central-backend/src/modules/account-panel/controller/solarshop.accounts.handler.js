@@ -831,6 +831,8 @@ const get_direct_epc_transactions = async (req, res) => {
         offline_payment: o.offline_payment || {},
         invoice: o.invoice || {},
         dispatch_tracking: o.dispatch_tracking || {},
+        assigned_vehicle: o.assigned_vehicle || null,
+        milestones: o.milestones || [],
         items_count: enrichedItems.length,
         items: enrichedItems,
         delivery_address: resolvedAddress,
@@ -1333,14 +1335,22 @@ const update_commission_status = async (req, res) => {
       // Create or update FpoCommissionLedger
       let fpoLedger = await FpoCommissionLedger.findOne({ fpo_order_id: order._id });
       const grossEligiblePaise = order.subtotal_paise || order.grand_total_paise || 0;
-      let commPaise = order.total_commission_paise || 0;
-      if (!commPaise) {
+
+      let commPaise = 0;
+      let tdsPaise = 0;
+      let netPaise = 0;
+
+      if (fpoLedger) {
+        commPaise = fpoLedger.commission_paise || 0;
+        tdsPaise = fpoLedger.tds_paise || 0;
+        netPaise = fpoLedger.net_commission_paise || (commPaise - tdsPaise);
+      } else {
         const snapBps = order.items?.[0]?.commission_snapshot || 200;
         commPaise = Math.round(grossEligiblePaise * (snapBps / 10000));
         if (!commPaise) commPaise = Math.round(grossEligiblePaise * 0.02);
+        tdsPaise = Math.round(commPaise * 0.05);
+        netPaise = commPaise - tdsPaise;
       }
-      const tdsPaise = Math.round(commPaise * 0.05);
-      const netPaise = commPaise - tdsPaise;
       const settlementStatus = commission_status === 'Paid' ? 'PAID'
         : commission_status === 'On Hold' ? 'ON_HOLD'
         : commission_status === 'Failed' ? 'FAILED'
@@ -1548,6 +1558,8 @@ const get_onboarded_epc_purchases = async (req, res) => {
           offline_payment: o.offline_payment || {},
           invoice: o.invoice || {},
           dispatch_tracking: o.dispatch_tracking || {},
+          assigned_vehicle: o.assigned_vehicle || null,
+          milestones: o.milestones || [],
           type_key: 'commission',
           transaction_type: 'Franchise Onboarded EPC Order'
         });
@@ -1853,7 +1865,11 @@ const get_transaction_details = async (req, res) => {
           delivery_address: resolvedDeliveryAddress,
           invoice: order.invoice || {},
           dispatch_tracking: order.dispatch_tracking || {},
+          assigned_vehicle: order.assigned_vehicle || null,
+          milestones: order.milestones || [],
         },
+        assigned_vehicle: order.assigned_vehicle || null,
+        milestones: order.milestones || [],
         created_at: order.created_at
       }
     });
@@ -2041,6 +2057,300 @@ const verify_epc_po_payment = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MODULE 1: 8-STAGE EPC ORDER LIFECYCLE TRANSITION HANDLERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _stageService = () => require('../../admin-panel/services/epc.offline.checkout.service');
+
+/** Stage 2: Mark order as Processing */
+const stage_processing = async (req, res) => {
+  try {
+    const order = await _stageService().updateOrderStage({
+      order_id:      req.params.id,
+      new_status:    'processing',
+      admin_user_id: req.user?.id,
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'Order moved to Processing.', data: { id: order._id, order_status: order.order_status } });
+  } catch (error) {
+    console.error('Error in stage_processing:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Stage 3: Assign vehicle (recommended or admin override) */
+const stage_assign_vehicle = async (req, res) => {
+  try {
+    const { vehicle_id, is_recommended, override_reason, driver } = req.body;
+    if (!vehicle_id) return res.status(400).json({ status: 'error', message: 'vehicle_id is required.' });
+
+    const { DeliveryVehicle } = require('../../warehouse-panel/models/company_warehouse_db');
+    const vehicle = await DeliveryVehicle.findById(vehicle_id).populate('assigned_driver_id').lean();
+    if (!vehicle) return res.status(404).json({ status: 'error', message: 'Vehicle not found.' });
+
+    const resolvedDriver = driver || (vehicle.assigned_driver_id ? {
+      driver_id: vehicle.assigned_driver_id._id,
+      driver_name: vehicle.assigned_driver_id.name,
+      driver_contact: vehicle.assigned_driver_id.contact,
+    } : null);
+
+    const order = await _stageService().assignVehicleToOrder({
+      order_id:        req.params.id,
+      vehicle,
+      driver:          resolvedDriver,
+      is_recommended:  is_recommended !== false,
+      override_reason: override_reason || null,
+      admin_user_id:   req.user?.id,
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'Vehicle assigned successfully.', data: { id: order._id, order_status: order.order_status, assigned_vehicle: order.assigned_vehicle } });
+  } catch (error) {
+    console.error('Error in stage_assign_vehicle:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Get Warehouse Vehicles for Accounts & Stage Assign */
+const get_warehouse_vehicles = async (req, res) => {
+  try {
+    const { DeliveryVehicle } = require('../../warehouse-panel/models/company_warehouse_db');
+    const { warehouse_id } = req.query;
+
+    const query = { is_deleted: false, is_active: true };
+    if (warehouse_id) {
+      const count = await DeliveryVehicle.countDocuments({ warehouse_id, is_deleted: false, is_active: true });
+      if (count > 0) {
+        query.warehouse_id = warehouse_id;
+      }
+    }
+
+    const vehicles = await DeliveryVehicle.find(query)
+      .populate('assigned_driver_id', 'name contact license_number')
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.status(200).json({ status: 'success', data: vehicles });
+  } catch (error) {
+    console.error('Error in get_warehouse_vehicles:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch vehicles.' });
+  }
+};
+
+/** Stage 4: Mark Ready for Dispatch */
+const stage_ready_for_dispatch = async (req, res) => {
+  try {
+    const order = await _stageService().updateOrderStage({
+      order_id:      req.params.id,
+      new_status:    'ready_for_dispatch',
+      admin_user_id: req.user?.id,
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'Order marked Ready for Dispatch.', data: { id: order._id, order_status: order.order_status } });
+  } catch (error) {
+    console.error('Error in stage_ready_for_dispatch:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Stage 5: Mark Dispatched */
+const stage_dispatched = async (req, res) => {
+  try {
+    const order = await _stageService().updateOrderStage({
+      order_id:      req.params.id,
+      new_status:    'dispatched',
+      admin_user_id: req.user?.id,
+      dispatch_data: req.body || {},
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'Order marked as Dispatched.', data: { id: order._id, order_status: order.order_status, dispatch_tracking: order.dispatch_tracking } });
+  } catch (error) {
+    console.error('Error in stage_dispatched:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Stage 6: Log In-Transit milestone */
+const stage_in_transit = async (req, res) => {
+  try {
+    const { milestone_status, description } = req.body;
+    if (!milestone_status) return res.status(400).json({ status: 'error', message: 'milestone_status is required.' });
+
+    const order = await _stageService().updateOrderStage({
+      order_id:      req.params.id,
+      new_status:    'in_transit',
+      admin_user_id: req.user?.id,
+      milestone:     { status: milestone_status, description: description || null },
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'In-transit milestone recorded.', data: { id: order._id, order_status: order.order_status, milestones: order.milestones } });
+  } catch (error) {
+    console.error('Error in stage_in_transit:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Stage 7: Mark Reached Destination */
+const stage_reached_destination = async (req, res) => {
+  try {
+    const order = await _stageService().updateOrderStage({
+      order_id:      req.params.id,
+      new_status:    'reached_destination',
+      admin_user_id: req.user?.id,
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'Order marked as Reached Destination.', data: { id: order._id, order_status: order.order_status } });
+  } catch (error) {
+    console.error('Error in stage_reached_destination:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Stage 8: Mark Delivered */
+const stage_delivered = async (req, res) => {
+  try {
+    const order = await _stageService().updateOrderStage({
+      order_id:      req.params.id,
+      new_status:    'delivered',
+      admin_user_id: req.user?.id,
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: 'Order marked as Delivered.', data: { id: order._id, order_status: order.order_status, delivered_at: order.delivered_at } });
+  } catch (error) {
+    console.error('Error in stage_delivered:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+// ── FPO Orders 8-Stage Handlers ──────────────────────────────────────────────
+const _poService = () => require('../../admin-panel/services/franchisee.po.service');
+
+/** Advance FPO Order Stage */
+const stage_fpo_order = async (req, res) => {
+  try {
+    const { id, stage } = req.params;
+    const order = await _poService().advancePoStage({
+      po_id: id,
+      new_stage: stage,
+      extra_data: req.body || {},
+      actor_id: req.user?.id,
+      req,
+    });
+    return res.status(200).json({
+      status: 'success',
+      message: `FPO Order advanced to ${String(stage).toUpperCase()}.`,
+      data: { id: order._id, status: order.status, dispatch_tracking: order.dispatch_tracking, milestones: order.milestones },
+    });
+  } catch (error) {
+    console.error('Error in stage_fpo_order:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Assign Vehicle to FPO Order */
+const stage_fpo_assign_vehicle = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { vehicle_id, driver, is_recommended, override_reason } = req.body;
+    if (!vehicle_id) return res.status(400).json({ status: 'error', message: 'vehicle_id is required.' });
+
+    const order = await _poService().assignVehicleToPo({
+      po_id: id,
+      vehicle_id,
+      driver: driver || null,
+      is_recommended: is_recommended !== false,
+      override_reason: override_reason || null,
+      actor_id: req.user?.id,
+      req,
+    });
+    return res.status(200).json({
+      status: 'success',
+      message: 'Vehicle assigned to FPO Order successfully.',
+      data: { id: order._id, status: order.status, assigned_vehicle: order.assigned_vehicle },
+    });
+  } catch (error) {
+    console.error('Error in stage_fpo_assign_vehicle:', error);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+/** Unified Generic Stage Advance for any order type */
+const stage_generic_order = async (req, res) => {
+  const { orderType, id, stage } = req.params;
+  const normType = String(orderType || '').toLowerCase();
+  if (normType === 'po' || normType === 'fpo' || normType === 'franchisee_po') {
+    return stage_fpo_order(req, res);
+  }
+  // EPC / Direct / Loose
+  const normStage = String(stage || '').toLowerCase().replace(/-/g, '_');
+  if (normStage === 'processing') return stage_processing(req, res);
+  if (normStage === 'ready_for_dispatch') return stage_ready_for_dispatch(req, res);
+  if (normStage === 'dispatched') return stage_dispatched(req, res);
+  if (normStage === 'in_transit') return stage_in_transit(req, res);
+  if (normStage === 'reached_destination') return stage_reached_destination(req, res);
+  if (normStage === 'delivered') return stage_delivered(req, res);
+
+  try {
+    const order = await _stageService().updateOrderStage({
+      order_id: id,
+      new_status: normStage,
+      admin_user_id: req.user?.id,
+      dispatch_data: req.body?.dispatch_data || req.body,
+      milestone: req.body?.milestone,
+      req,
+    });
+    return res.status(200).json({ status: 'success', message: `Order updated to ${stage}.`, data: { id: order._id, order_status: order.order_status } });
+  } catch (err) {
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+};
+
+const assign_vehicle_generic_order = async (req, res) => {
+  const { orderType } = req.params;
+  const normType = String(orderType || '').toLowerCase();
+  if (normType === 'po' || normType === 'fpo' || normType === 'franchisee_po') {
+    return stage_fpo_assign_vehicle(req, res);
+  }
+  return stage_assign_vehicle(req, res);
+};
+
+/** Lightweight route to fetch live 8-stage details for any order */
+const get_order_stage_details = async (req, res) => {
+  try {
+    const { orderType, id } = req.params;
+    const normType = String(orderType || '').toLowerCase();
+    let order = null;
+
+    if (normType === 'po' || normType === 'fpo' || normType === 'franchisee_po') {
+      order = await FpoOrder.findById(id).lean();
+    } else {
+      order = await EpcOrder.findById(id).lean();
+      if (!order) {
+        order = await FpoOrder.findById(id).lean();
+      }
+    }
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order not found.' });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        id: order._id,
+        status: order.status || order.order_status,
+        order_status: order.order_status || order.status,
+        assigned_vehicle: order.assigned_vehicle || null,
+        dispatch_tracking: order.dispatch_tracking || null,
+        milestones: order.milestones || [],
+      },
+    });
+  } catch (error) {
+    console.error('Error in get_order_stage_details:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
   get_dashboard_stats,
   get_recent_transactions,
@@ -2056,4 +2366,19 @@ module.exports = {
   deliver_epc_order,
   get_epc_po_payments,
   verify_epc_po_payment,
+  // Module 1: 8-Stage Transition Handlers
+  stage_processing,
+  stage_assign_vehicle,
+  get_warehouse_vehicles,
+  stage_ready_for_dispatch,
+  stage_dispatched,
+  stage_in_transit,
+  stage_reached_destination,
+  stage_delivered,
+  // FPO & Generic Order Stage Handlers
+  stage_fpo_order,
+  stage_fpo_assign_vehicle,
+  stage_generic_order,
+  assign_vehicle_generic_order,
+  get_order_stage_details,
 };

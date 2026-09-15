@@ -45,6 +45,12 @@ router.put('/deliver',           check_auth, check_permissions(PERM_EDIT), h.del
 router.put('/cancel',            check_auth, check_permissions(PERM_EDIT), h.cancel_po);
 router.post('/return',           check_auth, check_permissions(PERM_EDIT), h.process_returns);
 
+// ── 8-Stage Lifecycle Transitions ──────────────────────────────────────────
+router.post('/:id/stage/:stage', check_auth, check_permissions(PERM_EDIT), h.advance_stage);
+router.post('/:id/assign-vehicle', check_auth, check_permissions(PERM_EDIT), h.assign_vehicle);
+router.post('/stage/:stage',     check_auth, check_permissions(PERM_EDIT), h.advance_stage);
+router.post('/assign-vehicle',   check_auth, check_permissions(PERM_EDIT), h.assign_vehicle);
+
 // ── EPC Receipt Verification (Admin Panel) ───────────────────────────────────
 // GET: List all FPO orders that have pending EPC payment receipts
 router.get('/pending-receipts',       check_auth, check_permissions(PERM_VIEW), h.list_pending_epc_receipts);

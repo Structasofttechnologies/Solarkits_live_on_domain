@@ -62,7 +62,19 @@ const schema = new mongoose.Schema({
 
   order_status: {
     type: String,
-    enum: ['pending', 'confirmed', 'processing', 'allocated', 'dispatched', 'delivered', 'cancelled'],
+    enum: [
+      'pending',            // Initial state before payment verification
+      'confirmed',          // Stage 1: Payment verified
+      'processing',         // Stage 2: Warehouse picking & packing
+      'vehicle_assigned',   // Stage 3: Vehicle assigned (recommended or overridden)
+      'ready_for_dispatch', // Stage 4: Packing complete, staged for gate exit
+      'dispatched',         // Stage 5: Vehicle left warehouse gate
+      'in_transit',         // Stage 6: En route, milestone updates
+      'reached_destination',// Stage 7: Arrived at delivery location
+      'delivered',          // Stage 8: Delivery confirmed
+      'allocated',          // Legacy
+      'cancelled',          // Order cancelled
+    ],
     default: 'pending',
   },
   commission_status: {
@@ -98,6 +110,22 @@ const schema = new mongoose.Schema({
     enum: ['company_warehouse', 'franchise_warehouse', 'direct_fulfillment'],
     default: 'company_warehouse',
   },
+
+  // ── Module 1.1: Fulfillment Mode (chosen by buyer at checkout) ────────────
+  fulfillment_mode: {
+    type: String,
+    enum: ['franchisee_warehouse', 'epc_warehouse', 'direct_site'],
+    default: 'direct_site',
+  },
+
+  // ── Module 1.1: Order Load Metrics Snapshot ───────────────────────────────
+  // Captured at checkout time for vehicle recommendation & warehouse validation.
+  order_load_metrics: {
+    total_kits:       { type: Number, default: 0 }, // Total kit units ordered
+    total_kw:         { type: Number, default: 0 }, // Cumulative solar capacity in kW
+    total_weight_kg:  { type: Number, default: 0 }, // Estimated payload weight in kg
+  },
+
   warehouse_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'company_warehouses',
@@ -129,6 +157,24 @@ const schema = new mongoose.Schema({
     generated_at:   { type: Date, default: null },
   },
 
+  // ── Module 1.2: Assigned Vehicle & Driver ────────────────────────────────
+  // Populated at Stage 3 (vehicle_assigned) by the admin or recommendation engine.
+  assigned_vehicle: {
+    vehicle_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'delivery_vehicles', default: null },
+    vehicle_name:         { type: String, default: null, trim: true },
+    vehicle_type:         { type: String, default: null, trim: true },
+    registration_number:  { type: String, default: null, trim: true },
+    driver_id:            { type: mongoose.Schema.Types.ObjectId, ref: 'delivery_drivers', default: null },
+    driver_name:          { type: String, default: null, trim: true },
+    driver_contact:       { type: String, default: null, trim: true },
+    is_recommended:       { type: Boolean, default: true },  // true = auto-recommended; false = admin override
+    override_reason:      { type: String, default: null, trim: true }, // Required when is_recommended=false
+    overridden_by:        { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    overridden_at:        { type: Date, default: null },
+    assigned_by:          { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    assigned_at:          { type: Date, default: null },
+  },
+
   // ── Dispatch & Logistics Tracking ────────────────────────────────────────
   dispatch_tracking: {
     courier_name:       { type: String, default: null, trim: true },
@@ -139,6 +185,14 @@ const schema = new mongoose.Schema({
     dispatched_by:      { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
     dispatch_notes:     { type: String, default: null },
   },
+
+  // ── Module 1.3: In-Transit Milestone Updates (Stage 6) ───────────────────
+  milestones: [{
+    status:      { type: String, required: true }, // e.g. 'Left Pune', 'Entered Nashik'
+    description: { type: String, default: null },
+    recorded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    recorded_at: { type: Date, default: Date.now },
+  }],
 
   is_end_customer_sale: {
     type: Boolean,

@@ -9,8 +9,15 @@ const schema = new mongoose.Schema({
   level_0:         { type: mongoose.Schema.Types.ObjectId, default: null }, // Country ID
   level_1:         { type: mongoose.Schema.Types.ObjectId, default: null }, // State ID
   level_2:         { type: mongoose.Schema.Types.ObjectId, default: null }, // District ID
+
+  // ── Module 1.1: Physical Warehouse Capacity Metrics ─────────────────────
+  max_kit_capacity:            { type: Number, default: 0 },
+  max_weight_capacity_kg:      { type: Number, default: 0 },
+  allocated_incoming_capacity: { type: Number, default: 0 },
+
   is_active:       { type: Boolean, default: false },
   deleted_at:      { type: Date, default: null },
+
 }, { 
   collection: 'company_warehouses', 
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } 

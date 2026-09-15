@@ -43,6 +43,7 @@ const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
 const WarehousePoConfig = lazy(() => import("../pages/solar-shop/po-orders/WarehousePoConfig"));
 const LooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/LooseOrders"));
 const WarehouseLooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/WarehouseLooseOrders"));
+const VehicleDriverManagement = lazy(() => import("../../warehouse/pages/warehouse-management/VehicleDriverManagement"));
 const OrderManagementSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderManagementSettings"));
 const OffersManagement = lazy(() => import("../pages/solar-shop/order-management-settings/OffersManagement"));
 const CheckoutCartSettings = lazy(() => import("../pages/solar-shop/order-management-settings/CheckoutCartSettings"));
@@ -100,8 +101,9 @@ const menus = [
                 }
             ]
         },
-        { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "ADM_PO_ORDERS" },
-        { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "ADM_PO_ORDERS" },
+        { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
+        { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
+        { name: "Vehicles & Drivers", icon: <FaTruck />, path: "/admin-panel/solar-shop/vehicles-drivers", unique_id: "00000000" },
         {
             name: "Margin & Commission",
             icon: <FaCoins />,
@@ -511,11 +513,17 @@ export default function SolarShopDashboard() {
                                     <Route
                                         path="/loose-orders"
                                         element={
-                                            <PermissionGuard requiredUniqueId="ADM_PO_ORDERS">
-                                                <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
-                                                    <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
-                                                </Suspense>
-                                            </PermissionGuard>
+                                            <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
+                                                <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/vehicles-drivers"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Vehicles & Drivers..." />}>
+                                                <VehicleDriverManagement />
+                                            </Suspense>
                                         }
                                     />
                                     <Route
@@ -581,9 +589,19 @@ export default function SolarShopDashboard() {
                                     <Route
                                         path="/:countryName/loose-orders"
                                         element={
-                                            <PermissionGuard requiredUniqueId="ADM_PO_ORDERS">
+                                            <PermissionGuard requiredUniqueId="00000000">
                                                 <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
                                                     <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/vehicles-drivers"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="00000000">
+                                                <Suspense fallback={<Loader text="Loading Vehicles & Drivers..." />}>
+                                                    <VehicleDriverManagement />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

@@ -39,7 +39,9 @@ router.post('/inward/upload-tax-invoice', check_auth, perm('WH_MAT_INWARD', 'add
 });
 
 // ─── Vehicle Management ───
-router.get('/vehicles/compare', check_auth, vehicle_handler.compare_vehicles);
+router.get('/vehicles/compare',             check_auth, vehicle_handler.compare_vehicles);
+// Module 1.2: Smart Vehicle Recommendation Engine
+router.get('/vehicles/recommend-for-order', check_auth, vehicle_handler.recommend_vehicle_for_order);
 router.get('/vehicles', check_auth, vehicle_handler.get_vehicles);
 router.post('/vehicles', check_auth, vehicle_handler.add_vehicle);
 router.put('/vehicles/:id', check_auth, vehicle_handler.update_vehicle);

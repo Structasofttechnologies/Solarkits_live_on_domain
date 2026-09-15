@@ -75,6 +75,20 @@ async function reconcileResellerWallet(resellerId) {
   let pendingHolds = 0;
 
   for (const p of payouts) {
+    // Self-heal: ensure commission settlement payout matches the actual net commission
+    if (p.idempotency_key?.startsWith('COMM-PAYOUT-') || p.reference_order_id) {
+      const orderId = p.reference_order_id || p.idempotency_key.replace('COMM-PAYOUT-', '');
+      const fpoLedger = await FpoCommissionLedger.findOne({ fpo_order_id: orderId }).lean();
+      if (fpoLedger && fpoLedger.net_commission_paise && p.amount_paise !== fpoLedger.net_commission_paise) {
+        p.amount_paise = fpoLedger.net_commission_paise;
+        p.amount = fpoLedger.net_commission_paise / 100;
+        await ResellerPayoutRequest.updateOne(
+          { _id: p._id },
+          { $set: { amount_paise: p.amount_paise, amount: p.amount } }
+        );
+      }
+    }
+
     const amt = p.amount_paise || Math.round((p.amount || 0) * 100);
     if (p.status === 'paid') {
       totalWithdrawn += amt;
@@ -105,6 +119,8 @@ async function reconcileResellerWallet(resellerId) {
   wallet.pending_balance_paise = pendingHolds;
   wallet.available_balance_paise = available;
 
+  wallet.gross_earned = toRupees(grossEarned);
+  wallet.tds_deducted = toRupees(tdsDeducted);
   wallet.total_earned = toRupees(netEarned);
   wallet.total_withdrawn = toRupees(totalWithdrawn);
   wallet.pending_balance = toRupees(pendingHolds);

@@ -15,7 +15,14 @@ const schema = new mongoose.Schema({
   level_1:         { type: mongoose.Schema.Types.ObjectId, default: null }, // State ID
   level_2:         { type: mongoose.Schema.Types.ObjectId, default: null }, // District ID
   customer_types:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'company_customers_types' }],
-  rejection_reason:{ type: String, default: null },
+
+  // ── Module 1.1: Physical Warehouse Capacity Metrics ─────────────────────
+  // Used for checkout capacity validation when EPC Buyer selects
+  // EPC Warehouse / Company Warehouse fulfillment mode.
+  max_kit_capacity:            { type: Number, default: 0 }, // Max number of kits the warehouse can hold
+  max_weight_capacity_kg:      { type: Number, default: 0 }, // Max total payload weight in kg
+  allocated_incoming_capacity: { type: Number, default: 0 }, // Kit slots reserved by placed but un-delivered orders
+
   is_active:       { type: Boolean, default: false },
   due_date:        { type: Date, default: null },
   deleted_at:      { type: Date, default: null },

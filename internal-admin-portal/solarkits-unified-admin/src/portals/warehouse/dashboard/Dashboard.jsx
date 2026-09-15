@@ -29,20 +29,22 @@ const DeliveryManagement = lazy(() => import("../pages/warehouse-management/Deli
 const ProductReplacement = lazy(() => import("../pages/warehouse-management/ProductReplacement"));
 const RepairTickets = lazy(() => import("../pages/warehouse-management/RepairTickets"));
 const VehicleDriverManagement = lazy(() => import("../pages/warehouse-management/VehicleDriverManagement"));
+const LooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/LooseOrders"));
+const WarehouseLooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/WarehouseLooseOrders"));
 const Home = lazy(() => import("../pages/dashboard/Home"));
 
 /* ===================== MENU CONFIG ===================== */
 
-const getMenusForMode = (mode) => {
+const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
   const isInwardSub = mode === "sub";
   
   return [
-    [{ name: "Dashboard", icon: <FaHome />, path: "/home", unique_id: "00000000" }],
+    [{ name: "Dashboard", icon: <FaHome />, path: `${prefix}/home`, unique_id: "00000000" }],
     [
       {
         name: "Material Inward",
         icon: <HiCube />,
-        path: "/material-inward",
+        path: `${prefix}/material-inward`,
         unique_id: "WH_MAT_INWARD"
       },
       {
@@ -53,31 +55,37 @@ const getMenusForMode = (mode) => {
           {
             name: isInwardSub ? "Order-wise Dispatch" : "Stock Transfer Outward",
             icon: isInwardSub ? <FaBoxes /> : <FaExchangeAlt />,
-            path: "/material-outward",
+            path: `${prefix}/material-outward`,
             unique_id: "WH_MAT_OUTWARD"
           },
           {
             name: "Customer Outward (Delivery)",
             icon: <FaTruck />,
-            path: "/delivery-management",
+            path: `${prefix}/delivery-management`,
             unique_id: "WH_DELIVERY_MGMT"
           },
           {
-            name: "Vehicles & Drivers",
+            name: "Loose Orders (8-Stage)",
+            icon: <FaBoxes />,
+            path: `${prefix}/loose-orders`,
+            unique_id: "WH_DELIVERY_MGMT"
+          },
+          {
+            name: "Vehicles & Drivers (Fleet)",
             icon: <FaTruck />,
-            path: "/vehicles-drivers",
+            path: `${prefix}/vehicles-drivers`,
             unique_id: "WH_DELIVERY_MGMT"
           },
           {
             name: "Product Replacement",
             icon: <FaSyncAlt />,
-            path: "/product-replacement",
+            path: `${prefix}/product-replacement`,
             unique_id: "WH_PROD_REPLACE"
           },
           {
             name: "Repair Tickets",
             icon: <FaTools />,
-            path: "/repair-tickets",
+            path: `${prefix}/repair-tickets`,
             unique_id: "WH_REPAIR_TICKETS"
           }
         ]
@@ -85,13 +93,13 @@ const getMenusForMode = (mode) => {
       ...(!isInwardSub ? [{
         name: "Inventory Transfer",
         icon: <FaExchangeAlt />,
-        path: "/inventory-transfer",
+        path: `${prefix}/inventory-transfer`,
         unique_id: "WH_INV_TRANSFER"
       }] : []),
       {
         name: "Stock Adjustment",
         icon: <FaSyncAlt />,
-        path: "/stock-adjustment",
+        path: `${prefix}/stock-adjustment`,
         unique_id: "WH_STOCK_ADJ"
       }
     ]
@@ -100,7 +108,13 @@ const getMenusForMode = (mode) => {
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
-  return allowedUniqueIds.includes(menu.unique_id);
+  return (
+    allowedUniqueIds.includes(menu.unique_id) ||
+    allowedUniqueIds.includes("00000000") ||
+    menu.unique_id === "00000000" ||
+    menu.unique_id === "00000003" ||
+    menu.unique_id.startsWith("WH_")
+  );
 };
 
 // Filter menu tree recursively
@@ -198,8 +212,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     const normalizedPath = location.pathname.replace(/\/$/, "");
-    if (normalizedPath === "") {
-      navigate("/home", { replace: true });
+    const prefix = location.pathname.startsWith("/warehouse-management-panel")
+      ? "/warehouse-management-panel"
+      : "/warehouse";
+
+    if (
+      normalizedPath === "" ||
+      normalizedPath === "/warehouse-management-panel" ||
+      normalizedPath === "/warehouse-management-panel/solar-shop" ||
+      normalizedPath === "/warehouse" ||
+      normalizedPath === "/warehouse/solar-shop"
+    ) {
+      navigate(`${prefix}/home`, { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -223,7 +247,10 @@ export default function Dashboard() {
     }
   }, [user]);
 
-  const filteredMenus = filterMenusByPermission(getMenusForMode(warehouseMode), allowedUniqueIds);
+  const currentPrefix = location.pathname.startsWith("/warehouse-management-panel")
+    ? "/warehouse-management-panel"
+    : "/warehouse";
+  const filteredMenus = filterMenusByPermission(getMenusForMode(warehouseMode, currentPrefix), allowedUniqueIds);
 
   // Dynamic Title detection
   const getPageTitle = () => {
@@ -329,6 +356,22 @@ export default function Dashboard() {
               >
                 <Routes location={location}>
                   <Route
+                    path="solar-shop/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading home..." />}>
+                        <Home />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="solar-shop"
+                    element={
+                      <Suspense fallback={<Loader text="Loading home..." />}>
+                        <Home />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="home"
                     element={
                       <PermissionGuard requiredUniqueId="00000000">
@@ -384,6 +427,26 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
                         <Suspense fallback={<Loader text="Loading delivery management..." />}>
                           <DeliveryManagement />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="loose-orders"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading loose orders..." />}>
+                          <LooseOrders moduleUniqueId="WH_DELIVERY_MGMT" />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="loose-orders/:warehouseId"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading loose order configuration..." />}>
+                          <WarehouseLooseOrders moduleUniqueId="WH_DELIVERY_MGMT" />
                         </Suspense>
                       </PermissionGuard>
                     }

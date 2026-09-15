@@ -31,6 +31,8 @@ const schema = new mongoose.Schema({
   pending_balance:   { type: Number, required: true, default: 0, min: 0 },
   total_earned:      { type: Number, required: true, default: 0, min: 0 },
   total_withdrawn:   { type: Number, required: true, default: 0, min: 0 },
+  gross_earned:      { type: Number, default: 0, min: 0 },
+  tds_deducted:      { type: Number, default: 0, min: 0 },
 
   // ── Phase R9+: Integer Paise Accounting Fields (AUTHORITATIVE) ───────
   available_balance_paise: { type: Number, default: 0, min: 0 },

@@ -108,3 +108,88 @@ export const verifyEpcPoPayment = async (poId, epcId, data) => {
   });
   return res.data;
 };
+
+// ─── Module 1: 8-Stage EPC Order Transition API Callers ──────────────────────
+
+export const stageProcessing = async (id) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/processing`, {}, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const stageAssignVehicle = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/assign-vehicle`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const stageReadyForDispatch = async (id) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/ready-for-dispatch`, {}, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const stageDispatched = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/dispatched`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const stageInTransit = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/in-transit`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const stageReachedDestination = async (id) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/reached-destination`, {}, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const stageDelivered = async (id) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/stage/delivered`, {}, { headers: authHeaderObj() });
+  return res.data;
+};
+
+// ─── Module 1.1: FPO & Unified Order Stage Transition Callers ───────────────
+
+export const stageFpoOrder = async (id, stage, data = {}) => {
+  const res = await axios.post(`${BASE_URL}/fpo-orders/${id}/stage/${stage}`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const assignFpoVehicle = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/fpo-orders/${id}/stage/assign-vehicle`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const advanceOrderStage = async (orderType, id, stage, data = {}) => {
+  const res = await axios.post(`${BASE_URL}/orders/${orderType || 'po'}/${id}/stage/${stage}`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const assignOrderVehicle = async (orderType, id, data) => {
+  const res = await axios.post(`${BASE_URL}/orders/${orderType || 'po'}/${id}/stage/assign-vehicle`, data, { headers: authHeaderObj() });
+  return res.data;
+};
+
+export const getWarehouseVehicles = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const queryStr = query ? `?${query}` : '';
+  try {
+    const res = await axios.get(`${BASE_URL}/warehouse-vehicles${queryStr}`, { headers: authHeaderObj() });
+    return res.data;
+  } catch (err) {
+    try {
+      const res = await axios.get(`${API_BASE}/warehouse/vehicles${queryStr}`, { headers: authHeaderObj() });
+      return res.data;
+    } catch (err2) {
+      const adminApiUrl = import.meta.env.VITE_ADMIN_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/admin-api';
+      const res = await axios.get(`${adminApiUrl}/warehouse/vehicles${queryStr}`, { headers: authHeaderObj() });
+      return res.data;
+    }
+  }
+};
+
+export const getOrderStageDetails = async (orderType, id) => {
+  const res = await axios.get(`${BASE_URL}/orders/${orderType || 'po'}/${id}/stage-details`, { headers: authHeaderObj() });
+  return res.data;
+};
+
+
+

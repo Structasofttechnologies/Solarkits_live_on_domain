@@ -26,6 +26,8 @@ export default function App() {
           <Route path="pending-validation" element={<Suspense fallback={<Loader />}><PendingValidation /></Suspense>} />
           <Route path="in-review" element={<Suspense fallback={<Loader />}><InReview /></Suspense>} />
           <Route path="rejected" element={<Suspense fallback={<Loader />}><Rejected /></Suspense>} />
+          <Route path="solar-shop/*" element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
+          <Route path="solar-shop" element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
           <Route path='*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
         </Route>
         <Route path='*' element={<Suspense fallback={<Loader />}><NotFound /></Suspense>} />

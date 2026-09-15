@@ -20,6 +20,8 @@ const {
   deliverPo,
   cancelPo,
   returnItems,
+  advancePoStage,
+  assignVehicleToPo,
 } = require('../services/franchisee.po.service');
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
@@ -444,6 +446,72 @@ const verify_epc_receipt = async (req, res) => {
   }
 };
 
+// ── 8-STAGE LIFECYCLE ADVANCEMENT ─────────────────────────────────────────────
+const advance_stage = async (req, res) => {
+  try {
+    const po_id = req.params.id || req.body.po_id;
+    const stage = req.params.stage || req.body.stage;
+    if (!po_id || !stage) {
+      return res.status(400).json({ status: 'error', message: 'po_id and stage are required' });
+    }
+
+    const order = await advancePoStage({
+      po_id,
+      new_stage: stage,
+      extra_data: req.body || {},
+      actor_id: req.user?.id,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: `PO Order moved to ${String(stage).toUpperCase()}.`,
+      data: {
+        id: order._id,
+        status: order.status,
+        dispatch_tracking: order.dispatch_tracking,
+        milestones: order.milestones,
+      },
+    });
+  } catch (error) {
+    console.error('[po.handler] advance_stage error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+const assign_vehicle = async (req, res) => {
+  try {
+    const po_id = req.params.id || req.body.po_id;
+    const { vehicle_id, driver, is_recommended, override_reason } = req.body;
+    if (!po_id || !vehicle_id) {
+      return res.status(400).json({ status: 'error', message: 'po_id and vehicle_id are required' });
+    }
+
+    const order = await assignVehicleToPo({
+      po_id,
+      vehicle_id,
+      driver,
+      is_recommended,
+      override_reason,
+      actor_id: req.user?.id,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Vehicle assigned to PO Order successfully.',
+      data: {
+        id: order._id,
+        status: order.status,
+        assigned_vehicle: order.assigned_vehicle,
+      },
+    });
+  } catch (error) {
+    console.error('[po.handler] assign_vehicle error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
   list_po_orders,
   get_po_order,
@@ -458,4 +526,6 @@ module.exports = {
   process_returns,
   list_pending_epc_receipts,
   verify_epc_receipt,
+  advance_stage,
+  assign_vehicle,
 };

@@ -49,4 +49,19 @@ router.get(
   handler.get_orders_stats
 );
 
+// Module 1: Order Stage Progression & Vehicle Assignment
+router.post(
+  '/:id/stage/:stage',
+  check_auth,
+  check_permissions(PERM_ORDERS_VIEW),
+  handler.update_order_stage
+);
+
+router.post(
+  '/:id/assign-vehicle',
+  check_auth,
+  check_permissions(PERM_ORDERS_VIEW),
+  handler.assign_order_vehicle
+);
+
 module.exports = router;

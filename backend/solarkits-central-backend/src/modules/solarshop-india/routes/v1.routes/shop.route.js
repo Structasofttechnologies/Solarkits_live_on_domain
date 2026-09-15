@@ -29,6 +29,7 @@ const {
   get_shop_hierarchy,
   get_company_bank_details,
   check_warehouse_stock,
+  checkout_warehouse_capacity_check,
   calculate_pincode_delivery_cost,
   create_epc_offline_checkout,
   resubmit_epc_offline_payment,
@@ -85,6 +86,8 @@ router.put("/orders/:id/address", verify_auth, update_order_address);
 // ── EPC Offline Bank Transfer Checkout & Order Tracking Routes ─────────────
 router.get("/bank-details", get_company_bank_details);
 router.get("/check-warehouse-stock", optional_auth, check_warehouse_stock);
+// Module 1.1: Pre-checkout warehouse capacity validation
+router.get("/checkout/warehouse-capacity-check", optional_auth, checkout_warehouse_capacity_check);
 router.post("/offline-checkout/create", verify_auth, epcReceiptUpload, create_epc_offline_checkout);
 router.post("/offline-checkout/:id/resubmit", verify_auth, epcReceiptUpload, resubmit_epc_offline_payment);
 router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);

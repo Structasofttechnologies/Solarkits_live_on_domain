@@ -2939,6 +2939,66 @@ const check_warehouse_stock = async (req, res) => {
   }
 };
 
+// ─── MODULE 1.1: CHECKOUT WAREHOUSE CAPACITY CHECK ─────────────────────────────
+/**
+ * GET /api/india/v1/shop/checkout/warehouse-capacity-check
+ *
+ * Pre-checkout capacity validation before the buyer confirms delivery mode.
+ * Query params:
+ *   - fulfillment_mode: 'franchisee_warehouse' | 'epc_warehouse'
+ *   - cart_items: JSON-encoded array of { kit_id, quantity, kw_per_kit, weight_kg_per_kit }
+ *   - franchisee_id: (required when fulfillment_mode = franchisee_warehouse)
+ *   - warehouse_id:  (required when fulfillment_mode = epc_warehouse)
+ */
+const checkout_warehouse_capacity_check = async (req, res) => {
+  try {
+    const { fulfillment_mode, cart_items, franchisee_id, warehouse_id } = req.query;
+
+    if (!fulfillment_mode) {
+      return res.status(400).json({ success: false, message: 'fulfillment_mode is required.' });
+    }
+    if (!['franchisee_warehouse', 'epc_warehouse'].includes(fulfillment_mode)) {
+      return res.status(200).json({ success: true, status: 'success', allowed: true, message: 'No capacity check needed for direct site delivery.' });
+    }
+
+    let parsedCartItems = [];
+    try {
+      parsedCartItems = cart_items ? JSON.parse(cart_items) : [];
+    } catch (_) {
+      return res.status(400).json({ success: false, message: 'Invalid cart_items format. Must be a valid JSON array.' });
+    }
+
+    // ── Compute Order Load Metrics ──────────────────────────────────────────
+    const order_load_metrics = parsedCartItems.reduce((acc, item) => {
+      const qty = Number(item.quantity || 1);
+      acc.total_kits      += qty;
+      acc.total_kw        += qty * Number(item.kw_per_kit     || 0);
+      acc.total_weight_kg += qty * Number(item.weight_kg_per_kit || 0);
+      return acc;
+    }, { total_kits: 0, total_kw: 0, total_weight_kg: 0 });
+
+    const { checkWarehouseCapacityForMode } = require('../../../admin-panel/services/epc.offline.checkout.service');
+    const result = await checkWarehouseCapacityForMode({
+      fulfillment_mode,
+      order_load_metrics,
+      franchisee_id,
+      warehouse_id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      status: 'success',
+      data: {
+        order_load_metrics,
+        ...result,
+      },
+    });
+  } catch (error) {
+    console.error('checkout_warehouse_capacity_check error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /**
  * GET /api/india/v1/shop/delivery-cost/calculate
  * Calculate delivery freight for a given pincode and product/kit
@@ -3099,6 +3159,12 @@ const create_epc_offline_checkout = async (req, res) => {
       offline_payment_data.sender_bank_name = body.sender_bank_name;
     }
 
+    let fulfillment_mode = body.fulfillment_mode || 'franchisee_warehouse';
+    let order_load_metrics = body.order_load_metrics;
+    if (typeof order_load_metrics === 'string') {
+      try { order_load_metrics = JSON.parse(order_load_metrics); } catch (e) {}
+    }
+
     const { createEpcOfflineOrder } = require("../../../admin-panel/services/epc.offline.checkout.service");
     const result = await createEpcOfflineOrder({
       epc_id,
@@ -3107,6 +3173,8 @@ const create_epc_offline_checkout = async (req, res) => {
       offline_payment_data,
       actor_id: epc_id,
       req,
+      fulfillment_mode,
+      order_load_metrics,
     });
 
     // Clear cart on successful order placement
@@ -3929,6 +3997,7 @@ module.exports = {
   get_shop_hierarchy,
   get_company_bank_details,
   check_warehouse_stock,
+  checkout_warehouse_capacity_check,
   calculate_pincode_delivery_cost,
   create_epc_offline_checkout,
   resubmit_epc_offline_payment,

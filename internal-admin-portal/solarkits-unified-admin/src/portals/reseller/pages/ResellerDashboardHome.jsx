@@ -137,7 +137,7 @@ export default function ResellerDashboardHome() {
               to="/reseller-portal/wallet"
               className="w-full flex items-center justify-between p-3.5 rounded-xl border border-border bg-bg hover:bg-surface-hover transition-colors text-sm font-semibold text-text-primary"
             >
-              <span className="flex items-center gap-2.5"><FiCreditCard className="text-success" /> Request Payout Withdrawal</span>
+              <span className="flex items-center gap-2.5"><FiCreditCard className="text-success" /> Wallet & Payouts</span>
               <span className="text-xs text-text-muted">Wallet</span>
             </Link>
 

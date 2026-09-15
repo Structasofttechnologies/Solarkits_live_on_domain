@@ -183,6 +183,8 @@ async function createEpcOfflineOrder({
   offline_payment_data = {},
   actor_id = null,
   req = null,
+  fulfillment_mode = 'franchisee_warehouse',
+  order_load_metrics = null,
 }) {
   if (!items || items.length === 0) {
     throw new Error('Cart must contain at least one item');
@@ -330,6 +332,12 @@ async function createEpcOfflineOrder({
     reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
     fulfillment_source: fulfillmentSource,
+    fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
+    order_load_metrics: order_load_metrics || {
+      total_kits: processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0),
+      total_kw: processedItems.reduce((acc, it) => acc + ((it.quantity || 0) * (it.kw || 5)), 0),
+      total_weight_kg: processedItems.reduce((acc, it) => acc + ((it.quantity || 0) * 250), 0),
+    },
     items: processedItems,
     subtotal_paise: totals.subtotal_paise,
     tax_total_paise: totals.tax_total_paise,
@@ -365,6 +373,18 @@ async function createEpcOfflineOrder({
     },
     reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
   });
+
+  // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
+  if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
+    const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+    try {
+      await Reseller.findByIdAndUpdate(targetResellerId, {
+        $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
+      });
+    } catch (capacityErr) {
+      console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
+    }
+  }
 
   // 5. Hold stock in inventory ledger if reseller assigned
   if (targetResellerId) {
@@ -682,13 +702,269 @@ async function markEpcOrderDelivered(order_id, admin_user_id, req = null) {
   return order;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MODULE 1.1: CHECKOUT WAREHOUSE CAPACITY CHECK
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * checkWarehouseCapacityForMode
+ *
+ * Validates whether the selected fulfillment warehouse can absorb the incoming
+ * order (by kit count) without exceeding its physical capacity limits.
+ *
+ * Uses the formula:
+ *   Available Capacity = max_kits - (current_stock_kits + allocated_incoming_kits)
+ *
+ * NOTE: This is a READ-ONLY check. The actual slot commitment (incrementing
+ * allocated_incoming_kits) is performed atomically during order creation in
+ * createEpcOfflineOrder() — preventing double commits under concurrent checkouts.
+ *
+ * @param {Object} params
+ * @param {string}  params.fulfillment_mode    'franchisee_warehouse' | 'epc_warehouse'
+ * @param {Object}  params.order_load_metrics  { total_kits, total_kw, total_weight_kg }
+ * @param {string}  [params.franchisee_id]     Reseller _id (required for franchisee_warehouse)
+ * @param {string}  [params.warehouse_id]      CompanyWarehouse _id (required for epc_warehouse)
+ * @returns {Object} { allowed, available_capacity, max_capacity, current_load, message }
+ */
+async function checkWarehouseCapacityForMode({ fulfillment_mode, order_load_metrics, franchisee_id, warehouse_id }) {
+  const orderKits = Number(order_load_metrics?.total_kits || 0);
+
+  if (fulfillment_mode === 'franchisee_warehouse') {
+    if (!franchisee_id) throw new Error('franchisee_id is required for Franchisee Warehouse capacity check.');
+
+    const reseller = await Reseller.findById(franchisee_id)
+      .select('warehouse_capacity business_name')
+      .lean();
+
+    if (!reseller) throw new Error('Franchisee not found.');
+
+    const cap = reseller.warehouse_capacity || {};
+    const maxKits         = cap.max_kits || 0;
+    const currentStock    = cap.current_stock_kits || 0;
+    const allocatedIncoming = cap.allocated_incoming_kits || 0;
+    const currentLoad     = currentStock + allocatedIncoming;
+    const availableSlots  = Math.max(0, maxKits - currentLoad);
+    const allowed         = maxKits === 0 || availableSlots >= orderKits;
+
+    return {
+      allowed,
+      available_capacity: availableSlots,
+      max_capacity:       maxKits,
+      current_load:       currentLoad,
+      warehousing_entity: reseller.business_name || 'Franchisee Warehouse',
+      message: allowed
+        ? `Sufficient capacity. ${availableSlots} kit slots available.`
+        : `Insufficient capacity. Only ${availableSlots} slots available; your order requires ${orderKits} kits.`,
+    };
+  }
+
+  if (fulfillment_mode === 'epc_warehouse') {
+    const { CompanyWarehouse } = require('../models/company_warehouse_db');
+    const query = warehouse_id
+      ? { _id: warehouse_id, is_active: true }
+      : { is_active: true, warehouse_type: 'master' };
+
+    const warehouse = await CompanyWarehouse.findOne(query)
+      .select('warehouse_code max_kit_capacity allocated_incoming_capacity')
+      .lean();
+
+    if (!warehouse) throw new Error('EPC Warehouse not found.');
+
+    const maxKits           = warehouse.max_kit_capacity || 0;
+    const allocated         = warehouse.allocated_incoming_capacity || 0;
+    const availableSlots    = Math.max(0, maxKits - allocated);
+    const allowed           = maxKits === 0 || availableSlots >= orderKits;
+
+    return {
+      allowed,
+      available_capacity: availableSlots,
+      max_capacity:       maxKits,
+      current_load:       allocated,
+      warehousing_entity: warehouse.warehouse_code || 'EPC Warehouse',
+      message: allowed
+        ? `Sufficient capacity. ${availableSlots} kit slots available.`
+        : `Insufficient capacity. Only ${availableSlots} slots available; your order requires ${orderKits} kits.`,
+    };
+  }
+
+  // direct_site — no capacity check needed
+  return { allowed: true, message: 'No warehouse capacity check required for direct site delivery.' };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODULE 1.2: VEHICLE ASSIGNMENT — STAGE 3
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * assignVehicleToOrder
+ *
+ * Transitions an EPC order to Stage 3 (vehicle_assigned).
+ * Accepts a vehicle (recommended or admin-override) and snapshots vehicle +
+ * driver info into the order document.
+ *
+ * @param {Object} params
+ * @param {string} params.order_id
+ * @param {Object} params.vehicle         Full vehicle doc or populated object
+ * @param {Object} [params.driver]        { driver_id, driver_name, driver_contact }
+ * @param {boolean} params.is_recommended  Was this vehicle auto-recommended?
+ * @param {string} [params.override_reason] Required when is_recommended = false
+ * @param {string} params.admin_user_id
+ * @param {Object} params.req             Express request (for audit trail)
+ */
+async function assignVehicleToOrder({ order_id, vehicle, driver, is_recommended, override_reason, admin_user_id, req }) {
+  const order = await EpcOrder.findById(order_id);
+  if (!order) throw new Error('Order not found.');
+
+  const allowedFromStatus = ['confirmed', 'processing', 'vehicle_assigned'];
+  if (!allowedFromStatus.includes(order.order_status)) {
+    throw new Error(`Cannot assign vehicle from current status: ${order.order_status}.`);
+  }
+
+  order.order_status = 'vehicle_assigned';
+  order.assigned_vehicle = {
+    vehicle_id:          vehicle._id || vehicle.id,
+    vehicle_name:        vehicle.name,
+    vehicle_type:        vehicle.vehicle_type || null,
+    registration_number: vehicle.registration_number,
+    driver_id:           driver?.driver_id    || null,
+    driver_name:         driver?.driver_name  || null,
+    driver_contact:      driver?.driver_contact || null,
+    is_recommended:      is_recommended !== false,
+    override_reason:     is_recommended === false ? (override_reason || null) : null,
+    overridden_by:       is_recommended === false ? admin_user_id : null,
+    overridden_at:       is_recommended === false ? new Date() : null,
+    assigned_by:         admin_user_id,
+    assigned_at:         new Date(),
+  };
+
+  await order.save();
+
+  await logAudit({
+    actor_type: 'cms_user',
+    actor_id:   admin_user_id,
+    action:     'EPC_VEHICLE_ASSIGNED',
+    entity_type:'epc_orders',
+    entity_id:  order._id,
+    after_snapshot: {
+      order_number: order.order_number,
+      status:       'vehicle_assigned',
+      vehicle:      vehicle.name,
+      registration: vehicle.registration_number,
+      is_recommended,
+    },
+    req,
+  });
+
+  return order;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODULE 1.3: GENERIC 8-STAGE ORDER STATUS TRANSITION ENGINE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * updateOrderStage
+ *
+ * Generic state machine transition for EPC orders across Stages 2-8.
+ * Allowed transitions enforced by STAGE_FLOW.
+ *
+ * Stages:
+ *   2. confirmed       → processing
+ *   3. processing      → vehicle_assigned      (handled by assignVehicleToOrder)
+ *   4. vehicle_assigned→ ready_for_dispatch
+ *   5. ready_for_dispatch → dispatched
+ *   6. dispatched      → in_transit
+ *   6b.in_transit      → milestone append
+ *   7. in_transit      → reached_destination
+ *   8. reached_destination → delivered
+ *
+ * @param {Object} params
+ * @param {string}  params.order_id
+ * @param {string}  params.new_status       Target status
+ * @param {string}  params.admin_user_id
+ * @param {Object}  [params.dispatch_data]  For 'dispatched': { courier_name, tracking_number, tracking_url, estimated_delivery, dispatch_notes }
+ * @param {Object}  [params.milestone]      For 'in_transit': { status, description }
+ * @param {Object}  params.req
+ */
+async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_data, milestone, req }) {
+  const STAGE_FLOW = {
+    processing:           ['confirmed'],
+    ready_for_dispatch:   ['vehicle_assigned'],
+    dispatched:           ['ready_for_dispatch'],
+    in_transit:           ['dispatched', 'in_transit'],
+    reached_destination:  ['in_transit'],
+    delivered:            ['reached_destination'],
+  };
+
+  const order = await EpcOrder.findById(order_id);
+  if (!order) throw new Error('Order not found.');
+
+  const allowedFrom = STAGE_FLOW[new_status];
+  if (!allowedFrom) throw new Error(`Invalid target status: ${new_status}.`);
+  if (!allowedFrom.includes(order.order_status)) {
+    throw new Error(
+      `Cannot move to '${new_status}' from current status '${order.order_status}'. ` +
+      `Allowed from: ${allowedFrom.join(', ')}.`
+    );
+  }
+
+  // ── Status-specific logic ─────────────────────────────────────────────────
+  if (new_status === 'dispatched' && dispatch_data) {
+    order.dispatch_tracking = {
+      ...order.dispatch_tracking?.toObject?.() || {},
+      courier_name:       dispatch_data.courier_name    || null,
+      tracking_number:    dispatch_data.tracking_number || null,
+      tracking_url:       dispatch_data.tracking_url    || null,
+      dispatched_at:      new Date(),
+      estimated_delivery: dispatch_data.estimated_delivery || null,
+      dispatched_by:      admin_user_id,
+      dispatch_notes:     dispatch_data.dispatch_notes  || null,
+    };
+  }
+
+  if (new_status === 'in_transit' && milestone) {
+    order.milestones = order.milestones || [];
+    order.milestones.push({
+      status:      milestone.status,
+      description: milestone.description || null,
+      recorded_by: admin_user_id,
+      recorded_at: new Date(),
+    });
+  }
+
+  if (new_status === 'delivered') {
+    order.delivered_at = new Date();
+  }
+
+  order.order_status = new_status;
+  await order.save();
+
+  await logAudit({
+    actor_type: 'cms_user',
+    actor_id:   admin_user_id,
+    action:     `EPC_ORDER_${new_status.toUpperCase()}`,
+    entity_type:'epc_orders',
+    entity_id:  order._id,
+    after_snapshot: { order_number: order.order_number, status: new_status },
+    req,
+  });
+
+  return order;
+}
+
+
 module.exports = {
   COMPANY_BANK_DETAILS,
   checkWarehouseStockAvailability,
+  checkWarehouseCapacityForMode,
   createEpcOfflineOrder,
   resubmitEpcPaymentProof,
   reviewEpcOfflinePayment,
   updateEpcOrderDispatch,
   markEpcOrderDelivered,
   generateInvoiceNumber,
+  assignVehicleToOrder,
+  updateOrderStage,
 };

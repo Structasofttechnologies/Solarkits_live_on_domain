@@ -35,11 +35,16 @@ export default function VehicleDriverManagement() {
   const [vehicleForm, setVehicleForm] = useState({
     name: "",
     registration_number: "",
+    vehicle_type: "Custom",
     capacity_kg: "",
     base_rate_per_km: "",
     fuel_type: "Diesel",
     fuel_efficiency_kmpl: "",
-    fuel_price_per_litre: ""
+    fuel_price_per_litre: "",
+    // Module 1.2: Logistic Constraint Limits
+    max_kits:       "",
+    max_kw:         "",
+    max_weight_kg:  "",
   });
 
   const [driverModalOpen, setDriverModalOpen] = useState(false);
@@ -90,22 +95,31 @@ export default function VehicleDriverManagement() {
       setVehicleForm({
         name: vehicle.name,
         registration_number: vehicle.registration_number,
+        vehicle_type: vehicle.vehicle_type || "Custom",
         capacity_kg: vehicle.capacity_kg,
         base_rate_per_km: vehicle.base_rate_per_km,
         fuel_type: vehicle.fuel_type || "Diesel",
         fuel_efficiency_kmpl: vehicle.fuel_efficiency_kmpl,
-        fuel_price_per_litre: vehicle.fuel_price_per_litre
+        fuel_price_per_litre: vehicle.fuel_price_per_litre,
+        // Module 1.2 fields
+        max_kits:      vehicle.max_kits || "",
+        max_kw:        vehicle.max_kw   || "",
+        max_weight_kg: vehicle.max_weight_kg || "",
       });
     } else {
       setEditingVehicle(null);
       setVehicleForm({
         name: "",
         registration_number: "",
+        vehicle_type: "Custom",
         capacity_kg: "",
         base_rate_per_km: "",
         fuel_type: "Diesel",
         fuel_efficiency_kmpl: "",
-        fuel_price_per_litre: ""
+        fuel_price_per_litre: "",
+        max_kits: "",
+        max_kw: "",
+        max_weight_kg: "",
       });
     }
     setVehicleModalOpen(true);
@@ -354,6 +368,19 @@ export default function VehicleDriverManagement() {
                               <p className="text-[10px] text-text-muted">Base Rate</p>
                               <p className="font-bold text-text-primary">₹{v.base_rate_per_km}/KM</p>
                             </div>
+                          </div>
+                        </div>
+
+                        {/* Module 1.2: Logistic Limits Badge */}
+                        <div className="p-2.5 bg-primary/5 rounded-xl border border-primary/20 space-y-1 text-xs">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="font-semibold text-primary">🚚 {v.vehicle_type || "Custom"}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Recom. Engine</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-[10px] text-text-secondary pt-0.5">
+                            <span className="bg-surface px-1.5 py-0.5 rounded border border-border">Kits: <strong className="text-text-primary">{v.max_kits ? `${v.max_kits} max` : 'Unlimited'}</strong></span>
+                            <span className="bg-surface px-1.5 py-0.5 rounded border border-border">kW: <strong className="text-text-primary">{v.max_kw ? `${v.max_kw} kW` : 'Unlimited'}</strong></span>
+                            <span className="bg-surface px-1.5 py-0.5 rounded border border-border">Weight: <strong className="text-text-primary">{v.max_weight_kg ? `${v.max_weight_kg} kg` : `${v.capacity_kg} kg`}</strong></span>
                           </div>
                         </div>
 
@@ -701,6 +728,65 @@ export default function VehicleDriverManagement() {
                 onChange={(e) => setVehicleForm({ ...vehicleForm, fuel_price_per_litre: e.target.value })}
                 required
               />
+            </div>
+          </div>
+
+          {/* ── Module 1.2: Logistic Constraint Limits Section ─────────────── */}
+          <div className="pt-3 border-t border-border">
+            <p className="text-xs font-bold text-text-secondary mb-2 flex items-center gap-1">
+              <span>🚚</span> Logistic Limits (Vehicle Recommendation Engine)
+            </p>
+            <div className="space-y-1 mb-3">
+              <Dropdown
+                label="Vehicle Type Preset"
+                value={vehicleForm.vehicle_type}
+                onChange={(val) => setVehicleForm({ ...vehicleForm, vehicle_type: val })}
+                options={[
+                  { value: "Tata Ace",           text: "Tata Ace (Mini Truck)" },
+                  { value: "3-Wheeler Electric",  text: "3-Wheeler Electric" },
+                  { value: "14ft Canter",         text: "14ft Canter" },
+                  { value: "20ft Truck",          text: "20ft Truck" },
+                  { value: "32ft Container",      text: "32ft Container" },
+                  { value: "Custom",              text: "Custom" },
+                ]}
+                className="w-full"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-text-secondary">Max Kits (units)</label>
+                <CustomInput
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 20"
+                  value={vehicleForm.max_kits}
+                  onChange={(e) => setVehicleForm({ ...vehicleForm, max_kits: e.target.value })}
+                />
+                <p className="text-[10px] text-text-secondary">0 = unlimited</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-text-secondary">Max System kW</label>
+                <CustomInput
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  placeholder="e.g. 50"
+                  value={vehicleForm.max_kw}
+                  onChange={(e) => setVehicleForm({ ...vehicleForm, max_kw: e.target.value })}
+                />
+                <p className="text-[10px] text-text-secondary">0 = unlimited</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-text-secondary">Max Weight (kg)</label>
+                <CustomInput
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 1500"
+                  value={vehicleForm.max_weight_kg}
+                  onChange={(e) => setVehicleForm({ ...vehicleForm, max_weight_kg: e.target.value })}
+                />
+                <p className="text-[10px] text-text-secondary">0 = unlimited</p>
+              </div>
             </div>
           </div>
 

@@ -101,25 +101,29 @@ const check_auth = async (req, res, next) => {
 
     const isSuperAdmin = role.name === 'Super Admin' || department.level === 'global';
 
-    // 5. Validate requested panel exists
-    const requestedPanelPrefix = '/warehouse-management-panel';
-    const panel = await CmsPanel.findOne({ url_prefix: requestedPanelPrefix, is_deleted: false, is_active: true }).lean();
-    if (!panel) {
+    // 5. Validate requested panel exists (accepts both warehouse panel and admin panel requests)
+    const allowedPrefixes = ['/warehouse-management-panel', '/admin-panel'];
+    const panels = await CmsPanel.find({ url_prefix: { $in: allowedPrefixes }, is_deleted: false, is_active: true }).lean();
+    if (!panels || panels.length === 0) {
       return res.status(404).json({ status: "error", message: "Requested panel not found or inactive.", auth: false });
     }
 
+    const panelIds = panels.map(p => p._id);
+    let activePanel = panels.find(p => p.url_prefix === '/warehouse-management-panel') || panels[0];
+
     if (!isSuperAdmin) {
       // 6. Validate panel assigned to department
-      const deptPanelLink = await DepartmentPanel.findOne({ department_id: department._id, panel_id: panel._id }).lean();
+      const deptPanelLink = await DepartmentPanel.findOne({ department_id: department._id, panel_id: { $in: panelIds } }).lean();
       if (!deptPanelLink) {
         return res.status(403).json({ status: "error", message: "Department does not have access to this panel.", auth: false });
       }
 
       // 7. Validate panel assigned to role
-      const rolePanelLink = await RolePanel.findOne({ role_id: role._id, panel_id: panel._id }).lean();
+      const rolePanelLink = await RolePanel.findOne({ role_id: role._id, panel_id: { $in: panelIds } }).lean();
       if (!rolePanelLink) {
         return res.status(403).json({ status: "error", message: "Role does not have access to this panel.", auth: false });
       }
+      activePanel = panels.find(p => String(p._id) === String(rolePanelLink.panel_id)) || activePanel;
     }
 
     req.user = {
@@ -128,7 +132,7 @@ const check_auth = async (req, res, next) => {
       department_id: department._id,
       is_super_admin: isSuperAdmin,
       country: user.country,
-      panel_id: panel._id,
+      panel_id: activePanel._id,
       is_warehouse_user: false
     };
 

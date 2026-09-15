@@ -12,9 +12,10 @@ import {
   MdInfoOutline,
   MdLocationOn
 } from "react-icons/md";
-import { FaBolt, FaRupeeSign, FaShieldAlt } from "react-icons/fa";
+import { FaBolt, FaRupeeSign, FaShieldAlt, FaTruckMoving } from "react-icons/fa";
 import { getDirectEpcTransactions } from "../../api/solarshopAccounts";
 import TransactionDetailsDrawer from "../../components/TransactionDetailsDrawer";
+import Product8StageJourneyModal from "../../components/Product8StageJourneyModal";
 import Button from "../../components/Button";
 
 export default function DirectEpcTransactions() {
@@ -35,9 +36,10 @@ export default function DirectEpcTransactions() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Drawer
+  // Drawer & Journey Modal
   const [selectedTxn, setSelectedTxn] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [journeyOrder, setJourneyOrder] = useState(null);
 
   useEffect(() => {
     fetchDirectOrders();
@@ -389,24 +391,34 @@ export default function DirectEpcTransactions() {
                       {renderStatusBadge(o.payment_status)}
                     </td>
 
-                    {/* View Details Button */}
+                    {/* Actions */}
                     <td className="px-4 sm:px-6 py-3.5 text-center whitespace-nowrap">
-                      <Button
-                        variant={o.payment_status === "Pending" ? "primary" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setSelectedTxn({ ...o, type_key: "direct_epc", transaction_type: "Direct EPC Transaction" });
-                          setIsDrawerOpen(true);
-                        }}
-                        className={`text-xs font-bold px-3 py-1 gap-1 ${
-                          o.payment_status === "Pending"
-                            ? "bg-amber-500 hover:bg-amber-600 text-white border-none shadow-xs animate-pulse"
-                            : "border-purple-500/30 text-purple-600 hover:bg-purple-600 hover:text-white"
-                        }`}
-                      >
-                        <MdVisibility size={14} />
-                        {o.payment_status === "Pending" ? "Verify Payment" : "View Details"}
-                      </Button>
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => setJourneyOrder(o)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-white shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                          title="Open 8-Step Product Journey"
+                        >
+                          <FaTruckMoving size={11} />
+                          <span>8-Step Journey</span>
+                        </button>
+                        <Button
+                          variant={o.payment_status === "Pending" ? "primary" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTxn({ ...o, type_key: "direct_epc", transaction_type: "Direct EPC Transaction" });
+                            setIsDrawerOpen(true);
+                          }}
+                          className={`text-xs font-bold px-3 py-1 gap-1 ${
+                            o.payment_status === "Pending"
+                              ? "bg-amber-500 hover:bg-amber-600 text-white border-none shadow-xs animate-pulse"
+                              : "border-purple-500/30 text-purple-600 hover:bg-purple-600 hover:text-white"
+                          }`}
+                        >
+                          <MdVisibility size={14} />
+                          {o.payment_status === "Pending" ? "Verify Payment" : "View Details"}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -447,6 +459,19 @@ export default function DirectEpcTransactions() {
         transaction={selectedTxn}
         onStatusUpdated={fetchDirectOrders}
       />
+
+      {/* ── PRODUCT 8-STAGE JOURNEY MODAL ──────────────────────────────────── */}
+      {journeyOrder && (
+        <Product8StageJourneyModal
+          isOpen={!!journeyOrder}
+          onClose={() => setJourneyOrder(null)}
+          order={journeyOrder}
+          orderType="direct_epc"
+          onStageUpdated={() => {
+            fetchDirectOrders();
+          }}
+        />
+      )}
     </div>
   );
 }

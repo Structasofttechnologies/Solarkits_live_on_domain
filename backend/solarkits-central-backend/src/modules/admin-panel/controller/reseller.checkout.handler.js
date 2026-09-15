@@ -17,6 +17,10 @@ const {
   processEpcCheckout,
   confirmEpcOrderPayment,
 } = require('../services/epc.order.service');
+const {
+  updateOrderStage,
+  assignVehicleToOrder,
+} = require('../services/epc.offline.checkout.service');
 
 // ─── 1. VALIDATE CHECKOUT ─────────────────────────────────────────────────────
 /**
@@ -521,6 +525,92 @@ const get_orders_stats = async (req, res) => {
   }
 };
 
+// ─── Module 1: Order Stage Transitions & Vehicle Assignment ─────────────────
+/**
+ * POST /admin-api/reseller-mgmt/orders/:id/stage/:stage
+ */
+const update_order_stage = async (req, res) => {
+  try {
+    const { id, stage } = req.params;
+    const admin_user_id = req.user?._id || req.user?.id || 'admin';
+    const { dispatch_data, milestone } = req.body;
+
+    // Check if it's an EpcOrder
+    const isEpc = await EpcOrder.findById(id);
+    if (isEpc) {
+      const updated = await updateOrderStage({
+        order_id: id,
+        new_status: stage,
+        admin_user_id,
+        dispatch_data,
+        milestone,
+        req,
+      });
+      return res.json({
+        status: 'success',
+        data: updated,
+        message: `Order transitioned to ${stage} successfully.`
+      });
+    }
+
+    // Check if FpoOrder
+    const fpo = await FpoOrder.findById(id);
+    if (fpo) {
+      fpo.status = stage.toUpperCase();
+      if (stage === 'dispatched' && dispatch_data) {
+        fpo.dispatch_tracking = {
+          tracking_number: dispatch_data.tracking_number,
+          courier_name: dispatch_data.courier_name,
+          dispatched_at: new Date(),
+        };
+      }
+      if (stage === 'delivered') {
+        fpo.delivered_at = new Date();
+      }
+      await fpo.save();
+      return res.json({
+        status: 'success',
+        data: fpo,
+        message: `PO Order transitioned to ${stage} successfully.`
+      });
+    }
+
+    return res.status(404).json({ status: 'error', message: 'Order not found.' });
+  } catch (err) {
+    console.error('[update_order_stage] Error:', err);
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+};
+
+/**
+ * POST /admin-api/reseller-mgmt/orders/:id/assign-vehicle
+ */
+const assign_order_vehicle = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { vehicle_id, is_override, override_reason } = req.body;
+    const admin_user_id = req.user?._id || req.user?.id || 'admin';
+
+    const order = await assignVehicleToOrder({
+      order_id: id,
+      vehicle_id,
+      admin_user_id,
+      is_override,
+      override_reason,
+      req,
+    });
+
+    return res.json({
+      status: 'success',
+      data: order,
+      message: 'Vehicle assigned to order successfully.',
+    });
+  } catch (err) {
+    console.error('[assign_order_vehicle] Error:', err);
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+};
+
 module.exports = {
   validate_checkout,
   create_epc_order,
@@ -529,4 +619,6 @@ module.exports = {
   list_fpo_orders,
   list_loose_orders,
   get_orders_stats,
+  update_order_stage,
+  assign_order_vehicle,
 };

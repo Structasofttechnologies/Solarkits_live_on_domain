@@ -146,6 +146,9 @@ adminRouter.use('/quote-settings',               require('./modules/admin-panel/
 adminRouter.use('/estimator',                    require('./modules/admin-panel/routes/estimator.admin.route'));
 adminRouter.use('/project-boms',                 require('./modules/admin-panel/routes/estimator.admin.route'));
 
+// ─── Warehouse Panel routes accessible via Admin API ─────────────────────────
+adminRouter.use('/warehouse',                    require('./modules/warehouse-panel/routes/warehouse.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/admin-api', adminRouter);

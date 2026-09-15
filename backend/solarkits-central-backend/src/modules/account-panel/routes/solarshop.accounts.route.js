@@ -32,6 +32,32 @@ router.post('/epc-orders/:id/verify-payment', check_auth, solarshop_handler.veri
 router.post('/epc-orders/:id/dispatch', check_auth, solarshop_handler.dispatch_epc_order);
 router.post('/epc-orders/:id/deliver', check_auth, solarshop_handler.deliver_epc_order);
 
+// ── Module 1: 8-Stage Order Lifecycle Transition Routes ──────────────────────
+// Stage 2: Mark order as Processing (warehouse picking & packing started)
+router.post('/epc-orders/:id/stage/processing',          check_auth, solarshop_handler.stage_processing);
+// Fleet Vehicles list for Stage 3 vehicle assignment
+router.get('/warehouse-vehicles',                        check_auth, solarshop_handler.get_warehouse_vehicles);
+router.get('/warehouse/vehicles',                        check_auth, solarshop_handler.get_warehouse_vehicles);
+// Stage 3: Assign a vehicle (recommended auto-fill or admin override)
+router.post('/epc-orders/:id/stage/assign-vehicle',      check_auth, solarshop_handler.stage_assign_vehicle);
+// Stage 4: Mark Ready for Dispatch (packing complete, staged at gate)
+router.post('/epc-orders/:id/stage/ready-for-dispatch',  check_auth, solarshop_handler.stage_ready_for_dispatch);
+// Stage 5: Mark Dispatched (vehicle has left the warehouse gate)
+router.post('/epc-orders/:id/stage/dispatched',          check_auth, solarshop_handler.stage_dispatched);
+// Stage 6: Log In-Transit milestone update (can be called multiple times)
+router.post('/epc-orders/:id/stage/in-transit',          check_auth, solarshop_handler.stage_in_transit);
+// Stage 7: Mark Reached Destination
+router.post('/epc-orders/:id/stage/reached-destination', check_auth, solarshop_handler.stage_reached_destination);
+// Stage 8: Mark Delivered
+router.post('/epc-orders/:id/stage/delivered',           check_auth, solarshop_handler.stage_delivered);
+
+// ── Module 1.1: FPO & Generic Order 8-Stage Lifecycle Routes ──────────────────
+router.post('/fpo-orders/:id/stage/assign-vehicle',      check_auth, solarshop_handler.stage_fpo_assign_vehicle);
+router.post('/fpo-orders/:id/stage/:stage',             check_auth, solarshop_handler.stage_fpo_order);
+router.post('/orders/:orderType/:id/stage/assign-vehicle', check_auth, solarshop_handler.assign_vehicle_generic_order);
+router.post('/orders/:orderType/:id/stage/:stage',      check_auth, solarshop_handler.stage_generic_order);
+router.get('/orders/:orderType/:id/stage-details',       check_auth, solarshop_handler.get_order_stage_details);
+
 // 9. EPC PO Payments Verification (FPO Allocations)
 router.get('/epc-po-payments', check_auth, solarshop_handler.get_epc_po_payments);
 router.post('/epc-po-payments/:poId/allocations/:epcId/verify', check_auth, solarshop_handler.verify_epc_po_payment);

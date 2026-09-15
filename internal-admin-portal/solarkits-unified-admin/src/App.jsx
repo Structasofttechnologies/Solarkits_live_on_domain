@@ -52,6 +52,7 @@ export default function App() {
           <Route path="/developer-panel/*" element={<DeveloperPortalApp />} />
 
           {/* Warehouse Panel */}
+          <Route path="/warehouse-management-panel/*" element={<WarehousePortalApp />} />
           <Route path="/warehouse-profile/*" element={<WarehousePortalApp />} />
           <Route path="/pending-validation/*" element={<WarehousePortalApp />} />
           <Route path="/in-review/*" element={<WarehousePortalApp />} />

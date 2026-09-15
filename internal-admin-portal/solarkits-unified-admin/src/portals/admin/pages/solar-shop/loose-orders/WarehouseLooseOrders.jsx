@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import ReactCountryFlag from "react-country-flag";
@@ -26,6 +26,8 @@ const API_URL = import.meta.env.VITE_API_URL;
 export default function WarehouseLooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
   const { countryName, warehouseId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isWarehousePanel = location.pathname.startsWith("/warehouse-management-panel");
   const dispatch = useDispatch();
   const token = useSelector((state) => state.auth.token);
 
@@ -50,7 +52,7 @@ export default function WarehouseLooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDER
   const fetchData = async () => {
     setLoading(true);
     try {
-      const isIndia = (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
+      const isIndia = isWarehousePanel || (countryName || "india").toLowerCase() === "india" || (countryName || "").toLowerCase() === "in";
       const endpoint = isIndia ? "india/loose-order-settings" : "loose-order-settings";
 
       const [countriesRes, warehousesRes, settingsRes] = await Promise.all([
@@ -62,16 +64,13 @@ export default function WarehouseLooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDER
           `${API_URL}/warehouses?unique_id=ADM_CO_MARGIN&req_for=view`,
           { headers: authHeaderObj() }
         ),
-        axios.get(
-          `${API_URL}/solarshop/${endpoint}/warehouse/${warehouseId}?unique_id=${moduleUniqueId}&req_for=view`,
-          { headers: authHeaderObj() }
-        ).catch(() => ({ data: { data: null } }))
+        axios.get(`${API_URL}/solarshop/${endpoint}/warehouse/${warehouseId}?unique_id=${moduleUniqueId}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: null } }))
       ]);
 
       const activeCountries = countriesRes.data?.countries || [];
       const foundCountry = activeCountries.find(
-        (c) => c.name.toLowerCase() === countryName?.toLowerCase()
-      );
+        (c) => c.name.toLowerCase() === (countryName || "india")?.toLowerCase()
+      ) || activeCountries[0];
       setCountryObj(foundCountry);
 
       const allWarehouses = warehousesRes.data?.warehouses || [];
@@ -137,7 +136,13 @@ export default function WarehouseLooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDER
       <div className="card p-6 bg-surface border border-border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/loose-orders`)}
+            onClick={() => {
+              if (isWarehousePanel) {
+                navigate('/warehouse-management-panel/loose-orders');
+              } else {
+                navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/loose-orders`);
+              }
+            }}
             className="w-10 h-10 rounded-xl bg-surface-hover border border-border flex items-center justify-center text-text-muted hover:text-primary transition-colors"
           >
             <FaArrowLeft />

@@ -157,6 +157,23 @@ const schema = new mongoose.Schema({
   is_operational:        { type: Boolean, default: false },
   operations_started_at: { type: Date, default: null },
 
+  // ── Module 1.1: Franchisee Warehouse Physical Capacity (for Checkout Validation) ──
+  // These metrics are used during EPC Buyer checkout to validate whether the
+  // Franchisee Warehouse can absorb the incoming order without overflow.
+  //
+  // Available Capacity = max_kits - (current_stock_kits + allocated_incoming_kits)
+  //
+  // CRITICAL: allocated_incoming_kits must be incremented atomically at order
+  // placement (Double Commit Prevention) — not deferred to physical dispatch.
+  warehouse_capacity: {
+    max_kits:                  { type: Number, default: 0 }, // Maximum physical kit storage capacity
+    max_weight_kg:             { type: Number, default: 0 }, // Maximum weight in kg
+    max_area_sqft:             { type: Number, default: 0 }, // Physical floor area in sq ft
+    current_stock_kits:        { type: Number, default: 0 }, // Current kits physically in warehouse
+    allocated_incoming_kits:   { type: Number, default: 0 }, // Orders placed but not yet delivered (committed slots)
+    last_capacity_updated_at:  { type: Date, default: null },
+  },
+
   activation_status: {
     type: String,
     enum: ['pending', 'active', 'suspended', 'terminated'],

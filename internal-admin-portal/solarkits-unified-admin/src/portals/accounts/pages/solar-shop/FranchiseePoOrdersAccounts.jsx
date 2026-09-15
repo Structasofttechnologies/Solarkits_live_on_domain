@@ -26,28 +26,58 @@ import {
 } from "react-icons/fa";
 import { authHeaderObj } from "@/app/authHeader";
 import Loader from "@/components/Loader";
+import Product8StageJourneyModal from "../../components/Product8StageJourneyModal";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 const STATUS_BADGES = {
-  DRAFT:             { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300" },
-  SUBMITTED:         { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
-  PENDING_APPROVAL:  { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
-  CHANGES_REQUESTED: { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
-  APPROVED:          { label: "Approved (Awaiting Payment)", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
-  REJECTED:          { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400" },
-  AWAITING_PAYMENT:  { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
-  PARTIALLY_PAID:    { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400" },
-  PAID:              { label: "Payment Verified", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  PROCESSING:        { label: "Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
-  DISPATCHED:        { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
-  DELIVERED:         { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  COMPLETED:         { label: "Settled & Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
-  CANCELLED:         { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400" },
+  DRAFT:               { label: "Draft", bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300" },
+  SUBMITTED:           { label: "Submitted", bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-600 dark:text-blue-400" },
+  PENDING_APPROVAL:    { label: "Pending Approval", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-600 dark:text-amber-400" },
+  CHANGES_REQUESTED:   { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400" },
+  APPROVED:            { label: "Approved (Awaiting Payment)", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
+  REJECTED:            { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400" },
+  AWAITING_PAYMENT:    { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400" },
+  PARTIALLY_PAID:      { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400" },
+  PAID:                { label: "1. Confirmed (Paid)", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  CONFIRMED:           { label: "1. Confirmed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  STOCK_ALLOCATED:     { label: "2. Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
+  PROCESSING:          { label: "2. Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400" },
+  VEHICLE_ASSIGNED:    { label: "3. Vehicle Assigned", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-300" },
+  READY_FOR_DISPATCH:  { label: "4. Ready for Dispatch", bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300" },
+  PARTIALLY_DISPATCHED:{ label: "5. Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
+  DISPATCHED:          { label: "5. Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400" },
+  IN_TRANSIT:          { label: "6. In Transit", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300" },
+  REACHED_DESTINATION: { label: "7. Reached Dest.", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-700 dark:text-teal-300" },
+  DELIVERED:           { label: "8. Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  COMPLETED:           { label: "8. Settled & Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400" },
+  CANCELLED:           { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400" },
 };
 
+function getStageBadgeText(status) {
+  const norm = String(status || "SUBMITTED").toUpperCase();
+  const map = {
+    CONFIRMED: "Stage 1/8",
+    PAID: "Stage 1/8",
+    APPROVED: "Stage 1/8",
+    SUBMITTED: "Stage 1/8",
+    PROCESSING: "Stage 2/8",
+    STOCK_ALLOCATED: "Stage 2/8",
+    VEHICLE_ASSIGNED: "Stage 3/8",
+    READY_FOR_DISPATCH: "Stage 4/8",
+    PARTIALLY_DISPATCHED: "Stage 5/8",
+    DISPATCHED: "Stage 5/8",
+    IN_TRANSIT: "Stage 6/8",
+    REACHED_DESTINATION: "Stage 7/8",
+    DELIVERED: "Stage 8/8 ✓",
+    COMPLETED: "Stage 8/8 ✓",
+  };
+  return map[norm] || "Stage 1/8";
+}
+
 function StatusBadge({ status }) {
-  const cfg = STATUS_BADGES[status] || STATUS_BADGES.SUBMITTED;
+  const norm = String(status || "SUBMITTED").toUpperCase();
+  const cfg = STATUS_BADGES[norm] || STATUS_BADGES.SUBMITTED;
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black border border-current/20 ${cfg.bg} ${cfg.text}`}>
       {cfg.label}
@@ -68,6 +98,10 @@ export default function FranchiseePoOrdersAccounts() {
   const [actionLoading, setActionLoading] = useState(false);
   const [alertMsg, setAlertMsg] = useState(null);
   const [verifyingEpcReceipt, setVerifyingEpcReceipt] = useState(null); // { poId, epcBuyerId, action }
+
+  // 8-Step Journey Modal State
+  const [journeyOrder, setJourneyOrder] = useState(null);
+  const [journeyProduct, setJourneyProduct] = useState(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -468,12 +502,28 @@ export default function FranchiseePoOrdersAccounts() {
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-all cursor-pointer shadow-xs"
-                        >
-                          Review & Settle
-                        </button>
+                        <div className="flex items-center justify-end gap-2 flex-wrap">
+                          <button
+                            onClick={() => {
+                              setJourneyOrder(order);
+                              setJourneyProduct(item);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-primary hover:opacity-95 text-white shadow-xs hover:shadow-md transition-all cursor-pointer whitespace-nowrap"
+                            title="Open 8-Step Product Journey Lifecycle"
+                          >
+                            <FaTruckMoving size={12} />
+                            <span>8-Step Journey</span>
+                            <span className="ml-1 px-1.5 py-0.2 rounded-md bg-white/20 text-[10px] font-extrabold">
+                              {getStageBadgeText(order.status)}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-surface-hover hover:bg-border text-text-primary border border-border transition-all cursor-pointer shadow-xs"
+                          >
+                            Review & Settle
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -904,6 +954,23 @@ export default function FranchiseePoOrdersAccounts() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── PRODUCT 8-STAGE JOURNEY MODAL ──────────────────────────────────── */}
+      {journeyOrder && (
+        <Product8StageJourneyModal
+          isOpen={!!journeyOrder}
+          onClose={() => {
+            setJourneyOrder(null);
+            setJourneyProduct(null);
+          }}
+          order={journeyOrder}
+          product={journeyProduct}
+          orderType="po"
+          onStageUpdated={() => {
+            fetchOrders();
+          }}
+        />
       )}
     </div>
   );

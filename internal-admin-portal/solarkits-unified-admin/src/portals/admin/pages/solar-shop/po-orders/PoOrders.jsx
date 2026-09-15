@@ -18,7 +18,8 @@ import {
   FaEye,
   FaTruck,
   FaMoneyBillWave,
-  FaTimes
+  FaTimes,
+  FaTruckMoving
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -26,28 +27,58 @@ import CustomTable from "@/components/CustomTable";
 import Dropdown from "@/components/Dropdown";
 import Loader from "@/components/Loader";
 import { authHeaderObj } from "@/app/authHeader";
+import Product8StageJourneyModal from "../../../../accounts/components/Product8StageJourneyModal";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 const STATUS_BADGES = {
-  DRAFT:             { label: "Draft", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
-  SUBMITTED:         { label: "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
-  PENDING_APPROVAL:  { label: "Pending Approval", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
-  CHANGES_REQUESTED: { label: "Changes Requested", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
-  APPROVED:          { label: "Approved", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  REJECTED:          { label: "Rejected", bg: "#fef2f2", text: "#b91c1c", border: "#fca5a5" },
-  AWAITING_PAYMENT:  { label: "Awaiting Payment", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
-  PARTIALLY_PAID:    { label: "Partially Paid", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
-  PAID:              { label: "Paid", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
-  PROCESSING:        { label: "Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
-  DISPATCHED:        { label: "Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
-  DELIVERED:         { label: "Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  COMPLETED:         { label: "Completed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  CANCELLED:         { label: "Cancelled", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
+  DRAFT:                { label: "Draft", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
+  SUBMITTED:            { label: "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
+  PENDING_APPROVAL:     { label: "Pending Approval", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+  CHANGES_REQUESTED:    { label: "Changes Requested", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
+  APPROVED:             { label: "Approved (Awaiting Payment)", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  REJECTED:             { label: "Rejected", bg: "#fef2f2", text: "#b91c1c", border: "#fca5a5" },
+  AWAITING_PAYMENT:     { label: "Awaiting Payment", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+  PARTIALLY_PAID:       { label: "Partially Paid", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  PAID:                 { label: "1. Confirmed (Paid)", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+  CONFIRMED:            { label: "1. Confirmed", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+  STOCK_ALLOCATED:      { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+  PROCESSING:           { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+  VEHICLE_ASSIGNED:     { label: "3. Vehicle Assigned", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+  READY_FOR_DISPATCH:   { label: "4. Ready for Dispatch", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+  PARTIALLY_DISPATCHED: { label: "5. Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
+  DISPATCHED:           { label: "5. Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
+  IN_TRANSIT:           { label: "6. In Transit", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
+  REACHED_DESTINATION:  { label: "7. Reached Dest.", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  DELIVERED:            { label: "8. Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  COMPLETED:            { label: "8. Settled & Completed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  CANCELLED:            { label: "Cancelled", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
 };
 
+function getStageBadgeText(status) {
+  const norm = String(status || "SUBMITTED").toUpperCase();
+  const map = {
+    CONFIRMED: "Stage 1/8",
+    PAID: "Stage 1/8",
+    APPROVED: "Stage 1/8",
+    SUBMITTED: "Stage 1/8",
+    PROCESSING: "Stage 2/8",
+    STOCK_ALLOCATED: "Stage 2/8",
+    VEHICLE_ASSIGNED: "Stage 3/8",
+    READY_FOR_DISPATCH: "Stage 4/8",
+    PARTIALLY_DISPATCHED: "Stage 5/8",
+    DISPATCHED: "Stage 5/8",
+    IN_TRANSIT: "Stage 6/8",
+    REACHED_DESTINATION: "Stage 7/8",
+    DELIVERED: "Stage 8/8 ✓",
+    COMPLETED: "Stage 8/8 ✓",
+  };
+  return map[norm] || "Stage 1/8";
+}
+
 function StatusBadge({ status }) {
-  const cfg = STATUS_BADGES[status] || { label: status || "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" };
+  const norm = String(status || "SUBMITTED").toUpperCase();
+  const cfg = STATUS_BADGES[norm] || { label: norm, bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" };
   return (
     <span
       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black whitespace-nowrap shadow-2xs"
@@ -76,6 +107,8 @@ export default function PoOrders({ moduleUniqueId }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [verifyingEpcReceipt, setVerifyingEpcReceipt] = useState(null); // { poId, epcBuyerId, action }
+  const [journeyOrder, setJourneyOrder] = useState(null);
+  const [journeyProduct, setJourneyProduct] = useState(null);
 
   // Payment Confirmation Modal State
   const [paymentRefInput, setPaymentRefInput] = useState("");
@@ -687,14 +720,30 @@ export default function PoOrders({ moduleUniqueId }) {
 
                   {/* Actions */}
                   <td className="px-5 py-4 text-right whitespace-nowrap">
-                    <Button
-                      onClick={() => setSelectedOrder(order)}
-                      size="sm"
-                      leftIcon={<FaEye size={12} />}
-                      className="rounded-xl text-xs font-black py-2 px-3.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
-                    >
-                      Review & Actions
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setJourneyOrder(order);
+                          setJourneyProduct(item);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-primary hover:opacity-95 text-white shadow-xs hover:shadow-md transition-all cursor-pointer whitespace-nowrap"
+                        title="View 8-Step Product Journey Lifecycle"
+                      >
+                        <FaTruckMoving size={12} />
+                        <span>8-Step Journey</span>
+                        <span className="ml-1 px-1.5 py-0.2 rounded-md bg-white/20 text-[10px] font-extrabold">
+                          {getStageBadgeText(order.status)}
+                        </span>
+                      </button>
+                      <Button
+                        onClick={() => setSelectedOrder(order)}
+                        size="sm"
+                        leftIcon={<FaEye size={12} />}
+                        className="rounded-xl text-xs font-black py-2 px-3.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
+                      >
+                        Review & Actions
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -1024,6 +1073,17 @@ export default function PoOrders({ moduleUniqueId }) {
                       <FaCheckCircle size={12} /> Mark Delivered
                     </button>
                   )}
+
+                  {/* 8-Step Journey Direct Action */}
+                  <button
+                    onClick={() => {
+                      setJourneyOrder(selectedOrder);
+                      setJourneyProduct(selectedOrder.items?.[0]);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-primary hover:opacity-95 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <FaTruckMoving size={12} /> 8-Step Journey ({getStageBadgeText(selectedOrder.status)})
+                  </button>
                 </div>
               </div>
             </div>
@@ -1076,6 +1136,23 @@ export default function PoOrders({ moduleUniqueId }) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── PRODUCT 8-STAGE JOURNEY MODAL ──────────────────────────────────── */}
+      {journeyOrder && (
+        <Product8StageJourneyModal
+          isOpen={!!journeyOrder}
+          onClose={() => {
+            setJourneyOrder(null);
+            setJourneyProduct(null);
+          }}
+          order={journeyOrder}
+          product={journeyProduct}
+          orderType="po"
+          onStageUpdated={() => {
+            fetchFpoOrders();
+          }}
+        />
       )}
     </div>
   );

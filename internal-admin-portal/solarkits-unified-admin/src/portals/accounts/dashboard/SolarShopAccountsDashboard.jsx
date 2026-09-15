@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaHandshake, FaBolt, FaCoins, FaUserCheck } from "react-icons/fa";
+import { FaHome, FaHandshake, FaBolt, FaCoins, FaUserCheck, FaBoxes } from "react-icons/fa";
 import { MdDashboard, MdPayments, MdShoppingCart, MdReceipt } from "react-icons/md";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,6 +13,7 @@ const DirectEpcTransactions = lazy(() => import("../pages/solar-shop/DirectEpcTr
 const FranchiseCommissionTracking = lazy(() => import("../pages/solar-shop/FranchiseCommissionTracking"));
 const OnboardedEpcPurchases = lazy(() => import("../pages/solar-shop/OnboardedEpcPurchases"));
 const FranchiseePoOrdersAccounts = lazy(() => import("../pages/solar-shop/FranchiseePoOrdersAccounts"));
+const LooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/LooseOrders"));
 const Profile = lazy(() => import("../pages/Profile"));
 const AccountSettings = lazy(() => import("../pages/AccountSettings"));
 
@@ -27,6 +28,11 @@ const solarShopMenus = [
       name: "Franchisee PO Orders",
       icon: <MdReceipt />,
       path: "/account-panel/solar-shop/franchisee-po-orders",
+    },
+    {
+      name: "Loose Orders",
+      icon: <FaBoxes />,
+      path: "/account-panel/solar-shop/loose-orders",
     },
     {
       name: "Franchise Plan Purchases",
@@ -121,6 +127,14 @@ export default function SolarShopAccountsDashboard() {
                     element={
                       <Suspense fallback={<Loader text="Loading franchisee PO orders..." />}>
                         <FranchiseePoOrdersAccounts />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/loose-orders/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading loose orders..." />}>
+                        <LooseOrders moduleUniqueId="ACC_LOOSE_ORDERS" />
                       </Suspense>
                     }
                   />
