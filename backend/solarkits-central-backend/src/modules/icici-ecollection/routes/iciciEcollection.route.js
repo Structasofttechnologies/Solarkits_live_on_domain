@@ -3,11 +3,13 @@ const router = express.Router();
 const iciciController = require('../controllers/iciciEcollection.controller');
 
 // ─── ICICI Bank Gateway Webhook Endpoints ──────────────────────────────
-// MSG HOLD: Remitter validation before credit
+// MSG HOLD / Validation: Remitter validation before credit
 router.post('/msg-hold', iciciController.handleMsgHold);
+router.post('/validate', iciciController.handleMsgHold);
 
-// MIS POSTING: Final payment credit & reconciliation
+// MIS POSTING / Callback: Final payment credit & reconciliation
 router.post('/mis-posting', iciciController.handleMisPosting);
+router.post('/callback', iciciController.handleMisPosting);
 
 // ─── Real-Time Stream (SSE) for Admin, Accounts & Franchise Dashboards ─
 router.get('/stream', iciciController.streamPaymentEvents);

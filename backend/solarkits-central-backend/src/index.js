@@ -204,6 +204,7 @@ app.use('/supplier-api', supplierRouter);
 // 11. ICICI Bank E-Collection Webhooks & Real-Time Stream
 const iciciEcollectionRouter = require('./modules/icici-ecollection/routes/iciciEcollection.route');
 app.use('/api/v1/payments/icici', iciciEcollectionRouter);
+app.use('/api/icici/payment', iciciEcollectionRouter);
 app.use('/admin-api/payments/icici', iciciEcollectionRouter);
 app.use('/account-api/payments/icici', iciciEcollectionRouter);
 app.use('/admin-api/api/v1/payments/icici', iciciEcollectionRouter);

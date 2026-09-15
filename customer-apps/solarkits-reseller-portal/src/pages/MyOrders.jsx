@@ -16,31 +16,19 @@ export default function MyOrders() {
     pending_verification_count: 0,
     active_dispatch_count: 0,
   });
-  const [warehouseCapacity, setWarehouseCapacity] = useState({
-    max_kits: 50,
-    max_weight_kg: 10000,
-    current_stock_kits: 0,
-    allocated_incoming_kits: 0,
-  });
   const [loading, setLoading] = useState(true);
   const [filterTab, setFilterTab] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   const fetchEpcOrders = () => {
     setLoading(true);
-    Promise.all([
-      api.get("/india/v1/reseller/epc-orders/list"),
-      api.get("/india/v1/reseller/auth/me").catch(() => ({ data: null })),
-    ])
-      .then(([ordersRes, meRes]) => {
+    api.get("/india/v1/reseller/epc-orders/list")
+      .then((ordersRes) => {
         if (ordersRes.data?.status === "success") {
           setOrders(ordersRes.data.data || []);
           if (ordersRes.data.stats) {
             setStats(ordersRes.data.stats);
           }
-        }
-        if (meRes.data?.data?.warehouse_capacity || meRes.data?.user?.warehouse_capacity) {
-          setWarehouseCapacity(meRes.data.data?.warehouse_capacity || meRes.data.user?.warehouse_capacity);
         }
       })
       .catch((err) => {
@@ -87,112 +75,6 @@ export default function MyOrders() {
         </button>
       </div>
 
-      {/* ── Franchisee Warehouse Live Capacity Dashboard Widget (Module 1.1) ── */}
-      {warehouseCapacity && (() => {
-        const maxKits = Number(warehouseCapacity.max_kits || 50);
-        const currentStock = Number(warehouseCapacity.current_stock_kits || 0);
-        const incomingReserved = Number(warehouseCapacity.allocated_incoming_kits || 0);
-        const totalCommitted = currentStock + incomingReserved;
-        const availableSlots = Math.max(0, maxKits - totalCommitted);
-        const utilizationPct = Math.min(100, Math.round((totalCommitted / maxKits) * 100));
-
-        const isFull = availableSlots <= 0;
-        const isNearCapacity = utilizationPct >= 80;
-
-        return (
-          <div className="bg-white p-6 rounded-3xl text-slate-900 shadow-sm border border-slate-200 relative overflow-hidden">
-            {/* Subtle background decoration */}
-            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-50/50 rounded-full blur-3xl -z-0 pointer-events-none" />
-
-            <div className="relative z-10 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs">
-                    <FaWarehouse size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-black tracking-tight text-slate-900 flex items-center gap-2">
-                      Franchisee Warehouse Storage Capacity
-                      {isFull ? (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-red-50 text-red-700 font-extrabold border border-red-200">
-                          At Capacity Limit
-                        </span>
-                      ) : isNearCapacity ? (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 font-extrabold border border-amber-200">
-                          Near Full ({utilizationPct}%)
-                        </span>
-                      ) : (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-200">
-                          Optimal Capacity
-                        </span>
-                      )}
-                    </h2>
-                    <p className="text-xs text-slate-500 font-medium">
-                      Live physical storage tracking & incoming order commitment ledger
-                    </p>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-[11px] text-slate-400 font-semibold block">Available Inward Capacity</span>
-                  <span className={`text-2xl font-black font-mono ${availableSlots > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {availableSlots} Kits Remaining
-                  </span>
-                </div>
-              </div>
-
-              {/* 4 Metric Cards Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100 text-center">
-                  <span className="text-[11px] font-bold text-slate-500 block">Max Storage Capacity</span>
-                  <p className="text-lg font-black text-slate-900 mt-0.5">{maxKits} Kits</p>
-                  <span className="text-[10px] text-slate-400 font-mono">({warehouseCapacity.max_weight_kg ? `${warehouseCapacity.max_weight_kg} kg` : '10,000 kg'})</span>
-                </div>
-
-                <div className="bg-blue-50/50 p-3.5 rounded-2xl border border-blue-100 text-center">
-                  <span className="text-[11px] font-bold text-blue-700 block">Current Physical Stock</span>
-                  <p className="text-lg font-black text-blue-800 mt-0.5">{currentStock} Kits</p>
-                  <span className="text-[10px] text-blue-600/80 font-medium">In-hub physical</span>
-                </div>
-
-                <div className="bg-amber-50/50 p-3.5 rounded-2xl border border-amber-100 text-center">
-                  <span className="text-[11px] font-bold text-amber-700 block">Incoming Reserved</span>
-                  <p className="text-lg font-black text-amber-800 mt-0.5">{incomingReserved} Kits</p>
-                  <span className="text-[10px] text-amber-600/80 font-medium">En route / staged</span>
-                </div>
-
-                <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100 text-center">
-                  <span className="text-[11px] font-bold text-slate-500 block">Capacity Utilization</span>
-                  <p className={`text-lg font-black mt-0.5 ${isFull ? "text-red-600" : isNearCapacity ? "text-amber-600" : "text-emerald-600"}`}>
-                    {utilizationPct}%
-                  </p>
-                  <span className="text-[10px] text-slate-400 font-medium">{totalCommitted}/{maxKits} committed</span>
-                </div>
-              </div>
-
-              {/* Utilization Progress Bar */}
-              <div className="space-y-1.5 pt-1">
-                <div className="flex justify-between text-[11px] font-bold text-slate-500">
-                  <span>Storage Allocation Load</span>
-                  <span className="text-slate-700">{utilizationPct}% Full</span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${
-                      isFull
-                        ? "bg-red-500"
-                        : isNearCapacity
-                        ? "bg-amber-500"
-                        : "bg-gradient-to-r from-blue-600 to-emerald-500"
-                    }`}
-                    style={{ width: `${utilizationPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Filter Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
