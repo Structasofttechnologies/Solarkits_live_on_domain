@@ -28,6 +28,7 @@ const Dialog = ({ isOpen, open, onClose, children, title, footer, size = "md" })
     md: "max-w-2xl",
     lg: "max-w-4xl",
     xl: "max-w-6xl",
+    "2xl": "max-w-7xl",
     full: "max-w-[95vw]"
   };
 
@@ -51,7 +52,7 @@ const Dialog = ({ isOpen, open, onClose, children, title, footer, size = "md" })
     >
       {/* Modal Box — stop propagation so inner mouse events don't reach backdrop */}
       <div
-        className={`bg-surface rounded-2xl shadow-2xl w-full ${sizeClasses[size]} max-h-[92vh] relative flex flex-col animate-in zoom-in-95 duration-200`}
+        className={`bg-surface rounded-2xl shadow-2xl w-full ${sizeClasses[size] || size} max-h-[92vh] relative flex flex-col animate-in zoom-in-95 duration-200`}
         onMouseDown={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
       >

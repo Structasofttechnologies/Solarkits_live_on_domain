@@ -5,6 +5,7 @@ import { FiChevronRight, FiHome } from "react-icons/fi";
 const PageHeader = ({ 
   title, 
   subtitle, 
+  subTitle,
   icon: Icon, 
   actions, 
   stats = [],
@@ -13,6 +14,7 @@ const PageHeader = ({
 }) => {
   const location = useLocation();
   const pathnames = location.pathname.split('/').filter((x) => x);
+  const displaySubtitle = subtitle || subTitle;
 
   return (
     <div className={`relative overflow-hidden rounded-2xl gradient-primary shadow-xl mb-8 ${className}`}>
@@ -25,7 +27,11 @@ const PageHeader = ({
           <div className="flex items-start gap-5">
             {Icon && (
               <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/30 shadow-lg shrink-0">
-                <Icon className="text-white text-3xl" />
+                {React.isValidElement(Icon) ? (
+                  Icon
+                ) : typeof Icon === 'function' ? (
+                  <Icon className="text-white text-3xl" />
+                ) : null}
               </div>
             )}
             <div>
@@ -58,9 +64,9 @@ const PageHeader = ({
               <h1 className="text-3xl lg:text-4xl font-bold text-white tracking-tight mb-2">
                 {title}
               </h1>
-              {subtitle && (
+              {displaySubtitle && (
                 <p className="text-white/80 text-lg max-w-2xl font-medium">
-                  {subtitle}
+                  {displaySubtitle}
                 </p>
               )}
             </div>

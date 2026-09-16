@@ -49,8 +49,16 @@ const s = new mongoose.Schema({
   is_active:          { type: Boolean, default: true },
   deleted_at:         { type: Date, default: null },
   created_at:         { type: Date, default: Date.now }
-}, { collection: 'pc_combo_kits', timestamps: false, toJSON: { virtuals: true }, toObject: { virtuals: true } });
+}, { collection: 'pc_comobo_kit', timestamps: false, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 s.virtual('id').get(function () { return this._id; });
 
-module.exports = db.model('pc_combo_kits', s);
+const WarehouseComboKit = db.model('pc_comobo_kit', s);
+
+if (!db.models['pc_combo_kits']) {
+  try {
+    db.model('pc_combo_kits', s, 'pc_comobo_kit');
+  } catch (e) {}
+}
+
+module.exports = WarehouseComboKit;

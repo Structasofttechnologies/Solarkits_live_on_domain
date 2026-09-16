@@ -16,7 +16,9 @@ router.get("/get-active-districts", check_auth, geolocation_handler.get_active_d
 router.get("/active-states", check_auth, geolocation_handler.get_active_states);
 router.get("/active-districts", check_auth, geolocation_handler.get_active_districts);
 router.get("/states", check_auth, geolocation_handler.get_states);
+router.get("/states/:country_id", check_auth, geolocation_handler.get_states);
 router.get("/districts", check_auth, geolocation_handler.get_districts);
+router.get("/districts/:state_id", check_auth, geolocation_handler.get_districts);
 
 const fpoGeoPermissions = [
     { unique_code: 'FPO_COMM', permissions: ['view'] },

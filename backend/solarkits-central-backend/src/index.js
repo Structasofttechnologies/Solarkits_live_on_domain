@@ -146,6 +146,9 @@ adminRouter.use('/quote-settings',               require('./modules/admin-panel/
 adminRouter.use('/estimator',                    require('./modules/admin-panel/routes/estimator.admin.route'));
 adminRouter.use('/project-boms',                 require('./modules/admin-panel/routes/estimator.admin.route'));
 
+// ─── Delivery Management & Route Consolidation System ─────────────────────────
+adminRouter.use('/delivery-management',           require('./modules/admin-panel/routes/delivery.management.route'));
+
 // ─── Warehouse Panel routes accessible via Admin API ─────────────────────────
 adminRouter.use('/warehouse',                    require('./modules/warehouse-panel/routes/warehouse.route'));
 

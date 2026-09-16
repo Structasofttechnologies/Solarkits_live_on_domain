@@ -53,6 +53,17 @@ const WarehouseMarginConfig = lazy(() => import("../pages/solar-shop/company-mar
 const WarehouseKitActivations = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitActivations"));
 const WarehouseKitConfig = lazy(() => import("../pages/solar-shop/warehouse-kit-activations/WarehouseKitConfig"));
 
+// ── Warehouse & Order Delivery Management Module ──────────────────────────────
+const DeliveryDashboard = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryDashboard"));
+const DeliveryQueue = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryQueue"));
+const DeliveryTracking = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryTracking"));
+const RouteConsolidationSettings = lazy(() => import("../pages/solar-shop/delivery-management/RouteConsolidationSettings"));
+const VehicleMaster = lazy(() => import("../pages/solar-shop/delivery-management/VehicleMaster"));
+const TransportVendors = lazy(() => import("../pages/solar-shop/delivery-management/TransportVendors"));
+const PhysicalVehicles = lazy(() => import("../pages/solar-shop/delivery-management/PhysicalVehicles"));
+const ComboKitWeightMaster = lazy(() => import("../pages/solar-shop/delivery-management/ComboKitWeightMaster"));
+const DeliveryCostSettings = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryCostSettings"));
+
 const menus = [
     [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/solar-shop/home", unique_id: "00000000" }],
     [
@@ -104,6 +115,68 @@ const menus = [
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
         { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
         { name: "Vehicles & Drivers", icon: <FaTruck />, path: "/admin-panel/solar-shop/vehicles-drivers", unique_id: "00000000" },
+        {
+            name: "Delivery Management",
+            icon: <FaTruck />,
+            path: "/admin-panel/solar-shop/delivery-management/vehicle-master",
+            unique_id: "ADM_DELIVERY_MGMT",
+            subMenu: [
+                {
+                    name: "1. Vehicle Master (Catalog)",
+                    icon: <FaTruck />,
+                    path: "/admin-panel/solar-shop/delivery-management/vehicle-master",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "2. Transport Vendors",
+                    icon: <FiUsers />,
+                    path: "/admin-panel/solar-shop/delivery-management/providers",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "3. Live Fleet & Vehicles",
+                    icon: <FaTruck />,
+                    path: "/admin-panel/solar-shop/delivery-management/fleet",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "4. ComboKit Weight Master",
+                    icon: <HiCube />,
+                    path: "/admin-panel/solar-shop/delivery-management/kit-weights",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "5. Delivery Cost Settings",
+                    icon: <FiDollarSign />,
+                    path: "/admin-panel/solar-shop/delivery-management/cost-settings",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "6. Route & Consolidation",
+                    icon: <FiSliders />,
+                    path: "/admin-panel/solar-shop/delivery-management/routes",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "7. Delivery Queue (FIFO)",
+                    icon: <FaBoxes />,
+                    path: "/admin-panel/solar-shop/delivery-management/queue",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "8. Trip Tracking & POD",
+                    icon: <FiMapPin />,
+                    path: "/admin-panel/solar-shop/delivery-management/tracking",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "9. Dashboard & Analytics",
+                    icon: <FiBarChart2 />,
+                    path: "/admin-panel/solar-shop/delivery-management/dashboard",
+                    unique_id: "ADM_DELIVERY_MGMT"
+                }
+            ]
+        },
         {
             name: "Margin & Commission",
             icon: <FaCoins />,
@@ -932,6 +1005,211 @@ export default function SolarShopDashboard() {
                                             <Suspense fallback={<Loader text="Loading Estimator Settings..." />}>
                                                 <EstimatorSettingsAdmin />
                                             </Suspense>
+                                        }
+                                    />
+
+                                    {/* ── Warehouse & Order Delivery Management Module ───────────── */}
+                                    {/* Direct Paths */}
+                                    <Route
+                                        path="/delivery-management"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Vehicle Master..." />}>
+                                                    <VehicleMaster />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/vehicle-master"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Vehicle Master..." />}>
+                                                    <VehicleMaster />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/providers"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Transport Vendors..." />}>
+                                                    <TransportVendors />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/fleet"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Physical Fleet..." />}>
+                                                    <PhysicalVehicles />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/kit-weights"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading ComboKit Weight Master..." />}>
+                                                    <ComboKitWeightMaster />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/cost-settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Cost Settings..." />}>
+                                                    <DeliveryCostSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/routes"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Route Consolidation Settings..." />}>
+                                                    <RouteConsolidationSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/queue"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Queue..." />}>
+                                                    <DeliveryQueue />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/tracking"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Tracking..." />}>
+                                                    <DeliveryTracking />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/delivery-management/dashboard"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Dashboard..." />}>
+                                                    <DeliveryDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+
+                                    {/* Country-prefixed Paths */}
+                                    <Route
+                                        path="/:countryName/delivery-management"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Vehicle Master..." />}>
+                                                    <VehicleMaster />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/vehicle-master"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Vehicle Master..." />}>
+                                                    <VehicleMaster />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/providers"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Transport Vendors..." />}>
+                                                    <TransportVendors />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/fleet"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Physical Fleet..." />}>
+                                                    <PhysicalVehicles />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/kit-weights"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading ComboKit Weight Master..." />}>
+                                                    <ComboKitWeightMaster />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/cost-settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Cost Settings..." />}>
+                                                    <DeliveryCostSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/routes"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Route Consolidation Settings..." />}>
+                                                    <RouteConsolidationSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/queue"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Queue..." />}>
+                                                    <DeliveryQueue />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/tracking"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Tracking..." />}>
+                                                    <DeliveryTracking />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/dashboard"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Dashboard..." />}>
+                                                    <DeliveryDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
                                         }
                                     />
 

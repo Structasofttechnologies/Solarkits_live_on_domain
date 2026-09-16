@@ -8,6 +8,7 @@ const { upload_any_files } = require('../utils/upload.files');
 
 const upload_to_cloudinary = upload_any_files('public/uploads/combo_kits', 10);
 
+router.get('/', check_auth, handler.get_combo_kits_india);
 router.post('/create-kit', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['add'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['add'] }, { unique_code: 'ADM_BULK_COMBO', permissions: ['add'] }]), upload_to_cloudinary, handler.create_combo_kit);
 router.get('/get-kits', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['view'] }, { unique_code: 'ADM_BETCHMARK_PRICE_MASTER', permissions: ['view'] }, { unique_code: 'ADM_PO_ORDERS', permissions: ['view'] }, { unique_code: 'ADM_CO_MARGIN', permissions: ['view'] }, { unique_code: 'ADM_BULK_COMBO', permissions: ['view'] }, { unique_code: 'ADM_WH_KIT_ACT', permissions: ['view'] }, { unique_code: 'ADM_ORDER_SETTINGS', permissions: ['view'] }, { unique_code: 'FPO_MOQ', permissions: ['view'] }, { unique_code: 'RSL_MGMT', permissions: ['view'] }]), handler.get_combo_kits);
 router.put('/update-kit', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['edit'] }, { unique_code: 'ADM_BULK_COMBO', permissions: ['edit'] }]), upload_to_cloudinary, handler.update_combo_kit);

@@ -398,15 +398,35 @@ const deactivate_country_logic = async (country_id) => {
  */
 const get_states = async (req, res) => {
   try {
-    const country_id = req.body?.country_id || req.query?.country_id || req.body?.country;
-    if (!country_id) {
+    let country_id = req.params?.country_id || req.body?.country_id || req.query?.country_id || req.body?.country;
+    let countryObjId = null;
+
+    if (country_id && mongoose.Types.ObjectId.isValid(country_id)) {
+      countryObjId = new mongoose.Types.ObjectId(country_id);
+    } else if (country_id && typeof country_id === 'string') {
+      const geoByName = await GeoLevel0.findOne({
+        name: { $regex: new RegExp(`^${country_id}$`, "i") },
+        $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+      });
+      if (geoByName) countryObjId = geoByName._id;
+    }
+
+    if (!countryObjId) {
+      const defaultCountry = await GeoLevel0.findOne({ 
+        is_active: true, 
+        $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
+      }).sort({ name: 1 });
+      if (defaultCountry) countryObjId = defaultCountry._id;
+    }
+
+    if (!countryObjId) {
       return res.status(400).json({
         message: "country_id is required",
         status: "error",
       });
     }
 
-    const geoCountry = await GeoLevel0.findById(country_id);
+    const geoCountry = await GeoLevel0.findById(countryObjId);
     if (!geoCountry) {
       return res.status(404).json({ message: "Country not found", status: "error" });
     }
@@ -414,7 +434,7 @@ const get_states = async (req, res) => {
     const states_raw = await GeoLevel1.aggregate([
       { 
         $match: { 
-          level_0: new mongoose.Types.ObjectId(country_id), 
+          level_0: countryObjId, 
           $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
         } 
       },
@@ -751,7 +771,7 @@ const deactivate_state_logic = async (state_id) => {
  */
 const get_districts = async (req, res) => {
   try {
-    const state_id = req.body?.state_id || req.query?.state_id || req.body?.state;
+    const state_id = req.params?.state_id || req.body?.state_id || req.query?.state_id || req.body?.state;
     if (!state_id) {
       return res.status(400).json({
         message: "state_id is required",
@@ -759,7 +779,22 @@ const get_districts = async (req, res) => {
       });
     }
 
-    const geoState = await GeoLevel1.findById(state_id).populate('level_0');
+    let stateObjId = null;
+    if (mongoose.Types.ObjectId.isValid(state_id)) {
+      stateObjId = new mongoose.Types.ObjectId(state_id);
+    } else if (typeof state_id === 'string') {
+      const stateByName = await GeoLevel1.findOne({
+        name: { $regex: new RegExp(`^${state_id}$`, "i") },
+        $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }]
+      });
+      if (stateByName) stateObjId = stateByName._id;
+    }
+
+    if (!stateObjId) {
+      return res.status(404).json({ message: "State not found", status: "error" });
+    }
+
+    const geoState = await GeoLevel1.findById(stateObjId).populate('level_0');
     if (!geoState) {
       return res.status(404).json({ message: "State not found", status: "error" });
     }
@@ -767,7 +802,7 @@ const get_districts = async (req, res) => {
     const districts_raw = await GeoLevel2.aggregate([
       { 
         $match: { 
-          level_1: new mongoose.Types.ObjectId(state_id), 
+          level_1: stateObjId, 
           $or: [{ deleted_at: null }, { deleted_at: { $exists: false } }] 
         } 
       },

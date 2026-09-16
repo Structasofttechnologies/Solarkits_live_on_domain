@@ -111,6 +111,16 @@ const BomRateHistory           = require('./bom_rate_history.schema');
 const EpcMarginEstimate        = require('./epc_margin_estimates.schema');
 const EstimatorSettings        = require('./estimator_settings.schema');
 
+// --- Delivery Management & Route Consolidation Module ---
+const DeliveryVehicleMaster    = require('./vehicle_master.schema');
+const DeliveryServiceProvider  = require('./delivery_service_provider.schema');
+const DeliveryVehicleFleet     = require('./delivery_vehicle_fleet.schema');
+const ComboKitWeightMaster     = require('./combokit_weight_master.schema');
+const DeliveryCostBenchmark    = require('./delivery_cost_benchmark.schema');
+const KitDeliveryCostRule      = require('./kit_delivery_cost_rule.schema');
+const DeliveryRouteSetting     = require('./delivery_route_setting.schema');
+const DeliveryOrder            = require('./delivery_order.schema');
+
 module.exports = {
   EpcAccount,
   EpcSignupRequest,
@@ -221,4 +231,13 @@ module.exports = {
   BomRateHistory,
   EpcMarginEstimate,
   EstimatorSettings,
+  // --- Delivery Management & Route Consolidation Module ---
+  DeliveryVehicleMaster,
+  DeliveryServiceProvider,
+  DeliveryVehicleFleet,
+  ComboKitWeightMaster,
+  DeliveryCostBenchmark,
+  KitDeliveryCostRule,
+  DeliveryRouteSetting,
+  DeliveryOrder,
 };
