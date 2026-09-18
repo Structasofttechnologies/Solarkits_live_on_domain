@@ -58,6 +58,16 @@ const schema = new mongoose.Schema({
     required: true,
     min: 0, // Per kit in ₹
   },
+  shipment_weight_kg: {
+    type: Number,
+    default: 0,
+    min: 0, // Total estimated shipment weight in KG
+  },
+  total_weight_kg: {
+    type: Number,
+    default: 0,
+    min: 0, // Backward compatibility alias
+  },
   free_delivery: {
     type: Boolean,
     default: false,

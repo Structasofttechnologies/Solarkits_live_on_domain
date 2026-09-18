@@ -7,6 +7,11 @@ const { india_solarshop_db: db } = require('../../config/databases');
  * Section 5: DELIVERY COST SETTINGS
  */
 const schema = new mongoose.Schema({
+  service_provider_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'delivery_service_providers',
+    default: null,
+  },
   warehouse_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'company_warehouses',
@@ -77,7 +82,14 @@ const schema = new mongoose.Schema({
 
 schema.virtual('id').get(function () { return this._id; });
 
-// Compound unique index on warehouse + vehicle + district
-schema.index({ warehouse_id: 1, vehicle_master_id: 1, district_id: 1 }, { unique: true });
+// Compound unique index on vendor + warehouse + vehicle + district
+schema.index({ service_provider_id: 1, warehouse_id: 1, vehicle_master_id: 1, district_id: 1 }, { unique: true });
 
-module.exports = db.model('delivery_cost_benchmarks', schema);
+const Model = db.model('delivery_cost_benchmarks', schema);
+
+// Safe cleanup of legacy 3-field index if present in MongoDB
+Model.collection.dropIndex('warehouse_id_1_vehicle_master_id_1_district_id_1').catch(() => {
+  // Ignore if old index does not exist
+});
+
+module.exports = Model;

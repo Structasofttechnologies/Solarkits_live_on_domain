@@ -118,16 +118,31 @@ export const deliveryApi = {
   },
 
   // ── 5. Delivery Cost Settings ──
-  getBenchmarks: async (warehouseId = null) => {
-    const res = await axios.get(`${API_BASE}/delivery-management/benchmarks${buildQuery({ warehouse_id: warehouseId })}`, getHeaders());
+  getBenchmarks: async (paramsOrWarehouseId = null) => {
+    const params = typeof paramsOrWarehouseId === 'string' || !paramsOrWarehouseId
+      ? { warehouse_id: paramsOrWarehouseId }
+      : paramsOrWarehouseId;
+    const res = await axios.get(`${API_BASE}/delivery-management/benchmarks${buildQuery(params)}`, getHeaders());
     return res.data;
   },
   createBenchmark: async (data) => {
     const res = await axios.post(`${API_BASE}/delivery-management/benchmarks`, data, getHeaders());
     return res.data;
   },
+  updateBenchmark: async (id, data) => {
+    const res = await axios.put(`${API_BASE}/delivery-management/benchmarks/${id}`, data, getHeaders());
+    return res.data;
+  },
+  bulkCreateBenchmarks: async (data) => {
+    const res = await axios.post(`${API_BASE}/delivery-management/benchmarks/bulk`, data, getHeaders());
+    return res.data;
+  },
   deleteBenchmark: async (id) => {
     const res = await axios.delete(`${API_BASE}/delivery-management/benchmarks/${id}`, getHeaders());
+    return res.data;
+  },
+  bulkDeleteBenchmarks: async (ids) => {
+    const res = await axios.post(`${API_BASE}/delivery-management/benchmarks/bulk-delete`, { ids }, getHeaders());
     return res.data;
   },
 
@@ -140,8 +155,16 @@ export const deliveryApi = {
     const res = await axios.post(`${API_BASE}/delivery-management/kit-rules`, data, getHeaders());
     return res.data;
   },
+  updateKitRule: async (id, data) => {
+    const res = await axios.put(`${API_BASE}/delivery-management/kit-rules/${id}`, data, getHeaders());
+    return res.data;
+  },
   deleteKitRule: async (id) => {
     const res = await axios.delete(`${API_BASE}/delivery-management/kit-rules/${id}`, getHeaders());
+    return res.data;
+  },
+  bulkDeleteKitRules: async (ids) => {
+    const res = await axios.post(`${API_BASE}/delivery-management/kit-rules/bulk-delete`, { ids }, getHeaders());
     return res.data;
   },
 
@@ -237,5 +260,56 @@ export const deliveryApi = {
   getDistricts: async (stateId) => {
     const res = await axios.get(`${API_BASE}/geolocation/districts${buildQuery({ state_id: stateId })}`, getHeaders());
     return res.data;
+  },
+
+  // ── 15. Hierarchy Filters ──
+  getIndustryTypes: async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/industry-types/list?active_only=true`, getHeaders());
+      return res.data;
+    } catch (e) {
+      console.error('Failed to get industry types', e);
+      return { data: [] };
+    }
+  },
+  getCategories: async (industryTypeId = null) => {
+    try {
+      const qs = industryTypeId ? `&industry_type_id=${industryTypeId}` : '';
+      const res = await axios.get(`${API_BASE}/project-types/get-categories?req_for=view${qs}`, getHeaders());
+      return res.data;
+    } catch (e) {
+      console.error('Failed to get categories', e);
+      return { data: [] };
+    }
+  },
+  getSubcategories: async (categoryId) => {
+    if (!categoryId) return { data: [] };
+    try {
+      const res = await axios.get(`${API_BASE}/project-types/get-subcategories?category_id=${categoryId}`, getHeaders());
+      return res.data;
+    } catch (e) {
+      console.error('Failed to get subcategories', e);
+      return { data: [] };
+    }
+  },
+  getSystemTypes: async (subcategoryId) => {
+    if (!subcategoryId) return { data: [] };
+    try {
+      const res = await axios.get(`${API_BASE}/project-types/get-subcategory-types?subcategory_id=${subcategoryId}`, getHeaders());
+      return res.data;
+    } catch (e) {
+      console.error('Failed to get system types', e);
+      return { data: [] };
+    }
+  },
+  getProjectRanges: async (subcategoryTypeId) => {
+    if (!subcategoryTypeId) return { data: [] };
+    try {
+      const res = await axios.get(`${API_BASE}/project-types/get-ranges?subcategory_type_id=${subcategoryTypeId}`, getHeaders());
+      return res.data;
+    } catch (e) {
+      console.error('Failed to get project ranges', e);
+      return { data: [] };
+    }
   },
 };

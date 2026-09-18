@@ -35,12 +35,17 @@ router.get('/kits/weights/capacity-chart', check_auth, handler.get_vehicle_capac
 // ─── 5. Delivery Cost Settings (Benchmark) ───────────────────────────────────
 router.get('/benchmarks', check_auth, handler.get_benchmarks);
 router.post('/benchmarks', check_auth, handler.create_benchmark);
+router.post('/benchmarks/bulk', check_auth, handler.bulk_create_benchmarks);
+router.put('/benchmarks/:id', check_auth, handler.update_benchmark);
 router.delete('/benchmarks/:id', check_auth, handler.delete_benchmark);
+router.post('/benchmarks/bulk-delete', check_auth, handler.bulk_delete_benchmarks);
 
 // ─── 6. Kit-Wise Delivery Cost Rules ─────────────────────────────────────────
 router.get('/kit-rules', check_auth, handler.get_kit_rules);
 router.post('/kit-rules', check_auth, handler.create_kit_rule);
+router.put('/kit-rules/:id', check_auth, handler.update_kit_rule);
 router.delete('/kit-rules/:id', check_auth, handler.delete_kit_rule);
+router.post('/kit-rules/bulk-delete', check_auth, handler.bulk_delete_kit_rules);
 
 // ─── 7. Route & Consolidation Settings ───────────────────────────────────────
 router.get('/routes', check_auth, handler.get_routes);

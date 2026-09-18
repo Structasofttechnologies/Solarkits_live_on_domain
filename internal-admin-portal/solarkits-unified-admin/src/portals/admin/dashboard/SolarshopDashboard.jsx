@@ -4,7 +4,7 @@ import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
 import { selectAllowedUniqueIds } from "../features/modules.slice";
-import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
 import Drawer from "../components/Drawer";
@@ -43,7 +43,6 @@ const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
 const WarehousePoConfig = lazy(() => import("../pages/solar-shop/po-orders/WarehousePoConfig"));
 const LooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/LooseOrders"));
 const WarehouseLooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/WarehouseLooseOrders"));
-const VehicleDriverManagement = lazy(() => import("../../warehouse/pages/warehouse-management/VehicleDriverManagement"));
 const OrderManagementSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderManagementSettings"));
 const OffersManagement = lazy(() => import("../pages/solar-shop/order-management-settings/OffersManagement"));
 const CheckoutCartSettings = lazy(() => import("../pages/solar-shop/order-management-settings/CheckoutCartSettings"));
@@ -63,6 +62,8 @@ const TransportVendors = lazy(() => import("../pages/solar-shop/delivery-managem
 const PhysicalVehicles = lazy(() => import("../pages/solar-shop/delivery-management/PhysicalVehicles"));
 const ComboKitWeightMaster = lazy(() => import("../pages/solar-shop/delivery-management/ComboKitWeightMaster"));
 const DeliveryCostSettings = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryCostSettings"));
+
+
 
 const menus = [
     [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/solar-shop/home", unique_id: "00000000" }],
@@ -114,7 +115,6 @@ const menus = [
         },
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
         { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
-        { name: "Vehicles & Drivers", icon: <FaTruck />, path: "/admin-panel/solar-shop/vehicles-drivers", unique_id: "00000000" },
         {
             name: "Delivery Management",
             icon: <FaTruck />,
@@ -158,7 +158,7 @@ const menus = [
                     unique_id: "ADM_DELIVERY_MGMT"
                 },
                 {
-                    name: "7. Delivery Queue (FIFO)",
+                    name: "7. Delivery Queue",
                     icon: <FaBoxes />,
                     path: "/admin-panel/solar-shop/delivery-management/queue",
                     unique_id: "ADM_DELIVERY_MGMT"
@@ -177,6 +177,7 @@ const menus = [
                 }
             ]
         },
+
         {
             name: "Margin & Commission",
             icon: <FaCoins />,
@@ -593,11 +594,7 @@ export default function SolarShopDashboard() {
                                     />
                                     <Route
                                         path="/vehicles-drivers"
-                                        element={
-                                            <Suspense fallback={<Loader text="Loading Vehicles & Drivers..." />}>
-                                                <VehicleDriverManagement />
-                                            </Suspense>
-                                        }
+                                        element={<Navigate to="../delivery-management/fleet" replace />}
                                     />
                                     <Route
                                         path="/company-margin"
@@ -671,13 +668,7 @@ export default function SolarShopDashboard() {
                                     />
                                     <Route
                                         path="/:countryName/vehicles-drivers"
-                                        element={
-                                            <PermissionGuard requiredUniqueId="00000000">
-                                                <Suspense fallback={<Loader text="Loading Vehicles & Drivers..." />}>
-                                                    <VehicleDriverManagement />
-                                                </Suspense>
-                                            </PermissionGuard>
-                                        }
+                                        element={<Navigate to="../delivery-management/fleet" replace />}
                                     />
                                     <Route
                                         path="/:countryName/loose-orders/:warehouseId"
@@ -1012,13 +1003,7 @@ export default function SolarShopDashboard() {
                                     {/* Direct Paths */}
                                     <Route
                                         path="/delivery-management"
-                                        element={
-                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
-                                                <Suspense fallback={<Loader text="Loading Vehicle Master..." />}>
-                                                    <VehicleMaster />
-                                                </Suspense>
-                                            </PermissionGuard>
-                                        }
+                                        element={<Navigate to="vehicle-master" replace />}
                                     />
                                     <Route
                                         path="/delivery-management/vehicle-master"
@@ -1114,13 +1099,7 @@ export default function SolarShopDashboard() {
                                     {/* Country-prefixed Paths */}
                                     <Route
                                         path="/:countryName/delivery-management"
-                                        element={
-                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
-                                                <Suspense fallback={<Loader text="Loading Vehicle Master..." />}>
-                                                    <VehicleMaster />
-                                                </Suspense>
-                                            </PermissionGuard>
-                                        }
+                                        element={<Navigate to="vehicle-master" replace />}
                                     />
                                     <Route
                                         path="/:countryName/delivery-management/vehicle-master"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '../../../features/alert.slice';
 import {
@@ -32,7 +32,12 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function DeliveryDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
+
+  const basePath = location.pathname.includes('/warehouse-management-panel')
+    ? '/warehouse-management-panel/delivery-management'
+    : '/admin-panel/solar-shop/delivery-management';
 
   const [loading, setLoading] = useState(true);
   const [warehouses, setWarehouses] = useState([]);
@@ -153,7 +158,7 @@ export default function DeliveryDashboard() {
       {/* Quick Action Navigation Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <button
-          onClick={() => navigate('/admin-panel/solar-shop/delivery-management/queue')}
+          onClick={() => navigate(`${basePath}/queue`)}
           className="bg-white p-4 rounded-xl border border-amber-200 hover:border-amber-400 hover:shadow-md transition-all flex items-center justify-between text-left group"
         >
           <div>
@@ -166,7 +171,7 @@ export default function DeliveryDashboard() {
         </button>
 
         <button
-          onClick={() => navigate('/admin-panel/solar-shop/delivery-management/tracking')}
+          onClick={() => navigate(`${basePath}/tracking`)}
           className="bg-white p-4 rounded-xl border border-blue-200 hover:border-blue-400 hover:shadow-md transition-all flex items-center justify-between text-left group"
         >
           <div>
@@ -179,7 +184,7 @@ export default function DeliveryDashboard() {
         </button>
 
         <button
-          onClick={() => navigate('/admin-panel/solar-shop/delivery-management/fleet')}
+          onClick={() => navigate(`${basePath}/fleet`)}
           className="bg-white p-4 rounded-xl border border-emerald-200 hover:border-emerald-400 hover:shadow-md transition-all flex items-center justify-between text-left group"
         >
           <div>
@@ -192,7 +197,7 @@ export default function DeliveryDashboard() {
         </button>
 
         <button
-          onClick={() => navigate('/admin-panel/solar-shop/delivery-management/routes')}
+          onClick={() => navigate(`${basePath}/routes`)}
           className="bg-white p-4 rounded-xl border border-purple-200 hover:border-purple-400 hover:shadow-md transition-all flex items-center justify-between text-left group"
         >
           <div>
@@ -404,7 +409,7 @@ export default function DeliveryDashboard() {
 
                 <div className="mt-4 pt-3 border-t border-slate-100">
                   <Button
-                    onClick={() => navigate('/admin-panel/solar-shop/delivery-management/queue')}
+                    onClick={() => navigate(`${basePath}/queue`)}
                     className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs py-2 flex items-center justify-center gap-2"
                   >
                     Open Queue & Combine Orders <FaArrowRight />
@@ -626,7 +631,7 @@ export default function DeliveryDashboard() {
               <Button
                 variant="outline"
                 className="text-xs flex items-center gap-1.5"
-                onClick={() => navigate('/admin-panel/solar-shop/delivery-management/tracking')}
+                onClick={() => navigate(`${basePath}/tracking`)}
               >
                 View Full Tracking Ledger <FaArrowRight />
               </Button>
@@ -700,7 +705,7 @@ export default function DeliveryDashboard() {
                           </td>
                           <td className="px-4 py-3">
                             <button
-                              onClick={() => navigate('/admin-panel/solar-shop/delivery-management/tracking')}
+                              onClick={() => navigate(`${basePath}/tracking`)}
                               className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1"
                             >
                               Track <FaArrowRight className="text-[10px]" />

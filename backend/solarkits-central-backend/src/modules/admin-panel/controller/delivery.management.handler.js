@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const {
   DeliveryVehicleMaster,
   DeliveryServiceProvider,
@@ -12,6 +13,7 @@ const {
   FpoOrder,
 } = require('../models/india_solarshop_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
+const { GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const deliveryService = require('../services/delivery.management.service');
 
 // ─── 1. VEHICLE MASTER CRUD ───────────────────────────────────────────────────
@@ -321,16 +323,24 @@ exports.get_vehicle_capacity_chart = async (req, res) => {
 // ─── 5. DELIVERY COST BENCHMARK CRUD ──────────────────────────────────────────
 exports.get_benchmarks = async (req, res) => {
   try {
-    const { warehouse_id } = req.query;
+    const { warehouse_id, service_provider_id, state_id, vehicle_master_id } = req.query;
     const cleanWarehouseId = (warehouse_id && warehouse_id !== 'null' && warehouse_id !== 'undefined' && mongoose.Types.ObjectId.isValid(warehouse_id)) ? warehouse_id : null;
+    const cleanProviderId = (service_provider_id && service_provider_id !== 'null' && service_provider_id !== 'undefined' && mongoose.Types.ObjectId.isValid(service_provider_id)) ? service_provider_id : null;
+    const cleanVehicleId = (vehicle_master_id && vehicle_master_id !== 'null' && vehicle_master_id !== 'undefined' && mongoose.Types.ObjectId.isValid(vehicle_master_id)) ? vehicle_master_id : null;
+    const cleanStateId = (state_id && state_id !== 'null' && state_id !== 'undefined' && mongoose.Types.ObjectId.isValid(state_id)) ? state_id : null;
+
     const query = { deleted_at: null };
     if (cleanWarehouseId) query.warehouse_id = cleanWarehouseId;
+    if (cleanProviderId) query.service_provider_id = cleanProviderId;
+    if (cleanVehicleId) query.vehicle_master_id = cleanVehicleId;
+    if (cleanStateId) query.state_id = cleanStateId;
 
     const list = await DeliveryCostBenchmark.find(query)
-      .populate('warehouse_id', 'warehouse_code address')
+      .populate('service_provider_id', 'name provider_code mobile_number customer_service_number')
+      .populate({ path: 'warehouse_id', model: CompanyWarehouse, select: 'warehouse_code address' })
       .populate('vehicle_master_id', 'name brand_make max_load_kg')
-      .populate('state_id', 'name')
-      .populate('district_id', 'name')
+      .populate({ path: 'state_id', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'district_id', model: GeoLevel2, select: 'name' })
       .sort({ created_at: -1 });
 
     return res.status(200).json({ status: 'success', data: list });
@@ -342,13 +352,20 @@ exports.get_benchmarks = async (req, res) => {
 
 exports.create_benchmark = async (req, res) => {
   try {
-    const { warehouse_id, vehicle_master_id, state_id, district_id, benchmark_cost } = req.body;
+    const { service_provider_id, warehouse_id, vehicle_master_id, state_id, district_id, benchmark_cost } = req.body;
     if (!warehouse_id || !vehicle_master_id || !state_id || !district_id || benchmark_cost === undefined) {
       return res.status(400).json({ status: 'error', message: 'Warehouse, Vehicle, State, District, and Benchmark Cost are required.' });
     }
 
+    const filter = {
+      service_provider_id: service_provider_id || null,
+      warehouse_id,
+      vehicle_master_id,
+      district_id,
+    };
+
     const record = await DeliveryCostBenchmark.findOneAndUpdate(
-      { warehouse_id, vehicle_master_id, district_id },
+      filter,
       { ...req.body, updated_by: req.user?._id },
       { upsert: true, new: true }
     );
@@ -356,6 +373,135 @@ exports.create_benchmark = async (req, res) => {
     return res.status(201).json({ status: 'success', data: record, message: 'Benchmark cost configured successfully.' });
   } catch (err) {
     console.error('create_benchmark error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.bulk_create_benchmarks = async (req, res) => {
+  try {
+    const {
+      service_provider_id,
+      warehouse_id,
+      vehicle_master_id,
+      state_id,
+      gst_applicable = true,
+      gst_rate = 18,
+      free_delivery_eligible = false,
+      effective_date,
+      benchmarks = [],
+    } = req.body;
+
+    if (!warehouse_id || !vehicle_master_id || !state_id || !Array.isArray(benchmarks) || benchmarks.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Warehouse, Vehicle, State, and non-empty benchmarks list are required.',
+      });
+    }
+
+    const operations = benchmarks
+      .filter((b) => b.district_id && b.benchmark_cost !== undefined && b.benchmark_cost !== null && !isNaN(b.benchmark_cost))
+      .map((item) => ({
+        updateOne: {
+          filter: {
+            service_provider_id: service_provider_id || null,
+            warehouse_id,
+            vehicle_master_id,
+            district_id: item.district_id,
+          },
+          update: {
+            $set: {
+              service_provider_id: service_provider_id || null,
+              warehouse_id,
+              vehicle_master_id,
+              state_id,
+              district_id: item.district_id,
+              benchmark_cost: Number(item.benchmark_cost),
+              gst_applicable: gst_applicable !== undefined ? Boolean(gst_applicable) : true,
+              gst_rate: Number(gst_rate) || 18,
+              free_delivery_eligible: Boolean(free_delivery_eligible),
+              effective_date: effective_date ? new Date(effective_date) : new Date(),
+              is_active: true,
+              deleted_at: null,
+              updated_by: req.user?._id || null,
+            },
+            $setOnInsert: {
+              created_by: req.user?._id || null,
+            },
+          },
+          upsert: true,
+        },
+      }));
+
+    if (operations.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No valid district and benchmark cost rows found to save.',
+      });
+    }
+
+    const bulkResult = await DeliveryCostBenchmark.bulkWrite(operations, { ordered: false });
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Successfully processed ${operations.length} delivery benchmarks (${bulkResult.upsertedCount || 0} inserted, ${bulkResult.modifiedCount || 0} updated).`,
+      data: {
+        total_processed: operations.length,
+        inserted: bulkResult.upsertedCount || 0,
+        updated: bulkResult.modifiedCount || 0,
+      },
+    });
+  } catch (err) {
+    console.error('bulk_create_benchmarks error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.update_benchmark = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      service_provider_id,
+      warehouse_id,
+      vehicle_master_id,
+      state_id,
+      district_id,
+      benchmark_cost,
+      gst_applicable,
+      gst_rate,
+      free_delivery_eligible,
+      effective_date,
+    } = req.body;
+
+    const updateData = {
+      updated_by: req.user?._id || null,
+      updated_at: new Date(),
+    };
+
+    if (service_provider_id !== undefined) updateData.service_provider_id = service_provider_id || null;
+    if (warehouse_id) updateData.warehouse_id = warehouse_id;
+    if (vehicle_master_id) updateData.vehicle_master_id = vehicle_master_id;
+    if (state_id) updateData.state_id = state_id;
+    if (district_id) updateData.district_id = district_id;
+    if (benchmark_cost !== undefined) updateData.benchmark_cost = Number(benchmark_cost);
+    if (gst_applicable !== undefined) updateData.gst_applicable = Boolean(gst_applicable);
+    if (gst_rate !== undefined) updateData.gst_rate = Number(gst_rate);
+    if (free_delivery_eligible !== undefined) updateData.free_delivery_eligible = Boolean(free_delivery_eligible);
+    if (effective_date) updateData.effective_date = new Date(effective_date);
+
+    const updated = await DeliveryCostBenchmark.findByIdAndUpdate(id, updateData, { new: true })
+      .populate('service_provider_id', 'name provider_code mobile_number customer_service_number')
+      .populate({ path: 'warehouse_id', model: CompanyWarehouse, select: 'warehouse_code address' })
+      .populate('vehicle_master_id', 'name brand_make max_load_kg')
+      .populate({ path: 'state_id', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'district_id', model: GeoLevel2, select: 'name' });
+
+    if (!updated) {
+      return res.status(404).json({ status: 'error', message: 'Benchmark record not found.' });
+    }
+
+    return res.status(200).json({ status: 'success', data: updated, message: 'Benchmark cost updated successfully.' });
+  } catch (err) {
+    console.error('update_benchmark error:', err);
     return res.status(500).json({ status: 'error', message: err.message });
   }
 };
@@ -371,15 +517,61 @@ exports.delete_benchmark = async (req, res) => {
   }
 };
 
+exports.bulk_delete_benchmarks = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Array of benchmark IDs is required.' });
+    }
+
+    const result = await DeliveryCostBenchmark.updateMany(
+      { _id: { $in: ids } },
+      { $set: { deleted_at: new Date(), is_active: false, updated_by: req.user?._id || null } }
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Successfully deleted ${result.modifiedCount || ids.length} benchmarks.`,
+      data: { count: result.modifiedCount || ids.length },
+    });
+  } catch (err) {
+    console.error('bulk_delete_benchmarks error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
 // ─── 6. KIT-WISE DELIVERY COST RULES CRUD ─────────────────────────────────────
 exports.get_kit_rules = async (req, res) => {
   try {
     const list = await KitDeliveryCostRule.find({ deleted_at: null })
       .populate('kit_id', 'name capacity')
       .populate('vehicle_master_id', 'name max_load_kg')
-      .sort({ created_at: -1 });
+      .sort({ created_at: -1 })
+      .lean();
 
-    return res.status(200).json({ status: 'success', data: list });
+    // Fetch active combokit weights to enrich/fallback shipment_weight_kg
+    const allWeights = await ComboKitWeightMaster.find({ deleted_at: null }).lean();
+    const weightMap = {};
+    for (const w of allWeights) {
+      if (w.kit_id) {
+        weightMap[w.kit_id.toString()] = w.total_kit_weight_kg || 0;
+      }
+    }
+
+    const enrichedList = list.map((r) => {
+      const kitIdStr = r.kit_id?._id?.toString() || r.kit_id?.toString();
+      const unitWeight = weightMap[kitIdStr] || 0;
+      let shipmentWeight = unitWeight > 0
+        ? Math.round(unitWeight * Number(r.number_of_kits || 1))
+        : Number(r.shipment_weight_kg || r.total_weight_kg || 0);
+      return {
+        ...r,
+        shipment_weight_kg: shipmentWeight,
+        total_weight_kg: shipmentWeight,
+      };
+    });
+
+    return res.status(200).json({ status: 'success', data: enrichedList });
   } catch (err) {
     console.error('get_kit_rules error:', err);
     return res.status(500).json({ status: 'error', message: err.message });
@@ -388,13 +580,33 @@ exports.get_kit_rules = async (req, res) => {
 
 exports.create_kit_rule = async (req, res) => {
   try {
-    const { kit_id, order_type, number_of_kits, vehicle_master_id, total_delivery_cost, per_kit_delivery_cost } = req.body;
+    const {
+      kit_id,
+      order_type,
+      number_of_kits,
+      vehicle_master_id,
+      total_delivery_cost,
+      per_kit_delivery_cost,
+      shipment_weight_kg,
+      total_weight_kg,
+    } = req.body;
+
     if (!kit_id || !order_type || !number_of_kits || !vehicle_master_id || total_delivery_cost === undefined || per_kit_delivery_cost === undefined) {
       return res.status(400).json({ status: 'error', message: 'Kit, Order Type, Qty, Vehicle, Total Delivery Cost, and Per-Kit Cost are required.' });
     }
 
+    let finalShipmentWeight = Number(shipment_weight_kg || total_weight_kg || 0);
+    if (!finalShipmentWeight) {
+      const kwm = await ComboKitWeightMaster.findOne({ kit_id, deleted_at: null }).lean();
+      if (kwm && kwm.total_kit_weight_kg) {
+        finalShipmentWeight = Math.round(kwm.total_kit_weight_kg * Number(number_of_kits));
+      }
+    }
+
     const newRule = new KitDeliveryCostRule({
       ...req.body,
+      shipment_weight_kg: finalShipmentWeight,
+      total_weight_kg: finalShipmentWeight,
       created_by: req.user?._id || null,
     });
 
@@ -402,6 +614,68 @@ exports.create_kit_rule = async (req, res) => {
     return res.status(201).json({ status: 'success', data: newRule, message: 'Kit Delivery Rule created successfully.' });
   } catch (err) {
     console.error('create_kit_rule error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.update_kit_rule = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      kit_id,
+      order_type,
+      number_of_kits,
+      vehicle_master_id,
+      total_delivery_cost,
+      per_kit_delivery_cost,
+      free_delivery,
+      shipment_weight_kg,
+      total_weight_kg,
+      industry_type_id,
+      project_type_id,
+      project_subtype_id,
+    } = req.body;
+
+    let finalShipmentWeight = shipment_weight_kg !== undefined
+      ? Number(shipment_weight_kg)
+      : (total_weight_kg !== undefined ? Number(total_weight_kg) : undefined);
+
+    if ((finalShipmentWeight === undefined || finalShipmentWeight === 0) && kit_id) {
+      const kwm = await ComboKitWeightMaster.findOne({ kit_id, deleted_at: null }).lean();
+      if (kwm && kwm.total_kit_weight_kg) {
+        finalShipmentWeight = Math.round(kwm.total_kit_weight_kg * Number(number_of_kits || 1));
+      }
+    }
+
+    const updateData = {
+      ...(kit_id && { kit_id }),
+      ...(order_type && { order_type }),
+      ...(number_of_kits !== undefined && { number_of_kits: Number(number_of_kits) }),
+      ...(vehicle_master_id && { vehicle_master_id }),
+      ...(total_delivery_cost !== undefined && { total_delivery_cost: Number(total_delivery_cost) }),
+      ...(per_kit_delivery_cost !== undefined && { per_kit_delivery_cost: Number(per_kit_delivery_cost) }),
+      ...(free_delivery !== undefined && { free_delivery: Boolean(free_delivery) }),
+      ...(finalShipmentWeight !== undefined && {
+        shipment_weight_kg: finalShipmentWeight,
+        total_weight_kg: finalShipmentWeight,
+      }),
+      ...(industry_type_id !== undefined && { industry_type_id: industry_type_id || null }),
+      ...(project_type_id !== undefined && { project_type_id: project_type_id || null }),
+      ...(project_subtype_id !== undefined && { project_subtype_id: project_subtype_id || null }),
+      updated_by: req.user?._id || null,
+    };
+
+    const updated = await KitDeliveryCostRule.findByIdAndUpdate(id, updateData, { new: true })
+      .populate('kit_id', 'name capacity')
+      .populate('vehicle_master_id', 'name max_load_kg');
+
+    if (!updated) {
+      return res.status(404).json({ status: 'error', message: 'Kit Delivery Rule not found.' });
+    }
+
+    return res.status(200).json({ status: 'success', data: updated, message: 'Kit Delivery Rule updated successfully.' });
+  } catch (err) {
+    console.error('update_kit_rule error:', err);
     return res.status(500).json({ status: 'error', message: err.message });
   }
 };
@@ -417,6 +691,29 @@ exports.delete_kit_rule = async (req, res) => {
   }
 };
 
+exports.bulk_delete_kit_rules = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Array of rule IDs is required.' });
+    }
+
+    const result = await KitDeliveryCostRule.updateMany(
+      { _id: { $in: ids } },
+      { $set: { deleted_at: new Date(), is_active: false, updated_by: req.user?._id || null } }
+    );
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Successfully deleted ${result.modifiedCount || ids.length} rules.`,
+      data: { count: result.modifiedCount || ids.length },
+    });
+  } catch (err) {
+    console.error('bulk_delete_kit_rules error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
 // ─── 7. DELIVERY ROUTE & CONSOLIDATION SETTINGS CRUD ─────────────────────────
 exports.get_routes = async (req, res) => {
   try {
@@ -426,10 +723,10 @@ exports.get_routes = async (req, res) => {
     if (cleanWarehouseId) query.origin_warehouse_id = cleanWarehouseId;
 
     const routes = await DeliveryRouteSetting.find(query)
-      .populate('origin_warehouse_id', 'warehouse_code address')
-      .populate('state_id', 'name')
-      .populate('primary_district_id', 'name')
-      .populate('nearby_district_ids', 'name')
+      .populate({ path: 'origin_warehouse_id', model: CompanyWarehouse, select: 'warehouse_code address' })
+      .populate({ path: 'state_id', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'primary_district_id', model: GeoLevel2, select: 'name' })
+      .populate({ path: 'nearby_district_ids', model: GeoLevel2, select: 'name' })
       .sort({ created_at: -1 });
 
     return res.status(200).json({ status: 'success', data: routes });
@@ -628,10 +925,10 @@ exports.get_tracking_list = async (req, res) => {
     }
 
     const list = await DeliveryOrder.find(query)
-      .populate('warehouse_id', 'warehouse_code address')
+      .populate({ path: 'warehouse_id', model: CompanyWarehouse, select: 'warehouse_code address' })
       .populate('service_provider_id', 'name mobile_number customer_service_number')
-      .populate('stops.destination.state_id', 'name')
-      .populate('stops.destination.district_id', 'name')
+      .populate({ path: 'stops.destination.state_id', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'stops.destination.district_id', model: GeoLevel2, select: 'name' })
       .sort({ created_at: -1 });
 
     return res.status(200).json({ status: 'success', data: list });
@@ -645,11 +942,11 @@ exports.get_trip_details = async (req, res) => {
   try {
     const { id } = req.params;
     const delivery = await DeliveryOrder.findById(id)
-      .populate('warehouse_id', 'warehouse_code address lat lng')
+      .populate({ path: 'warehouse_id', model: CompanyWarehouse, select: 'warehouse_code address lat lng' })
       .populate('service_provider_id', 'name owner_name mobile_number customer_service_number gst_number')
       .populate('vehicles_allocated.vehicle_master_id', 'name brand_make max_load_kg')
-      .populate('stops.destination.state_id', 'name')
-      .populate('stops.destination.district_id', 'name');
+      .populate({ path: 'stops.destination.state_id', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'stops.destination.district_id', model: GeoLevel2, select: 'name' });
 
     if (!delivery) return res.status(404).json({ status: 'error', message: 'Delivery Trip not found.' });
     return res.status(200).json({ status: 'success', data: delivery });
@@ -727,8 +1024,8 @@ exports.get_dashboard_analytics = async (req, res) => {
 exports.get_warehouses_list = async (req, res) => {
   try {
     const list = await CompanyWarehouse.find({ deleted_at: null })
-      .populate('level_1', 'name')
-      .populate('level_2', 'name')
+      .populate({ path: 'level_1', model: GeoLevel1, select: 'name' })
+      .populate({ path: 'level_2', model: GeoLevel2, select: 'name' })
       .select('_id warehouse_code address pincode level_1 level_2 warehouse_type')
       .lean();
 

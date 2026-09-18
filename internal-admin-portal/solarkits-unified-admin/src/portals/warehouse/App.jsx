@@ -28,6 +28,8 @@ export default function App() {
           <Route path="rejected" element={<Suspense fallback={<Loader />}><Rejected /></Suspense>} />
           <Route path="solar-shop/*" element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
           <Route path="solar-shop" element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
+          <Route path="solar-shop-solarkits/*" element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
+          <Route path="solar-shop-solarkits" element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
           <Route path='*' element={<Suspense fallback={<Loader />}><Dashboard /></Suspense>} />
         </Route>
         <Route path='*' element={<Suspense fallback={<Loader />}><NotFound /></Suspense>} />

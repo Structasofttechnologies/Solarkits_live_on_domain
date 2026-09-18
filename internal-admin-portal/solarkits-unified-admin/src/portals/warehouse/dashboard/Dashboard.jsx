@@ -1,4 +1,4 @@
-import { Route, Routes, useLocation, useNavigate, Link } from "react-router-dom";
+import { Route, Routes, useLocation, useNavigate, Link, Navigate } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,7 +12,7 @@ import { selectAllowedUniqueIds } from "../features/modules.slice";
 
 import { FaHome, FaExchangeAlt, FaBoxes, FaTruck, FaSyncAlt, FaTools, FaCheckCircle, FaFileInvoice, FaUser, FaMapMarkerAlt } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
-import { FiAlertCircle, FiX, FiArrowRight } from "react-icons/fi";
+import { FiAlertCircle, FiX, FiArrowRight, FiUsers, FiDollarSign, FiMapPin, FiBarChart2, FiSliders } from "react-icons/fi";
 
 /* ===================== Lazy Pages ===================== */
 
@@ -33,11 +33,24 @@ const LooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders
 const WarehouseLooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/WarehouseLooseOrders"));
 const Home = lazy(() => import("../pages/dashboard/Home"));
 
+/* ===================== Delivery Management Module Pages ===================== */
+const DeliveryDashboard = lazy(() => import("../../admin/pages/solar-shop/delivery-management/DeliveryDashboard"));
+const DeliveryQueue = lazy(() => import("../../admin/pages/solar-shop/delivery-management/DeliveryQueue"));
+const DeliveryTracking = lazy(() => import("../../admin/pages/solar-shop/delivery-management/DeliveryTracking"));
+const RouteConsolidationSettings = lazy(() => import("../../admin/pages/solar-shop/delivery-management/RouteConsolidationSettings"));
+const VehicleMaster = lazy(() => import("../../admin/pages/solar-shop/delivery-management/VehicleMaster"));
+const TransportVendors = lazy(() => import("../../admin/pages/solar-shop/delivery-management/TransportVendors"));
+const PhysicalVehicles = lazy(() => import("../../admin/pages/solar-shop/delivery-management/PhysicalVehicles"));
+const ComboKitWeightMaster = lazy(() => import("../../admin/pages/solar-shop/delivery-management/ComboKitWeightMaster"));
+const DeliveryCostSettings = lazy(() => import("../../admin/pages/solar-shop/delivery-management/DeliveryCostSettings"));
+const UnifiedFleetManagement = lazy(() => import("../pages/warehouse-management/UnifiedFleetManagement"));
+const UnifiedCustomerOutward = lazy(() => import("../pages/warehouse-management/UnifiedCustomerOutward"));
+
 /* ===================== MENU CONFIG ===================== */
 
 const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
   const isInwardSub = mode === "sub";
-  
+
   return [
     [{ name: "Dashboard", icon: <FaHome />, path: `${prefix}/home`, unique_id: "00000000" }],
     [
@@ -65,30 +78,30 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
             unique_id: "WH_DELIVERY_MGMT"
           },
           {
-            name: "Loose Orders (8-Stage)",
-            icon: <FaBoxes />,
-            path: `${prefix}/loose-orders`,
-            unique_id: "WH_DELIVERY_MGMT"
-          },
-          {
             name: "Vehicles & Drivers (Fleet)",
             icon: <FaTruck />,
             path: `${prefix}/vehicles-drivers`,
             unique_id: "WH_DELIVERY_MGMT"
-          },
-          {
-            name: "Product Replacement",
-            icon: <FaSyncAlt />,
-            path: `${prefix}/product-replacement`,
-            unique_id: "WH_PROD_REPLACE"
-          },
-          {
-            name: "Repair Tickets",
-            icon: <FaTools />,
-            path: `${prefix}/repair-tickets`,
-            unique_id: "WH_REPAIR_TICKETS"
           }
         ]
+      },
+      {
+        name: "Loose Orders (8-Stage)",
+        icon: <FaBoxes />,
+        path: `${prefix}/loose-orders`,
+        unique_id: "WH_DELIVERY_MGMT"
+      },
+      {
+        name: "Service & Repair Tickets",
+        icon: <FaTools />,
+        path: `${prefix}/repair-tickets`,
+        unique_id: "WH_REPAIR_TICKETS"
+      },
+      {
+        name: "Product Replacement",
+        icon: <FaSyncAlt />,
+        path: `${prefix}/product-replacement`,
+        unique_id: "WH_PROD_REPLACE"
       },
       ...(!isInwardSub ? [{
         name: "Inventory Transfer",
@@ -176,11 +189,11 @@ export default function Dashboard() {
     const due = new Date(dueDateStr);
     const diffMs = due - now;
     if (diffMs <= 0) return "Overdue";
-    
+
     const diffMins = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays > 0) {
       return `${diffDays}d remaining`;
     }
@@ -220,8 +233,10 @@ export default function Dashboard() {
       normalizedPath === "" ||
       normalizedPath === "/warehouse-management-panel" ||
       normalizedPath === "/warehouse-management-panel/solar-shop" ||
+      normalizedPath === "/warehouse-management-panel/solar-shop-solarkits" ||
       normalizedPath === "/warehouse" ||
-      normalizedPath === "/warehouse/solar-shop"
+      normalizedPath === "/warehouse/solar-shop" ||
+      normalizedPath === "/warehouse/solar-shop-solarkits"
     ) {
       navigate(`${prefix}/home`, { replace: true });
     }
@@ -260,9 +275,11 @@ export default function Dashboard() {
     if (path.includes('/material-outward')) return 'Material Outward Dispatch';
     if (path.includes('/inventory-transfer')) return 'Inventory Transfer';
     if (path.includes('/stock-adjustment')) return 'Stock Adjustment';
-    if (path.includes('/delivery-management')) return 'Delivery Routing & Dispatch';
+    if (path.includes('/delivery-management')) return 'Customer Outward (Delivery)';
+    if (path.includes('/vehicles-drivers')) return 'Vehicles & Drivers (Fleet)';
+    if (path.includes('/loose-orders')) return 'Loose Orders (8-Stage)';
     if (path.includes('/product-replacement')) return 'Product Replacement Claims';
-    if (path.includes('/repair-tickets')) return 'Repair Ticket Center';
+    if (path.includes('/repair-tickets')) return 'Service & Repair Tickets';
     if (path.includes('/profile')) return 'My Profile';
     if (path.includes('/account-settings')) return 'Account Settings';
     return 'Warehouse Management';
@@ -280,7 +297,7 @@ export default function Dashboard() {
       />
 
       <div className="flex flex-col flex-1 max-w-full min-w-0 overflow-hidden">
-         <Header
+        <Header
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           isMobile={isMobile}
@@ -293,57 +310,57 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
 
           <div className="relative h-full overflow-y-auto overflow-x-hidden scrollbar-hover p-4 md:p-6">
-            {user && 
-             user.is_warehouse_user && 
-             user.role === 'manager' && 
-             (user.warehouse_status === 2 || user.warehouse_status === 5) && 
-             profileCompletion && 
-             !isBannerDismissed && (
-              <div className="mb-6 relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-warning/5 to-amber-600/10 border border-warning/20 rounded-2xl p-4 shadow-md backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-warning" />
-                <div className="flex items-start gap-3 pl-2">
-                  <div className="w-10 h-10 rounded-xl bg-warning/10 border border-warning/30 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 animate-pulse">
-                    <FiAlertCircle className="text-warning w-5.5 h-5.5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-text-primary flex items-center gap-2">
-                      <span>Warehouse Profile Incomplete</span>
-                      <span className="px-2 py-0.5 rounded-full bg-warning/15 text-warning text-[10px] font-extrabold uppercase tracking-wide">
-                        {profileCompletion.percentage}% Complete
-                      </span>
-                    </h4>
-                    <p className="text-xs text-text-secondary mt-1">
-                      {user.warehouse_status === 5 ? (
-                        <span className="text-danger font-medium">Your profile was rejected by admin. Please update required fields.</span>
-                      ) : (
-                        <span>Please fill out your warehouse profile details to submit for review.</span>
-                      )}
-                      {profileCompletion.due_date && (
-                        <span className="ml-1.5 font-semibold text-warning/90">
-                          • Deadline: {new Date(profileCompletion.due_date).toLocaleString()} ({getRemainingTime(profileCompletion.due_date)})
+            {user &&
+              user.is_warehouse_user &&
+              user.role === 'manager' &&
+              (user.warehouse_status === 2 || user.warehouse_status === 5) &&
+              profileCompletion &&
+              !isBannerDismissed && (
+                <div className="mb-6 relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-warning/5 to-amber-600/10 border border-warning/20 rounded-2xl p-4 shadow-md backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-warning" />
+                  <div className="flex items-start gap-3 pl-2">
+                    <div className="w-10 h-10 rounded-xl bg-warning/10 border border-warning/30 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 animate-pulse">
+                      <FiAlertCircle className="text-warning w-5.5 h-5.5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-text-primary flex items-center gap-2">
+                        <span>Warehouse Profile Incomplete</span>
+                        <span className="px-2 py-0.5 rounded-full bg-warning/15 text-warning text-[10px] font-extrabold uppercase tracking-wide">
+                          {profileCompletion.percentage}% Complete
                         </span>
-                      )}
-                    </p>
+                      </h4>
+                      <p className="text-xs text-text-secondary mt-1">
+                        {user.warehouse_status === 5 ? (
+                          <span className="text-danger font-medium">Your profile was rejected by admin. Please update required fields.</span>
+                        ) : (
+                          <span>Please fill out your warehouse profile details to submit for review.</span>
+                        )}
+                        {profileCompletion.due_date && (
+                          <span className="ml-1.5 font-semibold text-warning/90">
+                            • Deadline: {new Date(profileCompletion.due_date).toLocaleString()} ({getRemainingTime(profileCompletion.due_date)})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 self-end sm:self-auto shrink-0 pl-12 sm:pl-0">
+                    <Link
+                      to="/warehouse-profile"
+                      className="flex items-center gap-1.5 px-4 py-2 bg-warning text-white rounded-xl text-xs font-black hover:bg-warning-hover active:scale-95 transition-all duration-200 shadow-sm"
+                    >
+                      <span>Complete Profile</span>
+                      <FiArrowRight className="w-4 h-4" />
+                    </Link>
+                    <button
+                      onClick={() => setIsBannerDismissed(true)}
+                      className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-text-muted hover:text-text-primary transition-colors duration-200"
+                      title="Dismiss banner"
+                    >
+                      <FiX className="w-4.5 h-4.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 self-end sm:self-auto shrink-0 pl-12 sm:pl-0">
-                  <Link
-                    to="/warehouse-profile"
-                    className="flex items-center gap-1.5 px-4 py-2 bg-warning text-white rounded-xl text-xs font-black hover:bg-warning-hover active:scale-95 transition-all duration-200 shadow-sm"
-                  >
-                    <span>Complete Profile</span>
-                    <FiArrowRight className="w-4 h-4" />
-                  </Link>
-                  <button
-                    onClick={() => setIsBannerDismissed(true)}
-                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-text-muted hover:text-text-primary transition-colors duration-200"
-                    title="Dismiss banner"
-                  >
-                    <FiX className="w-4.5 h-4.5" />
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
 
             <AnimatePresence mode="wait">
               <motion.div
@@ -365,6 +382,22 @@ export default function Dashboard() {
                   />
                   <Route
                     path="solar-shop"
+                    element={
+                      <Suspense fallback={<Loader text="Loading home..." />}>
+                        <Home />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="solar-shop-solarkits/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading home..." />}>
+                        <Home />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="solar-shop-solarkits"
                     element={
                       <Suspense fallback={<Loader text="Loading home..." />}>
                         <Home />
@@ -421,6 +454,7 @@ export default function Dashboard() {
                       </PermissionGuard>
                     }
                   />
+                  {/* ── Delivery Management & Fleet Module Routes ── */}
                   <Route
                     path="delivery-management/*"
                     element={
@@ -430,6 +464,52 @@ export default function Dashboard() {
                         </Suspense>
                       </PermissionGuard>
                     }
+                  />
+                  <Route
+                    path="delivery-management/customer-outward/*"
+                    element={<Navigate to="../delivery-management" replace />}
+                  />
+                  <Route
+                    path="vehicles-drivers/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading vehicles & drivers..." />}>
+                          <VehicleDriverManagement />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="delivery-management/fleet"
+                    element={<Navigate to="../vehicles-drivers" replace />}
+                  />
+                  <Route
+                    path="delivery-management/vehicle-master"
+                    element={<Navigate to="/admin-panel/solar-shop/delivery-management/vehicle-master" replace />}
+                  />
+                  <Route
+                    path="delivery-management/providers"
+                    element={<Navigate to="/admin-panel/solar-shop/delivery-management/providers" replace />}
+                  />
+                  <Route
+                    path="delivery-management/kit-weights"
+                    element={<Navigate to="/admin-panel/solar-shop/delivery-management/kit-weights" replace />}
+                  />
+                  <Route
+                    path="delivery-management/cost-settings"
+                    element={<Navigate to="/admin-panel/solar-shop/delivery-management/cost-settings" replace />}
+                  />
+                  <Route
+                    path="delivery-management/routes"
+                    element={<Navigate to="/admin-panel/solar-shop/delivery-management/routes" replace />}
+                  />
+                  <Route
+                    path="delivery-management/queue"
+                    element={<Navigate to="../delivery-management" replace />}
+                  />
+                  <Route
+                    path="delivery-management/dashboard"
+                    element={<Navigate to="/admin-panel/solar-shop/delivery-management/dashboard" replace />}
                   />
                   <Route
                     path="loose-orders"
@@ -447,16 +527,6 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
                         <Suspense fallback={<Loader text="Loading loose order configuration..." />}>
                           <WarehouseLooseOrders moduleUniqueId="WH_DELIVERY_MGMT" />
-                        </Suspense>
-                      </PermissionGuard>
-                    }
-                  />
-                  <Route
-                    path="vehicles-drivers/*"
-                    element={
-                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
-                        <Suspense fallback={<Loader text="Loading vehicles & drivers..." />}>
-                          <VehicleDriverManagement />
                         </Suspense>
                       </PermissionGuard>
                     }

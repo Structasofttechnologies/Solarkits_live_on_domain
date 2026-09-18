@@ -456,13 +456,21 @@ const getEligibleFleet = async ({ warehouse_id, destination_district_id, total_w
 /**
  * 6. BENCHMARK COST VALIDATION
  */
-const validateBenchmarkCost = async ({ warehouse_id, vehicle_master_id, district_id, proposed_cost }) => {
-  const benchmark = await DeliveryCostBenchmark.findOne({
+const validateBenchmarkCost = async ({ service_provider_id, warehouse_id, vehicle_master_id, district_id, proposed_cost }) => {
+  const query = {
     warehouse_id,
     vehicle_master_id,
     district_id,
     is_active: true,
-  }).lean();
+  };
+  if (service_provider_id) {
+    query.service_provider_id = service_provider_id;
+  }
+  let benchmark = await DeliveryCostBenchmark.findOne(query).lean();
+  if (!benchmark && service_provider_id) {
+    delete query.service_provider_id;
+    benchmark = await DeliveryCostBenchmark.findOne(query).lean();
+  }
 
   const benchmarkCost = benchmark ? benchmark.benchmark_cost : 5000;
   const cost = Number(proposed_cost);
