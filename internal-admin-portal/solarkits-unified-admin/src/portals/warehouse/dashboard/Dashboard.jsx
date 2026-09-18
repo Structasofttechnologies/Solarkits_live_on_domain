@@ -78,11 +78,24 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
             unique_id: "WH_DELIVERY_MGMT"
           },
           {
-            name: "Vehicles & Drivers (Fleet)",
-            icon: <FaTruck />,
-            path: `${prefix}/vehicles-drivers`,
+            name: "Delivery Queue",
+            icon: <FaBoxes />,
+            path: `${prefix}/delivery-management/queue`,
             unique_id: "WH_DELIVERY_MGMT"
-          }
+          },
+          {
+            name: "Trip Tracking & POD",
+            icon: <FiMapPin />,
+            path: `${prefix}/delivery-management/tracking`,
+            unique_id: "WH_DELIVERY_MGMT"
+          },
+          // {
+          //   name: "Vehicles & Drivers (Fleet)",
+          //   icon: <FaTruck />,
+          //   path: `${prefix}/vehicles-drivers`,
+          //   unique_id: "WH_DELIVERY_MGMT"
+          // }
+
         ]
       },
       {
@@ -275,6 +288,8 @@ export default function Dashboard() {
     if (path.includes('/material-outward')) return 'Material Outward Dispatch';
     if (path.includes('/inventory-transfer')) return 'Inventory Transfer';
     if (path.includes('/stock-adjustment')) return 'Stock Adjustment';
+    if (path.includes('/delivery-management/queue')) return 'Delivery Queue';
+    if (path.includes('/delivery-management/tracking')) return 'Trip Tracking & POD';
     if (path.includes('/delivery-management')) return 'Customer Outward (Delivery)';
     if (path.includes('/vehicles-drivers')) return 'Vehicles & Drivers (Fleet)';
     if (path.includes('/loose-orders')) return 'Loose Orders (8-Stage)';
@@ -456,11 +471,31 @@ export default function Dashboard() {
                   />
                   {/* ── Delivery Management & Fleet Module Routes ── */}
                   <Route
+                    path="delivery-management/queue/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading delivery queue..." />}>
+                          <UnifiedCustomerOutward defaultTab="queue" />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="delivery-management/tracking/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading delivery tracking..." />}>
+                          <UnifiedCustomerOutward defaultTab="tracking" />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
                     path="delivery-management/*"
                     element={
                       <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
                         <Suspense fallback={<Loader text="Loading delivery management..." />}>
-                          <DeliveryManagement />
+                          <UnifiedCustomerOutward defaultTab="map" />
                         </Suspense>
                       </PermissionGuard>
                     }
@@ -502,10 +537,6 @@ export default function Dashboard() {
                   <Route
                     path="delivery-management/routes"
                     element={<Navigate to="/admin-panel/solar-shop/delivery-management/routes" replace />}
-                  />
-                  <Route
-                    path="delivery-management/queue"
-                    element={<Navigate to="../delivery-management" replace />}
                   />
                   <Route
                     path="delivery-management/dashboard"

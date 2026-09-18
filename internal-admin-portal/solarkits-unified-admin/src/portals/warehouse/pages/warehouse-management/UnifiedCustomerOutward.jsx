@@ -42,7 +42,7 @@ export default function UnifiedCustomerOutward({ defaultTab = 'queue' }) {
     if (tabKey === 'queue') {
       navigate(`${prefix}/delivery-management/queue`, { replace: true });
     } else if (tabKey === 'map') {
-      navigate(`${prefix}/delivery-management/customer-outward?tab=map`, { replace: true });
+      navigate(`${prefix}/delivery-management?tab=map`, { replace: true });
     } else if (tabKey === 'tracking') {
       navigate(`${prefix}/delivery-management/tracking`, { replace: true });
     }

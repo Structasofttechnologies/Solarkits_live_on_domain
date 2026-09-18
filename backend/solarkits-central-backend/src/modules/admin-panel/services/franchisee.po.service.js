@@ -541,11 +541,13 @@ async function advancePoStage({ po_id, new_stage, extra_data = {}, actor_id, req
     order.dispatch_date = new Date();
   }
 
-  if (upperStage === 'IN_TRANSIT' && extra_data.milestone) {
+  if (upperStage === 'IN_TRANSIT') {
+    const mStatus = extra_data.milestone?.status || extra_data.milestone_status || extra_data.status || 'En Route';
+    const mDesc = extra_data.milestone?.description || extra_data.description || null;
     order.milestones = order.milestones || [];
     order.milestones.push({
-      status:      extra_data.milestone.status || 'En Route',
-      description: extra_data.milestone.description || null,
+      status:      mStatus,
+      description: mDesc,
       recorded_by: actor_id,
       recorded_at: new Date(),
     });

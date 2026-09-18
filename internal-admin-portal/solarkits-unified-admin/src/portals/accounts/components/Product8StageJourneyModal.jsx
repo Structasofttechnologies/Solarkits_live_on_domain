@@ -375,10 +375,14 @@ export default function Product8StageJourneyModal({
 
   const handleMilestone = async (e) => {
     e.preventDefault();
+    const finalDesc = milestoneDesc || `Order passed ${milestoneStatus} checkpoint.`;
     await callAdvance("IN_TRANSIT", {
+      milestone_status: milestoneStatus,
+      status: milestoneStatus,
+      description: finalDesc,
       milestone: {
         status: milestoneStatus,
-        description: milestoneDesc || `Order passed ${milestoneStatus} checkpoint.`,
+        description: finalDesc,
       },
     });
     setMilestoneDesc("");

@@ -3,9 +3,9 @@ import { useSelector } from "react-redux";
 import {
   FaCreditCard, FaSearch, FaSpinner,
   FaCheckCircle, FaHistory,
-  FaClipboardList, FaFilePdf, FaEye
+  FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaFilter
 } from "react-icons/fa";
-import { getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder } from "../../api/accounts";
+import { getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder, getHierarchyOptions } from "../../api/accounts";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
 import CustomTable from "../../components/CustomTable";
@@ -132,6 +132,39 @@ export default function Payments() {
   const [warehouseFilter, setWarehouseFilter] = useState("All");
   const [supplierFilter, setSupplierFilter] = useState("All");
 
+  // Quick Filters (Industry → Category → Sub Category → System Type → Project Range)
+  const [quickFilters, setQuickFilters] = useState({
+    industryType: "all",
+    category: "all",
+    subCategory: "all",
+    systemType: "all",
+    projectRange: "all",
+  });
+
+  const [hierarchy, setHierarchy] = useState({
+    shopHierarchy: [],
+    industries: [],
+    categories: [],
+    subcategories: [],
+    types: [],
+    ranges: [],
+  });
+
+  const fetchHierarchy = async () => {
+    try {
+      const res = await getHierarchyOptions();
+      if (res?.status === "success" && res.data) {
+        setHierarchy(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to load hierarchy options:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHierarchy();
+  }, []);
+
   // Pay Modal State
   const [selectedPO, setSelectedPO] = useState(null);
   const [isPayOpen, setIsPayOpen] = useState(false);
@@ -183,6 +216,7 @@ export default function Payments() {
     fetchOrders();
     setWarehouseFilter("All");
     setSupplierFilter("All");
+    setQuickFilters({ industryType: "all", category: "all", subCategory: "all", systemType: "all", projectRange: "all" });
     setPage(1);
   }, [activeClusterId, activeStateId, activeCountryId]);
 
@@ -351,7 +385,231 @@ export default function Payments() {
     return Array.from(map.values());
   }, [purchaseOrders]);
 
-  // Filter pending vs history
+  // ── Quick Filter Options (from Shop Hierarchy) ───────────────────────────
+  const shopHierarchy = useMemo(() => hierarchy.shopHierarchy || [], [hierarchy.shopHierarchy]);
+
+  const qfIndustryTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        if (ind.name && !seen.has(ind.name.toLowerCase())) {
+          seen.add(ind.name.toLowerCase());
+          list.push({ value: ind.name, text: ind.name });
+        }
+      });
+    } else if (hierarchy?.industries && hierarchy.industries.length > 0) {
+      hierarchy.industries.forEach((ind) => {
+        if (ind.name && !seen.has(ind.name.toLowerCase())) {
+          seen.add(ind.name.toLowerCase());
+          list.push({ value: ind.name, text: ind.name });
+        }
+      });
+    }
+    return [{ value: "all", text: "All Industry Types" }, ...list];
+  }, [shopHierarchy, hierarchy]);
+
+  const qfCategoryOptions = useMemo(() => {
+    const catMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      const targetInds = quickFilters.industryType === "all"
+        ? shopHierarchy
+        : shopHierarchy.filter(
+            (ind) =>
+              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+              String(ind.id) === String(quickFilters.industryType)
+          );
+
+      targetInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (cat.name && !catMap.has(cat.name.toLowerCase())) {
+            catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name });
+          }
+        });
+      });
+    } else if (hierarchy?.categories && hierarchy.categories.length > 0) {
+      const matchedInd = (hierarchy?.industries || []).find(
+        (i) =>
+          i.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+          String(i._id) === String(quickFilters.industryType)
+      );
+      (hierarchy.categories || []).forEach((cat) => {
+        if (
+          (quickFilters.industryType === "all" || (matchedInd && String(cat.industry_type_id) === String(matchedInd._id))) &&
+          cat.name &&
+          !catMap.has(cat.name.toLowerCase())
+        ) {
+          catMap.set(cat.name.toLowerCase(), { value: cat.name, text: cat.name });
+        }
+      });
+    }
+    return [{ value: "all", text: "All Categories" }, ...Array.from(catMap.values())];
+  }, [shopHierarchy, hierarchy, quickFilters.industryType]);
+
+  const qfSubCategoryOptions = useMemo(() => {
+    const subsMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      const targetInds = quickFilters.industryType === "all"
+        ? shopHierarchy
+        : shopHierarchy.filter(
+            (ind) =>
+              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+              String(ind.id) === String(quickFilters.industryType)
+          );
+
+      targetInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (
+            quickFilters.category === "all" ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id) === String(quickFilters.category)
+          ) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (sub.name && !subsMap.has(sub.name.toLowerCase())) {
+                subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name });
+              }
+            });
+          }
+        });
+      });
+    } else if (hierarchy?.subcategories && hierarchy.subcategories.length > 0) {
+      const matchedCat = (hierarchy?.categories || []).find(
+        (c) =>
+          c.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+          String(c._id) === String(quickFilters.category)
+      );
+      (hierarchy.subcategories || []).forEach((sub) => {
+        if (
+          (quickFilters.category === "all" || (matchedCat && String(sub.category) === String(matchedCat._id))) &&
+          sub.name &&
+          !subsMap.has(sub.name.toLowerCase())
+        ) {
+          subsMap.set(sub.name.toLowerCase(), { value: sub.name, text: sub.name });
+        }
+      });
+    }
+    return [{ value: "all", text: "All Sub-Categories" }, ...Array.from(subsMap.values())];
+  }, [shopHierarchy, hierarchy, quickFilters.industryType, quickFilters.category]);
+
+  const qfSystemTypeOptions = useMemo(() => {
+    const typesMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      const targetInds = quickFilters.industryType === "all"
+        ? shopHierarchy
+        : shopHierarchy.filter(
+            (ind) =>
+              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+              String(ind.id) === String(quickFilters.industryType)
+          );
+
+      targetInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (
+            quickFilters.category === "all" ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id) === String(quickFilters.category)
+          ) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (
+                quickFilters.subCategory === "all" ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase() ||
+                String(sub.id) === String(quickFilters.subCategory)
+              ) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (mt.name && !typesMap.has(mt.name.toLowerCase())) {
+                    typesMap.set(mt.name.toLowerCase(), { value: mt.name, text: mt.name });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    } else if (hierarchy?.types && hierarchy.types.length > 0) {
+      hierarchy.types.forEach((t) => {
+        if (t.name && !typesMap.has(t.name.toLowerCase())) {
+          typesMap.set(t.name.toLowerCase(), { value: t.name, text: t.name });
+        }
+      });
+    }
+    return [{ value: "all", text: "All System Types" }, ...Array.from(typesMap.values())];
+  }, [shopHierarchy, hierarchy, quickFilters.industryType, quickFilters.category, quickFilters.subCategory]);
+
+  const qfProjectRangeOptions = useMemo(() => {
+    const rangesMap = new Map();
+    if (shopHierarchy && shopHierarchy.length > 0) {
+      const targetInds = quickFilters.industryType === "all"
+        ? shopHierarchy
+        : shopHierarchy.filter(
+            (ind) =>
+              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+              String(ind.id) === String(quickFilters.industryType)
+          );
+
+      targetInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (
+            quickFilters.category === "all" ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id) === String(quickFilters.category)
+          ) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (
+                quickFilters.subCategory === "all" ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase() ||
+                String(sub.id) === String(quickFilters.subCategory)
+              ) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (
+                    quickFilters.systemType === "all" ||
+                    mt.name?.toLowerCase() === quickFilters.systemType.toLowerCase() ||
+                    String(mt.id || mt.type_id) === String(quickFilters.systemType)
+                  ) {
+                    (mt.ranges || []).forEach((r) => {
+                      const idVal = String(r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`);
+                      if (idVal && !rangesMap.has(idVal.toLowerCase())) {
+                        rangesMap.set(idVal.toLowerCase(), {
+                          value: r.range_label || idVal,
+                          text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || "kW"}`,
+                        });
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    } else if (hierarchy?.ranges && hierarchy.ranges.length > 0) {
+      hierarchy.ranges.forEach((r) => {
+        const idVal = String(r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_id?.symbol || "kW"}`);
+        if (idVal && !rangesMap.has(idVal.toLowerCase())) {
+          rangesMap.set(idVal.toLowerCase(), {
+            value: r.range_label || idVal,
+            text: r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_id?.symbol || "kW"}`,
+          });
+        }
+      });
+    }
+    return [{ value: "all", text: "All Project Ranges" }, ...Array.from(rangesMap.values())];
+  }, [
+    shopHierarchy,
+    hierarchy,
+    quickFilters.industryType,
+    quickFilters.category,
+    quickFilters.subCategory,
+    quickFilters.systemType,
+  ]);
+
+  const hasActiveQuickFilters =
+    quickFilters.industryType !== "all" || quickFilters.category !== "all" ||
+    quickFilters.subCategory !== "all" || quickFilters.systemType !== "all" || quickFilters.projectRange !== "all";
+
+  const clearQuickFilters = () =>
+    setQuickFilters({ industryType: "all", category: "all", subCategory: "all", systemType: "all", projectRange: "all" });
+
+  // ── Filter POs ────────────────────────────────────────────────────────────
   const filteredPOList = useMemo(() => {
     return purchaseOrders.filter((po) => {
       const matchesSearch =
@@ -372,9 +630,56 @@ export default function Payments() {
         supplierFilter === "All" ? true :
           (po.supplier_id?._id || po.supplier_id?.id) === supplierFilter;
 
-      return matchesSearch && matchesTab && matchesWarehouse && matchesSupplier;
+      // Quick Filters — match if ANY item or PO matches active filters
+      const matchesQuickFilters = (() => {
+        if (!hasActiveQuickFilters) return true;
+
+        if (quickFilters.industryType !== "all") {
+          const target = quickFilters.industryType.toLowerCase();
+          const hasInd =
+            (po.industry_types || []).some(t => t?.toLowerCase() === target) ||
+            (po.items || []).some(it => (it.sku_details?.industry_type_name || it.industry_type_name || "").toLowerCase() === target);
+          if (!hasInd) return false;
+        }
+
+        if (quickFilters.category !== "all") {
+          const target = quickFilters.category.toLowerCase();
+          const hasCat =
+            (po.categories || []).some(c => c?.toLowerCase() === target) ||
+            (po.items || []).some(it => (it.sku_details?.category_name || it.category_name || it.sku_details?.category || "").toLowerCase() === target);
+          if (!hasCat) return false;
+        }
+
+        if (quickFilters.subCategory !== "all") {
+          const target = quickFilters.subCategory.toLowerCase();
+          const hasSub =
+            (po.subcategories || []).some(s => s?.toLowerCase() === target) ||
+            (po.items || []).some(it => (it.sku_details?.subcategory_name || it.subcategory_name || "").toLowerCase() === target);
+          if (!hasSub) return false;
+        }
+
+        if (quickFilters.systemType !== "all") {
+          const target = quickFilters.systemType.toLowerCase();
+          const hasSys =
+            (po.system_types || []).some(t => t?.toLowerCase() === target) ||
+            (po.items || []).some(it => (it.sku_details?.system_type_name || it.system_type_name || "").toLowerCase() === target);
+          if (!hasSys) return false;
+        }
+
+        if (quickFilters.projectRange !== "all") {
+          const target = quickFilters.projectRange.toLowerCase();
+          const hasRange =
+            (po.project_ranges || []).some(r => r?.toLowerCase() === target) ||
+            (po.items || []).some(it => (it.sku_details?.project_range_name || it.sku_details?.project_range_label || it.project_range_label || "").toLowerCase() === target);
+          if (!hasRange) return false;
+        }
+
+        return true;
+      })();
+
+      return matchesSearch && matchesTab && matchesWarehouse && matchesSupplier && matchesQuickFilters;
     });
-  }, [purchaseOrders, searchQuery, activeTab, warehouseFilter, supplierFilter]);
+  }, [purchaseOrders, searchQuery, activeTab, warehouseFilter, supplierFilter, quickFilters, hasActiveQuickFilters]);
 
   // Paginated POs
   const paginatedPOs = useMemo(() => {
@@ -418,6 +723,109 @@ export default function Payments() {
           <FaHistory />
           Payment History
         </button>
+      </div>
+
+      {/* ─── Quick Filters Bar ─────────────────────────────────────────────── */}
+      <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <FaFilter className="w-3 h-3" />
+            </span>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-text-primary">Quick Filters</h3>
+              {hasActiveQuickFilters && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  Filtered ({filteredPOList.length} orders)
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={clearQuickFilters}
+            className="text-xs font-semibold text-primary hover:text-primary/70 hover:underline cursor-pointer transition-colors"
+          >
+            Clear Main
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {/* 1. Industry Type */}
+          <div>
+            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Industry Type</label>
+            <div className="relative">
+              <select
+                value={quickFilters.industryType}
+                onChange={(e) => { setQuickFilters({ industryType: e.target.value, category: "all", subCategory: "all", systemType: "all", projectRange: "all" }); setPage(1); }}
+                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+              >
+                {qfIndustryTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
+              </select>
+              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 2. Category */}
+          <div>
+            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Category</label>
+            <div className="relative">
+              <select
+                value={quickFilters.category}
+                onChange={(e) => { setQuickFilters(prev => ({ ...prev, category: e.target.value, subCategory: "all", systemType: "all", projectRange: "all" })); setPage(1); }}
+                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+              >
+                {qfCategoryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
+              </select>
+              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 3. Sub Category */}
+          <div>
+            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Sub Category</label>
+            <div className="relative">
+              <select
+                value={quickFilters.subCategory}
+                onChange={(e) => { setQuickFilters(prev => ({ ...prev, subCategory: e.target.value, systemType: "all", projectRange: "all" })); setPage(1); }}
+                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+              >
+                {qfSubCategoryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
+              </select>
+              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 4. System Type */}
+          <div>
+            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">System Type</label>
+            <div className="relative">
+              <select
+                value={quickFilters.systemType}
+                onChange={(e) => { setQuickFilters(prev => ({ ...prev, systemType: e.target.value, projectRange: "all" })); setPage(1); }}
+                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+              >
+                {qfSystemTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
+              </select>
+              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 5. Project Range */}
+          <div>
+            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Project Range</label>
+            <div className="relative">
+              <select
+                value={quickFilters.projectRange}
+                onChange={(e) => { setQuickFilters(prev => ({ ...prev, projectRange: e.target.value })); setPage(1); }}
+                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+              >
+                {qfProjectRangeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
+              </select>
+              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Table Section */}

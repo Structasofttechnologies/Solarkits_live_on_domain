@@ -187,6 +187,10 @@ export const deliveryApi = {
   },
 
   // ── 8. Delivery Queue & Franchisee Destinations ──
+  getHierarchyOptions: async () => {
+    const res = await axios.get(`${API_BASE}/delivery-management/hierarchy-options`, getHeaders());
+    return res.data;
+  },
   getDeliveryQueue: async (params = {}) => {
     const res = await axios.get(`${API_BASE}/delivery-management/queue${buildQuery(params)}`, getHeaders());
     return res.data;

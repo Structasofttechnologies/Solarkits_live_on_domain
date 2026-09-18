@@ -112,12 +112,16 @@ export default function CheckOut() {
   const [capacityChecking, setCapacityChecking] = useState(false);
   const [capacityResult, setCapacityResult] = useState(null);
 
-  // Compute Order Load Metrics
+  // Compute Order Load Metrics — must use item.qty (Redux cart field), NOT item.quantity (undefined for EPC catalogue items)
   const orderLoadMetrics = useMemo(() => {
     return cart.reduce((acc, item) => {
-      const qty = Number(item.quantity || 1);
-      const kw = Number(item.kw || item.capacity_kw || (item.capacity ? parseFloat(item.capacity) : 5)) || 5;
-      const weight = Number(item.weight_kg || item.weight) || (kw * 85);
+      const qty = Number(item.qty || 1);  // ← item.qty is the Redux cart quantity field
+      let kw = Number(item.kw || item.capacity_kw || (item.capacity ? parseFloat(item.capacity) : 0) || (item.capacityKW || 0)) || 0;
+      if (kw === 0) {
+        const m = (item.kitName || item.name || item.title || '').match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+        if (m) kw = parseFloat(m[1]) || 0;
+      }
+      const weight = Number(item.weight_kg || item.weight) || (kw > 0 ? Math.round(kw * 75) : 150);
       acc.total_kits += qty;
       acc.total_kw += qty * kw;
       acc.total_weight_kg += qty * weight;
@@ -136,11 +140,18 @@ export default function CheckOut() {
     const verifyCapacity = async () => {
       setCapacityChecking(true);
       try {
-        const cartItemsParam = cart.map(item => ({
-          quantity: item.quantity || 1,
-          kw_per_kit: Number(item.kw || item.capacity_kw || (item.capacity ? parseFloat(item.capacity) : 5)) || 5,
-          weight_kg_per_kit: Number(item.weight_kg || item.weight) || 250,
-        }));
+        const cartItemsParam = cart.map(item => {
+          let kw = Number(item.kw || item.capacity_kw || (item.capacity ? parseFloat(item.capacity) : 0) || (item.capacityKW || 0)) || 0;
+          if (kw === 0) {
+            const m = (item.kitName || item.name || item.title || '').match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+            if (m) kw = parseFloat(m[1]) || 0;
+          }
+          return {
+            quantity: item.qty || 1,  // ← use item.qty (Redux cart field), not item.quantity
+            kw_per_kit: kw,
+            weight_kg_per_kit: Number(item.weight_kg || item.weight) || (kw > 0 ? Math.round(kw * 75) : 250),
+          };
+        });
 
         const res = await axios.get(
           `${API_URL}/india/v1/shop/checkout/warehouse-capacity-check`,
@@ -605,7 +616,14 @@ export default function CheckOut() {
         kit_id: item.is_custom ? null : item.id,
         item_name: item.kitName || item.name || "Solar Kit",
         image: item.image || item.kit_image || item.img || (item.images && item.images[0]) || null,
-        capacity: item.capacity ? `${item.capacity} kW` : null,
+        capacity: (() => {
+          if (item.capacity) return String(item.capacity).includes('kW') ? String(item.capacity) : `${item.capacity} kW`;
+          if (item.capacity_kw) return `${item.capacity_kw} kW`;
+          if (item.kw) return `${item.kw} kW`;
+          if (item.capacityKW) return `${item.capacityKW} kW`;
+          const m = (item.kitName || item.name || item.title || '').match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+          return m ? `${m[1]} kW` : null;
+        })(),
         description: item.description || null,
         quantity: item.qty || 1,
         ourPrice: item.ourPrice,
@@ -965,27 +983,7 @@ export default function CheckOut() {
               </div>
             </div>
 
-            {/* UPI Quick Pay & Pulse Info */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#264baa]/10 border border-[#264baa]/25 text-xs">
-              <div className="flex items-center gap-2.5 text-[#264baa] dark:text-blue-200">
-                <FiCheckCircle className="text-lg text-[#264baa] dark:text-blue-400 shrink-0" />
-                <span>
-                  <strong>Instant Auto-Reconciliation:</strong> Transfer via RTGS / NEFT / IMPS or UPI. Our system automatically confirms payment within 10s!
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-bold text-text-primary dark:text-white">
-                  UPI: {iciciVanDetails?.upi_handle || `${iciciVanDetails?.virtual_account_number || 'SLRK9876543210'}@icici`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleCopyText(iciciVanDetails?.upi_handle || `${iciciVanDetails?.virtual_account_number || 'SLRK9876543210'}@icici`, "upi")}
-                  className="font-bold text-[#264baa] dark:text-blue-400 hover:underline text-xs"
-                >
-                  {copiedField === "upi" ? "Copied!" : "Copy UPI"}
-                </button>
-              </div>
-            </div>
+
           </div>
 
           {/* Checkout Submission Form */}
@@ -1016,18 +1014,16 @@ export default function CheckOut() {
                     {/* Mode 1: Franchisee Warehouse */}
                     <div
                       onClick={() => setFulfillmentMode("franchisee_warehouse")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                        fulfillmentMode === "franchisee_warehouse"
-                          ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
-                          : "border-border bg-surface hover:border-primary/50"
-                      }`}
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "franchisee_warehouse"
+                        ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
+                        : "border-border bg-surface hover:border-primary/50"
+                        }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-2xl">🏬</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                            fulfillmentMode === "franchisee_warehouse" ? "border-primary bg-primary text-white" : "border-border"
-                          }`}>
+                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "franchisee_warehouse" ? "border-primary bg-primary text-white" : "border-border"
+                            }`}>
                             {fulfillmentMode === "franchisee_warehouse" && <FiCheck size={10} />}
                           </span>
                         </div>
@@ -1058,18 +1054,16 @@ export default function CheckOut() {
                     {/* Mode 2: EPC Warehouse / Self Warehouse */}
                     <div
                       onClick={() => setFulfillmentMode("epc_warehouse")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                        fulfillmentMode === "epc_warehouse"
-                          ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
-                          : "border-border bg-surface hover:border-primary/50"
-                      }`}
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "epc_warehouse"
+                        ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
+                        : "border-border bg-surface hover:border-primary/50"
+                        }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-2xl">🏭</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                            fulfillmentMode === "epc_warehouse" ? "border-primary bg-primary text-white" : "border-border"
-                          }`}>
+                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "epc_warehouse" ? "border-primary bg-primary text-white" : "border-border"
+                            }`}>
                             {fulfillmentMode === "epc_warehouse" && <FiCheck size={10} />}
                           </span>
                         </div>
@@ -1086,18 +1080,16 @@ export default function CheckOut() {
                     {/* Mode 3: Direct Site Address / Pincode Delivery */}
                     <div
                       onClick={() => setFulfillmentMode("direct_site")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
-                        fulfillmentMode === "direct_site"
-                          ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
-                          : "border-border bg-surface hover:border-primary/50"
-                      }`}
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative flex flex-col justify-between ${fulfillmentMode === "direct_site"
+                        ? "border-primary bg-primary/5 shadow-md ring-2 ring-primary/20"
+                        : "border-border bg-surface hover:border-primary/50"
+                        }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-2xl">🚚</span>
-                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                            fulfillmentMode === "direct_site" ? "border-primary bg-primary text-white" : "border-border"
-                          }`}>
+                          <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${fulfillmentMode === "direct_site" ? "border-primary bg-primary text-white" : "border-border"
+                            }`}>
                             {fulfillmentMode === "direct_site" && <FiCheck size={10} />}
                           </span>
                         </div>

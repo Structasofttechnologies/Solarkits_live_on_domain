@@ -158,19 +158,7 @@ const menus = [
                     unique_id: "ADM_DELIVERY_MGMT"
                 },
                 {
-                    name: "7. Delivery Queue",
-                    icon: <FaBoxes />,
-                    path: "/admin-panel/solar-shop/delivery-management/queue",
-                    unique_id: "ADM_DELIVERY_MGMT"
-                },
-                {
-                    name: "8. Trip Tracking & POD",
-                    icon: <FiMapPin />,
-                    path: "/admin-panel/solar-shop/delivery-management/tracking",
-                    unique_id: "ADM_DELIVERY_MGMT"
-                },
-                {
-                    name: "9. Dashboard & Analytics",
+                    name: "7. Dashboard & Analytics",
                     icon: <FiBarChart2 />,
                     path: "/admin-panel/solar-shop/delivery-management/dashboard",
                     unique_id: "ADM_DELIVERY_MGMT"

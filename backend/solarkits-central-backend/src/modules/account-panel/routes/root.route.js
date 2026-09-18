@@ -42,6 +42,7 @@ router.post('/accounts/upload-payment-receipt', check_auth, upload_files('public
   return res.status(400).json({ status: "error", message: "No file uploaded." });
 });
 router.get('/accounts/purchase-orders', check_auth, accounts_handler.get_purchase_orders);
+router.get('/accounts/hierarchy-options', check_auth, accounts_handler.get_hierarchy_options);
 router.get('/accounts/skus/:skuId/details', check_auth, accounts_handler.get_sku_details);
 
 // PO Requests from Warehouse

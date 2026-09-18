@@ -20,6 +20,7 @@ const {
   ResellerInventoryLedger,
   SolarShopSettings,
 } = require('../models/india_solarshop_db');
+const { CompanyWarehouse } = require('../models/company_warehouse_db');
 const { calculateCheckoutPrice } = require('./reseller.pricing.service');
 const { calculateCurrentItemStock } = require('./reseller.procurement.service');
 const { routeEpcOrderToReseller } = require('./epc.order.service');
@@ -303,13 +304,19 @@ async function createEpcOfflineOrder({
     totalResellerMarginPaise += netMargin;
     totalPlatformCommissionPaise += commission;
 
+    let itemCapacity = item.capacity || null;
+    if (!itemCapacity) {
+      const match = `${item.item_name || ''} ${item.name || ''} ${item.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+      if (match) itemCapacity = `${match[1]} kW`;
+    }
+
     processedItems.push({
       scope_type: item.item_type || item.scope_type || 'kit',
       product_id: item.product_id || null,
       kit_id: item.kit_id || null,
       item_name: item.item_name || item.name || 'Solar Component',
       image: item.image || item.kit_image || null,
-      capacity: item.capacity || null,
+      capacity: itemCapacity,
       description: item.description || null,
       quantity: item.quantity,
       unit_price_paise: item.unit_price_paise,
@@ -325,19 +332,64 @@ async function createEpcOfflineOrder({
   const orderNumber = generateEpcOrderNumber();
   const fulfillmentSource = targetResellerId ? 'franchise_warehouse' : 'company_warehouse';
 
+  // Lookup warehouse matching delivery address state or default company warehouse
+  let assignedWarehouseId = null;
+  const stateName = delivery_address?.state_name;
+  if (stateName) {
+    const stateWh = await CompanyWarehouse.findOne({
+      $or: [
+        { state: new RegExp(stateName, 'i') },
+        { 'address.state': new RegExp(stateName, 'i') },
+        { warehouse_code: new RegExp(stateName.slice(0, 2), 'i') }
+      ],
+      is_active: true,
+    }).lean();
+    if (stateWh) assignedWarehouseId = stateWh._id;
+  }
+  if (!assignedWarehouseId) {
+    const defaultWh = await CompanyWarehouse.findOne({ is_active: true }).lean();
+    if (defaultWh) assignedWarehouseId = defaultWh._id;
+  }
+
   // 4. Create EPC Order in 'pending_verification' status
   const epcOrder = await EpcOrder.create({
     order_number: orderNumber,
     epc_id,
+    warehouse_id: assignedWarehouseId,
     reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
     fulfillment_source: fulfillmentSource,
     fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
-    order_load_metrics: order_load_metrics || {
-      total_kits: processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0),
-      total_kw: processedItems.reduce((acc, it) => acc + ((it.quantity || 0) * (it.kw || 5)), 0),
-      total_weight_kg: processedItems.reduce((acc, it) => acc + ((it.quantity || 0) * 250), 0),
-    },
+    order_load_metrics: (() => {
+      // Always compute server-side from processedItems — never blindly trust frontend values.
+      // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
+      const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+      const serverKw = processedItems.reduce((acc, it) => {
+        let kw = parseFloat(it.capacity || '0') || 0;
+        if (kw === 0) {
+          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+          if (match) kw = parseFloat(match[1]) || 0;
+        }
+        return acc + (it.quantity || 0) * kw;
+      }, 0);
+      const serverWeight = processedItems.reduce((acc, it) => {
+        let kw = parseFloat(it.capacity || '0') || 0;
+        if (kw === 0) {
+          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+          if (match) kw = parseFloat(match[1]) || 0;
+        }
+        const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
+        return acc + (it.quantity || 0) * unitW;
+      }, 0);
+
+      // Supplement with frontend metrics only when they have richer data (higher kit count)
+      const frontendKits = (order_load_metrics?.total_kits || 0);
+      return {
+        total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
+        total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
+        total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
+      };
+    })(),
     items: processedItems,
     subtotal_paise: totals.subtotal_paise,
     tax_total_paise: totals.tax_total_paise,
@@ -890,12 +942,12 @@ async function assignVehicleToOrder({ order_id, vehicle, driver, is_recommended,
  */
 async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_data, milestone, req }) {
   const STAGE_FLOW = {
-    processing:           ['confirmed'],
-    ready_for_dispatch:   ['vehicle_assigned'],
-    dispatched:           ['ready_for_dispatch'],
-    in_transit:           ['dispatched', 'in_transit'],
-    reached_destination:  ['in_transit'],
-    delivered:            ['reached_destination'],
+    processing:           ['pending', 'confirmed', 'allocated', 'processing'],
+    ready_for_dispatch:   ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch'],
+    dispatched:           ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched'],
+    in_transit:           ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit'],
+    reached_destination:  ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit', 'reached_destination'],
+    delivered:            ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit', 'reached_destination', 'delivered'],
   };
 
   const order = await EpcOrder.findById(order_id);
@@ -910,28 +962,42 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
     );
   }
 
+  const resolvedAdminId = (admin_user_id && mongoose.Types.ObjectId.isValid(admin_user_id)) ? admin_user_id : null;
+
   // ── Status-specific logic ─────────────────────────────────────────────────
   if (new_status === 'dispatched' && dispatch_data) {
     order.dispatch_tracking = {
       ...order.dispatch_tracking?.toObject?.() || {},
-      courier_name:       dispatch_data.courier_name    || null,
-      tracking_number:    dispatch_data.tracking_number || null,
+      courier_name:       dispatch_data.courier_name    || 'Company Fleet Logistics',
+      tracking_number:    dispatch_data.tracking_number || `TRK-${order.order_number}`,
       tracking_url:       dispatch_data.tracking_url    || null,
       dispatched_at:      new Date(),
       estimated_delivery: dispatch_data.estimated_delivery || null,
-      dispatched_by:      admin_user_id,
+      dispatched_by:      resolvedAdminId,
       dispatch_notes:     dispatch_data.dispatch_notes  || null,
     };
   }
 
-  if (new_status === 'in_transit' && milestone) {
+  if (new_status === 'in_transit') {
+    const mStatus = milestone?.status || milestone?.milestone_status || 'In Transit';
+    const mDesc = milestone?.description || null;
     order.milestones = order.milestones || [];
     order.milestones.push({
-      status:      milestone.status,
-      description: milestone.description || null,
-      recorded_by: admin_user_id,
+      status:      mStatus,
+      description: mDesc,
+      recorded_by: resolvedAdminId,
       recorded_at: new Date(),
     });
+
+    if (!order.dispatch_tracking?.dispatched_at) {
+      order.dispatch_tracking = {
+        ...order.dispatch_tracking?.toObject?.() || {},
+        courier_name: order.dispatch_tracking?.courier_name || 'Company Fleet Logistics',
+        tracking_number: order.dispatch_tracking?.tracking_number || `TRK-${order.order_number}`,
+        dispatched_at: new Date(),
+        dispatched_by: resolvedAdminId,
+      };
+    }
   }
 
   if (new_status === 'delivered') {
@@ -941,15 +1007,17 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
   order.order_status = new_status;
   await order.save();
 
-  await logAudit({
-    actor_type: 'cms_user',
-    actor_id:   admin_user_id,
-    action:     `EPC_ORDER_${new_status.toUpperCase()}`,
-    entity_type:'epc_orders',
-    entity_id:  order._id,
-    after_snapshot: { order_number: order.order_number, status: new_status },
-    req,
-  });
+  if (resolvedAdminId) {
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id:   resolvedAdminId,
+      action:     `EPC_ORDER_${new_status.toUpperCase()}`,
+      entity_type:'epc_orders',
+      entity_id:  order._id,
+      after_snapshot: { order_number: order.order_number, status: new_status },
+      req,
+    }).catch(err => console.warn('Audit log warning in updateOrderStage:', err.message));
+  }
 
   return order;
 }

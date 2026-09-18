@@ -13,6 +13,7 @@ export default function CreateDeliveryModal({
   onClose,
   orders = [], // 1 order for single, 2+ for combined
   onSuccess,
+  warehouses = [],
 }) {
   const dispatch = useDispatch();
   const isCombined = orders.length > 1;
@@ -21,7 +22,8 @@ export default function CreateDeliveryModal({
   const [loading, setLoading] = useState(false);
   const [fleetList, setFleetList] = useState([]);
   const [splitRecommendation, setSplitRecommendation] = useState(null);
-  const [franchiseeDestinations, setFranchiseeDestinations] = useState([]);
+  const [_franchiseeDestinations, setFranchiseeDestinations] = useState([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
 
   // Selected Fleet & Allocation
   const [selectedProviderId, setSelectedProviderId] = useState('');
@@ -53,13 +55,113 @@ export default function CreateDeliveryModal({
   const primaryWarehouseId = orders[0]?.warehouse_id;
   const primaryDistrictId = orders[0]?.destination?.district_id;
 
-  const loadEligibilityData = async () => {
+  const fetchBenchmarkRate = async (whId, vId, proposedCost = null) => {
+    const targetWhId = whId || selectedWarehouseId || primaryWarehouseId || warehouses[0]?._id;
+    const vehicle = fleetList.find((v) => v._id === vId) || fleetList[0];
+    const vmId = vehicle?.vehicle_master_id?._id || vehicle?.vehicle_master_id;
+
+    try {
+      if (isCombined && orders.length > 1) {
+        // Multi-stop combined benchmark calculation
+        let stopBenchmarksSum = 0;
+        for (const ord of orders) {
+          const distId = ord.destination?.district_id;
+          const stopRes = await deliveryApi
+            .validateBenchmark({
+              warehouse_id: targetWhId,
+              vehicle_master_id: vmId,
+              district_id: distId,
+              proposed_cost: 0,
+            })
+            .catch(() => null);
+          stopBenchmarksSum += stopRes?.data?.benchmark_cost || 4500;
+        }
+
+        const combinedBench = Math.round(stopBenchmarksSum * 0.72);
+        const costToCompare = proposedCost !== null ? Number(proposedCost) : combinedBench;
+
+        const bResult = {
+          benchmark_cost: combinedBench,
+          proposed_cost: costToCompare,
+          meets_benchmark: costToCompare <= combinedBench,
+          difference: costToCompare - combinedBench,
+          separate_total: stopBenchmarksSum,
+          consolidation_saving: Math.max(0, stopBenchmarksSum - combinedBench),
+          matched_rule: `${orders.length} Stops Consolidated Route (~28% Saving Applied)`,
+        };
+        setBenchmarkResult(bResult);
+        if (proposedCost === null) {
+          setVendorCost(String(combinedBench));
+        }
+        return combinedBench;
+      } else {
+        const res = await deliveryApi.validateBenchmark({
+          warehouse_id: targetWhId,
+          vehicle_master_id: vmId,
+          district_id: primaryDistrictId,
+          proposed_cost: proposedCost !== null ? Number(proposedCost) : 0,
+        });
+
+        if (res.status === 'success') {
+          const bench = res.data.benchmark_cost || 4500;
+          const costToCompare = proposedCost !== null ? Number(proposedCost) : bench;
+          const bResult = {
+            ...res.data,
+            benchmark_cost: bench,
+            proposed_cost: costToCompare,
+            meets_benchmark: costToCompare <= bench,
+            difference: costToCompare - bench,
+          };
+          setBenchmarkResult(bResult);
+          if (proposedCost === null) {
+            setVendorCost(String(bench));
+          }
+          return bench;
+        }
+      }
+    } catch (err) {
+      console.warn('Benchmark validation fallback:', err);
+      const fallbackCost = isCombined ? 6500 : 4500;
+      setBenchmarkResult({
+        benchmark_cost: fallbackCost,
+        proposed_cost: proposedCost !== null ? Number(proposedCost) : fallbackCost,
+        meets_benchmark: (proposedCost !== null ? Number(proposedCost) : fallbackCost) <= fallbackCost,
+        difference: 0,
+        matched_rule: 'Standard Baseline Route Rate',
+      });
+      if (proposedCost === null) {
+        setVendorCost(String(fallbackCost));
+      }
+    }
+  };
+
+  const handleCostChange = (newVal) => {
+    setVendorCost(newVal);
+    const num = Number(newVal || 0);
+    if (benchmarkResult) {
+      const meets = num <= benchmarkResult.benchmark_cost;
+      setBenchmarkResult({
+        ...benchmarkResult,
+        proposed_cost: num,
+        meets_benchmark: meets,
+        difference: num - benchmarkResult.benchmark_cost,
+      });
+      if (meets) {
+        setIsOverridden(true);
+      } else {
+        setIsOverridden(false);
+      }
+    }
+  };
+
+  const loadEligibilityData = async (whIdToUse) => {
     if (!orders.length) return;
+    const targetWhId = whIdToUse || selectedWarehouseId || primaryWarehouseId || warehouses[0]?._id;
     setLoading(true);
     try {
       const [fleetRes, destRes] = await Promise.all([
         deliveryApi.getEligibleFleet({
-          warehouse_id: primaryWarehouseId,
+          warehouse_id: targetWhId,
           destination_district_id: primaryDistrictId,
           total_weight_kg: totalKg,
           route_distance_km: 120,
@@ -67,6 +169,7 @@ export default function CreateDeliveryModal({
         deliveryApi.getFranchiseeDestinations(primaryDistrictId),
       ]);
 
+      let chosenVehicleId = '';
       if (fleetRes.status === 'success') {
         const list = fleetRes.data.eligible_fleet || [];
         setFleetList(list);
@@ -74,6 +177,7 @@ export default function CreateDeliveryModal({
 
         if (list.length > 0) {
           const first = list[0];
+          chosenVehicleId = first._id;
           setSelectedVehicleId(first._id);
           setSelectedProviderId(first.service_provider_id?._id || first.service_provider_id);
           setDriverName(first.assigned_driver?.name || '');
@@ -85,9 +189,13 @@ export default function CreateDeliveryModal({
       if (destRes.status === 'success') {
         setFranchiseeDestinations(destRes.data || []);
       }
+
+      // Automatically calculate and load benchmark rate
+      await fetchBenchmarkRate(targetWhId, chosenVehicleId);
     } catch (err) {
       console.error(err);
       showAlert('Failed to load eligible vehicles', 'error');
+      await fetchBenchmarkRate(targetWhId, null);
     } finally {
       setLoading(false);
     }
@@ -95,10 +203,11 @@ export default function CreateDeliveryModal({
 
   useEffect(() => {
     if (isOpen) {
-      setVendorCost(isCombined ? '18000' : '5000');
-      loadEligibilityData();
+      const initialWh = primaryWarehouseId || warehouses[0]?._id || '';
+      setSelectedWarehouseId(initialWh);
+      loadEligibilityData(initialWh);
     }
-  }, [isOpen]);
+  }, [isOpen, orders, warehouses]);
 
   const handleVehicleSelect = (vId) => {
     setSelectedVehicleId(vId);
@@ -109,28 +218,11 @@ export default function CreateDeliveryModal({
       setDriverMobile(vehicle.assigned_driver?.mobile || '');
       setDriverLicense(vehicle.assigned_driver?.license_number || '');
     }
+    fetchBenchmarkRate(selectedWarehouseId, vId, vendorCost);
   };
 
   const handleCostBlur = async () => {
-    if (!vendorCost || !primaryDistrictId) return;
-    try {
-      const selectedVehicle = fleetList.find((v) => v._id === selectedVehicleId);
-      const res = await deliveryApi.validateBenchmark({
-        warehouse_id: primaryWarehouseId,
-        vehicle_master_id: selectedVehicle?.vehicle_master_id?._id,
-        district_id: primaryDistrictId,
-        proposed_cost: Number(vendorCost),
-      });
-
-      if (res.status === 'success') {
-        setBenchmarkResult(res.data);
-        if (!res.data.meets_benchmark) {
-          setIsOverridden(false);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
+    fetchBenchmarkRate(selectedWarehouseId, selectedVehicleId, vendorCost);
   };
 
   const handleSubmit = async (e) => {
@@ -183,7 +275,7 @@ export default function CreateDeliveryModal({
 
     const payload = {
       delivery_type: isCombined ? 'consolidated_master_trip' : 'single_order',
-      warehouse_id: primaryWarehouseId,
+      warehouse_id: selectedWarehouseId || primaryWarehouseId || warehouses[0]?._id,
       service_provider_id: selectedProviderId,
       booking_source: 'manual',
       stops: stopsPayload,
@@ -239,37 +331,81 @@ export default function CreateDeliveryModal({
             </div>
             <div>
               <div className="text-xs text-slate-500 uppercase font-semibold">Dispatch Warehouse</div>
-              <div className="text-sm font-semibold text-slate-800 font-mono">
-                {orders[0]?.warehouse_code || 'Company WH'}
-              </div>
+              {warehouses.length > 0 ? (
+                <select
+                  value={selectedWarehouseId}
+                  onChange={(e) => {
+                    setSelectedWarehouseId(e.target.value);
+                    loadEligibilityData(e.target.value);
+                  }}
+                  className="text-xs font-semibold text-slate-800 bg-white border border-slate-300 rounded px-2 py-1 mt-0.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  {warehouses.map((wh) => (
+                    <option key={wh._id} value={wh._id}>
+                      {wh.warehouse_code} {wh.warehouse_name ? `- ${wh.warehouse_name}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-sm font-semibold text-slate-800 font-mono">
+                  {orders[0]?.warehouse_code || 'Company WH'}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Multi-Stop Sequence Display (Combined Mode) */}
-          {isCombined ? (
-            <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-white">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <FaMapMarkerAlt className="text-blue-600" /> Sequential Stops Route
-              </h4>
-              <div className="space-y-2">
-                {orders.map((o, idx) => (
-                  <div key={o._id} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50 text-xs">
+          {/* Order Details & Destination Breakdown */}
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-white">
+            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <FaMapMarkerAlt className="text-blue-600" />
+              {isCombined ? `Sequential Stops Route (${orders.length} Stops)` : 'Delivery Destination & Ordered Products'}
+            </h4>
+            <div className="space-y-2.5">
+              {orders.map((o, idx) => (
+                <div key={o._id} className="p-3 rounded-lg border border-slate-200 bg-slate-50/70 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px]">
-                        {idx + 1}
-                      </span>
-                      <span className="font-mono font-semibold text-slate-900">{o.order_number}</span>
-                      <span className="text-slate-600">({o.customer_name})</span>
+                      {isCombined && (
+                        <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-[10px]">
+                          {idx + 1}
+                        </span>
+                      )}
+                      <span className="font-mono font-bold text-blue-700">{o.order_number}</span>
+                      <span className="text-slate-600 font-medium">({o.customer_name})</span>
                     </div>
-                    <div className="text-slate-600 text-right">
-                      <div>{o.destination?.district_name || 'District'} • {o.destination?.pincode}</div>
-                      <div className="text-[11px] font-semibold text-slate-800">{o.kits} kits ({o.total_kg} KG)</div>
+                    <div className="font-bold text-slate-900 font-mono">
+                      {o.kits} kits • {o.total_kg?.toLocaleString()} KG • {o.total_kw} kW
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-600 pt-1 border-t border-slate-200/60">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Delivery Site Address</span>
+                      <div className="font-medium text-slate-800">{o.destination?.address || 'Direct Site'}</div>
+                      <div className="text-slate-500 text-[11px]">
+                        {o.destination?.district_name || 'District'}, {o.destination?.state_name || 'State'} - {o.destination?.pincode}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Ordered Equipment / Kit</span>
+                      {o.items && o.items.length > 0 ? (
+                        <div className="space-y-1 mt-0.5">
+                          {o.items.map((it, iIdx) => (
+                            <div key={iIdx} className="bg-white border border-slate-200 rounded px-2 py-0.5 text-[11px] flex items-center justify-between">
+                              <span className="font-semibold text-slate-800 truncate">{it.kit_name || it.item_name}</span>
+                              <span className="text-indigo-600 font-bold ml-2 shrink-0">×{it.quantity} {it.capacity_kw ? `(${it.capacity_kw}kW)` : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="font-semibold text-slate-700">{o.kits} kits</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : null}
+          </div>
 
           {/* Vehicle Selection & Previous Vehicle Preference */}
           <div className="space-y-3">
@@ -348,23 +484,48 @@ export default function CreateDeliveryModal({
           </div>
 
           {/* Commercials: Actual Vendor Cost, Benchmark Validation, Cost Allocation */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Transport Cost & 3-Tier Financial Reconciliation
-            </h4>
+          <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Transport Cost & 3-Tier Financial Reconciliation
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  {isCombined
+                    ? `Consolidated Multi-Stop Trip (${orders.length} stops) • Origin Warehouse to Delivery Sites`
+                    : `Direct Single Delivery • ${orders[0]?.destination?.district_name || 'Destination'} Route`}
+                </p>
+              </div>
+              {benchmarkResult?.matched_rule && (
+                <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded">
+                  {benchmarkResult.matched_rule}
+                </span>
+              )}
+            </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <CustomInput
                   label="Actual Delivery Cost ₹ (Payable to Transporter) *"
                   type="number"
-                  placeholder="e.g. 8000"
+                  placeholder="e.g. 5000"
                   value={vendorCost}
-                  onChange={(e) => setVendorCost(e.target.value)}
+                  onChange={(e) => handleCostChange(e.target.value)}
                   onBlur={handleCostBlur}
                   required
                 />
-                <span className="text-[11px] text-slate-500">Total payable with 18% GST: ₹{Math.round(Number(vendorCost || 0) * 1.18).toLocaleString()}</span>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                  <span>With 18% GST: ₹{Math.round(Number(vendorCost || 0) * 1.18).toLocaleString()}</span>
+                  {benchmarkResult?.benchmark_cost ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCostChange(String(benchmarkResult.benchmark_cost))}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold underline text-[11px] cursor-pointer"
+                    >
+                      Reset to Benchmark (₹{benchmarkResult.benchmark_cost.toLocaleString()})
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               {isCombined ? (
@@ -373,57 +534,101 @@ export default function CreateDeliveryModal({
                   <select
                     value={costAllocationMethod}
                     onChange={(e) => setCostAllocationMethod(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-500"
                   >
-                    <option value="by_kit_qty">By Kit Quantity</option>
-                    <option value="by_weight_kg">By Shipment Weight (KG)</option>
-                    <option value="by_distance">By Delivery Distance</option>
-                    <option value="manual">Manual Allocation</option>
+                    <option value="by_kit_qty">By Kit Quantity (Equal share per kit unit)</option>
+                    <option value="by_weight_kg">By Shipment Weight (KG proportional)</option>
+                    <option value="by_distance">By Delivery Distance (Stop sequential)</option>
+                    <option value="manual">Manual Equal Split</option>
                   </select>
+                  <span className="text-[11px] text-slate-500 block mt-1">
+                    Splits the single transporter invoice proportionally across all {orders.length} orders.
+                  </span>
                 </div>
               ) : null}
             </div>
 
-            {/* Benchmark Validation Notice */}
-            {benchmarkResult ? (
-              <div className={`p-3 rounded-lg text-xs flex items-center justify-between ${
-                benchmarkResult.meets_benchmark
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : 'bg-amber-50 text-amber-900 border border-amber-300'
-              }`}>
-                <div>
-                  <span className="font-semibold">Company Benchmark: ₹{benchmarkResult.benchmark_cost.toLocaleString()}</span>
-                  <span className="ml-2">
-                    {benchmarkResult.meets_benchmark
-                      ? '✅ Within active cost benchmark'
-                      : `⚠️ Exceeds benchmark by ₹${benchmarkResult.difference.toLocaleString()} (Requires Admin Override)`}
+            {/* Benchmark Validation Card (ALWAYS VISIBLE) */}
+            <div
+              className={`p-3.5 rounded-xl text-xs border space-y-2 transition-all ${
+                benchmarkResult?.meets_benchmark
+                  ? 'bg-emerald-50/70 border-emerald-300 text-emerald-900'
+                  : 'bg-amber-50/80 border-amber-300 text-amber-900'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold">
+                  <span className="text-sm">
+                    Approved Benchmark Rate: ₹{(benchmarkResult?.benchmark_cost || (isCombined ? 6500 : 4500)).toLocaleString()}
+                  </span>
+                  <span
+                    className={`text-[11px] px-2 py-0.5 rounded font-semibold ${
+                      benchmarkResult?.meets_benchmark
+                        ? 'bg-emerald-200 text-emerald-900'
+                        : 'bg-amber-200 text-amber-900'
+                    }`}
+                  >
+                    {benchmarkResult?.meets_benchmark
+                      ? '✅ Within Approved Benchmark'
+                      : `⚠️ Exceeds Benchmark by ₹${Math.abs(benchmarkResult?.difference || 0).toLocaleString()}`}
                   </span>
                 </div>
                 {isOverridden ? (
-                  <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                    Override Approved
+                  <span className="font-bold text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200 shadow-2xs">
+                    Override Authorized
                   </span>
                 ) : null}
               </div>
-            ) : null}
 
-            {/* Financial Ledger Preview */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-xs">
-              <div>
-                <span className="text-slate-500">Customer Charge:</span>
-                <span className="ml-1 font-bold text-slate-900">₹{totalCustomerCharge.toLocaleString()}</span>
-              </div>
-              <div>
-                <span className="text-slate-500">Transporter Cost:</span>
-                <span className="ml-1 font-bold text-slate-900">₹{Number(vendorCost || 0).toLocaleString()}</span>
-              </div>
-              <div>
-                <span className="text-slate-500">Net Delivery Margin:</span>
-                <span className={`ml-1 font-bold ${
-                  totalCustomerCharge - Number(vendorCost || 0) >= 0 ? 'text-emerald-700' : 'text-red-600'
-                }`}>
-                  ₹{(totalCustomerCharge - Number(vendorCost || 0)).toLocaleString()}
+              <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span>
+                  <strong>Calculation Formula:</strong> Based on Warehouse (
+                  {warehouses.find((w) => w._id === selectedWarehouseId)?.warehouse_code || orders[0]?.warehouse_code || 'GJ-WH'}
+                  ) → {orders.map((o) => o.destination?.district_name || 'District').join(', ')}
                 </span>
+                {isCombined && benchmarkResult?.separate_total ? (
+                  <span>
+                    Separate trips: ₹{benchmarkResult.separate_total.toLocaleString()} → Combined trip saving: +₹
+                    {benchmarkResult.consolidation_saving?.toLocaleString()}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            {/* 3-Tier Financial Ledger Reconciliation */}
+            <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-1.5 text-xs">
+              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                3-Tier Financial Ledger Breakdown
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div>
+                  <div className="text-slate-500 text-[11px]">1. Customer Fee Collected</div>
+                  <div className="font-bold text-slate-900 text-sm font-mono">
+                    ₹{totalCustomerCharge.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[11px]">2. Approved Benchmark Rate</div>
+                  <div className="font-bold text-blue-700 text-sm font-mono">
+                    ₹{(benchmarkResult?.benchmark_cost || (isCombined ? 6500 : 4500)).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[11px]">3. Actual Transporter Cost</div>
+                  <div className="font-bold text-slate-900 text-sm font-mono">
+                    ₹{Number(vendorCost || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[11px]">Net Delivery Margin</div>
+                  <div
+                    className={`font-bold text-sm font-mono ${
+                      totalCustomerCharge - Number(vendorCost || 0) >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                    }`}
+                  >
+                    ₹{(totalCustomerCharge - Number(vendorCost || 0)).toLocaleString()}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

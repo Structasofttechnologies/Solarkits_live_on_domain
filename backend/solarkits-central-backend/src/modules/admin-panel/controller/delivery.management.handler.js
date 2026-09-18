@@ -15,6 +15,7 @@ const {
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
 const { GeoLevel1, GeoLevel2 } = require('../models/geolocation_db');
 const deliveryService = require('../services/delivery.management.service');
+const estimatorHandler = require('./estimator.admin.handler');
 
 // ─── 1. VEHICLE MASTER CRUD ───────────────────────────────────────────────────
 exports.get_vehicle_masters = async (req, res) => {
@@ -782,7 +783,23 @@ exports.delete_route = async (req, res) => {
 // ─── 8. QUEUE & CONSOLIDATION SUGGESTIONS ─────────────────────────────────────
 exports.get_delivery_queue = async (req, res) => {
   try {
-    const { warehouse_id, page = 1, limit = 50, priority_only = false } = req.query;
+    const {
+      warehouse_id,
+      page = 1,
+      limit = 50,
+      priority_only = false,
+      industry_type,
+      industry_type_name,
+      category,
+      category_name,
+      sub_category,
+      subcategory,
+      subcategory_name,
+      system_type,
+      system_type_name,
+      project_range,
+      project_range_name,
+    } = req.query;
     const cleanWarehouseId = (warehouse_id && warehouse_id !== 'null' && warehouse_id !== 'undefined' && mongoose.Types.ObjectId.isValid(warehouse_id)) ? warehouse_id : null;
 
     const result = await deliveryService.getDeliveryQueue({
@@ -790,12 +807,19 @@ exports.get_delivery_queue = async (req, res) => {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 50,
       priority_only: priority_only === 'true',
+      industry_type: industry_type || industry_type_name,
+      category: category || category_name,
+      subcategory: sub_category || subcategory || subcategory_name,
+      system_type: system_type || system_type_name,
+      project_range: project_range || project_range_name,
     });
 
-    // Also scan for suggestions if warehouse provided
+    // Always scan for consolidation suggestions (pass null if no warehouse filter)
     let consolidationSuggestions = [];
-    if (cleanWarehouseId) {
-      consolidationSuggestions = await deliveryService.scanQueueForConsolidation(cleanWarehouseId);
+    try {
+      consolidationSuggestions = await deliveryService.scanQueueForConsolidation(cleanWarehouseId, result.orders);
+    } catch (scanErr) {
+      console.warn('consolidation scan warning:', scanErr.message);
     }
 
     return res.status(200).json({
@@ -808,6 +832,15 @@ exports.get_delivery_queue = async (req, res) => {
     });
   } catch (err) {
     console.error('get_delivery_queue error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.get_hierarchy_options = async (req, res) => {
+  try {
+    return await estimatorHandler.get_hierarchy_options(req, res);
+  } catch (err) {
+    console.error('get_hierarchy_options error:', err);
     return res.status(500).json({ status: 'error', message: err.message });
   }
 };
@@ -846,15 +879,15 @@ exports.update_order_priority = async (req, res) => {
 exports.get_eligible_fleet = async (req, res) => {
   try {
     const { warehouse_id, destination_district_id, total_weight_kg, route_distance_km } = req.query;
-    if (!destination_district_id || !total_weight_kg) {
-      return res.status(400).json({ status: 'error', message: 'District ID and Total Weight are required.' });
-    }
+    const cleanDistrictId = (destination_district_id && destination_district_id !== 'undefined' && destination_district_id !== 'null') ? destination_district_id : null;
+    const weight = Number(total_weight_kg) || 100;
+    const distance = Number(route_distance_km) || 100;
 
     const result = await deliveryService.getEligibleFleet({
       warehouse_id,
-      destination_district_id,
-      total_weight_kg: Number(total_weight_kg),
-      route_distance_km: Number(route_distance_km || 100),
+      destination_district_id: cleanDistrictId,
+      total_weight_kg: weight,
+      route_distance_km: distance,
     });
 
     return res.status(200).json({ status: 'success', data: result });

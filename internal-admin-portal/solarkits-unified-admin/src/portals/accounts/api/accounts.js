@@ -132,6 +132,22 @@ export const getPurchaseOrders = async (clusterId = "", stateId = "", countryId 
   return res.data;
 };
 
+export const getHierarchyOptions = async () => {
+  try {
+    const res = await axios.get(`${API_URL}/accounts/hierarchy-options`, {
+      headers: authHeaderObj(),
+    });
+    if (res.data?.status === "success") return res.data;
+  } catch (e) {
+    // fallback to delivery-management/hierarchy-options
+  }
+  const adminUrl = import.meta.env.VITE_ADMIN_API_URL || import.meta.env.VITE_API_URL || "http://localhost:5000/admin-api";
+  const res = await axios.get(`${adminUrl}/delivery-management/hierarchy-options`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 export const getSkuDetails = async (skuId) => {
   const res = await axios.get(`${API_URL}/accounts/skus/${skuId}/details`, {
     headers: authHeaderObj(),

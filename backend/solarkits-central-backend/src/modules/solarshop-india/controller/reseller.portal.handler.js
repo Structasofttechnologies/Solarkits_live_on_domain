@@ -1583,85 +1583,56 @@ const get_reseller_authorized_products = async (req, res) => {
       const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
       if (validExplicitIds.length > 0) {
         kitOrConditions.push({ _id: { $in: validExplicitIds } });
-      } else if (matchedSolarKitIds.length > 0) {
+      }
+      if (matchedSolarKitIds.length > 0) {
         kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
       }
 
+      let planKits = [];
       if (kitOrConditions.length > 0) {
-        const planKits = await WarehouseComboKit.find({
+        planKits = await WarehouseComboKit.find({
           is_active: { $ne: false },
           deleted_at: null,
           $or: kitOrConditions,
         }).lean();
-
-        planKits.forEach((k) => {
-          const listing = listingMap[k._id.toString()];
-          const kitDisplayName = k.name || k.kit_name || 'Combo Kit';
-          const kitCode = k.kit_code || 'KIT-SKU';
-          const priceInr = listing?.cost_price_paise
-            ? listing.cost_price_paise / 100
-            : (k.base_price_cached || k.selling_price_cached || k.base_price || 5000);
-
-          itemMap.set(`kit:${k._id.toString()}`, {
-            _id: k._id,
-            id: k._id,
-            scope_type: 'kit',
-            is_kit: true,
-            name: kitDisplayName,
-            kit_name: kitDisplayName,
-            sku_code: kitCode,
-            kit_code: kitCode,
-            base_price: priceInr,
-            price: priceInr,
-            reseller_cost_inr: priceInr,
-            is_authorized: true,
-            source: 'plan_default',
-            plan_name: activePlan.name,
-          });
-        });
       }
 
-      // 2b. Load Plan Products if specified or matching categories
-      const prodOrConditions = [];
-      if (planProdIds.length > 0) {
-        prodOrConditions.push({ _id: { $in: planProdIds } });
-      }
-      if (allCategoryIds.size > 0) {
-        prodOrConditions.push({ category_id: { $in: Array.from(allCategoryIds) } });
-      }
-      if (allSubcatIds.size > 0) {
-        prodOrConditions.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
-      }
-
-      if (prodOrConditions.length > 0) {
-        const planProds = await Product.find({
-          $or: prodOrConditions,
+      // Fallback: If no kits matched explicit restrictions or no restrictions set,
+      // load all active standard catalog combo kits under the active franchise plan
+      if (planKits.length === 0) {
+        planKits = await WarehouseComboKit.find({
           is_active: { $ne: false },
           deleted_at: null,
         }).lean();
-
-        planProds.forEach((p) => {
-          const listing = listingMap[p._id.toString()];
-          const priceInr = listing?.cost_price_paise
-            ? listing.cost_price_paise / 100
-            : (p.base_price || (p.base_price_paise ? p.base_price_paise / 100 : null) || p.price || 1000);
-
-          itemMap.set(`product:${p._id.toString()}`, {
-            _id: p._id,
-            id: p._id,
-            scope_type: 'product',
-            is_kit: false,
-            name: p.name,
-            sku_code: p.sku_code || 'PROD-SKU',
-            base_price: priceInr,
-            price: priceInr,
-            reseller_cost_inr: priceInr,
-            is_authorized: true,
-            source: 'plan_default',
-            plan_name: activePlan.name,
-          });
-        });
       }
+
+      planKits.forEach((k) => {
+        const listing = listingMap[k._id.toString()];
+        const kitDisplayName = k.name || k.kit_name || 'Combo Kit';
+        const kitCode = k.kit_code || 'KIT-SKU';
+        const priceInr = listing?.cost_price_paise
+          ? listing.cost_price_paise / 100
+          : (k.base_price_cached || k.selling_price_cached || k.base_price || 5000);
+
+        itemMap.set(`kit:${k._id.toString()}`, {
+          _id: k._id,
+          id: k._id,
+          kit_id: k._id,
+          scope_type: 'kit',
+          is_kit: true,
+          name: kitDisplayName,
+          kit_name: kitDisplayName,
+          sku_code: kitCode,
+          kit_code: kitCode,
+          base_price: priceInr,
+          price: priceInr,
+          reseller_cost_inr: priceInr,
+          is_authorized: true,
+          source: 'plan_default',
+          plan_name: activePlan.name,
+        });
+      });
+
     }
 
     // 3. Fetch Explicit Admin Reseller Rules for THIS reseller (ResellerProductAuthorization)
@@ -1728,6 +1699,7 @@ const get_reseller_authorized_products = async (req, res) => {
         itemMap.set(`kit:${k._id.toString()}`, {
           _id: k._id,
           id: k._id,
+          kit_id: k._id,
           scope_type: 'kit',
           is_kit: true,
           name: kitDisplayName,
@@ -1767,6 +1739,7 @@ const get_reseller_authorized_products = async (req, res) => {
           itemMap.set(`kit:${k._id.toString()}`, {
             _id: k._id,
             id: k._id,
+            kit_id: k._id,
             scope_type: 'kit',
             is_kit: true,
             name: kitDisplayName,
@@ -1895,26 +1868,36 @@ const get_reseller_commission_rates = async (req, res) => {
     });
 
     const uniqueKitIds = Array.from(new Set(kitIds)).filter((id) => mongoose.Types.ObjectId.isValid(id));
-    const comboKits = await WarehouseComboKit.find({
-      _id: { $in: uniqueKitIds },
-      deleted_at: null,
-    }).lean();
+    let comboKits = [];
+    if (uniqueKitIds.length > 0) {
+      comboKits = await WarehouseComboKit.find({
+        _id: { $in: uniqueKitIds },
+        is_active: { $ne: false },
+        deleted_at: null,
+      }).lean();
+    }
 
-    const kitMap = new Map();
-    comboKits.forEach((k) => kitMap.set(k._id.toString(), k));
+    // Fallback: If no kits matched explicit IDs, load all active combo kits in the catalog
+    if (comboKits.length === 0) {
+      comboKits = await WarehouseComboKit.find({
+        is_active: { $ne: false },
+        deleted_at: null,
+      }).lean();
+    }
 
-    const defaultRule = commRules.find((r) => !r.combo_kit_id) || commRules[0];
+    const defaultRule = commRules.find((r) => !r.combo_kit_id) || commRules[0] || {
+      commission_method: activeSub.plan_id.commission_method || 'PERCENTAGE',
+      commission_percentage: activeSub.plan_id.default_commission_rate ?? 2,
+    };
     const rates = [];
     const standardTiers = [1, 5, 10, 25, 50, 100];
 
-    uniqueKitIds.forEach((kitId) => {
-      const kit = kitMap.get(kitId);
+    comboKits.forEach((kit) => {
+      const kitId = kit._id.toString();
       const rule = commRules.find((r) => r.combo_kit_id && r.combo_kit_id.toString() === kitId) || defaultRule;
       if (!rule) return;
 
-      const pricePaise = kit
-        ? Math.round((kit.base_price_cached || kit.selling_price_cached || kit.base_price || 50000) * 100)
-        : 5000000;
+      const pricePaise = Math.round((kit.base_price_cached || kit.selling_price_cached || kit.base_price || 50000) * 100);
 
       let perKitPaise = 0;
       if (rule.commission_method === 'PERCENTAGE') {
@@ -3302,26 +3285,34 @@ const get_my_plan_po_settings = async (req, res) => {
     const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
     if (validExplicitIds.length > 0) {
       kitOrConditions.push({ _id: { $in: validExplicitIds } });
-    } else if (matchedSolarKitIds.length > 0) {
+    }
+    if (matchedSolarKitIds.length > 0) {
       kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
     }
 
-    let comboKits = [];
+    let foundKits = [];
     if (kitOrConditions.length > 0) {
-      const foundKits = await WarehouseComboKit.find({
+      foundKits = await WarehouseComboKit.find({
         is_active: { $ne: false },
         deleted_at: null,
         $or: kitOrConditions,
       }).lean();
-
-      comboKits = foundKits.map((k) => ({
-        ...k,
-        po_setting_id: defSetting?._id || null,
-        min_po_quantity: defSetting?.min_po_quantity ?? 1,
-        max_po_quantity: defSetting?.max_po_quantity ?? null,
-        po_validity_days: defSetting?.po_validity_days ?? 30,
-      }));
     }
+
+    if (foundKits.length === 0) {
+      foundKits = await WarehouseComboKit.find({
+        is_active: { $ne: false },
+        deleted_at: null,
+      }).lean();
+    }
+
+    const comboKits = foundKits.map((k) => ({
+      ...k,
+      po_setting_id: defSetting?._id || null,
+      min_po_quantity: defSetting?.min_po_quantity ?? 1,
+      max_po_quantity: defSetting?.max_po_quantity ?? null,
+      po_validity_days: defSetting?.po_validity_days ?? 30,
+    }));
 
     // Deduplicate combo kits
     const uniqueKitsMap = new Map();

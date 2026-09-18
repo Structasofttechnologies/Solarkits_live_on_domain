@@ -95,7 +95,7 @@ export default function AuthorizedCatalog() {
 
   // Find kit commission for a given product rule
   const getKitComm = (r) => {
-    const kitId = r.kit_id || r.kit?._id || r.kit?.id;
+    const kitId = r.kit_id || r.kit?._id || r.kit?.id || (r.scope_type === "kit" ? (r.id || r._id) : null);
     if (!kitId || !commLookup[kitId]) return null;
     return { kitId, data: commLookup[kitId] };
   };
@@ -153,9 +153,9 @@ export default function AuthorizedCatalog() {
       {/* ── Filter Tabs ────────────────────────────────────────────────── */}
       <div className="flex gap-2 flex-wrap">
         {[
-          { key: "all",     label: `All (${counts.all})` },
-          { key: "kit",     label: `Combo Kits (${counts.kit})` },
-          { key: "product", label: `Products (${counts.product})` },
+          { key: "all", label: `All (${counts.all})` },
+          { key: "kit", label: `Combo Kits (${counts.kit})` },
+          ...(counts.product > 0 ? [{ key: "product", label: `Products (${counts.product})` }] : []),
         ].map(({ key, label }) => (
           <button
             key={key}

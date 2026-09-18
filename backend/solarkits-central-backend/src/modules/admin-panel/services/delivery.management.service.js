@@ -16,6 +16,17 @@ const {
   StoreSetup,
 } = require('../models/india_solarshop_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
+const { GeoLevel2 } = require('../models/geolocation_db');
+const {
+  IndustryType,
+  ProjectCategory,
+  ProjectSubcategory,
+  ProjectType,
+  ProjectSubcategoryType,
+  ProjectRange,
+  SolarKit,
+  Product,
+} = require('../models/core_db');
 
 /**
  * Helper: Generate unique delivery number DEL-YYYY-XXXX
@@ -44,19 +55,23 @@ const getKitWeight = async (kitId) => {
 
 const calculateOrderCargo = async (orderOrId, orderModel = 'epc_orders') => {
   let order = null;
-  if (orderOrId && typeof orderOrId === 'object' && orderOrId._id) {
+  const isDocument = orderOrId && typeof orderOrId === 'object' && (orderOrId.items !== undefined || orderOrId.order_number !== undefined || orderOrId.po_number !== undefined);
+  if (isDocument) {
     order = orderOrId;
-  } else if (orderModel === 'epc_orders') {
-    order = await EpcOrder.findById(orderOrId).lean();
-  } else if (orderModel === 'fpo_orders') {
-    order = await FpoOrder.findById(orderOrId).lean();
   } else {
-    order = await PurchaseOrder.findById(orderOrId).lean();
+    const id = (orderOrId && orderOrId._id && !isDocument) ? orderOrId._id : orderOrId;
+    if (orderModel === 'epc_orders') {
+      order = await EpcOrder.findById(id).lean();
+    } else if (orderModel === 'fpo_orders') {
+      order = await FpoOrder.findById(id).lean();
+    } else {
+      order = await PurchaseOrder.findById(id).lean();
+    }
   }
 
   if (!order) {
     return {
-      order_id: orderOrId?._id || orderOrId,
+      order_id: (orderOrId && typeof orderOrId === 'object' && orderOrId._id) ? orderOrId._id : orderOrId,
       order_number: orderOrId?.order_number || 'N/A',
       total_kits: 1,
       total_weight_kg: 100,
@@ -74,30 +89,105 @@ const calculateOrderCargo = async (orderOrId, orderModel = 'epc_orders') => {
   for (const item of items) {
     const qty = Number(item.quantity || 1);
     const kitId = item.kit_id || item.product_id;
-    const unitWeight = await getKitWeight(kitId);
-    const itemTotalWeight = unitWeight * qty;
 
+    let unitWeight = 0;
+    let capacityVal = parseFloat(item.capacity || '') || 0;
+
+    if (kitId) {
+      // 1. Try ComboKitWeightMaster
+      const weightRecord = await ComboKitWeightMaster.findOne({ kit_id: kitId }).lean();
+      if (weightRecord) {
+        if (weightRecord.total_kit_weight_kg > 0) {
+          unitWeight = weightRecord.total_kit_weight_kg;
+        }
+        if (capacityVal === 0 && weightRecord.capacity_kw > 0) {
+          capacityVal = weightRecord.capacity_kw;
+        }
+      }
+
+      // 2. Try WarehouseComboKit
+      if (unitWeight === 0 || capacityVal === 0) {
+        const kitDoc = await WarehouseComboKit.findById(kitId).lean();
+        if (kitDoc) {
+          if (capacityVal === 0 && kitDoc.capacity > 0) {
+            capacityVal = kitDoc.capacity;
+          }
+          if (unitWeight === 0 && capacityVal > 0) {
+            unitWeight = Math.round(capacityVal * 75);
+          }
+        }
+      }
+    }
+
+    // 3. Fallback: Parse capacity kW from item_name or description (e.g. "50 kW Commercial LT On-Grid...")
+    if (capacityVal === 0) {
+      const textToSearch = `${item.item_name || ''} ${item.description || ''}`;
+      const match = textToSearch.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+      if (match) {
+        capacityVal = parseFloat(match[1]) || 0;
+      }
+    }
+
+    // 4. Weight fallback if still 0
+    if (unitWeight === 0) {
+      if (capacityVal > 0) {
+        unitWeight = Math.round(capacityVal * 75);
+      } else if (item.unit_weight_kg) {
+        unitWeight = Number(item.unit_weight_kg);
+      } else {
+        unitWeight = 100;
+      }
+    }
+
+    const itemTotalWeight = unitWeight * qty;
     totalKits += qty;
     totalWeightKg += itemTotalWeight;
-
-    // Estimate kW from item capacity string or number if present
-    const capacityVal = parseFloat(item.capacity || item.item_name || '1') || 1;
-    totalKw += capacityVal * qty;
+    totalKw += capacityVal > 0 ? capacityVal * qty : 0;
 
     kitItems.push({
       kit_id: kitId,
       kit_name: item.item_name || 'Solar Kit',
+      scope_type: item.scope_type || 'kit',
       quantity: qty,
       unit_weight_kg: unitWeight,
       total_weight_kg: itemTotalWeight,
+      capacity_kw: capacityVal,
     });
   }
 
-  // Fallback to order_load_metrics if available and items had 0 weight
-  if (totalWeightKg === 0 && order.order_load_metrics?.total_weight_kg) {
-    totalWeightKg = order.order_load_metrics.total_weight_kg;
-    totalKits = order.order_load_metrics.total_kits || 1;
-    totalKw = order.order_load_metrics.total_kw || 1;
+  // Use order_load_metrics as fallback when items array didn't yield values
+  const metrics = order.order_load_metrics;
+
+  // If metrics exist and are more authoritative (i.e. kits count matches or is higher), prefer metrics
+  if (metrics && (metrics.total_kits > 0 || metrics.total_weight_kg > 0)) {
+    // If items loop gave 0 kits, use metrics entirely
+    if (totalKits === 0) {
+      return {
+        order_id: order._id,
+        order_number: order.order_number,
+        total_kits: metrics.total_kits || 1,
+        total_weight_kg: metrics.total_weight_kg || 100,
+        total_kw: metrics.total_kw || 1,
+        kit_items: kitItems,
+      };
+    }
+
+    // If metrics.total_kits > computed totalKits, it means items were counted wrong — prefer metrics
+    if (metrics.total_kits > totalKits) {
+      totalKits = metrics.total_kits;
+      totalWeightKg = metrics.total_weight_kg || totalWeightKg;
+      totalKw = metrics.total_kw || totalKw;
+    }
+
+    // Always fill in missing kw/weight from metrics
+    if (totalKw === 0 && metrics.total_kw > 0) totalKw = metrics.total_kw;
+    if (totalWeightKg === 0 && metrics.total_weight_kg > 0) totalWeightKg = metrics.total_weight_kg;
+
+    // If weight seems too low relative to kits (less than 50 KG per kit), use metrics weight
+    const avgKgPerKit = totalWeightKg / totalKits;
+    if (avgKgPerKit < 50 && metrics.total_weight_kg > totalWeightKg) {
+      totalWeightKg = metrics.total_weight_kg;
+    }
   }
 
   return {
@@ -140,9 +230,185 @@ const getFranchiseeDestinations = async (districtId = null) => {
 };
 
 /**
+ * Helper: Enrich orders and kit_items with classification taxonomy (Quick Filters)
+ */
+const enrichOrdersWithHierarchy = async (orders) => {
+  if (!orders || orders.length === 0) return orders;
+
+  const kitIds = new Set();
+  const productIds = new Set();
+
+  orders.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      if (it.kit_id) kitIds.add(String(it.kit_id));
+      if (it.product_id) productIds.add(String(it.product_id));
+    });
+  });
+
+  const [
+    comboKits,
+    products,
+    industryTypes,
+    categories,
+    subcategories,
+    types,
+    typeMaps,
+    ranges,
+  ] = await Promise.all([
+    WarehouseComboKit.find({ _id: { $in: Array.from(kitIds) } }).lean().catch(() => []),
+    Product.find({ _id: { $in: Array.from(productIds) } }).lean().catch(() => []),
+    IndustryType.find({ deleted_at: null }).lean().catch(() => []),
+    ProjectCategory.find({ deleted_at: null }).lean().catch(() => []),
+    ProjectSubcategory.find({ deleted_at: null }).lean().catch(() => []),
+    ProjectType.find({ deleted_at: null }).lean().catch(() => []),
+    ProjectSubcategoryType.find({ deleted_at: null }).lean().catch(() => []),
+    ProjectRange.find({ deleted_at: null }).populate('unit_id').lean().catch(() => []),
+  ]);
+
+  const solarKitIds = comboKits.map((k) => k.solar_kit_id).filter(Boolean);
+  const solarKits = solarKitIds.length > 0
+    ? await SolarKit.find({ _id: { $in: solarKitIds } }).lean().catch(() => [])
+    : [];
+
+  const resolveItemHierarchy = (it) => {
+    const kitIdStr = it.kit_id ? String(it.kit_id) : null;
+    const prodIdStr = it.product_id ? String(it.product_id) : null;
+    const nameStr = (it.kit_name || it.item_name || '').toLowerCase();
+    const cap = parseFloat(it.capacity_kw || it.capacity || 0);
+
+    let indName = null;
+    let catName = null;
+    let subName = null;
+    let typeName = null;
+    let rangeName = null;
+
+    if (kitIdStr) {
+      const kit = comboKits.find((k) => String(k._id) === kitIdStr);
+      if (kit) {
+        const sk = solarKits.find((s) => String(s._id) === String(kit.solar_kit_id)) || {};
+        const catId = sk.category_id || kit.category_id;
+        const subId = sk.subcategory_id || kit.subcategory_id;
+        const typeMapId = sk.type_id || kit.type_id;
+        const rangeId = kit.project_range_id;
+
+        const cat = categories.find((c) => String(c._id) === String(catId));
+        if (cat) {
+          catName = cat.name;
+          const ind = industryTypes.find((i) => String(i._id) === String(cat.industry_type_id));
+          if (ind) indName = ind.name;
+        }
+
+        const sub = subcategories.find((s) => String(s._id) === String(subId));
+        if (sub) subName = sub.name;
+
+        const tm = typeMaps.find((t) => String(t._id) === String(typeMapId));
+        if (tm) {
+          const tp = types.find((t) => String(t._id) === String(tm.type));
+          if (tp) typeName = tp.name;
+        }
+
+        if (rangeId) {
+          const pr = ranges.find((r) => String(r._id) === String(rangeId));
+          if (pr) {
+            rangeName = pr.range_label || (pr.min_value !== undefined ? `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}` : null);
+          }
+        }
+      }
+    }
+
+    if (prodIdStr && (!indName || !catName)) {
+      const prod = products.find((p) => String(p._id) === prodIdStr);
+      if (prod) {
+        if (!indName && prod.industry_type_id) {
+          const ind = industryTypes.find((i) => String(i._id) === String(prod.industry_type_id));
+          if (ind) indName = ind.name;
+        }
+        if (!catName && prod.category_id) {
+          const cat = categories.find((c) => String(c._id) === String(prod.category_id));
+          if (cat) catName = cat.name;
+        }
+        if (!subName && prod.subcategory_id) {
+          const sub = subcategories.find((s) => String(s._id) === String(prod.subcategory_id));
+          if (sub) subName = sub.name;
+        }
+      }
+    }
+
+    if (!typeName && it.project_type_name) {
+      typeName = it.project_type_name;
+    }
+
+    // Keyword heuristics if hierarchy links were unlinked / manual
+    if (!indName) {
+      if (nameStr.includes('commercial')) indName = 'Commercial';
+      else if (nameStr.includes('residential')) indName = 'Residential';
+      else if (nameStr.includes('industrial')) indName = 'Industrial';
+      else if (nameStr.includes('agri') || nameStr.includes('farm')) indName = 'Agricultural';
+    }
+
+    if (!catName) {
+      if (nameStr.includes('on-grid') || nameStr.includes('ongrid')) catName = 'On-Grid Solar System';
+      else if (nameStr.includes('off-grid') || nameStr.includes('offgrid')) catName = 'Off-Grid Solar System';
+      else if (nameStr.includes('hybrid')) catName = 'Hybrid Solar System';
+      else if (nameStr.includes('microgrid')) catName = 'Microgrid Solution';
+    }
+
+    if (!typeName) {
+      if (nameStr.includes('three phase') || nameStr.includes('3 phase') || nameStr.includes('3p')) typeName = 'Three Phase';
+      else if (nameStr.includes('single phase') || nameStr.includes('1 phase') || nameStr.includes('1p')) typeName = 'Single Phase';
+    }
+
+    if (!rangeName && cap > 0 && ranges.length > 0) {
+      const matchedRange = ranges.find((r) => cap >= (r.min_value ?? 0) && cap <= (r.max_value ?? 999999));
+      if (matchedRange) {
+        rangeName = matchedRange.range_label || `${matchedRange.min_value} - ${matchedRange.max_value} ${matchedRange.unit_id?.symbol || 'kW'}`;
+      }
+    }
+
+    return {
+      industry_type_name: indName,
+      category_name: catName,
+      subcategory_name: subName,
+      system_type_name: typeName,
+      project_range_name: rangeName,
+    };
+  };
+
+  orders.forEach((o) => {
+    (o.items || []).forEach((it) => {
+      const meta = resolveItemHierarchy(it);
+      Object.assign(it, meta);
+    });
+
+    o.industry_types = [...new Set((o.items || []).map((i) => i.industry_type_name).filter(Boolean))];
+    o.categories = [...new Set((o.items || []).map((i) => i.category_name).filter(Boolean))];
+    o.subcategories = [...new Set((o.items || []).map((i) => i.subcategory_name).filter(Boolean))];
+    o.system_types = [...new Set((o.items || []).map((i) => i.system_type_name).filter(Boolean))];
+    o.project_ranges = [...new Set((o.items || []).map((i) => i.project_range_name).filter(Boolean))];
+  });
+
+  return orders;
+};
+
+/**
  * 3. DELIVERY QUEUE (PAID ORDERS ONLY, FIFO BY PAYMENT TIMESTAMP)
  */
-const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_only = false }) => {
+const getDeliveryQueue = async ({
+  warehouse_id,
+  page = 1,
+  limit = 50,
+  priority_only = false,
+  industry_type,
+  industry_type_name,
+  category,
+  category_name,
+  subcategory,
+  subcategory_name,
+  system_type,
+  system_type_name,
+  project_range,
+  project_range_name,
+}) => {
   const validWarehouseId = (warehouse_id && warehouse_id !== 'null' && warehouse_id !== 'undefined' && mongoose.Types.ObjectId.isValid(warehouse_id)) ? warehouse_id : null;
 
   const query = {
@@ -173,13 +439,39 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
     .sort({ paid_at: 1, created_at: 1 })
     .lean();
 
+  // Fetch available warehouses for dynamic assignment if order has null warehouse_id
+  const defaultWarehouses = await CompanyWarehouse.find({ is_active: true }).lean();
+  const defaultWarehouse = defaultWarehouses.find(w => w.warehouse_code?.includes('GJ')) || defaultWarehouses[0];
+
   // Map and unify
   const unified = [];
 
   for (const o of epcOrders) {
-    const cargo = await calculateOrderCargo(o._id, 'epc_orders');
+    const cargo = await calculateOrderCargo(o, 'epc_orders');
     const paymentTime = o.offline_payment?.payment_date || o.created_at;
     const hoursWaiting = Math.round((Date.now() - new Date(paymentTime).getTime()) / (1000 * 3600));
+
+    let whId = o.warehouse_id?._id || o.warehouse_id;
+    let whCode = o.warehouse_id?.warehouse_code;
+    if (!whId) {
+      const stateName = o.delivery_address?.state_name;
+      const matched = defaultWarehouses.find(w => 
+        (stateName && (
+          (w.state && w.state.toLowerCase().includes(stateName.toLowerCase())) ||
+          (w.address?.state && w.address.state.toLowerCase().includes(stateName.toLowerCase())) ||
+          (stateName.toLowerCase().includes('gujarat') && w.warehouse_code?.includes('GJ'))
+        ))
+      ) || defaultWarehouse;
+      whId = matched?._id || null;
+      whCode = matched?.warehouse_code || 'WH-01';
+    }
+
+    let districtId = o.delivery_address?.district_id;
+    if (!districtId && (o.delivery_address?.district_name || o.delivery_address?.city)) {
+      const distName = (o.delivery_address?.district_name || o.delivery_address?.city).trim();
+      const distDoc = await GeoLevel2.findOne({ name: new RegExp(`^${distName}$`, 'i'), deleted_at: null }).lean();
+      if (distDoc) districtId = distDoc._id;
+    }
 
     unified.push({
       _id: o._id,
@@ -190,19 +482,20 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
       hours_waiting: hoursWaiting,
       customer_name: o.epc_id?.name || o.delivery_address?.contact_name || 'EPC Buyer',
       customer_phone: o.epc_id?.whatsapp || o.delivery_address?.contact_phone || 'N/A',
-      warehouse_id: o.warehouse_id?._id || o.warehouse_id,
-      warehouse_code: o.warehouse_id?.warehouse_code || 'WH-01',
+      warehouse_id: whId,
+      warehouse_code: whCode,
       destination: {
-        address: o.delivery_address?.line || 'Direct Site',
+        address: o.delivery_address?.line || o.delivery_address?.address || 'Direct Site',
         state_id: o.delivery_address?.state_id,
         state_name: o.delivery_address?.state_name,
-        district_id: o.delivery_address?.district_id,
-        district_name: o.delivery_address?.district_name,
+        district_id: districtId,
+        district_name: o.delivery_address?.district_name || o.delivery_address?.city || 'District',
         pincode: o.delivery_address?.pincode,
       },
       kits: cargo.total_kits,
       total_kg: cargo.total_weight_kg,
       total_kw: cargo.total_kw,
+      items: cargo.kit_items || [],
       customer_delivery_charge: (o.shipping_fee_paise || 0) / 100,
       expected_dispatch: o.dispatch_tracking?.estimated_delivery || null,
       order_status: o.order_status,
@@ -212,9 +505,16 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
   }
 
   for (const o of fpoOrders) {
-    const cargo = await calculateOrderCargo(o._id, 'fpo_orders');
+    const cargo = await calculateOrderCargo(o, 'fpo_orders');
     const paymentTime = o.paid_at || o.created_at;
     const hoursWaiting = Math.round((Date.now() - new Date(paymentTime).getTime()) / (1000 * 3600));
+
+    let whId = o.warehouse_id?._id || o.warehouse_id;
+    let whCode = o.warehouse_id?.warehouse_code;
+    if (!whId) {
+      whId = defaultWarehouse?._id || null;
+      whCode = defaultWarehouse?.warehouse_code || 'WH-01';
+    }
 
     unified.push({
       _id: o._id,
@@ -225,8 +525,8 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
       hours_waiting: hoursWaiting,
       customer_name: o.franchisee_id?.name || 'Franchisee',
       customer_phone: o.franchisee_id?.mobile || 'N/A',
-      warehouse_id: o.warehouse_id || null,
-      warehouse_code: 'WH-01',
+      warehouse_id: whId,
+      warehouse_code: whCode,
       destination: {
         address: o.delivery_address || 'Franchisee Store',
         state_id: o.state_id,
@@ -236,6 +536,7 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
       kits: cargo.total_kits,
       total_kg: cargo.total_weight_kg,
       total_kw: cargo.total_kw,
+      items: cargo.kit_items || [],
       customer_delivery_charge: (o.shipping_fee_paise || 0) / 100,
       expected_dispatch: o.expected_delivery_date || null,
       order_status: o.status,
@@ -244,13 +545,52 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
     });
   }
 
+  // Enrich items with classification taxonomy
+  await enrichOrdersWithHierarchy(unified);
+
   // Sort strictly ascending by payment time (FIFO: oldest paid order appears first)
   unified.sort((a, b) => new Date(a.payment_time).getTime() - new Date(b.payment_time).getTime());
 
   // Filter if priority requested
   let filtered = unified;
   if (priority_only) {
-    filtered = unified.filter(u => u.is_priority);
+    filtered = filtered.filter(u => u.is_priority);
+  }
+
+  // Quick Filters
+  const targetInd = (industry_type || industry_type_name || '').trim();
+  if (targetInd && targetInd !== 'all') {
+    filtered = filtered.filter(u =>
+      (u.industry_types || []).some(t => t?.toLowerCase() === targetInd.toLowerCase())
+    );
+  }
+
+  const targetCat = (category || category_name || '').trim();
+  if (targetCat && targetCat !== 'all') {
+    filtered = filtered.filter(u =>
+      (u.categories || []).some(c => c?.toLowerCase() === targetCat.toLowerCase())
+    );
+  }
+
+  const targetSub = (subcategory || subcategory_name || '').trim();
+  if (targetSub && targetSub !== 'all') {
+    filtered = filtered.filter(u =>
+      (u.subcategories || []).some(s => s?.toLowerCase() === targetSub.toLowerCase())
+    );
+  }
+
+  const targetSys = (system_type || system_type_name || '').trim();
+  if (targetSys && targetSys !== 'all') {
+    filtered = filtered.filter(u =>
+      (u.system_types || []).some(st => st?.toLowerCase() === targetSys.toLowerCase())
+    );
+  }
+
+  const targetRange = (project_range || project_range_name || '').trim();
+  if (targetRange && targetRange !== 'all') {
+    filtered = filtered.filter(u =>
+      (u.project_ranges || []).some(pr => pr?.toLowerCase() === targetRange.toLowerCase())
+    );
   }
 
   const total = filtered.length;
@@ -267,92 +607,170 @@ const getDeliveryQueue = async ({ warehouse_id, page = 1, limit = 50, priority_o
 
 /**
  * 4. AUTOMATIC ORDER CONSOLIDATION SCANNER
+ * Accepts precomputed orders (passed from handler) and auto-groups by district.
+ * Also supports DeliveryRouteSetting-based grouping when route settings exist.
+ * Works even without a warehouse filter (warehouseId can be null).
  */
-const scanQueueForConsolidation = async (warehouseId) => {
+const scanQueueForConsolidation = async (warehouseId, precomputedOrders = null) => {
   const validWarehouseId = (warehouseId && warehouseId !== 'null' && warehouseId !== 'undefined' && mongoose.Types.ObjectId.isValid(warehouseId)) ? warehouseId : null;
-  if (!validWarehouseId) return [];
 
-  const queueResult = await getDeliveryQueue({ warehouse_id: validWarehouseId, limit: 200 });
-  const allOrders = queueResult.orders;
+  // Use precomputed orders if provided, otherwise fetch from DB
+  let allOrders = precomputedOrders;
+  if (!allOrders) {
+    const queueResult = await getDeliveryQueue({ warehouse_id: validWarehouseId, limit: 200 });
+    allOrders = queueResult.orders;
+  }
 
-  // Fetch active route settings for this warehouse
-  const routeSettings = await DeliveryRouteSetting.find({
-    origin_warehouse_id: validWarehouseId,
-    combined_delivery_enabled: true,
-    is_active: true,
-  }).lean();
+  // Only non-priority orders are eligible for consolidation
+  const eligibleOrders = allOrders.filter(o => !o.is_priority);
 
   const suggestions = [];
+  const usedOrderIds = new Set();
 
-  for (const route of routeSettings) {
-    // Collect all eligible district IDs for this route
-    const eligibleDistricts = [
-      route.primary_district_id?.toString(),
-      ...(route.nearby_district_ids || []).map(d => d.toString()),
-    ].filter(Boolean);
+  // ── Strategy 1: DeliveryRouteSetting-based grouping (when route settings exist) ──
+  if (validWarehouseId) {
+    const routeSettings = await DeliveryRouteSetting.find({
+      origin_warehouse_id: validWarehouseId,
+      combined_delivery_enabled: true,
+      is_active: true,
+    }).lean();
 
-    const eligiblePincodes = (route.pincode_groups || []).map(p => p.pincode);
+    for (const route of routeSettings) {
+      const eligibleDistricts = [
+        route.primary_district_id?.toString(),
+        ...(route.nearby_district_ids || []).map(d => d.toString()),
+      ].filter(Boolean);
+      const eligiblePincodes = (route.pincode_groups || []).map(p => p.pincode);
 
-    // Filter orders matching route districts or pincodes
-    const routeEligibleOrders = allOrders.filter(o => {
-      // Priority orders bypass consolidation
-      if (o.is_priority) return false;
+      const routeOrders = eligibleOrders.filter(o => {
+        if (usedOrderIds.has(o._id?.toString())) return false;
+        const orderDistId = o.destination?.district_id?.toString();
+        const orderPin = o.destination?.pincode;
+        return (orderDistId && eligibleDistricts.includes(orderDistId)) ||
+               (orderPin && eligiblePincodes.includes(orderPin));
+      });
 
-      const orderDistId = o.destination?.district_id?.toString();
-      const orderPin = o.destination?.pincode;
+      if (routeOrders.length >= 2) {
+        const clusterOrders = routeOrders.slice(0, route.max_delivery_stops || 5);
+        clusterOrders.forEach(o => usedOrderIds.add(o._id?.toString()));
 
-      const matchesDistrict = orderDistId && eligibleDistricts.includes(orderDistId);
-      const matchesPincode = orderPin && eligiblePincodes.includes(orderPin);
+        const totalKits = clusterOrders.reduce((sum, o) => sum + (o.kits || 0), 0);
+        const totalWeightKg = clusterOrders.reduce((sum, o) => sum + (o.total_kg || 0), 0);
+        const totalKw = clusterOrders.reduce((sum, o) => sum + (o.total_kw || 0), 0);
 
-      return matchesDistrict || matchesPincode;
-    });
+        let separateBenchmarkTotal = 0;
+        for (const ord of clusterOrders) {
+          let bench = null;
+          if (ord.destination?.district_id) {
+            bench = await DeliveryCostBenchmark.findOne({
+              ...(validWarehouseId ? { warehouse_id: validWarehouseId } : {}),
+              district_id: ord.destination?.district_id,
+              is_active: true,
+            }).lean();
+          }
+          separateBenchmarkTotal += (bench?.benchmark_cost || 4000);
+        }
 
-    if (routeEligibleOrders.length >= 2) {
-      // Group up to max_delivery_stops
-      const clusterOrders = routeEligibleOrders.slice(0, route.max_delivery_stops || 5);
-      const totalKits = clusterOrders.reduce((sum, o) => sum + o.kits, 0);
-      const totalWeightKg = clusterOrders.reduce((sum, o) => sum + o.total_kg, 0);
-      const totalKw = clusterOrders.reduce((sum, o) => sum + o.total_kw, 0);
+        const primaryBench = validWarehouseId ? await DeliveryCostBenchmark.findOne({
+          warehouse_id: validWarehouseId,
+          district_id: route.primary_district_id,
+          is_active: true,
+        }).lean() : null;
 
-      // Check benchmark savings
-      let separateBenchmarkTotal = 0;
-      for (const ord of clusterOrders) {
-        const bench = await DeliveryCostBenchmark.findOne({
-          warehouse_id: warehouseId,
+        const baseCombinedCost = primaryBench
+          ? primaryBench.benchmark_cost * 1.25
+          : separateBenchmarkTotal * 0.75;
+        const estimatedSaving = Math.max(0, separateBenchmarkTotal - baseCombinedCost);
+
+        suggestions.push({
+          route_id: route._id,
+          route_name: route.route_name,
+          orders: clusterOrders,
+          order_count: clusterOrders.length,
+          total_kits: totalKits,
+          total_weight_kg: totalWeightKg,
+          total_kw: totalKw,
+          districts: [...new Set(clusterOrders.map(o => o.destination?.district_name || 'N/A'))],
+          pincodes: [...new Set(clusterOrders.map(o => o.destination?.pincode).filter(Boolean))],
+          total_stops: clusterOrders.length,
+          estimated_route_distance_km: route.max_route_distance_km || 150,
+          separate_benchmark_total: Math.round(separateBenchmarkTotal),
+          combined_benchmark_cost: Math.round(baseCombinedCost),
+          estimated_saving: Math.round(estimatedSaving),
+          max_waiting_period_hours: route.max_waiting_period_hours,
+          cost_allocation_default: route.cost_allocation_default,
+        });
+      }
+    }
+  }
+
+  // ── Strategy 2: Auto-group remaining orders by same district (no route settings needed) ──
+  const remainingOrders = eligibleOrders.filter(o => !usedOrderIds.has(o._id?.toString()));
+
+  // Group by district (using district_id, district_name, or pincode prefix)
+  const byDistrict = {};
+  for (const o of remainingOrders) {
+    const distNameClean = (o.destination?.district_name || '').trim().toLowerCase();
+    const stateNameClean = (o.destination?.state_name || '').trim().toLowerCase();
+    const pinClean = (o.destination?.pincode || '').trim().slice(0, 3);
+    
+    // Group key priority: district_id -> district_name_state -> pincode 3-digit prefix
+    let groupKey = o.destination?.district_id?.toString();
+    if (!groupKey && distNameClean) {
+      groupKey = `${distNameClean}_${stateNameClean}`;
+    }
+    if (!groupKey && pinClean) {
+      groupKey = `pin_${pinClean}`;
+    }
+    if (!groupKey) groupKey = 'unknown';
+
+    if (!byDistrict[groupKey]) byDistrict[groupKey] = [];
+    byDistrict[groupKey].push(o);
+  }
+
+  for (const [groupKey, distOrders] of Object.entries(byDistrict)) {
+    if (distOrders.length < 2 || groupKey === 'unknown') continue;
+
+    const clusterOrders = distOrders.slice(0, 5); // max 5 per combined trip
+    const totalKits = clusterOrders.reduce((sum, o) => sum + (o.kits || 0), 0);
+    const totalWeightKg = clusterOrders.reduce((sum, o) => sum + (o.total_kg || 0), 0);
+    const totalKw = clusterOrders.reduce((sum, o) => sum + (o.total_kw || 0), 0);
+
+    let separateBenchmarkTotal = 0;
+    for (const ord of clusterOrders) {
+      let bench = null;
+      if (ord.destination?.district_id) {
+        bench = await DeliveryCostBenchmark.findOne({
+          ...(validWarehouseId ? { warehouse_id: validWarehouseId } : {}),
           district_id: ord.destination?.district_id,
           is_active: true,
         }).lean();
-        separateBenchmarkTotal += (bench?.benchmark_cost || 4000);
       }
-
-      // Estimate combined benchmark cost (base benchmark + minor stop deviation)
-      const primaryBench = await DeliveryCostBenchmark.findOne({
-        warehouse_id: warehouseId,
-        district_id: route.primary_district_id,
-        is_active: true,
-      }).lean();
-      const baseCombinedCost = primaryBench ? primaryBench.benchmark_cost * 1.25 : separateBenchmarkTotal * 0.75;
-      const estimatedSaving = Math.max(0, separateBenchmarkTotal - baseCombinedCost);
-
-      suggestions.push({
-        route_id: route._id,
-        route_name: route.route_name,
-        orders: clusterOrders,
-        order_count: clusterOrders.length,
-        total_kits: totalKits,
-        total_weight_kg: totalWeightKg,
-        total_kw: totalKw,
-        districts: [...new Set(clusterOrders.map(o => o.destination?.district_name || 'N/A'))],
-        pincodes: [...new Set(clusterOrders.map(o => o.destination?.pincode).filter(Boolean))],
-        total_stops: clusterOrders.length,
-        estimated_route_distance_km: route.max_route_distance_km || 150,
-        separate_benchmark_total: Math.round(separateBenchmarkTotal),
-        combined_benchmark_cost: Math.round(baseCombinedCost),
-        estimated_saving: Math.round(estimatedSaving),
-        max_waiting_period_hours: route.max_waiting_period_hours,
-        cost_allocation_default: route.cost_allocation_default,
-      });
+      separateBenchmarkTotal += (bench?.benchmark_cost || 4000);
     }
+
+    const baseCombinedCost = Math.round(separateBenchmarkTotal * 0.72); // ~28% saving on combined
+    const estimatedSaving = Math.max(0, separateBenchmarkTotal - baseCombinedCost);
+    const districtName = clusterOrders.find(o => o.destination?.district_name)?.destination?.district_name || 'Cluster';
+
+    suggestions.push({
+      route_id: null,
+      route_name: `${districtName} Combined Route`,
+      orders: clusterOrders,
+      order_count: clusterOrders.length,
+      total_kits: totalKits,
+      total_weight_kg: totalWeightKg,
+      total_kw: totalKw,
+      districts: [...new Set(clusterOrders.map(o => o.destination?.district_name || 'N/A'))],
+      pincodes: [...new Set(clusterOrders.map(o => o.destination?.pincode).filter(Boolean))],
+      total_stops: clusterOrders.length,
+      estimated_route_distance_km: 80,
+      separate_benchmark_total: Math.round(separateBenchmarkTotal),
+      combined_benchmark_cost: baseCombinedCost,
+      estimated_saving: Math.round(estimatedSaving),
+      max_waiting_period_hours: 48,
+      cost_allocation_default: 'by_kit_qty',
+    });
   }
 
   return suggestions;
@@ -372,17 +790,23 @@ const getEligibleFleet = async ({ warehouse_id, destination_district_id, total_w
   const masterIds = vehicleMasters.map(vm => vm._id);
 
   // 2. Find Providers active in the target district
-  const providers = await DeliveryServiceProvider.find({
-    status: 'Active',
-    'active_districts.district_id': destination_district_id,
-  }).lean();
+  let providers = [];
+  if (destination_district_id) {
+    providers = await DeliveryServiceProvider.find({
+      status: 'Active',
+      'active_districts.district_id': destination_district_id,
+    }).lean();
+  }
+  if (providers.length === 0) {
+    providers = await DeliveryServiceProvider.find({ status: 'Active' }).lean();
+  }
 
   const providerIds = providers.map(p => p._id);
 
   // 3. Find available physical vehicles
-  const availableFleet = await DeliveryVehicleFleet.find({
-    service_provider_id: { $in: providerIds },
-    vehicle_master_id: { $in: masterIds },
+  let availableFleet = await DeliveryVehicleFleet.find({
+    ...(providerIds.length > 0 ? { service_provider_id: { $in: providerIds } } : {}),
+    ...(masterIds.length > 0 ? { vehicle_master_id: { $in: masterIds } } : {}),
     current_status: 'Available',
     is_active: true,
     is_deleted: false,
@@ -390,6 +814,17 @@ const getEligibleFleet = async ({ warehouse_id, destination_district_id, total_w
     .populate('service_provider_id', 'name owner_name mobile_number customer_service_number gst_number')
     .populate('vehicle_master_id', 'name brand_make model max_load_kg length_ft width_ft height_ft')
     .lean();
+
+  // If no available vehicle matched strictly, fetch any active vehicle
+  if (availableFleet.length === 0) {
+    availableFleet = await DeliveryVehicleFleet.find({
+      is_active: true,
+      is_deleted: false,
+    })
+      .populate('service_provider_id', 'name owner_name mobile_number customer_service_number gst_number')
+      .populate('vehicle_master_id', 'name brand_make model max_load_kg length_ft width_ft height_ft')
+      .lean();
+  }
 
   // 4. Check Previous Vehicle Preference for this route
   const lastTripOnRoute = await DeliveryOrder.findOne({
@@ -457,22 +892,57 @@ const getEligibleFleet = async ({ warehouse_id, destination_district_id, total_w
  * 6. BENCHMARK COST VALIDATION
  */
 const validateBenchmarkCost = async ({ service_provider_id, warehouse_id, vehicle_master_id, district_id, proposed_cost }) => {
-  const query = {
-    warehouse_id,
-    vehicle_master_id,
-    district_id,
-    is_active: true,
-  };
-  if (service_provider_id) {
-    query.service_provider_id = service_provider_id;
-  }
-  let benchmark = await DeliveryCostBenchmark.findOne(query).lean();
-  if (!benchmark && service_provider_id) {
-    delete query.service_provider_id;
-    benchmark = await DeliveryCostBenchmark.findOne(query).lean();
+  const cleanWhId = (warehouse_id && warehouse_id !== 'null' && warehouse_id !== 'undefined' && mongoose.Types.ObjectId.isValid(warehouse_id)) ? warehouse_id : null;
+  const cleanVmId = (vehicle_master_id && vehicle_master_id !== 'null' && vehicle_master_id !== 'undefined' && mongoose.Types.ObjectId.isValid(vehicle_master_id)) ? vehicle_master_id : null;
+  const cleanDistId = (district_id && district_id !== 'null' && district_id !== 'undefined' && mongoose.Types.ObjectId.isValid(district_id)) ? district_id : null;
+  const cleanSpId = (service_provider_id && service_provider_id !== 'null' && service_provider_id !== 'undefined' && mongoose.Types.ObjectId.isValid(service_provider_id)) ? service_provider_id : null;
+
+  let benchmark = null;
+
+  // 1. Try full match (warehouse + vehicle_master + district)
+  if (cleanWhId && cleanVmId && cleanDistId) {
+    const fullQuery = {
+      warehouse_id: cleanWhId,
+      vehicle_master_id: cleanVmId,
+      district_id: cleanDistId,
+      is_active: true,
+      ...(cleanSpId ? { service_provider_id: cleanSpId } : {}),
+    };
+    benchmark = await DeliveryCostBenchmark.findOne(fullQuery).lean();
+
+    if (!benchmark && cleanSpId) {
+      delete fullQuery.service_provider_id;
+      benchmark = await DeliveryCostBenchmark.findOne(fullQuery).lean();
+    }
   }
 
-  const benchmarkCost = benchmark ? benchmark.benchmark_cost : 5000;
+  // 2. Try warehouse + district
+  if (!benchmark && cleanWhId && cleanDistId) {
+    benchmark = await DeliveryCostBenchmark.findOne({
+      warehouse_id: cleanWhId,
+      district_id: cleanDistId,
+      is_active: true,
+    }).lean();
+  }
+
+  // 3. Try district only
+  if (!benchmark && cleanDistId) {
+    benchmark = await DeliveryCostBenchmark.findOne({
+      district_id: cleanDistId,
+      is_active: true,
+    }).lean();
+  }
+
+  // 4. Try warehouse only
+  if (!benchmark && cleanWhId) {
+    benchmark = await DeliveryCostBenchmark.findOne({
+      warehouse_id: cleanWhId,
+      is_active: true,
+    }).lean();
+  }
+
+  // Baseline benchmark if not configured in DB: ₹4,500
+  const benchmarkCost = benchmark ? benchmark.benchmark_cost : 4500;
   const cost = Number(proposed_cost);
   const meetsBenchmark = cost <= benchmarkCost;
   const difference = cost - benchmarkCost;
@@ -485,6 +955,7 @@ const validateBenchmarkCost = async ({ service_provider_id, warehouse_id, vehicl
     gst_applicable: benchmark ? benchmark.gst_applicable : true,
     gst_rate: benchmark ? benchmark.gst_rate : 18,
     free_delivery_eligible: benchmark ? benchmark.free_delivery_eligible : false,
+    matched_rule: benchmark ? 'Database Cost Setting' : 'Standard Baseline Benchmark',
   };
 };
 
@@ -530,7 +1001,7 @@ const calculateCostAllocations = ({ total_vendor_cost, stops, method = 'by_kit_q
  * 8. CREATE DELIVERY ORDER / MASTER DELIVERY TRIP
  */
 const createDeliveryTrip = async (payload, adminUser = null) => {
-  const {
+  let {
     delivery_type = 'single_order',
     warehouse_id,
     route_setting_id = null,
@@ -545,9 +1016,43 @@ const createDeliveryTrip = async (payload, adminUser = null) => {
     expected_delivery_date = null,
   } = payload;
 
-  if (!warehouse_id || !service_provider_id || stops.length === 0 || vehicles_allocated.length === 0) {
+  // Auto-resolve warehouse_id if missing from stops or active company warehouses
+  let resolvedWarehouseId = (warehouse_id && warehouse_id !== 'null' && warehouse_id !== 'undefined') ? warehouse_id : null;
+  if (!resolvedWarehouseId && stops.length > 0) {
+    const firstStop = stops[0];
+    if (firstStop.order_id) {
+      const ord = (firstStop.order_model === 'fpo_orders')
+        ? await FpoOrder.findById(firstStop.order_id).lean()
+        : await EpcOrder.findById(firstStop.order_id).lean();
+      if (ord?.warehouse_id) {
+        resolvedWarehouseId = ord.warehouse_id?._id || ord.warehouse_id;
+      }
+    }
+  }
+  if (!resolvedWarehouseId) {
+    const defaultWh = await CompanyWarehouse.findOne({ is_active: true }).lean();
+    if (defaultWh) resolvedWarehouseId = defaultWh._id;
+  }
+
+  // Auto-resolve service_provider_id if missing from allocated vehicle or active provider
+  let resolvedServiceProviderId = (service_provider_id && service_provider_id !== 'null' && service_provider_id !== 'undefined') ? service_provider_id : null;
+  if (!resolvedServiceProviderId && vehicles_allocated.length > 0 && vehicles_allocated[0].vehicle_id) {
+    const v = await DeliveryVehicleFleet.findById(vehicles_allocated[0].vehicle_id).lean();
+    if (v?.service_provider_id) {
+      resolvedServiceProviderId = v.service_provider_id?._id || v.service_provider_id;
+    }
+  }
+  if (!resolvedServiceProviderId) {
+    const defaultSp = await DeliveryServiceProvider.findOne({ status: 'Active' }).lean();
+    if (defaultSp) resolvedServiceProviderId = defaultSp._id;
+  }
+
+  if (!resolvedWarehouseId || !resolvedServiceProviderId || stops.length === 0 || vehicles_allocated.length === 0) {
     throw new Error('Warehouse, Service Provider, at least one Stop, and at least one Vehicle are required.');
   }
+
+  warehouse_id = resolvedWarehouseId;
+  service_provider_id = resolvedServiceProviderId;
 
   const deliveryNumber = await generateDeliveryNumber();
 

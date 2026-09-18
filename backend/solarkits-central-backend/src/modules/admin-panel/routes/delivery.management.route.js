@@ -54,6 +54,7 @@ router.put('/routes/:id', check_auth, handler.update_route);
 router.delete('/routes/:id', check_auth, handler.delete_route);
 
 // ─── 8. Delivery Queue & Franchisee Destinations ─────────────────────────────
+router.get('/hierarchy-options', check_auth, handler.get_hierarchy_options);
 router.get('/queue', check_auth, handler.get_delivery_queue);
 router.post('/queue/:orderId/priority', check_auth, handler.update_order_priority);
 router.get('/destinations/franchisees', check_auth, handler.get_franchisee_destinations);

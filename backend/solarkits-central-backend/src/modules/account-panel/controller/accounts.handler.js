@@ -5,6 +5,7 @@ const { company_warehouse_db, supplier_db } = require('../config/databases');
 const { Cluster, GeoLevel2, GeoLevel0, GeoLevel1 } = require('../models/geolocation_db');
 const { Supplier } = require('../models/supplier_db');
 const { CountrySaaSProduct, CmsRole, CmsUserScope } = require('../models/user_db');
+const estimatorAdminHandler = require('../../admin-panel/controller/estimator.admin.handler');
 
 // Register suppliers model on company_warehouse_db connection to allow populate('supplier_id') on PurchaseOrder
 if (!company_warehouse_db.models['suppliers']) {
@@ -1420,17 +1421,47 @@ const get_purchase_orders = async (req, res) => {
               ]
             }).lean();
           if (sku) {
+            const prod = sku.product_id || {};
+            const prodName = prod.name || '';
+            const catName = prod.template_id?.name || 'N/A';
+            
+            let indName = prod.industry_type_name || null;
+            let subName = prod.subcategory_name || null;
+            let sysName = prod.system_type_name || null;
+            let rangeName = prod.project_range_name || null;
+
+            if (!indName) {
+              const lower = (prodName + ' ' + catName).toLowerCase();
+              if (lower.includes('agri') || lower.includes('farm') || lower.includes('pump')) indName = 'Solar Agriculture';
+              else if (lower.includes('ev') || lower.includes('charger') || lower.includes('carport')) indName = 'Solar EV';
+              else if (lower.includes('storage') || lower.includes('battery') || lower.includes('bess')) indName = 'Energy Storage';
+              else if (lower.includes('lighting') || lower.includes('street light') || lower.includes('light')) indName = 'Solar Lighting';
+              else if (lower.includes('thermal') || lower.includes('heater') || lower.includes('water heater')) indName = 'Solar Thermal';
+              else if (lower.includes('rural') || lower.includes('home lighting')) indName = 'Rural Solar';
+              else indName = 'Solar PV';
+            }
+
             item.sku_details = {
               sku_code: sku.sku_code || 'N/A',
-              product_name: sku.product_id?.name || 'N/A',
-              brand_name: sku.product_id?.brand_id?.brand_name || 'N/A',
-              category: sku.product_id?.template_id?.name || 'N/A'
+              product_name: prodName || 'N/A',
+              brand_name: prod.brand_id?.brand_name || 'N/A',
+              category: catName,
+              industry_type_name: indName,
+              category_name: prod.category_name || catName,
+              subcategory_name: subName,
+              system_type_name: sysName,
+              project_range_name: rangeName
             };
           }
         } catch (skuErr) {
           console.error(`Error populating SKU ${item.sku_id} for PO ${po._id}:`, skuErr);
         }
       }
+      po.industry_types = [...new Set((po.items || []).map(i => i.sku_details?.industry_type_name).filter(Boolean))];
+      po.categories = [...new Set((po.items || []).map(i => i.sku_details?.category_name || i.sku_details?.category).filter(Boolean))];
+      po.subcategories = [...new Set((po.items || []).map(i => i.sku_details?.subcategory_name).filter(Boolean))];
+      po.system_types = [...new Set((po.items || []).map(i => i.sku_details?.system_type_name).filter(Boolean))];
+      po.project_ranges = [...new Set((po.items || []).map(i => i.sku_details?.project_range_name).filter(Boolean))];
     }
 
     return res.status(200).json({ status: "success", data: list });
@@ -1796,6 +1827,10 @@ const update_po_request_status = async (req, res) => {
   }
 };
 
+const get_hierarchy_options = async (req, res) => {
+  return await estimatorAdminHandler.get_hierarchy_options(req, res);
+};
+
 module.exports = {
   get_pending_inwards,
   approve_inward,
@@ -1820,5 +1855,6 @@ module.exports = {
   cancel_purchase_order,
   get_country_saas_products,
   get_po_requests,
-  update_po_request_status
+  update_po_request_status,
+  get_hierarchy_options
 };

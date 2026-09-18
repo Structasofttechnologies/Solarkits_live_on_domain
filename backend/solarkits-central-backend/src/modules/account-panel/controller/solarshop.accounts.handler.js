@@ -2173,14 +2173,15 @@ const stage_dispatched = async (req, res) => {
 /** Stage 6: Log In-Transit milestone */
 const stage_in_transit = async (req, res) => {
   try {
-    const { milestone_status, description } = req.body;
-    if (!milestone_status) return res.status(400).json({ status: 'error', message: 'milestone_status is required.' });
+    const { milestone_status, description, milestone, status } = req.body || {};
+    const resolvedStatus = milestone_status || milestone?.status || status || 'In Transit';
+    const resolvedDesc = description || milestone?.description || 'En route to delivery site';
 
     const order = await _stageService().updateOrderStage({
       order_id:      req.params.id,
       new_status:    'in_transit',
       admin_user_id: req.user?.id,
-      milestone:     { status: milestone_status, description: description || null },
+      milestone:     { status: resolvedStatus, description: resolvedDesc },
       req,
     });
     return res.status(200).json({ status: 'success', message: 'In-transit milestone recorded.', data: { id: order._id, order_status: order.order_status, milestones: order.milestones } });
