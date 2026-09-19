@@ -19,12 +19,14 @@ import {
   MdSettings,
   MdTune,
   MdWarehouse,
+  MdVisibility,
 } from "react-icons/md";
 import { FaMagnifyingGlassLocation, FaMapLocationDot } from "react-icons/fa6";
 import { BiSolidLayerPlus } from "react-icons/bi";
 import { GoProject } from "react-icons/go";
 import { HiCube, HiOutlineTemplate } from "react-icons/hi";
 import { FiSmartphone } from "react-icons/fi";
+import VisionDashboard from "../pages/dashboard/vision-dashboard/VisionDashboard";
 
 /* ===================== Lazy Pages ===================== */
 
@@ -41,12 +43,17 @@ const IndustryTypeManagement = lazy(() => import("../pages/dashboard/industry-co
 const WebsiteConfiguration = lazy(() => import("../pages/dashboard/website-configuration/WebsiteConfiguration"));
 const BdeManagement = lazy(() => import("../pages/dashboard/bde-management/BdeManagement"));
 const StoreSetupManagement = lazy(() => import("../pages/dashboard/store-setup/StoreSetupManagement"));
+const ConfigurationDashboard = lazy(() => import("../pages/dashboard/configuration-dashboard/ConfigurationDashboard"));
 const NotFound = lazy(() => import("../pages/NotFound"));
 
 /* ===================== MENU CONFIG ===================== */
 
 const menus = [
-  [{ name: "Dashboard", icon: <FaHome />, path: "/admin-panel/home", unique_id: "00000000" }],
+  [
+    { name: "Dashboard", icon: <FaHome />, path: "/admin-panel/home", unique_id: "00000000" },
+    { name: "Vision Dashboard", icon: <MdVisibility />, path: "/admin-panel/vision-dashboard", unique_id: "00000000" },
+    { name: "Configuration Dashboard", icon: <MdTune />, path: "/admin-panel/configuration-dashboard", unique_id: "00000000" },
+  ],
   [
     {
       name: "BDE Management",
@@ -382,6 +389,8 @@ export default function Dashboard() {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes('/home')) return 'Home Dashboard';
+    if (path.includes('/vision-dashboard')) return 'Vision Dashboard';
+    if (path.includes('/configuration-dashboard')) return 'Configuration Dashboard';
     if (path.includes('/bde-management')) return 'BDE Management';
     if (path.includes('/operations')) return 'Operations Management';
     if (path.includes('/settings')) return 'System Settings';
@@ -427,6 +436,27 @@ export default function Dashboard() {
                 className="min-h-full"
               >
                 <Routes location={location}>
+
+                  <Route
+                    path="/vision-dashboard"
+                    element={
+                      <PermissionGuard requiredUniqueId={["VISION_DASHBOARD", "00000000"]}>
+                        <Suspense fallback={<Loader text="Loading vision dashboard..." />}>
+                          <VisionDashboard moduleUniqueId="VISION_DASHBOARD" />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/configuration-dashboard"
+                    element={
+                      <PermissionGuard requiredUniqueId="00000000">
+                        <Suspense fallback={<Loader text="Loading configuration dashboard..." />}>
+                          <ConfigurationDashboard />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
                   <Route
                     path="/home"
                     element={
