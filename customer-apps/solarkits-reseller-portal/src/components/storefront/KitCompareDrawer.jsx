@@ -63,7 +63,7 @@ export default function KitCompareDrawer({
                 </button>
 
                 <div>
-                  <span className="text-[10px] font-extrabold text-[#0575B8] uppercase tracking-wider">
+                  <span className="text-[10px] font-extrabold text-[#253880] uppercase tracking-wider">
                     {kit.capacityDisplay} • {kit.applicationType}
                   </span>
                   <h4 className="text-xs font-black text-slate-900 truncate pr-5 mt-0.5">
@@ -77,7 +77,7 @@ export default function KitCompareDrawer({
                 <div className="flex items-center justify-between border-t border-slate-200/80 pt-2 text-xs">
                   <div>
                     <span className="text-[9px] font-bold text-slate-400 block uppercase">Dealer Rate</span>
-                    <span className="font-black text-[#0575B8]">
+                    <span className="font-black text-[#253880]">
                       ₹{kit.wholesalePrice.toLocaleString("en-IN")}
                     </span>
                   </div>
@@ -91,7 +91,7 @@ export default function KitCompareDrawer({
                     </button>
                     <button
                       onClick={() => onOpenLeadModal({ kitName: kit.name, capacityDisplay: kit.capacityDisplay }, "bulk_price")}
-                      className="px-2.5 py-1 rounded-lg bg-[#0575B8] hover:bg-[#045D93] text-[11px] font-black text-white shadow-xs transition-colors cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-[#253880] hover:bg-[#1d2c66] text-[11px] font-black text-white shadow-xs transition-colors cursor-pointer"
                     >
                       Quote
                     </button>

@@ -34,6 +34,11 @@ export default function Login() {
     lockedUntil: null
   });
 
+  // 🔒 Only show demo credentials on localhost / 127.0.0.1 — never on live domains
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
   // 🧪 Testing Credentials with default fallbacks & env support
   const testCredentials = (() => {
     const defaultAccounts = [
@@ -376,6 +381,8 @@ export default function Login() {
   };
 
   const DirectLoginCard = () => {
+    // Hide entirely on live/production domains
+    if (!isLocalhost) return null;
     if (!testCredentials || testCredentials.length === 0) return null;
 
     return (

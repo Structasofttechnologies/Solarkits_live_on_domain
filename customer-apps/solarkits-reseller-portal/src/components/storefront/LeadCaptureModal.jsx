@@ -300,7 +300,7 @@ export default function LeadCaptureModal({
                 Thank You, {formData.fullName || "Partner"}!
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Your B2B inquiry for <strong className="text-[#0575B8]">{formData.requiredKitConfig || "Complete SolarKits"}</strong> in{" "}
+                Your B2B inquiry for <strong className="text-[#253880]">{formData.requiredKitConfig || "Complete SolarKits"}</strong> in{" "}
                 <strong>{formData.district}, {formData.state}</strong> has been logged in our central CRM.
               </p>
               <p className="text-[11px] text-slate-500">
@@ -349,9 +349,9 @@ export default function LeadCaptureModal({
               {formData.requiredKitConfig && (
                 <div className="p-3 rounded-2xl bg-sky-50 border border-sky-200/80 flex items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2 text-slate-700">
-                    <FiPackage className="text-[#0575B8] shrink-0" size={16} />
+                    <FiPackage className="text-[#253880] shrink-0" size={16} />
                     <span>
-                      Selected Solution: <strong className="text-[#0575B8]">{formData.requiredKitConfig}</strong>
+                      Selected Solution: <strong className="text-[#253880]">{formData.requiredKitConfig}</strong>
                     </span>
                   </div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -372,7 +372,7 @@ export default function LeadCaptureModal({
                     value={formData.fullName}
                     onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                     placeholder="e.g. Ramesh Chandra"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                   />
                 </div>
 
@@ -386,7 +386,7 @@ export default function LeadCaptureModal({
                     value={formData.businessName}
                     onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
                     placeholder="e.g. Chandra Solar & Electricals"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                   />
                 </div>
               </div>
@@ -408,7 +408,7 @@ export default function LeadCaptureModal({
                       value={formData.mobileNumber}
                       onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value, whatsappNumber: formData.whatsappNumber || e.target.value })}
                       placeholder="9876543210"
-                      className="w-full pl-11 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      className="w-full pl-11 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                     />
                   </div>
                 </div>
@@ -426,7 +426,7 @@ export default function LeadCaptureModal({
                       value={formData.whatsappNumber}
                       onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
                       placeholder="9876543210 (For quick quotation)"
-                      className="w-full pl-11 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      className="w-full pl-11 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                     />
                   </div>
                 </div>
@@ -444,7 +444,7 @@ export default function LeadCaptureModal({
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="ramesh@chandrasolar.com"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                   />
                 </div>
 
@@ -463,7 +463,7 @@ export default function LeadCaptureModal({
                           type="button"
                           onClick={handleSendGstOtp}
                           disabled={gstLoading}
-                          className="text-[10px] font-bold text-[#0575B8] hover:underline"
+                          className="text-[10px] font-bold text-[#253880] hover:underline"
                         >
                           {gstLoading ? "Sending OTP..." : "Verify via GST OTP"}
                         </button>
@@ -480,7 +480,7 @@ export default function LeadCaptureModal({
                     }}
                     placeholder="27AAAAA0000A1Z5"
                     className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs sm:text-sm text-slate-900 uppercase font-mono focus:bg-white focus:outline-none shadow-xs ${
-                      gstVerified ? "border-emerald-500 bg-emerald-50/30" : "border-slate-200 focus:border-[#0575B8]"
+                      gstVerified ? "border-emerald-500 bg-emerald-50/30" : "border-slate-200 focus:border-[#253880]"
                     }`}
                   />
                 </div>
@@ -557,7 +557,7 @@ export default function LeadCaptureModal({
                   <select
                     value={formData.state}
                     onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8]"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880]"
                   >
                     {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
                       <option key={st} value={st}>
@@ -574,7 +574,7 @@ export default function LeadCaptureModal({
                   <select
                     value={formData.district}
                     onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8]"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880]"
                   >
                     {availableDistricts.map((dist) => (
                       <option key={dist} value={dist}>
@@ -594,7 +594,7 @@ export default function LeadCaptureModal({
                     value={formData.pincode}
                     onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
                     placeholder="e.g. 411001"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8]"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880]"
                   />
                 </div>
               </div>
@@ -608,7 +608,7 @@ export default function LeadCaptureModal({
                   <select
                     value={formData.businessType}
                     onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8]"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880]"
                   >
                     <option value="Solar EPC Contractor">Solar EPC Contractor</option>
                     <option value="Solar Equipment Dealer / Trader">Solar Equipment Dealer / Trader</option>
@@ -625,7 +625,7 @@ export default function LeadCaptureModal({
                   <select
                     value={formData.expectedOrderQty}
                     onChange={(e) => setFormData({ ...formData, expectedOrderQty: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8]"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880]"
                   >
                     <option value="1 - 3 Kits / Month (Starter)">1 - 3 Kits / Month (Starter)</option>
                     <option value="4 - 10 Kits / Month (Active Dealer)">4 - 10 Kits / Month (Active Dealer)</option>
@@ -645,7 +645,7 @@ export default function LeadCaptureModal({
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Mention desired panel wattage (e.g. 550W DCR), inverter brand, mounting structure type, or target DISCOM name..."
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8]"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880]"
                 />
               </div>
 
@@ -656,7 +656,7 @@ export default function LeadCaptureModal({
                   id="lead_consent"
                   checked={formData.consent}
                   onChange={(e) => setFormData({ ...formData, consent: e.target.checked })}
-                  className="mt-0.5 accent-[#0575B8] rounded"
+                  className="mt-0.5 accent-[#253880] rounded"
                   required
                 />
                 <label htmlFor="lead_consent" className="text-[11px] text-slate-500 leading-tight">
@@ -678,7 +678,7 @@ export default function LeadCaptureModal({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
                 >
                   {submitting ? (
                     <>

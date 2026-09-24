@@ -4,19 +4,19 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-primary: #1a3b8b;
-  --color-primary-end: #2d55bd;
-  --color-primary-hover: #122961;
+  --color-primary: #253880;
+  --color-primary-end: #1d2c66;
+  --color-primary-hover: #1d2c66;
 
-  --color-secondary: #f8c21a;
-  --color-secondary-hover: #e0ac10;
+  --color-secondary: #f49222;
+  --color-secondary-hover: #dd7e13;
 
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-surface-hover: #f9fafb;
 
   --color-border: #e5e7eb;
-  --color-ring: #26388040;
+  --color-ring: #25388040;
 
   --color-text-primary: #0f172a;
   --color-text-secondary: #64748b;
@@ -52,8 +52,8 @@
 
   --gradient-primary-soft: linear-gradient(
     135deg,
-    #3a56c950 0%,
-    #26388050 100%
+    #25388040 0%,
+    #25388015 100%
   );
 
   --gradient-danger: linear-gradient(
@@ -106,7 +106,7 @@
   --gradient-secondary: linear-gradient(
     135deg,
     var(--color-secondary) 0%,
-    #ffdf5e 100%
+    #f9a94b 100%
   );
 
   --gradient-bg-subtle: linear-gradient(
@@ -366,22 +366,22 @@ body {
 .animate-rotate-slow{animation:rotate-slow 22s linear infinite}
 .animate-blob{animation:blob-morph 12s ease-in-out infinite}
 .animate-marquee{animation:marquee 35s linear infinite}
-.hero-bg{background:radial-gradient(ellipse at 20% 50%,rgba(26,59,139,.45) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(248,194,26,.07) 0%,transparent 50%),linear-gradient(135deg,#020617 0%,#0d1b3e 55%,#020617 100%)}
+.hero-bg{background:radial-gradient(ellipse at 20% 50%,rgba(37,56,128,.45) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(244,146,34,.07) 0%,transparent 50%),linear-gradient(135deg,#020617 0%,#0d1b3e 55%,#020617 100%)}
 .landing-glass-card{background:rgba(255,255,255,.03);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.08);border-radius:20px;transition:all .35s ease}
-.landing-glass-card:hover{background:rgba(255,255,255,.06);border-color:rgba(248,194,26,.22);transform:translateY(-5px);box-shadow:0 24px 60px rgba(0,0,0,.5)}
-.gold-text{background:linear-gradient(135deg,#f8c21a 0%,#ffdf5e 50%,#e0ac10 100%);background-clip:text;-webkit-background-clip:text;color:transparent}
-.solar-text{background:linear-gradient(90deg,#f8c21a,#fff,#f8c21a);background-size:200% auto;background-clip:text;-webkit-background-clip:text;color:transparent;animation:shimmer 4s linear infinite}
+.landing-glass-card:hover{background:rgba(255,255,255,.06);border-color:rgba(244,146,34,.22);transform:translateY(-5px);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.gold-text{background:linear-gradient(135deg,#f49222 0%,#f9a94b 50%,#dd7e13 100%);background-clip:text;-webkit-background-clip:text;color:transparent}
+.solar-text{background:linear-gradient(90deg,#f49222,#fff,#f49222);background-size:200% auto;background-clip:text;-webkit-background-clip:text;color:transparent;animation:shimmer 4s linear infinite}
 .landing-section{padding:96px 24px}
 .dot-pattern{background-image:radial-gradient(rgba(255,255,255,.055) 1px,transparent 1px);background-size:32px 32px}
 .feature-card{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:20px;padding:32px;transition:all .35s ease;position:relative;overflow:hidden}
-.feature-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(248,194,26,.06) 0%,transparent 60%);opacity:0;transition:opacity .35s ease;border-radius:20px}
-.feature-card:hover{border-color:rgba(248,194,26,.28);transform:translateY(-6px);box-shadow:0 28px 60px rgba(0,0,0,.4)}
+.feature-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(244,146,34,.06) 0%,transparent 60%);opacity:0;transition:opacity .35s ease;border-radius:20px}
+.feature-card:hover{border-color:rgba(244,146,34,.28);transform:translateY(-6px);box-shadow:0 28px 60px rgba(0,0,0,.4)}
 .feature-card:hover::before{opacity:1}
 .testimonial-card{background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:20px;transition:all .3s ease;min-width:340px;max-width:380px}
-.testimonial-card:hover{border-color:rgba(248,194,26,.25);transform:translateY(-4px)}
+.testimonial-card:hover{border-color:rgba(244,146,34,.25);transform:translateY(-4px)}
 .landing-nav-link{color:rgba(255,255,255,.8);font-size:.9rem;font-weight:500;text-decoration:none;padding:8px 4px;position:relative;transition:color .22s}
-.landing-nav-link::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f8c21a,#e0ac10);border-radius:2px;transform:scaleX(0);transition:transform .25s ease}
-.landing-nav-link:hover{color:#f8c21a}
+.landing-nav-link::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#f49222,#dd7e13);border-radius:2px;transform:scaleX(0);transition:transform .25s ease}
+.landing-nav-link:hover{color:#f49222}
 .landing-nav-link:hover::after{transform:scaleX(1)}
 @media (max-width: 1024px) {
   .landing-section { padding: 64px 20px; }

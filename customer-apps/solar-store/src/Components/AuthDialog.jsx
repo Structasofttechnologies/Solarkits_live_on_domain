@@ -18,6 +18,11 @@ import {
 } from "react-icons/fi";
 import axios from "axios";
 
+// 🔒 Only show demo fill on localhost — never on live domains
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
 export default function AuthDialog() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -238,15 +243,18 @@ export default function AuthDialog() {
               <span>Remember me</span>
             </label>
 
-            <button
-              type="button"
-              onClick={fillDemoCredentials}
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200/70 cursor-pointer"
-              title="Click to auto-fill verified demo customer credentials"
-            >
-              <FiZap className="text-amber-500" />
-              Demo Fill
-            </button>
+            {/* Demo Fill — localhost only */}
+            {isLocalhost && (
+              <button
+                type="button"
+                onClick={fillDemoCredentials}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200/70 cursor-pointer"
+                title="Click to auto-fill verified demo customer credentials"
+              >
+                <FiZap className="text-amber-500" />
+                Demo Fill
+              </button>
+            )}
           </div>
 
           {/* Submit Button */}

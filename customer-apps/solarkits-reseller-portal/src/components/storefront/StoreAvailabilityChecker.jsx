@@ -99,8 +99,8 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-3 sm:space-y-4">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-slate-200 shadow-xs">
-            <FiMapPin className="text-[#0575B8]" size={14} />
-            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
+            <FiMapPin className="text-[#253880]" size={14} />
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#253880]">
               {badgeText}
             </span>
           </div>
@@ -129,7 +129,7 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
                 <select
                   value={selectedState}
                   onChange={(e) => setSelectedState(e.target.value)}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs cursor-pointer font-medium"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs cursor-pointer font-medium"
                 >
                   {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
                     <option key={st} value={st}>
@@ -147,7 +147,7 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
                 <select
                   value={selectedDistrict}
                   onChange={(e) => setSelectedDistrict(e.target.value)}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs cursor-pointer font-medium"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs cursor-pointer font-medium"
                 >
                   {(INDIAN_STATES_DISTRICTS[selectedState] || []).map((dist) => (
                     <option key={dist} value={dist}>
@@ -168,7 +168,7 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
                   value={pincode}
                   onChange={(e) => setPincode(e.target.value.replace(/\D/g, ""))}
                   placeholder="e.g. 411001"
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs font-medium"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs font-medium"
                 />
               </div>
 
@@ -177,7 +177,7 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
                 <button
                   type="submit"
                   disabled={checking}
-                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-75"
+                  className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-75"
                 >
                   {checking ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -321,7 +321,7 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
                               pincode: result.pincode,
                               requiredConfig: `Waitlist Request for ${result.district}`,
                             }, "territory_review")}
-                            className="px-5 py-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
+                            className="px-5 py-2.5 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
                           >
                             <span>Join Priority Waitlist →</span>
                           </button>
@@ -504,7 +504,7 @@ export default function StoreAvailabilityChecker({ onOpenLeadModal, storeAvailab
                     <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
                       <button
                         onClick={handleApplyFromModal}
-                        className="w-full sm:flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                        className="w-full sm:flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
                       >
                         <span>Join Priority Waitlist / Request Adjacent Area</span>
                         <FiArrowRight size={15} />

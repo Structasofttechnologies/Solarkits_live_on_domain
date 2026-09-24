@@ -179,8 +179,8 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
           <div className="lg:col-span-7 space-y-6">
             <div className="space-y-3">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-100 shadow-xs">
-                <FiHelpCircle className="text-[#0575B8]" size={14} />
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
+                <FiHelpCircle className="text-[#253880]" size={14} />
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#253880]">
                   {badgeText}
                 </span>
               </div>
@@ -208,7 +208,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                   }}
                   className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                     activeCategory === cat
-                      ? "bg-[#0575B8] text-white shadow-xs"
+                      ? "bg-[#253880] text-white shadow-xs"
                       : "bg-slate-100 text-slate-600 hover:text-slate-900"
                   }`}
                 >
@@ -228,12 +228,12 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                   >
                     <button
                       onClick={() => setOpenIndex(isOpen ? null : idx)}
-                      className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 font-bold text-xs sm:text-sm text-slate-900 hover:text-[#0575B8] transition-colors cursor-pointer"
+                      className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-4 font-bold text-xs sm:text-sm text-slate-900 hover:text-[#253880] transition-colors cursor-pointer"
                     >
                       <span>{faq.q}</span>
                       <FiChevronDown
                         className={`text-slate-400 transition-transform duration-300 shrink-0 ${
-                          isOpen ? "rotate-180 text-[#0575B8]" : ""
+                          isOpen ? "rotate-180 text-[#253880]" : ""
                         }`}
                         size={18}
                       />
@@ -261,7 +261,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
           <div className="lg:col-span-5">
             <div className="rounded-3xl bg-slate-50 border border-slate-200 p-6 sm:p-8 shadow-xl space-y-5">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-[#0575B8] bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-100">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#253880] bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-100">
                   {deskBadge}
                 </span>
                 <h3 className="text-xl font-black text-slate-900 mt-2">
@@ -281,7 +281,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                   </p>
                   <button
                     onClick={() => setSubmitted(false)}
-                    className="px-4 py-2 bg-[#0575B8] text-white text-xs font-bold rounded-xl shadow-xs"
+                    className="px-4 py-2 bg-[#253880] text-white text-xs font-bold rounded-xl shadow-xs"
                   >
                     Submit Another Inquiry
                   </button>
@@ -298,7 +298,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g. Ramesh Kumar"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#253880] shadow-xs"
                     />
                   </div>
 
@@ -314,7 +314,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                         value={formData.mobile}
                         onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                         placeholder="9876543210"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
 
@@ -328,7 +328,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         placeholder="ramesh@company.com"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
                   </div>
@@ -341,7 +341,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                       <select
                         value={formData.state}
                         onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0575B8]"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#253880]"
                       >
                         {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
                           <option key={st} value={st}>
@@ -358,7 +358,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                       <select
                         value={formData.district}
                         onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0575B8]"
+                        className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#253880]"
                       >
                         {(INDIAN_STATES_DISTRICTS[formData.state] || []).map((dist) => (
                           <option key={dist} value={dist}>
@@ -378,7 +378,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                       placeholder="Tell us about your target kilowatt volume or dealership questions..."
-                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#0575B8] shadow-xs"
+                      className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-[#253880] shadow-xs"
                     />
                   </div>
 
@@ -386,7 +386,7 @@ export default function FaqContactSection({ onOpenLeadModal, faqConfig }) {
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
                     >
                       {submitting ? (
                         <>

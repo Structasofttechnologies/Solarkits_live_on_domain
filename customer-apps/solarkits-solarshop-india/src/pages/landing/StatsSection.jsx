@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
 const DEFAULT_STATS = [
-  { value: "10,000+", label: "Kits Delivered", sub: "Pan-India", icon: "☀️", color: "#1a3b8b", bg: "#eff6ff" },
+  { value: "10,000+", label: "Kits Delivered", sub: "Pan-India", icon: "☀️", color: "#253880", bg: "#eff6ff" },
   { value: "50 MW+", label: "Clean Power Generated", sub: "Equivalent to 40,000 tons CO2 offset", icon: "⚡", color: "#0d9488", bg: "#f0fdfa" },
   { value: "18,000+", label: "Pincodes Covered", sub: "Door-to-door insurance", icon: "🗺️", color: "#d97706", bg: "#fffbeb" },
   { value: "4.9 / 5", label: "Customer Rating", sub: "Based on 2,500+ verified reviews", icon: "⭐", color: "#7c3aed", bg: "#f5f3ff" },
@@ -10,7 +10,7 @@ const DEFAULT_STATS = [
 
 function StatCard({ stat, index, active }) {
   const iconList = ["☀️", "⚡", "🗺️", "⭐", "🏆", "📦"];
-  const colorList = ["#1a3b8b", "#0d9488", "#d97706", "#7c3aed", "#2563eb", "#059669"];
+  const colorList = ["#253880", "#0d9488", "#d97706", "#7c3aed", "#2563eb", "#059669"];
   const bgList = ["#eff6ff", "#f0fdfa", "#fffbeb", "#f5f3ff", "#eff6ff", "#ecfdf5"];
 
   const icon = stat.icon || iconList[index % iconList.length];

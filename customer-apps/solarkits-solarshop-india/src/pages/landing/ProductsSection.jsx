@@ -8,7 +8,7 @@ const DEFAULT_PRODUCTS = [
     name: "On-Grid Rooftop Solar Kits",
     description: "Grid-tied solar systems with high-efficiency TopCon mono panels and net-metering smart inverters. Save up to ₹78,000 with government subsidy.",
     tag: "PM Surya Ghar Ready",
-    tagColor: "#1a3b8b",
+    tagColor: "#253880",
     tagBg: "#eff6ff",
     price: "Starting at ₹48,000",
   },
@@ -48,7 +48,7 @@ function ProductCard({ item, index, active }) {
   };
 
   const icons = ["🏠", "🔋", "⚡", "📦", "🏭", "🌾"];
-  const colors = ["#1a3b8b", "#d97706", "#7c3aed", "#dc2626", "#0d9488", "#15803d"];
+  const colors = ["#253880", "#d97706", "#7c3aed", "#dc2626", "#0d9488", "#15803d"];
   const bgs = ["#eff6ff", "#fffbeb", "#f5f3ff", "#fff1f2", "#f0fdfa", "#f0fdf4"];
 
   const icon = item.icon || icons[index % icons.length];
@@ -103,13 +103,13 @@ function ProductCard({ item, index, active }) {
         {item.desc || item.description}
       </p>
       {item.price && (
-        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#1a3b8b", marginBottom: "16px" }}>
+        <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#253880", marginBottom: "16px" }}>
           {item.price}
         </div>
       )}
       <div
         onClick={scrollToSteps}
-        style={{ display: "flex", alignItems: "center", gap: "6px", color: "#1a3b8b", fontSize: "0.85rem", fontWeight: 700, transition: "gap 0.2s", cursor: "pointer" }}
+        style={{ display: "flex", alignItems: "center", gap: "6px", color: "#253880", fontSize: "0.85rem", fontWeight: 700, transition: "gap 0.2s", cursor: "pointer" }}
         onMouseEnter={(e) => e.currentTarget.style.gap = "10px"}
         onMouseLeave={(e) => e.currentTarget.style.gap = "6px"}
       >
@@ -188,14 +188,14 @@ export default function ProductsSection({ productsConfig }) {
         >
           <motion.button
             onClick={handlePartnerPortal}
-            whileHover={{ scale: 1.04, boxShadow: "0 12px 32px rgba(26,59,139,0.3)" }}
+            whileHover={{ scale: 1.04, boxShadow: "0 12px 32px rgba(37,56,128,0.3)" }}
             whileTap={{ scale: 0.97 }}
             style={{
               padding: "15px 40px",
-              background: "linear-gradient(135deg, #1a3b8b, #2563eb)",
+              background: "linear-gradient(135deg, #253880, #189bd7)",
               color: "#fff", borderRadius: "12px",
               fontSize: "1rem", fontWeight: 800, cursor: "pointer", border: "none",
-              boxShadow: "0 6px 20px rgba(26,59,139,0.25)",
+              boxShadow: "0 6px 20px rgba(37,56,128,0.25)",
               fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: "8px",
             }}

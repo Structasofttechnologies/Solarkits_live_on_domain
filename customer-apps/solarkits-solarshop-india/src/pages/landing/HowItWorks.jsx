@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { FiMapPin, FiShoppingCart, FiTruck, FiCheckCircle } from "react-icons/fi";
 
 const DEFAULT_STEPS = [
-  { step: "01", icon: FiMapPin, title: "Choose Your System Capacity", description: "Select the required kilowatt size (1kW to 10kW+) based on your monthly electricity consumption.", color: "#1a3b8b", bg: "#eff6ff", border: "#bfdbfe" },
+  { step: "01", icon: FiMapPin, title: "Choose Your System Capacity", description: "Select the required kilowatt size (1kW to 10kW+) based on your monthly electricity consumption.", color: "#253880", bg: "#eff6ff", border: "#bfdbfe" },
   { step: "02", icon: FiShoppingCart, title: "Customize Components & BOM", description: "Pick your preferred inverter brand, panel wattage, and battery backup storage capacity.", color: "#d97706", bg: "#fffbeb", border: "#fde68a" },
   { step: "03", icon: FiTruck, title: "Express Hub Dispatch", description: "Your complete package is pre-assembled, tested, and dispatched from our regional hub within 48 hours.", color: "#0d9488", bg: "#f0fdfa", border: "#99f6e4" },
   { step: "04", icon: FiCheckCircle, title: "Site Delivery & Quick Setup", description: "Receive everything in one shipment with color-coded wiring guides for hassle-free assembly.", color: "#15803d", bg: "#f0fdf4", border: "#86efac" },
@@ -28,7 +28,7 @@ export default function HowItWorks({ howItWorksConfig }) {
   const steps = howItWorksConfig?.steps && howItWorksConfig.steps.length > 0 ? howItWorksConfig.steps : DEFAULT_STEPS;
 
   const iconOptions = [FiMapPin, FiShoppingCart, FiTruck, FiCheckCircle];
-  const colorOptions = ["#1a3b8b", "#d97706", "#0d9488", "#15803d"];
+  const colorOptions = ["#253880", "#d97706", "#0d9488", "#15803d"];
   const bgOptions = ["#eff6ff", "#fffbeb", "#f0fdfa", "#f0fdf4"];
   const borderOptions = ["#bfdbfe", "#fde68a", "#99f6e4", "#86efac"];
 

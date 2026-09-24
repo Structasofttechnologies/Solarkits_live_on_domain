@@ -3,19 +3,19 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-primary: #1a3b8b;
-  --color-primary-end: #2d55bd;
-  --color-primary-hover: #122961;
+  --color-primary: #253880;
+  --color-primary-end: #1d2c66;
+  --color-primary-hover: #1d2c66;
 
-  --color-secondary: #f8c21a;
-  --color-secondary-hover: #e0ac10;
+  --color-secondary: #f49222;
+  --color-secondary-hover: #dd7e13;
 
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-surface-hover: #f9fafb;
 
   --color-border: #e5e7eb;
-  --color-ring: #26388040;
+  --color-ring: #25388040;
 
   --color-text-primary: #0f172a;
   --color-text-secondary: #64748b;
@@ -43,89 +43,61 @@
   --shadow-md: 0 6px 16px #00000022;
   --shadow-lg: 0 8px 24px #00000033;
 
-  --gradient-primary: linear-gradient(
-    135deg,
-    var(--color-primary) 0%,
-    var(--color-primary-end) 100%
-  );
+  --gradient-primary: linear-gradient(135deg,
+      var(--color-primary) 0%,
+      var(--color-primary-end) 100%);
 
-  --gradient-primary-soft: linear-gradient(
-    135deg,
-    #3a56c950 0%,
-    #26388050 100%
-  );
+  --gradient-primary-soft: linear-gradient(135deg,
+      #25388040 0%,
+      #25388015 100%);
 
-  --gradient-danger: linear-gradient(
-    135deg,
-    var(--color-danger),
-    var(--color-danger-hover)
-  );
+  --gradient-danger: linear-gradient(135deg,
+      var(--color-danger),
+      var(--color-danger-hover));
 
-  --gradient-danger-soft: linear-gradient(
-    135deg,
-    #dc262650 0%,
-    #dc262650 100%
-  );
+  --gradient-danger-soft: linear-gradient(135deg,
+      #dc262650 0%,
+      #dc262650 100%);
 
-  --gradient-warning: linear-gradient(
-    135deg,
-    var(--color-warning),
-    var(--color-warning-hover)
-  );
+  --gradient-warning: linear-gradient(135deg,
+      var(--color-warning),
+      var(--color-warning-hover));
 
-  --gradient-warning-soft: linear-gradient(
-    135deg,
-    #f59e0b50 0%,
-    #d9770650 100%
-  );
+  --gradient-warning-soft: linear-gradient(135deg,
+      #f59e0b50 0%,
+      #d9770650 100%);
 
-  --gradient-success: linear-gradient(
-    135deg,
-    var(--color-success),
-    var(--color-success-hover)
-  );
+  --gradient-success: linear-gradient(135deg,
+      var(--color-success),
+      var(--color-success-hover));
 
-  --gradient-success-soft: linear-gradient(
-    135deg,
-    #16a34a50 0%,
-    #15803d50 100%
-  );
+  --gradient-success-soft: linear-gradient(135deg,
+      #16a34a50 0%,
+      #15803d50 100%);
 
-  --gradient-info: linear-gradient(
-    135deg,
-    var(--color-info),
-    var(--color-info-hover)
-  );
+  --gradient-info: linear-gradient(135deg,
+      var(--color-info),
+      var(--color-info-hover));
 
-  --gradient-info-soft: linear-gradient(
-    135deg,
-    #0ea5e950 0%,
-    #0284c750 100%
-  );
+  --gradient-info-soft: linear-gradient(135deg,
+      #0ea5e950 0%,
+      #0284c750 100%);
 
-  --gradient-secondary: linear-gradient(
-    135deg,
-    var(--color-secondary) 0%,
-    #ffdf5e 100%
-  );
+  --gradient-secondary: linear-gradient(135deg,
+      var(--color-secondary) 0%,
+      #f9a94b 100%);
 
-  --gradient-bg-subtle: linear-gradient(
-    135deg,
-    #f8fafc 0%,
-    #eef2f7 100%
-  );
+  --gradient-bg-subtle: linear-gradient(135deg,
+      #f8fafc 0%,
+      #eef2f7 100%);
 
-  --gradient-glass: linear-gradient(
-    135deg,
-    #ffffff33 0%,
-    #ffffff1a 100%
-  );
+  --gradient-glass: linear-gradient(135deg,
+      #ffffff33 0%,
+      #ffffff1a 100%);
 
-  --gradient-card-glass: linear-gradient(
-    135deg,
-    #ffffffeb 0%,
-    #ffffffd9 100%
-  );
+  --gradient-card-glass: linear-gradient(135deg,
+      #ffffffeb 0%,
+      #ffffffd9 100%);
 
   --color-button-primary: var(--color-primary);
   --color-button-primary-hover: var(--color-primary-hover);
@@ -170,13 +142,15 @@ body {
   border-radius: 4px;
 }
 
-.scrollbar-none, .no-scrollbar {
+.scrollbar-none,
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
 
-.scrollbar-none::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
@@ -202,17 +176,49 @@ body {
   background: var(--gradient-primary-soft);
 }
 
-.gradient-danger { background: var(--gradient-danger); }
-.gradient-warning { background: var(--gradient-warning); }
-.gradient-warning-soft { background: var(--gradient-warning-soft); }
-.gradient-success { background: var(--gradient-success); }
-.gradient-success-soft { background: var(--gradient-success-soft); }
-.gradient-info { background: var(--gradient-info); }
-.gradient-info-soft { background: var(--gradient-info-soft); }
-.gradient-secondary { background: var(--gradient-secondary); }
-.gradient-bg-subtle { background: var(--gradient-bg-subtle); }
-.gradient-glass { background: var(--gradient-glass); }
-.gradient-card-glass { background: var(--gradient-card-glass); }
+.gradient-danger {
+  background: var(--gradient-danger);
+}
+
+.gradient-warning {
+  background: var(--gradient-warning);
+}
+
+.gradient-warning-soft {
+  background: var(--gradient-warning-soft);
+}
+
+.gradient-success {
+  background: var(--gradient-success);
+}
+
+.gradient-success-soft {
+  background: var(--gradient-success-soft);
+}
+
+.gradient-info {
+  background: var(--gradient-info);
+}
+
+.gradient-info-soft {
+  background: var(--gradient-info-soft);
+}
+
+.gradient-secondary {
+  background: var(--gradient-secondary);
+}
+
+.gradient-bg-subtle {
+  background: var(--gradient-bg-subtle);
+}
+
+.gradient-glass {
+  background: var(--gradient-glass);
+}
+
+.gradient-card-glass {
+  background: var(--gradient-card-glass);
+}
 
 /* === Button classes === */
 .btn-primary {

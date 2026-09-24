@@ -43,8 +43,8 @@ export default function PlansShowcase() {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto space-y-3 sm:space-y-4">
           <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-sky-50 border border-sky-100 shadow-xs">
-            <FiZap className="text-[#0575B8]" size={14} />
-            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
+            <FiZap className="text-[#253880]" size={14} />
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#253880]">
               Admin Verified Franchisee Tiers
             </span>
           </div>
@@ -63,7 +63,7 @@ export default function PlansShowcase() {
 
         {/* Loading Indicator */}
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-6 sm:py-8 text-[#0575B8] font-bold text-xs sm:text-sm">
+          <div className="flex items-center justify-center gap-2 py-6 sm:py-8 text-[#253880] font-bold text-xs sm:text-sm">
             <FiLoader className="animate-spin" size={16} />
             <span>Syncing latest franchise tiers from Central System...</span>
           </div>
@@ -103,7 +103,7 @@ export default function PlansShowcase() {
                 <div className="p-5 sm:p-8 space-y-4 sm:space-y-6">
                   {/* Scope Level & Plan Name */}
                   <div className="space-y-1.5 sm:space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-lg bg-sky-50 border border-sky-200 text-[#0575B8] text-[11px] sm:text-xs font-black">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-lg bg-sky-50 border border-sky-200 text-[#253880] text-[11px] sm:text-xs font-black">
                       <FiMapPin size={12} />
                       <span>{scopeLevel} Allotment</span>
                     </div>
@@ -140,7 +140,7 @@ export default function PlansShowcase() {
                   <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                     <div className="p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
                       <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Territory Quota</span>
-                      <span className="text-xs sm:text-sm font-black text-[#0575B8]">
+                      <span className="text-xs sm:text-sm font-black text-[#253880]">
                         {territoryCount} {p.territory_level === "state" ? "States" : "Districts"}
                       </span>
                     </div>
@@ -154,7 +154,7 @@ export default function PlansShowcase() {
 
                     <div className="p-2.5 sm:p-3 rounded-xl bg-sky-50/70 border border-sky-100 text-center">
                       <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Warehouse Req.</span>
-                      <span className="text-xs sm:text-sm font-black text-[#0575B8]">
+                      <span className="text-xs sm:text-sm font-black text-[#253880]">
                         {p.warehouse_required
                           ? `${p.warehouse_count || 1} WH (${Number(p.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)`
                           : "Zero WH Req."}
@@ -236,7 +236,7 @@ export default function PlansShowcase() {
                     className={`w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
                       isPopular
                         ? "bg-gradient-to-r from-[#F49222] to-[#D97E15] hover:from-[#D97E15] hover:to-[#F49222] text-white shadow-md shadow-amber-500/20 transform hover:-translate-y-0.5"
-                        : "bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white shadow-md shadow-blue-600/20"
+                        : "bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white shadow-md shadow-blue-600/20"
                     }`}
                   >
                     <span>Apply</span>
@@ -261,7 +261,7 @@ export default function PlansShowcase() {
           </p>
           <a
             href="#contact"
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0575B8] hover:underline pt-1"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#253880] hover:underline pt-1"
           >
             <span>Request Master Franchise Call</span>
             <FiArrowRight size={13} />

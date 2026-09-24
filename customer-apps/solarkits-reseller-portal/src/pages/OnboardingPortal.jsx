@@ -321,7 +321,7 @@ export default function OnboardingPortal() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-800">
         <div className="flex flex-col items-center gap-3">
-          <FiLoader size={40} className="animate-spin text-[#0575B8]" />
+          <FiLoader size={40} className="animate-spin text-[#253880]" />
           <p className="text-xs font-black uppercase tracking-widest text-slate-500">Loading Workspace...</p>
         </div>
       </div>
@@ -351,7 +351,7 @@ export default function OnboardingPortal() {
               <p className="text-xs text-slate-500 font-medium truncate max-w-[200px]">{companyName}</p>
             </div>
 
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0575B8] to-blue-600 text-white font-black text-xs flex items-center justify-center shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#253880] to-blue-600 text-white font-black text-xs flex items-center justify-center shadow-sm">
               {userInitials}
             </div>
 
@@ -370,7 +370,7 @@ export default function OnboardingPortal() {
       {/* ── Main Onboarding Container ───────────────────────────────────────── */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Vibrant Bright Welcome Hero Banner */}
-        <div className="p-6 sm:p-8 lg:p-10 rounded-3xl bg-gradient-to-r from-[#0575B8] via-[#0066A2] to-[#045D93] text-white shadow-xl relative overflow-hidden">
+        <div className="p-6 sm:p-8 lg:p-10 rounded-3xl bg-gradient-to-r from-[#253880] via-[#0066A2] to-[#1d2c66] text-white shadow-xl relative overflow-hidden">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
           <div className="pointer-events-none absolute -left-16 -bottom-16 h-56 w-56 rounded-full bg-[#F49222]/30 blur-2xl" />
 
@@ -507,26 +507,26 @@ export default function OnboardingPortal() {
             className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-200 ${
               isAgreementSigned
                 ? "border-emerald-300/80 bg-emerald-50/60 text-emerald-950 shadow-xs"
-                : "border-[#0575B8] bg-blue-50/70 text-blue-950 ring-2 ring-blue-500/20 shadow-md"
+                : "border-[#253880] bg-blue-50/70 text-blue-950 ring-2 ring-blue-500/20 shadow-md"
             }`}
           >
             <div>
               <div className="flex items-center justify-between gap-1 mb-2.5">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
-                  isAgreementSigned ? "bg-emerald-600 text-white" : "bg-[#0575B8] text-white"
+                  isAgreementSigned ? "bg-emerald-600 text-white" : "bg-[#253880] text-white"
                 }`}>
                   3
                 </span>
                 <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full whitespace-nowrap inline-flex items-center gap-1 ${
                   isAgreementSigned 
                     ? "bg-emerald-100 text-emerald-800 border border-emerald-300" 
-                    : "bg-[#0575B8] text-white"
+                    : "bg-[#253880] text-white"
                 }`}>
                   {isAgreementSigned ? <><FiCheck size={10} /> SIGNED</> : "ACTION REQUIRED"}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
-                <FiFileText size={16} className={isAgreementSigned ? "text-emerald-600" : "text-[#0575B8]"} />
+                <FiFileText size={16} className={isAgreementSigned ? "text-emerald-600" : "text-[#253880]"} />
                 <span>Agreement Signing</span>
               </div>
               <p className="text-[11px] text-slate-600 font-medium">
@@ -537,7 +537,7 @@ export default function OnboardingPortal() {
               <button
                 onClick={() => setAgreementModalOpen(true)}
                 className={`w-full py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm transition-all cursor-pointer ${
-                  isAgreementSigned ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#0575B8] hover:bg-[#045D93] text-white"
+                  isAgreementSigned ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-[#253880] hover:bg-[#1d2c66] text-white"
                 }`}
               >
                 <span>{isAgreementSigned ? "View Agreement" : "Sign Agreement →"}</span>
@@ -766,7 +766,7 @@ export default function OnboardingPortal() {
             <div>
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <span>Current Onboarding Stage:</span>
-                <span className="text-[#0575B8]">
+                <span className="text-[#253880]">
                   {isAccountActive
                     ? "Phase 5: Operations Live & Active Retailer"
                     : isStoreSetupCompleted
@@ -804,12 +804,12 @@ export default function OnboardingPortal() {
             <div className={`p-6 rounded-3xl border-2 transition-all flex flex-col justify-between ${
               isAgreementSigned
                 ? "border-emerald-200 bg-emerald-50/50 shadow-xs"
-                : "border-[#0575B8] bg-blue-50/60 shadow-md ring-2 ring-blue-500/20"
+                : "border-[#253880] bg-blue-50/60 shadow-md ring-2 ring-blue-500/20"
             }`}>
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-black text-base text-slate-900 flex items-center gap-2">
-                    <FiFileText size={18} className="text-[#0575B8]" /> Step 3: Agreement
+                    <FiFileText size={18} className="text-[#253880]" /> Step 3: Agreement
                   </span>
                   <span className={`text-xs font-black px-3 py-1 rounded-full ${
                     isAgreementSigned ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-900 border border-blue-200"
@@ -823,7 +823,7 @@ export default function OnboardingPortal() {
               </div>
               <button
                 onClick={() => setAgreementModalOpen(true)}
-                className="w-full py-3 px-4 rounded-2xl bg-[#0575B8] hover:bg-[#045D93] text-white font-bold transition shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 px-4 rounded-2xl bg-[#253880] hover:bg-[#1d2c66] text-white font-bold transition shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <FiFileText size={16} />
                 <span>{isAgreementSigned ? "View Agreement Copy" : "Review & Sign Agreement"}</span>
@@ -951,7 +951,7 @@ export default function OnboardingPortal() {
               {/* Official Agreement Header */}
               <div className="border-b border-slate-200 pb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-[#0575B8] border border-blue-200">
+                  <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-[#253880] border border-blue-200">
                     Step 3 • Legal Agreement Execution
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -981,7 +981,7 @@ export default function OnboardingPortal() {
                 </div>
                 <div>
                   <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">GSTIN</p>
-                  <p className="font-mono font-bold text-[#0575B8] mt-0.5">{reseller?.gst_number || reseller?.gstin || "Pending / Inbound"}</p>
+                  <p className="font-mono font-bold text-[#253880] mt-0.5">{reseller?.gst_number || reseller?.gstin || "Pending / Inbound"}</p>
                 </div>
                 <div>
                   <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Territory Scope</p>
@@ -993,7 +993,7 @@ export default function OnboardingPortal() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <FiFileText className="text-[#0575B8]" size={14} />
+                    <FiFileText className="text-[#253880]" size={14} />
                     <span>Official Agreement Terms & Legal Clauses (Scroll to read complete document)</span>
                   </span>
                   <span className="text-[11px] text-slate-400">Standard Legal Text</span>
@@ -1043,7 +1043,7 @@ export default function OnboardingPortal() {
                         value={signerName}
                         onChange={(e) => setSignerName(e.target.value)}
                         placeholder="e.g. Rajesh Kumar"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-[#0575B8]"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-[#253880]"
                       />
                     </div>
                     <div>
@@ -1054,7 +1054,7 @@ export default function OnboardingPortal() {
                         value={signerDesignation}
                         onChange={(e) => setSignerDesignation(e.target.value)}
                         placeholder="e.g. Proprietor / Managing Director"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-[#0575B8]"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold focus:outline-none focus:border-[#253880]"
                       />
                     </div>
                   </div>
@@ -1067,7 +1067,7 @@ export default function OnboardingPortal() {
                       id="agreementConsent"
                       checked={consentAgreed}
                       onChange={(e) => setConsentAgreed(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0575B8] focus:ring-[#0575B8]"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#253880] focus:ring-[#253880]"
                     />
                     <label htmlFor="agreementConsent" className="text-xs text-slate-700 font-medium cursor-pointer">
                       I confirm that I am authorized to execute this agreement on behalf of <strong>{companyName}</strong>, and I agree to all clauses and terms.
@@ -1085,7 +1085,7 @@ export default function OnboardingPortal() {
                     <button
                       type="submit"
                       disabled={signingLoading}
-                      className="px-6 py-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white font-black text-xs shadow-md flex items-center gap-2"
+                      className="px-6 py-2.5 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white font-black text-xs shadow-md flex items-center gap-2"
                     >
                       {signingLoading ? (
                         <>

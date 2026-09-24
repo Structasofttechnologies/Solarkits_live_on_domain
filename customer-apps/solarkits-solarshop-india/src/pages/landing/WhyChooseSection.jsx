@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { FiAward, FiTruck, FiZap, FiShield, FiDollarSign, FiTool } from "react-icons/fi";
 
 const DEFAULT_FEATURES = [
-  { icon: FiAward, title: "Pre-Engineered & Pre-Wired", description: "Every kit is pre-configured with perfectly matched panels, inverters, and protection hardware for rapid installation.", color: "#1a3b8b", bg: "#eff6ff" },
+  { icon: FiAward, title: "Pre-Engineered & Pre-Wired", description: "Every kit is pre-configured with perfectly matched panels, inverters, and protection hardware for rapid installation.", color: "#253880", bg: "#eff6ff" },
   { icon: FiShield, title: "100% Genuine Tier-1 Hardware", description: "Direct supply from ALMM-approved and MNRE-certified manufacturers with official warranty cards.", color: "#0d9488", bg: "#f0fdfa" },
   { icon: FiTruck, title: "Transit Insured Pan-India Logistics", description: "Safe door-to-door delivery with 100% transit insurance across 18,000+ pincodes in India.", color: "#d97706", bg: "#fffbeb" },
   { icon: FiDollarSign, title: "Full 12% GST ITC Claim", description: "All purchases come with official GST invoices allowing businesses and EPCs to claim full input tax credit.", color: "#7c3aed", bg: "#f5f3ff" },
@@ -30,7 +30,7 @@ export default function WhyChooseSection({ whyChooseConfig }) {
   const items = whyChooseConfig?.items && whyChooseConfig.items.length > 0 ? whyChooseConfig.items : DEFAULT_FEATURES;
 
   const iconOptions = [FiAward, FiShield, FiTruck, FiDollarSign, FiZap, FiTool];
-  const colorOptions = ["#1a3b8b", "#0d9488", "#d97706", "#7c3aed", "#15803d", "#dc2626"];
+  const colorOptions = ["#253880", "#0d9488", "#d97706", "#7c3aed", "#15803d", "#dc2626"];
   const bgOptions = ["#eff6ff", "#f0fdfa", "#fffbeb", "#f5f3ff", "#f0fdf4", "#fff1f2"];
 
   return (

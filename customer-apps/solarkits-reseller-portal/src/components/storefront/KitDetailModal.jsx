@@ -59,7 +59,7 @@ export default function KitDetailModal({
         {/* Sticky Modal Top Bar */}
         <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200 px-5 sm:px-8 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <span className="px-2.5 py-0.5 rounded-full bg-[#0575B8] text-white text-[10px] font-black uppercase tracking-wider">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#253880] text-white text-[10px] font-black uppercase tracking-wider">
               SOLARKIT
             </span>
             <span className="text-xs font-mono font-bold text-slate-400">
@@ -127,7 +127,7 @@ export default function KitDetailModal({
                 </div>
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <span className="text-[9px] font-bold text-slate-400 block uppercase">Phase</span>
-                  <span className="font-extrabold text-[#0575B8] text-[11px]">
+                  <span className="font-extrabold text-[#253880] text-[11px]">
                     {kit.phase === "single-phase" ? "1-Phase" : "3-Phase"}
                   </span>
                 </div>
@@ -143,7 +143,7 @@ export default function KitDetailModal({
             {/* Right Commercial & Value Proposition */}
             <div className="lg:col-span-7 space-y-4">
               <div>
-                <span className="text-xs font-bold text-[#0575B8] uppercase tracking-wider">
+                <span className="text-xs font-bold text-[#253880] uppercase tracking-wider">
                   {kit.applicationType} • {kit.panelBrand}
                 </span>
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
@@ -162,7 +162,7 @@ export default function KitDetailModal({
                       Franchisee / Dealer Wholesale Rate
                     </span>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-2xl sm:text-3xl font-black text-[#0575B8]">
+                      <span className="text-2xl sm:text-3xl font-black text-[#253880]">
                         ₹{kit.wholesalePrice.toLocaleString("en-IN")}
                       </span>
                       <span className="text-[11px] font-bold text-slate-500">
@@ -224,7 +224,7 @@ export default function KitDetailModal({
                       requiredConfig: kit.name,
                     }, "bulk_price");
                   }}
-                  className="py-3 px-4 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+                  className="py-3 px-4 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
                 >
                   <FiDollarSign size={14} />
                   <span>Get Bulk Dealer Price</span>
@@ -254,7 +254,7 @@ export default function KitDetailModal({
                 onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-3 text-xs font-black uppercase tracking-wider border-b-2 whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === tab.key
-                    ? "border-[#0575B8] text-[#0575B8] bg-sky-50/50 rounded-t-xl"
+                    ? "border-[#253880] text-[#253880] bg-sky-50/50 rounded-t-xl"
                     : "border-transparent text-slate-500 hover:text-slate-900"
                 }`}
               >
@@ -283,7 +283,7 @@ export default function KitDetailModal({
               {/* Warranty Card */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <FiShield className="text-[#0575B8]" />
+                  <FiShield className="text-[#253880]" />
                   Multi-Tier Manufacturer Warranty Schedule
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
@@ -293,7 +293,7 @@ export default function KitDetailModal({
                   </div>
                   <div className="p-3 bg-white rounded-xl border border-slate-200">
                     <span className="text-[10px] font-bold text-slate-400 block uppercase">Inverter</span>
-                    <span className="font-bold text-[#0575B8]">{kit.warranty.inverter}</span>
+                    <span className="font-bold text-[#253880]">{kit.warranty.inverter}</span>
                   </div>
                   <div className="p-3 bg-white rounded-xl border border-slate-200">
                     <span className="text-[10px] font-bold text-slate-400 block uppercase">BOS Kit</span>
@@ -326,13 +326,13 @@ export default function KitDetailModal({
               {/* Complete BOS contents breakdown */}
               <div className="space-y-3 pt-2">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <FiLayers className="text-[#0575B8]" />
+                  <FiLayers className="text-[#253880]" />
                   Pre-Packaged BOS Electrical Components
                 </h4>
                 <ul className="space-y-2 text-xs text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                   {kit.bosContents.map((bosItem, idx) => (
                     <li key={idx} className="flex items-start gap-2">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#0575B8] mt-1.5 shrink-0" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#253880] mt-1.5 shrink-0" />
                       <span>{bosItem}</span>
                     </li>
                   ))}
@@ -369,7 +369,7 @@ export default function KitDetailModal({
 
                 <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200 text-center space-y-1">
                   <span className="text-[10px] font-bold text-sky-800 uppercase tracking-wider">Monthly Energy Yield</span>
-                  <p className="text-xl sm:text-2xl font-black text-[#0575B8]">{kit.generationStats.monthlyUnits}</p>
+                  <p className="text-xl sm:text-2xl font-black text-[#253880]">{kit.generationStats.monthlyUnits}</p>
                   <p className="text-[10px] text-slate-500">Approx. bill offset for tier-1 tariff</p>
                 </div>
 
@@ -382,7 +382,7 @@ export default function KitDetailModal({
 
               {/* Area Requirement */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
-                <div className="h-10 w-10 rounded-xl bg-blue-100 text-[#0575B8] flex items-center justify-center shrink-0">
+                <div className="h-10 w-10 rounded-xl bg-blue-100 text-[#253880] flex items-center justify-center shrink-0">
                   <FiGrid size={20} />
                 </div>
                 <div>
@@ -412,7 +412,7 @@ export default function KitDetailModal({
           {activeTab === "documents" && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#0575B8] transition-all flex items-center justify-between">
+                <div className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#253880] transition-all flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
                       <FiFileText size={20} />
@@ -424,15 +424,15 @@ export default function KitDetailModal({
                   </div>
                   <button
                     onClick={() => alert(`Downloading technical datasheet for ${kit.name}`)}
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-[#0575B8] hover:text-white transition-colors cursor-pointer"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-[#253880] hover:text-white transition-colors cursor-pointer"
                   >
                     <FiDownload size={16} />
                   </button>
                 </div>
 
-                <div className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#0575B8] transition-all flex items-center justify-between">
+                <div className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-[#253880] transition-all flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-blue-50 text-[#0575B8] flex items-center justify-center">
+                    <div className="h-10 w-10 rounded-xl bg-blue-50 text-[#253880] flex items-center justify-center">
                       <FiFileText size={20} />
                     </div>
                     <div>
@@ -442,7 +442,7 @@ export default function KitDetailModal({
                   </div>
                   <button
                     onClick={() => alert(`Downloading SLD diagram for ${kit.name}`)}
-                    className="p-2 rounded-xl bg-slate-100 hover:bg-[#0575B8] hover:text-white transition-colors cursor-pointer"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-[#253880] hover:text-white transition-colors cursor-pointer"
                   >
                     <FiDownload size={16} />
                   </button>
@@ -471,16 +471,16 @@ export default function KitDetailModal({
                   <div
                     key={alt.id}
                     onClick={() => onSelectAlternative && onSelectAlternative(alt)}
-                    className="p-3 rounded-2xl bg-slate-50 hover:bg-sky-50 border border-slate-200 hover:border-[#0575B8] transition-all cursor-pointer space-y-1"
+                    className="p-3 rounded-2xl bg-slate-50 hover:bg-sky-50 border border-slate-200 hover:border-[#253880] transition-all cursor-pointer space-y-1"
                   >
-                    <span className="text-[9px] font-bold text-[#0575B8] uppercase">
+                    <span className="text-[9px] font-bold text-[#253880] uppercase">
                       {alt.capacityDisplay} • {alt.panelWattage}W
                     </span>
                     <h5 className="text-xs font-black text-slate-900 truncate">
                       {alt.shortTitle}
                     </h5>
                     <div className="flex items-center justify-between text-xs pt-1">
-                      <span className="font-extrabold text-[#0575B8]">
+                      <span className="font-extrabold text-[#253880]">
                         ₹{alt.wholesalePrice.toLocaleString("en-IN")}
                       </span>
                       <span className="text-[10px] text-slate-500 font-bold">
@@ -499,7 +499,7 @@ export default function KitDetailModal({
         <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-md border-t border-slate-200 px-5 sm:px-8 py-3.5 flex items-center justify-between gap-3">
           <div className="hidden sm:block">
             <span className="text-[10px] font-bold text-slate-400 block uppercase">Wholesale Price</span>
-            <span className="text-lg font-black text-[#0575B8]">
+            <span className="text-lg font-black text-[#253880]">
               ₹{kit.wholesalePrice.toLocaleString("en-IN")}
             </span>
           </div>
@@ -520,7 +520,7 @@ export default function KitDetailModal({
                   requiredConfig: kit.name,
                 }, "bulk_price");
               }}
-              className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
+              className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
             >
               <FiDollarSign size={13} />
               <span>Get Bulk Price & GST Quote</span>

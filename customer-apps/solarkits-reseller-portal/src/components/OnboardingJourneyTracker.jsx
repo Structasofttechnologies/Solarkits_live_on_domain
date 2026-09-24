@@ -273,7 +273,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
     <div className="rounded-3xl border border-slate-200/90 bg-white shadow-xl overflow-hidden mb-8">
       {/* Header Banner */}
       <div className="p-6 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white relative overflow-hidden">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#0575B8]/30 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#253880]/30 blur-3xl" />
         <div className="pointer-events-none absolute -left-16 -bottom-16 h-48 w-48 rounded-full bg-[#F49222]/20 blur-3xl" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -371,7 +371,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                 {step.buttonText && step.onClick && (
                   <button
                     onClick={step.onClick}
-                    className="w-full py-1.5 px-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045d93] text-white text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-colors"
+                    className="w-full py-1.5 px-2.5 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-colors"
                   >
                     <span>{step.buttonText}</span>
                     <FiArrowRight size={12} />
@@ -413,7 +413,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
               {/* Official Agreement Header */}
               <div className="border-b border-slate-200 pb-4">
                 <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-[#0575B8] border border-blue-200">
+                  <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-[#253880] border border-blue-200">
                     Step 3 • Legal Agreement Execution
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -443,7 +443,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                 </div>
                 <div>
                   <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">GSTIN</p>
-                  <p className="font-mono font-bold text-[#0575B8] mt-0.5">{reseller?.gst_number || reseller?.gstin || "Pending / Inbound"}</p>
+                  <p className="font-mono font-bold text-[#253880] mt-0.5">{reseller?.gst_number || reseller?.gstin || "Pending / Inbound"}</p>
                 </div>
                 <div>
                   <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Territory Scope</p>
@@ -455,7 +455,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <FiFileText className="text-[#0575B8]" size={14} />
+                    <FiFileText className="text-[#253880]" size={14} />
                     <span>Official Agreement Terms & Legal Clauses (Scroll to read complete document)</span>
                   </span>
                   <span className="text-[11px] text-slate-400">Standard Legal Text</span>
@@ -513,7 +513,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         value={signerName}
                         onChange={(e) => setSignerName(e.target.value)}
                         placeholder="e.g. Ramesh Chandra"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
 
@@ -527,7 +527,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         value={signerDesignation}
                         onChange={(e) => setSignerDesignation(e.target.value)}
                         placeholder="e.g. Proprietor / Managing Director / Authorized Partner"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
                   </div>
@@ -549,7 +549,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                       type="checkbox"
                       checked={consentAgreed}
                       onChange={(e) => setConsentAgreed(e.target.checked)}
-                      className="mt-1 h-4 w-4 rounded text-[#0575B8] focus:ring-0 cursor-pointer"
+                      className="mt-1 h-4 w-4 rounded text-[#253880] focus:ring-0 cursor-pointer"
                     />
                     <span>
                       I solemnly declare that I am the authorized legal representative of <strong>{reseller?.business_name}</strong>. I have read, understood, and hereby accept and digitally execute this Franchise Partner Agreement.
@@ -571,7 +571,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                     <button
                       type="submit"
                       disabled={signingLoading}
-                      className="px-7 py-3 rounded-xl bg-[#0575B8] hover:bg-[#045d93] text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition"
+                      className="px-7 py-3 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer transition"
                     >
                       {signingLoading ? <FiLoader className="animate-spin" /> : <FiCheck size={18} />}
                       <span>Digitally Sign & Proceed to Fee Payment</span>
@@ -660,7 +660,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         value={utrNumber}
                         onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
                         placeholder="e.g. HDFC260812345678"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 uppercase focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
 
@@ -674,7 +674,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         value={amountPaid}
                         onChange={(e) => setAmountPaid(e.target.value)}
                         placeholder="50000"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
                   </div>
@@ -689,7 +689,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         required
                         value={paymentDate}
                         onChange={(e) => setPaymentDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
 
@@ -702,7 +702,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         value={senderBank}
                         onChange={(e) => setSenderBank(e.target.value)}
                         placeholder="e.g. State Bank of India"
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#0575B8] shadow-xs"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:border-[#253880] shadow-xs"
                       />
                     </div>
                   </div>
@@ -719,7 +719,7 @@ export default function OnboardingJourneyTracker({ reseller, onRefresh }) {
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                       />
                       <div className="flex flex-col items-center gap-1.5 text-slate-600">
-                        <FiUploadCloud size={24} className="text-[#0575B8]" />
+                        <FiUploadCloud size={24} className="text-[#253880]" />
                         <span className="text-sm font-bold text-slate-800">
                           {receiptFile ? receiptFile.name : "Click to select or drop transfer receipt slip"}
                         </span>

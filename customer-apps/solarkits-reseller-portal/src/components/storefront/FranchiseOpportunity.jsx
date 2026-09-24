@@ -68,7 +68,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
       className="relative overflow-hidden border-t border-slate-200 bg-slate-50 py-16 text-slate-900 sm:py-24"
     >
       {/* Background Decoration */}
-      <div className="pointer-events-none absolute -right-24 top-8 h-72 w-72 rounded-full bg-[#0575B8]/5 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 top-8 h-72 w-72 rounded-full bg-[#253880]/5 blur-3xl" />
       <div className="pointer-events-none absolute -left-20 bottom-0 h-56 w-56 rounded-full bg-[#F49222]/5 blur-3xl" />
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -82,7 +82,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
           </div>
 
           <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-5xl">
-            Choose Your <span className="text-[#0575B8]">Solar Territory</span>
+            Choose Your <span className="text-[#253880]">Solar Territory</span>
           </h2>
 
           <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
@@ -94,7 +94,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
         {/* Loading State */}
         {loading && (
           <div className="mt-16 flex flex-col items-center justify-center gap-3 text-slate-500 font-semibold py-12">
-            <FiLoader className="animate-spin text-[#0575B8]" size={28} />
+            <FiLoader className="animate-spin text-[#253880]" size={28} />
             <span className="text-sm">Loading franchise plans from admin...</span>
           </div>
         )}
@@ -107,7 +107,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
             <button
               type="button"
               onClick={fetchPlans}
-              className="px-4 py-2 bg-[#0575B8] text-white text-xs font-bold rounded-lg hover:bg-[#045D93] transition"
+              className="px-4 py-2 bg-[#253880] text-white text-xs font-bold rounded-lg hover:bg-[#1d2c66] transition"
             >
               Retry Loading
             </button>
@@ -155,12 +155,12 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                 <article
                   key={plan.id || plan._id || plan.slug}
                   className={`group relative flex flex-col overflow-hidden rounded-[28px] bg-white transition duration-300 hover:-translate-y-1 ${isPopular
-                      ? "border-2 border-[#0575B8] shadow-xl shadow-blue-900/10 lg:-translate-y-3 lg:hover:-translate-y-4"
+                      ? "border-2 border-[#253880] shadow-xl shadow-blue-900/10 lg:-translate-y-3 lg:hover:-translate-y-4"
                       : "border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-900/5"
                     }`}
                 >
                   {isPopular && (
-                    <div className="bg-[#0575B8] py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                    <div className="bg-[#253880] py-2 text-center text-[10px] font-black uppercase tracking-[0.18em] text-white">
                       Recommended Growth Plan
                     </div>
                   )}
@@ -179,7 +179,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
 
                       <span
                         className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase ${isPopular
-                            ? "border-blue-200 bg-blue-50 text-[#0575B8]"
+                            ? "border-blue-200 bg-blue-50 text-[#253880]"
                             : "border-slate-200 bg-slate-50 text-slate-500"
                           }`}
                       >
@@ -213,7 +213,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Warehouse
                         </p>
-                        <p className="mt-1 text-xs font-black text-[#0575B8] line-clamp-1">
+                        <p className="mt-1 text-xs font-black text-[#253880] line-clamp-1">
                           {plan.warehouse_required
                             ? `${plan.warehouse_count || 1} WH (${Number(plan.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)`
                             : "No WH Required"}
@@ -239,8 +239,8 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                       type="button"
                       onClick={() => handlePlanClick(plan)}
                       className={`mt-6 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-xs font-black uppercase tracking-wider text-white transition focus:outline-none focus:ring-4 focus:ring-blue-200 ${isPopular
-                          ? "bg-gradient-to-r from-[#0575B8] to-[#1965B0] shadow-md shadow-blue-500/20 hover:from-[#045D93] hover:to-[#0575B8]"
-                          : "bg-[#0575B8] hover:bg-[#045D93]"
+                          ? "bg-gradient-to-r from-[#253880] to-[#1d2c66] shadow-md shadow-blue-500/20 hover:from-[#1d2c66] hover:to-[#253880]"
+                          : "bg-[#253880] hover:bg-[#1d2c66]"
                         }`}
                     >
                       <span>{btnText}</span>

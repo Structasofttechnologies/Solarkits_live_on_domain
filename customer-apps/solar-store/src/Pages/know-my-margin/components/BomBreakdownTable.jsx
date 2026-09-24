@@ -84,7 +84,7 @@ export default function BomBreakdownTable({
                           checked={checked}
                           disabled={isMandatory}
                           onChange={() => onToggleItem && onToggleItem(item)}
-                          className="w-4 h-4 text-primary rounded focus:ring-primary cursor-pointer disabled:cursor-not-allowed accent-[#1a3b8b]"
+                          className="w-4 h-4 text-primary rounded focus:ring-primary cursor-pointer disabled:cursor-not-allowed accent-[#253880]"
                         />
                       </td>
                     )}

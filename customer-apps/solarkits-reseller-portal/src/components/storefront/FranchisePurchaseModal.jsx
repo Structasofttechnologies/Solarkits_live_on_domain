@@ -485,7 +485,7 @@ export default function FranchisePurchaseModal({
         {/* ── Modal Top Header ────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 sm:px-8 py-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-blue-50/60">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-[#0575B8]/10 text-[#0575B8] flex items-center justify-center font-bold shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-[#253880]/10 text-[#253880] flex items-center justify-center font-bold shadow-xs">
               <FiZap size={24} />
             </div>
             <div>
@@ -493,7 +493,7 @@ export default function FranchisePurchaseModal({
                 <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                   Franchise Partner Onboarding
                 </h3>
-                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#0575B8] text-white shadow-xs">
+                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#253880] text-white shadow-xs">
                   {step === 5 ? "Complete" : `Step ${step} of 4`}
                 </span>
               </div>
@@ -526,7 +526,7 @@ export default function FranchisePurchaseModal({
                 key={stg.num}
                 className={`px-3 py-2 rounded-xl border flex items-center gap-2 transition-all ${
                   stg.active
-                    ? "bg-[#0575B8] text-white border-[#0575B8] shadow-sm ring-2 ring-blue-500/20"
+                    ? "bg-[#253880] text-white border-[#253880] shadow-sm ring-2 ring-blue-500/20"
                     : stg.done
                     ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                     : "bg-white text-slate-500 border-slate-200"
@@ -535,7 +535,7 @@ export default function FranchisePurchaseModal({
                 <div
                   className={`w-5 h-5 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${
                     stg.active
-                      ? "bg-white text-[#0575B8]"
+                      ? "bg-white text-[#253880]"
                       : stg.done
                       ? "bg-emerald-600 text-white"
                       : "bg-slate-200 text-slate-700"
@@ -558,7 +558,7 @@ export default function FranchisePurchaseModal({
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
               {/* Guarantee Banner */}
               <div className="p-5 rounded-2xl bg-blue-50/80 border border-blue-200 flex items-start gap-4 shadow-xs">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#0575B8] flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-[#253880] flex items-center justify-center shrink-0 mt-0.5">
                   <FiShield size={22} />
                 </div>
                 <div className="space-y-1">
@@ -566,7 +566,7 @@ export default function FranchisePurchaseModal({
                     Strict Territorial Exclusivity Guarantee
                   </h4>
                   <p className="text-sm text-slate-600 leading-relaxed">
-                    Only <strong className="text-[#0575B8] font-bold">one authorized franchisee</strong> is assigned per territory. Once approved by Admin, you gain exclusive factory pricing and regional lead allocation.
+                    Only <strong className="text-[#253880] font-bold">one authorized franchisee</strong> is assigned per territory. Once approved by Admin, you gain exclusive factory pricing and regional lead allocation.
                   </p>
                 </div>
               </div>
@@ -591,14 +591,14 @@ export default function FranchisePurchaseModal({
                         onClick={() => setTerritoryLevel(lvl.key)}
                         className={`p-5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
                           isSelected
-                            ? "border-[#0575B8] bg-blue-50/60 shadow-md ring-2 ring-[#0575B8]/20"
+                            ? "border-[#253880] bg-blue-50/60 shadow-md ring-2 ring-[#253880]/20"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <Icon size={20} className={isSelected ? "text-[#0575B8]" : "text-slate-400"} />
+                          <Icon size={20} className={isSelected ? "text-[#253880]" : "text-slate-400"} />
                           {isSelected && (
-                            <span className="w-5 h-5 rounded-full bg-[#0575B8] text-white flex items-center justify-center text-xs font-black">
+                            <span className="w-5 h-5 rounded-full bg-[#253880] text-white flex items-center justify-center text-xs font-black">
                               ✓
                             </span>
                           )}
@@ -622,7 +622,7 @@ export default function FranchisePurchaseModal({
                   <select
                     value={selectedState}
                     onChange={(e) => setSelectedState(e.target.value)}
-                    className="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs"
+                    className="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs"
                   >
                     {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
                       <option key={st} value={st}>
@@ -640,7 +640,7 @@ export default function FranchisePurchaseModal({
                     <select
                       value={selectedDistrict}
                       onChange={(e) => setSelectedDistrict(e.target.value)}
-                      className="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs"
+                      className="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs"
                     >
                       {(INDIAN_STATES_DISTRICTS[selectedState] || []).map((dst) => (
                         <option key={dst} value={dst}>
@@ -656,7 +656,7 @@ export default function FranchisePurchaseModal({
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200">
                 {checkingAvailability ? (
                   <div className="flex items-center gap-3 text-sm text-slate-600 font-semibold py-2">
-                    <FiLoader className="animate-spin text-[#0575B8]" size={20} />
+                    <FiLoader className="animate-spin text-[#253880]" size={20} />
                     <span>Verifying real-time exclusivity for {selectedDistrict || selectedState}...</span>
                   </div>
                 ) : availabilityResult && availabilityResult.is_available ? (
@@ -691,8 +691,8 @@ export default function FranchisePurchaseModal({
               <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#0575B8] text-white flex items-center justify-center text-xs font-bold">1</span>
-                    <FiShield className="text-[#0575B8]" size={16} />
+                    <span className="w-5 h-5 rounded-full bg-[#253880] text-white flex items-center justify-center text-xs font-bold">1</span>
+                    <FiShield className="text-[#253880]" size={16} />
                     <span>QuickeKYC Business GSTIN Verification</span>
                   </label>
                   {gstVerified && (
@@ -716,14 +716,14 @@ export default function FranchisePurchaseModal({
                             placeholder="e.g. 24AAACS1234F1Z8"
                             value={gstInput}
                             onChange={(e) => setGstInput(e.target.value.toUpperCase())}
-                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm font-mono font-bold text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm font-mono font-bold text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs"
                           />
                         </div>
                         <button
                           type="button"
                           onClick={handleVerifyGst}
                           disabled={gstLoading || gstInput.trim().length < 15}
-                          className="px-6 py-3 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-sm font-bold transition flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-md shrink-0"
+                          className="px-6 py-3 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white text-sm font-bold transition flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-md shrink-0"
                         >
                           {gstLoading ? <FiLoader className="animate-spin" size={18} /> : <FiShield size={18} />}
                           <span>Verify GSTIN</span>
@@ -798,8 +798,8 @@ export default function FranchisePurchaseModal({
               <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-[#0575B8] text-white flex items-center justify-center text-xs font-bold">2</span>
-                    <FiPhone className="text-[#0575B8]" size={16} />
+                    <span className="w-5 h-5 rounded-full bg-[#253880] text-white flex items-center justify-center text-xs font-bold">2</span>
+                    <FiPhone className="text-[#253880]" size={16} />
                     <span>Mobile Number OTP Verification</span>
                   </label>
                   {mobileVerified && (
@@ -827,7 +827,7 @@ export default function FranchisePurchaseModal({
                             placeholder="e.g. 9876543210"
                             value={form.mobile}
                             onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, "") })}
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs disabled:bg-slate-100"
+                            className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-300 bg-white text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs disabled:bg-slate-100"
                           />
                         </div>
                       </div>
@@ -838,7 +838,7 @@ export default function FranchisePurchaseModal({
                             type="button"
                             onClick={handleSendMobileOtp}
                             disabled={mobileOtpLoading || form.mobile.length < 10}
-                            className="w-full py-3 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-md"
+                            className="w-full py-3 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white text-sm font-bold transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-md"
                           >
                             {mobileOtpLoading ? <FiLoader className="animate-spin" size={18} /> : <FiLock size={16} />}
                             <span>Send OTP</span>
@@ -869,7 +869,7 @@ export default function FranchisePurchaseModal({
                               type="button"
                               onClick={handleSendMobileOtp}
                               disabled={mobileOtpLoading}
-                              className="text-[#0575B8] hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                              className="text-[#253880] hover:underline font-bold flex items-center gap-1 cursor-pointer"
                             >
                               <FiRefreshCw size={12} /> Resend OTP
                             </button>
@@ -883,7 +883,7 @@ export default function FranchisePurchaseModal({
                             placeholder="Enter OTP (Test: 1234)"
                             value={mobileOtpInput}
                             onChange={(e) => setMobileOtpInput(e.target.value.replace(/\D/g, ""))}
-                            className="flex-1 px-4 py-3 rounded-xl border border-blue-300 bg-white text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575B8]"
+                            className="flex-1 px-4 py-3 rounded-xl border border-blue-300 bg-white text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#253880]"
                           />
                           <button
                             type="button"
@@ -942,7 +942,7 @@ export default function FranchisePurchaseModal({
                     placeholder="Authorized Signatory / Director"
                     value={form.contact_person}
                     onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs"
                   />
                   {formErrors.contact_person && (
                     <p className="text-xs text-red-500 mt-1">{formErrors.contact_person}</p>
@@ -958,7 +958,7 @@ export default function FranchisePurchaseModal({
                     placeholder="Company or Dealership Name"
                     value={form.business_name}
                     onChange={(e) => setForm({ ...form, business_name: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs"
                   />
                   {formErrors.business_name && (
                     <p className="text-xs text-red-500 mt-1">{formErrors.business_name}</p>
@@ -974,7 +974,7 @@ export default function FranchisePurchaseModal({
                     placeholder="partner@business.com"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0575B8] shadow-xs"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white font-semibold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#253880] shadow-xs"
                   />
                   {formErrors.email && (
                     <p className="text-xs text-red-500 mt-1">{formErrors.email}</p>
@@ -991,7 +991,7 @@ export default function FranchisePurchaseModal({
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
               {/* Header Box */}
               <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50/70 border border-blue-200 flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#0575B8] text-white flex items-center justify-center shrink-0 shadow-sm">
+                <div className="w-12 h-12 rounded-2xl bg-[#253880] text-white flex items-center justify-center shrink-0 shadow-sm">
                   <FiCamera size={24} />
                 </div>
                 <div className="space-y-1">
@@ -999,7 +999,7 @@ export default function FranchisePurchaseModal({
                     <h4 className="text-base font-black text-slate-900">
                       Upload Your Shop / Storefront Photos
                     </h4>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#0575B8] text-white">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#253880] text-white">
                       Recommended 4 - 5 Photos
                     </span>
                   </div>
@@ -1043,7 +1043,7 @@ export default function FranchisePurchaseModal({
                   className="hidden"
                 />
 
-                <div className="w-14 h-14 rounded-2xl bg-[#0575B8]/10 text-[#0575B8] flex items-center justify-center mx-auto shadow-xs">
+                <div className="w-14 h-14 rounded-2xl bg-[#253880]/10 text-[#253880] flex items-center justify-center mx-auto shadow-xs">
                   {photoUploading ? (
                     <FiLoader className="animate-spin" size={28} />
                   ) : (
@@ -1063,7 +1063,7 @@ export default function FranchisePurchaseModal({
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
                   <label
                     htmlFor="shop-photo-file-input"
-                    className="px-6 py-2.5 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white text-xs font-bold transition flex items-center gap-2 shadow-md cursor-pointer"
                   >
                     <FiPlus size={16} />
                     <span>Choose Photos From Device</span>
@@ -1072,7 +1072,7 @@ export default function FranchisePurchaseModal({
                   <button
                     type="button"
                     onClick={handleAddSamplePhotos}
-                    className="px-4 py-2.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-[#0575B8] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl border border-blue-300 bg-white hover:bg-blue-50 text-[#253880] text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <FiImage size={15} />
                     <span>Load 4 Demo Photos</span>
@@ -1085,7 +1085,7 @@ export default function FranchisePurchaseModal({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                      <FiImage className="text-[#0575B8]" size={16} />
+                      <FiImage className="text-[#253880]" size={16} />
                       <span>Uploaded Shop Photos ({shopPhotos.length} / 5)</span>
                     </label>
                     <button
@@ -1139,7 +1139,7 @@ export default function FranchisePurchaseModal({
                     {shopPhotos.length < 6 && (
                       <label
                         htmlFor="shop-photo-file-input"
-                        className="aspect-4/3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#0575B8] bg-slate-50 hover:bg-blue-50/40 transition flex flex-col items-center justify-center gap-1.5 cursor-pointer text-slate-500 hover:text-[#0575B8]"
+                        className="aspect-4/3 rounded-2xl border-2 border-dashed border-slate-300 hover:border-[#253880] bg-slate-50 hover:bg-blue-50/40 transition flex flex-col items-center justify-center gap-1.5 cursor-pointer text-slate-500 hover:text-[#253880]"
                       >
                         <FiPlus size={24} />
                         <span className="text-xs font-bold">Add More</span>
@@ -1149,7 +1149,7 @@ export default function FranchisePurchaseModal({
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
-                  <FiInfo size={16} className="text-[#0575B8] shrink-0" />
+                  <FiInfo size={16} className="text-[#253880] shrink-0" />
                   <span>
                     No photos uploaded yet. You can click <strong>Choose Photos</strong> or <strong>Load 4 Demo Photos</strong> to add shop photos before proceeding.
                   </span>
@@ -1234,7 +1234,7 @@ export default function FranchisePurchaseModal({
                   type="checkbox"
                   checked={form.consent}
                   onChange={(e) => setForm({ ...form, consent: e.target.checked })}
-                  className="mt-1 rounded border-slate-300 text-[#0575B8] focus:ring-[#0575B8]"
+                  className="mt-1 rounded border-slate-300 text-[#253880] focus:ring-[#253880]"
                 />
                 <span>I confirm that all business information, territory preferences, and shop photos provided are accurate and authorize SolarKits to process my franchise request.</span>
               </label>
@@ -1319,7 +1319,7 @@ export default function FranchisePurchaseModal({
                     onClose();
                     navigate("/login");
                   }}
-                  className="w-full sm:w-auto px-8 py-3.5 bg-[#0575B8] hover:bg-[#045D93] text-white text-sm font-bold rounded-2xl transition shadow-md cursor-pointer"
+                  className="w-full sm:w-auto px-8 py-3.5 bg-[#253880] hover:bg-[#1d2c66] text-white text-sm font-bold rounded-2xl transition shadow-md cursor-pointer"
                 >
                   Go to Partner Login Portal →
                 </button>
@@ -1358,7 +1358,7 @@ export default function FranchisePurchaseModal({
                     }
                     setStep((s) => s + 1);
                   }}
-                  className="px-8 py-3 rounded-2xl bg-[#0575B8] hover:bg-[#045D93] text-white text-sm font-black transition flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
+                  className="px-8 py-3 rounded-2xl bg-[#253880] hover:bg-[#1d2c66] text-white text-sm font-black transition flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
                 >
                   <span>Continue</span>
                   <FiArrowRight size={16} />
@@ -1390,7 +1390,7 @@ export default function FranchisePurchaseModal({
               >
                 <div className="p-4 bg-slate-950 flex items-center justify-between border-b border-slate-800 text-white">
                   <span className="text-sm font-bold flex items-center gap-2">
-                    <FiImage className="text-[#0575B8]" /> Full Size Shop Photo
+                    <FiImage className="text-[#253880]" /> Full Size Shop Photo
                   </span>
                   <button
                     type="button"

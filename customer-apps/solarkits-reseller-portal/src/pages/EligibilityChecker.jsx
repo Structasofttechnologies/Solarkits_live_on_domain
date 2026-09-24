@@ -170,7 +170,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
   };
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-[#0575B8] focus:ring-4 focus:ring-blue-100";
+    "mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-[#253880] focus:ring-4 focus:ring-blue-100";
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
@@ -188,7 +188,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
               </span>
             </div>
             <h1 className="mt-4 text-2xl font-black tracking-tight sm:text-4xl">
-              Territory Franchise <span className="text-[#0575B8]">Eligibility Checker</span>
+              Territory Franchise <span className="text-[#253880]">Eligibility Checker</span>
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-600">
               Verify your business profile, select from active Admin-authorized partner plans, and receive verified territory allocation.
@@ -198,7 +198,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
           {/* Loading State */}
           {loading && (
             <div className="mt-12 flex flex-col items-center justify-center py-16 bg-white rounded-3xl border border-slate-200 shadow-xs">
-              <FiLoader className="animate-spin text-[#0575B8]" size={36} />
+              <FiLoader className="animate-spin text-[#253880]" size={36} />
               <p className="mt-4 text-sm font-bold text-slate-700">Loading authorized franchise plans from Admin Panel...</p>
               <p className="text-xs text-slate-400 mt-1">Fetching live territory tiers, fee structures, and commercial margins</p>
             </div>
@@ -243,7 +243,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-7 space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-5">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wider text-[#0575B8]">Applicant Profile</p>
+                    <p className="text-xs font-black uppercase tracking-wider text-[#253880]">Applicant Profile</p>
                     <h2 className="mt-1 text-xl font-black text-slate-900">Business & Territory Details</h2>
                   </div>
                   <span className="rounded-full bg-orange-50 px-3 py-1 text-[10px] font-black uppercase text-[#D97E15]">
@@ -366,7 +366,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                           onClick={() => setSelectedPlanId(id)}
                           className={`relative rounded-2xl border p-3.5 text-left transition-all flex flex-col justify-between ${
                             active
-                              ? "border-[#0575B8] bg-blue-50/70 text-[#0575B8] ring-2 ring-blue-100 shadow-xs"
+                              ? "border-[#253880] bg-blue-50/70 text-[#253880] ring-2 ring-blue-100 shadow-xs"
                               : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-slate-50"
                           }`}
                         >
@@ -379,7 +379,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                           <div className="flex items-center gap-2">
                             <div
                               className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                                active ? "bg-[#0575B8] text-white" : "bg-slate-100 text-slate-500"
+                                active ? "bg-[#253880] text-white" : "bg-slate-100 text-slate-500"
                               }`}
                             >
                               <Icon size={14} />
@@ -391,7 +391,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
 
                           <div className="mt-2.5">
                             <p className="text-xs font-bold text-slate-900 line-clamp-1">{plan.name}</p>
-                            <p className="text-xs font-black text-[#0575B8] mt-0.5">
+                            <p className="text-xs font-black text-[#253880] mt-0.5">
                               ₹{Number(plan.one_time_fee || 0).toLocaleString("en-IN")}
                             </p>
                           </div>
@@ -432,8 +432,8 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
               </div>
 
               {/* Right Column: Live Recommendation Card */}
-              <aside className="overflow-hidden rounded-3xl border-2 border-[#0575B8] bg-white shadow-xl shadow-blue-900/10 lg:sticky lg:top-8">
-                <div className="flex items-center justify-between bg-[#0575B8] px-5 py-3.5 text-white">
+              <aside className="overflow-hidden rounded-3xl border-2 border-[#253880] bg-white shadow-xl shadow-blue-900/10 lg:sticky lg:top-8">
+                <div className="flex items-center justify-between bg-[#253880] px-5 py-3.5 text-white">
                   <span className="text-[10px] font-black uppercase tracking-[0.16em] flex items-center gap-1.5">
                     <FiCheckCircle size={13} />
                     <span>Live Admin Plan Details</span>
@@ -454,7 +454,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                         {selectedPlan.name}
                       </h3>
                     </div>
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-blue-50 text-[#0575B8]">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-blue-50 text-[#253880]">
                       <FiBriefcase size={21} />
                     </div>
                   </div>
@@ -491,7 +491,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                       </div>
                       <div>
                         <p className="text-[10px] font-bold uppercase text-slate-400">Commission Rate</p>
-                        <p className="mt-0.5 text-xs font-black text-[#0575B8]">
+                        <p className="mt-0.5 text-xs font-black text-[#253880]">
                           {selectedPlan.default_commission_rate || 8}% Commission
                         </p>
                       </div>
@@ -604,7 +604,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                       type="button"
                       onClick={handleSubmit}
                       disabled={!gstinValid}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] px-4 py-4 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-blue-500/25 transition-all hover:from-[#045D93] hover:to-[#0575B8] disabled:cursor-not-allowed disabled:opacity-45 hover:shadow-xl"
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#253880] to-[#1d2c66] px-4 py-4 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-blue-500/25 transition-all hover:from-[#1d2c66] hover:to-[#253880] disabled:cursor-not-allowed disabled:opacity-45 hover:shadow-xl"
                     >
                       <span>Apply for {selectedPlan.name}</span>
                       <FiArrowRight size={15} />

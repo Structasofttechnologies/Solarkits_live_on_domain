@@ -57,7 +57,7 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
                 className="h-9 w-auto object-contain"
               />
               <div className="flex flex-col border-l border-slate-300 pl-2.5">
-                <span className="text-xs font-black tracking-wider uppercase text-[#0575B8]">
+                <span className="text-xs font-black tracking-wider uppercase text-[#253880]">
                   {brandTitle}
                 </span>
                 <span className="text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase">
@@ -87,27 +87,27 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
             </h4>
             <ul className="space-y-2 text-xs text-slate-600">
               <li>
-                <a href="#store-availability" className="hover:text-[#0575B8] transition-colors">
+                <a href="#store-availability" className="hover:text-[#253880] transition-colors">
                   Territory Checker
                 </a>
               </li>
               <li>
-                <a href="#eligibility-checker" className="hover:text-[#0575B8] transition-colors">
+                <a href="#eligibility-checker" className="hover:text-[#253880] transition-colors">
                   Eligibility Checker
                 </a>
               </li>
               <li>
-                <a href="#franchise-plans" className="hover:text-[#0575B8] transition-colors">
+                <a href="#franchise-plans" className="hover:text-[#253880] transition-colors">
                   Franchise Plans
                 </a>
               </li>
               <li>
-                <a href="#dealer-support" className="hover:text-[#0575B8] transition-colors">
+                <a href="#dealer-support" className="hover:text-[#253880] transition-colors">
                   Dealer & EPC Support
                 </a>
               </li>
               <li>
-                <Link to="/login" className="hover:text-[#0575B8] transition-colors">
+                <Link to="/login" className="hover:text-[#253880] transition-colors">
                   Partner Portal Login
                 </Link>
               </li>
@@ -121,7 +121,7 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
             </h4>
             <div className="space-y-2.5 text-xs text-slate-600">
               <div className="flex items-start gap-2.5">
-                <FiMapPin className="text-[#0575B8] shrink-0 mt-0.5" size={14} />
+                <FiMapPin className="text-[#253880] shrink-0 mt-0.5" size={14} />
                 <span>{address}</span>
               </div>
               <div className="flex items-center gap-2.5">
@@ -145,7 +145,7 @@ export default function Footer({ onOpenLeadModal, footerConfig }) {
 
               <button
                 onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Footer Consultation" }, "bulk_price")}
-                className="px-3.5 py-2 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
+                className="px-3.5 py-2 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
               >
                 {callbackBtnText}
               </button>

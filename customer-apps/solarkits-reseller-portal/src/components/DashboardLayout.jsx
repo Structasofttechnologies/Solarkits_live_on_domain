@@ -209,7 +209,7 @@ export default function DashboardLayout() {
   const userInitials = getInitials(primaryName);
 
   const avatarUrl = primaryName
-    ? `https://ui-avatars.com/api/?name=${encodeURIComponent(primaryName)}&background=1a3b8b&color=ffffff&bold=true`
+    ? `https://ui-avatars.com/api/?name=${encodeURIComponent(primaryName)}&background=253880&color=ffffff&bold=true`
     : null;
 
   return (
@@ -734,7 +734,7 @@ export default function DashboardLayout() {
                           <span>{primaryName}</span>
                         </div>
                         {reseller.contact_person && reseller.business_name && (
-                          <div className="text-[11px] font-bold text-[#0575B8] truncate">
+                          <div className="text-[11px] font-bold text-[#253880] truncate">
                             🏢 {reseller.business_name}
                           </div>
                         )}

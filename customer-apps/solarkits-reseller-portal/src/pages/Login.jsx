@@ -17,6 +17,11 @@ import {
 } from "react-icons/fi";
 import logoImg from "@/assets/images/logo.png";
 
+// 🔒 Only show demo credentials on localhost — never on live domains
+const isLocalhost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
 export default function Login() {
   const navigate = useNavigate();
   const [authMode, setAuthMode] = useState(() => {
@@ -206,11 +211,11 @@ export default function Login() {
       {/* Background decorative blobs */}
       <div
         className="absolute top-[-10%] left-[-5%] w-96 h-96 rounded-full blur-3xl opacity-30 pointer-events-none"
-        style={{ background: "radial-gradient(circle, #1a3b8b40, transparent)" }}
+        style={{ background: "radial-gradient(circle, #25388040, transparent)" }}
       />
       <div
         className="absolute bottom-[-10%] right-[-5%] w-96 h-96 rounded-full blur-3xl opacity-20 pointer-events-none"
-        style={{ background: "radial-gradient(circle, #2d55bd40, transparent)" }}
+        style={{ background: "radial-gradient(circle, #1d2c6640, transparent)" }}
       />
 
       <motion.div
@@ -221,7 +226,7 @@ export default function Login() {
         style={{
           background: "#ffffff",
           border: "1px solid #e5e7eb",
-          boxShadow: "0 8px 40px rgba(26, 59, 139, 0.12)",
+          boxShadow: "0 8px 40px rgba(37, 56, 128, 0.12)",
         }}
       >
         {/* Logo & Heading */}
@@ -272,62 +277,64 @@ export default function Login() {
           </button>
         </div>
 
-        {/* Demo Credentials Card */}
-        <div
-          className="p-4 rounded-2xl space-y-2.5"
-          style={{
-            background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
-            border: "2px solid #bfdbfe",
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <span
-              className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
-              style={{ color: "#1d4ed8" }}
-            >
-              <FiKey size={13} style={{ color: "#3b82f6" }} />
-              Demo Franchisee Access
-            </span>
-            <span
-              className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase"
-              style={{ background: "#bfdbfe", color: "#1e40af" }}
-            >
-              Active Demo
-            </span>
-          </div>
-
+        {/* Demo Credentials Card — localhost only */}
+        {isLocalhost && (
           <div
-            className="text-xs font-mono p-2.5 rounded-xl border space-y-1"
-            style={{ background: "white", borderColor: "#bfdbfe", color: "#334155" }}
-          >
-            <div>
-              <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>ID: </span>
-              structasoftadmin@gmail.com
-            </div>
-            {authMode === "password" ? (
-              <div>
-                <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>Pass: </span>
-                Password@123
-              </div>
-            ) : (
-              <div>
-                <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>PIN: </span>
-                9876 (or 4321)
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={authMode === "password" ? handleFillDemoPassword : handleFillDemoPin}
-            className="w-full py-2 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+            className="p-4 rounded-2xl space-y-2.5"
             style={{
-              background: "linear-gradient(135deg, #1a3b8b 0%, #2d55bd 100%)",
+              background: "linear-gradient(135deg, #eff6ff, #dbeafe)",
+              border: "2px solid #bfdbfe",
             }}
           >
-            ⚡ Click to Auto-Fill {authMode === "password" ? "Password" : "PIN"} Credentials
-          </button>
-        </div>
+            <div className="flex items-center justify-between">
+              <span
+                className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5"
+                style={{ color: "#1d4ed8" }}
+              >
+                <FiKey size={13} style={{ color: "#3b82f6" }} />
+                Demo Franchisee Access
+              </span>
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase"
+                style={{ background: "#bfdbfe", color: "#1e40af" }}
+              >
+                Active Demo
+              </span>
+            </div>
+
+            <div
+              className="text-xs font-mono p-2.5 rounded-xl border space-y-1"
+              style={{ background: "white", borderColor: "#bfdbfe", color: "#334155" }}
+            >
+              <div>
+                <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>ID: </span>
+                structasoftadmin@gmail.com
+              </div>
+              {authMode === "password" ? (
+                <div>
+                  <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>Pass: </span>
+                  Password@123
+                </div>
+              ) : (
+                <div>
+                  <span className="font-bold font-sans" style={{ color: "#94a3b8" }}>PIN: </span>
+                  9876 (or 4321)
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={authMode === "password" ? handleFillDemoPassword : handleFillDemoPin}
+              className="w-full py-2 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              style={{
+                background: "linear-gradient(135deg, #253880 0%, #1d2c66 100%)",
+              }}
+            >
+              ⚡ Click to Auto-Fill {authMode === "password" ? "Password" : "PIN"} Credentials
+            </button>
+          </div>
+        )}
 
         {/* Error Notification */}
         {error && (
@@ -376,8 +383,8 @@ export default function Login() {
                     color: "#0f172a",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#1a3b8b";
-                    e.target.style.boxShadow = "0 0 0 3px rgba(26,59,139,0.12)";
+                    e.target.style.borderColor = "#253880";
+                    e.target.style.boxShadow = "0 0 0 3px rgba(37,56,128,0.12)";
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = "#e5e7eb";
@@ -414,8 +421,8 @@ export default function Login() {
                     color: "#0f172a",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#1a3b8b";
-                    e.target.style.boxShadow = "0 0 0 3px rgba(26,59,139,0.12)";
+                    e.target.style.borderColor = "#253880";
+                    e.target.style.boxShadow = "0 0 0 3px rgba(37,56,128,0.12)";
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = "#e5e7eb";
@@ -463,8 +470,8 @@ export default function Login() {
               style={{
                 background: loading
                   ? "#94a3b8"
-                  : "linear-gradient(135deg, #1a3b8b 0%, #2d55bd 100%)",
-                boxShadow: loading ? "none" : "0 4px 16px rgba(26, 59, 139, 0.35)",
+                  : "linear-gradient(135deg, #253880 0%, #1d2c66 100%)",
+                boxShadow: loading ? "none" : "0 4px 16px rgba(37, 56, 128, 0.35)",
               }}
             >
               {loading ? <FiLoader className="animate-spin" size={18} /> : "Sign In with Password"}
@@ -502,8 +509,8 @@ export default function Login() {
                     color: "#0f172a",
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = "#1a3b8b";
-                    e.target.style.boxShadow = "0 0 0 3px rgba(26,59,139,0.12)";
+                    e.target.style.borderColor = "#253880";
+                    e.target.style.boxShadow = "0 0 0 3px rgba(37,56,128,0.12)";
                   }}
                   onBlur={(e) => {
                     e.target.style.borderColor = "#e5e7eb";
@@ -586,8 +593,8 @@ export default function Login() {
               style={{
                 background: loading
                   ? "#94a3b8"
-                  : "linear-gradient(135deg, #1a3b8b 0%, #2d55bd 100%)",
-                boxShadow: loading ? "none" : "0 4px 16px rgba(26, 59, 139, 0.35)",
+                  : "linear-gradient(135deg, #253880 0%, #1d2c66 100%)",
+                boxShadow: loading ? "none" : "0 4px 16px rgba(37, 56, 128, 0.35)",
               }}
             >
               {loading ? (
@@ -607,7 +614,7 @@ export default function Login() {
           <Link
             to="/register"
             className="font-bold hover:underline underline-offset-2"
-            style={{ color: "#1a3b8b" }}
+            style={{ color: "#253880" }}
           >
             Apply Now
           </Link>

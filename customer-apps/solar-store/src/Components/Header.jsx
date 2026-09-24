@@ -388,7 +388,7 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
               ref={popupRef}
             >
               <img
-                src={`https://ui-avatars.com/api/?name=${user?.name}&background=1a3b8b&color=ffffff`}
+                src={`https://ui-avatars.com/api/?name=${user?.name}&background=253880&color=ffffff`}
                 alt={user?.name}
                 className="w-9 h-9 rounded-full border-2 border-border group-hover:border-primary/55 transition-all"
               />

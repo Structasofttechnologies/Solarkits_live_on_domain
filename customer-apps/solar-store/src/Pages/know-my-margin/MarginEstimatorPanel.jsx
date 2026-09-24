@@ -322,7 +322,7 @@ export default function MarginEstimatorPanel({ onBack, onSaved, onQuoteGenerated
             </div>
 
             {/* Estimated Customer Price Hero Card */}
-            <div className="p-6 rounded-2xl bg-gradient-to-br from-primary via-[#1a3b8b] to-[#122961] text-white shadow-xl shadow-primary/25 space-y-2">
+            <div className="p-6 rounded-2xl bg-gradient-to-br from-primary via-[#253880] to-[#1d2c66] text-white shadow-xl shadow-primary/25 space-y-2">
               <div className="flex items-center justify-between text-blue-100 text-xs uppercase font-bold tracking-wider">
                 <span>Estimated Customer Selling Price</span>
                 <span className="px-2 py-0.5 bg-white/20 rounded">Incl. GST</span>

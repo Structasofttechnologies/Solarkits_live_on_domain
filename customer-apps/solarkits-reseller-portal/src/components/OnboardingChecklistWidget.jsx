@@ -108,7 +108,7 @@ export default function OnboardingChecklistWidget({ reseller, territory, activeS
       {/* Header Banner */}
       <div className="p-6 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white relative overflow-hidden">
         {/* Background accent glow */}
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#0575B8]/30 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#253880]/30 blur-3xl" />
         <div className="pointer-events-none absolute -left-16 -bottom-16 h-48 w-48 rounded-full bg-[#F49222]/20 blur-3xl" />
 
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -215,7 +215,7 @@ export default function OnboardingChecklistWidget({ reseller, territory, activeS
                           ? "bg-slate-100 hover:bg-slate-200 text-slate-700"
                           : item.pending
                           ? "bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200"
-                          : "bg-[#0575B8] hover:bg-[#045D93] text-white shadow-md shadow-blue-500/20"
+                          : "bg-[#253880] hover:bg-[#1d2c66] text-white shadow-md shadow-blue-500/20"
                       }`}
                     >
                       <span>{item.actionText}</span>

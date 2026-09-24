@@ -285,8 +285,8 @@ export default function ProductStoreShowcase() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6 border-b border-slate-200 pb-6 sm:pb-8">
           <div className="space-y-2 sm:space-y-3 max-w-2xl">
             <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-white border border-slate-200 shadow-xs">
-              <FiShoppingBag className="text-[#0575B8]" size={14} />
-              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#0575B8]">
+              <FiShoppingBag className="text-[#253880]" size={14} />
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-[#253880]">
                 Franchisee Wholesale Store
               </span>
             </div>
@@ -312,7 +312,7 @@ export default function ProductStoreShowcase() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search kits, inverters, SKUs..."
-                className="w-full pl-10 pr-4 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#0575B8] shadow-xs transition-colors"
+                className="w-full pl-10 pr-4 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#253880] shadow-xs transition-colors"
               />
               {searchQuery && (
                 <button
@@ -334,8 +334,8 @@ export default function ProductStoreShowcase() {
               onClick={() => setSelectedCategory(cat)}
               className={`px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                 selectedCategory === cat
-                  ? "bg-[#0575B8] text-white shadow-md shadow-blue-500/20"
-                  : "bg-white text-slate-700 hover:text-[#0575B8] hover:bg-sky-50 border border-slate-200 shadow-xs"
+                  ? "bg-[#253880] text-white shadow-md shadow-blue-500/20"
+                  : "bg-white text-slate-700 hover:text-[#253880] hover:bg-sky-50 border border-slate-200 shadow-xs"
               }`}
             >
               {cat}
@@ -400,7 +400,7 @@ export default function ProductStoreShowcase() {
                       <span className="text-[10px] sm:text-[11px] font-mono text-slate-400 uppercase tracking-wider">
                         SKU: {p.sku}
                       </span>
-                      <h3 className="text-sm sm:text-base font-black text-slate-900 group-hover:text-[#0575B8] transition-colors line-clamp-2 mt-0.5">
+                      <h3 className="text-sm sm:text-base font-black text-slate-900 group-hover:text-[#253880] transition-colors line-clamp-2 mt-0.5">
                         {p.name}
                       </h3>
                     </div>
@@ -412,7 +412,7 @@ export default function ProductStoreShowcase() {
                           <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 block uppercase">
                             Franchisee Wholesale
                           </span>
-                          <span className="text-lg sm:text-2xl font-black text-[#0575B8]">
+                          <span className="text-lg sm:text-2xl font-black text-[#253880]">
                             ₹{(p.our_price || 0).toLocaleString("en-IN")}
                           </span>
                         </div>
@@ -441,7 +441,7 @@ export default function ProductStoreShowcase() {
 
                     {/* Warranty line */}
                     <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 font-medium">
-                      <FiShield className="text-[#0575B8] shrink-0" size={13} />
+                      <FiShield className="text-[#253880] shrink-0" size={13} />
                       <span className="truncate">{p.warranty}</span>
                     </div>
                   </div>
@@ -459,7 +459,7 @@ export default function ProductStoreShowcase() {
 
                   <button
                     onClick={() => handleProcureClick(p)}
-                    className="py-2 sm:py-2.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                    className="py-2 sm:py-2.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white text-xs font-black flex items-center justify-center gap-1 transition-all shadow-md shadow-blue-500/20 cursor-pointer"
                   >
                     <FiShoppingBag size={13} />
                     <span>Order / Buy</span>
@@ -483,7 +483,7 @@ export default function ProductStoreShowcase() {
                 setSelectedCategory("All Products");
                 setSearchQuery("");
               }}
-              className="px-4 py-2 bg-[#0575B8] text-white rounded-xl text-xs font-bold mt-2"
+              className="px-4 py-2 bg-[#253880] text-white rounded-xl text-xs font-bold mt-2"
             >
               Reset Filters
             </button>
@@ -524,7 +524,7 @@ export default function ProductStoreShowcase() {
               {/* Modal Header */}
               <div className="flex items-start justify-between border-b border-slate-100 pb-3 sm:pb-4">
                 <div>
-                  <span className="text-[11px] sm:text-xs font-mono text-[#0575B8] font-bold uppercase">
+                  <span className="text-[11px] sm:text-xs font-mono text-[#253880] font-bold uppercase">
                     {selectedProduct.sku} • {selectedProduct.category}
                   </span>
                   <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">{selectedProduct.name}</h3>
@@ -541,7 +541,7 @@ export default function ProductStoreShowcase() {
               <div className="p-3.5 sm:p-4 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-between">
                 <div>
                   <span className="text-[10px] sm:text-xs text-slate-600 font-medium">Franchisee Wholesale</span>
-                  <p className="text-xl sm:text-2xl font-black text-[#0575B8]">
+                  <p className="text-xl sm:text-2xl font-black text-[#253880]">
                     ₹{selectedProduct.our_price.toLocaleString("en-IN")}
                   </p>
                 </div>
@@ -600,7 +600,7 @@ export default function ProductStoreShowcase() {
                     setModalOpen(false);
                     handleProcureClick(selectedProduct);
                   }}
-                  className="px-4 py-2 sm:px-6 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] text-white text-xs font-black shadow-md shadow-blue-500/20 flex items-center gap-1.5"
+                  className="px-4 py-2 sm:px-6 sm:py-2.5 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] text-white text-xs font-black shadow-md shadow-blue-500/20 flex items-center gap-1.5"
                 >
                   <FiShoppingBag size={13} />
                   <span>Procure / Order</span>
@@ -628,7 +628,7 @@ export default function ProductStoreShowcase() {
               <div className="space-y-1.5 sm:space-y-2">
                 <h3 className="text-lg sm:text-xl font-black text-slate-900">Franchisee Procurement</h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  To procure <strong className="text-[#0575B8]">{procurePromptProduct.name}</strong> at the wholesale rate of{" "}
+                  To procure <strong className="text-[#253880]">{procurePromptProduct.name}</strong> at the wholesale rate of{" "}
                   <strong className="text-emerald-600">₹{procurePromptProduct.our_price.toLocaleString("en-IN")}</strong>, please sign in or register.
                 </p>
               </div>
@@ -636,7 +636,7 @@ export default function ProductStoreShowcase() {
               <div className="space-y-2 pt-2">
                 <Link
                   to="/login"
-                  className="block w-full py-2.5 sm:py-3 rounded-xl bg-[#0575B8] hover:bg-[#045D93] text-white text-xs font-black shadow-md shadow-blue-600/20 transition-all"
+                  className="block w-full py-2.5 sm:py-3 rounded-xl bg-[#253880] hover:bg-[#1d2c66] text-white text-xs font-black shadow-md shadow-blue-600/20 transition-all"
                 >
                   Sign In to Partner Portal
                 </Link>

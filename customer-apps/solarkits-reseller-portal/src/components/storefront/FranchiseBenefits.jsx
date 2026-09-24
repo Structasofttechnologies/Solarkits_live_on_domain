@@ -68,8 +68,8 @@ export default function FranchiseBenefits() {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-50 border border-sky-100 shadow-xs">
-            <FiShield className="text-[#0575B8]" size={14} />
-            <span className="text-xs font-black uppercase tracking-wider text-[#0575B8]">
+            <FiShield className="text-[#253880]" size={14} />
+            <span className="text-xs font-black uppercase tracking-wider text-[#253880]">
               Why Partner with SolarKits
             </span>
           </div>
@@ -107,7 +107,7 @@ export default function FranchiseBenefits() {
                   </span>
                 </div>
 
-                <h3 className="text-lg font-black text-slate-900 group-hover:text-[#0575B8] transition-colors">
+                <h3 className="text-lg font-black text-slate-900 group-hover:text-[#253880] transition-colors">
                   {b.title}
                 </h3>
 

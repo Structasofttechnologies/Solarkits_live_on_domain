@@ -30,7 +30,7 @@ function TickerBar({ tickerItems }) {
 
   return (
     <div style={{
-      background: "linear-gradient(135deg, #1a3b8b, #1d4ed8)",
+      background: "linear-gradient(135deg, #253880, #1d2c66)",
       overflow: "hidden",
       height: "40px",
       display: "flex",
@@ -41,7 +41,7 @@ function TickerBar({ tickerItems }) {
       {/* Left fade */}
       <div style={{
         position: "absolute", left: 0, top: 0, bottom: 0, width: "80px",
-        background: "linear-gradient(90deg, #1a3b8b, transparent)",
+        background: "linear-gradient(90deg, #253880, transparent)",
         zIndex: 1,
       }} />
 

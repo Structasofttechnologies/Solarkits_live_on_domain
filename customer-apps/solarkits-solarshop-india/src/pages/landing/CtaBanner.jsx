@@ -21,7 +21,7 @@ export default function CtaBanner({ ctaConfig }) {
     <section
       style={{
         position: "relative", overflow: "hidden",
-        background: "linear-gradient(135deg, #1a3b8b 0%, #1d4ed8 40%, #2563eb 70%, #1a3b8b 100%)",
+        background: "linear-gradient(135deg, #253880 0%, #1d2c66 40%, #1965b0 70%, #253880 100%)",
         padding: "96px 28px",
       }}
     >
@@ -30,7 +30,7 @@ export default function CtaBanner({ ctaConfig }) {
         <div className="animate-blob animate-float-slow" style={{
           position: "absolute", top: "-80px", right: "5%",
           width: "450px", height: "450px",
-          background: "radial-gradient(circle, rgba(248,194,26,0.18) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(244,146,34,0.18) 0%, transparent 70%)",
           filter: "blur(50px)",
         }} />
         <div className="animate-blob animate-float-reverse" style={{
@@ -58,18 +58,18 @@ export default function CtaBanner({ ctaConfig }) {
           style={{
             display: "inline-flex", width: "72px", height: "72px",
             borderRadius: "20px",
-            background: "linear-gradient(135deg, #f8c21a, #f59e0b)",
+            background: "linear-gradient(135deg, #f49222, #dd7e13)",
             alignItems: "center", justifyContent: "center",
             marginBottom: "28px",
-            boxShadow: "0 12px 36px rgba(248,194,26,0.5)",
+            boxShadow: "0 12px 36px rgba(244,146,34,0.5)",
           }}
         >
-          <FaSolarPanel style={{ color: "#1a3b8b", fontSize: "2rem" }} />
+          <FaSolarPanel style={{ color: "#253880", fontSize: "2rem" }} />
         </motion.div>
 
         {/* Badge */}
         <div style={{ display: "inline-block", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "50px", padding: "5px 16px", marginBottom: "20px" }}>
-          <span style={{ color: "#f8c21a", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.1em" }}>
+          <span style={{ color: "#f49222", fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.1em" }}>
             {badgeText}
           </span>
         </div>
@@ -95,14 +95,14 @@ export default function CtaBanner({ ctaConfig }) {
         <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
           <motion.button
             onClick={handleRegister}
-            whileHover={{ scale: 1.04, boxShadow: "0 16px 40px rgba(248,194,26,0.5)" }}
+            whileHover={{ scale: 1.04, boxShadow: "0 16px 40px rgba(244,146,34,0.5)" }}
             whileTap={{ scale: 0.97 }}
             style={{
               padding: "16px 36px",
-              background: "linear-gradient(135deg, #f8c21a, #f59e0b)",
-              color: "#1a3b8b", borderRadius: "14px",
+              background: "linear-gradient(135deg, #f49222, #dd7e13)",
+              color: "#253880", borderRadius: "14px",
               fontSize: "1.05rem", fontWeight: 900, cursor: "pointer", border: "none",
-              boxShadow: "0 8px 28px rgba(248,194,26,0.35)",
+              boxShadow: "0 8px 28px rgba(244,146,34,0.35)",
               display: "inline-flex", alignItems: "center", gap: "10px",
               fontFamily: "inherit",
             }}

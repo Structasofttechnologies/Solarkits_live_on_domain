@@ -48,8 +48,8 @@ export default function OnboardingSteps() {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-slate-200 shadow-xs">
-            <FiCheckCircle className="text-[#0575B8]" size={14} />
-            <span className="text-xs font-black uppercase tracking-wider text-[#0575B8]">
+            <FiCheckCircle className="text-[#253880]" size={14} />
+            <span className="text-xs font-black uppercase tracking-wider text-[#253880]">
               Simple 4-Step Onboarding
             </span>
           </div>
@@ -75,20 +75,20 @@ export default function OnboardingSteps() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: idx * 0.12 }}
-              className="relative p-7 rounded-3xl bg-white border border-slate-200 hover:border-[#0575B8] shadow-sm hover:shadow-xl flex flex-col justify-between transition-all duration-300 group"
+              className="relative p-7 rounded-3xl bg-white border border-slate-200 hover:border-[#253880] shadow-sm hover:shadow-xl flex flex-col justify-between transition-all duration-300 group"
             >
               <div className="space-y-4">
                 {/* Step Number & Icon */}
                 <div className="flex items-center justify-between">
-                  <span className="text-3xl font-black font-mono text-slate-300 group-hover:text-[#0575B8] transition-colors">
+                  <span className="text-3xl font-black font-mono text-slate-300 group-hover:text-[#253880] transition-colors">
                     {s.step}
                   </span>
-                  <div className="h-12 w-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#0575B8] group-hover:bg-[#0575B8] group-hover:text-white transition-all shadow-xs">
+                  <div className="h-12 w-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-[#253880] group-hover:bg-[#253880] group-hover:text-white transition-all shadow-xs">
                     <s.icon size={22} />
                   </div>
                 </div>
 
-                <h3 className="text-base font-black text-slate-900 group-hover:text-[#0575B8] transition-colors">
+                <h3 className="text-base font-black text-slate-900 group-hover:text-[#253880] transition-colors">
                   {s.title}
                 </h3>
 
@@ -104,7 +104,7 @@ export default function OnboardingSteps() {
         <div className="text-center mt-12">
           <Link
             to="/register"
-            className="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all transform hover:-translate-y-0.5"
+            className="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all transform hover:-translate-y-0.5"
           >
             <span>Register as Partner Now</span>
             <FiArrowRight size={18} />

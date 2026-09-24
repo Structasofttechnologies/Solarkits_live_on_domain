@@ -118,7 +118,7 @@ export default function EstimateDetail({ estimate, onClose, onGenerateQuote }) {
           </div>
 
           {/* Cost & Margin Summary */}
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-primary via-[#1a3b8b] to-[#122961] text-white shadow-lg shadow-primary/20 space-y-4">
+          <div className="p-5 rounded-2xl bg-gradient-to-br from-primary via-[#253880] to-[#1d2c66] text-white shadow-lg shadow-primary/20 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs uppercase font-bold text-blue-100 tracking-wider">

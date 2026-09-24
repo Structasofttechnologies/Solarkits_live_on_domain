@@ -11,16 +11,16 @@ export default function MobileStickyBar({ onOpenLeadModal }) {
         {/* 1. Browse Kits */}
         <a
           href="#catalog-browser"
-          className="flex flex-col items-center justify-center py-1 text-slate-700 hover:text-[#0575B8]"
+          className="flex flex-col items-center justify-center py-1 text-slate-700 hover:text-[#253880]"
         >
-          <FiPackage size={17} className="text-[#0575B8]" />
+          <FiPackage size={17} className="text-[#253880]" />
           <span className="text-[9px] font-bold mt-0.5 whitespace-nowrap">Browse Kits</span>
         </a>
 
         {/* 2. Store Availability */}
         <a
           href="#store-availability"
-          className="flex flex-col items-center justify-center py-1 text-slate-700 hover:text-[#0575B8]"
+          className="flex flex-col items-center justify-center py-1 text-slate-700 hover:text-[#253880]"
         >
           <FiMapPin size={17} className="text-[#F49222]" />
           <span className="text-[9px] font-bold mt-0.5 whitespace-nowrap">Territory</span>
@@ -29,7 +29,7 @@ export default function MobileStickyBar({ onOpenLeadModal }) {
         {/* 3. Check Eligibility */}
         <a
           href="#eligibility-checker"
-          className="flex flex-col items-center justify-center py-1 text-slate-700 hover:text-[#0575B8]"
+          className="flex flex-col items-center justify-center py-1 text-slate-700 hover:text-[#253880]"
         >
           <FiAward size={17} className="text-emerald-600" />
           <span className="text-[9px] font-bold mt-0.5 whitespace-nowrap">Eligibility</span>
@@ -47,7 +47,7 @@ export default function MobileStickyBar({ onOpenLeadModal }) {
         {/* 5. Apply Now */}
         <button
           onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Mobile Fast Application" }, "franchise_apply")}
-          className="flex flex-col items-center justify-center py-1 px-1 rounded-xl bg-gradient-to-r from-[#0575B8] to-[#1965B0] text-white shadow-xs cursor-pointer"
+          className="flex flex-col items-center justify-center py-1 px-1 rounded-xl bg-gradient-to-r from-[#253880] to-[#1d2c66] text-white shadow-xs cursor-pointer"
         >
           <FiZap size={15} />
           <span className="text-[9px] font-black uppercase mt-0.5 whitespace-nowrap">Apply Now</span>

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FiChevronLeft, FiChevronRight, FiStar } from "react-icons/fi";
 
 const DEFAULT_TESTIMONIALS = [
-  { name: "Rajesh Kulkarni", role: "Homeowner", city: "Pune, Maharashtra", initials: "RK", color: "#1a3b8b", bg: "#eff6ff", rating: 5, quote: "SolarKits delivered the entire package in 3 days. The pre-wired ACDB/DCDB boxes saved our local electrician half a day of work. My electricity bill is down from ₹3,200 to ₹150!" },
+  { name: "Rajesh Kulkarni", role: "Homeowner", city: "Pune, Maharashtra", initials: "RK", color: "#253880", bg: "#eff6ff", rating: 5, quote: "SolarKits delivered the entire package in 3 days. The pre-wired ACDB/DCDB boxes saved our local electrician half a day of work. My electricity bill is down from ₹3,200 to ₹150!" },
   { name: "Anand Verma", role: "Commercial EPC Contractor", city: "Jaipur, Rajasthan", initials: "AV", color: "#0d9488", bg: "#f0fdfa", rating: 5, quote: "Ordering turnkey kits with proper GST invoices is a game changer for our business. DCR panels passed DISCOM inspection on the first attempt." },
   { name: "Balwinder Singh", role: "Farm House Owner", city: "Ludhiana, Punjab", initials: "BS", color: "#15803d", bg: "#f0fdf4", rating: 5, quote: "The hybrid system with lithium battery provides 24x7 continuous power even during local grid cuts. Excellent build quality and very responsive support." },
   { name: "Priya Sharma", role: "Solar Contractor", city: "Pune, Maharashtra", initials: "PS", color: "#7c3aed", bg: "#f5f3ff", rating: 5, quote: "Finally a solar e-commerce platform that actually understands customer needs! The order tracking, GST invoicing, and secure payment options make purchasing solar products so much faster." },
@@ -43,7 +43,7 @@ export default function TestimonialsSection({ testimonialsConfig }) {
   const heading = testimonialsConfig?.heading || "Trusted by Homeowners & Solar Businesses";
   const subtitle = testimonialsConfig?.subtitle || "Hear what customers across India say about their SolarKits delivery and power performance.";
 
-  const colors = ["#1a3b8b", "#0d9488", "#15803d", "#7c3aed", "#d97706", "#dc2626"];
+  const colors = ["#253880", "#0d9488", "#15803d", "#7c3aed", "#d97706", "#dc2626"];
   const bgs = ["#eff6ff", "#f0fdfa", "#f0fdf4", "#f5f3ff", "#fffbeb", "#fff1f2"];
 
   return (
@@ -54,7 +54,7 @@ export default function TestimonialsSection({ testimonialsConfig }) {
       {/* Top decorative wave */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: "6px",
-        background: "linear-gradient(90deg, #1a3b8b, #3b82f6, #f8c21a, #0d9488, #1a3b8b)",
+        background: "linear-gradient(90deg, #253880, #189bd7, #f49222, #0d9488, #253880)",
       }} />
 
       <div style={{ maxWidth: "1280px", margin: "0 auto", position: "relative", zIndex: 1 }}>

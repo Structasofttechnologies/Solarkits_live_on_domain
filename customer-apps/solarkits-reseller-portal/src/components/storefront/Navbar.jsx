@@ -63,7 +63,7 @@ export default function Navbar({ onOpenLeadModal }) {
                 className="h-8 sm:h-9 xl:h-10 w-auto object-contain transition-transform group-hover:scale-105 shrink-0"
               />
               <div className="flex flex-col border-l border-slate-200 pl-2 sm:pl-3 shrink-0">
-                <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-[#0575B8] whitespace-nowrap">
+                <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase text-[#253880] whitespace-nowrap">
                   Franchisee Network
                 </span>
                 <span className="hidden xs:block text-[8px] sm:text-[9px] text-[#F49222] font-extrabold tracking-wider uppercase whitespace-nowrap">
@@ -79,7 +79,7 @@ export default function Navbar({ onOpenLeadModal }) {
               <a
                 key={item.name}
                 href={item.href}
-                className="px-2.5 py-1.5 rounded-xl text-xs 2xl:text-xs font-bold text-slate-700 hover:text-[#0575B8] hover:bg-sky-50 transition-all whitespace-nowrap shrink-0"
+                className="px-2.5 py-1.5 rounded-xl text-xs 2xl:text-xs font-bold text-slate-700 hover:text-[#253880] hover:bg-sky-50 transition-all whitespace-nowrap shrink-0"
               >
                 {item.name}
               </a>
@@ -92,15 +92,15 @@ export default function Navbar({ onOpenLeadModal }) {
 
             <Link
               to="/login"
-              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-[#0575B8] hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
+              className="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:text-[#253880] hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1.5 shadow-2xs whitespace-nowrap shrink-0"
             >
-              <FiUser className="text-[#0575B8] shrink-0" size={13} />
+              <FiUser className="text-[#253880] shrink-0" size={13} />
               <span>Partner Login</span>
             </Link>
 
             <button
               onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Header Fast Application" }, "franchise_apply")}
-              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-[#0575B8] to-[#1965B0] hover:from-[#045D93] hover:to-[#0575B8] transition-all transform hover:-translate-y-0.5 shadow-md shadow-blue-500/20 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-[#253880] to-[#1d2c66] hover:from-[#1d2c66] hover:to-[#253880] transition-all transform hover:-translate-y-0.5 shadow-md shadow-blue-500/20 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <FiZap size={13} />
               <span>Apply Now</span>
@@ -113,7 +113,7 @@ export default function Navbar({ onOpenLeadModal }) {
 
             <button
               onClick={() => onOpenLeadModal && onOpenLeadModal({ requiredConfig: "Mobile Fast Application" }, "franchise_apply")}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-white bg-[#0575B8] shadow-xs whitespace-nowrap"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-extrabold text-white bg-[#253880] shadow-xs whitespace-nowrap"
             >
               Apply Now
             </button>
@@ -143,16 +143,16 @@ export default function Navbar({ onOpenLeadModal }) {
               <a
                 href="#catalog-browser"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#253880]"
               >
-                <FiShoppingBag className="text-[#0575B8]" />
+                <FiShoppingBag className="text-[#253880]" />
                 Browse Solarkits
               </a>
 
               <a
                 href="#store-availability"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#253880]"
               >
                 <FiMapPin className="text-[#F49222]" />
                 Check Store Availability
@@ -161,7 +161,7 @@ export default function Navbar({ onOpenLeadModal }) {
               <Link
                 href="/eligibility"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#253880]"
               >
                 <FiAward className="text-emerald-600" />
                 Check Eligibility
@@ -170,7 +170,7 @@ export default function Navbar({ onOpenLeadModal }) {
               <a
                 href="#franchise-plans"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#253880]"
               >
                 <FiZap className="text-purple-600" />
                 Franchise Plans
@@ -179,7 +179,7 @@ export default function Navbar({ onOpenLeadModal }) {
               <a
                 href="#revenue-potential"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#253880]"
               >
                 <FiTrendingUp className="text-amber-600" />
                 Revenue Potential
@@ -188,7 +188,7 @@ export default function Navbar({ onOpenLeadModal }) {
               <a
                 href="#faq-section"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#0575B8]"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-800 hover:bg-sky-50 hover:text-[#253880]"
               >
                 <FiHelpCircle className="text-slate-600" />
                 FAQ
@@ -212,7 +212,7 @@ export default function Navbar({ onOpenLeadModal }) {
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full py-2.5 text-center text-xs font-bold text-slate-700 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-center gap-2"
               >
-                <FiUser className="text-[#0575B8]" />
+                <FiUser className="text-[#253880]" />
                 Partner Login
               </Link>
             </div>

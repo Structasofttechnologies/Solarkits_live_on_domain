@@ -57,7 +57,7 @@ export default function TestimonialsProof({ testimonialsConfig }) {
             {heading.includes(highlightHeading) ? (
               <>
                 {heading.replace(highlightHeading, "")}{" "}
-                <span className="text-[#0575B8]">{highlightHeading}</span>
+                <span className="text-[#253880]">{highlightHeading}</span>
               </>
             ) : (
               heading
@@ -105,7 +105,7 @@ export default function TestimonialsProof({ testimonialsConfig }) {
                   <h4 className="text-xs font-black text-slate-900">{t.name}</h4>
                   <p className="text-[10px] text-slate-500">{t.company}</p>
                 </div>
-                <span className="text-[10px] font-bold text-[#0575B8] bg-sky-50 px-2 py-1 rounded-md border border-sky-200">
+                <span className="text-[10px] font-bold text-[#253880] bg-sky-50 px-2 py-1 rounded-md border border-sky-200">
                   {t.volume}
                 </span>
               </div>
