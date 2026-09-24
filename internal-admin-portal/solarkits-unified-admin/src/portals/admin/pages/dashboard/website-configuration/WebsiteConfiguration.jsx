@@ -67,7 +67,7 @@ export default function WebsiteConfiguration() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border overflow-x-auto scrollbar-none">
+        {/* <div className="flex items-center gap-2 mt-6 pt-4 border-t border-border overflow-x-auto scrollbar-none">
           {TABS.map((tab) => {
             const active = isTabActive(tab.subPath);
             return (
@@ -92,7 +92,7 @@ export default function WebsiteConfiguration() {
               </button>
             );
           })}
-        </div>
+        </div> */}
       </div>
 
       {/* Routed Content */}

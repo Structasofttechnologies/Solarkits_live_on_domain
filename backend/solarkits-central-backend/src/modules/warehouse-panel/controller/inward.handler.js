@@ -968,6 +968,56 @@ const mark_purchase_order_delivered = async (req, res) => {
     }], { session });
 
     await session.commitTransaction();
+
+    // ── Post-Commit: Trigger Delivery Queue for linked EPC / Franchise orders ──
+    // If this PO was created from combined EPC/Franchise orders, update their status
+    // so they appear in the Delivery Management Queue for warehouse dispatch.
+    if (po.po_type && po.po_type !== 'supplier_manual' && po.source_orders && po.source_orders.length > 0) {
+      try {
+        const { EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
+        const epcSourceIds = po.source_orders
+          .filter(s => s.order_type === 'epc')
+          .map(s => s.order_id);
+
+        if (epcSourceIds.length > 0) {
+          // Move from pending/confirmed → 'processing' and ensure payment_status is captured
+          // The warehouse delivery queue displays 'processing' orders with 'captured' payment
+          await EpcOrder.updateMany(
+            { _id: { $in: epcSourceIds } },
+            {
+              $set: {
+                order_status: 'processing',
+                payment_status: 'captured',
+                warehouse_id: warehouse_id
+              }
+            }
+          );
+          console.log(`[InwardHandler] Delivery queue triggered for ${epcSourceIds.length} EPC order(s) linked to PO ${po.po_number}`);
+        }
+
+        const franchiseSourceIds = po.source_orders
+          .filter(s => s.order_type === 'franchise')
+          .map(s => s.order_id);
+
+        if (franchiseSourceIds.length > 0) {
+          const { FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+          await FpoOrder.updateMany(
+            { _id: { $in: franchiseSourceIds } },
+            {
+              $set: {
+                status: 'PROCESSING',
+                warehouse_id: warehouse_id
+              }
+            }
+          );
+          console.log(`[InwardHandler] Delivery queue triggered for ${franchiseSourceIds.length} Franchise order(s) linked to PO ${po.po_number}`);
+        }
+      } catch (triggerErr) {
+        // Non-fatal — stock was already received, just log the queue trigger failure
+        console.error('[InwardHandler] Failed to trigger delivery queue for source orders:', triggerErr.message);
+      }
+    }
+
     return res.status(200).json({ status: "success", message: "Purchase order marked delivered and stock updated with supplier invoice." });
   } catch (err) {
     await session.abortTransaction();

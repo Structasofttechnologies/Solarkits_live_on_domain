@@ -9,7 +9,7 @@ import {
   HiOutlineHashtag, HiOutlineQrcode, HiOutlineDownload,
   HiOutlineSearch, HiOutlinePlus, HiOutlineTrash, HiDuplicate
 } from 'react-icons/hi';
-import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice } from "react-icons/fa";
+import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers } from "react-icons/fa";
 import { getInwardActiveSkus, saveInward, getInwardLogs, getInwardStockStatus, getWarehousePurchaseOrders, markPurchaseOrderDelivered, uploadTaxInvoice, createPoRequest, getPoRequests } from "../../api/inward";
 import axios from "axios";
 import { authHeaderObj } from "../../app/authHeader";
@@ -171,6 +171,31 @@ function ProformaInvoiceModal({ isOpen, onClose, po, defaultTab = "po" }) {
                   </tfoot>
                 </table>
               </div>
+
+              {po.source_orders && po.source_orders.length > 0 && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-800/40 p-3 space-y-2 mt-3">
+                  <div className="text-[10px] font-black text-purple-700 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <FaUsers /> Customer Orders Covered by this Combined PO ({po.source_orders.length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {po.source_orders.map((src, i) => (
+                      <div key={i} className="bg-surface rounded-lg p-2.5 border border-purple-200/60 dark:border-purple-800/40 text-xs">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-text-primary text-[11px]">{src.order_number || `#${String(src.order_id).slice(-6)}`}</span>
+                          <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                            {src.order_type}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-text-secondary">{src.customer_name}</div>
+                        {src.customer_contact && <div className="text-[9px] text-text-muted">{src.customer_contact}</div>}
+                        {src.order_amount > 0 && (
+                          <div className="text-[10px] font-bold text-primary mt-0.5">₹{src.order_amount.toLocaleString()}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )
         ) : (
@@ -1503,6 +1528,11 @@ export default function MaterialInward() {
                           <div className="text-[9px] text-text-secondary mt-0.5">
                             Ordered: {new Date(po.createdAt || po.created_at).toLocaleDateString()}
                           </div>
+                          {po.source_orders && po.source_orders.length > 0 && (
+                            <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700/50">
+                              <FaUsers size={9} /> Combined ({po.source_orders.length} order{po.source_orders.length !== 1 ? 's' : ''})
+                            </span>
+                          )}
                         </td>
                         <td className="p-3">
                           <div className="font-bold text-text-primary text-xs">{po.supplier_id?.company_name || "N/A"}</div>

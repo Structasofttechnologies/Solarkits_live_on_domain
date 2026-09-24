@@ -116,10 +116,10 @@ export default function FranchiseLanding() {
       />
 
       {/* 9. Franchise Territory Opportunity (Plans are kept dynamic per user request) */}
-      <FranchiseOpportunity
+      {/* <FranchiseOpportunity
         onOpenLeadModal={handleOpenLeadModal}
         onOpenPurchaseModal={handleOpenPurchaseModal}
-      />
+      /> */}
 
       {/* 14. Testimonials or Verified Business Proof */}
       <TestimonialsProof testimonialsConfig={dynamicContent?.testimonials} />

@@ -1827,8 +1827,518 @@ const update_po_request_status = async (req, res) => {
   }
 };
 
+
 const get_hierarchy_options = async (req, res) => {
   return await estimatorAdminHandler.get_hierarchy_options(req, res);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: Resolve Combo Kit Components (Solar Panels, Inverters, BOS kits) with Images
+// ─────────────────────────────────────────────────────────────────────────────
+const DEFAULT_PANEL_IMG = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=400&auto=format&fit=crop&q=80";
+const DEFAULT_INVERTER_IMG = "https://images.unsplash.com/photo-1558441719-8b489c63f70b?w=400&auto=format&fit=crop&q=80";
+const DEFAULT_STRUCTURE_IMG = "https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?w=400&auto=format&fit=crop&q=80";
+const DEFAULT_ACDB_IMG = "https://images.unsplash.com/photo-1581092335397-9583fe92d232?w=400&auto=format&fit=crop&q=80";
+const DEFAULT_CABLE_IMG = "https://images.unsplash.com/photo-1544724569-5f546fd6f2b5?w=400&auto=format&fit=crop&q=80";
+
+async function resolveKitComponents(kitId, orderQty = 1, itemName = '', itemCapacity = null) {
+  let kitDoc = null;
+  const rawDb = mongoose.connection.db;
+  if (kitId && mongoose.Types.ObjectId.isValid(kitId) && rawDb) {
+    try {
+      kitDoc = await rawDb.collection('pc_comobo_kit').findOne({ _id: new mongoose.Types.ObjectId(kitId) })
+            || await rawDb.collection('pc_combo_kits').findOne({ _id: new mongoose.Types.ObjectId(kitId) });
+    } catch (e) {
+      console.error('Error fetching kit doc:', e.message);
+    }
+  }
+
+  // Parse capacity from kit or itemName
+  let capacityKw = kitDoc?.capacity || 0;
+  if (!capacityKw && (itemName || itemCapacity)) {
+    const match = (itemCapacity || itemName || '').match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+    if (match) capacityKw = parseFloat(match[1]);
+  }
+  if (!capacityKw) capacityKw = 5;
+
+  let panels = null;
+  let inverters = null;
+  let bosList = [];
+
+  if (kitDoc && rawDb && ((kitDoc.base_components && kitDoc.base_components.length > 0) || (kitDoc.bos_kits && kitDoc.bos_kits.length > 0))) {
+    try {
+      const templateIds = (kitDoc.base_components || []).map(b => b.template_id).filter(Boolean);
+      const skuIds = [
+        ...(kitDoc.base_components || []).map(b => b.sku_id),
+        ...(kitDoc.bos_kits || []).map(b => b.sku_id)
+      ].filter(Boolean);
+      const brandIds = [
+        kitDoc.brand_id,
+        ...(kitDoc.base_components || []).map(b => b.brand_id),
+        ...(kitDoc.bos_kits || []).map(b => b.brand_id)
+      ].filter(Boolean);
+
+      const [templates, skus, brands] = await Promise.all([
+        templateIds.length > 0 ? rawDb.collection('pc_product_templates').find({ _id: { $in: templateIds } }).toArray() : [],
+        skuIds.length > 0 ? rawDb.collection('pc_product_skus').find({ _id: { $in: skuIds } }).toArray() : [],
+        brandIds.length > 0 ? rawDb.collection('brands').find({ _id: { $in: brandIds } }).toArray() : [],
+      ]);
+
+      const templateMap = Object.fromEntries(templates.map(t => [t._id.toString(), t.name]));
+      const skuMap = Object.fromEntries(skus.map(s => [s._id.toString(), s]));
+      const brandMap = Object.fromEntries(brands.map(b => [b._id.toString(), b.name || b.brand_name]));
+
+      const kitBrand = brandMap[kitDoc.brand_id?.toString()] || 'SolarKits OEM';
+
+      for (const bc of kitDoc.base_components || []) {
+        const type = templateMap[bc.template_id?.toString()] || 'Component';
+        const skuObj = skuMap[bc.sku_id?.toString()] || {};
+        const brand = brandMap[bc.brand_id?.toString()] || kitBrand;
+        const isPanel = type.toLowerCase().includes('panel') || type.toLowerCase().includes('module');
+        const isInverter = type.toLowerCase().includes('inverter');
+        const perKit = bc.quantity || 1;
+        const totalQty = perKit * orderQty;
+
+        if (isPanel && !panels) {
+          panels = {
+            type: 'Solar Panel',
+            name: skuObj.sku_code ? `${brand} ${skuObj.sku_code}` : `${brand} 540W Mono PERC / Bifacial Module`,
+            sku_code: skuObj.sku_code || 'PV-540W',
+            brand: brand,
+            quantity_per_kit: perKit,
+            total_quantity: totalQty,
+            image: skuObj.image || kitDoc.kit_image || DEFAULT_PANEL_IMG,
+          };
+        } else if (isInverter && !inverters) {
+          inverters = {
+            type: 'Solar Inverter',
+            name: skuObj.sku_code ? `${brand} ${skuObj.sku_code}` : `${brand} ${capacityKw}kW String Inverter`,
+            sku_code: skuObj.sku_code || `INV-${capacityKw}KW`,
+            brand: brand,
+            quantity_per_kit: perKit,
+            total_quantity: totalQty,
+            image: skuObj.image || DEFAULT_INVERTER_IMG,
+          };
+        } else {
+          bosList.push({
+            type: type,
+            name: skuObj.sku_code ? `${brand} ${skuObj.sku_code}` : `${brand} ${type}`,
+            brand: brand,
+            quantity_per_kit: perKit,
+            total_quantity: totalQty,
+            image: skuObj.image || DEFAULT_STRUCTURE_IMG,
+          });
+        }
+      }
+
+      for (const bk of kitDoc.bos_kits || []) {
+        const brand = brandMap[bk.brand_id?.toString()] || kitBrand;
+        const perKit = bk.quantity || 1;
+        bosList.push({
+          type: 'BOS Kit',
+          name: bk.name || 'Balance of System Protection',
+          brand: brand,
+          quantity_per_kit: perKit,
+          total_quantity: perKit * orderQty,
+          image: bk.image || DEFAULT_ACDB_IMG,
+        });
+      }
+    } catch (parseErr) {
+      console.error('Error resolving kit components:', parseErr.message);
+    }
+  }
+
+  // Fallback defaults if no components were parsed from kitDoc
+  if (!panels) {
+    const panelsPerKit = Math.max(1, Math.round((capacityKw * 1000) / 540));
+    panels = {
+      type: 'Solar Panel',
+      name: `${capacityKw}kW High-Efficiency Bifacial Mono PERC Module`,
+      sku_code: 'PV-540W-BIF',
+      brand: kitDoc?.brand_name || 'Tier-1 Certified',
+      quantity_per_kit: panelsPerKit,
+      total_quantity: panelsPerKit * orderQty,
+      image: DEFAULT_PANEL_IMG,
+    };
+  }
+
+  if (!inverters) {
+    inverters = {
+      type: 'Solar Inverter',
+      name: `${capacityKw}kW On-Grid String Inverter (Single/Three Phase)`,
+      sku_code: `INV-${capacityKw}KW`,
+      brand: kitDoc?.brand_name || 'Tier-1 Certified',
+      quantity_per_kit: 1,
+      total_quantity: 1 * orderQty,
+      image: DEFAULT_INVERTER_IMG,
+    };
+  }
+
+  if (bosList.length === 0) {
+    bosList = [
+      {
+        type: 'Mounting Structure',
+        name: 'GI Hot-Dip Rooftop Mounting Structure',
+        brand: 'Heavy Duty Structural',
+        quantity_per_kit: 1,
+        total_quantity: 1 * orderQty,
+        image: DEFAULT_STRUCTURE_IMG,
+      },
+      {
+        type: 'Protection System',
+        name: 'ACDB & DCDB IP65 Surge Protection Distribution Box',
+        brand: 'Industrial Standard',
+        quantity_per_kit: 1,
+        total_quantity: 1 * orderQty,
+        image: DEFAULT_ACDB_IMG,
+      },
+      {
+        type: 'Cabling & Safety',
+        name: 'Solar DC Cable (4/6 sq.mm) & Earthing Kit',
+        brand: 'Certified Solar Cables',
+        quantity_per_kit: 1,
+        total_quantity: 1 * orderQty,
+        image: DEFAULT_CABLE_IMG,
+      }
+    ];
+  }
+
+  return {
+    capacity_kw: capacityKw,
+    kit_image: kitDoc?.kit_image || kitDoc?.image || DEFAULT_PANEL_IMG,
+    panels,
+    inverters,
+    bos_components: bosList,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: Get Pending EPC & Franchise Orders for the Payments Panel
+// Returns all EPC orders and Franchise orders awaiting stock procurement —
+// with full breakdown of solar panels, inverters, and BOS items with images.
+// ─────────────────────────────────────────────────────────────────────────────
+const get_pending_epc_franchise_orders = async (req, res) => {
+  try {
+    const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+
+    // 1. Fetch EPC orders awaiting stock procurement
+    const epcOrders = await EpcOrder.find({
+      order_status: { $in: ['confirmed', 'processing', 'pending'] },
+      payment_status: { $in: ['captured', 'pending_verification', 'pending'] },
+    })
+      .populate('epc_id', 'name email whatsapp gstin company_name')
+      .populate('warehouse_id', 'warehouse_code address')
+      .sort({ created_at: -1 })
+      .lean();
+
+    // 2. Fetch Franchise orders (FpoOrder) awaiting stock procurement
+    const fpoOrders = await FpoOrder.find({
+      status: { $in: ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'AWAITING_PAYMENT', 'PAID', 'CONFIRMED'] },
+      deleted_at: null,
+    })
+      .populate('franchisee_id', 'name company_name email mobile gstin')
+      .sort({ created_at: -1 })
+      .lean();
+
+    // 3. Check which orders are already linked to a paid/pending PO
+    const allSourceOrderIds = new Set();
+    const existingPOs = await PurchaseOrder.find({
+      status: { $in: ['pending', 'accepted', 'invoiced', 'paid', 'delivered'] }
+    }).select('source_orders status').lean();
+
+    for (const po of existingPOs) {
+      for (const so of po.source_orders || []) {
+        if (so.order_id) {
+          allSourceOrderIds.add(so.order_id.toString());
+        }
+      }
+    }
+
+    // 4. Filter out already-linked orders
+    const pendingEpcOrders = epcOrders.filter(o => !allSourceOrderIds.has(o._id.toString()));
+    const pendingFranchiseOrders = fpoOrders.filter(o => !allSourceOrderIds.has(o._id.toString()));
+
+    // 5. Format EPC orders with full component breakdown
+    const formattedEpc = await Promise.all(pendingEpcOrders.map(async o => {
+      const items = await Promise.all((o.items || []).map(async it => {
+        const breakdown = it.scope_type === 'kit' || (!it.scope_type && it.kit_id)
+          ? await resolveKitComponents(it.kit_id, it.quantity, it.item_name, it.capacity)
+          : null;
+        return {
+          item_name: it.item_name,
+          quantity: it.quantity,
+          unit_price: (it.unit_price_paise || 0) / 100,
+          total_price: (it.total_price_paise || 0) / 100,
+          kit_id: it.kit_id || null,
+          product_id: it.product_id || null,
+          scope_type: it.scope_type || 'kit',
+          capacity: it.capacity || (breakdown ? `${breakdown.capacity_kw} kW` : null),
+          image: it.image || breakdown?.kit_image || null,
+          breakdown,
+        };
+      }));
+
+      return {
+        id: o._id,
+        order_number: o.order_number,
+        order_type: 'epc',
+        customer_name: o.epc_id?.name || o.epc_id?.company_name || 'EPC Buyer',
+        customer_contact: o.epc_id?.whatsapp || o.epc_id?.email || '-',
+        customer_gstin: o.epc_id?.gstin || '-',
+        order_status: o.order_status,
+        payment_status: o.payment_status,
+        order_amount: (o.grand_total_paise || 0) / 100,
+        delivery_address: o.delivery_address || null,
+        warehouse_id: o.warehouse_id || null,
+        items,
+        created_at: o.created_at,
+      };
+    }));
+
+    // 6. Format Franchise orders with full component breakdown
+    const formattedFranchise = await Promise.all(pendingFranchiseOrders.map(async o => {
+      const items = await Promise.all((o.items || []).map(async it => {
+        const breakdown = it.kit_id
+          ? await resolveKitComponents(it.kit_id, it.quantity, it.item_name, null)
+          : null;
+        return {
+          item_name: it.item_name,
+          quantity: it.quantity,
+          unit_price: (it.unit_price_paise || 0) / 100,
+          total_price: (it.total_price_paise || 0) / 100,
+          kit_id: it.kit_id || null,
+          product_id: it.product_id || null,
+          scope_type: 'franchise_po',
+          capacity: breakdown ? `${breakdown.capacity_kw} kW` : null,
+          image: breakdown?.kit_image || null,
+          breakdown,
+        };
+      }));
+
+      return {
+        id: o._id,
+        order_number: o.po_number,
+        order_type: 'franchise',
+        customer_name: o.franchisee_id?.name || o.franchisee_id?.company_name || 'Franchise Partner',
+        customer_contact: o.franchisee_id?.mobile || o.franchisee_id?.email || '-',
+        customer_gstin: o.franchisee_id?.gstin || '-',
+        order_status: o.status,
+        payment_status: o.offline_payment?.payment_method ? 'offline_payment' : 'pending',
+        order_amount: (o.grand_total_paise || 0) / 100,
+        delivery_address: o.destination_address ? { address_line: o.destination_address, pincode: o.destination_pincode } : null,
+        warehouse_id: null,
+        items,
+        created_at: o.createdAt || o.created_at,
+      };
+    }));
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        epc_orders: formattedEpc,
+        franchise_orders: formattedFranchise,
+      },
+      counts: {
+        epc: formattedEpc.length,
+        franchise: formattedFranchise.length,
+        total: formattedEpc.length + formattedFranchise.length
+      }
+    });
+  } catch (err) {
+    console.error('Error in get_pending_epc_franchise_orders:', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch pending orders.', error: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW: Create Combined Supplier Payment (from multiple EPC/Franchise orders)
+// Body: {
+//   warehouse_id, supplier_id, timeline,
+//   source_order_ids: [{ order_id, order_type }],
+//   items: [{ sku_id, sku_code, qty, order_price }],
+//   payment: { reference_no, proforma_invoice_no, payment_date, amount, payment_mode, receipt_url }
+// }
+// ─────────────────────────────────────────────────────────────────────────────
+const create_combined_supplier_payment = async (req, res) => {
+  try {
+    const { warehouse_id, supplier_id, timeline, source_order_ids, items, payment } = req.body;
+
+    if (!warehouse_id || !supplier_id || !timeline || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'warehouse_id, supplier_id, timeline, and items are required.' });
+    }
+    if (!payment || !payment.reference_no || !payment.payment_date || !payment.amount || !payment.payment_mode) {
+      return res.status(400).json({ status: 'error', message: 'Payment details (reference_no, payment_date, amount, payment_mode) are required.' });
+    }
+
+    const warehouse = await CompanyWarehouse.findById(warehouse_id).lean();
+    if (!warehouse) return res.status(404).json({ status: 'error', message: 'Warehouse not found.' });
+
+    const supplier = await Supplier.findById(supplier_id).lean();
+    if (!supplier) return res.status(404).json({ status: 'error', message: 'Supplier not found.' });
+
+    // Resolve cluster for benchmark price lookup
+    let cluster_id = null;
+    if (warehouse.level_2) {
+      const district = await GeoLevel2.findById(warehouse.level_2).lean();
+      if (district && district.cluster) cluster_id = district.cluster;
+    }
+
+    // Process items — validate and fetch benchmark prices
+    const processedItems = [];
+    for (const item of items) {
+      const { sku_id, sku_code, qty, order_price } = item;
+      if (!sku_id || !qty || !order_price) {
+        return res.status(400).json({ status: 'error', message: 'Each item must have sku_id, qty, and order_price.' });
+      }
+
+      let priceEntry = await ProductSkuPrice.findOne({ warehouse_id, sku_id, price: { $gt: 0 } });
+      if (!priceEntry && cluster_id) {
+        priceEntry = await ProductSkuPrice.findOne({ cluster_id, sku_id, price: { $gt: 0 } });
+      }
+      const benchmark_price = priceEntry ? priceEntry.price : Number(order_price);
+      const benchmark_price_per_watt = priceEntry ? (priceEntry.price_per_watt || 0) : 0;
+
+      // Fetch SKU details
+      const skuDetail = await ProductSku.findById(sku_id)
+        .populate({ path: 'product_id', populate: { path: 'template_id' } })
+        .lean();
+
+      let { capacity_w } = await getSkuCapacityW(sku_id, skuDetail?.product_id?._id);
+      const isSolarPanel = (skuDetail?.product_id?.template_id?.name || '').toLowerCase().includes('solar panel');
+      const parsedOrderPrice = Number(order_price);
+      const order_price_per_watt = isSolarPanel ? parsedOrderPrice : 0;
+      const finalOrderPrice = isSolarPanel ? (parsedOrderPrice * capacity_w) : parsedOrderPrice;
+
+      processedItems.push({
+        sku_id,
+        sku_code: sku_code || skuDetail?.sku_code || 'N/A',
+        qty: Number(qty),
+        benchmark_price,
+        benchmark_price_per_watt,
+        order_price: finalOrderPrice,
+        order_price_per_watt,
+      });
+    }
+
+    // Determine PO type from source orders
+    const sourceOrderTypes = (source_order_ids || []).map(s => s.order_type);
+    const hasEpc = sourceOrderTypes.includes('epc');
+    const hasFranchise = sourceOrderTypes.includes('franchise');
+    let po_type = 'supplier_manual';
+    if (hasEpc && hasFranchise) po_type = 'mixed_combined';
+    else if (hasEpc) po_type = 'epc_combined';
+    else if (hasFranchise) po_type = 'franchise_combined';
+
+    // Enrich source orders with details
+    const enrichedSourceOrders = [];
+    if (source_order_ids && source_order_ids.length > 0) {
+      const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+      for (const src of source_order_ids) {
+        if (src.order_type === 'epc') {
+          const epcOrder = await EpcOrder.findById(src.order_id)
+            .populate('epc_id', 'name company_name email whatsapp gstin')
+            .lean();
+          if (epcOrder) {
+            enrichedSourceOrders.push({
+              order_id: epcOrder._id,
+              order_type: 'epc',
+              order_number: epcOrder.order_number,
+              customer_name: epcOrder.epc_id?.name || epcOrder.epc_id?.company_name || 'EPC Buyer',
+              customer_contact: epcOrder.epc_id?.whatsapp || epcOrder.epc_id?.email || '',
+              order_amount: (epcOrder.grand_total_paise || 0) / 100,
+              delivery_address: epcOrder.delivery_address || null,
+              items: (epcOrder.items || []).map(it => ({
+                item_name: it.item_name,
+                quantity: it.quantity,
+                scope_type: it.scope_type,
+              })),
+            });
+          }
+        } else if (src.order_type === 'franchise') {
+          const fpo = await FpoOrder.findById(src.order_id)
+            .populate('franchisee_id', 'name company_name email mobile gstin')
+            .lean();
+          if (fpo) {
+            enrichedSourceOrders.push({
+              order_id: fpo._id,
+              order_type: 'franchise',
+              order_number: fpo.po_number,
+              customer_name: fpo.franchisee_id?.name || fpo.franchisee_id?.company_name || 'Franchise Partner',
+              customer_contact: fpo.franchisee_id?.mobile || fpo.franchisee_id?.email || '',
+              order_amount: (fpo.grand_total_paise || 0) / 100,
+              delivery_address: fpo.destination_address ? { address_line: fpo.destination_address, pincode: fpo.destination_pincode } : null,
+              items: (fpo.items || []).map(it => ({
+                item_name: it.item_name,
+                quantity: it.quantity,
+                scope_type: 'franchise_po',
+              })),
+            });
+          }
+        }
+      }
+    }
+
+    // Generate PO number
+    const count = await PurchaseOrder.countDocuments({});
+    const year = new Date().getFullYear();
+    const suffix = String(count + 1).padStart(5, '0');
+    const po_number = `CPO-${year}-${suffix}`; // CPO = Combined Purchase Order
+
+    const newPO = new PurchaseOrder({
+      po_number,
+      warehouse_id,
+      supplier_id,
+      items: processedItems,
+      timeline: new Date(timeline),
+      po_type,
+      source_orders: enrichedSourceOrders,
+      status: 'paid', // Combined PO goes straight to paid (payment made immediately)
+      payment_details: {
+        reference_no: payment.reference_no,
+        payment_date: new Date(payment.payment_date),
+        amount: Number(payment.amount),
+        payment_mode: payment.payment_mode,
+        receipt_url: payment.receipt_url || null,
+      },
+      proforma_invoice_no: payment.proforma_invoice_no || null,
+      created_by: req.user.id,
+    });
+
+    await newPO.save();
+
+    // Update EPC orders status to 'processing' so they appear in warehouse delivery queue
+    if (enrichedSourceOrders.length > 0) {
+      const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+      const epcSourceIds = enrichedSourceOrders
+        .filter(s => s.order_type === 'epc')
+        .map(s => s.order_id);
+      if (epcSourceIds.length > 0) {
+        await EpcOrder.updateMany(
+          { _id: { $in: epcSourceIds }, order_status: { $in: ['confirmed', 'pending'] } },
+          { $set: { order_status: 'processing' } }
+        );
+      }
+
+      const franchiseSourceIds = enrichedSourceOrders
+        .filter(s => s.order_type === 'franchise')
+        .map(s => s.order_id);
+      if (franchiseSourceIds.length > 0) {
+        await FpoOrder.updateMany(
+          { _id: { $in: franchiseSourceIds } },
+          { $set: { status: 'STOCK_ALLOCATED' } }
+        );
+      }
+    }
+
+    return res.status(201).json({
+      status: 'success',
+      message: `Combined Purchase Order ${po_number} created and payment recorded. ${enrichedSourceOrders.length} source order(s) linked.`,
+      data: newPO
+    });
+  } catch (err) {
+    console.error('Error in create_combined_supplier_payment:', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to create combined payment.', error: err.message });
+  }
 };
 
 module.exports = {
@@ -1856,5 +2366,8 @@ module.exports = {
   get_country_saas_products,
   get_po_requests,
   update_po_request_status,
-  get_hierarchy_options
+  get_hierarchy_options,
+  get_pending_epc_franchise_orders,
+  create_combined_supplier_payment,
 };
+

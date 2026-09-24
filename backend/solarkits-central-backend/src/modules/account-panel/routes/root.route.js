@@ -49,6 +49,10 @@ router.get('/accounts/skus/:skuId/details', check_auth, accounts_handler.get_sku
 router.get('/accounts/po-requests', check_auth, accounts_handler.get_po_requests);
 router.post('/accounts/po-requests/:id/status', check_auth, accounts_handler.update_po_request_status);
 
+// EPC & Franchise Combined Supplier Payment (new flow)
+router.get('/accounts/pending-epc-franchise-orders', check_auth, accounts_handler.get_pending_epc_franchise_orders);
+router.post('/accounts/combined-supplier-payment', check_auth, accounts_handler.create_combined_supplier_payment);
+
 // Supplier Registration & Listing
 router.get('/accounts/suppliers', check_auth, accounts_handler.list_suppliers);
 router.post('/accounts/suppliers', check_auth, accounts_handler.create_supplier);

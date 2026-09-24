@@ -43,10 +43,10 @@ function LandingPage() {
             <WhyChooseUs whyChooseConfig={dynamicContent?.why_choose} />
 
             {/* Certifications & Brands */}
-            <CertificationsSection brandsConfig={dynamicContent?.brands} />
+            {/* <CertificationsSection brandsConfig={dynamicContent?.brands} /> */}
 
             {/* Testimonials */}
-            <TestimonialsSection testimonialsConfig={dynamicContent?.testimonials} />
+            {/* <TestimonialsSection testimonialsConfig={dynamicContent?.testimonials} /> */}
 
             {/* Footer */}
             <Footer footerConfig={dynamicContent?.footer} />

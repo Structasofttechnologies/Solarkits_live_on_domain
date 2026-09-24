@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link  } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiMenu,
@@ -34,9 +34,9 @@ export default function Navbar({ onOpenLeadModal }) {
   // Primary navigation matching exact requirements
   const navLinks = [
     { name: "Home", href: "#" },
-    { name: "Franchise Plan", href: "#franchise-plans", icon: FiZap },
+    // { name: "Franchise Plan", href: "#franchise-plans", icon: FiZap },
     // { name: "Store Availability", href: "#store-availability", icon: FiMapPin },
-    { name: "Eligibility Checker",  href: "/eligibility", icon: FiAward },
+    { name: "Eligibility Checker", href: "/eligibility", icon: FiAward },
     { name: "FAQ", href: "#faq-section", icon: FiHelpCircle },
   ];
 

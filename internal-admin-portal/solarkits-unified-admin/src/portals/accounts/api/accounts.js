@@ -228,3 +228,19 @@ export const updatePoRequestStatus = async (id, status) => {
   });
   return res.data;
 };
+
+// ── EPC & Franchise Combined Supplier Payment ─────────────────────────────────
+
+export const getPendingEpcFranchiseOrders = async () => {
+  const res = await axios.get(`${API_URL}/accounts/pending-epc-franchise-orders`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const createCombinedSupplierPayment = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/combined-supplier-payment`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};

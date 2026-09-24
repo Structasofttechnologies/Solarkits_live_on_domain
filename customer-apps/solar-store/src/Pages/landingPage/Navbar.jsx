@@ -448,20 +448,20 @@ export default function Navbar() {
               </button>
 
               {/* Brand Partners Link */}
-              <button
+              {/* <button
                 onClick={() => handleNavClick("#brands")}
                 className="whitespace-nowrap shrink-0 inline-flex items-center px-2.5 xl:px-3.5 py-2 text-gray-700 text-xs xl:text-sm font-semibold rounded-xl hover:text-primary-600 hover:bg-primary-50/80 transition-all duration-150 cursor-pointer"
               >
                 <span className="whitespace-nowrap">Brand Partners</span>
-              </button>
+              </button> */}
 
               {/* Customer Reviews Link */}
-              <button
+              {/* <button
                 onClick={() => handleNavClick("#testimonials")}
                 className="whitespace-nowrap shrink-0 inline-flex items-center px-2.5 xl:px-3.5 py-2 text-gray-700 text-xs xl:text-sm font-semibold rounded-xl hover:text-primary-600 hover:bg-primary-50/80 transition-all duration-150 cursor-pointer"
               >
                 <span className="whitespace-nowrap">Customer Reviews</span>
-              </button>
+              </button> */}
             </nav>
 
             {/* 3. Right Action Buttons */}
