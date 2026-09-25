@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSelector } from "react-redux";
 import {
   FaCreditCard, FaSearch, FaSpinner,
   FaCheckCircle, FaHistory,
-  FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaFilter,
+  FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaChevronUp, FaFilter,
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
   FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
   FaStore
@@ -303,8 +303,9 @@ function CustomerOrdersTable({
                       className={`mt-1 w-4 h-4 rounded border-border ${themeAccent} cursor-pointer flex-shrink-0`}
                     />
                     <div
-                      className="flex-1 grid grid-cols-5 gap-4 min-w-0 cursor-pointer"
+                      className="flex-1 grid grid-cols-5 gap-4 min-w-0 cursor-pointer select-none"
                       onClick={() => setExpandedOrderId(isExpanded ? null : orderId)}
+                      title={isExpanded ? "Click to collapse / close order" : "Click to view breakdown & images"}
                     >
                       {/* Order Number + Type */}
                       <div>
@@ -372,28 +373,46 @@ function CustomerOrdersTable({
                         <div className="text-[9px] text-text-muted mt-1.5">{order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}</div>
                       </div>
                     </div>
-                    {/* Expand button */}
+                    {/* Expand / Collapse button */}
                     <button
                       type="button"
-                      onClick={() => setExpandedOrderId(isExpanded ? null : orderId)}
-                      className="flex-shrink-0 text-text-muted hover:text-primary transition-colors p-1 cursor-pointer"
-                      title={isExpanded ? "Collapse Details" : "View Breakdown & Images"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedOrderId(isExpanded ? null : orderId);
+                      }}
+                      className={`flex-shrink-0 p-1.5 rounded-lg border transition-all cursor-pointer ${
+                        isExpanded
+                          ? "text-primary border-primary/30 bg-primary/10 hover:bg-primary/20"
+                          : "text-text-muted hover:text-primary border-transparent hover:border-border hover:bg-surface-hover"
+                      }`}
+                      title={isExpanded ? "Collapse / Close Order" : "View Breakdown & Images"}
                     >
-                      <FaChevronDown className={`text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      <FaChevronDown className={`text-xs transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
                     </button>
                   </div>
 
                   {/* Expanded item details with rich BOM breakdown & product images */}
                   {isExpanded && (
                     <div className="px-6 py-5 bg-surface-hover/30 border-t border-border space-y-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
                         <div className="text-[11px] font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
                           <FaBoxOpen className="text-primary text-xs" />
                           Order Items &amp; Complete Kit Component Breakdown
                         </div>
-                        <span className="text-[10px] font-bold text-text-muted">
-                          {(order.items || []).length} item{(order.items || []).length !== 1 ? "s" : ""}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold text-text-muted">
+                            {(order.items || []).length} item{(order.items || []).length !== 1 ? "s" : ""}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedOrderId(null)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-text-secondary hover:text-danger bg-surface border border-border hover:border-danger/30 hover:bg-danger/5 transition-all cursor-pointer shadow-xs"
+                            title="Close Order Tab"
+                          >
+                            <FaTimes size={10} className="text-danger" />
+                            <span>Close Order Tab</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="space-y-4">
@@ -544,6 +563,21 @@ function CustomerOrdersTable({
                             </div>
                           );
                         })}
+                      </div>
+
+                      {/* Bottom close bar */}
+                      <div className="pt-2 flex items-center justify-between border-t border-border/60">
+                        <span className="text-[10px] text-text-muted font-medium">
+                          Viewing itemized Bill of Materials &amp; equipment specifications for order <strong className="text-text-primary font-bold">{order.order_number}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedOrderId(null)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-text-secondary hover:text-text-primary bg-surface border border-border hover:bg-surface-hover hover:border-primary/40 transition-all cursor-pointer shadow-xs"
+                        >
+                          <FaChevronUp size={11} className="text-primary" />
+                          <span>Close / Collapse Tab</span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -722,12 +756,14 @@ export default function Payments() {
   const [expandedOrderId, setExpandedOrderId] = useState(null);        // expanded order detail row
   const [awaitingSubFilter, setAwaitingSubFilter] = useState("all");    // "all" | "customer_orders" | "supplier_pos"
 
-  // Auto-expand the first pending customer order so the user sees the panels/inverter details immediately
+  // Auto-expand the first pending customer order only once upon initial data load
+  const hasAutoExpandedRef = useRef(false);
   useEffect(() => {
-    if (pendingEpcOrders.length > 0 && !expandedOrderId) {
+    if (pendingEpcOrders.length > 0 && !hasAutoExpandedRef.current) {
+      hasAutoExpandedRef.current = true;
       setExpandedOrderId(pendingEpcOrders[0].id || pendingEpcOrders[0]._id);
     }
-  }, [pendingEpcOrders, expandedOrderId]);
+  }, [pendingEpcOrders]);
 
   const pendingPOCount = useMemo(() => {
     return purchaseOrders.filter(po => po.status === "pending" || po.status === "accepted" || po.status === "invoiced").length;
