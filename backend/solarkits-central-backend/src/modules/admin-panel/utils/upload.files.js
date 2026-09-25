@@ -145,11 +145,32 @@ function upload_files(upload_dir, max_size_mb, field_name, files_length) {
         }
         next();
       } catch (uploadErr) {
-        console.error("Cloudinary upload error:", uploadErr.message || uploadErr);
-        return res.status(500).json({
-          status: "error",
-          message: "File upload to cloud storage failed",
-        });
+        console.error("Cloudinary upload error, attempting local storage fallback:", uploadErr.message || uploadErr);
+        try {
+          const fs = require("fs");
+          const targetDir = path.join(__dirname, "../../../../", upload_dir);
+          if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+          }
+          for (const file of req.files) {
+            if (!file.path) {
+              const unique = Date.now() + "_" + Math.round(Math.random() * 1e9);
+              const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+              const filename = `FILE_${unique}${ext}`;
+              const filePath = path.join(targetDir, filename);
+              fs.writeFileSync(filePath, file.buffer);
+              file.path = `/${upload_dir.replace(/\\/g, "/")}/${filename}`.replace(/\/+/g, "/");
+              file.filename = filename;
+            }
+          }
+          next();
+        } catch (localErr) {
+          console.error("Local disk upload fallback error:", localErr.message);
+          return res.status(500).json({
+            status: "error",
+            message: "File upload to storage failed",
+          });
+        }
       }
     });
   };
@@ -208,11 +229,32 @@ function upload_any_files(upload_dir, max_size_mb) {
         }
         next();
       } catch (uploadErr) {
-        console.error("Cloudinary upload error:", uploadErr.message || uploadErr);
-        return res.status(500).json({
-          status: "error",
-          message: "File upload to cloud storage failed",
-        });
+        console.error("Cloudinary upload error, attempting local storage fallback:", uploadErr.message || uploadErr);
+        try {
+          const fs = require("fs");
+          const targetDir = path.join(__dirname, "../../../../", upload_dir);
+          if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+          }
+          for (const file of req.files) {
+            if (!file.path) {
+              const unique = Date.now() + "_" + Math.round(Math.random() * 1e9);
+              const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+              const filename = `FILE_${unique}${ext}`;
+              const filePath = path.join(targetDir, filename);
+              fs.writeFileSync(filePath, file.buffer);
+              file.path = `/${upload_dir.replace(/\\/g, "/")}/${filename}`.replace(/\/+/g, "/");
+              file.filename = filename;
+            }
+          }
+          next();
+        } catch (localErr) {
+          console.error("Local disk upload fallback error:", localErr.message);
+          return res.status(500).json({
+            status: "error",
+            message: "File upload to storage failed",
+          });
+        }
       }
     });
   };

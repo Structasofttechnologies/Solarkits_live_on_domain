@@ -60,10 +60,19 @@ export default function HeroSection({ heroConfig }) {
     }
   };
 
+  const resolveHeroImage = (src, fallback) => {
+    if (!src) return fallback;
+    if (typeof src === "string" && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:"))) {
+      return src;
+    }
+    const apiBase = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") || import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+    return `${apiBase}${src.startsWith("/") ? "" : "/"}${src}`;
+  };
+
   return (
     <section id="hero" className="relative w-full">
       <Swiper
-        key={slides.map((s, i) => `${s.id || i}-${s.title}`).join('_')}
+        key={slides.map((s, i) => `${s.id || i}-${s.title}-${s.image || ''}-${s.image_opacity || ''}`).join('_')}
         modules={[Autoplay, Pagination, EffectFade]}
         effect="fade"
         autoplay={{ delay: 5000, disableOnInteraction: false, pauseOnMouseEnter: false }}
@@ -77,9 +86,17 @@ export default function HeroSection({ heroConfig }) {
             <div className={`relative w-full h-full bg-gradient-to-r ${slide.bg || "from-navy via-primary-700 to-primary-500"}`}>
               {/* Background image */}
               <img
-                src={slide.image || heroImg}
-                alt="Solar Home"
-                className="absolute inset-0 w-full h-full object-cover object-center opacity-30"
+                src={resolveHeroImage(slide.image || heroConfig?.bg_image, heroImg)}
+                alt={slide.title ? slide.title.replace(/\n/g, " ") : "Solar Kits"}
+                style={{
+                  opacity: slide.image_opacity ? Number(slide.image_opacity) / 100 : 0.3,
+                }}
+                className="absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-500"
+                onError={(e) => {
+                  if (e.target.src !== heroImg) {
+                    e.target.src = heroImg;
+                  }
+                }}
               />
               {/* Overlay */}
               <div className="hero-overlay absolute inset-0" />

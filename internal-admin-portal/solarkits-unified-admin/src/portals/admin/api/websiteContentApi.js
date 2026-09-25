@@ -45,3 +45,17 @@ export const resetWebsiteContent = async (websiteKey = "franchise") => {
   );
   return res.data;
 };
+
+export const uploadWebsiteImage = async (formData) => {
+  const res = await axios.post(
+    buildUrl(`/website-content/upload-image`, "ADM_WEBSITE_CONFIG", "edit"),
+    formData,
+    {
+      headers: {
+        ...authHeaderObj(),
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return res.data;
+};

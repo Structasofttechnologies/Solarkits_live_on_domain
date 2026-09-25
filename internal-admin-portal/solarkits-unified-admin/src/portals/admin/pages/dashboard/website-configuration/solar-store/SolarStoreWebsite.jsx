@@ -25,351 +25,89 @@ import {
   FiAward,
   FiShoppingCart,
   FiTag,
+  FiUploadCloud,
+  FiImage,
 } from "react-icons/fi";
 import { FaStore, FaBoxOpen, FaHandshake, FaComments } from "react-icons/fa";
 import {
   getWebsiteContent,
   updateWebsiteContent,
   resetWebsiteContent,
+  uploadWebsiteImage,
 } from "../../../../api/websiteContentApi";
 import Loader from "../../../../components/Loader";
 
 const DEFAULT_SOLAR_STORE_STATE = {
   hero: {
     enabled: true,
-    slides: [
-      {
-        id: 1,
-        tag: "🌞 India's #1 Solar Kits Marketplace",
-        title: "Complete Solar Kits\nFor Homes & Business",
-        subtitle: "Certified pre-configured & custom solar kits — panels, inverter, mounting structure & BOS in one box. Save up to ₹78,000 with PM Surya Ghar Subsidy.",
-        cta1: { label: "Shop Solar Kits", href: "#products" },
-        cta2: { label: "Calculate Savings", href: "#calculator" },
-        bg: "from-navy via-primary-700 to-primary-500",
-      },
-      {
-        id: 2,
-        tag: "💰 PM Surya Ghar Yojana",
-        title: "Get Govt. Subsidy\nUp to ₹78,000 on Solar Kits",
-        subtitle: "Under PM Surya Ghar Muft Bijli Yojana, install 1kW-3kW Rooftop Solar Kits with verified subsidy approval. Apply now through SolarKits!",
-        cta1: { label: "Check Subsidy Kits", href: "#subsidy" },
-        cta2: { label: "Talk to Expert", href: "#contact" },
-        bg: "from-[#0D3B6E] via-[#1565C0] to-[#29ABE2]",
-      },
-      {
-        id: 3,
-        tag: "⚡ Complete Plug & Play Solar Kits",
-        title: "Everything You Need\nin One Box",
-        subtitle: "From 1kW Home Kits to 100kW Commercial Kits — our complete kits include high-efficiency panels, inverter, mounting structures & AC/DC BOS. Fast delivery across India!",
-        cta1: { label: "View Solar Kits", href: "#products" },
-        cta2: { label: "Get Free Quote", href: "#quote" },
-        bg: "from-[#0D3B6E] to-primary-600",
-      },
-    ],
-    trust_badges: ["✅ BIS Certified", "📋 GST Invoice", "🚚 Free Delivery", "⭐ 4.8 Rating"],
-    stats: [
-      { val: "10,000+", label: "Happy Customers" },
-      { val: "50 MW+", label: "Installed Capacity" },
-    ],
+    bg_image: "",
+    slides: [],
+    trust_badges: [],
+    stats: [],
   },
   categories: {
     enabled: true,
-    badge_text: "Browse Solar Kit Categories",
-    heading: "Find the Right Solar",
-    highlight_heading: "Kit Solution",
-    subtitle: "Explore our certified range of complete solar kits designed for homes, businesses, farms and commercial projects.",
-    items: [
-      {
-        id: 1,
-        name: "On-Grid Solar Kits",
-        desc: "Grid-tied rooftop solar kits from 1kW to 10kW with net-metering & PM Surya Ghar subsidy.",
-        count: "45+ Kits",
-        label: "On-Grid",
-        href: "#products",
-      },
-      {
-        id: 2,
-        name: "Off-Grid Solar Kits",
-        desc: "Battery-backed complete solar kits for 24x7 independent power without grid reliance.",
-        count: "30+ Kits",
-        label: "Off-Grid",
-        href: "#products",
-      },
-      {
-        id: 3,
-        name: "Hybrid Solar Kits",
-        desc: "Best of both: Grid connectivity with battery backup for uninterrupted power & maximum savings.",
-        count: "25+ Kits",
-        label: "Hybrid",
-        href: "#products",
-      },
-      {
-        id: 4,
-        name: "Solar Custom Kits",
-        desc: "Pre-wired AC/DC distribution boxes, lightning arrestors, earthing kits and custom combos.",
-        count: "50+ Kits",
-        label: "Custom Kits",
-        href: "#products",
-      },
-    ],
-    quality_note_1: "All products are quality verified",
-    quality_note_2: "Pan-India delivery and installation support",
+    badge_text: "",
+    heading: "",
+    highlight_heading: "",
+    subtitle: "",
+    items: [],
+    quality_note_1: "",
+    quality_note_2: "",
   },
   featured_products: {
     enabled: true,
-    badge_text: "Most Popular",
-    heading: "Bestselling Solar Kits",
-    subtitle: "Explore our most trusted pre-configured solar combo kits selected for high performance, durability and maximum subsidy benefits.",
-    view_all_text: "View All Solar Kits",
-    view_all_href: "#all-products",
-    items: [
-      {
-        id: 1,
-        name: "SolarKits 1kW Smart On-Grid Home Kit",
-        category: "On-Grid Solar Kit",
-        badge: "Subsidy Eligible",
-        badgeColor: "bg-green-500 text-white",
-        rating: 4.8,
-        reviews: 234,
-        price: 48000,
-        mrp: 65000,
-        discount: 26,
-        watt: "1kW Kit",
-        brand: "SolarKits Prime",
-      },
-      {
-        id: 2,
-        name: "SolarKits 2kW Rooftop Solar Combo Kit",
-        category: "On-Grid Solar Kit",
-        badge: "PM Surya Ghar Ready",
-        badgeColor: "bg-sky-500 text-white",
-        rating: 4.9,
-        reviews: 189,
-        price: 95000,
-        mrp: 125000,
-        discount: 24,
-        watt: "2kW Kit",
-        brand: "SolarKits Prime",
-      },
-      {
-        id: 3,
-        name: "SolarKits 3kW Complete Home Combo Kit",
-        category: "On-Grid Solar Kit",
-        badge: "🔥 Bestseller",
-        badgeColor: "bg-red-500 text-white",
-        rating: 4.9,
-        reviews: 312,
-        price: 145000,
-        mrp: 195000,
-        discount: 26,
-        watt: "3kW Kit",
-        brand: "SolarKits Prime",
-      },
-      {
-        id: 4,
-        name: "SolarKits 5kW Heavy Duty Hybrid Solar Kit",
-        category: "Hybrid Solar Kit",
-        badge: "Battery Backup",
-        badgeColor: "bg-orange-500 text-white",
-        rating: 4.8,
-        reviews: 156,
-        price: 265000,
-        mrp: 340000,
-        discount: 22,
-        watt: "5kW Kit",
-        brand: "SolarKits Ultra",
-      },
-      {
-        id: 5,
-        name: "SolarKits 10kW Commercial 3-Phase Kit",
-        category: "Commercial Solar Kit",
-        badge: "High ROI",
-        badgeColor: "bg-blue-600 text-white",
-        rating: 4.8,
-        reviews: 98,
-        price: 490000,
-        mrp: 620000,
-        discount: 21,
-        watt: "10kW Kit",
-        brand: "SolarKits Pro",
-      },
-      {
-        id: 6,
-        name: "SolarKits Universal Complete Solar BOS Kit",
-        category: "Solar BOS Kit",
-        badge: "Plug & Play",
-        badgeColor: "bg-purple-500 text-white",
-        rating: 4.7,
-        reviews: 142,
-        price: 18500,
-        mrp: 24000,
-        discount: 23,
-        watt: "Universal BOS",
-        brand: "SolarKits",
-      },
-    ],
+    badge_text: "",
+    heading: "",
+    subtitle: "",
+    view_all_text: "",
+    view_all_href: "",
+    items: [],
   },
   why_choose: {
     enabled: true,
-    badge_text: "Why SolarKits?",
-    heading: "The SolarKits Advantage",
-    subtitle: "We don't just sell solar — we deliver a complete, worry-free solar experience",
-    items: [
-      {
-        emoji: "🏅",
-        title: "BIS & MNRE Certified",
-        desc: "All products are certified by Bureau of Indian Standards and Ministry of New & Renewable Energy.",
-        color: "bg-blue-50 border-blue-100",
-        iconBg: "bg-primary-100",
-      },
-      {
-        emoji: "🚚",
-        title: "Free Pan-India Delivery",
-        desc: "We deliver to 18,000+ pincodes across India. Free shipping on orders above ₹5,000.",
-        color: "bg-orange-50 border-orange-100",
-        iconBg: "bg-accent-50",
-      },
-      {
-        emoji: "🛡️",
-        title: "25-Year Warranty",
-        desc: "Industry-leading 25-year performance warranty on solar panels + 5-year product warranty.",
-        color: "bg-green-50 border-green-100",
-        iconBg: "bg-green-100",
-      },
-      {
-        emoji: "⚙️",
-        title: "Expert Installation",
-        desc: "Trained solar engineers install your system within 48–72 hours of delivery. MNRE empanelled.",
-        color: "bg-purple-50 border-purple-100",
-        iconBg: "bg-purple-100",
-      },
-      {
-        emoji: "💰",
-        title: "Easy EMI Options",
-        desc: "0% EMI available for 6/12 months on orders above ₹25,000 via top bank credit cards.",
-        color: "bg-sky-50 border-sky-100",
-        iconBg: "bg-sky-100",
-      },
-      {
-        emoji: "📋",
-        title: "GST Invoice & Tax Benefits",
-        desc: "Get official GST invoices for every purchase. Businesses can claim input tax credit.",
-        color: "bg-teal-50 border-teal-100",
-        iconBg: "bg-teal-100",
-      },
-    ],
+    badge_text: "",
+    heading: "",
+    subtitle: "",
+    items: [],
   },
   brands: {
     enabled: true,
-    badge_text: "Our Brand Partners",
-    heading: "Top Solar Kit Brand Partners",
-    subtitle: "Explore certified Tier-1 component manufacturers integrated into SolarKits complete solar solutions, selected for quality, efficiency and long-term performance.",
-    cta_label: "Explore All Brands",
-    cta_href: "#all-brands",
-    items: [
-      { id: 1, name: "Adani Solar", type: "Solar Kit Partner", description: "Tier-1 high-efficiency Mono PERC solar modules" },
-      { id: 2, name: "Waaree", type: "Solar Kit Partner", description: "Reliable mono and bifacial solar kit modules" },
-      { id: 3, name: "Tata Power Solar", type: "Solar Kit Partner", description: "Trusted residential and commercial kit panels" },
-      { id: 4, name: "Vikram Solar", type: "Solar Kit Partner", description: "Premium high-performance solar kit modules" },
-      { id: 5, name: "Luminous", type: "Solar Kit Partner", description: "Complete rooftop solar kit power solutions" },
-      { id: 6, name: "Loom Solar", type: "Solar Kit Partner", description: "Advanced rooftop solar kit technology" },
-      { id: 7, name: "RenewSys", type: "Solar Kit Partner", description: "Durable and efficient PV solar kit modules" },
-      { id: 8, name: "Goldi Solar", type: "Solar Kit Partner", description: "Quality-certified Indian solar kit modules" },
-      { id: 9, name: "Solis", type: "Solar Kit Partner", description: "Smart on-grid and hybrid solar kit power systems" },
-      { id: 10, name: "Growatt", type: "Solar Kit Partner", description: "Intelligent residential solar kit power units" },
-      { id: 11, name: "Microtek", type: "Solar Kit Partner", description: "Reliable solar kit power conditioning units" },
-      { id: 12, name: "UTL Solar", type: "Solar Kit Partner", description: "Complete off-grid and hybrid solar kit packages" },
-    ],
+    badge_text: "",
+    heading: "",
+    subtitle: "",
+    cta_label: "",
+    cta_href: "",
+    items: [],
   },
   testimonials: {
     enabled: true,
-    badge_text: "Customer Stories",
-    heading: "Loved by Solar Customers",
-    subtitle: "Real experiences from families and businesses that switched to clean, affordable solar energy.",
-    overall_rating: "4.8",
-    review_count: "Based on 2,400+ reviews",
-    platforms: [
-      { platform: "Google", rating: "4.9", reviews: "1.2K reviews", color: "bg-blue-50 text-blue-600" },
-      { platform: "Trustpilot", rating: "4.7", reviews: "520 reviews", color: "bg-green-50 text-green-600" },
-      { platform: "Amazon", rating: "4.8", reviews: "410 reviews", color: "bg-orange-50 text-orange-600" },
-      { platform: "Flipkart", rating: "4.8", reviews: "270 reviews", color: "bg-sky-50 text-sky-600" },
-    ],
-    items: [
-      {
-        id: 1,
-        name: "Ramesh Sharma",
-        city: "Jaipur, Rajasthan",
-        role: "Homeowner",
-        rating: 5,
-        review: "We installed a 3kW system through SolarKits. The whole process from ordering to installation was super smooth. My electricity bill dropped from ₹2,800 to just ₹120! Best investment ever.",
-        system: "3kW On-Grid System",
-        savings: "₹2,680/mo",
-        initials: "RS",
-      },
-      {
-        id: 2,
-        name: "Priya Menon",
-        city: "Coimbatore, Tamil Nadu",
-        role: "Factory Owner",
-        rating: 5,
-        review: "Ordered 50 panels for our factory rooftop. Delivery was on time and the panels are top quality — all MNRE certified. Our energy costs have fallen by 65%. Highly recommend SolarKits!",
-        system: "25kW Commercial System",
-        savings: "₹42,000/mo",
-        initials: "PM",
-      },
-      {
-        id: 3,
-        name: "Ajay Verma",
-        city: "Lucknow, Uttar Pradesh",
-        role: "Farmer",
-        rating: 5,
-        review: "Maine 5kW off-grid system lagaya apne khet ke liye. Ab pump chalta hai bina bijli bill ke. SolarKits ka support team bahut helpful tha. Thank you!",
-        system: "5kW Off-Grid System",
-        savings: "₹5,200/mo",
-        initials: "AV",
-      },
-      {
-        id: 4,
-        name: "Sunita Patel",
-        city: "Surat, Gujarat",
-        role: "Homeowner",
-        rating: 4,
-        review: "Got subsidy of ₹78,000 with help from SolarKits team. The installation team was professional and completed the job in just 2 days. Very satisfied with the quality and service.",
-        system: "4kW On-Grid System",
-        savings: "₹3,500/mo",
-        initials: "SP",
-      },
-      {
-        id: 5,
-        name: "Mohit Gupta",
-        city: "Pune, Maharashtra",
-        role: "IT Professional",
-        rating: 5,
-        review: "The SolarKits app made it so easy to track my production. I'm producing 18–20 units daily. The 25-year warranty gives me complete peace of mind. Great product, great service!",
-        system: "3kW Hybrid System",
-        savings: "₹2,900/mo",
-        initials: "MG",
-      },
-    ],
+    badge_text: "",
+    heading: "",
+    subtitle: "",
+    overall_rating: "",
+    review_count: "",
+    platforms: [],
+    items: [],
   },
   footer: {
     consultation_box: {
-      badge: "Free solar consultation",
-      heading: "Ready to switch to solar?",
-      subtitle: "Share your pincode and our expert will suggest the right solar kit.",
-      button_text: "Get free quote",
+      badge: "",
+      heading: "",
+      subtitle: "",
+      button_text: "",
     },
-    description: "Quality solar kits, honest guidance and reliable support for homes, farms and businesses across India.",
-    phone: "1800-SOLAR-KIT",
-    email: "support@solarkits.in",
-    address: "Mumbai, Maharashtra, India",
-    shop_links: ["On-Grid Solar Kits", "Off-Grid Solar Kits", "Hybrid Solar Kits", "Commercial Solar Kits"],
-    help_links: ["About Us", "Contact Us", "Installation Guide", "Product Warranty"],
-    policy_links: ["Privacy", "Terms", "Returns", "Shipping"],
-    copyright_text: "© 2026 SolarKits™ Pvt. Ltd. All Rights Reserved.",
+    description: "",
+    phone: "",
+    email: "",
+    address: "",
+    shop_links: [],
+    help_links: [],
+    policy_links: [],
+    copyright_text: "",
     floating_whatsapp: {
-      number: "919876543210",
-      label: "Chat on WhatsApp",
+      number: "",
+      label: "",
     },
   },
 };
@@ -380,6 +118,8 @@ export default function SolarStoreWebsite() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState(null);
+  const [uploadingSlideIdx, setUploadingSlideIdx] = useState(null);
+  const [uploadingGlobalBg, setUploadingGlobalBg] = useState(false);
 
   const fetchContent = useCallback(async () => {
     setLoading(true);
@@ -389,14 +129,10 @@ export default function SolarStoreWebsite() {
         setSections({
           ...DEFAULT_SOLAR_STORE_STATE,
           ...res.data.sections,
-          featured_products: {
-            ...DEFAULT_SOLAR_STORE_STATE.featured_products,
-            ...(res.data.sections.featured_products || {}),
-          },
         });
       }
     } catch (err) {
-      console.warn("Could not load from API, using default store data:", err);
+      console.warn("Could not load from API, using clean default store data:", err);
     } finally {
       setLoading(false);
     }
@@ -441,7 +177,7 @@ export default function SolarStoreWebsite() {
     try {
       const res = await resetWebsiteContent("solar-store");
       if (res && res.status === "success") {
-        setSections(DEFAULT_SOLAR_STORE_STATE);
+        setSections(res.data?.sections || DEFAULT_SOLAR_STORE_STATE);
         setAlert({ type: "success", message: "Solar Store reset to factory defaults successfully!" });
       }
     } catch (err) {
@@ -449,6 +185,85 @@ export default function SolarStoreWebsite() {
     } finally {
       setSaving(false);
       setTimeout(() => setAlert(null), 5000);
+    }
+  };
+
+  // ── Slide Background Image Upload Handlers ─────────────────────────────────
+  const handleSlideImageUpload = async (sIdx, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setAlert({ type: "error", message: "File size exceeds 10MB limit." });
+      return;
+    }
+
+    setUploadingSlideIdx(sIdx);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await uploadWebsiteImage(formData);
+      if (res && res.status === "success" && res.data?.url) {
+        handleUpdateSlide(sIdx, "image", res.data.url);
+        setAlert({
+          type: "success",
+          message: `Slide #${sIdx + 1} background image uploaded! Remember to click "Save All Changes" to publish.`,
+        });
+      } else {
+        throw new Error(res?.message || "Upload failed");
+      }
+    } catch (err) {
+      console.error("Slide image upload failed:", err);
+      setAlert({
+        type: "error",
+        message: "Image upload failed: " + (err.response?.data?.message || err.message),
+      });
+    } finally {
+      setUploadingSlideIdx(null);
+      e.target.value = "";
+    }
+  };
+
+  const handleGlobalBgUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setAlert({ type: "error", message: "File size exceeds 10MB limit." });
+      return;
+    }
+
+    setUploadingGlobalBg(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const res = await uploadWebsiteImage(formData);
+      if (res && res.status === "success" && res.data?.url) {
+        setSections((prev) => ({
+          ...prev,
+          hero: {
+            ...prev.hero,
+            bg_image: res.data.url,
+          },
+        }));
+        setAlert({
+          type: "success",
+          message: 'Global hero background image uploaded! Remember to click "Save All Changes" to publish.',
+        });
+      } else {
+        throw new Error(res?.message || "Upload failed");
+      }
+    } catch (err) {
+      console.error("Global background upload failed:", err);
+      setAlert({
+        type: "error",
+        message: "Image upload failed: " + (err.response?.data?.message || err.message),
+      });
+    } finally {
+      setUploadingGlobalBg(false);
+      e.target.value = "";
     }
   };
 
@@ -462,6 +277,8 @@ export default function SolarStoreWebsite() {
       cta1: { label: "Shop Now", href: "#products" },
       cta2: { label: "Learn More", href: "#about" },
       bg: "from-[#0D3B6E] via-[#1565C0] to-[#29ABE2]",
+      image: "",
+      image_opacity: "30",
     };
     setSections((prev) => ({
       ...prev,
@@ -823,6 +640,73 @@ export default function SolarStoreWebsite() {
             </button>
           </div>
 
+          {/* Global Fallback Hero Background Banner */}
+          <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/60 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="text-xs font-bold text-text-primary flex items-center gap-2">
+                  <FiImage className="text-primary" size={15} />
+                  <span>Default Hero Background (Global fallback for all slides)</span>
+                </h4>
+                <p className="text-[11px] text-text-secondary mt-0.5">
+                  Applies automatically to any carousel slide that does not have an individual custom background image.
+                </p>
+              </div>
+              {sections.hero?.bg_image && (
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 shrink-0">
+                  Global Image Configured
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="text"
+                value={sections.hero?.bg_image || ""}
+                onChange={(e) =>
+                  setSections((prev) => ({
+                    ...prev,
+                    hero: { ...prev.hero, bg_image: e.target.value },
+                  }))
+                }
+                placeholder="Global background image URL (e.g. https://... or Cloudinary link)"
+                className="flex-1 px-3 py-2 bg-surface border border-border rounded-lg text-xs text-text-primary focus:border-primary outline-none"
+              />
+
+              <label
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-surface border border-border hover:border-primary text-text-primary text-xs font-bold cursor-pointer transition-all shadow-xs shrink-0 ${
+                  uploadingGlobalBg ? "opacity-60 pointer-events-none" : ""
+                }`}
+              >
+                <FiUploadCloud size={14} className={uploadingGlobalBg ? "animate-bounce text-primary" : "text-primary"} />
+                <span>{uploadingGlobalBg ? "Uploading..." : "Upload Global Background"}</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  className="hidden"
+                  disabled={uploadingGlobalBg}
+                  onChange={handleGlobalBgUpload}
+                />
+              </label>
+
+              {sections.hero?.bg_image && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSections((prev) => ({
+                      ...prev,
+                      hero: { ...prev.hero, bg_image: "" },
+                    }))
+                  }
+                  className="p-2 rounded-lg border border-border text-red-500 hover:bg-red-50 hover:border-red-200 transition-all cursor-pointer"
+                  title="Remove global fallback"
+                >
+                  <FiTrash2 size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Slides List */}
           <div className="space-y-4">
             <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
@@ -873,6 +757,118 @@ export default function SolarStoreWebsite() {
                         placeholder="from-navy via-primary-700 to-primary-500"
                         className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-xs font-mono text-text-secondary"
                       />
+                    </div>
+
+                    {/* Slide Background Image Control */}
+                    <div className="md:col-span-2 p-3.5 rounded-xl border border-border bg-surface space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-text-primary flex items-center gap-2">
+                          <FiImage className="text-primary" size={16} />
+                          <span>Slide Background Image</span>
+                        </label>
+                        {slide.image ? (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20">
+                            Custom Image Set
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-text-secondary bg-surface-hover px-2 py-0.5 rounded-md border border-border">
+                            Using Default Hero Image
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        {/* Thumbnail Preview */}
+                        <div className="relative w-32 h-20 rounded-lg overflow-hidden border border-border bg-slate-900 shrink-0 group shadow-xs">
+                          {slide.image ? (
+                            <img
+                              src={slide.image}
+                              alt="Slide Background Preview"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.src = "https://placehold.co/600x400?text=Preview+Error";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-text-secondary text-[10px] p-2 text-center bg-surface-hover">
+                              <FiImage size={20} className="mb-1 opacity-40 text-primary" />
+                              <span className="text-[9px] font-medium">Default Solar Villa</span>
+                            </div>
+                          )}
+                          {slide.image && (
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <a
+                                href={slide.image}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-white text-[10px] font-bold bg-black/70 px-2 py-1 rounded flex items-center gap-1 hover:bg-black"
+                              >
+                                <FiEye size={12} /> Preview
+                              </a>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* URL input and upload button */}
+                        <div className="flex-1 w-full space-y-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={slide.image || ""}
+                              onChange={(e) => handleUpdateSlide(sIdx, "image", e.target.value)}
+                              placeholder="Paste image URL (https://... or Cloudinary link) or click Upload"
+                              className="flex-1 px-3 py-2 bg-surface border border-border rounded-lg text-xs text-text-primary focus:border-primary outline-none"
+                            />
+
+                            <label
+                              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-primary text-white hover:opacity-95 text-xs font-bold cursor-pointer transition-all shadow-xs shrink-0 ${
+                                uploadingSlideIdx === sIdx ? "opacity-60 pointer-events-none" : ""
+                              }`}
+                            >
+                              <FiUploadCloud size={14} className={uploadingSlideIdx === sIdx ? "animate-bounce" : ""} />
+                              <span>{uploadingSlideIdx === sIdx ? "Uploading..." : "Upload Image"}</span>
+                              <input
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp,image/jpg"
+                                className="hidden"
+                                disabled={uploadingSlideIdx === sIdx}
+                                onChange={(e) => handleSlideImageUpload(sIdx, e)}
+                              />
+                            </label>
+
+                            {slide.image && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateSlide(sIdx, "image", "")}
+                                className="p-2 rounded-lg border border-border text-red-500 hover:bg-red-50 hover:border-red-200 transition-all cursor-pointer"
+                                title="Remove custom image (reset to default)"
+                              >
+                                <FiTrash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-text-secondary">
+                            <span>Recommended: 1920x800px or 16:9 banner (JPG, PNG, WEBP).</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[10px]">Image Opacity:</span>
+                              <select
+                                value={slide.image_opacity || "30"}
+                                onChange={(e) => handleUpdateSlide(sIdx, "image_opacity", e.target.value)}
+                                className="bg-surface border border-border rounded px-2 py-1 text-xs text-text-primary font-semibold"
+                              >
+                                <option value="15">15% (Very Subtle)</option>
+                                <option value="20">20%</option>
+                                <option value="30">30% (Recommended)</option>
+                                <option value="40">40%</option>
+                                <option value="50">50% (Balanced)</option>
+                                <option value="60">60%</option>
+                                <option value="80">80% (Vibrant)</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="md:col-span-2">
@@ -1004,6 +1000,19 @@ export default function SolarStoreWebsite() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Hero Quick Save Button */}
+          <div className="pt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-primary text-white text-xs font-bold shadow-md shadow-primary/20 hover:opacity-95 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <FiSave size={14} />
+              <span>{saving ? "Saving Changes..." : "Save Hero Carousel & Background"}</span>
+            </button>
           </div>
         </div>
       )}

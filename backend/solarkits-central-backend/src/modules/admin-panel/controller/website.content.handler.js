@@ -157,6 +157,8 @@ const DEFAULT_SOLAR_STORE_CONTENT = {
           cta1: { label: "Shop Solar Kits", href: "#products" },
           cta2: { label: "Calculate Savings", href: "#calculator" },
           bg: "from-navy via-primary-700 to-primary-500",
+          image: "",
+          image_opacity: "30",
         },
         {
           id: 2,
@@ -166,6 +168,8 @@ const DEFAULT_SOLAR_STORE_CONTENT = {
           cta1: { label: "Check Subsidy Kits", href: "#subsidy" },
           cta2: { label: "Talk to Expert", href: "#contact" },
           bg: "from-[#0D3B6E] via-[#1565C0] to-[#29ABE2]",
+          image: "",
+          image_opacity: "30",
         },
         {
           id: 3,
@@ -175,6 +179,8 @@ const DEFAULT_SOLAR_STORE_CONTENT = {
           cta1: { label: "View Solar Kits", href: "#products" },
           cta2: { label: "Get Free Quote", href: "#quote" },
           bg: "from-[#0D3B6E] to-primary-600",
+          image: "",
+          image_opacity: "30",
         },
       ],
       trust_badges: ["✅ BIS Certified", "📋 GST Invoice", "🚚 Free Delivery", "⭐ 4.8 Rating"],
@@ -1032,6 +1038,37 @@ exports.get_public_solarkits_content = async (req, res) => {
       status: 'success',
       data: DEFAULT_SOLARKITS_MAIN_CONTENT.sections,
       fallback: true,
+    });
+  }
+};
+
+// ── Upload Website Image (Hero background, Banners, Content Media) ───────────
+exports.upload_image = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'No image file uploaded',
+      });
+    }
+
+    const file = req.files[0];
+    const imageUrl = file.path;
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Website image uploaded successfully',
+      data: {
+        url: imageUrl,
+        filename: file.filename,
+      },
+    });
+  } catch (error) {
+    console.error('upload_image error:', error);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to upload website image',
+      error: error.message,
     });
   }
 };
