@@ -12,6 +12,8 @@ router.get('/user-modules', check_auth, root_handler.get_user_modules);
 router.get('/geography/countries', check_auth, root_handler.get_active_countries);
 router.get('/geography/states', check_auth, root_handler.get_active_states);
 router.get('/geography/states/:country_id', check_auth, root_handler.get_active_states);
+router.get('/geography/districts', check_auth, root_handler.get_active_districts);
+router.get('/geography/districts/:state_id', check_auth, root_handler.get_active_districts);
 router.get('/geography/clusters', check_auth, root_handler.get_active_clusters);
 router.get('/geography/clusters/:state_id', check_auth, root_handler.get_active_clusters);
 router.get('/geography/assigned-clusters', check_auth, root_handler.get_assigned_clusters);

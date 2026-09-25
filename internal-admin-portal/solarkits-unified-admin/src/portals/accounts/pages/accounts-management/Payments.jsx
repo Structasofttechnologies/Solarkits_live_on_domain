@@ -5,9 +5,15 @@ import {
   FaCheckCircle, FaHistory,
   FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaFilter,
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
-  FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash
+  FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
+  FaStore
 } from "react-icons/fa";
-import { getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder, getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus, getPendingEpcFranchiseOrders, createCombinedSupplierPayment } from "../../api/accounts";
+import {
+  getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder,
+  getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
+  getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
+  getStates, getDistricts, getAllComboKits
+} from "../../api/accounts";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
 import CustomTable from "../../components/CustomTable";
@@ -187,6 +193,370 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
   );
 }
 
+// ─── Reusable Customer Orders Table (Separate for EPC & Franchise) ───────────
+function CustomerOrdersTable({
+  title,
+  icon: Icon,
+  type, // "epc" | "franchise"
+  orders,
+  totalPendingCount,
+  selectedOrderIds,
+  toggleOrderSelection,
+  onSelectAll,
+  isAllSelected,
+  selectedCount,
+  expandedOrderId,
+  setExpandedOrderId,
+  hasActiveFilters,
+  onResetFilters,
+  loading,
+}) {
+  const isEpc = type === "epc";
+  const themeAccent = isEpc ? "accent-blue-600" : "accent-purple-600";
+  const themeIconBg = isEpc ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
+  const themeBadgeBg = isEpc ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300";
+  const themeSelectedBg = isEpc
+    ? "text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800"
+    : "text-purple-600 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800";
+  const themeHighlightRow = isEpc ? "bg-blue-50/50 dark:bg-blue-900/10" : "bg-purple-50/50 dark:bg-purple-900/10";
+
+  return (
+    <div className="space-y-3">
+      {/* Section Title Header */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className={`p-1.5 rounded-lg ${themeIconBg}`}>
+            <Icon className="w-3.5 h-3.5" />
+          </span>
+          <h3 className="font-bold text-sm text-text-primary">
+            {title}
+          </h3>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${themeBadgeBg}`}>
+            {hasActiveFilters ? `${orders.length} of ${totalPendingCount} orders` : `${totalPendingCount} order${totalPendingCount !== 1 ? "s" : ""}`}
+          </span>
+        </div>
+        {selectedCount > 0 && (
+          <span className={`text-xs font-black px-3 py-1 rounded-lg border ${themeSelectedBg}`}>
+            {selectedCount} Selected for Combined Supplier Payment
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16 bg-surface border border-border rounded-2xl">
+          <FaSpinner className={`animate-spin ${isEpc ? "text-blue-600" : "text-purple-600"} text-2xl`} />
+          <span className="ml-3 text-sm text-text-secondary font-semibold">Loading {isEpc ? "EPC" : "Franchise"} orders...</span>
+        </div>
+      ) : totalPendingCount === 0 ? (
+        <div className="bg-surface border border-dashed border-border rounded-2xl p-10 text-center">
+          <FaBoxOpen className="text-4xl text-text-muted mx-auto mb-2 opacity-50" />
+          <p className="text-sm font-bold text-text-secondary">No pending {isEpc ? "EPC customer" : "Franchise"} orders</p>
+          <p className="text-xs text-text-muted mt-0.5">All {isEpc ? "EPC" : "Franchise"} orders have been combined and paid to suppliers.</p>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="bg-surface border border-dashed border-border rounded-2xl p-10 text-center">
+          <FaBoxOpen className="text-4xl text-text-muted mx-auto mb-2 opacity-50" />
+          <p className="text-sm font-bold text-text-secondary">No {isEpc ? "EPC" : "Franchise"} orders matching the selected master filters</p>
+          <p className="text-xs text-text-muted mt-0.5">Try adjusting or clearing your filter criteria above.</p>
+          <button
+            type="button"
+            onClick={onResetFilters}
+            className={`mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-bold transition-all cursor-pointer shadow-xs ${isEpc ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"}`}
+          >
+            <FaTimes size={10} />
+            <span>Reset All Filters</span>
+          </button>
+        </div>
+      ) : (
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
+          {/* Table header */}
+          <div className="px-6 py-3.5 border-b border-border bg-surface-hover flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                onChange={onSelectAll}
+                className={`w-4 h-4 rounded border-border ${themeAccent} cursor-pointer`}
+              />
+              <span className="text-xs font-black text-text-secondary uppercase tracking-wider">
+                Select All {isEpc ? "EPC" : "Franchise"} Orders
+              </span>
+            </div>
+            <span className="text-[10px] text-text-muted font-bold">
+              Click any order to view exact solar panels, inverters &amp; BOS breakdown with images
+            </span>
+          </div>
+
+          <div className="divide-y divide-border">
+            {orders.map((order) => {
+              const orderId = order.id || order._id;
+              const isSelected = selectedOrderIds.has(orderId);
+              const isExpanded = expandedOrderId === orderId;
+              return (
+                <div key={orderId} className={`transition-all ${isSelected ? themeHighlightRow : "hover:bg-surface-hover/60"}`}>
+                  {/* Row */}
+                  <div className="px-6 py-4 flex items-start gap-4">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleOrderSelection(orderId)}
+                      className={`mt-1 w-4 h-4 rounded border-border ${themeAccent} cursor-pointer flex-shrink-0`}
+                    />
+                    <div
+                      className="flex-1 grid grid-cols-5 gap-4 min-w-0 cursor-pointer"
+                      onClick={() => setExpandedOrderId(isExpanded ? null : orderId)}
+                    >
+                      {/* Order Number + Type */}
+                      <div>
+                        <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Order</div>
+                        <div className="text-xs font-black text-text-primary">{order.order_number}</div>
+                        <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${order.order_type === "epc" ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700/40" : "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700/40"}`}>
+                          {order.order_type === "epc" ? <FaBuilding size={8} /> : <FaStore size={8} />} {order.order_type === "epc" ? "EPC Customer" : "Franchise Store"}
+                        </span>
+                      </div>
+                      {/* Customer */}
+                      <div className="space-y-1">
+                        <div className="text-[10px] text-text-muted uppercase font-bold">
+                          {order.order_type === "franchise" ? "Franchise Partner" : "EPC Buyer"}
+                        </div>
+                        <div className="text-xs font-black text-text-primary truncate" title={order.customer_name}>
+                          {order.customer_name}
+                        </div>
+                        {order.customer_gstin && order.customer_gstin !== "-" ? (
+                          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                            <span className="text-[8px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">GSTIN:</span>
+                            <span>{order.customer_gstin}</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-mono text-text-muted">
+                            GST: Not Available
+                          </div>
+                        )}
+                        <div className="text-[10px] text-text-muted flex items-center gap-1">
+                          <FaPhone size={8} className="text-text-muted flex-shrink-0" />
+                          <span>{order.customer_contact}</span>
+                        </div>
+                      </div>
+                      {/* Delivery Location */}
+                      <div>
+                        <div className="text-[10px] text-text-muted uppercase font-bold mb-1">
+                          {order.order_type === "franchise" ? "Store Location" : "Delivery To"}
+                        </div>
+                        {order.delivery_address ? (
+                          <>
+                            <div className="text-xs font-semibold text-text-primary flex items-center gap-1">
+                              <FaMapMarkerAlt size={9} className={`${isEpc ? "text-blue-500" : "text-purple-500"} flex-shrink-0`} />
+                              {order.delivery_address.district_name || order.delivery_address.city || order.delivery_address.address_line || "—"}
+                            </div>
+                            <div className="text-[10px] text-text-muted">{order.delivery_address.state_name || ""}</div>
+                            {order.delivery_address.pincode && (
+                              <div className="text-[9px] text-text-muted">PIN: {order.delivery_address.pincode}</div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-[10px] text-text-muted italic">No address</div>
+                        )}
+                      </div>
+                      {/* Order Value */}
+                      <div>
+                        <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Order Value</div>
+                        <div className="text-sm font-black text-text-primary">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
+                        <div className="text-[10px] text-text-muted mt-0.5">{order.items?.length || 0} item(s)</div>
+                      </div>
+                      {/* Status + Date */}
+                      <div>
+                        <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Status</div>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border inline-block ${order.payment_status === "captured" || order.payment_status === "paid" ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"}`}>
+                          {order.payment_status === "captured" || order.payment_status === "paid" ? "Paid" : "Pending Verification"}
+                        </span>
+                        <div className="text-[9px] text-text-muted mt-1.5">{order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}</div>
+                      </div>
+                    </div>
+                    {/* Expand button */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedOrderId(isExpanded ? null : orderId)}
+                      className="flex-shrink-0 text-text-muted hover:text-primary transition-colors p-1 cursor-pointer"
+                      title={isExpanded ? "Collapse Details" : "View Breakdown & Images"}
+                    >
+                      <FaChevronDown className={`text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                    </button>
+                  </div>
+
+                  {/* Expanded item details with rich BOM breakdown & product images */}
+                  {isExpanded && (
+                    <div className="px-6 py-5 bg-surface-hover/30 border-t border-border space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
+                          <FaBoxOpen className="text-primary text-xs" />
+                          Order Items &amp; Complete Kit Component Breakdown
+                        </div>
+                        <span className="text-[10px] font-bold text-text-muted">
+                          {(order.items || []).length} item{(order.items || []).length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+
+                      <div className="space-y-4">
+                        {(order.items || []).map((item, idx) => {
+                          const isKit = item.scope_type === "kit" || (!item.scope_type && item.kit_id) || (item.item_name || "").toLowerCase().includes("kit") || item.breakdown;
+                          const breakdown = isKit ? getItemBreakdown(item) : null;
+
+                          return (
+                            <div key={idx} className="bg-surface rounded-2xl border border-border shadow-xs overflow-hidden">
+                              {/* Item Title Bar */}
+                              <div className="p-4 bg-surface-hover/50 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                  <img
+                                    src={item.image || breakdown?.kit_image || DEFAULT_PANEL_IMG}
+                                    alt={item.item_name}
+                                    className="w-14 h-14 rounded-xl object-cover border border-border shadow-xs flex-shrink-0 bg-white"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="text-sm font-black text-text-primary tracking-tight">{item.item_name}</h4>
+                                      {isKit && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
+                                          Combo Kit
+                                        </span>
+                                      )}
+                                      {item.capacity && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/20">
+                                          {item.capacity}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-text-secondary font-semibold mt-1 flex items-center gap-2 flex-wrap">
+                                      <span>Order Quantity: <strong className="text-text-primary font-black">{item.quantity} {isKit ? "Kit" : "Unit"}{item.quantity > 1 ? "s" : ""}</strong></span>
+                                      <span className="text-text-muted">•</span>
+                                      <span>Rate: <strong className="text-text-primary">₹{(item.unit_price || 0).toLocaleString("en-IN")}</strong> / {isKit ? "kit" : "unit"}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0 bg-primary/5 px-4 py-2 rounded-xl border border-primary/10">
+                                  <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Item Total Value</div>
+                                  <div className="text-base font-black text-primary">₹{(item.total_price || 0).toLocaleString("en-IN")}</div>
+                                </div>
+                              </div>
+
+                              {/* Rich Component Breakdown for Combo Kits */}
+                              {breakdown && (
+                                <div className="p-4 bg-bg/40 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
+                                      <FaBoxOpen className="text-amber-500 text-xs" />
+                                      Bill of Materials (BOM) Breakdown — Exact Components to Procure
+                                    </span>
+                                    <span className="text-[10px] font-bold text-text-muted">
+                                      Total components for {item.quantity} Kit{item.quantity > 1 ? "s" : ""}
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {/* 1. Solar Panels Card */}
+                                    {breakdown.panels && (
+                                      <div className="p-3.5 rounded-xl border border-amber-300/80 dark:border-amber-700/60 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent flex items-start gap-3">
+                                        <img
+                                          src={breakdown.panels.image || DEFAULT_PANEL_IMG}
+                                          alt={breakdown.panels.name}
+                                          className="w-16 h-16 rounded-lg object-cover border border-amber-300 dark:border-amber-700/60 flex-shrink-0 shadow-xs bg-white"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center justify-between gap-1 mb-1">
+                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500 text-white shadow-xs">
+                                              ☀️ Solar Panels
+                                            </span>
+                                            <span className="text-xs font-black text-amber-700 dark:text-amber-300">
+                                              {breakdown.panels.total_quantity} Pcs Total
+                                            </span>
+                                          </div>
+                                          <div className="text-xs font-bold text-text-primary line-clamp-1">
+                                            {breakdown.panels.name}
+                                          </div>
+                                          <div className="text-[10px] text-text-secondary font-medium mt-0.5">
+                                            Brand: <strong className="text-text-primary">{breakdown.panels.brand}</strong>
+                                          </div>
+                                          <div className="text-[10px] font-semibold text-amber-800 dark:text-amber-200/90 mt-1 bg-amber-100/70 dark:bg-amber-950/60 px-2 py-0.5 rounded-md inline-block">
+                                            {breakdown.panels.quantity_per_kit} pcs/kit × {item.quantity} kits = <strong className="font-black text-amber-900 dark:text-amber-100">{breakdown.panels.total_quantity} Panels</strong>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 2. Inverters Card */}
+                                    {breakdown.inverters && (
+                                      <div className="p-3.5 rounded-xl border border-blue-300/80 dark:border-blue-700/60 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent flex items-start gap-3">
+                                        <img
+                                          src={breakdown.inverters.image || DEFAULT_INVERTER_IMG}
+                                          alt={breakdown.inverters.name}
+                                          className="w-16 h-16 rounded-lg object-cover border border-blue-300 dark:border-blue-700/60 flex-shrink-0 shadow-xs bg-white"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center justify-between gap-1 mb-1">
+                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-xs">
+                                              ⚡ Solar Inverter
+                                            </span>
+                                            <span className="text-xs font-black text-blue-700 dark:text-blue-300">
+                                              {breakdown.inverters.total_quantity} Pcs Total
+                                            </span>
+                                          </div>
+                                          <div className="text-xs font-bold text-text-primary line-clamp-1">
+                                            {breakdown.inverters.name}
+                                          </div>
+                                          <div className="text-[10px] text-text-secondary font-medium mt-0.5">
+                                            Brand: <strong className="text-text-primary">{breakdown.inverters.brand}</strong>
+                                          </div>
+                                          <div className="text-[10px] font-semibold text-blue-800 dark:text-blue-200/90 mt-1 bg-blue-100/70 dark:bg-blue-950/60 px-2 py-0.5 rounded-md inline-block">
+                                            {breakdown.inverters.quantity_per_kit} pc/kit × {item.quantity} kits = <strong className="font-black text-blue-900 dark:text-blue-100">{breakdown.inverters.total_quantity} Inverters</strong>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 3. BOS & Protection Items Card */}
+                                    {breakdown.bos_components && breakdown.bos_components.length > 0 && (
+                                      <div className="p-3.5 rounded-xl border border-emerald-300/80 dark:border-emerald-700/60 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent flex flex-col justify-between">
+                                        <div>
+                                          <div className="flex items-center justify-between gap-1 mb-2">
+                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
+                                              🔧 BOS &amp; Protection
+                                            </span>
+                                            <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                                              Complete Kit Included
+                                            </span>
+                                          </div>
+                                          <div className="space-y-1.5">
+                                            {breakdown.bos_components.map((bos, bIdx) => (
+                                              <div key={bIdx} className="flex items-center gap-2 bg-white/70 dark:bg-surface/70 px-2 py-1 rounded-lg border border-emerald-100 dark:border-emerald-900/40 text-[10px]">
+                                                <img src={bos.image || DEFAULT_STRUCTURE_IMG} alt={bos.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />
+                                                <span className="font-bold text-text-primary truncate flex-1">{bos.name}</span>
+                                                <span className="font-black text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                                                  {bos.total_quantity} Sets
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Payments() {
   const { selectedScope } = useSelector((state) => state.user_slice);
   const activeClusterName = selectedScope?.clusterName || "Selected Cluster";
@@ -234,6 +604,82 @@ export default function Payments() {
 
   useEffect(() => {
     fetchHierarchy();
+  }, []);
+
+  // ── Location Filter State (State & District) ───────────────────────────────
+  const [selectedState, setSelectedState] = useState("all");
+  const [selectedDistrict, setSelectedDistrict] = useState("all");
+  const [statesList, setStatesList] = useState([]);
+  const [districtsList, setDistrictsList] = useState([]);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+
+  // ── Product Filter State (Admin Combo Kits) ────────────────────────────────
+  const [selectedComboKit, setSelectedComboKit] = useState("all");
+  const [allAdminKits, setAllAdminKits] = useState([]);
+  const [loadingAdminKits, setLoadingAdminKits] = useState(false);
+
+  // ── EPC & Franchise Specific Entity Filter States ─────────────────────────
+  const [selectedEpcId, setSelectedEpcId] = useState("all");
+  const [selectedFranchiseId, setSelectedFranchiseId] = useState("all");
+  const [epcList, setEpcList] = useState([]);
+  const [franchiseList, setFranchiseList] = useState([]);
+
+  // Load States on mount
+  useEffect(() => {
+    const fetchStates = async () => {
+      try {
+        const res = await getStates();
+        if (res?.data || res?.states) {
+          setStatesList(res.data || res.states || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch states:", err);
+      }
+    };
+    fetchStates();
+  }, []);
+
+  // Load Districts when state changes
+  useEffect(() => {
+    if (!selectedState || selectedState === "all") {
+      setDistrictsList([]);
+      setSelectedDistrict("all");
+      return;
+    }
+    const fetchDistricts = async () => {
+      setLoadingDistricts(true);
+      try {
+        const found = statesList.find(s => String(s.id || s._id) === String(selectedState) || s.name?.toLowerCase() === String(selectedState).toLowerCase());
+        const sId = found ? (found.id || found._id) : selectedState;
+        const res = await getDistricts(sId);
+        if (res?.data || res?.districts) {
+          setDistrictsList(res.data || res.districts || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch districts:", err);
+      } finally {
+        setLoadingDistricts(false);
+      }
+    };
+    fetchDistricts();
+  }, [selectedState, statesList]);
+
+  // Load All Admin Combo Kits on mount
+  useEffect(() => {
+    const fetchKits = async () => {
+      setLoadingAdminKits(true);
+      try {
+        const res = await getAllComboKits();
+        if (res?.status === "success" && res.data) {
+          setAllAdminKits(res.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to load admin combo kits:", err);
+      } finally {
+        setLoadingAdminKits(false);
+      }
+    };
+    fetchKits();
   }, []);
 
   // Pay Modal State
@@ -320,6 +766,8 @@ export default function Payments() {
         const epc = res.data?.epc_orders || [];
         const fpo = res.data?.franchise_orders || [];
         setPendingEpcOrders([...epc, ...fpo]);
+        if (res.data?.epc_list) setEpcList(res.data.epc_list);
+        if (res.data?.franchise_list) setFranchiseList(res.data.franchise_list);
       }
     } catch (err) {
       console.error("Failed to fetch pending EPC/Franchise orders:", err);
@@ -327,6 +775,56 @@ export default function Payments() {
       setLoadingEpcOrders(false);
     }
   };
+
+  const computedEpcOptions = useMemo(() => {
+    const map = new Map();
+    (epcList || []).forEach(e => {
+      const key = String(e.id || e.name);
+      map.set(key, { ...e, id: key });
+    });
+    (pendingEpcOrders || []).filter(o => o.order_type === "epc").forEach(o => {
+      const key = String(o.entity_id || o.customer_name);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          name: o.customer_name,
+          gstin: o.customer_gstin !== "-" ? o.customer_gstin : "",
+          pending_count: 1
+        });
+      } else {
+        const existing = map.get(key);
+        if (!existing.gstin && o.customer_gstin && o.customer_gstin !== "-") {
+          existing.gstin = o.customer_gstin;
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => (b.pending_count || 0) - (a.pending_count || 0) || a.name.localeCompare(b.name));
+  }, [epcList, pendingEpcOrders]);
+
+  const computedFranchiseOptions = useMemo(() => {
+    const map = new Map();
+    (franchiseList || []).forEach(f => {
+      const key = String(f.id || f.name);
+      map.set(key, { ...f, id: key });
+    });
+    (pendingEpcOrders || []).filter(o => o.order_type === "franchise").forEach(o => {
+      const key = String(o.entity_id || o.customer_name);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          name: o.customer_name,
+          gstin: o.customer_gstin !== "-" ? o.customer_gstin : "",
+          pending_count: 1
+        });
+      } else {
+        const existing = map.get(key);
+        if (!existing.gstin && o.customer_gstin && o.customer_gstin !== "-") {
+          existing.gstin = o.customer_gstin;
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => (b.pending_count || 0) - (a.pending_count || 0) || a.name.localeCompare(b.name));
+  }, [franchiseList, pendingEpcOrders]);
 
   const handleCombineWarehouseChange = async (whId) => {
     setCombineForm(prev => ({ ...prev, warehouse_id: whId, supplier_id: "" }));
@@ -398,10 +896,10 @@ export default function Payments() {
   };
 
   const selectAllOrders = () => {
-    if (selectedOrderIds.size === pendingEpcOrders.length) {
+    if (selectedOrderIds.size === filteredEpcOrders.length && filteredEpcOrders.length > 0) {
       setSelectedOrderIds(new Set());
     } else {
-      setSelectedOrderIds(new Set(pendingEpcOrders.map(o => o.id || o._id)));
+      setSelectedOrderIds(new Set(filteredEpcOrders.map(o => o.id || o._id)));
     }
   };
 
@@ -706,10 +1204,10 @@ export default function Payments() {
       const targetInds = quickFilters.industryType === "all"
         ? shopHierarchy
         : shopHierarchy.filter(
-            (ind) =>
-              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-              String(ind.id) === String(quickFilters.industryType)
-          );
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id) === String(quickFilters.industryType)
+        );
 
       targetInds.forEach((ind) => {
         (ind.categories || []).forEach((cat) => {
@@ -743,10 +1241,10 @@ export default function Payments() {
       const targetInds = quickFilters.industryType === "all"
         ? shopHierarchy
         : shopHierarchy.filter(
-            (ind) =>
-              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-              String(ind.id) === String(quickFilters.industryType)
-          );
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id) === String(quickFilters.industryType)
+        );
 
       targetInds.forEach((ind) => {
         (ind.categories || []).forEach((cat) => {
@@ -788,10 +1286,10 @@ export default function Payments() {
       const targetInds = quickFilters.industryType === "all"
         ? shopHierarchy
         : shopHierarchy.filter(
-            (ind) =>
-              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-              String(ind.id) === String(quickFilters.industryType)
-          );
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id) === String(quickFilters.industryType)
+        );
 
       targetInds.forEach((ind) => {
         (ind.categories || []).forEach((cat) => {
@@ -832,10 +1330,10 @@ export default function Payments() {
       const targetInds = quickFilters.industryType === "all"
         ? shopHierarchy
         : shopHierarchy.filter(
-            (ind) =>
-              ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
-              String(ind.id) === String(quickFilters.industryType)
-          );
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id) === String(quickFilters.industryType)
+        );
 
       targetInds.forEach((ind) => {
         (ind.categories || []).forEach((cat) => {
@@ -897,13 +1395,242 @@ export default function Payments() {
     quickFilters.industryType !== "all" || quickFilters.category !== "all" ||
     quickFilters.subCategory !== "all" || quickFilters.systemType !== "all" || quickFilters.projectRange !== "all";
 
+  const hasActiveLocationFilters =
+    selectedState !== "all" || selectedDistrict !== "all";
+
+  const hasActiveProductFilters =
+    selectedComboKit !== "all";
+
+  const hasActiveMasterFilters =
+    hasActiveQuickFilters ||
+    hasActiveLocationFilters ||
+    hasActiveProductFilters ||
+    selectedEpcId !== "all" ||
+    selectedFranchiseId !== "all" ||
+    searchQuery.trim() !== "";
+
+  const activeFiltersCount = [
+    quickFilters.industryType !== "all",
+    quickFilters.category !== "all",
+    quickFilters.subCategory !== "all",
+    quickFilters.systemType !== "all",
+    quickFilters.projectRange !== "all",
+    selectedState !== "all",
+    selectedDistrict !== "all",
+    selectedComboKit !== "all",
+    selectedEpcId !== "all",
+    selectedFranchiseId !== "all",
+    searchQuery.trim() !== "",
+  ].filter(Boolean).length;
+
   const clearQuickFilters = () =>
     setQuickFilters({ industryType: "all", category: "all", subCategory: "all", systemType: "all", projectRange: "all" });
 
-  // ── Filter POs ────────────────────────────────────────────────────────────
+  const clearLocationFilters = () => {
+    setSelectedState("all");
+    setSelectedDistrict("all");
+  };
+
+  const clearProductFilters = () => {
+    setSelectedComboKit("all");
+  };
+
+  const resetAllMasterFilters = () => {
+    clearQuickFilters();
+    clearLocationFilters();
+    clearProductFilters();
+    setSelectedEpcId("all");
+    setSelectedFranchiseId("all");
+    setSearchQuery("");
+    setPage(1);
+  };
+
+  // ── Filter Franchise & EPC Customer Orders ────────────────────────────────
+  const filteredEpcOrders = useMemo(() => {
+    return pendingEpcOrders.filter((order) => {
+      // 1. Search Query (Matches Order #, Customer / Partner Name, Phone / Contact, GSTIN, and Products)
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesNum = (order.order_number || "").toLowerCase().includes(q);
+        const matchesCust = (order.customer_name || "").toLowerCase().includes(q);
+        const matchesContact = (order.customer_contact || "").toLowerCase().includes(q);
+        const matchesGstin = (order.customer_gstin || "").toLowerCase().includes(q);
+        const matchesItem = (order.items || []).some(it => (it.item_name || "").toLowerCase().includes(q));
+        if (!matchesNum && !matchesCust && !matchesContact && !matchesGstin && !matchesItem) {
+          return false;
+        }
+      }
+
+      // 1.1 Dedicated EPC Partner Filter (by entity ID, name, or GSTIN)
+      if (selectedEpcId !== "all") {
+        if (order.order_type !== "epc") return false;
+        const target = selectedEpcId.toLowerCase();
+        const matchesId = String(order.entity_id || "").toLowerCase() === target;
+        const matchesName = String(order.customer_name || "").toLowerCase() === target;
+        const matchesGstin = String(order.customer_gstin || "").toLowerCase() === target;
+        if (!matchesId && !matchesName && !matchesGstin) return false;
+      }
+
+      // 1.2 Dedicated Franchise Partner Filter (by entity ID, name, or GSTIN)
+      if (selectedFranchiseId !== "all") {
+        if (order.order_type !== "franchise") return false;
+        const target = selectedFranchiseId.toLowerCase();
+        const matchesId = String(order.entity_id || "").toLowerCase() === target;
+        const matchesName = String(order.customer_name || "").toLowerCase() === target;
+        const matchesGstin = String(order.customer_gstin || "").toLowerCase() === target;
+        if (!matchesId && !matchesName && !matchesGstin) return false;
+      }
+
+      // 2. Location Filter (State & District)
+      if (selectedState !== "all") {
+        const targetState = selectedState.toLowerCase();
+        const orderStateId = (order.delivery_address?.state_id || order.state_id || "").toString().toLowerCase();
+        const orderStateName = (order.delivery_address?.state_name || order.state_name || "").toLowerCase();
+        if (orderStateId !== targetState && orderStateName !== targetState) {
+          return false;
+        }
+      }
+
+      if (selectedDistrict !== "all") {
+        const targetDist = selectedDistrict.toLowerCase();
+        const orderDistId = (order.delivery_address?.district_id || order.district_id || "").toString().toLowerCase();
+        const orderDistName = (order.delivery_address?.district_name || order.district_name || "").toLowerCase();
+        if (orderDistId !== targetDist && orderDistName !== targetDist) {
+          return false;
+        }
+      }
+
+      // 3. Product / ComboKit Filter (Admin Combo Kits)
+      if (selectedComboKit !== "all") {
+        const targetKitId = selectedComboKit.toString().toLowerCase();
+        const selectedKitObj = allAdminKits.find(k => String(k._id || k.id).toLowerCase() === targetKitId);
+        const targetKitName = selectedKitObj?.name?.toLowerCase();
+        const targetKitCap = selectedKitObj?.capacity || selectedKitObj?.capacity_kw;
+
+        const hasKit =
+          (order.kit_ids || []).some(kId => String(kId).toLowerCase() === targetKitId) ||
+          (order.items || []).some(it =>
+            String(it.kit_id).toLowerCase() === targetKitId ||
+            (it.breakdown && String(it.breakdown.kit_id).toLowerCase() === targetKitId) ||
+            (targetKitName && (it.item_name || "").toLowerCase().includes(targetKitName)) ||
+            (targetKitCap && ((it.capacity && String(it.capacity).includes(String(targetKitCap))) || (it.item_name || "").toLowerCase().includes(`${targetKitCap} kw`)))
+          );
+        if (!hasKit) return false;
+      }
+
+      // 4. Classification Quick Filters (Industry, Category, SubCategory, SystemType, ProjectRange)
+      if (hasActiveQuickFilters) {
+        if (quickFilters.industryType !== "all") {
+          const target = quickFilters.industryType.toLowerCase();
+          const hasInd =
+            (order.industry_types || []).some(t => t?.toLowerCase() === target) ||
+            (order.items || []).some(it => (it.industry_type_name || it.item_name || "").toLowerCase().includes(target));
+          if (!hasInd) return false;
+        }
+
+        if (quickFilters.category !== "all") {
+          const target = quickFilters.category.toLowerCase();
+          const hasCat =
+            (order.categories || []).some(c => c?.toLowerCase() === target) ||
+            (order.items || []).some(it => (it.category_name || it.item_name || "").toLowerCase().includes(target));
+          if (!hasCat) return false;
+        }
+
+        if (quickFilters.subCategory !== "all") {
+          const target = quickFilters.subCategory.toLowerCase();
+          const hasSub =
+            (order.subcategories || []).some(s => s?.toLowerCase() === target) ||
+            (order.items || []).some(it => (it.subcategory_name || it.item_name || "").toLowerCase().includes(target));
+          if (!hasSub) return false;
+        }
+
+        if (quickFilters.systemType !== "all") {
+          const target = quickFilters.systemType.toLowerCase();
+          const hasSys =
+            (order.system_types || []).some(t => t?.toLowerCase() === target) ||
+            (order.items || []).some(it => (it.system_type_name || it.item_name || "").toLowerCase().includes(target));
+          if (!hasSys) return false;
+        }
+
+        if (quickFilters.projectRange !== "all") {
+          const target = quickFilters.projectRange.toLowerCase();
+          const hasRange =
+            (order.project_ranges || []).some(r => r?.toLowerCase() === target) ||
+            (order.items || []).some(it => (it.capacity || it.item_name || "").toLowerCase().includes(target));
+          if (!hasRange) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [pendingEpcOrders, searchQuery, selectedEpcId, selectedFranchiseId, selectedState, selectedDistrict, selectedComboKit, quickFilters, hasActiveQuickFilters]);
+
+  // Separate EPC & Franchise Orders
+  const pendingEpcCount = useMemo(() => {
+    return pendingEpcOrders.filter(o => o.order_type === "epc").length;
+  }, [pendingEpcOrders]);
+
+  const pendingFranchiseCount = useMemo(() => {
+    return pendingEpcOrders.filter(o => o.order_type === "franchise").length;
+  }, [pendingEpcOrders]);
+
+  const filteredEpcOnlyOrders = useMemo(() => {
+    return filteredEpcOrders.filter(o => o.order_type === "epc");
+  }, [filteredEpcOrders]);
+
+  const filteredFranchiseOnlyOrders = useMemo(() => {
+    return filteredEpcOrders.filter(o => o.order_type === "franchise");
+  }, [filteredEpcOrders]);
+
+  const selectedEpcCount = useMemo(() => {
+    return filteredEpcOnlyOrders.filter(o => selectedOrderIds.has(o.id || o._id)).length;
+  }, [filteredEpcOnlyOrders, selectedOrderIds]);
+
+  const isAllEpcSelected = useMemo(() => {
+    return filteredEpcOnlyOrders.length > 0 && selectedEpcCount === filteredEpcOnlyOrders.length;
+  }, [filteredEpcOnlyOrders, selectedEpcCount]);
+
+  const selectedFranchiseCount = useMemo(() => {
+    return filteredFranchiseOnlyOrders.filter(o => selectedOrderIds.has(o.id || o._id)).length;
+  }, [filteredFranchiseOnlyOrders, selectedOrderIds]);
+
+  const isAllFranchiseSelected = useMemo(() => {
+    return filteredFranchiseOnlyOrders.length > 0 && selectedFranchiseCount === filteredFranchiseOnlyOrders.length;
+  }, [filteredFranchiseOnlyOrders, selectedFranchiseCount]);
+
+  const selectAllEpcOrders = () => {
+    const epcIds = filteredEpcOnlyOrders.map(o => o.id || o._id);
+    const allSelected = epcIds.length > 0 && epcIds.every(id => selectedOrderIds.has(id));
+    setSelectedOrderIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        epcIds.forEach(id => next.delete(id));
+      } else {
+        epcIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const selectAllFranchiseOrders = () => {
+    const franIds = filteredFranchiseOnlyOrders.map(o => o.id || o._id);
+    const allSelected = franIds.length > 0 && franIds.every(id => selectedOrderIds.has(id));
+    setSelectedOrderIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        franIds.forEach(id => next.delete(id));
+      } else {
+        franIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  // ── Filter Supplier Purchase Orders (POs) ─────────────────────────────────
   const filteredPOList = useMemo(() => {
     return purchaseOrders.filter((po) => {
       const matchesSearch =
+        !searchQuery.trim() ||
         po.po_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (po.invoice_no || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (po.supplier_id?.company_name || "").toLowerCase().includes(searchQuery.toLowerCase());
@@ -920,6 +1647,59 @@ export default function Payments() {
       const matchesSupplier =
         supplierFilter === "All" ? true :
           (po.supplier_id?._id || po.supplier_id?.id) === supplierFilter;
+
+      // Location Filter (State & District)
+      if (selectedState !== "all") {
+        const targetState = selectedState.toLowerCase();
+        const poStateId = (po.state_id || po.warehouse_id?.level_1 || "").toString().toLowerCase();
+        const poStateName = (po.state_name || "").toLowerCase();
+        const sourceStateMatches = (po.source_orders || []).some(so => {
+          const soStateId = (so.delivery_address?.state_id || "").toString().toLowerCase();
+          const soStateName = (so.delivery_address?.state_name || "").toLowerCase();
+          return soStateId === targetState || soStateName === targetState;
+        });
+        if (poStateId !== targetState && poStateName !== targetState && !sourceStateMatches) {
+          return false;
+        }
+      }
+
+      if (selectedDistrict !== "all") {
+        const targetDist = selectedDistrict.toLowerCase();
+        const poDistId = (po.district_id || po.warehouse_id?.level_2 || "").toString().toLowerCase();
+        const poDistName = (po.district_name || "").toLowerCase();
+        const sourceDistMatches = (po.source_orders || []).some(so => {
+          const soDistId = (so.delivery_address?.district_id || "").toString().toLowerCase();
+          const soDistName = (so.delivery_address?.district_name || "").toLowerCase();
+          return soDistId === targetDist || soDistName === targetDist;
+        });
+        if (poDistId !== targetDist && poDistName !== targetDist && !sourceDistMatches) {
+          return false;
+        }
+      }
+
+      // Product / ComboKit Filter (Admin Combo Kits)
+      if (selectedComboKit !== "all") {
+        const targetKit = selectedComboKit.toString().toLowerCase();
+        const selectedKitObj = allAdminKits.find(k => String(k._id || k.id).toLowerCase() === targetKit);
+        const targetKitName = selectedKitObj?.name?.toLowerCase();
+        const targetKitCap = selectedKitObj?.capacity || selectedKitObj?.capacity_kw;
+
+        const matchesDirectKit = po.combo_kit_id && String(po.combo_kit_id).toLowerCase() === targetKit;
+        const matchesKitArray = (po.combo_kit_ids || []).some(kId => String(kId).toLowerCase() === targetKit);
+        const matchesSourceOrders = (po.source_orders || []).some(so =>
+          (so.items || []).some(si =>
+            String(si.kit_id).toLowerCase() === targetKit ||
+            (targetKitName && (si.item_name || "").toLowerCase().includes(targetKitName))
+          )
+        );
+        const matchesPoItems = (po.items || []).some(pi =>
+          (targetKitName && (pi.sku_details?.product_name || pi.item_name || "").toLowerCase().includes(targetKitName)) ||
+          (targetKitCap && ((pi.capacity && String(pi.capacity).includes(String(targetKitCap))) || (pi.item_name || "").toLowerCase().includes(`${targetKitCap} kw`)))
+        );
+        if (!matchesDirectKit && !matchesKitArray && !matchesSourceOrders && !matchesPoItems) {
+          return false;
+        }
+      }
 
       // Quick Filters — match if ANY item or PO matches active filters
       const matchesQuickFilters = (() => {
@@ -970,7 +1750,7 @@ export default function Payments() {
 
       return matchesSearch && matchesTab && matchesWarehouse && matchesSupplier && matchesQuickFilters;
     });
-  }, [purchaseOrders, searchQuery, activeTab, warehouseFilter, supplierFilter, quickFilters, hasActiveQuickFilters]);
+  }, [purchaseOrders, searchQuery, activeTab, warehouseFilter, supplierFilter, selectedState, selectedDistrict, selectedComboKit, quickFilters, hasActiveQuickFilters]);
 
   // Paginated POs
   const paginatedPOs = useMemo(() => {
@@ -993,7 +1773,7 @@ export default function Payments() {
           className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-surface-hover"}`}
         >
           <FaClipboardList />
-          Awaiting Payment
+          Awaiting Order
           {(pendingEpcOrders.length > 0 || pendingPOCount > 0) && (
             <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-black flex items-center justify-center px-1.5 ${activeTab === "pending" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
               {pendingEpcOrders.length + pendingPOCount}
@@ -1015,7 +1795,7 @@ export default function Payments() {
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
-              onClick={() => setAwaitingSubFilter("all")}
+              onClick={() => { setAwaitingSubFilter("all"); setPage(1); }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "all" ? "bg-primary text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
             >
               <span>All Orders Awaiting Action</span>
@@ -1025,13 +1805,32 @@ export default function Payments() {
             </button>
             <button
               type="button"
-              onClick={() => setAwaitingSubFilter("customer_orders")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "customer_orders" ? "bg-amber-500 text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
+              onClick={() => {
+                setAwaitingSubFilter("epc_orders");
+                setSelectedFranchiseId("all");
+                setPage(1);
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "epc_orders" ? "bg-blue-600 text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
             >
-              <FaUsers size={11} />
-              <span>Franchise &amp; EPC Orders</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "customer_orders" ? "bg-white text-amber-600" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"}`}>
-                {pendingEpcOrders.length}
+              <FaBuilding size={11} />
+              <span>EPC Orders</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "epc_orders" ? "bg-white text-blue-600" : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"}`}>
+                {hasActiveMasterFilters ? filteredEpcOnlyOrders.length : pendingEpcCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAwaitingSubFilter("franchise_orders");
+                setSelectedEpcId("all");
+                setPage(1);
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "franchise_orders" ? "bg-purple-600 text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
+            >
+              <FaStore size={11} />
+              <span>Franchise Orders</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "franchise_orders" ? "bg-white text-purple-600" : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"}`}>
+                {hasActiveMasterFilters ? filteredFranchiseOnlyOrders.length : pendingFranchiseCount}
               </span>
             </button>
             <button
@@ -1048,7 +1847,7 @@ export default function Payments() {
           </div>
 
           {/* Action button: Combine & Pay Supplier */}
-          {(awaitingSubFilter === "all" || awaitingSubFilter === "customer_orders") && (
+          {(awaitingSubFilter === "all" || awaitingSubFilter === "epc_orders" || awaitingSubFilter === "franchise_orders") && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1060,11 +1859,10 @@ export default function Payments() {
               <button
                 onClick={openCombineModal}
                 disabled={selectedOrderIds.size === 0}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-sm ${
-                  selectedOrderIds.size > 0
-                    ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200 dark:shadow-amber-900 cursor-pointer"
-                    : "bg-surface border border-border text-text-muted cursor-not-allowed opacity-60"
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-sm ${selectedOrderIds.size > 0
+                  ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200 dark:shadow-amber-900 cursor-pointer"
+                  : "bg-surface border border-border text-text-muted cursor-not-allowed opacity-60"
+                  }`}
               >
                 <FaLink />
                 Combine &amp; Pay Supplier ({selectedOrderIds.size})
@@ -1074,309 +1872,665 @@ export default function Payments() {
         </div>
       )}
 
-      {/* ─── Franchise & EPC Orders Section (inside Awaiting Payment) ─────── */}
-      {activeTab === "pending" && (awaitingSubFilter === "all" || awaitingSubFilter === "customer_orders") && (
-        <div className="space-y-3">
-          {/* Section Title Header */}
-          <div className="flex items-center justify-between px-1">
+      {/* ─── Master Order Filters Bar ───────────────────────────────────────── */}
+      <div className="bg-surface border border-border rounded-2xl p-4.5 space-y-3.5 shadow-xs">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-border/60">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="p-2 rounded-xl bg-primary/10 text-primary">
+              <FaFilter className="w-3.5 h-3.5" />
+            </span>
             <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
-                <FaUsers className="w-3.5 h-3.5" />
-              </span>
-              <h3 className="font-bold text-sm text-text-primary">
-                Franchise &amp; EPC Customer Orders (Awaiting Supplier Procurement)
-              </h3>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                {pendingEpcOrders.length} order{pendingEpcOrders.length !== 1 ? "s" : ""}
-              </span>
+              <h3 className="font-bold text-sm text-text-primary tracking-tight">Master Order Filters</h3>
+              {activeFiltersCount > 0 && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20">
+                  {activeFiltersCount} active
+                </span>
+              )}
             </div>
-            {selectedOrderIds.size > 0 && (
-              <span className="text-xs font-black text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-3 py-1 rounded-lg border border-amber-200 dark:border-amber-800">
-                {selectedOrderIds.size} Selected for Combined Supplier Payment
+            <span className="text-[11px] text-text-muted hidden md:inline">
+              — Filter customer orders and supplier POs by industry classification, geography, and combo kit
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            {hasActiveQuickFilters && (
+              <button
+                type="button"
+                onClick={clearQuickFilters}
+                className="text-xs font-bold text-primary hover:text-primary/75 hover:underline cursor-pointer transition-colors"
+                title="Reset Industry, Category, Sub Category, System Type & Project Range"
+              >
+                Clear Main
+              </button>
+            )}
+            {hasActiveMasterFilters && (
+              <button
+                type="button"
+                onClick={resetAllMasterFilters}
+                className="text-xs font-bold text-text-secondary hover:text-danger px-2.5 py-1 rounded-lg border border-border hover:border-danger/30 hover:bg-danger/5 transition-all cursor-pointer flex items-center gap-1.5"
+                title="Reset all classification, location, and product filters"
+              >
+                <FaTimes size={10} />
+                <span>Reset All</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Row 1: Classification Quick Filters (Industry Type -> Category -> Sub Category -> System Type -> Project Range) */}
+        <div>
+          <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <FaLayerGroup size={10} className="text-primary/70" />
+            <span>1. Classification Filters</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* 1. Industry Type */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                Industry Type
+              </label>
+              <div className="relative">
+                <select
+                  value={quickFilters.industryType}
+                  onChange={(e) => {
+                    setQuickFilters({
+                      industryType: e.target.value,
+                      category: "all",
+                      subCategory: "all",
+                      systemType: "all",
+                      projectRange: "all"
+                    });
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  {qfIndustryTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.text}</option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 2. Category */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                Category
+              </label>
+              <div className="relative">
+                <select
+                  value={quickFilters.category}
+                  onChange={(e) => {
+                    setQuickFilters(prev => ({
+                      ...prev,
+                      category: e.target.value,
+                      subCategory: "all",
+                      systemType: "all",
+                      projectRange: "all"
+                    }));
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  {qfCategoryOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.text}</option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 3. Sub Category */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                Sub Category
+              </label>
+              <div className="relative">
+                <select
+                  value={quickFilters.subCategory}
+                  onChange={(e) => {
+                    setQuickFilters(prev => ({
+                      ...prev,
+                      subCategory: e.target.value,
+                      systemType: "all",
+                      projectRange: "all"
+                    }));
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  {qfSubCategoryOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.text}</option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 4. System Type */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                System Type
+              </label>
+              <div className="relative">
+                <select
+                  value={quickFilters.systemType}
+                  onChange={(e) => {
+                    setQuickFilters(prev => ({
+                      ...prev,
+                      systemType: e.target.value,
+                      projectRange: "all"
+                    }));
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  {qfSystemTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.text}</option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
+            </div>
+
+            {/* 5. Project Range */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                Project Range
+              </label>
+              <div className="relative">
+                <select
+                  value={quickFilters.projectRange}
+                  onChange={(e) => {
+                    setQuickFilters(prev => ({ ...prev, projectRange: e.target.value }));
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  {qfProjectRangeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.text}</option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Location (State & District), Product (Combo Kit), and Search Input */}
+        <div className="pt-2 border-t border-border/40">
+          <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <FaMapMarkerAlt size={10} className="text-amber-500/80" />
+              <span>2. Location, Customer &amp; Product Filters</span>
+            </div>
+            {awaitingSubFilter === "epc_orders" && (
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                <FaBuilding size={9} /> EPC Filter Mode Active
+              </span>
+            )}
+            {awaitingSubFilter === "franchise_orders" && (
+              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                <FaStore size={9} /> Franchise Filter Mode Active
               </span>
             )}
           </div>
+          <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${
+            awaitingSubFilter === "epc_orders" || awaitingSubFilter === "franchise_orders" || awaitingSubFilter === "all"
+              ? "lg:grid-cols-5"
+              : "lg:grid-cols-4"
+          } gap-3`}>
+            {/* 1. State */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                Location: State
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedState}
+                  onChange={(e) => {
+                    setSelectedState(e.target.value);
+                    setSelectedDistrict("all");
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  <option value="all">All States</option>
+                  {statesList.map(st => (
+                    <option key={st.id || st._id} value={st.id || st._id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
+            </div>
 
-          {loadingEpcOrders ? (
-            <div className="flex items-center justify-center py-16 bg-surface border border-border rounded-2xl">
-              <FaSpinner className="animate-spin text-amber-500 text-2xl" />
-              <span className="ml-3 text-sm text-text-secondary font-semibold">Loading orders...</span>
+            {/* 2. District */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider flex items-center justify-between">
+                <span>Location: District</span>
+                {loadingDistricts && <FaSpinner className="animate-spin text-primary text-[10px]" />}
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setPage(1);
+                  }}
+                  disabled={!selectedState || selectedState === "all"}
+                  className={`w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none transition-colors ${!selectedState || selectedState === "all" ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                    }`}
+                >
+                  <option value="all">
+                    {!selectedState || selectedState === "all" ? "Select State First" : "All Districts"}
+                  </option>
+                  {districtsList.map(dst => (
+                    <option key={dst.id || dst._id} value={dst.id || dst._id}>
+                      {dst.name}
+                    </option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
             </div>
-          ) : pendingEpcOrders.length === 0 ? (
-            <div className="bg-surface border border-dashed border-border rounded-2xl p-10 text-center">
-              <FaBoxOpen className="text-4xl text-text-muted mx-auto mb-2 opacity-50" />
-              <p className="text-sm font-bold text-text-secondary">No pending Franchise or EPC orders</p>
-              <p className="text-xs text-text-muted mt-0.5">All customer orders have been combined and paid to suppliers.</p>
+
+            {/* 3. Product / Admin Combo Kit */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider flex items-center justify-between">
+                <span>Product: Combo Kit</span>
+                {loadingAdminKits && <FaSpinner className="animate-spin text-primary text-[10px]" />}
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedComboKit}
+                  onChange={(e) => {
+                    setSelectedComboKit(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                >
+                  <option value="all">All Admin Combo Kits</option>
+                  {allAdminKits.map(kit => (
+                    <option key={kit._id || kit.id} value={kit._id || kit.id}>
+                      {kit.name} {kit.capacity ? `(${kit.capacity})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+              </div>
             </div>
-          ) : (
-            <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
-              {/* Table header */}
-              <div className="px-6 py-3.5 border-b border-border bg-surface-hover flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedOrderIds.size === pendingEpcOrders.length && pendingEpcOrders.length > 0}
-                    onChange={selectAllOrders}
-                    className="w-4 h-4 rounded border-border accent-amber-500 cursor-pointer"
-                  />
-                  <span className="text-xs font-black text-text-secondary uppercase tracking-wider">Select All Orders</span>
+
+            {/* 4. Dedicated EPC Partner Filter (when viewing EPC tab) */}
+            {awaitingSubFilter === "epc_orders" && (
+              <div>
+                <label className="block text-[10px] font-semibold text-blue-600 dark:text-blue-400 mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <FaBuilding size={9} />
+                    EPC Partner &amp; GSTIN
+                  </span>
+                  <span className="text-[9px] text-text-muted font-bold">({computedEpcOptions.length})</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedEpcId}
+                    onChange={(e) => {
+                      setSelectedEpcId(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full appearance-none h-9 bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 focus:border-blue-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  >
+                    <option value="all">All EPC Partners ({computedEpcOptions.length})</option>
+                    {computedEpcOptions.map((epc) => (
+                      <option key={epc.id || epc.name} value={epc.id || epc.name}>
+                        {epc.name} {epc.gstin ? `— GST: ${epc.gstin}` : ""} {epc.pending_count > 0 ? `(${epc.pending_count} pending)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 text-[9px] pointer-events-none" />
                 </div>
-                <span className="text-[10px] text-text-muted font-bold">
-                  Click any order to view exact solar panels, inverters &amp; BOS breakdown with images
-                </span>
               </div>
+            )}
 
-              <div className="divide-y divide-border">
-                {pendingEpcOrders.map((order) => {
-                  const orderId = order.id || order._id;
-                  const isSelected = selectedOrderIds.has(orderId);
-                  const isExpanded = expandedOrderId === orderId;
-                  return (
-                    <div key={orderId} className={`transition-all ${isSelected ? "bg-amber-50/50 dark:bg-amber-900/10" : "hover:bg-surface-hover/60"}`}>
-                      {/* Row */}
-                      <div className="px-6 py-4 flex items-start gap-4">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleOrderSelection(orderId)}
-                          className="mt-1 w-4 h-4 rounded border-border accent-amber-500 cursor-pointer flex-shrink-0"
-                        />
-                        <div
-                          className="flex-1 grid grid-cols-5 gap-4 min-w-0 cursor-pointer"
-                          onClick={() => setExpandedOrderId(isExpanded ? null : orderId)}
-                        >
-                          {/* Order Number + Type */}
-                          <div>
-                            <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Order</div>
-                            <div className="text-xs font-black text-text-primary">{order.order_number}</div>
-                            <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${order.order_type === "epc" ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700/40" : "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700/40"}`}>
-                              <FaBuilding size={8} /> {order.order_type === "epc" ? "EPC" : "Franchise"}
-                            </span>
-                          </div>
-                          {/* Customer */}
-                          <div>
-                            <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Customer</div>
-                            <div className="text-xs font-bold text-text-primary truncate">{order.customer_name}</div>
-                            <div className="text-[10px] text-text-muted">{order.customer_contact}</div>
-                            {order.customer_gstin && order.customer_gstin !== "-" && (
-                              <div className="text-[9px] text-text-muted mt-0.5 font-mono">GSTIN: {order.customer_gstin}</div>
-                            )}
-                          </div>
-                          {/* Delivery Location */}
-                          <div>
-                            <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Delivery To</div>
-                            {order.delivery_address ? (
-                              <>
-                                <div className="text-xs font-semibold text-text-primary flex items-center gap-1">
-                                  <FaMapMarkerAlt size={9} className="text-amber-500 flex-shrink-0" />
-                                  {order.delivery_address.district_name || order.delivery_address.city || order.delivery_address.address_line || "—"}
-                                </div>
-                                <div className="text-[10px] text-text-muted">{order.delivery_address.state_name || ""}</div>
-                                {order.delivery_address.pincode && (
-                                  <div className="text-[9px] text-text-muted">PIN: {order.delivery_address.pincode}</div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="text-[10px] text-text-muted italic">No address</div>
-                            )}
-                          </div>
-                          {/* Order Value */}
-                          <div>
-                            <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Order Value</div>
-                            <div className="text-sm font-black text-text-primary">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
-                            <div className="text-[10px] text-text-muted mt-0.5">{order.items?.length || 0} item(s)</div>
-                          </div>
-                          {/* Status + Date */}
-                          <div>
-                            <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Status</div>
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border inline-block ${order.payment_status === "captured" || order.payment_status === "paid" ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"}`}>
-                              {order.payment_status === "captured" || order.payment_status === "paid" ? "Paid" : "Pending Verification"}
-                            </span>
-                            <div className="text-[9px] text-text-muted mt-1.5">{order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}</div>
-                          </div>
-                        </div>
-                        {/* Expand button */}
-                        <button
-                          type="button"
-                          onClick={() => setExpandedOrderId(isExpanded ? null : orderId)}
-                          className="flex-shrink-0 text-text-muted hover:text-primary transition-colors p-1 cursor-pointer"
-                          title={isExpanded ? "Collapse Details" : "View Breakdown & Images"}
-                        >
-                          <FaChevronDown className={`text-xs transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                        </button>
-                      </div>
+            {/* 4. Dedicated Franchise Partner Filter (when viewing Franchise tab) */}
+            {awaitingSubFilter === "franchise_orders" && (
+              <div>
+                <label className="block text-[10px] font-semibold text-purple-600 dark:text-purple-400 mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <FaStore size={9} />
+                    Franchise Partner &amp; GSTIN
+                  </span>
+                  <span className="text-[9px] text-text-muted font-bold">({computedFranchiseOptions.length})</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedFranchiseId}
+                    onChange={(e) => {
+                      setSelectedFranchiseId(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full appearance-none h-9 bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 focus:border-purple-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  >
+                    <option value="all">All Franchise Partners ({computedFranchiseOptions.length})</option>
+                    {computedFranchiseOptions.map((fran) => (
+                      <option key={fran.id || fran.name} value={fran.id || fran.name}>
+                        {fran.name} {fran.gstin ? `— GST: ${fran.gstin}` : ""} {fran.pending_count > 0 ? `(${fran.pending_count} pending)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-500 text-[9px] pointer-events-none" />
+                </div>
+              </div>
+            )}
 
-                      {/* Expanded item details with rich BOM breakdown & product images */}
-                      {isExpanded && (
-                        <div className="px-6 py-5 bg-surface-hover/30 border-t border-border space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[11px] font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
-                              <FaBoxOpen className="text-primary text-xs" />
-                              Order Items &amp; Complete Kit Component Breakdown
-                            </div>
-                            <span className="text-[10px] font-bold text-text-muted">
-                              {(order.items || []).length} item{(order.items || []).length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
+            {/* 4. Customer Filter (when viewing All Orders awaiting action) */}
+            {awaitingSubFilter === "all" && (
+              <div>
+                <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                  Partner / Customer (Name &amp; GST)
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedEpcId !== "all" ? `epc_${selectedEpcId}` : selectedFranchiseId !== "all" ? `fran_${selectedFranchiseId}` : "all"}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "all") {
+                        setSelectedEpcId("all");
+                        setSelectedFranchiseId("all");
+                      } else if (val.startsWith("epc_")) {
+                        setSelectedEpcId(val.replace("epc_", ""));
+                        setSelectedFranchiseId("all");
+                      } else if (val.startsWith("fran_")) {
+                        setSelectedFranchiseId(val.replace("fran_", ""));
+                        setSelectedEpcId("all");
+                      }
+                      setPage(1);
+                    }}
+                    className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  >
+                    <option value="all">All Partners &amp; Customers</option>
+                    {computedEpcOptions.length > 0 && (
+                      <optgroup label="🏢 EPC Buyers">
+                        {computedEpcOptions.map((epc) => (
+                          <option key={`epc_${epc.id || epc.name}`} value={`epc_${epc.id || epc.name}`}>
+                            {epc.name} {epc.gstin ? `(GST: ${epc.gstin})` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {computedFranchiseOptions.length > 0 && (
+                      <optgroup label="🏪 Franchise Partners">
+                        {computedFranchiseOptions.map((fran) => (
+                          <option key={`fran_${fran.id || fran.name}`} value={`fran_${fran.id || fran.name}`}>
+                            {fran.name} {fran.gstin ? `(GST: ${fran.gstin})` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                </div>
+              </div>
+            )}
 
-                          <div className="space-y-4">
-                            {(order.items || []).map((item, idx) => {
-                              const isKit = item.scope_type === "kit" || (!item.scope_type && item.kit_id) || (item.item_name || "").toLowerCase().includes("kit") || item.breakdown;
-                              const breakdown = isKit ? getItemBreakdown(item) : null;
-
-                              return (
-                                <div key={idx} className="bg-surface rounded-2xl border border-border shadow-xs overflow-hidden">
-                                  {/* Item Title Bar */}
-                                  <div className="p-4 bg-surface-hover/50 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3.5 min-w-0">
-                                      <img
-                                        src={item.image || breakdown?.kit_image || DEFAULT_PANEL_IMG}
-                                        alt={item.item_name}
-                                        className="w-14 h-14 rounded-xl object-cover border border-border shadow-xs flex-shrink-0 bg-white"
-                                      />
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <h4 className="text-sm font-black text-text-primary tracking-tight">{item.item_name}</h4>
-                                          {isKit && (
-                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
-                                              Combo Kit
-                                            </span>
-                                          )}
-                                          {item.capacity && (
-                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/20">
-                                              {item.capacity}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-xs text-text-secondary font-semibold mt-1 flex items-center gap-2 flex-wrap">
-                                          <span>Order Quantity: <strong className="text-text-primary font-black">{item.quantity} {isKit ? "Kit" : "Unit"}{item.quantity > 1 ? "s" : ""}</strong></span>
-                                          <span className="text-text-muted">•</span>
-                                          <span>Rate: <strong className="text-text-primary">₹{(item.unit_price || 0).toLocaleString("en-IN")}</strong> / {isKit ? "kit" : "unit"}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="text-right flex-shrink-0 bg-primary/5 px-4 py-2 rounded-xl border border-primary/10">
-                                      <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Item Total Value</div>
-                                      <div className="text-base font-black text-primary">₹{(item.total_price || 0).toLocaleString("en-IN")}</div>
-                                    </div>
-                                  </div>
-
-                                  {/* Rich Component Breakdown for Combo Kits */}
-                                  {breakdown && (
-                                    <div className="p-4 bg-bg/40 space-y-3">
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
-                                          <FaBoxOpen className="text-amber-500 text-xs" />
-                                          Bill of Materials (BOM) Breakdown — Exact Components to Procure
-                                        </span>
-                                        <span className="text-[10px] font-bold text-text-muted">
-                                          Total components for {item.quantity} Kit{item.quantity > 1 ? "s" : ""}
-                                        </span>
-                                      </div>
-
-                                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        {/* 1. Solar Panels Card */}
-                                        {breakdown.panels && (
-                                          <div className="p-3.5 rounded-xl border border-amber-300/80 dark:border-amber-700/60 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent flex items-start gap-3">
-                                            <img
-                                              src={breakdown.panels.image || DEFAULT_PANEL_IMG}
-                                              alt={breakdown.panels.name}
-                                              className="w-16 h-16 rounded-lg object-cover border border-amber-300 dark:border-amber-700/60 flex-shrink-0 shadow-xs bg-white"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                              <div className="flex items-center justify-between gap-1 mb-1">
-                                                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500 text-white shadow-xs">
-                                                  ☀️ Solar Panels
-                                                </span>
-                                                <span className="text-xs font-black text-amber-700 dark:text-amber-300">
-                                                  {breakdown.panels.total_quantity} Pcs Total
-                                                </span>
-                                              </div>
-                                              <div className="text-xs font-bold text-text-primary line-clamp-1">
-                                                {breakdown.panels.name}
-                                              </div>
-                                              <div className="text-[10px] text-text-secondary font-medium mt-0.5">
-                                                Brand: <strong className="text-text-primary">{breakdown.panels.brand}</strong>
-                                              </div>
-                                              <div className="text-[10px] font-semibold text-amber-800 dark:text-amber-200/90 mt-1 bg-amber-100/70 dark:bg-amber-950/60 px-2 py-0.5 rounded-md inline-block">
-                                                {breakdown.panels.quantity_per_kit} pcs/kit × {item.quantity} kits = <strong className="font-black text-amber-900 dark:text-amber-100">{breakdown.panels.total_quantity} Panels</strong>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* 2. Inverters Card */}
-                                        {breakdown.inverters && (
-                                          <div className="p-3.5 rounded-xl border border-blue-300/80 dark:border-blue-700/60 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent flex items-start gap-3">
-                                            <img
-                                              src={breakdown.inverters.image || DEFAULT_INVERTER_IMG}
-                                              alt={breakdown.inverters.name}
-                                              className="w-16 h-16 rounded-lg object-cover border border-blue-300 dark:border-blue-700/60 flex-shrink-0 shadow-xs bg-white"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                              <div className="flex items-center justify-between gap-1 mb-1">
-                                                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-xs">
-                                                  ⚡ Solar Inverter
-                                                </span>
-                                                <span className="text-xs font-black text-blue-700 dark:text-blue-300">
-                                                  {breakdown.inverters.total_quantity} Pcs Total
-                                                </span>
-                                              </div>
-                                              <div className="text-xs font-bold text-text-primary line-clamp-1">
-                                                {breakdown.inverters.name}
-                                              </div>
-                                              <div className="text-[10px] text-text-secondary font-medium mt-0.5">
-                                                Brand: <strong className="text-text-primary">{breakdown.inverters.brand}</strong>
-                                              </div>
-                                              <div className="text-[10px] font-semibold text-blue-800 dark:text-blue-200/90 mt-1 bg-blue-100/70 dark:bg-blue-950/60 px-2 py-0.5 rounded-md inline-block">
-                                                {breakdown.inverters.quantity_per_kit} pc/kit × {item.quantity} kits = <strong className="font-black text-blue-900 dark:text-blue-100">{breakdown.inverters.total_quantity} Inverters</strong>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-
-                                        {/* 3. BOS & Protection Items Card */}
-                                        {breakdown.bos_components && breakdown.bos_components.length > 0 && (
-                                          <div className="p-3.5 rounded-xl border border-emerald-300/80 dark:border-emerald-700/60 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent flex flex-col justify-between">
-                                            <div>
-                                              <div className="flex items-center justify-between gap-1 mb-2">
-                                                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
-                                                  🔧 BOS &amp; Protection
-                                                </span>
-                                                <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
-                                                  Complete Kit Included
-                                                </span>
-                                              </div>
-                                              <div className="space-y-1.5">
-                                                {breakdown.bos_components.map((bos, bIdx) => (
-                                                  <div key={bIdx} className="flex items-center gap-2 bg-white/70 dark:bg-surface/70 px-2 py-1 rounded-lg border border-emerald-100 dark:border-emerald-900/40 text-[10px]">
-                                                    <img src={bos.image || DEFAULT_STRUCTURE_IMG} alt={bos.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />
-                                                    <span className="font-bold text-text-primary truncate flex-1">{bos.name}</span>
-                                                    <span className="font-black text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
-                                                      {bos.total_quantity} Sets
-                                                    </span>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {/* 5. Search Filter Input */}
+            <div>
+              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                {awaitingSubFilter === "epc_orders"
+                  ? "Search EPC Orders"
+                  : awaitingSubFilter === "franchise_orders"
+                  ? "Search Franchise Orders"
+                  : "Search Orders & POs"}
+              </label>
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder={
+                    awaitingSubFilter === "epc_orders"
+                      ? "EPC Name, GSTIN, Order #..."
+                      : awaitingSubFilter === "franchise_orders"
+                      ? "Franchise Name, GSTIN, Order #..."
+                      : "Order #, Customer, GSTIN, PO..."
+                  }
+                  className="w-full h-9 bg-bg border border-border focus:border-primary rounded-xl pl-8 pr-7 text-xs font-medium text-text-primary outline-none transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(""); setPage(1); }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary cursor-pointer"
+                  >
+                    <FaTimes size={10} />
+                  </button>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Row 3: Active Filters Chips */}
+        {hasActiveMasterFilters && (
+          <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider mr-1">Active:</span>
+
+              {quickFilters.industryType !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
+                  <span>Industry: {quickFilters.industryType}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setQuickFilters(prev => ({ ...prev, industryType: "all" })); setPage(1); }}
+                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {quickFilters.category !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
+                  <span>Category: {quickFilters.category}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setQuickFilters(prev => ({ ...prev, category: "all" })); setPage(1); }}
+                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {quickFilters.subCategory !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
+                  <span>Sub: {quickFilters.subCategory}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setQuickFilters(prev => ({ ...prev, subCategory: "all" })); setPage(1); }}
+                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {quickFilters.systemType !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
+                  <span>Type: {quickFilters.systemType}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setQuickFilters(prev => ({ ...prev, systemType: "all" })); setPage(1); }}
+                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {quickFilters.projectRange !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
+                  <span>Range: {quickFilters.projectRange}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setQuickFilters(prev => ({ ...prev, projectRange: "all" })); setPage(1); }}
+                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {selectedState !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-semibold border border-amber-500/20">
+                  <FaMapMarkerAlt size={9} />
+                  <span>State: {statesList.find(s => String(s.id || s._id) === String(selectedState))?.name || selectedState}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedState("all"); setSelectedDistrict("all"); setPage(1); }}
+                    className="hover:text-amber-900 ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {selectedDistrict !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-semibold border border-amber-500/20">
+                  <FaMapMarkerAlt size={9} />
+                  <span>District: {districtsList.find(d => String(d.id || d._id) === String(selectedDistrict))?.name || selectedDistrict}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedDistrict("all"); setPage(1); }}
+                    className="hover:text-amber-900 ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {selectedComboKit !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-[11px] font-semibold border border-indigo-500/20">
+                  <FaBoxOpen size={9} />
+                  <span>Kit: {allAdminKits.find(k => String(k._id || k.id) === String(selectedComboKit))?.name || "Selected Kit"}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedComboKit("all"); setPage(1); }}
+                    className="hover:text-indigo-900 ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {selectedEpcId !== "all" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400 text-[11px] font-semibold border border-blue-500/20">
+                  <FaBuilding size={9} />
+                  <span>EPC: {computedEpcOptions.find(e => String(e.id || e.name) === String(selectedEpcId))?.name || selectedEpcId}</span>
+                  {computedEpcOptions.find(e => String(e.id || e.name) === String(selectedEpcId))?.gstin && (
+                    <span className="font-mono text-[9px] bg-blue-100 dark:bg-blue-900/60 px-1 py-0.2 rounded font-bold">
+                      {computedEpcOptions.find(e => String(e.id || e.name) === String(selectedEpcId))?.gstin}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedEpcId("all"); setPage(1); }}
+                    className="hover:text-blue-900 ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {selectedFranchiseId !== "all" && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 text-[11px] font-semibold border border-purple-500/20">
+                  <FaStore size={9} />
+                  <span>Franchise: {computedFranchiseOptions.find(f => String(f.id || f.name) === String(selectedFranchiseId))?.name || selectedFranchiseId}</span>
+                  {computedFranchiseOptions.find(f => String(f.id || f.name) === String(selectedFranchiseId))?.gstin && (
+                    <span className="font-mono text-[9px] bg-purple-100 dark:bg-purple-900/60 px-1 py-0.2 rounded font-bold">
+                      {computedFranchiseOptions.find(f => String(f.id || f.name) === String(selectedFranchiseId))?.gstin}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedFranchiseId("all"); setPage(1); }}
+                    className="hover:text-purple-900 ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+
+              {searchQuery.trim() && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 text-[11px] font-semibold border border-slate-500/20">
+                  <FaSearch size={9} />
+                  <span>"{searchQuery.trim()}"</span>
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(""); setPage(1); }}
+                    className="hover:text-slate-900 ml-0.5 cursor-pointer"
+                  >
+                    <FaTimes size={9} />
+                  </button>
+                </span>
+              )}
+            </div>
+
+            <div className="text-[11px] font-bold text-text-secondary">
+              Matches: <span className="text-blue-600 font-black">{filteredEpcOnlyOrders.length}</span> EPC Orders,{" "}
+              <span className="text-purple-600 font-black">{filteredFranchiseOnlyOrders.length}</span> Franchise Orders,{" "}
+              <span className="text-primary font-black">{filteredPOList.length}</span> Supplier POs
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ─── EPC Customer Orders Section ─────── */}
+      {activeTab === "pending" && (awaitingSubFilter === "all" || awaitingSubFilter === "epc_orders") && (
+        <CustomerOrdersTable
+          title="EPC Customer Orders (Awaiting Supplier Procurement)"
+          icon={FaBuilding}
+          type="epc"
+          orders={filteredEpcOnlyOrders}
+          totalPendingCount={pendingEpcCount}
+          selectedOrderIds={selectedOrderIds}
+          toggleOrderSelection={toggleOrderSelection}
+          onSelectAll={selectAllEpcOrders}
+          isAllSelected={isAllEpcSelected}
+          selectedCount={selectedEpcCount}
+          expandedOrderId={expandedOrderId}
+          setExpandedOrderId={setExpandedOrderId}
+          hasActiveFilters={hasActiveMasterFilters}
+          onResetFilters={resetAllMasterFilters}
+          loading={loadingEpcOrders}
+        />
+      )}
+
+      {/* ─── Franchise Customer Orders Section ─────── */}
+      {activeTab === "pending" && (awaitingSubFilter === "all" || awaitingSubFilter === "franchise_orders") && (
+        <CustomerOrdersTable
+          title="Franchise Orders (Awaiting Supplier Procurement)"
+          icon={FaStore}
+          type="franchise"
+          orders={filteredFranchiseOnlyOrders}
+          totalPendingCount={pendingFranchiseCount}
+          selectedOrderIds={selectedOrderIds}
+          toggleOrderSelection={toggleOrderSelection}
+          onSelectAll={selectAllFranchiseOrders}
+          isAllSelected={isAllFranchiseSelected}
+          selectedCount={selectedFranchiseCount}
+          expandedOrderId={expandedOrderId}
+          setExpandedOrderId={setExpandedOrderId}
+          hasActiveFilters={hasActiveMasterFilters}
+          onResetFilters={resetAllMasterFilters}
+          loading={loadingEpcOrders}
+        />
       )}
 
       {/* ─── Supplier Purchase Orders Section (POs) ───────────────────────── */}
@@ -1390,330 +2544,227 @@ export default function Payments() {
                   <FaClipboardList className="w-3.5 h-3.5" />
                 </span>
                 <h3 className="font-bold text-sm text-text-primary">
-                  Supplier Purchase Orders (PO) Awaiting Payment
+                  Supplier Purchase Orders (PO) Awaiting Order
                 </h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                  {filteredPOList.length} order{filteredPOList.length !== 1 ? "s" : ""}
+                  {hasActiveMasterFilters ? `${filteredPOList.length} of ${purchaseOrders.length} orders` : `${filteredPOList.length} order${filteredPOList.length !== 1 ? "s" : ""}`}
                 </span>
               </div>
             </div>
           )}
 
-          {/* ─── Quick Filters Bar ─────────────────────────────────────────────── */}
-          <div className="bg-surface border border-border rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
-              <FaFilter className="w-3 h-3" />
-            </span>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-text-primary">Quick Filters</h3>
-              {hasActiveQuickFilters && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                  Filtered ({filteredPOList.length} orders)
-                </span>
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={clearQuickFilters}
-            className="text-xs font-semibold text-primary hover:text-primary/70 hover:underline cursor-pointer transition-colors"
-          >
-            Clear Main
-          </button>
-        </div>
+          {/* Table Section */}
+          <div className="card bg-surface border border-border">
+            <div className="p-4 border-b border-border flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="flex flex-col md:flex-row gap-3 flex-1">
+                <div className="relative flex-1 max-w-xs">
+                  <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setPage(1);
+                    }}
+                    placeholder="Search PO, Proforma Invoice, supplier..."
+                    className="w-full h-10 bg-bg border border-border focus:border-primary rounded-xl pl-9 pr-4 text-xs font-semibold outline-none text-text-primary"
+                  />
+                </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* 1. Industry Type */}
-          <div>
-            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Industry Type</label>
-            <div className="relative">
-              <select
-                value={quickFilters.industryType}
-                onChange={(e) => { setQuickFilters({ industryType: e.target.value, category: "all", subCategory: "all", systemType: "all", projectRange: "all" }); setPage(1); }}
-                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
-              >
-                {qfIndustryTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
-              </select>
-              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
-            </div>
-          </div>
+                {/* Warehouse Filter */}
+                <DropdownWithSearchInput
+                  value={warehouseFilter}
+                  onChange={(val) => { setWarehouseFilter(val); setPage(1); }}
+                  options={[
+                    { value: "All", text: "All Warehouses" },
+                    ...uniqueWarehouses.map(w => ({ value: w._id || w.id, text: `${w.warehouse_code} (${w.address})` }))
+                  ]}
+                  placeholder="Filter by Warehouse..."
+                  className="w-56 text-left"
+                />
 
-          {/* 2. Category */}
-          <div>
-            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Category</label>
-            <div className="relative">
-              <select
-                value={quickFilters.category}
-                onChange={(e) => { setQuickFilters(prev => ({ ...prev, category: e.target.value, subCategory: "all", systemType: "all", projectRange: "all" })); setPage(1); }}
-                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
-              >
-                {qfCategoryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
-              </select>
-              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                {/* Supplier Filter */}
+                <DropdownWithSearchInput
+                  value={supplierFilter}
+                  onChange={(val) => { setSupplierFilter(val); setPage(1); }}
+                  options={[
+                    { value: "All", text: "All Suppliers" },
+                    ...uniqueSuppliers.map(s => ({ value: s._id || s.id, text: `${s.company_name} (${s.brand_name})` }))
+                  ]}
+                  placeholder="Filter by Supplier..."
+                  className="w-56 text-left"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* 3. Sub Category */}
-          <div>
-            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Sub Category</label>
-            <div className="relative">
-              <select
-                value={quickFilters.subCategory}
-                onChange={(e) => { setQuickFilters(prev => ({ ...prev, subCategory: e.target.value, systemType: "all", projectRange: "all" })); setPage(1); }}
-                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
-              >
-                {qfSubCategoryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
-              </select>
-              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
-            </div>
-          </div>
+            <div className="overflow-x-auto px-6 pb-6 pt-2">
+              <CustomTable
+                containerClassName="shadow-none border-none bg-transparent"
+                headers={[
+                  { key: "po_number", label: "PO Details" },
+                  { key: "supplier", label: "Supplier / Brand" },
+                  { key: "items", label: "Products ordered" },
+                  { key: "total_amount", label: "Total Order Price" },
+                  { key: "timeline", label: "Due Timeline" },
+                  { key: "documents", label: "Documents" },
+                  { key: "status", label: "Status" },
+                  { key: "action", label: "Actions", align: "center" }
+                ]}
+                data={paginatedPOs}
+                loading={loadingOrders}
+                renderRow={(po) => {
+                  const totalVal = (po.items || []).reduce((acc, it) => acc + (it.qty * it.order_price), 0);
+                  const timelineDateObj = new Date(po.timeline);
+                  timelineDateObj.setHours(0, 0, 0, 0);
+                  const todayObj = new Date();
+                  todayObj.setHours(0, 0, 0, 0);
+                  const diffTime = todayObj - timelineDateObj;
+                  const overdueDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+                  const isPoOverdue = po.status !== "delivered" && overdueDays > 0;
 
-          {/* 4. System Type */}
-          <div>
-            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">System Type</label>
-            <div className="relative">
-              <select
-                value={quickFilters.systemType}
-                onChange={(e) => { setQuickFilters(prev => ({ ...prev, systemType: e.target.value, projectRange: "all" })); setPage(1); }}
-                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
-              >
-                {qfSystemTypeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
-              </select>
-              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
-            </div>
-          </div>
-
-          {/* 5. Project Range */}
-          <div>
-            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Project Range</label>
-            <div className="relative">
-              <select
-                value={quickFilters.projectRange}
-                onChange={(e) => { setQuickFilters(prev => ({ ...prev, projectRange: e.target.value })); setPage(1); }}
-                className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
-              >
-                {qfProjectRangeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.text}</option>)}
-              </select>
-              <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Section */}
-      <div className="card bg-surface border border-border">
-        <div className="p-4 border-b border-border flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex flex-col md:flex-row gap-3 flex-1">
-            <div className="relative flex-1 max-w-xs">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setPage(1);
+                  return (
+                    <>
+                      <td className="px-6 py-4">
+                        <span className="font-extrabold text-primary text-xs uppercase block">{po.po_number}</span>
+                        <span className="text-[10px] text-text-secondary font-bold block mt-0.5">PI No: {po.invoice_no || "—"}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-text-primary text-xs">{po.supplier_id?.company_name || "N/A"}</span>
+                        <div className="text-[10px] text-text-secondary">Brand: {po.supplier_id?.brand_name || "N/A"}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-xs font-bold text-text-primary">
+                          {(po.items || []).length} SKU{(po.items || []).length !== 1 ? "s" : ""}
+                        </div>
+                        <div className="text-[10px] text-text-secondary mt-0.5">
+                          {((po.items || []).reduce((acc, it) => acc + (it.qty || 0), 0)).toLocaleString()} pcs total
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedItems(po.items || []);
+                            setItemsModalOpen(true);
+                          }}
+                          className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-primary font-black hover:underline"
+                        >
+                          <FaEye size={10} /> View Items
+                        </button>
+                      </td>
+                      <td className="px-6 py-4 font-black text-text-primary text-xs">
+                        ₹{totalVal.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs font-semibold ${isPoOverdue ? 'text-danger font-extrabold' : 'text-text-primary'}`}>
+                          {new Date(po.timeline).toLocaleDateString()}
+                        </span>
+                        {isPoOverdue && (
+                          <span className="block text-[9px] font-black text-danger uppercase tracking-wider animate-pulse mt-0.5">
+                            ⚠️ Overdue ({overdueDays} {overdueDays === 1 ? 'day' : 'days'})
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1.5 max-w-[120px]">
+                          {po.purchase_order_pdf ? (
+                            <button
+                              onClick={() => {
+                                setProformaPO(po);
+                                setProformaInitialTab("po");
+                                setProformaModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold uppercase tracking-wide hover:bg-primary/20 transition-all justify-center"
+                            >
+                              <FaFilePdf size={9} /> PO PDF
+                            </button>
+                          ) : (
+                            <span className="text-[9px] text-text-muted italic text-center">No PO PDF</span>
+                          )}
+                          {po.proforma_invoice_pdf ? (
+                            <button
+                              onClick={() => {
+                                setProformaPO(po);
+                                setProformaInitialTab("pi");
+                                setProformaModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-info/10 text-info border border-info/20 text-[9px] font-bold uppercase tracking-wide hover:bg-info/20 transition-all justify-center"
+                            >
+                              <FaFilePdf size={9} /> PI PDF
+                            </button>
+                          ) : (
+                            <span className="text-[9px] text-text-muted italic text-center">No PI PDF</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase border ${po.status === 'delivered' ? 'bg-success/10 text-success border-success/20' :
+                          po.status === 'paid' ? 'bg-success/10 text-success border-success/20' :
+                            po.status === 'invoiced' ? 'bg-warning/10 text-warning border-warning/20' :
+                              po.status === 'pending' ? 'bg-primary/10 text-primary border-primary/20' :
+                                po.status === 'cancelled' ? 'bg-danger/10 text-danger border-danger/20' :
+                                  'bg-warning/10 text-warning border-warning/20'
+                          }`}>
+                          {po.status === 'pending' ? 'Pending Payment' : po.status === 'invoiced' ? 'Awaiting Payment' : po.status === 'paid' ? 'Paid / Awaiting Delivery' : po.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {["pending", "accepted", "invoiced"].includes(po.status) ? (
+                          <div className="flex flex-col gap-2 items-center justify-center">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleOpenPay(po)}
+                              className="text-[10px] font-extrabold uppercase py-1 px-3"
+                            >
+                              Add Payment Details
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => openCancelConfirm(po.id || po._id)}
+                              className="text-[10px] text-danger font-bold hover:underline"
+                            >
+                              Cancel PO
+                            </button>
+                          </div>
+                        ) : po.status === "cancelled" ? (
+                          <span className="text-[10px] text-text-muted italic">Order Cancelled</span>
+                        ) : (
+                          <div className="text-left text-[10px] space-y-0.5 bg-bg p-2 rounded-xl border border-border max-w-[170px] inline-block font-medium">
+                            <div className="text-text-secondary">UTR: <span className="font-bold text-text-primary">{po.payment_details?.reference_no}</span></div>
+                            <div className="text-text-secondary">Mode: <span className="font-bold text-text-primary">{po.payment_details?.payment_mode}</span></div>
+                            <div className="text-text-secondary">Paid: <span className="font-bold text-text-primary">₹{po.payment_details?.amount?.toLocaleString()}</span></div>
+                            {po.payment_details?.receipt_url && (
+                              <div className="mt-1">
+                                <a
+                                  href={po.payment_details.receipt_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary underline font-extrabold hover:text-primary-dark"
+                                >
+                                  📄 View Receipt
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </>
+                  );
                 }}
-                placeholder="Search PO, Proforma Invoice, supplier..."
-                className="w-full h-10 bg-bg border border-border focus:border-primary rounded-xl pl-9 pr-4 text-xs font-semibold outline-none text-text-primary"
+                emptyMessage={hasActiveMasterFilters ? "No purchase orders matching the selected master filters." : "No purchase orders found."}
               />
             </div>
 
-            {/* Warehouse Filter */}
-            <DropdownWithSearchInput
-              value={warehouseFilter}
-              onChange={(val) => { setWarehouseFilter(val); setPage(1); }}
-              options={[
-                { value: "All", text: "All Warehouses" },
-                ...uniqueWarehouses.map(w => ({ value: w._id || w.id, text: `${w.warehouse_code} (${w.address})` }))
-              ]}
-              placeholder="Filter by Warehouse..."
-              className="w-56 text-left"
-            />
-
-            {/* Supplier Filter */}
-            <DropdownWithSearchInput
-              value={supplierFilter}
-              onChange={(val) => { setSupplierFilter(val); setPage(1); }}
-              options={[
-                { value: "All", text: "All Suppliers" },
-                ...uniqueSuppliers.map(s => ({ value: s._id || s.id, text: `${s.company_name} (${s.brand_name})` }))
-              ]}
-              placeholder="Filter by Supplier..."
-              className="w-56 text-left"
-            />
+            <div className="p-6 border-t border-border">
+              <Pagination
+                currentPage={page}
+                totalPages={Math.ceil(filteredPOList.length / pageSize)}
+                onPageChange={setPage}
+                totalItems={filteredPOList.length}
+                pageSize={pageSize}
+              />
+            </div>
           </div>
         </div>
-
-        <div className="overflow-x-auto px-6 pb-6 pt-2">
-          <CustomTable
-            containerClassName="shadow-none border-none bg-transparent"
-            headers={[
-              { key: "po_number", label: "PO Details" },
-              { key: "supplier", label: "Supplier / Brand" },
-              { key: "items", label: "Products ordered" },
-              { key: "total_amount", label: "Total Order Price" },
-              { key: "timeline", label: "Due Timeline" },
-              { key: "documents", label: "Documents" },
-              { key: "status", label: "Status" },
-              { key: "action", label: "Actions", align: "center" }
-            ]}
-            data={paginatedPOs}
-            loading={loadingOrders}
-            renderRow={(po) => {
-              const totalVal = (po.items || []).reduce((acc, it) => acc + (it.qty * it.order_price), 0);
-              const timelineDateObj = new Date(po.timeline);
-              timelineDateObj.setHours(0, 0, 0, 0);
-              const todayObj = new Date();
-              todayObj.setHours(0, 0, 0, 0);
-              const diffTime = todayObj - timelineDateObj;
-              const overdueDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-              const isPoOverdue = po.status !== "delivered" && overdueDays > 0;
-
-              return (
-                <>
-                  <td className="px-6 py-4">
-                    <span className="font-extrabold text-primary text-xs uppercase block">{po.po_number}</span>
-                    <span className="text-[10px] text-text-secondary font-bold block mt-0.5">PI No: {po.invoice_no || "—"}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-text-primary text-xs">{po.supplier_id?.company_name || "N/A"}</span>
-                    <div className="text-[10px] text-text-secondary">Brand: {po.supplier_id?.brand_name || "N/A"}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-xs font-bold text-text-primary">
-                      {(po.items || []).length} SKU{(po.items || []).length !== 1 ? "s" : ""}
-                    </div>
-                    <div className="text-[10px] text-text-secondary mt-0.5">
-                      {((po.items || []).reduce((acc, it) => acc + (it.qty || 0), 0)).toLocaleString()} pcs total
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSelectedItems(po.items || []);
-                        setItemsModalOpen(true);
-                      }}
-                      className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-primary font-black hover:underline"
-                    >
-                      <FaEye size={10} /> View Items
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 font-black text-text-primary text-xs">
-                    ₹{totalVal.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-xs font-semibold ${isPoOverdue ? 'text-danger font-extrabold' : 'text-text-primary'}`}>
-                      {new Date(po.timeline).toLocaleDateString()}
-                    </span>
-                    {isPoOverdue && (
-                      <span className="block text-[9px] font-black text-danger uppercase tracking-wider animate-pulse mt-0.5">
-                        ⚠️ Overdue ({overdueDays} {overdueDays === 1 ? 'day' : 'days'})
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1.5 max-w-[120px]">
-                      {po.purchase_order_pdf ? (
-                        <button
-                          onClick={() => {
-                            setProformaPO(po);
-                            setProformaInitialTab("po");
-                            setProformaModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold uppercase tracking-wide hover:bg-primary/20 transition-all justify-center"
-                        >
-                          <FaFilePdf size={9} /> PO PDF
-                        </button>
-                      ) : (
-                        <span className="text-[9px] text-text-muted italic text-center">No PO PDF</span>
-                      )}
-                      {po.proforma_invoice_pdf ? (
-                        <button
-                          onClick={() => {
-                            setProformaPO(po);
-                            setProformaInitialTab("pi");
-                            setProformaModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-info/10 text-info border border-info/20 text-[9px] font-bold uppercase tracking-wide hover:bg-info/20 transition-all justify-center"
-                        >
-                          <FaFilePdf size={9} /> PI PDF
-                        </button>
-                      ) : (
-                        <span className="text-[9px] text-text-muted italic text-center">No PI PDF</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase border ${po.status === 'delivered' ? 'bg-success/10 text-success border-success/20' :
-                      po.status === 'paid' ? 'bg-success/10 text-success border-success/20' :
-                        po.status === 'invoiced' ? 'bg-warning/10 text-warning border-warning/20' :
-                          po.status === 'pending' ? 'bg-primary/10 text-primary border-primary/20' :
-                            po.status === 'cancelled' ? 'bg-danger/10 text-danger border-danger/20' :
-                              'bg-warning/10 text-warning border-warning/20'
-                      }`}>
-                      {po.status === 'pending' ? 'Pending Payment' : po.status === 'invoiced' ? 'Awaiting Payment' : po.status === 'paid' ? 'Paid / Awaiting Delivery' : po.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {["pending", "accepted", "invoiced"].includes(po.status) ? (
-                      <div className="flex flex-col gap-2 items-center justify-center">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => handleOpenPay(po)}
-                          className="text-[10px] font-extrabold uppercase py-1 px-3"
-                        >
-                          Add Payment Details
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => openCancelConfirm(po.id || po._id)}
-                          className="text-[10px] text-danger font-bold hover:underline"
-                        >
-                          Cancel PO
-                        </button>
-                      </div>
-                    ) : po.status === "cancelled" ? (
-                      <span className="text-[10px] text-text-muted italic">Order Cancelled</span>
-                    ) : (
-                      <div className="text-left text-[10px] space-y-0.5 bg-bg p-2 rounded-xl border border-border max-w-[170px] inline-block font-medium">
-                        <div className="text-text-secondary">UTR: <span className="font-bold text-text-primary">{po.payment_details?.reference_no}</span></div>
-                        <div className="text-text-secondary">Mode: <span className="font-bold text-text-primary">{po.payment_details?.payment_mode}</span></div>
-                        <div className="text-text-secondary">Paid: <span className="font-bold text-text-primary">₹{po.payment_details?.amount?.toLocaleString()}</span></div>
-                        {po.payment_details?.receipt_url && (
-                          <div className="mt-1">
-                            <a
-                              href={po.payment_details.receipt_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary underline font-extrabold hover:text-primary-dark"
-                            >
-                              📄 View Receipt
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </>
-              );
-            }}
-            emptyMessage="No purchase orders found."
-          />
-        </div>
-
-        <div className="p-6 border-t border-border">
-          <Pagination
-            currentPage={page}
-            totalPages={Math.ceil(filteredPOList.length / pageSize)}
-            onPageChange={setPage}
-            totalItems={filteredPOList.length}
-            pageSize={pageSize}
-          />
-        </div>
-      </div>
-    </div>
-  )}
+      )}
 
       {/* Pay Details Dialog */}
       <Dialog

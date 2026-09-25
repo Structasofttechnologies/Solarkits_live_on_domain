@@ -12,6 +12,10 @@ import { fetchCart } from "./features/slice"
 import LandingPage from "./Pages/LandingPage.jsx"
 import ShopPage from "./Pages/ShopPage.jsx"
 
+// Browse pages
+import BrowseByIndustry from "./Pages/browse/BrowseByIndustry.jsx"
+import BrowseByGovtTender from "./Pages/browse/BrowseByGovtTender.jsx"
+
 // Auth pages
 import Login from "./Pages/Login"
 import SignUp from "./Pages/SignUp"
@@ -49,6 +53,11 @@ function AppContent() {
         {/* Public landing and shop pages */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/shop" element={<ShopPage />} />
+
+        {/* Public Browse pages */}
+        <Route path="/browse/industry" element={<BrowseByIndustry />} />
+        <Route path="/browse/govt-tender" element={<BrowseByGovtTender />} />
+        <Route path="/industry-brochure" element={<BrowseByIndustry />} />
 
         {/* Legal & Policy pages */}
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />

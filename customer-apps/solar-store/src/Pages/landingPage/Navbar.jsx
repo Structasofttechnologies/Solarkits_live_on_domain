@@ -25,7 +25,9 @@ import {
   FiArrowRight,
   FiCheckCircle,
   FiStar,
+  FiFileText,
 } from "react-icons/fi";
+import { MdOutlineAccountBalance } from "react-icons/md";
 import { selectCartTotalItems } from "../../features/slice";
 import logo from "../../assets/images/logo.png";
 const getFranchisePortalUrl = () => {
@@ -39,79 +41,23 @@ const getFranchisePortalUrl = () => {
   }
   return "https://franchise.solarkits.in";
 };
-const E_SHOP_GROUPS = [
+const BROWSE_SECTORS = [
   {
-    groupTitle: "Preconfigured Solar Kits",
-    items: [
-      {
-        title: "On-Grid Solar Kits",
-        desc: "1kW – 10kW Grid-tied kits with subsidy & net-metering",
-        badge: "PM Surya Ghar",
-        badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        icon: FiSun,
-        href: "/shop",
-        appRoute: "/shop",
-      },
-      {
-        title: "Off-Grid Solar Kits",
-        desc: "1kW – 5kW Battery-backed standalone systems",
-        badge: "Zero Outages",
-        badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
-        icon: FiZap,
-        href: "/shop",
-        appRoute: "/shop",
-      },
-      {
-        title: "Hybrid Solar Kits",
-        desc: "3kW – 10kW Smart dual grid & battery storage systems",
-        badge: "Bestseller",
-        badgeColor: "bg-blue-50 text-blue-700 border-blue-200",
-        icon: FiPackage,
-        href: "/shop",
-        appRoute: "/shop",
-      },
-      {
-        title: "Commercial Solar Kits",
-        desc: "10kW – 100kW+ Three-phase heavy-duty rooftop combo kits",
-        badge: "B2B Tiered",
-        badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
-        icon: FiLayers,
-        href: "/shop",
-        appRoute: "/shop",
-      },
-    ],
+    title: "Browse SolarKits by Industry",
+    desc: "CMS-uploaded industry content grouped by sector",
+    icon: FiGrid,
+    href: "/shop",
+    appRoute: "/shop",
+    color: "blue",
   },
   {
-    groupTitle: "Custom Builders & EPC Procurement",
-    items: [
-      {
-        title: "Custom Combo Kit Builder",
-        desc: "Configure customized panels, inverters & mounting structures",
-        badge: "Interactive",
-        badgeColor: "bg-sky-50 text-sky-700 border-sky-200",
-        icon: FiGrid,
-        href: "/custom-combo-kit",
-        appRoute: "/custom-combo-kit",
-      },
-      {
-        title: "Bulk Procurement (EPC)",
-        desc: "Tiered volume discounts for registered EPC contractors",
-        badge: "Wholesale",
-        badgeColor: "bg-rose-50 text-rose-700 border-rose-200",
-        icon: FiBox,
-        href: "/bulk-buy",
-        appRoute: "/bulk-buy",
-      },
-      {
-        title: "Authorized Store Locator",
-        desc: "Find nearest SolarKits regional warehouse & franchisee hubs",
-        badge: "Pan-India",
-        badgeColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
-        icon: FiMapPin,
-        href: "/store-locator",
-        appRoute: "/store-locator",
-      },
-    ],
+    title: "Browse by Govt Tender",
+    desc: "PSU & Government tender compliant solar kits",
+    icon: MdOutlineAccountBalance,
+    href: "/shop",
+    appRoute: "/shop",
+    badge: "New",
+    color: "amber",
   },
 ];
 const NAV_LINKS = [
@@ -124,9 +70,13 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [eshopDropdownOpen, setEshopDropdownOpen] = useState(false);
-  const [mobileEshopExpanded, setMobileEshopExpanded] = useState(true);
+  const [brochureDropdownOpen, setBrochureDropdownOpen] = useState(false);
+  const [mobileEshopExpanded, setMobileEshopExpanded] = useState(false);
+  const [mobileBrochureExpanded, setMobileBrochureExpanded] = useState(false);
   const dropdownTimeoutRef = useRef(null);
+  const brochureTimeoutRef = useRef(null);
   const dropdownContainerRef = useRef(null);
+  const brochureDropdownRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
@@ -150,24 +100,36 @@ export default function Navbar() {
       ) {
         setEshopDropdownOpen(false);
       }
+      if (
+        brochureDropdownRef.current &&
+        !brochureDropdownRef.current.contains(e.target)
+      ) {
+        setBrochureDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
   const handleMouseEnterDropdown = () => {
-    if (dropdownTimeoutRef.current) {
-      clearTimeout(dropdownTimeoutRef.current);
-    }
+    if (dropdownTimeoutRef.current) clearTimeout(dropdownTimeoutRef.current);
     setEshopDropdownOpen(true);
+    setBrochureDropdownOpen(false);
   };
   const handleMouseLeaveDropdown = () => {
-    dropdownTimeoutRef.current = setTimeout(() => {
-      setEshopDropdownOpen(false);
-    }, 180);
+    dropdownTimeoutRef.current = setTimeout(() => setEshopDropdownOpen(false), 180);
+  };
+  const handleMouseEnterBrochure = () => {
+    if (brochureTimeoutRef.current) clearTimeout(brochureTimeoutRef.current);
+    setBrochureDropdownOpen(true);
+    setEshopDropdownOpen(false);
+  };
+  const handleMouseLeaveBrochure = () => {
+    brochureTimeoutRef.current = setTimeout(() => setBrochureDropdownOpen(false), 180);
   };
   const handleNavClick = (href) => {
     setMenuOpen(false);
     setEshopDropdownOpen(false);
+    setBrochureDropdownOpen(false);
     if (href.startsWith("#")) {
       if (location.pathname !== "/") {
         navigate(`/${href}`);
@@ -254,6 +216,8 @@ export default function Navbar() {
                 <FiHome className="text-sm xl:text-base text-gray-500 shrink-0" />
                 <span className="whitespace-nowrap">Home</span>
               </button>
+
+              {/* ── E-Shop Dropdown (Restored with all kit options + sector options) ── */}
               <div
                 ref={dropdownContainerRef}
                 className="relative shrink-0"
@@ -261,7 +225,7 @@ export default function Navbar() {
                 onMouseLeave={handleMouseLeaveDropdown}
               >
                 <button
-                  onClick={() => setEshopDropdownOpen((prev) => !prev)}
+                  onClick={() => handleNavClick("/shop")}
                   className={`whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2 text-xs xl:text-sm font-bold rounded-xl transition-all duration-150 cursor-pointer ${eshopDropdownOpen
                     ? "text-primary-600 bg-primary-50 ring-1 ring-primary-200"
                     : "text-gray-800 hover:text-primary-600 hover:bg-primary-50/80"
@@ -274,6 +238,10 @@ export default function Navbar() {
                     Kits
                   </span>
                   <FiChevronDown
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEshopDropdownOpen((prev) => !prev);
+                    }}
                     className={`text-xs xl:text-sm shrink-0 transition-transform duration-200 ${eshopDropdownOpen ? "rotate-180 text-primary-600" : "text-gray-400"
                       }`}
                   />
@@ -285,15 +253,15 @@ export default function Navbar() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 8, scale: 0.98 }}
                       transition={{ duration: 0.18, ease: "easeOut" }}
-                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[680px] xl:w-[720px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 p-5"
+                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[580px] xl:w-[620px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 p-4"
                     >
-                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100 gap-3">
+                      <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 gap-3">
                         <div>
-                          <h4 className="text-sm font-extrabold text-navy flex items-center gap-2">
+                          <h4 className="text-xs font-extrabold text-navy flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse"></span>
-                            SolarKits E-Shop & Catalog Explorer
+                            SolarKits E-Shop & Applications
                           </h4>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-[11px] text-gray-500">
                             Explore certified complete solar combos, bespoke builders & B2B procurement
                           </p>
                         </div>
@@ -302,57 +270,202 @@ export default function Navbar() {
                             onClick={() => handleNavClick("/shop")}
                             className="whitespace-nowrap text-xs font-bold text-primary-600 hover:text-primary-800 hover:underline flex items-center gap-1 cursor-pointer"
                           >
-                            View All Kits <FiArrowRight className="shrink-0" />
+                            View Full Catalog <FiArrowRight className="shrink-0" />
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        {E_SHOP_GROUPS.map((group, groupIdx) => (
-                          <div key={groupIdx} className="space-y-2">
-                            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-2 flex items-center gap-1.5">
-                              <span className="whitespace-nowrap">{group.groupTitle}</span>
+
+                      {/* Photo Section: BROWSE BY SECTOR & APPLICATIONS */}
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 px-1 mb-2.5">
+                        Browse by Sector & Applications
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {BROWSE_SECTORS.map((sector) => {
+                          const Icon = sector.icon;
+                          const isBlue = sector.color === "blue";
+                          return (
+                            <div
+                              key={sector.title}
+                              onClick={() => handleNavClick(sector.href || sector.appRoute || "/shop")}
+                              className={`flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer group shadow-2xs ${
+                                isBlue
+                                  ? "bg-blue-50/60 hover:bg-blue-100/70 border-blue-200/80 hover:border-blue-300"
+                                  : "bg-amber-50/60 hover:bg-amber-100/70 border-amber-200/80 hover:border-amber-300"
+                              }`}
+                            >
+                              <div
+                                className={`w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
+                                  isBlue ? "bg-blue-600" : "bg-amber-500"
+                                }`}
+                              >
+                                <Icon size={17} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <p
+                                      className={`text-xs font-bold transition-colors ${
+                                        isBlue
+                                          ? "text-blue-900 group-hover:text-blue-700"
+                                          : "text-amber-900 group-hover:text-amber-700"
+                                      }`}
+                                    >
+                                      {sector.title}
+                                    </p>
+                                    {sector.badge && (
+                                      <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                        {sector.badge}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <FiArrowRight
+                                    className={`text-xs shrink-0 group-hover:translate-x-0.5 transition-transform ${
+                                      isBlue ? "text-blue-500" : "text-amber-500"
+                                    }`}
+                                  />
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-0.5">{sector.desc}</p>
+                              </div>
                             </div>
-                            <div className="space-y-1">
-                              {group.items.map((subItem) => {
-                                const Icon = subItem.icon;
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* ── Industry Brochure Tab (New Navlink) ────────────────── */}
+              <div
+                ref={brochureDropdownRef}
+                className="relative shrink-0"
+                onMouseEnter={handleMouseEnterBrochure}
+                onMouseLeave={handleMouseLeaveBrochure}
+              >
+                <button
+                  onClick={() => handleNavClick("/browse/industry")}
+                  className={`whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-2 text-xs xl:text-sm font-bold rounded-xl transition-all duration-150 cursor-pointer ${brochureDropdownOpen
+                    ? "text-primary-600 bg-primary-50 ring-1 ring-primary-200"
+                    : "text-gray-800 hover:text-primary-600 hover:bg-primary-50/80"
+                    }`}
+                >
+                  <FiFileText className="text-sm xl:text-base text-primary-500 shrink-0" />
+                  <span className="whitespace-nowrap">Industry Brochure</span>
+                  <FiChevronDown
+                    className={`text-xs xl:text-sm shrink-0 transition-transform duration-200 ${brochureDropdownOpen ? "rotate-180 text-primary-600" : "text-gray-400"
+                      }`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {brochureDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                      className="absolute top-full left-0 mt-2 w-[600px] bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 p-5"
+                    >
+                      <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100">
+                        <div>
+                          <h4 className="text-xs font-extrabold text-navy flex items-center gap-2">
+                            <FiFileText className="text-primary-500" size={15} />
+                            SolarKits Industry & Tender Brochures
+                          </h4>
+                          <p className="text-[11px] text-gray-500">
+                            Explore sector-specific solar brochures, specs & tender configurations
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Section 1: Browse by Industry */}
+                        <div className="p-3.5 rounded-xl bg-blue-50/40 border border-blue-100 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                                <FiGrid size={13} />
+                              </div>
+                              <div>
+                                <h5 className="text-xs font-bold text-gray-800">Browse by Industry</h5>
+                                <p className="text-[10px] text-gray-500">CMS Industry Content</p>
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
+                              Explore solutions tailored for residential, commercial, industrial and agricultural sectors.
+                            </p>
+                            <div className="space-y-1 mb-3">
+                              {[
+                                { label: "Residential Solar", icon: FiHome },
+                                { label: "Commercial Solar", icon: FiBriefcase },
+                                { label: "Industrial Solar", icon: FiPackage },
+                                { label: "Agricultural Solar", icon: FiSun },
+                              ].map((sec) => {
+                                const SecIcon = sec.icon;
                                 return (
                                   <div
-                                    key={subItem.title}
-                                    onClick={() => handleNavClick(subItem.href || subItem.appRoute)}
-                                    className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-primary-50/60 transition-all duration-150 cursor-pointer border border-transparent hover:border-primary-100"
+                                    key={sec.label}
+                                    onClick={() => handleNavClick("/browse/industry")}
+                                    className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-blue-100/60 transition-colors cursor-pointer text-[11px] font-semibold text-gray-700 hover:text-blue-700"
                                   >
-                                    <div className="w-9 h-9 rounded-lg bg-primary-50 text-primary-600 group-hover:bg-primary-500 group-hover:text-white flex items-center justify-center shrink-0 transition-colors shadow-xs">
-                                      <Icon className="text-base shrink-0" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center justify-between gap-1">
-                                        <span className="text-xs font-bold text-gray-800 group-hover:text-primary-600 transition-colors truncate">
-                                          {subItem.title}
-                                        </span>
-                                        {subItem.badge && (
-                                          <span
-                                            className={`whitespace-nowrap text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${subItem.badgeColor}`}
-                                          >
-                                            {subItem.badge}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
-                                        {subItem.desc}
-                                      </p>
-                                    </div>
+                                    <SecIcon size={12} className="text-blue-500" />
+                                    <span>{sec.label}</span>
                                   </div>
                                 );
                               })}
                             </div>
                           </div>
-                        ))}
-                      </div>
+                          <button
+                            onClick={() => handleNavClick("/browse/industry")}
+                            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <span>Open Industry Catalog</span>
+                            <FiArrowRight size={12} />
+                          </button>
+                        </div>
 
+                        {/* Section 2: Browse by Govt Tender */}
+                        <div className="p-3.5 rounded-xl bg-amber-50/40 border border-amber-100 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+                                <MdOutlineAccountBalance size={14} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <h5 className="text-xs font-bold text-gray-800">Browse by Govt Tender</h5>
+                                  <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                    New
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500">Government & PSU Tenders</p>
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-gray-600 leading-relaxed mb-3">
+                              Solar kits configured for government tenders, PSU procurement, MNRE schemes and public projects.
+                            </p>
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {["MNRE Approved", "GeM Ready", "PSU Compliant", "Subsidy Ready"].map((tag) => (
+                                <span key={tag} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100/80 border border-amber-200 text-amber-800">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleNavClick("/browse/govt-tender")}
+                            className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <span>Explore Tender Kits</span>
+                            <FiArrowRight size={12} />
+                          </button>
+                        </div>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Why SolarKits */}
               <button
                 onClick={() => handleNavClick("#why-choose")}
                 className="whitespace-nowrap shrink-0 inline-flex items-center px-2.5 xl:px-3.5 py-2 text-gray-700 text-xs xl:text-sm font-semibold rounded-xl hover:text-primary-600 hover:bg-primary-50/80 transition-all duration-150 cursor-pointer"
@@ -466,6 +579,7 @@ export default function Navbar() {
                   </span>
                   <FiChevronRight className="text-gray-400 text-sm shrink-0" />
                 </button>
+                {/* ── E-Shop & Solar Kits — mobile ── */}
                 <div className="border border-gray-200/80 rounded-2xl overflow-hidden bg-gray-50/40">
                   <button
                     onClick={() => setMobileEshopExpanded(!mobileEshopExpanded)}
@@ -485,33 +599,98 @@ export default function Navbar() {
                   </button>
                   {mobileEshopExpanded && (
                     <div className="p-2 space-y-1 bg-white border-t border-gray-100">
-                      {E_SHOP_GROUPS.flatMap((g) => g.items).map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <button
-                            key={item.title}
-                            onClick={() => handleNavClick(item.href || item.appRoute)}
-                            className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-primary-50/60 text-left transition-colors group cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <Icon className="text-primary-500 text-base shrink-0 group-hover:text-primary-700" />
-                              <div className="truncate">
-                                <p className="text-xs font-bold text-gray-800 group-hover:text-primary-600 truncate">
-                                  {item.title}
-                                </p>
-                                <p className="text-[10px] text-gray-400 truncate">{item.desc}</p>
-                              </div>
-                            </div>
-                            {item.badge && (
-                              <span
-                                className={`whitespace-nowrap text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${item.badgeColor}`}
-                              >
-                                {item.badge}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
+                      <button
+                        onClick={() => handleNavClick("/shop")}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-primary-50 text-left transition-colors cursor-pointer bg-primary-50/50"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FiShoppingBag className="text-primary-600 text-base shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">Visit E-Shop Catalog</p>
+                            <p className="text-[10px] text-gray-500">Explore complete solar combo kits</p>
+                          </div>
+                        </div>
+                        <FiChevronRight className="text-primary-400 shrink-0" size={14} />
+                      </button>
+
+                      <button
+                        onClick={() => handleNavClick("/browse/industry")}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50 text-left transition-colors cursor-pointer bg-blue-50/40"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FiGrid className="text-blue-600 text-base shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">Browse SolarKits by Industry</p>
+                            <p className="text-[10px] text-gray-500">CMS Industry Content</p>
+                          </div>
+                        </div>
+                        <FiChevronRight className="text-blue-400 shrink-0" size={14} />
+                      </button>
+
+                      <button
+                        onClick={() => handleNavClick("/browse/govt-tender")}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-amber-50 text-left transition-colors cursor-pointer bg-amber-50/40"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <MdOutlineAccountBalance className="text-amber-500 text-base shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">Browse by Govt Tender</p>
+                            <p className="text-[10px] text-gray-500">PSU & Scheme Tenders</p>
+                          </div>
+                        </div>
+                        <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                          New
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Industry Brochure — mobile ── */}
+                <div className="border border-blue-200/80 rounded-2xl overflow-hidden bg-blue-50/30">
+                  <button
+                    onClick={() => setMobileBrochureExpanded(!mobileBrochureExpanded)}
+                    className="w-full flex items-center justify-between p-3.5 text-blue-900 font-extrabold text-sm bg-blue-50/80 hover:bg-blue-100/70 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2 whitespace-nowrap">
+                      <FiFileText className="text-blue-600 text-base shrink-0" />
+                      Industry Brochure
+                    </span>
+                    <FiChevronDown
+                      className={`text-gray-500 transition-transform duration-200 shrink-0 ${mobileBrochureExpanded ? "rotate-180" : ""
+                        }`}
+                    />
+                  </button>
+                  {mobileBrochureExpanded && (
+                    <div className="p-2 space-y-1 bg-white border-t border-blue-100">
+                      <button
+                        onClick={() => handleNavClick("/browse/industry")}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50 text-left transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FiGrid className="text-blue-600 text-base shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">Browse SolarKits by Industry</p>
+                            <p className="text-[10px] text-gray-400">Residential, Commercial, Industrial, Agri</p>
+                          </div>
+                        </div>
+                        <FiChevronRight className="text-gray-400 shrink-0" size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleNavClick("/browse/govt-tender")}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-amber-50 text-left transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <MdOutlineAccountBalance className="text-amber-500 text-base shrink-0" />
+                          <div>
+                            <p className="text-xs font-bold text-gray-800">Browse by Govt Tender</p>
+                            <p className="text-[10px] text-gray-400">PSU, MNRE & GeM tender kits</p>
+                          </div>
+                        </div>
+                        <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                          New
+                        </span>
+                      </button>
                     </div>
                   )}
                 </div>

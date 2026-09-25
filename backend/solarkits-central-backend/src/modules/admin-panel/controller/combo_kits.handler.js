@@ -587,6 +587,16 @@ const delete_combo_kit = async (req, res) => {
         kit.deleted_at = new Date();
         await kit.save();
 
+        try {
+            const rawDb = mongoose.connection.db;
+            if (rawDb) {
+                await rawDb.collection('pc_combo_kits').updateOne(
+                    { _id: kit._id },
+                    { $set: { deleted_at: kit.deleted_at } }
+                );
+            }
+        } catch (e) {}
+
         res.status(200).json({ status: 'success', message: 'Combo Kit deleted successfully.' });
     } catch (error) {
         console.error("Error in delete_combo_kit:", error);
@@ -1140,6 +1150,16 @@ const delete_combo_kit_india = async (req, res) => {
 
         kit.deleted_at = new Date();
         await kit.save();
+
+        try {
+            const rawDb = mongoose.connection.db;
+            if (rawDb) {
+                await rawDb.collection('pc_combo_kits').updateOne(
+                    { _id: kit._id },
+                    { $set: { deleted_at: kit.deleted_at } }
+                );
+            }
+        } catch (e) {}
 
         res.status(200).json({ status: 'success', message: 'Combo Kit deleted successfully.' });
     } catch (error) {

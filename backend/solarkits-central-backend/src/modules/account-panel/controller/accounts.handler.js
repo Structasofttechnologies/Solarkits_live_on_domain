@@ -1401,13 +1401,33 @@ const get_purchase_orders = async (req, res) => {
       .lean();
 
     const supplierIds = [...new Set(list.map(po => po.supplier_id?.toString()).filter(Boolean))];
-    const suppliersList = await Supplier.find({ _id: { $in: supplierIds } }).lean();
+    const allStateIds = [...new Set(list.map(po => po.warehouse_id?.level_1?.toString()).filter(Boolean))];
+    const allDistrictIds = [...new Set(list.map(po => po.warehouse_id?.level_2?.toString()).filter(Boolean))];
+
+    const [suppliersList, geoStates, geoDistricts] = await Promise.all([
+      supplierIds.length > 0 ? Supplier.find({ _id: { $in: supplierIds } }).lean() : [],
+      allStateIds.length > 0 ? GeoLevel1.find({ _id: { $in: allStateIds } }).lean() : [],
+      allDistrictIds.length > 0 ? GeoLevel2.find({ _id: { $in: allDistrictIds } }).lean() : [],
+    ]);
+
     const supplierMap = Object.fromEntries(suppliersList.map(s => [s._id.toString(), s]));
+    const geoStateMap = Object.fromEntries(geoStates.map(s => [s._id.toString(), s.name]));
+    const geoDistMap = Object.fromEntries(geoDistricts.map(d => [d._id.toString(), d.name]));
 
     for (const po of list) {
       if (po.supplier_id) {
         po.supplier_id = supplierMap[po.supplier_id.toString()] || null;
       }
+      po.state_id = po.warehouse_id?.level_1 ? String(po.warehouse_id.level_1) : null;
+      po.state_name = po.state_id ? (geoStateMap[po.state_id] || null) : null;
+      po.district_id = po.warehouse_id?.level_2 ? String(po.warehouse_id.level_2) : null;
+      po.district_name = po.district_id ? (geoDistMap[po.district_id] || null) : null;
+      po.combo_kit_ids = [
+        ...new Set([
+          (po.combo_kit_id || '').toString(),
+          ...(po.source_orders || []).flatMap(so => (so.items || []).map(si => (si.kit_id || '').toString()))
+        ].filter(Boolean))
+      ];
       if (!po || !po.items || !Array.isArray(po.items)) continue;
       for (const item of po.items) {
         if (!item || !item.sku_id) continue;
@@ -1541,68 +1561,100 @@ const get_combo_kits = async (req, res) => {
   try {
     const { warehouseId } = req.query;
 
-    if (!warehouseId || !mongoose.Types.ObjectId.isValid(warehouseId)) {
-      return res.status(200).json({ status: "success", data: [] });
-    }
-
-    const warehouse = await CompanyWarehouse.findById(warehouseId).lean();
-    if (!warehouse) {
-      return res.status(200).json({ status: "success", data: [] });
-    }
-
-    const activations = await WarehouseKitActivation.find({
-      warehouse_id: new mongoose.Types.ObjectId(warehouseId),
-      is_combokit_active: true,
-      deleted_at: null
-    }).lean();
-
-    const activeKitIds = activations.map(a => a.combo_kit_id);
-    if (activeKitIds.length === 0) {
-      return res.status(200).json({ status: "success", data: [] });
-    }
-
-    const list = await ComboKit.find({
-      _id: { $in: activeKitIds },
-      deleted_at: null
-    })
-      .populate({
-        path: 'solar_kit_id',
-        populate: { path: 'category_id' }
-      })
-      .populate({
-        path: 'bos_kits.sku_id',
-        populate: {
-          path: 'product_id',
-          populate: [
-            { path: 'brand_id' },
-            { path: 'template_id' }
-          ]
-        }
-      })
-      .lean();
-
-    const enrichedList = list.map(k => {
-      if (k.bos_kits) {
-        k.bos_kits = k.bos_kits.map(bk => {
-          if (bk.sku_id) {
-            bk.sku_id = {
-              ...bk.sku_id,
-              id: bk.sku_id._id,
-              sku_details: {
-                product_name: bk.sku_id.product_id?.name || 'N/A'
-              }
-            };
-          }
-          return bk;
-        });
+    if (warehouseId && mongoose.Types.ObjectId.isValid(warehouseId)) {
+      const warehouse = await CompanyWarehouse.findById(warehouseId).lean();
+      if (!warehouse) {
+        return res.status(200).json({ status: "success", data: [] });
       }
-      return {
-        ...k,
-        id: k._id
-      };
-    });
 
-    return res.status(200).json({ status: "success", data: enrichedList });
+      const activations = await WarehouseKitActivation.find({
+        warehouse_id: new mongoose.Types.ObjectId(warehouseId),
+        is_combokit_active: true,
+        deleted_at: null
+      }).lean();
+
+      const activeKitIds = activations.map(a => a.combo_kit_id);
+      if (activeKitIds.length === 0) {
+        return res.status(200).json({ status: "success", data: [] });
+      }
+
+      const list = await ComboKit.find({
+        _id: { $in: activeKitIds },
+        deleted_at: null
+      })
+        .populate({
+          path: 'solar_kit_id',
+          populate: { path: 'category_id' }
+        })
+        .populate({
+          path: 'bos_kits.sku_id',
+          populate: {
+            path: 'product_id',
+            populate: [
+              { path: 'brand_id' },
+              { path: 'template_id' }
+            ]
+          }
+        })
+        .lean();
+
+      const enrichedList = list.map(k => {
+        if (k.bos_kits) {
+          k.bos_kits = k.bos_kits.map(bk => {
+            if (bk.sku_id) {
+              bk.sku_id = {
+                ...bk.sku_id,
+                id: bk.sku_id._id,
+                sku_details: {
+                  product_name: bk.sku_id.product_id?.name || 'N/A'
+                }
+              };
+            }
+            return bk;
+          });
+        }
+        return {
+          ...k,
+          id: k._id
+        };
+      });
+
+      return res.status(200).json({ status: "success", data: enrichedList });
+    }
+
+    // When no warehouseId is passed, return ALL admin-created configured combo kits (Configured Combo Kits Registry)
+    const rawDb = mongoose.connection.db;
+    let allKits = [];
+    const query = { deleted_at: null, is_custom: { $ne: true } };
+
+    if (rawDb) {
+      // Primary source of truth is pc_comobo_kit (used by Admin Combo Kit Registry)
+      const primaryKits = await rawDb.collection('pc_comobo_kit').find(query).toArray().catch(() => []);
+      if (primaryKits && primaryKits.length > 0) {
+        allKits = primaryKits;
+      } else {
+        allKits = await rawDb.collection('pc_combo_kits').find(query).toArray().catch(() => []);
+      }
+    } else {
+      const { WarehouseComboKit: ComboKit } = require('../../admin-panel/models/core_db');
+      allKits = await ComboKit.find(query).lean();
+    }
+
+    const formattedKits = allKits.map(k => {
+      const cap = Number(k.capacity || k.capacity_kw || 0);
+      return {
+        _id: k._id,
+        id: k._id.toString(),
+        name: k.name || `Solar Kit ${cap} kW`,
+        capacity: cap,
+        capacity_kw: cap,
+        kit_image: k.kit_image || k.image || null,
+        selling_price: Number(k.selling_price_cached || k.selling_price || k.base_price_cached || 0),
+        is_custom: !!k.is_custom,
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    return res.status(200).json({ status: "success", data: formattedKits });
   } catch (err) {
     console.error("Error in get_combo_kits:", err);
     return res.status(500).json({ status: "error", message: "Failed to fetch combo kits.", error: err.message });
@@ -2019,14 +2071,14 @@ async function resolveKitComponents(kitId, orderQty = 1, itemName = '', itemCapa
 // ─────────────────────────────────────────────────────────────────────────────
 const get_pending_epc_franchise_orders = async (req, res) => {
   try {
-    const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const { EpcOrder, FpoOrder, EpcAccount, Reseller } = require('../../admin-panel/models/india_solarshop_db');
 
     // 1. Fetch EPC orders awaiting stock procurement
     const epcOrders = await EpcOrder.find({
       order_status: { $in: ['confirmed', 'processing', 'pending'] },
       payment_status: { $in: ['captured', 'pending_verification', 'pending'] },
     })
-      .populate('epc_id', 'name email whatsapp gstin company_name')
+      .populate('epc_id', 'name email whatsapp gstin company_name gstin_trade_name gstin_legal_name')
       .populate('warehouse_id', 'warehouse_code address')
       .sort({ created_at: -1 })
       .lean();
@@ -2036,7 +2088,7 @@ const get_pending_epc_franchise_orders = async (req, res) => {
       status: { $in: ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'AWAITING_PAYMENT', 'PAID', 'CONFIRMED'] },
       deleted_at: null,
     })
-      .populate('franchisee_id', 'name company_name email mobile gstin')
+      .populate('franchisee_id', 'business_name name company_name email mobile gst_number gstin contact_person')
       .sort({ created_at: -1 })
       .lean();
 
@@ -2058,8 +2110,30 @@ const get_pending_epc_franchise_orders = async (req, res) => {
     const pendingEpcOrders = epcOrders.filter(o => !allSourceOrderIds.has(o._id.toString()));
     const pendingFranchiseOrders = fpoOrders.filter(o => !allSourceOrderIds.has(o._id.toString()));
 
+    // 4.1 Batch resolve State and District names for all orders
+    const allStateIds = [
+      ...pendingEpcOrders.map(o => o.delivery_address?.state_id?.toString()).filter(Boolean),
+      ...pendingFranchiseOrders.map(o => (o.state_id?._id || o.state_id)?.toString()).filter(Boolean)
+    ];
+    const allDistrictIds = [
+      ...pendingEpcOrders.map(o => o.delivery_address?.district_id?.toString()).filter(Boolean),
+      ...pendingFranchiseOrders.map(o => (o.district_id?._id || o.district_id)?.toString()).filter(Boolean)
+    ];
+
+    const [geoStates, geoDistricts] = await Promise.all([
+      allStateIds.length > 0 ? GeoLevel1.find({ _id: { $in: allStateIds } }).lean() : [],
+      allDistrictIds.length > 0 ? GeoLevel2.find({ _id: { $in: allDistrictIds } }).lean() : [],
+    ]);
+    const geoStateMap = Object.fromEntries(geoStates.map(s => [s._id.toString(), s.name]));
+    const geoDistMap = Object.fromEntries(geoDistricts.map(d => [d._id.toString(), d.name]));
+
     // 5. Format EPC orders with full component breakdown
     const formattedEpc = await Promise.all(pendingEpcOrders.map(async o => {
+      const stId = o.delivery_address?.state_id?._id || o.delivery_address?.state_id || null;
+      const distId = o.delivery_address?.district_id?._id || o.delivery_address?.district_id || null;
+      const stateName = o.delivery_address?.state_name || (stId ? geoStateMap[stId.toString()] : null);
+      const distName = o.delivery_address?.district_name || (distId ? geoDistMap[distId.toString()] : null);
+
       const items = await Promise.all((o.items || []).map(async it => {
         const breakdown = it.scope_type === 'kit' || (!it.scope_type && it.kit_id)
           ? await resolveKitComponents(it.kit_id, it.quantity, it.item_name, it.capacity)
@@ -2069,8 +2143,8 @@ const get_pending_epc_franchise_orders = async (req, res) => {
           quantity: it.quantity,
           unit_price: (it.unit_price_paise || 0) / 100,
           total_price: (it.total_price_paise || 0) / 100,
-          kit_id: it.kit_id || null,
-          product_id: it.product_id || null,
+          kit_id: it.kit_id ? it.kit_id.toString() : null,
+          product_id: it.product_id ? it.product_id.toString() : null,
           scope_type: it.scope_type || 'kit',
           capacity: it.capacity || (breakdown ? `${breakdown.capacity_kw} kW` : null),
           image: it.image || breakdown?.kit_image || null,
@@ -2078,25 +2152,54 @@ const get_pending_epc_franchise_orders = async (req, res) => {
         };
       }));
 
+      const kitIds = [...new Set(items.map(i => i.kit_id).filter(Boolean))];
+
+      const epcName = o.epc_id?.name || o.epc_id?.gstin_trade_name || o.epc_id?.company_name || o.epc_id?.gstin_legal_name || 'EPC Buyer';
+      const epcContact = o.epc_id?.whatsapp || o.epc_id?.email || '-';
+      const epcGstin = o.epc_id?.gstin || '-';
+
       return {
         id: o._id,
         order_number: o.order_number,
         order_type: 'epc',
-        customer_name: o.epc_id?.name || o.epc_id?.company_name || 'EPC Buyer',
-        customer_contact: o.epc_id?.whatsapp || o.epc_id?.email || '-',
-        customer_gstin: o.epc_id?.gstin || '-',
+        entity_id: o.epc_id?._id ? o.epc_id._id.toString() : (o.epc_id ? o.epc_id.toString() : null),
+        customer_name: epcName,
+        customer_contact: epcContact,
+        customer_gstin: epcGstin,
         order_status: o.order_status,
         payment_status: o.payment_status,
         order_amount: (o.grand_total_paise || 0) / 100,
-        delivery_address: o.delivery_address || null,
+        delivery_address: {
+          address_line: o.delivery_address?.line || null,
+          pincode: o.delivery_address?.pincode || null,
+          state_id: stId ? stId.toString() : null,
+          state_name: stateName,
+          district_id: distId ? distId.toString() : null,
+          district_name: distName,
+        },
+        state_id: stId ? stId.toString() : null,
+        state_name: stateName,
+        district_id: distId ? distId.toString() : null,
+        district_name: distName,
         warehouse_id: o.warehouse_id || null,
         items,
+        kit_ids: kitIds,
+        industry_types: ['Solar PV'],
+        categories: ['Rooftop Solar'],
+        subcategories: ['Residential', 'Commercial'],
+        system_types: ['On-Grid', 'Hybrid', 'Off-Grid'],
+        project_ranges: items.map(i => i.capacity).filter(Boolean),
         created_at: o.created_at,
       };
     }));
 
     // 6. Format Franchise orders with full component breakdown
     const formattedFranchise = await Promise.all(pendingFranchiseOrders.map(async o => {
+      const stId = o.state_id?._id || o.state_id || null;
+      const distId = o.district_id?._id || o.district_id || null;
+      const stateName = (stId ? geoStateMap[stId.toString()] : null) || o.territory_snapshot?.state_name || null;
+      const distName = (distId ? geoDistMap[distId.toString()] : null) || o.territory_snapshot?.district_name || null;
+
       const items = await Promise.all((o.items || []).map(async it => {
         const breakdown = it.kit_id
           ? await resolveKitComponents(it.kit_id, it.quantity, it.item_name, null)
@@ -2106,8 +2209,8 @@ const get_pending_epc_franchise_orders = async (req, res) => {
           quantity: it.quantity,
           unit_price: (it.unit_price_paise || 0) / 100,
           total_price: (it.total_price_paise || 0) / 100,
-          kit_id: it.kit_id || null,
-          product_id: it.product_id || null,
+          kit_id: it.kit_id ? it.kit_id.toString() : null,
+          product_id: it.product_id ? it.product_id.toString() : null,
           scope_type: 'franchise_po',
           capacity: breakdown ? `${breakdown.capacity_kw} kW` : null,
           image: breakdown?.kit_image || null,
@@ -2115,28 +2218,135 @@ const get_pending_epc_franchise_orders = async (req, res) => {
         };
       }));
 
+      const kitIds = [...new Set(items.map(i => i.kit_id).filter(Boolean))];
+
+      const franName = o.franchisee_id?.business_name || o.franchisee_id?.name || o.franchisee_id?.company_name || 'Franchise Partner';
+      const franContact = o.franchisee_id?.mobile || o.franchisee_id?.email || '-';
+      const franGstin = o.franchisee_id?.gst_number || o.franchisee_id?.gstin || '-';
+
       return {
         id: o._id,
         order_number: o.po_number,
         order_type: 'franchise',
-        customer_name: o.franchisee_id?.name || o.franchisee_id?.company_name || 'Franchise Partner',
-        customer_contact: o.franchisee_id?.mobile || o.franchisee_id?.email || '-',
-        customer_gstin: o.franchisee_id?.gstin || '-',
+        entity_id: o.franchisee_id?._id ? o.franchisee_id._id.toString() : (o.franchisee_id ? o.franchisee_id.toString() : null),
+        customer_name: franName,
+        customer_contact: franContact,
+        customer_gstin: franGstin,
         order_status: o.status,
         payment_status: o.offline_payment?.payment_method ? 'offline_payment' : 'pending',
         order_amount: (o.grand_total_paise || 0) / 100,
-        delivery_address: o.destination_address ? { address_line: o.destination_address, pincode: o.destination_pincode } : null,
+        delivery_address: {
+          address_line: o.destination_address || null,
+          pincode: o.destination_pincode || null,
+          state_id: stId ? stId.toString() : null,
+          state_name: stateName,
+          district_id: distId ? distId.toString() : null,
+          district_name: distName,
+        },
+        state_id: stId ? stId.toString() : null,
+        state_name: stateName,
+        district_id: distId ? distId.toString() : null,
+        district_name: distName,
         warehouse_id: null,
         items,
+        kit_ids: kitIds,
+        industry_types: ['Solar PV'],
+        categories: ['Rooftop Solar'],
+        subcategories: ['Commercial', 'Residential'],
+        system_types: ['On-Grid', 'Hybrid', 'Off-Grid'],
+        project_ranges: items.map(i => i.capacity).filter(Boolean),
         created_at: o.createdAt || o.created_at,
       };
     }));
+
+    // 7. Aggregate unique EPC entities with order counts
+    const epcEntityMap = new Map();
+    formattedEpc.forEach(o => {
+      const key = o.entity_id || o.customer_name;
+      if (!epcEntityMap.has(key)) {
+        epcEntityMap.set(key, {
+          id: o.entity_id || key,
+          name: o.customer_name,
+          gstin: o.customer_gstin !== '-' ? o.customer_gstin : '',
+          contact: o.customer_contact !== '-' ? o.customer_contact : '',
+          pending_count: 0
+        });
+      }
+      epcEntityMap.get(key).pending_count += 1;
+    });
+
+    // 8. Aggregate unique Franchise entities with order counts
+    const franEntityMap = new Map();
+    formattedFranchise.forEach(o => {
+      const key = o.entity_id || o.customer_name;
+      if (!franEntityMap.has(key)) {
+        franEntityMap.set(key, {
+          id: o.entity_id || key,
+          name: o.customer_name,
+          gstin: o.customer_gstin !== '-' ? o.customer_gstin : '',
+          contact: o.customer_contact !== '-' ? o.customer_contact : '',
+          pending_count: 0
+        });
+      }
+      franEntityMap.get(key).pending_count += 1;
+    });
+
+    // Also supplement with any registered EPCs and Resellers that may exist in DB
+    try {
+      const [allDbEpcs, allDbResellers] = await Promise.all([
+        EpcAccount.find({ deleted_at: null }).select('name gstin gstin_trade_name gstin_legal_name whatsapp email').lean(),
+        Reseller.find({ is_active: true }).select('business_name gst_number contact_person mobile email').lean()
+      ]);
+
+      allDbEpcs.forEach(epc => {
+        const idStr = epc._id.toString();
+        const name = epc.name || epc.gstin_trade_name || epc.gstin_legal_name || 'EPC Buyer';
+        const gstin = epc.gstin || '';
+        if (!epcEntityMap.has(idStr)) {
+          epcEntityMap.set(idStr, {
+            id: idStr,
+            name,
+            gstin,
+            contact: epc.whatsapp || epc.email || '',
+            pending_count: 0
+          });
+        } else {
+          const existing = epcEntityMap.get(idStr);
+          if (!existing.gstin && gstin) existing.gstin = gstin;
+        }
+      });
+
+      allDbResellers.forEach(reseller => {
+        const idStr = reseller._id.toString();
+        const name = reseller.business_name || reseller.contact_person || 'Franchise Partner';
+        const gstin = reseller.gst_number || '';
+        if (!franEntityMap.has(idStr)) {
+          franEntityMap.set(idStr, {
+            id: idStr,
+            name,
+            gstin,
+            contact: reseller.mobile || reseller.email || '',
+            pending_count: 0
+          });
+        } else {
+          const existing = franEntityMap.get(idStr);
+          if (!existing.gstin && gstin) existing.gstin = gstin;
+        }
+      });
+    } catch (dbErr) {
+      console.warn('Non-fatal error fetching full DB EPC/Reseller master list:', dbErr.message);
+    }
+
+    const epcList = Array.from(epcEntityMap.values()).sort((a, b) => b.pending_count - a.pending_count || a.name.localeCompare(b.name));
+    const franchiseList = Array.from(franEntityMap.values()).sort((a, b) => b.pending_count - a.pending_count || a.name.localeCompare(b.name));
 
     return res.status(200).json({
       status: 'success',
       data: {
         epc_orders: formattedEpc,
         franchise_orders: formattedFranchise,
+        epc_list: epcList,
+        franchise_list: franchiseList,
       },
       counts: {
         epc: formattedEpc.length,

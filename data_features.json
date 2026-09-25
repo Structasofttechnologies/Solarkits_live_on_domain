@@ -1,0 +1,884 @@
+[
+  {
+    "id": "F001",
+    "module": "Authentication",
+    "name": "CMS Multi-Role Login",
+    "frontend": "cms-auth portal",
+    "backend": "/auth-api/login, /auth-api/refresh-access-token",
+    "status": "Fully Connected",
+    "desc": "Central unified authentication for Super Admin, Accounts, Warehouse, Operations, and Developers. Validates email/password + OTP, checks panel permissions, issues RS256 JWT access (15m) & refresh (2d) tokens via httpOnly cookies, and redirects users to their assigned department portal."
+  },
+  {
+    "id": "F002",
+    "module": "Authentication",
+    "name": "BDE Login",
+    "frontend": "BDE-modules/BdeLogin.jsx",
+    "backend": "/api/bde/v1/auth/login",
+    "status": "Fully Connected",
+    "desc": "Dedicated authentication service for Business Development Executives. Validates credentials, attaches assigned geographic territory and franchisee pipeline scope to the user session."
+  },
+  {
+    "id": "F003",
+    "module": "Authentication",
+    "name": "Franchise Login & Registration",
+    "frontend": "franchise-portal/Login.jsx, Register.jsx",
+    "backend": "/api/india/v1/reseller/auth/login, /auth/register",
+    "status": "Fully Connected",
+    "desc": "Mobile number OTP verification and 4-digit PIN setup for regional Franchise Partners. Handles session token management, account status verification, and rate limiting against brute-force attacks."
+  },
+  {
+    "id": "F004",
+    "module": "Authentication",
+    "name": "EPC Contractor Login/Signup",
+    "frontend": "solar-store/Login.jsx, SignUp.jsx",
+    "backend": "/api/india/v1/auth/login",
+    "status": "Fully Connected",
+    "desc": "Self-service onboarding and authentication for EPC solar contractors. Grants access to preconfigured combo kits, custom kit builders, and bulk purchasing with contractor pricing."
+  },
+  {
+    "id": "F005",
+    "module": "Authentication",
+    "name": "BOSKIT Distributor Auth",
+    "frontend": "boskit-website/LoginPage.jsx",
+    "backend": "/api/boskit/v1/auth/*",
+    "status": "Fully Connected",
+    "desc": "Multi-tier authentication portal for BOS distributors and local electrical dealers with role-based permission scopes, territory binding, and dealer network association."
+  },
+  {
+    "id": "F006",
+    "module": "BDE Management",
+    "name": "Admin Creates BDE",
+    "frontend": "admin/bde-management/CreateBde.jsx",
+    "backend": "POST /admin-api/bde/create",
+    "status": "Fully Connected",
+    "desc": "Super Admin interface to onboard new BDE field agents, upload identity KYC documents (Aadhaar, PAN), assign territorial states/districts, and configure monthly franchisee onboarding targets."
+  },
+  {
+    "id": "F007",
+    "module": "BDE Management",
+    "name": "BDE Dashboard",
+    "frontend": "BDE-modules/BdeDashboard.jsx",
+    "backend": "GET /api/bde/v1/dashboard",
+    "status": "Fully Connected",
+    "desc": "Operational command dashboard for field agents displaying real-time lead counts, pipeline conversion velocity, store setup milestone progress, and monthly target fulfillment metrics."
+  },
+  {
+    "id": "F008",
+    "module": "BDE Management",
+    "name": "BDE Lead Management",
+    "frontend": "BDE-modules/BdeLeads.jsx",
+    "backend": "/api/bde/v1/leads/*",
+    "status": "Fully Connected",
+    "desc": "Comprehensive lead tracking module allowing BDEs to register prospective franchise leads, schedule customer visits, record meeting minutes, log activity trails, and advance leads through onboarding stages."
+  },
+  {
+    "id": "F009",
+    "module": "BDE Management",
+    "name": "BDE Store Setup (16-Step)",
+    "frontend": "BDE-modules/BdeStoreSetup.jsx",
+    "backend": "/api/bde/v1/store-setup/*",
+    "status": "Fully Connected",
+    "desc": "16-step physical store setup verification engine (branding, signage, display kits, IT infrastructure). BDE uploads on-site photo proofs, submits delay exception requests, and requests final admin certification."
+  },
+  {
+    "id": "F010",
+    "module": "BDE Management",
+    "name": "BDE Franchise Pipeline",
+    "frontend": "BDE-modules/BdeFranchisees.jsx",
+    "backend": "/api/bde/v1/franchisees, /pipeline",
+    "status": "Fully Connected",
+    "desc": "Pipeline tracking visualization monitoring converted leads through KYC verification, offline fee receipt upload, physical store setup, and final operational activation."
+  },
+  {
+    "id": "F011",
+    "module": "BDE Management",
+    "name": "Admin BDE Dashboard",
+    "frontend": "admin/bde-management/BdeDashboard.jsx",
+    "backend": "GET /admin-api/bde/dashboard-stats, /list",
+    "status": "Fully Connected",
+    "desc": "Admin oversight dashboard monitoring field agent KPIs, tracking lead-to-onboarding conversion rates, reviewing KYC submissions, and dynamically reallocating territory quotas."
+  },
+  {
+    "id": "F012",
+    "module": "BDE Management",
+    "name": "BDE Territory Assignment",
+    "frontend": "admin/bde-management/TerritoryAssignment.jsx",
+    "backend": "POST /admin-api/bde/territory/assign",
+    "status": "Fully Connected",
+    "desc": "Administrative tool to map geographic boundaries (states, districts, clusters) to specific BDE agents with strict territory exclusivity enforcement."
+  },
+  {
+    "id": "F013",
+    "module": "BDE Management",
+    "name": "BDE Activity History",
+    "frontend": "admin/bde-management/BdeActivityHistory.jsx",
+    "backend": "GET /admin-api/bde/activity-history/:id",
+    "status": "Fully Connected",
+    "desc": "Complete audit trail logging BDE field interactions, status changes, photo proof uploads, and franchisee verification submissions with timestamps."
+  },
+  {
+    "id": "F014",
+    "module": "Franchise Module",
+    "name": "Franchise Landing Page",
+    "frontend": "franchise-portal/FranchiseLanding.jsx",
+    "backend": "GET /api/india/v1/reseller/landing-content",
+    "status": "Fully Connected",
+    "desc": "Public portal for prospective franchise partners showcasing plan benefits, ROI projections, investment tiers, and an interactive district territory availability checker."
+  },
+  {
+    "id": "F015",
+    "module": "Franchise Module",
+    "name": "KYC Workspace (GST, PAN, Aadhaar)",
+    "frontend": "franchise-portal/KycWorkspace.jsx",
+    "backend": "/api/india/v1/reseller/kyc/upload, /submit, /gst/verify",
+    "status": "Fully Connected",
+    "desc": "Structured verification workspace where applicants upload GST certificates, PAN cards, and Aadhaar documents. Features live GST verification via QuickEKYC and secure document storage."
+  },
+  {
+    "id": "F016",
+    "module": "Franchise Module",
+    "name": "Offline Fee Payment & Receipt Upload",
+    "frontend": "franchise-portal/OnboardingPortal.jsx",
+    "backend": "POST /api/india/v1/reseller/fee-payment/upload-receipt",
+    "status": "Fully Connected",
+    "desc": "Applicants execute offline bank transfer (NEFT/RTGS/IMPS/Cheque) for franchise plan fees, upload the bank payment slip, and enter the UTR number. Updates status to 'receipt_uploaded' for admin approval."
+  },
+  {
+    "id": "F017",
+    "module": "Franchise Module",
+    "name": "Franchise Dashboard",
+    "frontend": "franchise-portal/DashboardHome.jsx",
+    "backend": "/api/india/v1/reseller/auth/me",
+    "status": "Fully Connected",
+    "desc": "Operational homepage for active franchise partners displaying real-time Franchise Earning totals, commission summaries, EPC order pipeline, assigned territory leads, and recent dispatch milestones."
+  },
+  {
+    "id": "F018",
+    "module": "Franchise Module",
+    "name": "Authorized Product Catalog",
+    "frontend": "franchise-portal/AuthorizedCatalog.jsx",
+    "backend": "GET /api/india/v1/reseller/authorized-products",
+    "status": "Fully Connected",
+    "desc": "Catalog allowing franchise partners to browse admin-approved solar kits, configure regional profit margins, and selectively publish systems to local EPC contractors."
+  },
+  {
+    "id": "F019",
+    "module": "Franchise Module",
+    "name": "Franchise Earning & Commission",
+    "frontend": "franchise-portal/WalletPortal.jsx",
+    "backend": "/api/india/v1/reseller/wallet/*",
+    "status": "Fully Connected",
+    "desc": "Digital earnings ledger tracking real-time commission accruals and net Franchise Earning from EPC orders. Enables franchise partners to monitor balances and submit bank withdrawal requests for manual payout processing."
+  },
+  {
+    "id": "F020",
+    "module": "Franchise Module",
+    "name": "EPC Buyer Management",
+    "frontend": "franchise-portal/MyEpcBuyers.jsx",
+    "backend": "/api/india/v1/reseller/epc-buyers/*",
+    "status": "Fully Connected",
+    "desc": "CRM module enabling franchise partners to register local EPC contractors, manage customer relationships, and track regional contractor purchase volume."
+  },
+  {
+    "id": "F021",
+    "module": "Franchise Module",
+    "name": "Franchise PO Orders",
+    "frontend": "franchise-portal/PoOrder.jsx",
+    "backend": "/api/india/v1/reseller/po/*",
+    "status": "Fully Connected",
+    "desc": "Purchase order engine allowing franchise partners to procure bulk stock from central warehouses based on tier-specific discount rules and credit limits."
+  },
+  {
+    "id": "F022",
+    "module": "Franchise Module",
+    "name": "Store Setup Tracking",
+    "frontend": "franchise-portal/OnboardingPortal.jsx",
+    "backend": "/api/india/v1/reseller/store-setup/*",
+    "status": "Fully Connected",
+    "desc": "Franchisee-facing progress tracker displaying status of the 16 physical store setup milestones and assigned BDE agent inspection schedules."
+  },
+  {
+    "id": "F023",
+    "module": "Franchise Module",
+    "name": "Procurement & Inventory",
+    "frontend": "franchise-portal/ProcurementInventory.jsx",
+    "backend": "/api/india/v1/reseller/procurement/*",
+    "status": "Fully Connected",
+    "desc": "Franchise inventory management portal to order bulk solar equipment, log incoming warehouse deliveries, and maintain local stock levels."
+  },
+  {
+    "id": "F024",
+    "module": "Franchise Module",
+    "name": "Storefront Listings (Publish to EPC)",
+    "frontend": "franchise-portal/StorefrontListings.jsx",
+    "backend": "/api/india/v1/reseller/listings/*",
+    "status": "Fully Connected",
+    "desc": "Pricing and listing manager enabling franchise partners to adjust selling prices, apply percentage/fixed margins, and publish products to EPC storefronts."
+  },
+  {
+    "id": "F025",
+    "module": "Franchise Module",
+    "name": "Territory Eligibility Checker",
+    "frontend": "franchise-portal/EligibilityChecker.jsx",
+    "backend": "GET /api/india/v1/reseller/territory/availability",
+    "status": "Fully Connected",
+    "desc": "Interactive district search allowing prospective applicants to check territory exclusivity availability before submitting franchise applications."
+  },
+  {
+    "id": "F026",
+    "module": "Franchise Module",
+    "name": "PlansPortal (Franchise Plans)",
+    "frontend": "customer-apps/solarkits-reseller-portal/src/App.jsx",
+    "backend": "/api/india/v1/reseller/plans, /plans/my-subscription",
+    "status": "Fully Connected",
+    "desc": "Showcase portal displaying franchise package tiers, upfront fee schedules, commission rates, and territory rights (UI present; route currently commented in App.jsx). Dedicated subscription verification route and public franchise plan catalog on landing page."
+  },
+  {
+    "id": "F027",
+    "module": "Franchise Module",
+    "name": "Loose Order",
+    "frontend": "customer-apps/solarkits-reseller-portal/src/pages/LooseOrder.jsx",
+    "backend": "/api/india/v1/reseller/po/create, /plan-settings, SSE stream",
+    "status": "Fully Connected",
+    "desc": "Component procurement module for purchasing standalone non-bundled solar parts (panels, inverters, cables) outside standard combo kits (currently a placeholder stub). Complete 1,205-line enterprise module with kit selection, loose presets, EPC allocation, offline payment slip upload, and real-time ICICI payment events."
+  },
+  {
+    "id": "F028",
+    "module": "Admin Panel",
+    "name": "Product Template Management",
+    "frontend": "admin/product-configurations/ProductTemplates.jsx",
+    "backend": "/admin-api/product-templates/*",
+    "status": "Fully Connected",
+    "desc": "Master catalog engine to create standardized product templates with configurable technical attribute groups, specifications, and automated SKU generation."
+  },
+  {
+    "id": "F029",
+    "module": "Admin Panel",
+    "name": "Solar Kits Management",
+    "frontend": "admin/product-configurations/SolarKits.jsx",
+    "backend": "/admin-api/solar-kits/*",
+    "status": "Fully Connected",
+    "desc": "Admin module to bundle individual solar components into complete solar kits (On-Grid, Off-Grid, Hybrid), configuring baseline pricing and warehouse activations."
+  },
+  {
+    "id": "F030",
+    "module": "Admin Panel",
+    "name": "Combo Kits & Variants",
+    "frontend": "admin/solar-shop/combokit-configurations/*",
+    "backend": "/admin-api/combo-kits/*, /combo-kit-variants/*",
+    "status": "Fully Connected",
+    "desc": "Advanced Bill of Materials (BOM) configurator allowing creation of multi-tier combo kits with interchangeable inverter brands, panel ratings, and structure options."
+  },
+  {
+    "id": "F031",
+    "module": "Admin Panel",
+    "name": "Industry Type & Project Hierarchy",
+    "frontend": "admin/product-configurations/ProjectTypes.jsx",
+    "backend": "/admin-api/industry-types/*, /project-types/*",
+    "status": "Fully Connected",
+    "desc": "Taxonomy hierarchy manager structuring solar systems across Industry > Category > SubCategory > SystemType > Capacity tiers."
+  },
+  {
+    "id": "F032",
+    "module": "Admin Panel",
+    "name": "Industry Content CMS",
+    "frontend": "admin/industry-content/*",
+    "backend": "/admin-api/industry-content/*, /industry-themes/*",
+    "status": "Fully Connected",
+    "desc": "Dynamic marketing CMS to upload promotional banners, video testimonials, YouTube walkthroughs, and technical posters categorized by industry segment."
+  },
+  {
+    "id": "F033",
+    "module": "Admin Panel",
+    "name": "Website Content CMS",
+    "frontend": "admin/website-configuration/*",
+    "backend": "/admin-api/website-content/*",
+    "status": "Fully Connected",
+    "desc": "Content management engine for public websites controlling hero banners, FAQs, terms of service, partner testimonials, and promotional announcements."
+  },
+  {
+    "id": "F034",
+    "module": "Admin Panel",
+    "name": "Geolocation Management",
+    "frontend": "admin/settings/LocationSetting.jsx",
+    "backend": "/admin-api/geolocation/*",
+    "status": "Fully Connected",
+    "desc": "Geographic master database managing countries, states, districts, pin codes, and territory cluster boundaries across India."
+  },
+  {
+    "id": "F035",
+    "module": "Admin Panel",
+    "name": "User & Role Management",
+    "frontend": "admin/pages/CreateUsers.jsx (120KB)",
+    "backend": "/admin-api/cms/users/*, /admin-api/roles/*",
+    "status": "Fully Connected",
+    "desc": "RBAC security management engine defining internal departments, panel permissions, module access rights, and staff account creation."
+  },
+  {
+    "id": "F036",
+    "module": "Admin Panel",
+    "name": "Franchise Management & Receipt Approval",
+    "frontend": "admin/solar-shop/franchise-management/*",
+    "backend": "/admin-api/reseller-mgmt/*",
+    "status": "Fully Connected",
+    "desc": "Central verification interface to review franchise KYC submissions, inspect uploaded payment receipt slips, verify bank UTRs, track Franchise Earning, and activate operational accounts."
+  },
+  {
+    "id": "F037",
+    "module": "Admin Panel",
+    "name": "Store Setup Administration",
+    "frontend": "admin/store-setup/*",
+    "backend": "/admin-api/store-setup/*",
+    "status": "Fully Connected",
+    "desc": "Admin governance tool to inspect 16-step BDE store setup photo proofs, approve delay exception requests, and certify new franchise store openings."
+  },
+  {
+    "id": "F038",
+    "module": "Admin Panel",
+    "name": "Franchise PO Settings",
+    "frontend": "admin/solar-shop/po-orders/*",
+    "backend": "/admin-api/franchisee/po-settings/*",
+    "status": "Fully Connected",
+    "desc": "Configuration manager establishing minimum order quantities (MOQ), payment terms, and credit thresholds for franchise purchase orders."
+  },
+  {
+    "id": "F039",
+    "module": "Admin Panel",
+    "name": "Commission & MOQ Rules",
+    "frontend": "admin/solar-shop/*",
+    "backend": "/admin-api/franchisee/commission-rules/*, /moq-rules/*",
+    "status": "Fully Connected",
+    "desc": "Rules engine configuring percentage and fixed commission formulas for franchise partners based on sales volumes and kit categories."
+  },
+  {
+    "id": "F040",
+    "module": "Admin Panel",
+    "name": "Warehouse Management (Admin)",
+    "frontend": "admin/operations/company-warehouses/*",
+    "backend": "/admin-api/warehouses/*",
+    "status": "Fully Connected",
+    "desc": "Master warehouse setup managing physical warehouse locations, stock thresholds, SKU activations, and regional dispatch radius."
+  },
+  {
+    "id": "F041",
+    "module": "Admin Panel",
+    "name": "Supplier Management",
+    "frontend": "admin/manage-users/Suppliers.jsx",
+    "backend": "/admin-api/brand-manufacturer/*",
+    "status": "Fully Connected",
+    "desc": "Supplier registry managing solar equipment manufacturers, brand partnerships, product supply lines, and contract pricing."
+  },
+  {
+    "id": "F042",
+    "module": "Admin Panel",
+    "name": "EPC Management",
+    "frontend": "admin/epc-management/EpcDirectory.jsx",
+    "backend": "/admin-api/epc/list, /admin-api/epc/details",
+    "status": "Fully Connected",
+    "desc": "Contractor registry monitoring registered EPC installers, account statuses, and territorial activity. Administrative governance for verified EPC solar contractors, authorized kit assignments, and regional distribution tracking."
+  },
+  {
+    "id": "F043",
+    "module": "Admin Panel",
+    "name": "Approve New EPC",
+    "frontend": "admin/epc-approvals/EpcApprovals.jsx",
+    "backend": "/admin-api/epc/verify, /admin-api/epc/reject",
+    "status": "Fully Connected",
+    "desc": "Verification workflow to review and approve newly registered EPC contractor accounts. Verification workflow for new EPC contractor applications, reviewing GSTIN, trade licenses, and assigning contractor price tiers."
+  },
+  {
+    "id": "F044",
+    "module": "Admin Panel",
+    "name": "Price Master (SKU Pricing)",
+    "frontend": "admin/product-configurations/PriceMaster.jsx (53KB)",
+    "backend": "/admin-api/product-sku-prices/*",
+    "status": "Fully Connected",
+    "desc": "Centralized pricing matrix controlling base SKU costs, benchmark rates, and dynamic price approval workflows."
+  },
+  {
+    "id": "F045",
+    "module": "Admin Panel",
+    "name": "Units Management",
+    "frontend": "admin/product-configurations/UnitsManagement.jsx",
+    "backend": "/admin-api/units/*",
+    "status": "Fully Connected",
+    "desc": "Measurement configuration managing packaging units, weights, electrical metrics (kW, Wp, Ah, V), and conversion factors."
+  },
+  {
+    "id": "F046",
+    "module": "Solar Store (EPC)",
+    "name": "Preconfigured Combo Kits",
+    "frontend": "solar-store/dashboard/PreconfiguredComboKit",
+    "backend": "GET /api/india/v1/shop/combo-kits",
+    "status": "Fully Connected",
+    "desc": "EPC store catalog displaying turnkey solar kits with real-time district warehouse inventory polling every 30 seconds."
+  },
+  {
+    "id": "F047",
+    "module": "Solar Store (EPC)",
+    "name": "Custom Combo Kit Builder",
+    "frontend": "solar-store/dashboard/CustomComboKit",
+    "backend": "GET /api/india/v1/shop/combo-kits",
+    "status": "Fully Connected",
+    "desc": "Interactive kit builder enabling EPC contractors to customize panel brands, inverter capacities, and mounting structures with dynamic BOM pricing."
+  },
+  {
+    "id": "F048",
+    "module": "Solar Store (EPC)",
+    "name": "Bulk Buy",
+    "frontend": "solar-store/bulk-buy/BulkBuy",
+    "backend": "GET /api/india/v1/shop/combo-kits (bulk)",
+    "status": "Fully Connected",
+    "desc": "Volume procurement portal offering tiered bulk discounts for commercial and industrial solar installations."
+  },
+  {
+    "id": "F049",
+    "module": "Solar Store (EPC)",
+    "name": "Cart & Order Confirmation (Offline Receipt / Request)",
+    "frontend": "solar-store/cart/Cart, solar-store/CheckOut",
+    "backend": "/api/india/v1/shop/cart, /reserve-stock, /confirm-order",
+    "status": "Fully Connected",
+    "desc": "Cart and checkout engine featuring 30-minute stock reservation, GST validation, and offline bank transfer receipt attachment."
+  },
+  {
+    "id": "F050",
+    "module": "Solar Store (EPC)",
+    "name": "EPC Catalogue (Tenant-Isolated)",
+    "frontend": "solar-store/dashboard/EpcCatalogue",
+    "backend": "GET /api/india/v1/shop/epc-catalogue",
+    "status": "Fully Connected",
+    "desc": "Tenant-isolated catalog ensuring EPC contractors view regional franchise pricing while manufacturer baseline costs remain completely hidden."
+  },
+  {
+    "id": "F051",
+    "module": "Solar Store (EPC)",
+    "name": "Store Locator",
+    "frontend": "solar-store/store-locator/StoreLocatorPage",
+    "backend": "GET /api/india/v1/shop/stores",
+    "status": "Fully Connected",
+    "desc": "Geographic locator interface displaying nearby company warehouses and franchise stores for self-pickup of solar equipment."
+  },
+  {
+    "id": "F052",
+    "module": "Solar Store (EPC)",
+    "name": "Request Order",
+    "frontend": "customer-apps/solar-store/src/Pages/Board.jsx:148",
+    "backend": "/request-order mapped to BulkOrderCart.jsx, /api/india/v1/cart/bulk",
+    "status": "Fully Connected",
+    "desc": "Custom BOM request tool for EPC contractors to submit non-standard project bills of materials for offline quotation (route mapping pending in Board.jsx). Bulk order checkout cart allowing EPC contractors to review multi-kit orders, apply volume commercial discounts, and execute procurement."
+  },
+  {
+    "id": "F053",
+    "module": "Solar Store (EPC)",
+    "name": "Solar BOS Kit (Commented Out)",
+    "frontend": "customer-apps/solar-store/src/Pages/dashboard/SolarBosKit.jsx",
+    "backend": "/api/india/v1/bos-kits",
+    "status": "Fully Connected",
+    "desc": "Specialized catalog for Balance of System electrical accessories (DCDB, ACDB, cables, earthing kits) — backend API active; menu item commented in frontend. Full 1,506-line component for ordering electrical BOS distribution components, ACDB/DCDB boxes, MC4 connectors, and solar cabling."
+  },
+  {
+    "id": "F054",
+    "module": "Solar Store (EPC)",
+    "name": "Order Status Tracking",
+    "frontend": "solar-store/dashboard/ProjectOrderStatus",
+    "backend": "GET /api/india/v1/shop/orders",
+    "status": "Fully Connected",
+    "desc": "Real-time order tracking portal showing order verification, warehouse picking, dispatch transporter details, and delivery milestones."
+  },
+  {
+    "id": "F055",
+    "module": "SolarShop India",
+    "name": "Landing Page",
+    "frontend": "customer-apps/solarkits-solarshop-india/src/pages/LandingPage.jsx",
+    "backend": "/api/india/v1/website-content",
+    "status": "Fully Connected",
+    "desc": "Consumer retail landing page showcasing solar benefits and residential rooftop packages (currently using static mock content). Dynamic consumer landing page integrated with centralized Website CMS, showcasing solar benefits and residential rooftop packages."
+  },
+  {
+    "id": "F056",
+    "module": "SolarShop India",
+    "name": "Industries Showcase Page",
+    "frontend": "solar-store/BrowseByIndustry.jsx, solarshop-india/IndustriesPage.jsx",
+    "backend": "/api/admin/industry-content, /api/india/v1/industry-content",
+    "status": "Fully Connected",
+    "desc": "Industry showcase page presenting tailored solar solutions for agriculture, commercial, industrial, and residential sectors. Dynamic Industry Solutions CMS showcase presenting tailored solar packages for agriculture, commercial, industrial, and residential sectors."
+  },
+  {
+    "id": "F057",
+    "module": "BOSKIT",
+    "name": "Distributor Onboarding",
+    "frontend": "boskit-website/DistributorOnboardingPage.jsx",
+    "backend": "/api/boskit/v1/distributor/onboarding/*",
+    "status": "Fully Connected",
+    "desc": "Multi-step onboarding wizard for BOS channel distributors featuring GST verification, KYC document uploads, and territory allocation."
+  },
+  {
+    "id": "F058",
+    "module": "BOSKIT",
+    "name": "Distributor Plans Management (Admin)",
+    "frontend": "boskit-admin/DistributorPlansAdminPage.jsx (81KB)",
+    "backend": "/admin-api/boskit/v1/plans/*",
+    "status": "Fully Connected",
+    "desc": "Admin management module to configure distributor subscription tiers, security deposits, territory exclusivity rights, and credit policies."
+  },
+  {
+    "id": "F059",
+    "module": "BOSKIT",
+    "name": "Distributor Dashboard",
+    "frontend": "boskit-website/distributor/DistributorDashboardPage.jsx",
+    "backend": "GET /api/boskit/v1/distributor/dashboard/stats",
+    "status": "Fully Connected",
+    "desc": "Operational dashboard for BOS distributors to manage local dealer networks, track bulk purchase orders, and monitor regional territory sales."
+  },
+  {
+    "id": "F060",
+    "module": "BOSKIT",
+    "name": "Distributor Procurement Catalogue",
+    "frontend": "boskit-website/distributor/DistributorProcureCataloguePage.jsx",
+    "backend": "GET /api/boskit/v1/distributor/catalogue",
+    "status": "Fully Connected",
+    "desc": "Wholesale procurement catalog allowing distributors to order BOS components at master trade rates and configure downstream dealer margins."
+  },
+  {
+    "id": "F061",
+    "module": "BOSKIT",
+    "name": "Custom BOS Kit Configurator",
+    "frontend": "customer-apps/boskit-website/src/pages/BosKitConfigurator.jsx",
+    "backend": "/api/boskit/v1/configurator",
+    "status": "Fully Connected",
+    "desc": "Interactive configurator for designing electrical BOS distribution kits tailored to specific inverter capacities and solar string requirements. Interactive BOS kit configurator calculating string sizing, breaker ratings, surge protection, and enclosure specifications."
+  },
+  {
+    "id": "F062",
+    "module": "BOSKIT",
+    "name": "Dealer Registration & Dashboard",
+    "frontend": "boskit-website/dealer/DealerRegisterPage.jsx, DealerDashboardPage.jsx",
+    "backend": "/api/boskit/v1/dealer/*",
+    "status": "Fully Connected",
+    "desc": "Self-service portal for local electrical dealers to register under regional distributors, browse catalogs, place orders, and track shipments."
+  },
+  {
+    "id": "F063",
+    "module": "BOSKIT",
+    "name": "BOSKIT Admin Overview & Reports",
+    "frontend": "boskit-admin/BoskitOverviewDashboard.jsx, CrossPlatformReportsPage.jsx",
+    "backend": "/admin-api/boskit/v1/stats, /reports/*",
+    "status": "Fully Connected",
+    "desc": "Executive BI dashboard aggregating channel distribution performance, dealer turnover, and inventory movement across regional BOS networks."
+  },
+  {
+    "id": "F064",
+    "module": "BOSKIT",
+    "name": "BOSKIT MOQ, GST, Channel Settings",
+    "frontend": "boskit-admin MoqSettings + GstSettings + ChannelSettings",
+    "backend": "/admin-api/boskit/v1/moq-rules/*, tax-rules/*, channel-settings/*",
+    "status": "Fully Connected",
+    "desc": "Platform settings interface managing BOS minimum order quantities, HSN GST tax rules, and channel discount matrices."
+  },
+  {
+    "id": "F065",
+    "module": "BOSKIT",
+    "name": "FranchisePlansAdminPage",
+    "frontend": "internal-admin-portal/.../boskit/pages/FranchisePlansAdminPage.jsx",
+    "backend": "Re-exports DistributorPlansAdminPage.jsx (1,604 LOC)",
+    "status": "Fully Connected",
+    "desc": "Dedicated admin interface for managing franchise packages, perks, territory exclusivity clauses, and fee structures (currently a placeholder stub). Comprehensive admin management module for franchise & distributor package pricing, validity, renewal rules, and territory exclusivity."
+  },
+  {
+    "id": "F066",
+    "module": "Payments & Accounts",
+    "name": "Offline Payment & Receipt Upload System",
+    "frontend": "franchise-portal, solar-store, accounts portal",
+    "backend": "/api/india/v1/reseller/fee-payment/upload-receipt, /confirm-order",
+    "status": "Fully Connected",
+    "desc": "Central financial transaction engine handling offline bank transfer slip uploads, UTR number capture, Cloudinary document storage, and accounts verification."
+  },
+  {
+    "id": "F067",
+    "module": "Payments & Accounts",
+    "name": "Franchise Earning & Payout Mgmt (Admin)",
+    "frontend": "admin/solar-shop wallet section",
+    "backend": "/admin-api/reseller-mgmt/wallet/*",
+    "status": "Fully Connected",
+    "desc": "Financial management panel for Accounts team to review franchisee earning withdrawal requests, process manual bank payouts via NEFT/RTGS, and log UTR numbers."
+  },
+  {
+    "id": "F068",
+    "module": "Payments & Accounts",
+    "name": "Accounts Panel (Solar Shop Finance)",
+    "frontend": "accounts portal /solar-shop/*",
+    "backend": "/account-api/accounts/solar-shop/*",
+    "status": "Fully Connected",
+    "desc": "Financial management portal tracking franchise plan fee receipts, EPC direct transactions, and commission disbursements."
+  },
+  {
+    "id": "F069",
+    "module": "Payments & Accounts",
+    "name": "Purchase Orders (Accounts)",
+    "frontend": "accounts/PurchaseOrders.jsx (130KB)",
+    "backend": "/account-api/accounts/purchase-orders/*",
+    "status": "Fully Connected",
+    "desc": "Complete purchase order lifecycle tracking supplier invoices, bank payment slips, tax deductions, and milestone payments."
+  },
+  {
+    "id": "F070",
+    "module": "Payments & Accounts",
+    "name": "Supplier Registry (Accounts)",
+    "frontend": "accounts/SupplierRegistry.jsx",
+    "backend": "/account-api/accounts/suppliers/*",
+    "status": "Fully Connected",
+    "desc": "Supplier financial registry maintaining vendor GSTIN, bank account details, MSME registration, and payment terms."
+  },
+  {
+    "id": "F071",
+    "module": "Warehouse",
+    "name": "Material Inward (Stock Inward)",
+    "frontend": "warehouse/MaterialInward.jsx (104KB)",
+    "backend": "/warehouse-api/warehouse/inward/*",
+    "status": "Fully Connected",
+    "desc": "Warehouse inbound operations module logging receipt of manufacturer consignments, serial number scanning, and QA inspection reports."
+  },
+  {
+    "id": "F072",
+    "module": "Warehouse",
+    "name": "Material Outward & Delivery",
+    "frontend": "warehouse/MaterialOutward.jsx, DeliveryManagement.jsx (111KB)",
+    "backend": "/warehouse-api/warehouse/sales-orders/*",
+    "status": "Fully Connected",
+    "desc": "Warehouse dispatch engine managing picking lists, packing slips, transporter assignment, and e-Way bill generation."
+  },
+  {
+    "id": "F073",
+    "module": "Warehouse",
+    "name": "Vehicle & Driver Management",
+    "frontend": "warehouse/VehicleDriverManagement.jsx",
+    "backend": "/warehouse-api/warehouse/vehicles/*, /drivers/*",
+    "status": "Fully Connected",
+    "desc": "Fleet logistics registry managing company transport vehicles, driver assignments, insurance renewals, and trip logs."
+  },
+  {
+    "id": "F074",
+    "module": "Warehouse",
+    "name": "Inventory Transfer, Stock Adj, Replacement",
+    "frontend": "internal-admin-portal/.../warehouse/pages/InventoryTransfer.jsx",
+    "backend": "/warehouse-api/inventory/transfers, /adjustments",
+    "status": "Fully Connected",
+    "desc": "Warehouse stock management tool facilitating inter-warehouse material transfers, damaged stock write-offs, and customer warranty replacements. Inter-warehouse stock transfer tracking, physical inventory reconciliation, damaged stock write-offs, and warranty replacements."
+  },
+  {
+    "id": "F075",
+    "module": "Warehouse",
+    "name": "Repair Tickets",
+    "frontend": "internal-admin-portal/.../warehouse/pages/RepairTickets.jsx",
+    "backend": "/admin-api/service-tickets/*, solarkits_service_tickets.schema",
+    "status": "Fully Connected",
+    "desc": "Maintenance service desk logging RMA tickets for defective solar inverters, panels, or meters requiring factory repair (backend route pending). Service desk and RMA repair tracking for defective solar inverters, solar panels, and meters requiring factory maintenance."
+  },
+  {
+    "id": "F076",
+    "module": "Operations",
+    "name": "Operations Panel (Order Dispatch, Logistics)",
+    "frontend": "internal-admin-portal/.../admin/pages/dashboard/operations/Operations.jsx",
+    "backend": "/admin-api/delivery/*, delivery.management.handler.js",
+    "status": "Fully Connected",
+    "desc": "Operations control center coordinating logistics milestones, courier tracking, and site delivery confirmations (backend API routes under-built). Operations control center coordinating logistics milestones, 8-stage tracking, transporter assignment, and site delivery confirmations."
+  },
+  {
+    "id": "F077",
+    "module": "Notifications",
+    "name": "BDE Notifications",
+    "frontend": "BDE-modules/BdeNotifications.jsx",
+    "backend": "/api/bde/v1/notifications/*",
+    "status": "Fully Connected",
+    "desc": "Automated notification feed alerting field agents about lead status changes, store inspection milestones, and target achievements."
+  },
+  {
+    "id": "F078",
+    "module": "Notifications",
+    "name": "BOSKIT Notifications",
+    "frontend": "boskit-website notification handler",
+    "backend": "/api/boskit/v1/notification/*",
+    "status": "Fully Connected",
+    "desc": "Channel communication system alerting distributors and dealers about order dispatches, price revisions, and stock updates."
+  },
+  {
+    "id": "F079",
+    "module": "Notifications",
+    "name": "Email (Nodemailer)",
+    "frontend": "N/A (backend service)",
+    "backend": "Nodemailer v9 configured in .env",
+    "status": "Backend Only",
+    "desc": "Automated backend email service dispatching KYC approval notices, invoice PDFs, and password reset links via SMTP."
+  },
+  {
+    "id": "F080",
+    "module": "Notifications",
+    "name": "SMS/WhatsApp (Twilio)",
+    "frontend": "N/A (backend service)",
+    "backend": "Twilio SDK in package.json",
+    "status": "Backend Only",
+    "desc": "Instant messaging gateway sending one-time login passwords (OTP), delivery dispatch alerts, and critical account updates."
+  },
+  {
+    "id": "F081",
+    "module": "Reports",
+    "name": "BDE Performance & Conversion Funnel",
+    "frontend": "admin/bde-management/BdeConversionFunnel.jsx",
+    "backend": "/admin-api/franchisee/performance/*",
+    "status": "Fully Connected",
+    "desc": "Analytics dashboard evaluating field agent productivity, lead-to-onboarding conversion rates, and regional revenue contribution."
+  },
+  {
+    "id": "F082",
+    "module": "Reports",
+    "name": "BOSKIT Cross-Platform Reports",
+    "frontend": "boskit-admin/CrossPlatformReportsPage.jsx",
+    "backend": "/admin-api/boskit/v1/reports/*",
+    "status": "Fully Connected",
+    "desc": "Consolidated reporting engine providing executive visibility across distributor procurement, dealer turnover, and inventory velocity."
+  },
+  {
+    "id": "F083",
+    "module": "Reports",
+    "name": "Franchise Analytics (Admin)",
+    "frontend": "admin/solar-shop analytics",
+    "backend": "/admin-api/reseller-mgmt/analytics/*",
+    "status": "Fully Connected",
+    "desc": "Business analytics evaluating franchise partner sales volume, average order values, and commission distribution."
+  },
+  {
+    "id": "F084",
+    "module": "Security",
+    "name": "NoSQL Injection Prevention",
+    "frontend": "N/A",
+    "backend": "src/modules/admin-panel/middlewares/mongo.sanitize.js",
+    "status": "Backend Only",
+    "desc": "Global security middleware (`mongo.sanitize`) sanitizing all incoming payloads by stripping MongoDB operator keys ($ and .)."
+  },
+  {
+    "id": "F085",
+    "module": "Security",
+    "name": "Rate Limiting (Auth, GST, OTP)",
+    "frontend": "N/A",
+    "backend": "admin-panel/middlewares/rate.limit.js",
+    "status": "Backend Only",
+    "desc": "API protection middleware throttling authentication attempts, OTP generation, and GST API calls to prevent brute-force attacks."
+  },
+  {
+    "id": "F086",
+    "module": "Security",
+    "name": "JWT with httpOnly Cookies",
+    "frontend": "N/A",
+    "backend": "cms-auth module, verify_reseller_auth, verify_bde_auth",
+    "status": "Backend Only",
+    "desc": "Secure authentication token architecture utilizing RS256 encryption with 15-minute access tokens and 2-day refresh cookies."
+  },
+  {
+    "id": "F087",
+    "module": "Security",
+    "name": "CORS Vulnerability (Over-permissive)",
+    "frontend": "N/A",
+    "backend": "src/index.js lines 29-45",
+    "status": "Backend Only",
+    "desc": "CORS origin callback in server bootstrap currently allows all origins unconditionally (requires immediate restriction)."
+  },
+  {
+    "id": "F088",
+    "module": "Security",
+    "name": "Receipt Slip File Upload Validation",
+    "frontend": "N/A",
+    "backend": "kycDocUpload middleware in multer",
+    "status": "Backend Only",
+    "desc": "Multipart form validation middleware inspecting uploaded payment slips for valid image/PDF MIME types and file size bounds."
+  },
+  {
+    "id": "F089",
+    "module": "Security",
+    "name": "KYC & Payment Document Private Delivery",
+    "frontend": "N/A",
+    "backend": ".env.example CLOUDINARY_KYC_UPLOAD_PRESET commented out",
+    "status": "Backend Only",
+    "desc": "Document storage pipeline saving sensitive verification documents and payment slips to Cloudinary (requires enforcement of private signed URLs)."
+  },
+  {
+    "id": "F090",
+    "module": "Deployment",
+    "name": "Docker Multi-Stage Build",
+    "frontend": "N/A",
+    "backend": "Root Dockerfile (5.3KB)",
+    "status": "Backend Only",
+    "desc": "Production containerization script creating optimized, minimal Node.js and static web server runtime containers."
+  },
+  {
+    "id": "F091",
+    "module": "Deployment",
+    "name": "Nginx Reverse Proxy",
+    "frontend": "N/A",
+    "backend": "nginx.conf, nginx.prod.conf.template",
+    "status": "Backend Only",
+    "desc": "Reverse proxy routing HTTP/HTTPS traffic to internal port services with SSL termination and gzip compression."
+  },
+  {
+    "id": "F092",
+    "module": "Deployment",
+    "name": "Render.com Live Deployment",
+    "frontend": "3 apps on onrender.com",
+    "backend": "Deployed to Render.com",
+    "status": "Fully Connected",
+    "desc": "Cloud platform hosting running live instances of central backend and web portals on Render.com."
+  },
+  {
+    "id": "F093",
+    "module": "Payments & Banking",
+    "name": "ICICI Bank E-Collection Engine",
+    "frontend": "reseller-portal/LooseOrder, solar-store/CheckOut",
+    "backend": "backend/src/modules/icici-ecollection, /api/v1/payments/icici/*",
+    "status": "Fully Connected",
+    "desc": "Automated Virtual Account Number (VAN) generator for EPC/Franchisee checkouts, encrypted MSG HOLD remitter validation, MIS POSTING webhook credit confirmation, duplicate UTR idempotency guard, and Server-Sent Events (SSE) live payment stream."
+  },
+  {
+    "id": "F094",
+    "module": "Delivery Logistics",
+    "name": "8-Stage Order & Dispatch Tracking Pipeline",
+    "frontend": "solarkits-unified-admin (Tabs 7 & 8), solar-store, reseller-portal",
+    "backend": "/admin-api/delivery/journey, delivery_order.schema.js",
+    "status": "Fully Connected",
+    "desc": "Complete physical supply chain management featuring Tab 7 (FIFO Delivery Queue with cargo weight/kW metrics and combine delivery suggestions) and Tab 8 (Trip Tracking & Proof of Delivery confirmation across 8 distinct transit milestones)."
+  },
+  {
+    "id": "F095",
+    "module": "Delivery Logistics",
+    "name": "Smart Vehicle Fleet Assignment & Recommendation",
+    "frontend": "solarkits-unified-admin/DeliveryManagement",
+    "backend": "/admin-api/delivery/assign-vehicle, delivery.management.service.js",
+    "status": "Fully Connected",
+    "desc": "Automated logistics fleet recommendation engine evaluating vehicle payload (kg), max kit limits, kW load limits, and serviceable geographic districts with mandatory Admin override auditing and reason logging."
+  },
+  {
+    "id": "F096",
+    "module": "Website CMS",
+    "name": "Dynamic Industry Solutions CMS Engine",
+    "frontend": "admin/IndustryContentManagement, solar-store/BrowseByIndustry",
+    "backend": "/admin-api/industry-content, /api/india/v1/industry-content",
+    "status": "Fully Connected",
+    "desc": "Centralized dynamic content management system allowing administrators to configure tailored solar solutions, technical brochures, application cases, and media assets for Agriculture, Commercial, Industrial, and Residential sectors."
+  },
+  {
+    "id": "F097",
+    "module": "EPC Tools",
+    "name": "Project BOM Configuration & Margin Estimator",
+    "frontend": "customer-apps/solar-store/src/Pages/know-my-margin",
+    "backend": "/api/india/v1/estimator, /project-bom/calculate",
+    "status": "Fully Connected",
+    "desc": "Interactive Know My Margin calculator and Project Bill of Materials (BOM) engine allowing EPC solar contractors to configure project sizes, estimate gross margins, evaluate component costs, and generate formal quotations."
+  },
+  {
+    "id": "F098",
+    "module": "Franchise Growth",
+    "name": "Franchisee Monthly Target Goal Tracker",
+    "frontend": "solarkits-reseller-portal/DashboardHome, LooseOrder, Admin/Goals",
+    "backend": "/api/india/v1/reseller/goals/my-goal, /admin-api/goals/*",
+    "status": "Fully Connected",
+    "desc": "Target management system tracking monthly kit procurement goals, evaluating progress percentage in real time, and displaying visual achievement milestones on franchisee dashboards."
+  }
+]

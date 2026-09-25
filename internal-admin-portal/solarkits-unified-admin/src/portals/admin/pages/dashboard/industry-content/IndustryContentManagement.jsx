@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   listIndustryContent,
   getIndustryContentDetail,
@@ -50,19 +50,28 @@ import {
   FiImage,
   FiFileText,
   FiVideo,
+  FiChevronDown,
+  FiChevronUp,
+  FiZap,
+  FiSun,
 } from "react-icons/fi";
 import { MdOutlineDashboardCustomize, MdOutlineFactory } from "react-icons/md";
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
 const CONTENT_TYPES = [
+  { value: "", label: "All Types", icon: FiGrid },
   { value: "HERO_BANNER", label: "Hero Banner", icon: FiMonitor },
-  { value: "VIDEO", label: "Video Showcase", icon: FiVideo },
-  { value: "PHOTO", label: "Photo / Project", icon: FiImage },
-  { value: "POSTER", label: "Product Poster", icon: FiFileText },
-  { value: "GALLERY", label: "Photo Album", icon: FiLayers },
-  { value: "EXPLAINER_VIDEO", label: "Explainer Video", icon: FiPlay },
-  { value: "IMAGE_SLIDER", label: "Image Slider", icon: FiImage },
-  { value: "VIDEO_SLIDER", label: "Video Slider", icon: FiVideo },
+  { value: "VIDEO", label: "Video", icon: FiVideo },
+  { value: "PHOTO", label: "Photo", icon: FiImage },
+  { value: "POSTER", label: "Poster", icon: FiFileText },
+  { value: "GALLERY", label: "Gallery", icon: FiLayers },
+  { value: "EXPLAINER_VIDEO", label: "Explainer", icon: FiPlay },
+  { value: "IMAGE_SLIDER", label: "Img Slider", icon: FiImage },
+  { value: "VIDEO_SLIDER", label: "Vid Slider", icon: FiVideo },
 ];
+
+const FORM_CONTENT_TYPES = CONTENT_TYPES.filter((t) => t.value !== "");
 
 const PLACEMENTS = [
   { value: "HERO", label: "Hero Banner (Top Visual)" },
@@ -73,150 +82,210 @@ const PLACEMENTS = [
   { value: "STOREFRONT_TOP", label: "Storefront Top" },
 ];
 
-const FOCAL_POINTS = [
-  { value: "center", label: "Center (Default)" },
-  { value: "top", label: "Top (Heads & Skylines)" },
-  { value: "bottom", label: "Bottom (Ground & Hardware)" },
-  { value: "left", label: "Left" },
-  { value: "right", label: "Right" },
+
+
+const STATUS_FILTERS = [
+  { value: "", label: "All Status" },
+  { value: "DRAFT", label: "Draft" },
+  { value: "PUBLISHED", label: "Published" },
+  { value: "ARCHIVED", label: "Archived" },
 ];
 
+// ─── Industry icon helper ─────────────────────────────────────────────────────
+const INDUSTRY_ICONS = [FiSun, MdOutlineFactory, FiZap, FiMonitor, FiLayers, FiVideo];
+function getIndustryIcon(index) {
+  return INDUSTRY_ICONS[index % INDUSTRY_ICONS.length];
+}
+
+const INDUSTRY_COLORS = [
+  { bg: "bg-amber-50 dark:bg-amber-900/20", icon: "text-amber-600 dark:text-amber-400", ring: "ring-amber-400" },
+  { bg: "bg-blue-50 dark:bg-blue-900/20", icon: "text-blue-600 dark:text-blue-400", ring: "ring-blue-400" },
+  { bg: "bg-emerald-50 dark:bg-emerald-900/20", icon: "text-emerald-600 dark:text-emerald-400", ring: "ring-emerald-400" },
+  { bg: "bg-violet-50 dark:bg-violet-900/20", icon: "text-violet-600 dark:text-violet-400", ring: "ring-violet-400" },
+  { bg: "bg-rose-50 dark:bg-rose-900/20", icon: "text-rose-600 dark:text-rose-400", ring: "ring-rose-400" },
+  { bg: "bg-cyan-50 dark:bg-cyan-900/20", icon: "text-cyan-600 dark:text-cyan-400", ring: "ring-cyan-400" },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FormField({ label, required, children, hint }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </label>
+      {children}
+      {hint && <p className="mt-1 text-[10px] text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+function FieldInput({ value, onChange, placeholder, type = "text", ...rest }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#185ADB]/25 focus:border-[#185ADB] transition-all placeholder:text-slate-400"
+      {...rest}
+    />
+  );
+}
+
+function FieldSelect({ value, onChange, children, ...rest }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#185ADB]/25 focus:border-[#185ADB] transition-all"
+      {...rest}
+    >
+      {children}
+    </select>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function IndustryContentManagement() {
-  const [activeTab, setActiveTab] = useState("ALL_MEDIA"); // ALL_MEDIA, ADD_MEDIA, INDUSTRIES, RESELLER_PREVIEW, DISTRIBUTOR_PREVIEW, DRAFTS
-  const [viewMode, setViewMode] = useState("GRID"); // GRID or TABLE
+  const configSectionRef = useRef(null);
+
+  // Data
   const [contentList, setContentList] = useState([]);
   const [industries, setIndustries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState(null);
 
   // Filters
-  const [selectedType, setSelectedType] = useState("");
-  const [selectedAudience, setSelectedAudience] = useState("");
-  const [selectedIndustryFilter, setSelectedIndustryFilter] = useState("");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState("");
+  const [selectedIndustryId, setSelectedIndustryId] = useState(""); // "" = All Industries
+  const [selectedTypeTab, setSelectedTypeTab] = useState(""); // "" = All Types
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState("GRID");
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Modals state
+  // Modals
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingContent, setEditingContent] = useState(null);
   const [previewItem, setPreviewItem] = useState(null);
   const [schedulingItem, setSchedulingItem] = useState(null);
 
-  // Editor Form state (3-Step Wizard)
-  const [formStep, setFormStep] = useState(1); // 1: Content & Copy, 2: Targeting & CTAs, 3: Media & Settings
+  // Form state
   const [title, setTitle] = useState("");
   const [internalName, setInternalName] = useState("");
   const [contentType, setContentType] = useState("HERO_BANNER");
+  const [contentCategory, setContentCategory] = useState("INDUSTRY");
   const [targetAudience, setTargetAudience] = useState("BOTH");
   const [placement, setPlacement] = useState("HERO");
   const [heading, setHeading] = useState("");
   const [shortDescription, setShortDescription] = useState("");
-  const [ctaLabel, setCtaLabel] = useState("");
-  const [ctaUrl, setCtaUrl] = useState("");
   const [resellerCtaLabel, setResellerCtaLabel] = useState("");
   const [resellerCtaUrl, setResellerCtaUrl] = useState("");
   const [distributorCtaLabel, setDistributorCtaLabel] = useState("");
   const [distributorCtaUrl, setDistributorCtaUrl] = useState("");
   const [priority, setPriority] = useState(0);
   const [displayOrder, setDisplayOrder] = useState(0);
-  const [focalPosition, setFocalPosition] = useState("center");
   const [isFeatured, setIsFeatured] = useState(false);
-  const [allowDownload, setAllowDownload] = useState(true);
-  const [allowShare, setAllowShare] = useState(true);
-  const [autoplay, setAutoplay] = useState(false);
   const [assignedIndustryIds, setAssignedIndustryIds] = useState([]);
   const [activeMediaList, setActiveMediaList] = useState([]);
   const [saving, setSaving] = useState(false);
-
-  // Live preview interactive state
-  const [previewAudience, setPreviewAudience] = useState("RESELLER");
-  const [previewIndustryId, setPreviewIndustryId] = useState("");
+  const [ctaExpanded, setCtaExpanded] = useState(false);
+  // Filter: browse tab category
+  const [selectedCategory, setSelectedCategory] = useState(""); // "" = All, "INDUSTRY", "GOVT_TENDER"
 
   const showAlert = (type, message) => {
     setAlert({ type, message });
-    setTimeout(() => setAlert(null), 4000);
+    setTimeout(() => setAlert(null), 4500);
   };
 
-  // Fetch Industries
+  // ── Data Fetching ─────────────────────────────────────────────────────────
+
   const fetchIndustries = useCallback(async () => {
     try {
       const res = await getIndustryTypes();
       if (res.status === "success" || res.success) {
-        const list = res.data || [];
-        setIndustries(list);
-        if (list.length > 0 && !previewIndustryId) {
-          setPreviewIndustryId(list[0]._id || list[0].id);
-        }
+        setIndustries(res.data || []);
       }
     } catch (err) {
       console.error("Failed to load industries:", err);
     }
-  }, [previewIndustryId]);
+  }, []);
 
-  // Fetch Contents
   const fetchContents = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
-      if (selectedType) params.content_type = selectedType;
-      if (selectedAudience) params.target_audience = selectedAudience;
-      if (selectedIndustryFilter) params.industry_type_id = selectedIndustryFilter;
-      if (selectedStatusFilter) params.status = selectedStatusFilter;
+      if (selectedTypeTab) params.content_type = selectedTypeTab;
+      if (selectedIndustryId) params.industry_type_id = selectedIndustryId;
+      if (selectedStatus) params.status = selectedStatus;
       if (searchQuery) params.search = searchQuery;
-
-      if (activeTab === "DRAFTS") {
-        params.status = "DRAFT";
-      }
+      if (selectedCategory) params.content_category = selectedCategory;
 
       const res = await listIndustryContent(params);
       if (res.status === "success" || res.success) {
         setContentList(res.data?.contents || res.data || []);
       }
     } catch (err) {
-      console.error("Failed to load content list:", err);
+      console.error("Failed to load content:", err);
       showAlert("error", "Failed to load industry content.");
     } finally {
       setLoading(false);
     }
-  }, [selectedType, selectedAudience, selectedIndustryFilter, selectedStatusFilter, searchQuery, activeTab]);
+  }, [selectedTypeTab, selectedIndustryId, selectedStatus, searchQuery, selectedCategory]);
 
-  useEffect(() => {
-    fetchIndustries();
-  }, [fetchIndustries]);
+  useEffect(() => { fetchIndustries(); }, [fetchIndustries]);
+  useEffect(() => { fetchContents(); }, [fetchContents]);
 
-  useEffect(() => {
-    fetchContents();
-  }, [fetchContents]);
+  // ── Industry card click ───────────────────────────────────────────────────
 
-  // Reset editor form
+  const handleSelectIndustry = (id) => {
+    setSelectedIndustryId(id);
+    setSelectedTypeTab("");
+    setSelectedStatus("");
+    setSearchQuery("");
+    setSelectedIds([]);
+    setTimeout(() => {
+      configSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
+  // Count of content per industry
+  const contentCountByIndustry = useMemo(() => {
+    const map = {};
+    contentList.forEach((c) => {
+      (c.industries || []).forEach((ind) => {
+        const iid = ind.id || ind._id || ind.industry_type_id || ind;
+        map[iid] = (map[iid] || 0) + 1;
+      });
+    });
+    return map;
+  }, [contentList]);
+
+  // ── Form Reset ────────────────────────────────────────────────────────────
+
   const resetForm = () => {
     setEditingContent(null);
-    setFormStep(1);
     setTitle("");
     setInternalName("");
     setContentType("HERO_BANNER");
+    setContentCategory("INDUSTRY");
     setTargetAudience("BOTH");
     setPlacement("HERO");
     setHeading("");
     setShortDescription("");
-    setCtaLabel("");
-    setCtaUrl("");
     setResellerCtaLabel("");
     setResellerCtaUrl("");
     setDistributorCtaLabel("");
     setDistributorCtaUrl("");
     setPriority(0);
     setDisplayOrder(0);
-    setFocalPosition("center");
     setIsFeatured(false);
-    setAllowDownload(true);
-    setAllowShare(true);
-    setAutoplay(false);
-    setAssignedIndustryIds([]);
+    setAssignedIndustryIds(selectedIndustryId ? [String(selectedIndustryId)] : []);
     setActiveMediaList([]);
+    setCtaExpanded(false);
   };
 
   const handleOpenCreateModal = () => {
@@ -230,47 +299,62 @@ export default function IndustryContentManagement() {
     setTitle(item.title || "");
     setInternalName(item.internal_name || "");
     setContentType(item.content_type || "HERO_BANNER");
+    setContentCategory(item.content_category || "INDUSTRY");
     setTargetAudience(item.target_audience || "BOTH");
     setPlacement(item.placement || "HERO");
     setHeading(item.heading || "");
     setShortDescription(item.short_description || "");
-    setCtaLabel(item.cta_label || "");
-    setCtaUrl(item.cta_url || "");
     setResellerCtaLabel(item.reseller_cta_label || "");
     setResellerCtaUrl(item.reseller_cta_url || "");
     setDistributorCtaLabel(item.distributor_cta_label || "");
     setDistributorCtaUrl(item.distributor_cta_url || "");
     setPriority(item.priority || 0);
     setDisplayOrder(item.display_order || 0);
-    setFocalPosition(item.focal_position || "center");
     setIsFeatured(Boolean(item.is_featured));
-    setAllowDownload(item.allow_download !== undefined ? item.allow_download : true);
-    setAllowShare(item.allow_share !== undefined ? item.allow_share : true);
-    setAutoplay(Boolean(item.autoplay));
 
-    // Map industry IDs
-    const indIds = (item.industries || []).map((i) => i.id || i._id || i.industry_type_id || i);
+    const extractId = (x) => {
+      if (!x) return null;
+      if (typeof x === "string") return x;
+      if (x._id) return String(x._id);
+      if (x.id) return String(x.id);
+      if (x.industry_type_id) {
+        if (typeof x.industry_type_id === "object") {
+          return String(x.industry_type_id._id || x.industry_type_id.id || x.industry_type_id);
+        }
+        return String(x.industry_type_id);
+      }
+      return String(x);
+    };
+
+    const indIds = (item.industries || []).map(extractId).filter(Boolean);
     setAssignedIndustryIds(indIds);
 
-    // Fetch media details
     try {
       const detailRes = await getIndustryContentDetail(item.id || item._id);
       if (detailRes.status === "success" || detailRes.success) {
         const d = detailRes.data?.content || detailRes.data;
         setActiveMediaList(d.media || []);
+        if (d.industries && Array.isArray(d.industries) && d.industries.length > 0) {
+          const detailIndIds = d.industries.map(extractId).filter(Boolean);
+          setAssignedIndustryIds(detailIndIds);
+        }
       }
     } catch (_) {
       setActiveMediaList(item.media || []);
     }
-
     setIsEditorOpen(true);
   };
 
-  // Save content
-  const handleSaveContent = async () => {
+  // ── Save ──────────────────────────────────────────────────────────────────
+
+  const handleSaveContent = async (publishAfterSave = false) => {
     if (!title.trim()) {
       showAlert("error", "Content Title is required.");
-      setFormStep(1);
+      return;
+    }
+
+    if (publishAfterSave && assignedIndustryIds.length === 0) {
+      showAlert("error", "Please select at least one industry before publishing live.");
       return;
     }
 
@@ -280,23 +364,19 @@ export default function IndustryContentManagement() {
         title: title.trim(),
         internal_name: internalName.trim() || title.trim(),
         content_type: contentType,
+        content_category: contentCategory,
         target_audience: targetAudience,
         placement,
         heading: heading.trim(),
         short_description: shortDescription.trim(),
-        cta_label: ctaLabel.trim(),
-        cta_url: ctaUrl.trim(),
         reseller_cta_label: resellerCtaLabel.trim(),
         reseller_cta_url: resellerCtaUrl.trim(),
         distributor_cta_label: distributorCtaLabel.trim(),
         distributor_cta_url: distributorCtaUrl.trim(),
         priority: Number(priority),
         display_order: Number(displayOrder),
-        focal_position: focalPosition,
         is_featured: isFeatured,
-        allow_download: allowDownload,
-        allow_share: allowShare,
-        autoplay,
+        industry_ids: assignedIndustryIds,
         industry_type_ids: assignedIndustryIds,
       };
 
@@ -304,29 +384,40 @@ export default function IndustryContentManagement() {
 
       if (editingContent) {
         await updateIndustryContent(savedId, payload);
-        showAlert("success", "Media content updated successfully!");
+        showAlert("success", "Content updated successfully!");
       } else {
         const createRes = await createIndustryContent(payload);
         savedId = createRes.data?.id || createRes.data?._id || createRes.data?.content?._id;
-        showAlert("success", "Media content created successfully!");
+        showAlert("success", "Content created successfully!");
       }
 
-      // Save industry assignments
-      if (savedId && assignedIndustryIds.length > 0) {
-        await setContentIndustries(savedId, { industry_type_ids: assignedIndustryIds });
+      if (savedId) {
+        await setContentIndustries(savedId, {
+          industry_ids: assignedIndustryIds,
+          industry_type_ids: assignedIndustryIds,
+        });
+      }
+
+      if (publishAfterSave && savedId) {
+        await publishContent(savedId, {
+          industry_ids: assignedIndustryIds,
+          industry_type_ids: assignedIndustryIds,
+        });
+        showAlert("success", "Content saved & published live!");
       }
 
       setIsEditorOpen(false);
       fetchContents();
     } catch (err) {
-      console.error("Save content error:", err);
-      showAlert("error", err.response?.data?.message || "Failed to save content.");
+      console.error("Save error:", err);
+      showAlert("error", err.response?.data?.message || err.message || "Failed to save content.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Media upload handlers in step 3
+  // ── Media handlers ────────────────────────────────────────────────────────
+
   const handleUploadFile = async (formData) => {
     const id = editingContent?._id || editingContent?.id;
     if (!id) {
@@ -337,7 +428,7 @@ export default function IndustryContentManagement() {
       const res = await uploadContentMedia(id, formData);
       if (res.status === "success" || res.success) {
         setActiveMediaList((prev) => [...prev, res.data?.media || res.data]);
-        showAlert("success", "Media file uploaded successfully!");
+        showAlert("success", "Media uploaded!");
       }
     } catch (err) {
       showAlert("error", "Upload failed: " + (err.response?.data?.message || err.message));
@@ -347,7 +438,7 @@ export default function IndustryContentManagement() {
   const handleUploadExternalUrl = async (body) => {
     const id = editingContent?._id || editingContent?.id;
     if (!id) {
-      showAlert("error", "Please save content details first.");
+      showAlert("error", "Please save first.");
       return;
     }
     try {
@@ -356,11 +447,10 @@ export default function IndustryContentManagement() {
       formData.append("media_type", body.media_type);
       formData.append("device_type", body.device_type);
       formData.append("is_primary", body.is_primary ? "true" : "false");
-
       const res = await uploadContentMedia(id, formData);
       if (res.status === "success" || res.success) {
         setActiveMediaList((prev) => [...prev, res.data?.media || res.data]);
-        showAlert("success", "External URL attached successfully!");
+        showAlert("success", "External URL attached!");
       }
     } catch (err) {
       showAlert("error", "Failed to attach media: " + err.message);
@@ -371,13 +461,14 @@ export default function IndustryContentManagement() {
     try {
       await deleteContentMedia(mediaId);
       setActiveMediaList((prev) => prev.filter((m) => (m._id || m.id) !== mediaId));
-      showAlert("success", "Media item removed.");
+      showAlert("success", "Media removed.");
     } catch (err) {
       showAlert("error", "Failed to delete media.");
     }
   };
 
-  // Quick Action Handlers
+  // ── Quick Actions ─────────────────────────────────────────────────────────
+
   const handleToggleActive = async (item) => {
     try {
       const id = item.id || item._id;
@@ -398,11 +489,11 @@ export default function IndustryContentManagement() {
       const id = item.id || item._id;
       const res = await duplicateIndustryContent(id);
       if (res.status === "success" || res.success) {
-        showAlert("success", `Duplicated "${item.title}" successfully!`);
+        showAlert("success", `Duplicated "${item.title}"!`);
         fetchContents();
       }
     } catch (err) {
-      showAlert("error", "Failed to duplicate content.");
+      showAlert("error", "Failed to duplicate.");
     }
   };
 
@@ -412,32 +503,33 @@ export default function IndustryContentManagement() {
       showAlert("success", "Content published live!");
       fetchContents();
     } catch (err) {
-      showAlert("error", "Failed to publish.");
+      showAlert("error", err.response?.data?.message || err.message || "Failed to publish.");
     }
   };
 
   const handleUnpublish = async (id) => {
     try {
       await unpublishContent(id);
-      showAlert("success", "Content unpublished (moved to Draft).");
+      showAlert("success", "Content moved to Draft.");
       fetchContents();
     } catch (err) {
-      showAlert("error", "Failed to unpublish.");
+      showAlert("error", err.response?.data?.message || err.message || "Failed to unpublish.");
     }
   };
 
   const handleArchive = async (id) => {
-    if (!window.confirm("Archive this media content? It will no longer show in partner apps.")) return;
+    if (!window.confirm("Archive this content?")) return;
     try {
       await archiveContent(id);
       showAlert("success", "Content archived.");
       fetchContents();
     } catch (err) {
-      showAlert("error", "Failed to archive.");
+      showAlert("error", err.response?.data?.message || err.message || "Failed to archive.");
     }
   };
 
-  // Bulk Actions
+  // ── Bulk Actions ──────────────────────────────────────────────────────────
+
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedIds(contentList.map((c) => c.id || c._id));
@@ -454,11 +546,10 @@ export default function IndustryContentManagement() {
 
   const handleBulkAction = async (action) => {
     if (!selectedIds.length) return;
-    if (action === "delete" && !window.confirm(`Permanently delete ${selectedIds.length} items?`)) return;
-
+    if (action === "delete" && !window.confirm(`Delete ${selectedIds.length} items?`)) return;
     try {
       await bulkActionIndustryContent({ ids: selectedIds, action });
-      showAlert("success", `Bulk ${action} completed successfully!`);
+      showAlert("success", `Bulk ${action} completed!`);
       setSelectedIds([]);
       fetchContents();
     } catch (err) {
@@ -466,986 +557,798 @@ export default function IndustryContentManagement() {
     }
   };
 
-  // Filtered live preview items
-  const previewItemsForIndustry = useMemo(() => {
-    return contentList.filter((c) => {
-      const matchAudience =
-        previewAudience === "RESELLER"
-          ? c.target_audience === "RESELLER" || c.target_audience === "BOTH"
-          : c.target_audience === "DISTRIBUTOR" || c.target_audience === "BOTH" || c.target_audience === "EPC";
+  // ── Active industry name ───────────────────────────────────────────────────
 
-      const matchIndustry =
-        !previewIndustryId ||
-        c.industries?.some((i) => (i.id || i._id || i) === previewIndustryId);
+  const activeIndustry = industries.find(
+    (ind) => (ind._id || ind.id) === selectedIndustryId
+  );
 
-      return matchAudience && matchIndustry && c.is_active;
-    });
-  }, [contentList, previewAudience, previewIndustryId]);
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* ── Top Header & Sub-Navigation Tabs ─────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-black uppercase tracking-wider">
-                Industry CMS
-              </span>
-              <span className="text-xs text-slate-400 font-bold">Media Showcase v2.0</span>
-            </div>
-            <h1 className="font-heading font-black text-2xl sm:text-3xl text-slate-900 dark:text-white tracking-tight">
-              Industry Wise Media & Poster Management
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-              Curate, tag and  publish high-resolution photos, posters, and 4K videos segmented by industry for Franchisees and Distributors.
-            </p>
-          </div>
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
 
-          <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              onClick={handleOpenCreateModal}
-              className="px-5 py-2.5 rounded-2xl bg-[#185ADB] hover:bg-blue-700 text-white text-xs font-black shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
-            >
-              <FiPlus size={16} />
-              <span>Create New</span>
-            </button>
+      {/* ── Alert Toast ─────────────────────────────────────────────────────── */}
+      {alert && (
+        <div
+          className={`fixed top-5 right-5 z-[9999] p-4 rounded-2xl border flex items-center gap-3 text-xs font-bold shadow-xl animate-in slide-in-from-top-2 duration-300 ${alert.type === "success"
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-rose-50 text-rose-800 border-rose-200"
+            }`}
+        >
+          {alert.type === "success" ? <FiCheck size={15} /> : <FiAlertCircle size={15} />}
+          <span>{alert.message}</span>
+          <button onClick={() => setAlert(null)} className="ml-2 opacity-60 hover:opacity-100">
+            <FiX size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 1 — HEADER
+      ════════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl px-6 py-5 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#185ADB]/10 text-[#185ADB] text-[10px] font-black uppercase tracking-wider">
+              Industry CMS
+            </span>
+            <span className="text-xs text-slate-400 font-semibold">v2.0</span>
           </div>
+          <h1 className="font-heading font-black text-2xl text-slate-900 dark:text-white tracking-tight">
+            Industry Media Management
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5 font-medium">
+            Select an industry below, then configure its media content.
+          </p>
         </div>
 
-        {/* ── Sub-Navigation Tabs ────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 border-t border-slate-100 dark:border-slate-800 pt-4 scrollbar-thin">
-          {[
-            { id: "ALL_MEDIA", label: "All Media Assets", icon: FiGrid },
-            { id: "DRAFTS", label: "Drafts & Scheduled", icon: FiClock },
-            { id: "FRANCHISE_PREVIEW", label: "Franchise Showcase Preview", icon: FiEye },
-            { id: "DISTRIBUTOR_PREVIEW", label: "Distributor Showcase Preview", icon: FiMonitor },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            const Icon = tab.icon;
+        <button
+          onClick={handleOpenCreateModal}
+          className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#185ADB] hover:bg-blue-700 text-white text-xs font-black shadow-lg shadow-blue-500/20 transition-all active:scale-95 cursor-pointer"
+        >
+          <FiPlus size={15} />
+          <span>New Industry Content</span>
+        </button>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 2 — INDUSTRY SELECTOR
+      ════════════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Step 1</p>
+            <h2 className="font-heading font-black text-base text-slate-900 dark:text-white">
+              Select Industry
+            </h2>
+          </div>
+          {selectedIndustryId && (
+            <button
+              onClick={() => handleSelectIndustry("")}
+              className="text-[10px] font-bold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
+            >
+              <FiX size={11} /> Clear selection
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {/* All Industries card */}
+          <button
+            onClick={() => handleSelectIndustry("")}
+            className={`group flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border-2 transition-all duration-200 cursor-pointer min-h-[100px] ${selectedIndustryId === ""
+                ? "border-[#185ADB] bg-[#185ADB]/5 dark:bg-[#185ADB]/10 shadow-md shadow-blue-500/10"
+                : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-800"
+              }`}
+          >
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${selectedIndustryId === ""
+                  ? "bg-[#185ADB] text-white"
+                  : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 group-hover:bg-slate-300"
+                }`}
+            >
+              <FiGrid size={18} />
+            </div>
+            <div className="text-center">
+              <p className={`text-xs font-black leading-tight ${selectedIndustryId === "" ? "text-[#185ADB]" : "text-slate-700 dark:text-slate-200"}`}>
+                All Industries
+              </p>
+              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                {contentList.length} items
+              </p>
+            </div>
+            {selectedIndustryId === "" && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#185ADB]" />
+            )}
+          </button>
+
+          {/* Industry cards */}
+          {industries.map((ind, idx) => {
+            const id = ind._id || ind.id;
+            const isActive = selectedIndustryId === id;
+            const color = INDUSTRY_COLORS[idx % INDUSTRY_COLORS.length];
+            const Icon = getIndustryIcon(idx);
+            const count = contentCountByIndustry[id] || 0;
+
             return (
               <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  if (tab.id === "FRANCHISE_PREVIEW") setPreviewAudience("RESELLER");
-                  if (tab.id === "DISTRIBUTOR_PREVIEW") setPreviewAudience("DISTRIBUTOR");
-                }}
-                className={`
-                  shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer select-none
-                  ${isActive
-                    ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm"
-                    : "bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900"
-                  }
-                `}
+                key={id}
+                onClick={() => handleSelectIndustry(id)}
+                className={`relative group flex flex-col items-center justify-center gap-2.5 p-4 rounded-2xl border-2 transition-all duration-200 cursor-pointer min-h-[100px] ${isActive
+                    ? `border-[#185ADB] bg-[#185ADB]/5 dark:bg-[#185ADB]/10 shadow-md shadow-blue-500/10`
+                    : `border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-white dark:hover:bg-slate-800`
+                  }`}
               >
-                <Icon size={14} />
-                <span>{tab.label}</span>
+                {isActive && (
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#185ADB]" />
+                )}
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isActive
+                      ? "bg-[#185ADB] text-white scale-105"
+                      : `${color.bg} ${color.icon}`
+                    }`}
+                >
+                  <Icon size={18} />
+                </div>
+                <div className="text-center">
+                  <p className={`text-xs font-black leading-tight line-clamp-2 ${isActive ? "text-[#185ADB]" : "text-slate-700 dark:text-slate-200"}`}>
+                    {ind.name}
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                    {count} items
+                  </p>
+                </div>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* ── Alert Toast ──────────────────────────────────────────────────────── */}
-      {alert && (
-        <div
-          className={`p-4 rounded-2xl border flex items-center gap-3 text-xs font-bold shadow-sm animate-in fade-in duration-200 ${alert.type === "success"
-            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-            : "bg-rose-50 text-rose-800 border-rose-200"
-            }`}
-        >
-          {alert.type === "success" ? <FiCheck size={16} /> : <FiAlertCircle size={16} />}
-          <span>{alert.message}</span>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          SECTION 3 — CONFIGURATION PANEL
+      ════════════════════════════════════════════════════════════════════════ */}
+      <div ref={configSectionRef} className="space-y-4">
+
+        {/* Config Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Step 2</p>
+            <h2 className="font-heading font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
+              Configure Content
+              {activeIndustry && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#185ADB]/10 text-[#185ADB]">
+                  {activeIndustry.name}
+                </span>
+              )}
+              {!activeIndustry && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500">
+                  All Industries
+                </span>
+              )}
+            </h2>
+          </div>
         </div>
-      )}
 
-      {/* ── Tab: Live Partner Preview ────────────────────────────────────────── */}
-      {(activeTab === "FRANCHISE_PREVIEW" || activeTab === "RESELLER_PREVIEW" || activeTab === "DISTRIBUTOR_PREVIEW") && (
-        <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 space-y-6 border border-slate-800 shadow-xl">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">
-                LIVE INTERACTIVE SIMULATION
-              </span>
-              <h2 className="text-xl font-black font-heading mt-0.5">
-                {(activeTab === "FRANCHISE_PREVIEW" || activeTab === "RESELLER_PREVIEW") ? "SolarKits Franchise Portal View" : "BOS Kits Distributor Console View"}
-              </h2>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-400">Industry:</span>
-              <select
-                value={previewIndustryId}
-                onChange={(e) => setPreviewIndustryId(e.target.value)}
-                className="bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold"
-              >
-                {industries.map((ind) => (
-                  <option key={ind._id || ind.id} value={ind._id || ind.id}>
-                    {ind.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* Filter toolbar */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl px-4 py-3 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
+          {/* Content Type Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            {CONTENT_TYPES.map((type) => {
+              const Icon = type.icon;
+              const isActive = selectedTypeTab === type.value;
+              return (
+                <button
+                  key={type.value}
+                  onClick={() => setSelectedTypeTab(type.value)}
+                  className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-black transition-all cursor-pointer ${isActive
+                      ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                >
+                  <Icon size={12} />
+                  <span>{type.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {previewItemsForIndustry.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 font-bold text-xs space-y-2">
-              <FiImage size={32} className="mx-auto text-slate-600 mb-2" />
-              <div>No active media published for {previewAudience} in this industry.</div>
-              <button
-                onClick={handleOpenCreateModal}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs mt-2"
-              >
-                + Add Content for This Segment
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Hero Item */}
-              {previewItemsForIndustry[0] && (
-                <div className="relative rounded-2xl overflow-hidden aspect-[21/9] min-h-[260px] bg-slate-950 border border-slate-800 flex flex-col justify-end p-6">
-                  {previewItemsForIndustry[0].media?.[0]?.thumbnail_url ? (
-                    <img
-                      src={previewItemsForIndustry[0].media[0].thumbnail_url}
-                      alt=""
-                      className="absolute inset-0 w-full h-full object-cover opacity-60"
-                      style={{ objectPosition: previewItemsForIndustry[0].focal_position || "center" }}
-                    />
-                  ) : null}
-                  <div className="relative z-10 space-y-1">
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-black uppercase">
-                      Featured Hero
-                    </span>
-                    <h3 className="text-xl sm:text-2xl font-black text-white">
-                      {previewItemsForIndustry[0].heading || previewItemsForIndustry[0].title}
-                    </h3>
-                    <p className="text-xs text-slate-300 max-w-lg line-clamp-2">
-                      {previewItemsForIndustry[0].short_description}
-                    </p>
-                  </div>
-                </div>
-              )}
+          {/* Bottom row: status chips + search + view toggle */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Status chips */}
+              {STATUS_FILTERS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => setSelectedStatus(s.value)}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all cursor-pointer border ${selectedStatus === s.value
+                      ? "bg-[#185ADB] border-[#185ADB] text-white"
+                      : "bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300"
+                    }`}
+                >
+                  {s.label}
+                </button>
+              ))}
 
-              {/* Gallery Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {previewItemsForIndustry.slice(1).map((item) => (
-                  <div
-                    key={item.id || item._id}
-                    className="bg-slate-800/80 rounded-2xl overflow-hidden border border-slate-700/60 p-3 space-y-2"
-                  >
-                    <div className="aspect-video bg-slate-950 rounded-xl overflow-hidden relative">
-                      {item.media?.[0]?.thumbnail_url && (
-                        <img
-                          src={item.media[0].thumbnail_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          style={{ objectPosition: item.focal_position || "center" }}
-                        />
-                      )}
-                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/60 text-white text-[9px] font-bold uppercase">
-                        {item.content_type}
-                      </span>
-                    </div>
-                    <div className="space-y-0.5">
-                      <h4 className="text-xs font-black text-white line-clamp-1">{item.title}</h4>
-                      <p className="text-[10px] text-slate-400 line-clamp-1">{item.short_description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Tab: All Media Management / Drafts ───────────────────────────────── */}
-      {(activeTab === "ALL_MEDIA" || activeTab === "DRAFTS") && (
-        <div className="space-y-4">
-          {/* Filter & Search Bar */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
-              {/* Search input */}
-              <div className="relative flex-1 min-w-[180px] max-w-xs">
-                <FiSearch size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              {/* Search */}
+              <div className="relative">
+                <FiSearch size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search media by title or keyword..."
+                  placeholder="Search title..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-[#185ADB]/30 w-40"
                 />
               </div>
-
-              {/* Type Filter */}
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200"
-              >
-                <option value="">All Types</option>
-                {CONTENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-
-              {/* Audience Filter */}
-              <select
-                value={selectedAudience}
-                onChange={(e) => setSelectedAudience(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200"
-              >
-                <option value="">All Audiences</option>
-                <option value="RESELLER">Franchisees Only</option>
-                <option value="DISTRIBUTOR">Distributors Only</option>
-                <option value="BOTH">Both (Shared)</option>
-              </select>
-
-              {/* Industry Filter */}
-              <select
-                value={selectedIndustryFilter}
-                onChange={(e) => setSelectedIndustryFilter(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200"
-              >
-                <option value="">All Industries</option>
-                {industries.map((ind) => (
-                  <option key={ind._id || ind.id} value={ind._id || ind.id}>
-                    {ind.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
-            {/* View Mode Switcher (Grid / Table) & Refresh */}
+            {/* Right: view toggle + refresh */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
                 <button
                   onClick={() => setViewMode("GRID")}
-                  className={`p-1.5 rounded-xl transition-all cursor-pointer ${viewMode === "GRID" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-xs font-bold" : "text-slate-500"
-                    }`}
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "GRID" ? "bg-white dark:bg-slate-700 text-[#185ADB] shadow-xs" : "text-slate-400"}`}
                   title="Grid View"
                 >
-                  <FiGrid size={15} />
+                  <FiGrid size={13} />
                 </button>
                 <button
                   onClick={() => setViewMode("TABLE")}
-                  className={`p-1.5 rounded-xl transition-all cursor-pointer ${viewMode === "TABLE" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-xs font-bold" : "text-slate-500"
-                    }`}
-                  title="List Table View"
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "TABLE" ? "bg-white dark:bg-slate-700 text-[#185ADB] shadow-xs" : "text-slate-400"}`}
+                  title="List View"
                 >
-                  <FiList size={15} />
+                  <FiList size={13} />
                 </button>
               </div>
-
               <button
                 onClick={fetchContents}
-                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors cursor-pointer"
-                title="Reload Content"
+                className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-[#185ADB] transition-colors cursor-pointer"
+                title="Refresh"
               >
-                <FiRefreshCw size={14} className={loading ? "animate-spin text-blue-600" : ""} />
+                <FiRefreshCw size={13} className={loading ? "animate-spin text-[#185ADB]" : ""} />
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Bulk Action Toolbar (Appears when items are selected) */}
-          {selectedIds.length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 rounded-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
-              <div className="flex items-center gap-2 text-xs font-black text-blue-900 dark:text-blue-200">
-                <FiCheckSquare size={16} />
-                <span>{selectedIds.length} media items selected</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleBulkAction("publish")}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  Publish All
-                </button>
-                <button
-                  onClick={() => handleBulkAction("pause")}
-                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  Pause All
-                </button>
-                <button
-                  onClick={() => handleBulkAction("archive")}
-                  className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  Archive
-                </button>
-                <button
-                  onClick={() => handleBulkAction("delete")}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setSelectedIds([])}
-                  className="px-2 py-1 text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
-                >
-                  Clear
-                </button>
-              </div>
+        {/* Bulk Action Bar */}
+        {selectedIds.length > 0 && (
+          <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/70 rounded-2xl px-5 py-3 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs font-black text-blue-800 dark:text-blue-200">
+              <FiCheckSquare size={14} />
+              <span>{selectedIds.length} items selected</span>
             </div>
-          )}
-
-          {/* ── Content Grid View ──────────────────────────────────────────────── */}
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className="bg-white dark:bg-slate-900 rounded-3xl p-4 border border-slate-200 dark:border-slate-800 animate-pulse space-y-3"
-                >
-                  <div className="aspect-video bg-slate-200 dark:bg-slate-800 rounded-2xl" />
-                  <div className="h-4 w-3/4 bg-slate-200 dark:bg-slate-800 rounded-lg" />
-                  <div className="h-3 w-1/2 bg-slate-200 dark:bg-slate-800 rounded-lg" />
-                </div>
-              ))}
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleBulkAction("publish")} className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold cursor-pointer">Publish All</button>
+              <button onClick={() => handleBulkAction("pause")} className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold cursor-pointer">Pause All</button>
+              <button onClick={() => handleBulkAction("archive")} className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer">Archive</button>
+              <button onClick={() => handleBulkAction("delete")} className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer">Delete</button>
+              <button onClick={() => setSelectedIds([])} className="text-[11px] font-bold text-slate-400 hover:text-slate-700 cursor-pointer">Clear</button>
             </div>
-          ) : contentList.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 mx-auto flex items-center justify-center">
-                <FiImage size={28} />
+          </div>
+        )}
+
+        {/* Content Area */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 animate-pulse space-y-3">
+                <div className="aspect-video bg-slate-100 dark:bg-slate-800 rounded-xl" />
+                <div className="h-3.5 w-3/4 bg-slate-100 dark:bg-slate-800 rounded-lg" />
+                <div className="h-3 w-1/2 bg-slate-100 dark:bg-slate-800 rounded-lg" />
               </div>
-              <h3 className="font-heading font-black text-base text-slate-900 dark:text-white">
-                No Media Content Found
-              </h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto font-medium">
-                Try adjusting your search filters, or click the button below to upload your first visual asset.
+            ))}
+          </div>
+        ) : contentList.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-14 text-center border border-slate-200 dark:border-slate-800 border-dashed space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
+              <FiImage size={26} />
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-sm text-slate-800 dark:text-white">No Content Found</h3>
+              <p className="text-[11px] text-slate-400 mt-1 font-medium max-w-xs mx-auto">
+                {selectedIndustryId
+                  ? `No media content for ${activeIndustry?.name || "this industry"} yet.`
+                  : "No content matched the current filters."}
               </p>
-              <button
-                onClick={handleOpenCreateModal}
-                className="px-4 py-2 rounded-2xl bg-[#185ADB] text-white text-xs font-black shadow-md cursor-pointer"
-              >
-                + Add First Media Asset
-              </button>
             </div>
-          ) : viewMode === "GRID" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {contentList.map((item) => {
-                const id = item.id || item._id;
-                const isSelected = selectedIds.includes(id);
-                const thumb = item.media?.[0]?.thumbnail_url || item.media?.[0]?.url || item.thumbnail_url;
-                const isVideo = item.content_type === "VIDEO" || item.content_type === "EXPLAINER_VIDEO";
+            <button
+              onClick={handleOpenCreateModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-[#185ADB] text-white text-xs font-black shadow-md cursor-pointer"
+            >
+              <FiPlus size={14} /> Add First Media
+            </button>
+          </div>
+        ) : viewMode === "GRID" ? (
+          /* ─── Grid View ──────────────────────────────────────── */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {contentList.map((item) => {
+              const id = item.id || item._id;
+              const isSelected = selectedIds.includes(id);
+              const thumb = item.media?.[0]?.thumbnail_url || item.media?.[0]?.url || item.thumbnail_url;
+              const isVideo = item.content_type === "VIDEO" || item.content_type === "EXPLAINER_VIDEO";
 
-                return (
-                  <div
-                    key={id}
-                    className={`bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border transition-all duration-200 flex flex-col justify-between group ${isSelected
-                      ? "border-[#185ADB] shadow-md ring-2 ring-[#185ADB]/20"
-                      : "border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-md"
-                      }`}
-                  >
-                    {/* Media Thumbnail & Selection */}
-                    <div className="relative aspect-video bg-slate-950 overflow-hidden">
-                      {thumb ? (
-                        <img
-                          src={thumb}
-                          alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          style={{ objectPosition: item.focal_position || "center" }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600">
-                          <FiImage size={28} />
-                          <span className="text-[10px] font-bold mt-1">No Media Attached</span>
-                        </div>
-                      )}
-
-                      {/* Dark overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
-
-                      {/* Checkbox selector */}
-                      <button
-                        onClick={() => handleSelectRow(id)}
-                        className="absolute top-3 left-3 z-10 w-6 h-6 rounded-lg bg-black/60 backdrop-blur-md text-white flex items-center justify-center cursor-pointer border border-white/20"
-                      >
-                        {isSelected ? <FiCheckSquare size={14} className="text-blue-400" /> : <FiSquare size={14} />}
-                      </button>
-
-                      {/* Status badge */}
-                      <div className="absolute top-3 right-3 z-10">
-                        <ContentStatusBadge status={item.status} />
+              return (
+                <div
+                  key={id}
+                  className={`bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border transition-all duration-200 flex flex-col group ${isSelected
+                      ? "border-[#185ADB] ring-2 ring-[#185ADB]/15 shadow-md"
+                      : "border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                >
+                  {/* Thumbnail */}
+                  <div className="relative aspect-video bg-slate-950 overflow-hidden">
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-600">
+                        <FiImage size={24} />
+                        <span className="text-[10px] font-bold mt-1 opacity-60">No Media</span>
                       </div>
+                    )}
 
-                      {/* Center play icon for video */}
-                      {isVideo && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white">
-                            <FiPlay size={16} className="ml-0.5 fill-white" />
-                          </div>
-                        </div>
-                      )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                      {/* Bottom meta tags */}
-                      <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-[10px] font-bold">
-                        <span className="px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md uppercase tracking-wider">
-                          {item.content_type}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-blue-600/80 backdrop-blur-md uppercase tracking-wider">
-                          {item.target_audience === "RESELLER" ? "FRANCHISEE" : item.target_audience}
-                        </span>
-                      </div>
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => handleSelectRow(id)}
+                      className="absolute top-2.5 left-2.5 z-10 w-6 h-6 rounded-lg bg-black/50 backdrop-blur-sm border border-white/20 text-white flex items-center justify-center cursor-pointer hover:bg-black/70 transition-colors"
+                    >
+                      {isSelected ? <FiCheckSquare size={13} className="text-blue-400" /> : <FiSquare size={13} />}
+                    </button>
+
+                    {/* Status */}
+                    <div className="absolute top-2.5 right-2.5 z-10">
+                      <ContentStatusBadge status={item.status} />
                     </div>
 
-                    {/* Content Details */}
-                    <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
-                      <div className="space-y-1">
-                        <h4 className="font-heading font-black text-sm text-slate-900 dark:text-white line-clamp-1">
-                          {item.title}
-                        </h4>
-                        {item.heading && (
-                          <p className="text-xs font-bold text-blue-600 line-clamp-1">
-                            {item.heading}
-                          </p>
-                        )}
-                        {item.short_description && (
-                          <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                            {item.short_description}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Actions Toolbar */}
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1">
-                        {/* Active Toggle Switch */}
-                        <button
-                          onClick={() => handleToggleActive(item)}
-                          className={`text-xs font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-xl cursor-pointer transition-all ${item.is_active
-                            ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                            : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                            }`}
-                          title="Toggle Active Status"
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full ${item.is_active ? "bg-emerald-600" : "bg-slate-400"
-                              }`}
-                          />
-                          <span>{item.is_active ? "Active" : "Paused"}</span>
-                        </button>
-
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleDuplicate(item)}
-                            className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-                            title="Duplicate Content"
-                          >
-                            <FiCopy size={13} />
-                          </button>
-
-                          <button
-                            onClick={() => handleOpenEditModal(item)}
-                            className="p-1.5 rounded-xl hover:bg-blue-50 text-blue-600 transition-colors cursor-pointer"
-                            title="Edit Content (Wizard)"
-                          >
-                            <FiEdit2 size={13} />
-                          </button>
-
-                          {item.status === "PUBLISHED" ? (
-                            <button
-                              onClick={() => handleUnpublish(id)}
-                              className="p-1.5 rounded-xl hover:bg-amber-50 text-amber-600 transition-colors cursor-pointer"
-                              title="Unpublish to Draft"
-                            >
-                              <FiPause size={13} />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handlePublish(id)}
-                              className="p-1.5 rounded-xl hover:bg-emerald-50 text-emerald-600 transition-colors cursor-pointer"
-                              title="Publish Live"
-                            >
-                              <FiCheck size={13} />
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => handleArchive(id)}
-                            className="p-1.5 rounded-xl hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
-                            title="Archive / Delete"
-                          >
-                            <FiTrash2 size={13} />
-                          </button>
+                    {/* Video play icon */}
+                    {isVideo && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-9 h-9 rounded-full bg-white/25 backdrop-blur-sm flex items-center justify-center">
+                          <FiPlay size={14} className="text-white ml-0.5 fill-white" />
                         </div>
+                      </div>
+                    )}
+
+                    {/* Bottom meta */}
+                    <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-wider">
+                        {item.content_type?.replace("_", " ")}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`px-2 py-0.5 rounded-md backdrop-blur-sm text-[9px] font-black uppercase tracking-wider ${item.content_category === "GOVT_TENDER"
+                            ? "bg-amber-500/80 text-white"
+                            : "bg-[#185ADB]/80 text-white"
+                          }`}>
+                          {item.content_category === "GOVT_TENDER" ? "GOVT" : "INDUSTRY"}
+                        </span>
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* Table View */
-            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-              <table className="w-full text-left text-xs font-medium">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="p-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.length === contentList.length && contentList.length > 0}
-                        onChange={handleSelectAll}
-                        className="rounded"
-                      />
-                    </th>
-                    <th className="p-4">Visual Asset</th>
-                    <th className="p-4">Content Type</th>
-                    <th className="p-4">Target Audience</th>
-                    <th className="p-4">Placement</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {contentList.map((item) => {
-                    const id = item.id || item._id;
-                    const isSelected = selectedIds.includes(id);
-                    const thumb = item.media?.[0]?.thumbnail_url || item.thumbnail_url;
 
-                    return (
-                      <tr
-                        key={id}
-                        className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${isSelected ? "bg-blue-50/50 dark:bg-blue-950/20" : ""
+                  {/* Card body */}
+                  <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
+                    <div className="space-y-0.5">
+                      <h4 className="font-heading font-black text-[13px] text-slate-900 dark:text-white line-clamp-1">
+                        {item.title}
+                      </h4>
+                      {item.heading && (
+                        <p className="text-[11px] font-semibold text-[#185ADB] line-clamp-1">{item.heading}</p>
+                      )}
+                      {item.short_description && (
+                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{item.short_description}</p>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <button
+                        onClick={() => handleToggleActive(item)}
+                        className={`text-[11px] font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-lg cursor-pointer transition-all ${item.is_active
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                           }`}
                       >
-                        <td className="p-4">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectRow(id)}
-                            className="rounded"
-                          />
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-9 rounded-xl bg-slate-900 overflow-hidden shrink-0">
-                              {thumb && <img src={thumb} alt="" className="w-full h-full object-cover" />}
-                            </div>
-                            <div>
-                              <div className="font-bold text-slate-900 dark:text-white">{item.title}</div>
-                              <div className="text-[10px] text-slate-400">{item.heading || "No headline"}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 font-bold uppercase text-[10px] text-slate-600">
-                          {item.content_type}
-                        </td>
-                        <td className="p-4 font-bold uppercase text-[10px] text-blue-600">
-                          {item.target_audience === "RESELLER" ? "FRANCHISEE" : item.target_audience}
-                        </td>
-                        <td className="p-4 text-slate-500 font-bold text-[11px]">
-                          {item.placement}
-                        </td>
-                        <td className="p-4">
-                          <ContentStatusBadge status={item.status} />
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => handleOpenEditModal(item)}
-                              className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600"
-                              title="Edit"
-                            >
-                              <FiEdit2 size={13} />
-                            </button>
-                            <button
-                              onClick={() => handleDuplicate(item)}
-                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600"
-                              title="Duplicate"
-                            >
-                              <FiCopy size={13} />
-                            </button>
-                            <button
-                              onClick={() => handleArchive(id)}
-                              className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600"
-                              title="Delete"
-                            >
-                              <FiTrash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+                        <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? "bg-emerald-500" : "bg-slate-400"}`} />
+                        {item.is_active ? "Active" : "Paused"}
+                      </button>
 
-      {/* ── 3-Step Media Creation / Edit Modal Wizard ───────────────────────── */}
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => handleDuplicate(item)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors cursor-pointer" title="Duplicate">
+                          <FiCopy size={12} />
+                        </button>
+                        <button onClick={() => handleOpenEditModal(item)} className="p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-[#185ADB] transition-colors cursor-pointer" title="Edit">
+                          <FiEdit2 size={12} />
+                        </button>
+                        {item.status === "PUBLISHED" ? (
+                          <button onClick={() => handleUnpublish(id)} className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-500 transition-colors cursor-pointer" title="Unpublish">
+                            <FiPause size={12} />
+                          </button>
+                        ) : (
+                          <button onClick={() => handlePublish(id)} className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors cursor-pointer" title="Publish">
+                            <FiCheck size={12} />
+                          </button>
+                        )}
+                        <button onClick={() => handleArchive(id)} className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-500 transition-colors cursor-pointer" title="Archive">
+                          <FiTrash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ─── Table View ─────────────────────────────────────── */
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                <tr>
+                  <th className="p-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === contentList.length && contentList.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded"
+                    />
+                  </th>
+                  <th className="p-4">Asset</th>
+                  <th className="p-4">Type</th>
+                  <th className="p-4">Audience</th>
+                  <th className="p-4">Placement</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {contentList.map((item) => {
+                  const id = item.id || item._id;
+                  const isSelected = selectedIds.includes(id);
+                  const thumb = item.media?.[0]?.thumbnail_url || item.thumbnail_url;
+                  return (
+                    <tr
+                      key={id}
+                      className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${isSelected ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}`}
+                    >
+                      <td className="p-4">
+                        <input type="checkbox" checked={isSelected} onChange={() => handleSelectRow(id)} className="rounded" />
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-8 rounded-lg bg-slate-900 overflow-hidden shrink-0">
+                            {thumb && <img src={thumb} alt="" className="w-full h-full object-cover" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900 dark:text-white text-xs">{item.title}</div>
+                            <div className="text-[10px] text-slate-400 font-medium">{item.heading || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 font-bold text-[10px] uppercase text-slate-500">{item.content_type?.replace("_", " ")}</td>
+                      <td className="p-4 font-bold text-[10px] uppercase text-[#185ADB]">
+                        {item.target_audience === "RESELLER" ? "Franchise" : item.target_audience === "DISTRIBUTOR" ? "EPC" : item.target_audience}
+                      </td>
+                      <td className="p-4 text-[11px] font-semibold text-slate-500">{item.placement}</td>
+                      <td className="p-4"><ContentStatusBadge status={item.status} /></td>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button onClick={() => handleOpenEditModal(item)} className="p-1.5 rounded-lg hover:bg-blue-50 text-[#185ADB] cursor-pointer" title="Edit"><FiEdit2 size={12} /></button>
+                          <button onClick={() => handleDuplicate(item)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer" title="Duplicate"><FiCopy size={12} /></button>
+                          <button onClick={() => handleArchive(id)} className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-500 cursor-pointer" title="Delete"><FiTrash2 size={12} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          CONTENT FORM MODAL (Simplified Single-Page)
+      ════════════════════════════════════════════════════════════════════════ */}
       {isEditorOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col my-8 max-h-[90vh]">
-            {/* Wizard Header */}
-            <div className="p-5 sm:p-6 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col my-8">
+
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/80">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-[#185ADB]">
-                  {editingContent ? "EDIT MEDIA ASSET" : "NEW MEDIA CREATOR"}
+                  {editingContent ? "Edit Content" : "New Content"}
                 </span>
-                <h3 className="font-heading font-black text-lg text-slate-900 dark:text-white">
-                  {editingContent ? `Editing: ${editingContent.title}` : "Create Industry Showcase Media"}
+                <h3 className="font-heading font-black text-base text-slate-900 dark:text-white mt-0.5">
+                  {editingContent ? editingContent.title : "Create Industry Media"}
                 </h3>
               </div>
-
-              {/* Wizard Steps Indicator */}
-              <div className="flex items-center gap-2">
-                {[
-                  { num: 1, label: "Details & Copy" },
-                  { num: 2, label: "Targeting & CTAs" },
-                  { num: 3, label: "Assets & Settings" },
-                ].map((s) => (
-                  <button
-                    key={s.num}
-                    onClick={() => setFormStep(s.num)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black transition-all ${formStep === s.num
-                      ? "bg-[#185ADB] text-white shadow-xs"
-                      : "bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700"
-                      }`}
-                  >
-                    <span>{s.num}.</span>
-                    <span className="hidden sm:inline">{s.label}</span>
-                  </button>
-                ))}
-
-                <button
-                  onClick={() => setIsEditorOpen(false)}
-                  className="p-1.5 rounded-xl hover:bg-slate-200 text-slate-500 ml-2"
-                >
-                  <FiX size={18} />
-                </button>
-              </div>
+              <button
+                onClick={() => setIsEditorOpen(false)}
+                className="p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors cursor-pointer"
+              >
+                <FiX size={18} />
+              </button>
             </div>
 
-            {/* Wizard Body */}
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              {/* ── STEP 1: Content & Copy ─────────────────────────────────── */}
-              {formStep === 1 && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                        Content Title (Admin Reference) *
-                      </label>
-                      <input
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="e.g. Commercial Factory Rooftop 4K Video"
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                      />
-                    </div>
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-7">
 
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                        Content Type *
-                      </label>
-                      <select
-                        value={contentType}
-                        onChange={(e) => setContentType(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                      >
-                        {CONTENT_TYPES.map((t) => (
-                          <option key={t.value} value={t.value}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+              {/* ─── Section A: Content Info ─────────────────────────────── */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="w-5 h-5 rounded-md bg-[#185ADB] text-white text-[10px] font-black flex items-center justify-center">A</span>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Content Info</h4>
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                        Placement *
-                      </label>
-                      <select
-                        value={placement}
-                        onChange={(e) => setPlacement(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                      >
-                        {PLACEMENTS.map((p) => (
-                          <option key={p.value} value={p.value}>
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                        Display Priority (Higher shows first)
-                      </label>
-                      <input
-                        type="number"
-                        value={priority}
-                        onChange={(e) => setPriority(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                      Customer Headline (6–9 Words Recommended)
-                    </label>
-                    <input
-                      type="text"
-                      value={heading}
-                      onChange={(e) => setHeading(e.target.value)}
-                      placeholder="e.g. Industrial & Factory Solar Power Systems"
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField label="Content Title" required>
+                    <FieldInput
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. Commercial Rooftop Solar Showcase"
                     />
-                  </div>
+                  </FormField>
+                  <FormField label="Content Type" required>
+                    <FieldSelect value={contentType} onChange={(e) => setContentType(e.target.value)}>
+                      {FORM_CONTENT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </FieldSelect>
+                  </FormField>
+                </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="text-xs font-black uppercase tracking-wider text-slate-600">
-                        Short Description / Caption
-                      </label>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {shortDescription.length} / 160 chars
-                      </span>
-                    </div>
+                {/* Browse Tab Category */}
+                <FormField
+                  label="Browse Tab Category"
+                  required
+                  hint="Determines which store browse tab this content appears under."
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "INDUSTRY", label: "Browse by Industry", color: "bg-blue-50 border-blue-300 text-blue-800 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-200" },
+                      { value: "GOVT_TENDER", label: "Browse by Govt Tender", color: "bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-900/30 dark:border-amber-600 dark:text-amber-200" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setContentCategory(opt.value)}
+                        className={`px-3 py-2.5 rounded-xl border-2 text-[11px] font-black transition-all cursor-pointer ${contentCategory === opt.value
+                            ? opt.color + " ring-2 ring-offset-1 ring-[#185ADB]/30"
+                            : "bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 hover:border-slate-300"
+                          }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </FormField>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField label="Placement" required>
+                    <FieldSelect value={placement} onChange={(e) => setPlacement(e.target.value)}>
+                      {PLACEMENTS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </FieldSelect>
+                  </FormField>
+                  <FormField label="Display Priority" hint="Higher number shows first">
+                    <FieldInput
+                      type="number"
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value)}
+                      placeholder="0"
+                    />
+                  </FormField>
+                </div>
+
+                <FormField label="Headline (shown to partners)" hint="6–9 words recommended">
+                  <FieldInput
+                    value={heading}
+                    onChange={(e) => setHeading(e.target.value)}
+                    placeholder="e.g. Industrial & Factory Solar Power Systems"
+                  />
+                </FormField>
+
+                <FormField label="Short Description / Caption">
+                  <div className="relative">
                     <textarea
                       rows={3}
                       value={shortDescription}
                       onChange={(e) => setShortDescription(e.target.value)}
-                      placeholder="e.g. High-yield commercial bifacial panels engineered for factory rooftops with zero export control."
-                      className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                      placeholder="e.g. High-yield commercial bifacial panels engineered for factory rooftops..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#185ADB]/25 focus:border-[#185ADB] transition-all resize-none placeholder:text-slate-400"
                     />
+                    <span className="absolute bottom-2 right-3 text-[10px] font-mono text-slate-400">
+                      {shortDescription.length}/160
+                    </span>
                   </div>
+                </FormField>
+              </div>
+
+              {/* ─── Section B: Targeting & Industries ──────────────────────── */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="w-5 h-5 rounded-md bg-violet-600 text-white text-[10px] font-black flex items-center justify-center">B</span>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Targeting</h4>
                 </div>
-              )}
 
-              {/* ── STEP 2: Targeting & CTAs ────────────────────────────────── */}
-              {formStep === 2 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                      Target Audience *
-                    </label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { key: "RESELLER", label: "Franchisees Only", desc: "SolarKits Franchise App" },
-                        { key: "DISTRIBUTOR", label: "Distributors Only", desc: "BOS Kits Console" },
-                        { key: "BOTH", label: "Both (Shared)", desc: "Show in both portals" },
-                      ].map((aud) => (
-                        <button
-                          key={aud.key}
-                          type="button"
-                          onClick={() => setTargetAudience(aud.key)}
-                          className={`p-3 rounded-2xl border text-left cursor-pointer transition-all ${targetAudience === aud.key
-                            ? "border-[#185ADB] bg-blue-50/50 dark:bg-blue-950/40 text-[#185ADB]"
-                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
-                            }`}
-                        >
-                          <div className="text-xs font-black">{aud.label}</div>
-                          <div className="text-[10px] text-slate-500">{aud.desc}</div>
-                        </button>
-                      ))}
-                    </div>
+                {/* Audience selector */}
+                <FormField label="Target Audience" required>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {[
+                      { key: "RESELLER", label: "Franchisees", desc: "SolarKits Portal" },
+                      { key: "EPC", label: "EPC", desc: "EPC Partner Portal" },
+                      { key: "BOTH", label: "Both", desc: "All partner portals" },
+                    ].map((aud) => (
+                      <button
+                        key={aud.key}
+                        type="button"
+                        onClick={() => setTargetAudience(aud.key)}
+                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${targetAudience === aud.key
+                            ? "border-[#185ADB] bg-blue-50/60 dark:bg-blue-950/40"
+                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                          }`}
+                      >
+                        <div className={`text-xs font-black ${targetAudience === aud.key ? "text-[#185ADB]" : "text-slate-800 dark:text-slate-200"}`}>{aud.label}</div>
+                        <div className="text-[10px] text-slate-400 font-medium mt-0.5">{aud.desc}</div>
+                      </button>
+                    ))}
                   </div>
+                </FormField>
 
-                  {/* Industry Mappings */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-xs font-black uppercase tracking-wider text-slate-600">
-                        Mapped Industry Segments
-                      </label>
+                {/* Industry assignment */}
+                <FormField
+                  label="Assign to Industries"
+                  required
+                  hint={assignedIndustryIds.length === 0 ? "Required to publish live (at least 1)" : `${assignedIndustryIds.length} selected`}
+                >
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[10px] text-slate-500 font-semibold">Select industries this content appears in</span>
                       <button
                         type="button"
                         onClick={() =>
                           setAssignedIndustryIds(
                             assignedIndustryIds.length === industries.length
                               ? []
-                              : industries.map((i) => i._id || i.id)
+                              : industries.map((i) => String(i._id || i.id))
                           )
                         }
-                        className="text-[10px] font-bold text-[#185ADB] hover:underline"
+                        className="text-[10px] font-bold text-[#185ADB] hover:underline cursor-pointer"
                       >
                         {assignedIndustryIds.length === industries.length ? "Clear All" : "Select All"}
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto">
+                    {assignedIndustryIds.length === 0 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium mb-2.5 flex items-center gap-1.5">
+                        <FiAlertCircle size={12} className="shrink-0" />
+                        No industries selected. Content will remain as Draft until at least one industry is assigned.
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {industries.map((ind) => {
-                        const id = ind._id || ind.id;
-                        const isChecked = assignedIndustryIds.includes(id);
+                        const iid = String(ind._id || ind.id);
+                        const isChecked = assignedIndustryIds.some((id) => String(id) === iid);
                         return (
                           <label
-                            key={id}
-                            className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer"
+                            key={iid}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-xs font-semibold ${isChecked
+                                ? "border-[#185ADB]/40 bg-blue-50 dark:bg-blue-900/20 text-[#185ADB]"
+                                : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-slate-300"
+                              }`}
                           >
                             <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() =>
                                 setAssignedIndustryIds((prev) =>
-                                  prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+                                  prev.some((id) => String(id) === iid)
+                                    ? prev.filter((id) => String(id) !== iid)
+                                    : [...prev, iid]
                                 )
                               }
-                              className="rounded text-[#185ADB]"
+                              className="rounded text-[#185ADB] shrink-0"
                             />
-                            <span>{ind.name}</span>
+                            <span className="line-clamp-1">{ind.name}</span>
                           </label>
                         );
                       })}
                     </div>
                   </div>
+                </FormField>
 
-                  {/* Role Specific CTAs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-                      <span className="text-[10px] font-black uppercase text-blue-600">
-                        Franchisee CTA Settings
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="CTA Label (e.g. View Solar Kit →)"
-                        value={resellerCtaLabel}
-                        onChange={(e) => setResellerCtaLabel(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-                      />
-                      <input
-                        type="text"
-                        placeholder="CTA URL (e.g. /catalog)"
-                        value={resellerCtaUrl}
-                        onChange={(e) => setResellerCtaUrl(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-                      />
+                {/* CTA Section (collapsible) */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setCtaExpanded((p) => !p)}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/60 text-xs font-black text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <span>CTA Settings (optional)</span>
+                    {ctaExpanded ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
+                  </button>
+                  {ctaExpanded && (
+                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Franchisee CTA</p>
+                        <FieldInput value={resellerCtaLabel} onChange={(e) => setResellerCtaLabel(e.target.value)} placeholder="Button label (e.g. View Kit →)" />
+                        <FieldInput value={resellerCtaUrl} onChange={(e) => setResellerCtaUrl(e.target.value)} placeholder="URL (e.g. /catalog)" />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase text-cyan-600 tracking-wider">EPC CTA</p>
+                        <FieldInput value={distributorCtaLabel} onChange={(e) => setDistributorCtaLabel(e.target.value)} placeholder="Button label (e.g. View EPC Portal →)" />
+                        <FieldInput value={distributorCtaUrl} onChange={(e) => setDistributorCtaUrl(e.target.value)} placeholder="URL (e.g. /epc/portal)" />
+                      </div>
                     </div>
-
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-                      <span className="text-[10px] font-black uppercase text-[#0575B8]">
-                        Distributor CTA Settings
-                      </span>
-                      <input
-                        type="text"
-                        placeholder="CTA Label (e.g. View BOS Kit →)"
-                        value={distributorCtaLabel}
-                        onChange={(e) => setDistributorCtaLabel(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-                      />
-                      <input
-                        type="text"
-                        placeholder="CTA URL (e.g. /distributor/portal/procure)"
-                        value={distributorCtaUrl}
-                        onChange={(e) => setDistributorCtaUrl(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
 
-              {/* ── STEP 3: Media Assets & Settings ────────────────────────── */}
-              {formStep === 3 && (
-                <div className="space-y-6">
-                  {/* Permissions & Focal Points */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-1">
-                        Image/Video Focal Point
-                      </label>
-                      <select
-                        value={focalPosition}
-                        onChange={(e) => setFocalPosition(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
-                      >
-                        {FOCAL_POINTS.map((f) => (
-                          <option key={f.value} value={f.value}>
-                            {f.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col justify-end space-y-2">
-                      <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isFeatured}
-                          onChange={(e) => setIsFeatured(e.target.checked)}
-                          className="rounded text-[#185ADB]"
-                        />
-                        <span>★ Mark as Featured Item</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={allowDownload}
-                          onChange={(e) => setAllowDownload(e.target.checked)}
-                          className="rounded text-[#185ADB]"
-                        />
-                        <span>Allow Partner Downloads</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={allowShare}
-                          onChange={(e) => setAllowShare(e.target.checked)}
-                          className="rounded text-[#185ADB]"
-                        />
-                        <span>Allow Partner Share Link</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Upload Zone */}
-                  <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-600 mb-2">
-                      Media Upload / Video URL
-                    </label>
-                    <MediaUploadZone
-                      mediaList={activeMediaList}
-                      onUploadFile={handleUploadFile}
-                      onUploadExternalUrl={handleUploadExternalUrl}
-                      onDeleteMedia={handleDeleteMedia}
-                    />
-                  </div>
+              {/* ─── Section C: Media ─────────────────────────────────── */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <span className="w-5 h-5 rounded-md bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">C</span>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-300">Media</h4>
                 </div>
-              )}
+
+                {/* Media Upload */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                    Media Files / External URL
+                  </label>
+                  {!editingContent && (
+                    <div className="mb-3 flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                      <FiAlertCircle size={13} className="shrink-0 mt-0.5" />
+                      <span>Save the content details first (use "Save Draft"), then upload media files.</span>
+                    </div>
+                  )}
+                  <MediaUploadZone
+                    mediaList={activeMediaList}
+                    onUploadFile={handleUploadFile}
+                    onUploadExternalUrl={handleUploadExternalUrl}
+                    onDeleteMedia={handleDeleteMedia}
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Wizard Navigation Footer */}
-            <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              {formStep > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setFormStep((s) => s - 1)}
-                  className="px-4 py-2 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
-                >
-                  ← Previous Step
-                </button>
-              ) : (
-                <div />
-              )}
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 flex items-center justify-between gap-3">
+              <button
+                onClick={() => setIsEditorOpen(false)}
+                className="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 cursor-pointer transition-all"
+              >
+                Cancel
+              </button>
 
               <div className="flex items-center gap-2">
-                {formStep < 3 ? (
-                  <button
-                    type="button"
-                    onClick={() => setFormStep((s) => s + 1)}
-                    className="px-5 py-2 rounded-2xl bg-[#185ADB] text-white text-xs font-black cursor-pointer shadow-md"
-                  >
-                    Next Step →
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleSaveContent}
-                    disabled={saving}
-                    className="px-6 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-lg shadow-emerald-500/20 cursor-pointer"
-                  >
-                    {saving ? "Saving..." : "Save & Publish Media"}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => handleSaveContent(false)}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-black cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-600 transition-all disabled:opacity-60"
+                >
+                  {saving ? "Saving..." : "Save Draft"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveContent(true)}
+                  disabled={saving}
+                  className="px-5 py-2 rounded-xl bg-[#185ADB] hover:bg-blue-700 text-white text-xs font-black shadow-md shadow-blue-500/20 cursor-pointer transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2"
+                >
+                  <FiCheck size={14} />
+                  {saving ? "Publishing..." : "Save & Publish"}
+                </button>
               </div>
             </div>
           </div>

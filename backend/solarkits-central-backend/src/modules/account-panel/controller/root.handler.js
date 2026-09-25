@@ -1,5 +1,5 @@
 const { CmsUser, CmsRoleWiseModule, CmsModule, CmsPanel, RolePanel, DepartmentPanel, PanelSaaSProduct, UserPanel, CmsUserScope, CmsRole } = require('../models/user_db');
-const { GeoLevel0, GeoLevel1, Cluster } = require('../models/geolocation_db');
+const { GeoLevel0, GeoLevel1, GeoLevel2, Cluster } = require('../models/geolocation_db');
 
 const get_user_data = async (req, res) => {
     try {
@@ -343,11 +343,29 @@ const get_assigned_clusters = async (req, res) => {
     }
 };
 
+const get_active_districts = async (req, res) => {
+    try {
+        const state_id = req.params.state_id || req.query.state_id;
+        let query = { is_active: true, deleted_at: null };
+        if (state_id) {
+            query.level_1 = state_id;
+        }
+
+        const rows = await GeoLevel2.find(query, '_id name level_1').sort({ name: 1 }).lean();
+        const data = rows.map(r => ({ id: String(r._id), name: r.name, state_id: String(r.level_1) }));
+        res.status(200).json({ success: true, message: 'Districts fetched successfully', data });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
+    }
+};
+
 module.exports = {
     get_user_data,
     get_user_modules,
     get_active_countries,
     get_active_states,
     get_active_clusters,
-    get_assigned_clusters
+    get_assigned_clusters,
+    get_active_districts
 };
+

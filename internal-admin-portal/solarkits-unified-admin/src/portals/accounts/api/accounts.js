@@ -83,8 +83,17 @@ export const getCountries = async () => {
   return res.data;
 };
 
-export const getStates = async (countryId) => {
-  const res = await axios.get(`${API_URL}/geography/states/${countryId}`, {
+export const getStates = async (countryId = "") => {
+  const url = countryId ? `${API_URL}/geography/states/${countryId}` : `${API_URL}/geography/states`;
+  const res = await axios.get(url, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getDistricts = async (stateId = "") => {
+  const url = stateId ? `${API_URL}/geography/districts/${stateId}` : `${API_URL}/geography/districts`;
+  const res = await axios.get(url, {
     headers: authHeaderObj(),
   });
   return res.data;
@@ -191,6 +200,10 @@ export const getComboKits = async (warehouseId = "") => {
     headers: authHeaderObj(),
   });
   return res.data;
+};
+
+export const getAllComboKits = async () => {
+  return await getComboKits("");
 };
 
 export const getCountrySaaSProducts = async (countryId) => {

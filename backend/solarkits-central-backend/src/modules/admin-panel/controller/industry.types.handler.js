@@ -61,11 +61,18 @@ const list_industry_types_public = async (req, res) => {
     if (audience === 'epc')      query.for_epc = true;
 
     const rows = await IndustryType.find(query)
-      .select('name code slug description icon thumbnail sort_order')
+      .select('name code slug description icon cover_image thumbnail sort_order is_active for_resellers for_epc')
       .sort({ sort_order: 1, name: 1 })
       .lean();
 
-    return res.json({ status: 'success', data: rows.map(r => ({ ...r, id: r._id })) });
+    return res.json({
+      status: 'success',
+      data: rows.map(r => ({
+        ...r,
+        id: r._id,
+        is_active: r.is_active !== false,
+      })),
+    });
   } catch (error) {
     console.error('[industry.types] list_industry_types_public error:', error);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });

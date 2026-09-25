@@ -51,7 +51,7 @@ const list_content = async (req, res) => {
   try {
     const {
       page = 1, limit = 50,
-      status, content_type, target_audience, industry_type_id, placement, is_featured, search,
+      status, content_type, target_audience, industry_type_id, placement, is_featured, search, content_category,
     } = req.query;
 
     const filter = { deleted_at: null };
@@ -61,6 +61,7 @@ const list_content = async (req, res) => {
     if (placement)        filter.placement = placement;
     if (is_featured !== undefined && is_featured !== '') filter.is_featured = is_featured === 'true' || is_featured === true;
     if (search)           filter.title = { $regex: search, $options: 'i' };
+    if (content_category) filter.content_category = content_category;
 
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -181,28 +182,40 @@ const get_content_detail = async (req, res) => {
 const create_content = async (req, res) => {
   try {
     const {
-      title, internal_name, content_type, target_audience, placement,
+      title, internal_name, content_type, content_category, target_audience, placement,
       heading, short_description, cta_label, cta_url,
       reseller_cta_label, reseller_cta_url, distributor_cta_label, distributor_cta_url,
       is_featured, priority, display_order, start_at, end_at, status, is_active,
       autoplay, show_controls, muted, loop, allow_download, allow_share, allow_fullscreen,
       focal_position, related_kit_ids,
-      industry_ids,  // array of industry_type_id strings
     } = req.body;
 
     if (!title || !internal_name || !content_type || !target_audience) {
       return res.status(400).json({ status: 'error', message: 'title, internal_name, content_type, and target_audience are required' });
     }
 
+    const raw_industry_ids = req.body.industry_ids !== undefined ? req.body.industry_ids : req.body.industry_type_ids;
+    const arr_industry_ids = raw_industry_ids ? (Array.isArray(raw_industry_ids) ? raw_industry_ids : [raw_industry_ids]) : [];
+    const valid_ids = arr_industry_ids
+      .map(i => (typeof i === 'object' && i ? (i._id || i.id || i.industry_type_id) : i))
+      .filter(id => id && mongoose.Types.ObjectId.isValid(id))
+      .map(id => id.toString());
+
     // Sanitize user-visible fields
     const safe_heading = sanitize_html(heading);
     const safe_desc    = sanitize_html(short_description);
     const safe_cta_url = sanitize_url(cta_url);
 
+    let initial_status = status || 'DRAFT';
+    if (initial_status === 'PUBLISHED' && valid_ids.length === 0) {
+      initial_status = 'DRAFT';
+    }
+
     const content = await IndustryContent.create({
       title: title.trim(),
       internal_name: internal_name.trim(),
       content_type,
+      content_category: content_category || 'INDUSTRY',
       target_audience,
       placement: placement || 'GALLERY',
       heading:           safe_heading,
@@ -227,20 +240,20 @@ const create_content = async (req, res) => {
       allow_fullscreen:  allow_fullscreen !== false,
       focal_position:    focal_position || 'center',
       related_kit_ids:   Array.isArray(related_kit_ids) ? related_kit_ids : [],
-      status:            status || 'DRAFT',
+      status:            initial_status,
       is_active:         is_active !== undefined ? !!is_active : true,
       created_by:        req.user?.id,
     });
 
     // Assign industries if provided
-    if (industry_ids && Array.isArray(industry_ids) && industry_ids.length > 0) {
-      const valid_ids = industry_ids.filter(id => mongoose.Types.ObjectId.isValid(id));
-      if (valid_ids.length) {
-        const maps = valid_ids.map(iid => ({
-          content_id: content._id,
-          industry_type_id: iid,
-        }));
-        await IndustryContentIndustryMap.insertMany(maps, { ordered: false }).catch(() => {});
+    if (valid_ids.length > 0) {
+      for (const iid of valid_ids) {
+        await IndustryContentIndustryMap.findOneAndUpdate(
+          { content_id: content._id, industry_type_id: iid },
+          { $set: { deleted_at: null, is_active: true } },
+          { upsert: true, new: true }
+        );
+        invalidate_industry_cache(iid);
       }
     }
 
@@ -265,7 +278,7 @@ const update_content = async (req, res) => {
     if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
 
     const allowed = [
-      'title', 'internal_name', 'content_type', 'target_audience', 'placement',
+      'title', 'internal_name', 'content_type', 'content_category', 'target_audience', 'placement',
       'heading', 'short_description', 'cta_label', 'cta_url',
       'reseller_cta_label', 'reseller_cta_url', 'distributor_cta_label', 'distributor_cta_url',
       'is_featured', 'priority', 'display_order', 'status', 'is_active',
@@ -288,6 +301,30 @@ const update_content = async (req, res) => {
       }
     }
     update.updated_by = req.user?.id;
+
+    // Sync industries if provided in body
+    const raw_industry_ids = req.body.industry_ids !== undefined ? req.body.industry_ids : req.body.industry_type_ids;
+    if (raw_industry_ids !== undefined) {
+      const arr_industry_ids = Array.isArray(raw_industry_ids) ? raw_industry_ids : [raw_industry_ids];
+      const valid_ids = arr_industry_ids
+        .map(i => (typeof i === 'object' && i ? (i._id || i.id || i.industry_type_id) : i))
+        .filter(iid => iid && mongoose.Types.ObjectId.isValid(iid))
+        .map(iid => iid.toString());
+
+      await IndustryContentIndustryMap.updateMany(
+        { content_id: id, industry_type_id: { $nin: valid_ids }, deleted_at: null },
+        { $set: { deleted_at: new Date(), is_active: false } }
+      );
+
+      for (const iid of valid_ids) {
+        await IndustryContentIndustryMap.findOneAndUpdate(
+          { content_id: id, industry_type_id: iid },
+          { $set: { deleted_at: null, is_active: true } },
+          { upsert: true, new: true }
+        );
+        invalidate_industry_cache(iid);
+      }
+    }
 
     const updated = await IndustryContent.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
 
@@ -414,12 +451,12 @@ const delete_content_media = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. SET INDUSTRY ASSIGNMENTS
 // POST /admin-api/industry-content/set-industries/:id
-// Body: { industry_ids: [...] }
+// Body: { industry_ids: [...] } or { industry_type_ids: [...] }
 // ─────────────────────────────────────────────────────────────────────────────
 const set_industry_assignments = async (req, res) => {
   try {
     const { id } = req.params;
-    const { industry_ids = [] } = req.body;
+    const raw_industry_ids = req.body.industry_ids !== undefined ? req.body.industry_ids : (req.body.industry_type_ids !== undefined ? req.body.industry_type_ids : []);
 
     if (!mongoose.Types.ObjectId.isValid(id))
       return res.status(400).json({ status: 'error', message: 'Invalid content id' });
@@ -427,8 +464,12 @@ const set_industry_assignments = async (req, res) => {
     const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
     if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
 
-    // Validate all industry ids
-    const valid_ids = industry_ids.filter(iid => mongoose.Types.ObjectId.isValid(iid));
+    // Validate and normalize all industry ids
+    const arr_industry_ids = Array.isArray(raw_industry_ids) ? raw_industry_ids : [raw_industry_ids];
+    const valid_ids = arr_industry_ids
+      .map(i => (typeof i === 'object' && i ? (i._id || i.id || i.industry_type_id) : i))
+      .filter(iid => iid && mongoose.Types.ObjectId.isValid(iid))
+      .map(iid => iid.toString());
 
     // Soft-delete existing maps not in new list
     await IndustryContentIndustryMap.updateMany(
@@ -443,7 +484,7 @@ const set_industry_assignments = async (req, res) => {
         { $set: { deleted_at: null, is_active: true } },
         { upsert: true, new: true }
       );
-      invalidate_industry_cache(iid.toString());
+      invalidate_industry_cache(iid);
     }
 
     return res.json({ status: 'success', message: 'Industry assignments updated' });
@@ -468,6 +509,24 @@ const publish_content = async (req, res) => {
 
     if (['ARCHIVED'].includes(content.status))
       return res.status(409).json({ status: 'error', message: `Cannot publish content with status "${content.status}"` });
+
+    // Sync any industries passed in the request body
+    const raw_industry_ids = req.body?.industry_ids !== undefined ? req.body?.industry_ids : req.body?.industry_type_ids;
+    if (raw_industry_ids) {
+      const arr_industry_ids = Array.isArray(raw_industry_ids) ? raw_industry_ids : [raw_industry_ids];
+      const valid_ids = arr_industry_ids
+        .map(i => (typeof i === 'object' && i ? (i._id || i.id || i.industry_type_id) : i))
+        .filter(iid => iid && mongoose.Types.ObjectId.isValid(iid))
+        .map(iid => iid.toString());
+
+      for (const iid of valid_ids) {
+        await IndustryContentIndustryMap.findOneAndUpdate(
+          { content_id: id, industry_type_id: iid },
+          { $set: { deleted_at: null, is_active: true } },
+          { upsert: true, new: true }
+        );
+      }
+    }
 
     // Verify at least one industry is assigned
     const mapCount = await IndustryContentIndustryMap.countDocuments({ content_id: id, deleted_at: null });
@@ -535,6 +594,24 @@ const schedule_content = async (req, res) => {
 
     const content = await IndustryContent.findOne({ _id: id, deleted_at: null });
     if (!content) return res.status(404).json({ status: 'error', message: 'Content not found' });
+
+    // Sync any industries passed in the request body
+    const raw_industry_ids = req.body?.industry_ids !== undefined ? req.body?.industry_ids : req.body?.industry_type_ids;
+    if (raw_industry_ids) {
+      const arr_industry_ids = Array.isArray(raw_industry_ids) ? raw_industry_ids : [raw_industry_ids];
+      const valid_ids = arr_industry_ids
+        .map(i => (typeof i === 'object' && i ? (i._id || i.id || i.industry_type_id) : i))
+        .filter(iid => iid && mongoose.Types.ObjectId.isValid(iid))
+        .map(iid => iid.toString());
+
+      for (const iid of valid_ids) {
+        await IndustryContentIndustryMap.findOneAndUpdate(
+          { content_id: id, industry_type_id: iid },
+          { $set: { deleted_at: null, is_active: true } },
+          { upsert: true, new: true }
+        );
+      }
+    }
 
     // Verify at least one industry is assigned
     const mapCount = await IndustryContentIndustryMap.countDocuments({ content_id: id, deleted_at: null });
@@ -780,6 +857,26 @@ const bulk_action = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'No valid ids provided' });
     }
 
+    let targetIds = validIds;
+    let skippedCount = 0;
+
+    if (action === 'publish') {
+      const maps = await IndustryContentIndustryMap.find({
+        content_id: { $in: validIds },
+        deleted_at: null,
+      }).select('content_id').lean();
+      const idsWithIndustry = new Set(maps.map(m => m.content_id.toString()));
+      targetIds = validIds.filter(id => idsWithIndustry.has(id.toString()));
+      skippedCount = validIds.length - targetIds.length;
+
+      if (targetIds.length === 0) {
+        return res.status(409).json({
+          status: 'error',
+          message: 'None of the selected items have an industry assigned. Please assign at least one industry before publishing.',
+        });
+      }
+    }
+
     let update = {};
     if (action === 'publish') {
       update = { status: 'PUBLISHED', is_active: true, published_at: new Date(), updated_by: req.user?.id };
@@ -798,15 +895,19 @@ const bulk_action = async (req, res) => {
     }
 
     await IndustryContent.updateMany(
-      { _id: { $in: validIds }, deleted_at: null },
+      { _id: { $in: targetIds }, deleted_at: null },
       { $set: update }
     );
 
     // Invalidate affected industry caches
-    const maps = await IndustryContentIndustryMap.find({ content_id: { $in: validIds }, deleted_at: null }).lean();
+    const maps = await IndustryContentIndustryMap.find({ content_id: { $in: targetIds }, deleted_at: null }).lean();
     maps.forEach(m => invalidate_industry_cache(m.industry_type_id.toString()));
 
-    return res.json({ status: 'success', message: `Bulk ${action} completed for ${validIds.length} items` });
+    const msg = skippedCount > 0
+      ? `Bulk publish completed for ${targetIds.length} items (${skippedCount} skipped: no industry assigned)`
+      : `Bulk ${action} completed for ${targetIds.length} items`;
+
+    return res.json({ status: 'success', message: msg });
   } catch (err) {
     console.error('[industry.content] bulk_action:', err);
     return res.status(500).json({ status: 'error', message: 'Internal server error' });
@@ -856,6 +957,7 @@ const list_public_content = async (req, res) => {
       industry_type_id,
       industry_slug,
       content_type,
+      content_category, // 'INDUSTRY' | 'GOVT_TENDER' — filter for browse tabs
       placement,
       is_featured,
       search,
@@ -883,6 +985,9 @@ const list_public_content = async (req, res) => {
 
     if (content_type && content_type !== 'ALL') {
       filter.content_type = content_type;
+    }
+    if (content_category) {
+      filter.content_category = content_category;
     }
     if (placement) {
       filter.placement = placement;
@@ -986,6 +1091,7 @@ const list_public_content = async (req, res) => {
         cta_label: item.cta_label,
         cta_url: item.cta_url,
         is_featured: item.is_featured,
+        content_category: item.content_category || 'INDUSTRY',
         priority: item.priority,
         display_order: item.display_order,
         focal_position: item.focal_position,

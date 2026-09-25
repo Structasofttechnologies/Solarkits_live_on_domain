@@ -22,6 +22,13 @@ const schema = new mongoose.Schema({
     ],
   },
 
+  // Browse tab category — determines which public browse section this content appears in
+  content_category: {
+    type: String,
+    enum: ['INDUSTRY', 'GOVT_TENDER'],
+    default: 'INDUSTRY',
+  },
+
   // Target audience (SolarKits Reseller, BOS Kits Distributor, EPC, or Both)
   target_audience: {
     type: String,

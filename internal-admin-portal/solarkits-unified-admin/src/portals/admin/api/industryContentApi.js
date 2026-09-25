@@ -117,14 +117,19 @@ export const deleteContentMedia = async (mediaId, moduleUniqueId = "ADM_INDUSTRY
 };
 
 export const setContentIndustries = async (id, data, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
-  const res = await axios.post(buildUrl(`/industry-content/set-industries/${id}`, moduleUniqueId, "edit"), data, {
+  const ids = data.industry_ids || data.industry_type_ids || (Array.isArray(data) ? data : []);
+  const payload = {
+    industry_ids: ids,
+    industry_type_ids: ids,
+  };
+  const res = await axios.post(buildUrl(`/industry-content/set-industries/${id}`, moduleUniqueId, "edit"), payload, {
     headers: authHeaderObj(),
   });
   return res.data;
 };
 
-export const publishContent = async (id, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
-  const res = await axios.put(buildUrl(`/industry-content/publish/${id}`, moduleUniqueId, "edit"), {}, {
+export const publishContent = async (id, data = {}, moduleUniqueId = "ADM_INDUSTRY_CONTENT") => {
+  const res = await axios.put(buildUrl(`/industry-content/publish/${id}`, moduleUniqueId, "edit"), data, {
     headers: authHeaderObj(),
   });
   return res.data;
