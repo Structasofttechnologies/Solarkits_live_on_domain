@@ -305,6 +305,7 @@ const get_warehouses = async (req, res) => {
         district_name: geoMap.l2[row.level_2?.toString()] || null,
         cluster: (geoMap.l2Cluster[row.level_2?.toString()] || null)?.name || null,
         cluster_name: (geoMap.l2Cluster[row.level_2?.toString()] || null)?.name || null,
+        cluster_id: (geoMap.l2Cluster[row.level_2?.toString()] || null)?.id || null,
         country_id: row.level_0,
         state_id: row.level_1,
         district_id: row.level_2,

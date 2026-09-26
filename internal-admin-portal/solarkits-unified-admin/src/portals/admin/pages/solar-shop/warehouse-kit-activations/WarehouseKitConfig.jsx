@@ -689,7 +689,7 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
                                   onClick={() => {
                                     const cId = warehouse.country_id || warehouse.level_0 || "";
                                     const sId = warehouse.state_id || warehouse.level_1 || "";
-                                    const clId = warehouse.cluster_id || warehouse.cluster?.id || warehouse.cluster || "";
+                                    const clId = warehouse.cluster_id || warehouse.cluster?.id || warehouse.cluster?._id || "";
                                     navigate(`/admin-panel/product-configurations/price-master?sku_id=${sku.sku_id}&cluster_id=${clId}&state_id=${sId}&country_id=${cId}`);
                                   }}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 bg-danger/10 text-danger hover:bg-danger/20 hover:scale-[1.02] border border-danger/20 rounded-md text-[9px] font-bold transition-all cursor-pointer"

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { ProductSku, ProductSkuPrice, ProductAttributeValue } = require('../models/core_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2, Cluster } = require('../models/geolocation_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
@@ -10,8 +11,14 @@ const get_sku_prices = async (req, res) => {
       return res.status(400).json({ status: "error", message: "cluster_id is required" });
     }
 
-    // Fetch cluster to determine the country/level_0
-    const cluster = await Cluster.findById(cluster_id).lean();
+    // Fetch cluster to determine the country/level_0 - support both ObjectId and cluster name
+    let cluster = null;
+    if (mongoose.Types.ObjectId.isValid(cluster_id) && String(new mongoose.Types.ObjectId(cluster_id)) === String(cluster_id)) {
+      cluster = await Cluster.findById(cluster_id).lean();
+    }
+    if (!cluster) {
+      cluster = await Cluster.findOne({ name: cluster_id, deleted_at: null }).lean();
+    }
     if (!cluster) {
       return res.status(404).json({ status: "error", message: "Cluster not found" });
     }
@@ -69,7 +76,7 @@ const get_sku_prices = async (req, res) => {
     });
 
     // Fetch existing pricing for this cluster
-    const pricingRecords = await ProductSkuPrice.find({ cluster_id }).lean();
+    const pricingRecords = await ProductSkuPrice.find({ cluster_id: cluster._id }).lean();
     const priceMap = {};
     const pricePerWattMap = {};
     pricingRecords.forEach(record => {
@@ -130,6 +137,8 @@ const get_sku_prices = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
+      cluster_id: cluster._id,
+      cluster_name: cluster.name,
       currency_code,
       currency_name,
       data
@@ -161,6 +170,16 @@ const set_sku_prices = async (req, res) => {
         message: "prices must be an array of { sku_id, price }"
       });
     }
+
+    // Resolve cluster to its ObjectId if name or string was passed
+    let cluster = null;
+    if (mongoose.Types.ObjectId.isValid(cluster_id) && String(new mongoose.Types.ObjectId(cluster_id)) === String(cluster_id)) {
+      cluster = await Cluster.findById(cluster_id).lean();
+    }
+    if (!cluster) {
+      cluster = await Cluster.findOne({ name: cluster_id, deleted_at: null }).lean();
+    }
+    const resolvedClusterId = cluster ? cluster._id : cluster_id;
 
     // Resolve country's currency details
     const country = await GeoLevel0.findById(country_id).lean();
@@ -219,11 +238,12 @@ const set_sku_prices = async (req, res) => {
       }
 
       return ProductSkuPrice.findOneAndUpdate(
-        { sku_id: item.sku_id, cluster_id },
+        { sku_id: item.sku_id, cluster_id: resolvedClusterId },
         {
           $set: {
             country_id,
             state_id,
+            cluster_id: resolvedClusterId,
             price: isNaN(finalPrice) ? 0 : finalPrice,
             price_per_watt: isNaN(price_per_watt) ? 0 : price_per_watt,
             currency_code
@@ -237,7 +257,7 @@ const set_sku_prices = async (req, res) => {
 
     // Recalculate kit prices for updated SKUs in all warehouses linked to this cluster asynchronously
     // 1. Get districts in this cluster
-    const districts = await GeoLevel2.find({ cluster: cluster_id, deleted_at: null }).select('_id').lean();
+    const districts = await GeoLevel2.find({ cluster: resolvedClusterId, deleted_at: null }).select('_id').lean();
     const districtIds = districts.map(d => d._id);
     // 2. Find warehouses in these districts
     const warehouses = await CompanyWarehouse.find({ level_2: { $in: districtIds }, deleted_at: null }).select('_id').lean();

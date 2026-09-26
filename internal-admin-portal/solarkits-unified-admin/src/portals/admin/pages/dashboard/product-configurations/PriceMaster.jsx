@@ -362,7 +362,19 @@ export default function PriceMaster({ moduleUniqueId }) {
           { headers: authHeaderObj() }
         );
         if (res.data?.status === "success") {
-          setClusters(res.data.clusters || []);
+          const loadedClusters = res.data.clusters || [];
+          setClusters(loadedClusters);
+          // If selectedCluster is set (e.g. from deep-link or name), resolve it to matching cluster's id
+          if (selectedCluster) {
+            const matched = loadedClusters.find(
+              c => (c.id && c.id === selectedCluster) ||
+                   (c._id && c._id === selectedCluster) ||
+                   (c.name && c.name.toLowerCase() === selectedCluster.toLowerCase())
+            );
+            if (matched && selectedCluster !== (matched.id || matched._id)) {
+              setSelectedCluster(matched.id || matched._id);
+            }
+          }
         }
       } catch (error) {
         console.error("Failed to load clusters:", error);
@@ -400,6 +412,9 @@ export default function PriceMaster({ moduleUniqueId }) {
         if (res.data?.status === "success") {
           setSkuPrices(res.data.data || []);
           setOriginalPrices(JSON.parse(JSON.stringify(res.data.data || [])));
+          if (res.data.cluster_id && selectedCluster !== res.data.cluster_id.toString()) {
+            setSelectedCluster(res.data.cluster_id.toString());
+          }
           if (res.data.currency_code) {
             setCurrencyCode(res.data.currency_code);
           }
@@ -615,7 +630,7 @@ export default function PriceMaster({ moduleUniqueId }) {
 
   const clusterOptions = clusters.map(c => ({
     text: c.name,
-    value: c._id
+    value: c.id || c._id
   }));
 
   const classificationOptions = [
@@ -694,7 +709,7 @@ export default function PriceMaster({ moduleUniqueId }) {
             label: "Cluster SKUs",
             value: selectedCluster ? skuPrices.length : 0,
             description: selectedCluster
-              ? clusters.find(c => c._id === selectedCluster)?.name || "Cluster"
+              ? clusters.find(c => (c.id || c._id) === selectedCluster || c.name?.toLowerCase() === selectedCluster?.toLowerCase())?.name || "Cluster"
               : "Select cluster"
           },
           {

@@ -31,6 +31,7 @@ const ALLOWED_VIEW_MODULES = [
   { unique_code: 'ADM_WH_BULK_CONFIG',    permissions: ['view'] },
   { unique_code: 'ADM_WH_KIT_CONFIG',     permissions: ['view'] },
   { unique_code: 'ADM_WH_PO_CONFIG',      permissions: ['view'] },
+  { unique_code: 'ADM_ORDER_SETTINGS',    permissions: ['view'] },
   { unique_code: 'RSL_MGMT',              permissions: ['view'] },
   { unique_code: 'RSL_PROD_AUTH',         permissions: ['view'] },
   { unique_code: 'RSL_PRODAUTH',          permissions: ['view'] },

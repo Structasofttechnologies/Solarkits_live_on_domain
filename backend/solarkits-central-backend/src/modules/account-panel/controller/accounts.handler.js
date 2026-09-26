@@ -2371,10 +2371,10 @@ const get_pending_epc_franchise_orders = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const create_combined_supplier_payment = async (req, res) => {
   try {
-    const { warehouse_id, supplier_id, timeline, source_order_ids, items, payment } = req.body;
+    const { warehouse_id, supplier_id, timeline, source_order_ids, items, payment, procurement_type } = req.body;
 
-    if (!warehouse_id || !supplier_id || !timeline || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'warehouse_id, supplier_id, timeline, and items are required.' });
+    if (!warehouse_id || !supplier_id) {
+      return res.status(400).json({ status: 'error', message: 'warehouse_id and supplier_id are required.' });
     }
     if (!payment || !payment.reference_no || !payment.payment_date || !payment.amount || !payment.payment_mode) {
       return res.status(400).json({ status: 'error', message: 'Payment details (reference_no, payment_date, amount, payment_mode) are required.' });
@@ -2393,40 +2393,54 @@ const create_combined_supplier_payment = async (req, res) => {
       if (district && district.cluster) cluster_id = district.cluster;
     }
 
-    // Process items — validate and fetch benchmark prices
+    // Process items if provided, or auto-generate summary item for procurement
     const processedItems = [];
-    for (const item of items) {
+    const rawItems = Array.isArray(items) ? items : [];
+
+    for (const item of rawItems) {
       const { sku_id, sku_code, qty, order_price } = item;
-      if (!sku_id || !qty || !order_price) {
-        return res.status(400).json({ status: 'error', message: 'Each item must have sku_id, qty, and order_price.' });
-      }
+      if (!sku_id) continue;
 
       let priceEntry = await ProductSkuPrice.findOne({ warehouse_id, sku_id, price: { $gt: 0 } });
       if (!priceEntry && cluster_id) {
         priceEntry = await ProductSkuPrice.findOne({ cluster_id, sku_id, price: { $gt: 0 } });
       }
-      const benchmark_price = priceEntry ? priceEntry.price : Number(order_price);
+      const benchmark_price = priceEntry ? priceEntry.price : (Number(order_price) || 0);
       const benchmark_price_per_watt = priceEntry ? (priceEntry.price_per_watt || 0) : 0;
 
-      // Fetch SKU details
       const skuDetail = await ProductSku.findById(sku_id)
         .populate({ path: 'product_id', populate: { path: 'template_id' } })
         .lean();
 
       let { capacity_w } = await getSkuCapacityW(sku_id, skuDetail?.product_id?._id);
       const isSolarPanel = (skuDetail?.product_id?.template_id?.name || '').toLowerCase().includes('solar panel');
-      const parsedOrderPrice = Number(order_price);
+      const parsedOrderPrice = Number(order_price) || 0;
       const order_price_per_watt = isSolarPanel ? parsedOrderPrice : 0;
-      const finalOrderPrice = isSolarPanel ? (parsedOrderPrice * capacity_w) : parsedOrderPrice;
+      const finalOrderPrice = isSolarPanel && capacity_w ? (parsedOrderPrice * capacity_w) : parsedOrderPrice;
 
       processedItems.push({
         sku_id,
         sku_code: sku_code || skuDetail?.sku_code || 'N/A',
-        qty: Number(qty),
+        qty: Number(qty) || 1,
         benchmark_price,
         benchmark_price_per_watt,
         order_price: finalOrderPrice,
         order_price_per_watt,
+      });
+    }
+
+    // If no specific SKU items provided, create a summary item representing the procurement
+    if (processedItems.length === 0) {
+      const fallbackSku = await ProductSku.findOne({}).lean();
+      const typeLabel = procurement_type === 'panel' ? 'SOLAR-PANEL' : procurement_type === 'inverter' ? 'INVERTER' : 'MIXED-KIT';
+      processedItems.push({
+        sku_id: fallbackSku?._id || new mongoose.Types.ObjectId(),
+        sku_code: `${typeLabel}-PROCUREMENT`,
+        qty: 1,
+        benchmark_price: Number(payment.amount),
+        benchmark_price_per_watt: 0,
+        order_price: Number(payment.amount),
+        order_price_per_watt: 0,
       });
     }
 
@@ -2499,8 +2513,9 @@ const create_combined_supplier_payment = async (req, res) => {
       warehouse_id,
       supplier_id,
       items: processedItems,
-      timeline: new Date(timeline),
+      timeline: timeline ? new Date(timeline) : new Date(Date.now() + 7 * 86400000),
       po_type,
+      procurement_type: procurement_type || null,
       source_orders: enrichedSourceOrders,
       status: 'paid', // Combined PO goes straight to paid (payment made immediately)
       payment_details: {

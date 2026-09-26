@@ -10,15 +10,37 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
  */
 const findAndPopulateComboKit = async (comboKitId) => {
   const objectId = new mongoose.Types.ObjectId(comboKitId);
-  const kit = await WarehouseComboKit.findOne({ _id: objectId, deleted_at: null }).lean();
+  let kit = await WarehouseComboKit.findOne({ _id: objectId, deleted_at: null }).lean();
+  if (!kit) {
+    try {
+      const { WarehouseComboKit: IndiaComboKit } = require('../../models/india_solarshop_db');
+      kit = await IndiaComboKit.findOne({ _id: objectId, deleted_at: null }).lean();
+    } catch (e) {}
+  }
 
   if (kit && kit.solar_kit_id) {
     const solarKit = await SolarKit.findById(kit.solar_kit_id)
       .populate('category_id')
       .populate('subcategory_id')
+      .populate({
+        path: 'type_id',
+        populate: {
+          path: 'type',
+          model: 'sys_filter_types'
+        }
+      })
       .lean();
     kit.solar_kit_id = solarKit;
   }
+
+  if (kit && kit.project_range_id) {
+    try {
+      const { ProjectRange } = require('../../models/core_db');
+      const pr = await ProjectRange.findById(kit.project_range_id).lean();
+      if (pr) kit.project_range_id = pr;
+    } catch (e) {}
+  }
+
   return kit;
 };
 
@@ -158,8 +180,8 @@ const get_order_settings = async (req, res) => {
 
       return {
         combo_kit_id: kitIdStr,
-        combo_kit_code: kit.combo_kit_code,
-        name: kit.solar_kit_id?.name || 'Unknown Kit',
+        combo_kit_code: kit.combo_kit_code || kit.name,
+        name: kit.solar_kit_id?.name || kit.name || 'Unknown Kit',
         category: kit.solar_kit_id?.category_id?.name || 'N/A',
         subcategory: kit.solar_kit_id?.subcategory_id?.name || 'N/A',
         is_custom: !!kit.is_custom,
@@ -167,7 +189,14 @@ const get_order_settings = async (req, res) => {
         master_warehouse_active: saved ? !!saved.master_warehouse_active : false,
         nearest_supplier_active: saved ? !!saved.nearest_supplier_active : false,
         in_cluster_supplier_active: saved ? !!saved.in_cluster_supplier_active : false,
-        settings_id: saved ? saved._id.toString() : null
+        settings_id: saved ? saved._id.toString() : null,
+        solar_kit_id: kit.solar_kit_id,
+        project_range_id: kit.project_range_id,
+        industry_type_id: kit.solar_kit_id?.category_id?.industry_type_id?._id || kit.solar_kit_id?.category_id?.industry_type_id || null,
+        category_id: kit.solar_kit_id?.category_id?._id || kit.solar_kit_id?.category_id?.id || null,
+        subcategory_id: kit.solar_kit_id?.subcategory_id?._id || kit.solar_kit_id?.subcategory_id?.id || null,
+        type_id: kit.solar_kit_id?.type_id?.subcategory_type_id || kit.solar_kit_id?.type_id?._id || kit.solar_kit_id?.type_id?.id || null,
+        type_name: kit.solar_kit_id?.type_id?.type?.name || kit.solar_kit_id?.type_id?.name || null,
       };
     });
 

@@ -18,18 +18,24 @@ const schema = new mongoose.Schema({
   warehouse_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'company_warehouses', required: true },
   supplier_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'suppliers', required: true },
   items: [{
-    sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', required: true },
-    sku_code:         { type: String, required: true },
-    qty:              { type: Number, required: true, min: 1 },
-    benchmark_price:  { type: Number, required: true },
+    sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', required: false, default: null },
+    sku_code:         { type: String, default: 'PROCUREMENT-ITEM' },
+    qty:              { type: Number, default: 1 },
+    benchmark_price:  { type: Number, default: 0 },
     benchmark_price_per_watt: { type: Number, default: 0 },
-    order_price:      { type: Number, required: true },
+    order_price:      { type: Number, default: 0 },
     order_price_per_watt: { type: Number, default: 0 }
   }],
   status: {
     type: String,
     enum: ['pending', 'accepted', 'invoiced', 'paid', 'delivered', 'cancelled', 'pending_price_approval'],
     default: 'pending'
+  },
+  // ── Procurement Type: 'panel' | 'inverter' | 'mixed' ──
+  procurement_type: {
+    type: String,
+    enum: ['panel', 'inverter', 'mixed', null],
+    default: null
   },
   // ── PO Type: indicates whether this PO was created from EPC/Franchise combined payment ──
   po_type: {
