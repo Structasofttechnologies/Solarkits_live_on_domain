@@ -152,6 +152,9 @@ adminRouter.use('/delivery-management',           require('./modules/admin-panel
 // ─── Warehouse Panel routes accessible via Admin API ─────────────────────────
 adminRouter.use('/warehouse',                    require('./modules/warehouse-panel/routes/warehouse.route'));
 
+// ─── Admin Notification System & Real-Time Stream ────────────────────────────
+adminRouter.use('/notifications',                require('./modules/admin-panel/routes/admin.notifications.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/admin-api', adminRouter);

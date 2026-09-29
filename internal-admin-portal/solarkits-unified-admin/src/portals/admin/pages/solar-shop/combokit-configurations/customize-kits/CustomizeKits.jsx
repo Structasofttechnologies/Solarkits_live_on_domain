@@ -572,6 +572,7 @@ export default function CustomizeKits({ moduleUniqueId = "ADM_CUSTOMIZE_KITS" })
         dispatch(setAlert({ type: "success", message: res.data.message }));
         setShowDrawer(false);
         fetchConfiguredKits(selectedCountry);
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       console.error(err);

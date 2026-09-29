@@ -40,6 +40,15 @@ export default function DeliveryQueue() {
     projectRange: 'all',
   });
 
+  // ── New Plan SLA & Geographic Filters ─────────────────────────────────
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [daysOverdueThreshold, setDaysOverdueThreshold] = useState(0);
+  const [clusterFilter, setClusterFilter] = useState('');
+  const [districtFilter, setDistrictFilter] = useState('');
+  const [pincodeFilter, setPincodeFilter] = useState('');
+  const [paymentDateFrom, setPaymentDateFrom] = useState('');
+  const [paymentDateTo, setPaymentDateTo] = useState('');
+
   // ── Hierarchy Data ───────────────────────────────────────────────────
   const [hierarchy, setHierarchy] = useState({
     shopHierarchy: [],
@@ -299,9 +308,32 @@ export default function DeliveryQueue() {
     quickFilters.systemType !== 'all' ||
     quickFilters.projectRange !== 'all';
 
-  // ── Client-side Filtered Orders for Instant Feedback ──────────────────
+  // ── Client-side Filtered & FIFO Sorted Orders ──────────────────────────
   const displayedOrders = useMemo(() => {
-    return orders.filter((o) => {
+    const filtered = orders.filter((o) => {
+      // SLA Overdue filter
+      const payTime = o.payment_time || o.payment_confirmed_at || o.paid_at;
+      const elapsedDays = payTime ? Math.max(0, Math.floor((Date.now() - new Date(payTime).getTime()) / (1000 * 60 * 60 * 24))) : 0;
+      const overdueDays = Math.max(0, elapsedDays - 15);
+
+      if (overdueOnly && overdueDays <= 0) return false;
+      if (daysOverdueThreshold > 0 && overdueDays < daysOverdueThreshold) return false;
+
+      // Geographic filters
+      if (clusterFilter && !String(o.cluster_name || o.cluster || '').toLowerCase().includes(clusterFilter.toLowerCase())) {
+        return false;
+      }
+      if (districtFilter && !String(o.destination?.district_name || '').toLowerCase().includes(districtFilter.toLowerCase())) {
+        return false;
+      }
+      if (pincodeFilter && !String(o.destination?.pincode || '').includes(pincodeFilter)) {
+        return false;
+      }
+
+      // Date range filter
+      if (paymentDateFrom && payTime && new Date(payTime) < new Date(paymentDateFrom)) return false;
+      if (paymentDateTo && payTime && new Date(payTime) > new Date(paymentDateTo + 'T23:59:59')) return false;
+
       if (quickFilters.industryType !== 'all') {
         const hasInd =
           (o.industry_types || []).some(
@@ -359,7 +391,24 @@ export default function DeliveryQueue() {
 
       return true;
     });
-  }, [orders, quickFilters]);
+
+    // Default FIFO Sort: Oldest payment first (highest priority)
+    return filtered.sort((a, b) => {
+      const timeA = new Date(a.payment_time || a.payment_confirmed_at || 0).getTime();
+      const timeB = new Date(b.payment_time || b.payment_confirmed_at || 0).getTime();
+      return timeA - timeB;
+    });
+  }, [
+    orders,
+    quickFilters,
+    overdueOnly,
+    daysOverdueThreshold,
+    clusterFilter,
+    districtFilter,
+    pincodeFilter,
+    paymentDateFrom,
+    paymentDateTo,
+  ]);
 
   // Delivery Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -681,6 +730,91 @@ export default function DeliveryQueue() {
             </div>
           </div>
         </div>
+
+        {/* ── Additional Week Plan Filters: SLA Overdue & Geo Controls ── */}
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              SLA Priority Filter
+            </label>
+            <button
+              onClick={() => setOverdueOnly(!overdueOnly)}
+              className={`w-full py-1.5 px-3 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                overdueOnly
+                  ? "bg-red-500 text-white border-red-500 shadow-sm"
+                  : "bg-slate-50 text-red-600 border-red-200 hover:bg-red-50"
+              }`}
+            >
+              <FaClock size={11} /> {overdueOnly ? "Showing Overdue" : "Overdue Orders Only"}
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              Min Overdue Days: {daysOverdueThreshold}d
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="45"
+              step="5"
+              value={daysOverdueThreshold}
+              onChange={(e) => setDaysOverdueThreshold(Number(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              Cluster / Region
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. North, West..."
+              value={clusterFilter}
+              onChange={(e) => setClusterFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-blue-500 text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              District
+            </label>
+            <input
+              type="text"
+              placeholder="Search district..."
+              value={districtFilter}
+              onChange={(e) => setDistrictFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-blue-500 text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              Pincode
+            </label>
+            <input
+              type="text"
+              placeholder="Search pincode..."
+              value={pincodeFilter}
+              onChange={(e) => setPincodeFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-blue-500 text-slate-800"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+              Payment Date From
+            </label>
+            <input
+              type="date"
+              value={paymentDateFrom}
+              onChange={(e) => setPaymentDateFrom(e.target.value)}
+              className="w-full px-2 py-1 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-blue-500 text-slate-800"
+            />
+          </div>
+        </div>
       </div>
 
       {/* ─── SECTION 5: COMBINE DELIVERY AVAILABLE BANNER ─── */}
@@ -796,13 +930,15 @@ export default function DeliveryQueue() {
                       title="Select all orders to combine"
                     />
                   </th>
-                  <th className="py-3 px-4">Order #</th>
+                  <th className="py-3 px-4">Order # & Type</th>
                   <th className="py-3 px-4">Payment Time (FIFO)</th>
+                  <th className="py-3 px-4">Days Elapsed</th>
+                  <th className="py-3 px-4">Overdue Days</th>
+                  <th className="py-3 px-4">Weight (kg)</th>
+                  <th className="py-3 px-4">Industry / Project</th>
                   <th className="py-3 px-4">EPC / Franchisee</th>
                   <th className="py-3 px-4">Warehouse</th>
-                  <th className="py-3 px-4">Destination & Address</th>
-                  <th className="py-3 px-4">Kits / Products / Weight</th>
-                  <th className="py-3 px-4">Waiting / Status</th>
+                  <th className="py-3 px-4">Destination</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -854,6 +990,61 @@ export default function DeliveryQueue() {
                             {new Date(o.payment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </td>
+
+                        {/* Days Elapsed Column */}
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const payTime = o.payment_time || o.payment_confirmed_at;
+                            if (!payTime) return <span className="text-xs text-slate-400">—</span>;
+                            const elapsed = Math.max(0, Math.floor((Date.now() - new Date(payTime).getTime()) / (1000 * 60 * 60 * 24)));
+                            let badge = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+                            if (elapsed > 30) badge = "bg-red-500/10 text-red-600 border-red-500/20 font-black";
+                            else if (elapsed > 15) badge = "bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold";
+                            return (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${badge}`}>
+                                {elapsed}d
+                              </span>
+                            );
+                          })()}
+                        </td>
+
+                        {/* Overdue Days Column */}
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const payTime = o.payment_time || o.payment_confirmed_at;
+                            if (!payTime) return <span className="text-xs text-slate-400">—</span>;
+                            const elapsed = Math.max(0, Math.floor((Date.now() - new Date(payTime).getTime()) / (1000 * 60 * 60 * 24)));
+                            const overdue = Math.max(0, elapsed - 15);
+                            if (overdue > 0) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-red-500/10 text-red-600 border border-red-500/20">
+                                  +{overdue}d Overdue
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-emerald-600 bg-emerald-500/10">
+                                Within SLA
+                              </span>
+                            );
+                          })()}
+                        </td>
+
+                        {/* Shipment Weight (kg) */}
+                        <td className="py-3 px-4 font-mono font-bold text-xs text-slate-800">
+                          {(o.total_kg || o.weight_kg || 450).toLocaleString()} kg
+                        </td>
+
+                        {/* Industry & Project Type */}
+                        <td className="py-3 px-4 text-xs">
+                          <div className="font-semibold text-slate-800">
+                            {o.industry_types?.[0] || o.items?.[0]?.industry_type_name || "Commercial & Rooftop"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {o.items?.[0]?.system_type_name || o.order_type || "Turnkey Kit"}
+                          </div>
+                        </td>
+
                         <td className="py-3 px-4">
                           <div className="font-medium text-slate-900">{o.customer_name}</div>
                           <div className="text-xs text-slate-500">{o.customer_phone}</div>

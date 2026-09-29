@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock } from "react-icons/fi";
 
 // ── Margin & Commission Settings Module ─────────────────────────────────────────
 const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
@@ -62,6 +62,11 @@ const TransportVendors = lazy(() => import("../pages/solar-shop/delivery-managem
 const PhysicalVehicles = lazy(() => import("../pages/solar-shop/delivery-management/PhysicalVehicles"));
 const ComboKitWeightMaster = lazy(() => import("../pages/solar-shop/delivery-management/ComboKitWeightMaster"));
 const DeliveryCostSettings = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryCostSettings"));
+const DeliveryApprovalQueue = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryApprovalQueue"));
+const ClusterWarehouseRouting = lazy(() => import("../pages/solar-shop/order-management-settings/ClusterWarehouseRouting"));
+const KitDisplayChecklist = lazy(() => import("../pages/solar-shop/order-management-settings/KitDisplayChecklist"));
+const OrderOverdueSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderOverdueSettings"));
+const OrderJourneyDashboard = lazy(() => import("../pages/solar-shop/order-management-settings/OrderJourneyDashboard"));
 
 
 
@@ -162,6 +167,12 @@ const menus = [
                     icon: <FiBarChart2 />,
                     path: "/admin-panel/solar-shop/delivery-management/dashboard",
                     unique_id: "ADM_DELIVERY_MGMT"
+                },
+                {
+                    name: "8. Approval Queue",
+                    icon: <FiShield />,
+                    path: "/admin-panel/solar-shop/delivery-management/approval-queue",
+                    unique_id: "ADM_DELIVERY_MGMT"
                 }
             ]
         },
@@ -221,6 +232,30 @@ const menus = [
                     name: "Checkout Cart Settings",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/order-management-settings/checkout-cart",
+                    unique_id: "ADM_ORDER_SETTINGS"
+                },
+                {
+                    name: "Cluster Warehouse Routing",
+                    icon: <FiMapPin />,
+                    path: "/admin-panel/solar-shop/order-management-settings/cluster-routing",
+                    unique_id: "ADM_ORDER_SETTINGS"
+                },
+                {
+                    name: "Kit Display Checklist",
+                    icon: <FiCheckSquare />,
+                    path: "/admin-panel/solar-shop/order-management-settings/kit-checklist",
+                    unique_id: "ADM_ORDER_SETTINGS"
+                },
+                {
+                    name: "Overdue Settings",
+                    icon: <FiClock />,
+                    path: "/admin-panel/solar-shop/order-management-settings/overdue-settings",
+                    unique_id: "ADM_ORDER_SETTINGS"
+                },
+                {
+                    name: "Order Journey Dashboard",
+                    icon: <FiBarChart2 />,
+                    path: "/admin-panel/solar-shop/order-management-settings/journey-dashboard",
                     unique_id: "ADM_ORDER_SETTINGS"
                 }
             ]
@@ -801,6 +836,46 @@ export default function SolarShopDashboard() {
                                         }
                                     />
                                     <Route
+                                        path="/order-management-settings/cluster-routing"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Cluster Routing..." />}>
+                                                    <ClusterWarehouseRouting />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/order-management-settings/kit-checklist"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Kit Checklist..." />}>
+                                                    <KitDisplayChecklist />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/order-management-settings/overdue-settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Overdue Settings..." />}>
+                                                    <OrderOverdueSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/order-management-settings/journey-dashboard"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Order Journey Dashboard..." />}>
+                                                    <OrderJourneyDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
                                         path="/:countryName/order-management-settings"
                                         element={
                                             <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
@@ -826,6 +901,46 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
                                                 <Suspense fallback={<Loader text="Loading Checkout Settings..." />}>
                                                     <CheckoutCartSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-management-settings/cluster-routing"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Cluster Routing..." />}>
+                                                    <ClusterWarehouseRouting />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-management-settings/kit-checklist"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Kit Checklist..." />}>
+                                                    <KitDisplayChecklist />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-management-settings/overdue-settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Overdue Settings..." />}>
+                                                    <OrderOverdueSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-management-settings/journey-dashboard"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Order Journey Dashboard..." />}>
+                                                    <OrderJourneyDashboard />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }
@@ -1083,6 +1198,16 @@ export default function SolarShopDashboard() {
                                             </PermissionGuard>
                                         }
                                     />
+                                    <Route
+                                        path="/delivery-management/approval-queue"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Approval Queue..." />}>
+                                                    <DeliveryApprovalQueue />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
 
                                     {/* Country-prefixed Paths */}
                                     <Route
@@ -1175,6 +1300,16 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
                                                 <Suspense fallback={<Loader text="Loading Delivery Dashboard..." />}>
                                                     <DeliveryDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/delivery-management/approval-queue"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_DELIVERY_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Delivery Approval Queue..." />}>
+                                                    <DeliveryApprovalQueue />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

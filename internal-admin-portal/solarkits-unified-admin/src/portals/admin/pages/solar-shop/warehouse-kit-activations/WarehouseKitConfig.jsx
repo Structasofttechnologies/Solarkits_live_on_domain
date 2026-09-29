@@ -17,10 +17,17 @@ import {
   FaLock,
   FaPercentage,
   FaSync,
+  FaCalendarAlt,
+  FaStore,
+  FaGlobeAmericas,
+  FaBuilding,
+  FaSlidersH,
+  FaClock,
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
 import Loader from "@/components/Loader";
+import Dialog from "@/components/Dialog";
 import DropdownWithSearchInput from "@/components/DropdownWithSearchInput";
 import { authHeaderObj } from "@/app/authHeader";
 
@@ -59,6 +66,52 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
   const [gstConfigured, setGstConfigured] = useState({});
   const [gstRates, setGstRates] = useState({});
 
+  // Store Display, Schedule & Scope State (Week Plan Requirements)
+  const [storeDisplayConfig, setStoreDisplayConfig] = useState({});
+  const [activeModal, setActiveModal] = useState({ type: null, kit: null });
+  const [modalForm, setModalForm] = useState(null);
+  const [availableClusters, setAvailableClusters] = useState([
+    { id: "north_hub", name: "North Hub Cluster" },
+    { id: "west_zone", name: "West Zone Cluster" },
+    { id: "south_cluster", name: "South Coastal Cluster" },
+    { id: "central_grid", name: "Central Metro Cluster" },
+    { id: "east_gateway", name: "East Gateway Cluster" },
+  ]);
+  const [availableStates, setAvailableStates] = useState([
+    { id: "mh", name: "Maharashtra" },
+    { id: "gj", name: "Gujarat" },
+    { id: "ka", name: "Karnataka" },
+    { id: "tn", name: "Tamil Nadu" },
+    { id: "rj", name: "Rajasthan" },
+    { id: "dl", name: "Delhi NCR" },
+  ]);
+
+  const defaultIndustryTypes = ["Residential", "Commercial", "Industrial", "Agricultural", "Government & Institutional"];
+  const defaultProjectTypes = ["Rooftop PV", "Ground Mount", "Solar Carport", "Microgrid / Hybrid", "Floating Solar"];
+
+  const getStoreConfig = (kitId) => {
+    return storeDisplayConfig[kitId] || {
+      is_store_display: true,
+      display_start_date: new Date().toISOString().split("T")[0],
+      display_end_date: "",
+      always_display: true,
+      clusters: ["all"],
+      states: ["all"],
+      industry_types: ["all"],
+      project_types: ["all"],
+    };
+  };
+
+  const handleUpdateStoreConfig = (kitId, updates) => {
+    setStoreDisplayConfig((prev) => ({
+      ...prev,
+      [kitId]: {
+        ...(prev[kitId] || getStoreConfig(kitId)),
+        ...updates,
+      },
+    }));
+  };
+
   // Error info for save failures per kit
   const [saveErrors, setSaveErrors] = useState({});
 
@@ -84,6 +137,7 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
       const marginMap = {};
       const gstMap = {};
       const gstRateMap = {};
+      const storeMap = {};
 
       const processKit = (a) => {
         const kitId = a.combo_kit_id?._id || a.combo_kit_id;
@@ -101,6 +155,17 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
           marginMap[kitId] = a.is_margin_configured ?? false;
           gstMap[kitId] = a.is_gst_configured ?? false;
           gstRateMap[kitId] = a.gst_rate !== undefined && a.gst_rate !== null ? Number(a.gst_rate) : null;
+
+          storeMap[kitId] = {
+            is_store_display: a.is_store_display ?? (a.is_combokit_active || a.is_customize_kit_active || true),
+            display_start_date: a.display_start_date || new Date().toISOString().split("T")[0],
+            display_end_date: a.display_end_date || "",
+            always_display: a.always_display ?? true,
+            clusters: a.restricted_clusters || ["all"],
+            states: a.restricted_states || ["all"],
+            industry_types: a.restricted_industry_types || ["all"],
+            project_types: a.restricted_project_types || ["all"],
+          };
         }
       };
 
@@ -112,6 +177,7 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
       setMarginConfigured(marginMap);
       setGstConfigured(gstMap);
       setGstRates(gstRateMap);
+      setStoreDisplayConfig(storeMap);
       setPendingToggles({});
       setSaveErrors({});
     } catch {
@@ -258,6 +324,7 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
       if (res.data?.status === "success") {
         dispatch(setAlert({ type: "success", message: "Kit activations saved successfully." }));
         await fetchActivations();
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
 
         // Check for any errors in bulk response
         const errors = res.data?.data?.errors || [];
@@ -789,6 +856,80 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
                         <span className="text-[9px] font-bold text-danger">{kitError}</span>
                       </div>
                     )}
+
+                    {/* Store Display & Restrictions Control Bar */}
+                    <div className="mt-3 pt-3 border-t border-border/50 flex flex-wrap items-center gap-2">
+                      {/* Store Display Switch */}
+                      <div className="flex items-center gap-2 bg-surface-hover/80 px-2.5 py-1.5 rounded-lg border border-border/60">
+                        <FaStore className={getStoreConfig(kitId).is_store_display ? "text-primary" : "text-text-muted"} size={11} />
+                        <span className="text-[10px] font-black uppercase tracking-wider text-text-primary">
+                          Store Display:
+                        </span>
+                        <label className="relative inline-flex items-center cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={getStoreConfig(kitId).is_store_display}
+                            onChange={(e) => {
+                              handleUpdateStoreConfig(kitId, { is_store_display: e.target.checked });
+                              setPendingToggles(prev => ({ ...prev, [kitId]: { ...prev[kitId], store_display_changed: true } }));
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className={`w-8 h-4 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-3 after:w-3 after:transition-all ${getStoreConfig(kitId).is_store_display ? "bg-primary" : "bg-border"}`} />
+                        </label>
+                        <span className={`text-[9px] font-black uppercase ${getStoreConfig(kitId).is_store_display ? "text-primary" : "text-text-muted"}`}>
+                          {getStoreConfig(kitId).is_store_display ? "Visible" : "Hidden"}
+                        </span>
+                      </div>
+
+                      {/* Display Schedule Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalForm({ kitId, ...getStoreConfig(kitId) });
+                          setActiveModal({ type: 'schedule', kit });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-hover/80 hover:bg-surface-hover border border-border/60 text-[10px] font-bold text-text-secondary hover:text-text-primary transition-all cursor-pointer"
+                      >
+                        <FaCalendarAlt size={10} className="text-primary/70" />
+                        <span>Schedule:</span>
+                        <span className="font-black text-text-primary">
+                          {getStoreConfig(kitId).always_display ? "Always Active" : `${getStoreConfig(kitId).display_start_date || "Start"} → ${getStoreConfig(kitId).display_end_date || "Open"}`}
+                        </span>
+                      </button>
+
+                      {/* Region Restrictions Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalForm({ kitId, ...getStoreConfig(kitId) });
+                          setActiveModal({ type: 'region', kit });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-hover/80 hover:bg-surface-hover border border-border/60 text-[10px] font-bold text-text-secondary hover:text-text-primary transition-all cursor-pointer"
+                      >
+                        <FaGlobeAmericas size={10} className="text-info/70" />
+                        <span>Region Scope:</span>
+                        <span className="font-black text-text-primary">
+                          {getStoreConfig(kitId).clusters.includes("all") ? "All Clusters" : `${getStoreConfig(kitId).clusters.length} Cluster(s)`}
+                        </span>
+                      </button>
+
+                      {/* Industry & Project Restrictions Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalForm({ kitId, ...getStoreConfig(kitId) });
+                          setActiveModal({ type: 'industry', kit });
+                        }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-hover/80 hover:bg-surface-hover border border-border/60 text-[10px] font-bold text-text-secondary hover:text-text-primary transition-all cursor-pointer"
+                      >
+                        <FaBuilding size={10} className="text-warning/80" />
+                        <span>Industry / Project:</span>
+                        <span className="font-black text-text-primary">
+                          {getStoreConfig(kitId).industry_types.includes("all") ? "Universal" : `${getStoreConfig(kitId).industry_types.length} Ind.`}
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-4 ml-4 shrink-0">
@@ -998,6 +1139,310 @@ export default function WarehouseKitConfig({ moduleUniqueId = "ADM_WH_KIT_ACT" }
           {hasChanges() ? `Save Changes (${Object.keys(pendingToggles).length} kit(s))` : "No Changes to Save"}
         </Button>
       </div>
+
+      {/* ── Modal 1: Display Schedule Modal ────────────────────────────────────── */}
+      <Dialog
+        isOpen={activeModal.type === 'schedule'}
+        onClose={() => setActiveModal({ type: null, kit: null })}
+        title={`Display Schedule: ${activeModal.kit?.name || "Kit"}`}
+        size="md"
+      >
+        {modalForm && (
+          <div className="space-y-4 p-1">
+            <div className="flex items-center justify-between p-3 bg-surface-hover rounded-xl border border-border">
+              <div>
+                <span className="text-xs font-black text-text-primary block">Always Display on Store</span>
+                <span className="text-[10px] text-text-secondary">Keep active continuously without date restrictions</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={modalForm.always_display}
+                onChange={(e) => setModalForm(prev => ({ ...prev, always_display: e.target.checked }))}
+                className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
+              />
+            </div>
+
+            {!modalForm.always_display && (
+              <div className="grid grid-cols-2 gap-3 p-3 bg-surface rounded-xl border border-border">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-text-secondary uppercase">Display Start Date *</label>
+                  <input
+                    type="date"
+                    value={modalForm.display_start_date || ""}
+                    onChange={(e) => setModalForm(prev => ({ ...prev, display_start_date: e.target.value }))}
+                    className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-text-primary outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-text-secondary uppercase">Display End Date *</label>
+                  <input
+                    type="date"
+                    value={modalForm.display_end_date || ""}
+                    onChange={(e) => setModalForm(prev => ({ ...prev, display_end_date: e.target.value }))}
+                    className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-xs text-text-primary outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveModal({ type: null, kit: null })}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (activeModal.kit) {
+                    const kId = activeModal.kit.id || activeModal.kit._id;
+                    handleUpdateStoreConfig(kId, {
+                      always_display: modalForm.always_display,
+                      display_start_date: modalForm.display_start_date,
+                      display_end_date: modalForm.display_end_date,
+                    });
+                    setPendingToggles(prev => ({ ...prev, [kId]: { ...prev[kId], schedule_changed: true } }));
+                  }
+                  setActiveModal({ type: null, kit: null });
+                }}
+              >
+                Save Schedule
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      {/* ── Modal 2: Region Restrictions Modal ──────────────────────────────────── */}
+      <Dialog
+        isOpen={activeModal.type === 'region'}
+        onClose={() => setActiveModal({ type: null, kit: null })}
+        title={`Region Scope & Restrictions: ${activeModal.kit?.name || "Kit"}`}
+        size="lg"
+      >
+        {modalForm && (
+          <div className="space-y-4 p-1">
+            <div className="flex items-center justify-between p-3 bg-surface-hover rounded-xl border border-border">
+              <div>
+                <span className="text-xs font-black text-text-primary block">All Regions Accessible</span>
+                <span className="text-[10px] text-text-secondary">Allow this kit to be visible and deliverable across all state clusters</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={modalForm.clusters.includes("all")}
+                onChange={(e) => {
+                  setModalForm(prev => ({
+                    ...prev,
+                    clusters: e.target.checked ? ["all"] : [],
+                    states: e.target.checked ? ["all"] : []
+                  }));
+                }}
+                className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
+              />
+            </div>
+
+            {!modalForm.clusters.includes("all") && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-black uppercase text-text-secondary">Select Allowed Clusters</span>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {availableClusters.map(c => {
+                      const checked = modalForm.clusters.includes(c.id);
+                      return (
+                        <label key={c.id} className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${checked ? 'bg-primary/10 border-primary/40 text-text-primary font-bold' : 'bg-surface border-border text-text-secondary'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setModalForm(prev => {
+                                const current = prev.clusters.filter(x => x !== "all");
+                                const next = e.target.checked ? [...current, c.id] : current.filter(x => x !== c.id);
+                                return { ...prev, clusters: next.length === 0 ? ["all"] : next };
+                              });
+                            }}
+                            className="rounded text-primary"
+                          />
+                          <span>{c.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-border">
+                  <span className="text-[11px] font-black uppercase text-text-secondary">Select Allowed States</span>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {availableStates.map(s => {
+                      const checked = modalForm.states.includes(s.id);
+                      return (
+                        <label key={s.id} className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${checked ? 'bg-primary/10 border-primary/40 text-text-primary font-bold' : 'bg-surface border-border text-text-secondary'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setModalForm(prev => {
+                                const current = prev.states.filter(x => x !== "all");
+                                const next = e.target.checked ? [...current, s.id] : current.filter(x => x !== s.id);
+                                return { ...prev, states: next.length === 0 ? ["all"] : next };
+                              });
+                            }}
+                            className="rounded text-primary"
+                          />
+                          <span>{s.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveModal({ type: null, kit: null })}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (activeModal.kit) {
+                    const kId = activeModal.kit.id || activeModal.kit._id;
+                    handleUpdateStoreConfig(kId, {
+                      clusters: modalForm.clusters,
+                      states: modalForm.states,
+                    });
+                    setPendingToggles(prev => ({ ...prev, [kId]: { ...prev[kId], region_changed: true } }));
+                  }
+                  setActiveModal({ type: null, kit: null });
+                }}
+              >
+                Save Region Restrictions
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      {/* ── Modal 3: Industry & Project Restrictions Modal ───────────────────────── */}
+      <Dialog
+        isOpen={activeModal.type === 'industry'}
+        onClose={() => setActiveModal({ type: null, kit: null })}
+        title={`Industry & Project Scope: ${activeModal.kit?.name || "Kit"}`}
+        size="lg"
+      >
+        {modalForm && (
+          <div className="space-y-4 p-1">
+            <div className="flex items-center justify-between p-3 bg-surface-hover rounded-xl border border-border">
+              <div>
+                <span className="text-xs font-black text-text-primary block">Universal Application</span>
+                <span className="text-[10px] text-text-secondary">Suitable for all industry verticals and deployment types</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={modalForm.industry_types.includes("all")}
+                onChange={(e) => {
+                  setModalForm(prev => ({
+                    ...prev,
+                    industry_types: e.target.checked ? ["all"] : [],
+                    project_types: e.target.checked ? ["all"] : []
+                  }));
+                }}
+                className="w-4 h-4 rounded text-primary focus:ring-primary cursor-pointer"
+              />
+            </div>
+
+            {!modalForm.industry_types.includes("all") && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-black uppercase text-text-secondary">Eligible Industry Sectors</span>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {defaultIndustryTypes.map(ind => {
+                      const checked = modalForm.industry_types.includes(ind);
+                      return (
+                        <label key={ind} className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${checked ? 'bg-primary/10 border-primary/40 text-text-primary font-bold' : 'bg-surface border-border text-text-secondary'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setModalForm(prev => {
+                                const current = prev.industry_types.filter(x => x !== "all");
+                                const next = e.target.checked ? [...current, ind] : current.filter(x => x !== ind);
+                                return { ...prev, industry_types: next.length === 0 ? ["all"] : next };
+                              });
+                            }}
+                            className="rounded text-primary"
+                          />
+                          <span>{ind}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-border">
+                  <span className="text-[11px] font-black uppercase text-text-secondary">Supported Project Deployment Types</span>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {defaultProjectTypes.map(proj => {
+                      const checked = modalForm.project_types.includes(proj);
+                      return (
+                        <label key={proj} className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-all ${checked ? 'bg-primary/10 border-primary/40 text-text-primary font-bold' : 'bg-surface border-border text-text-secondary'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setModalForm(prev => {
+                                const current = prev.project_types.filter(x => x !== "all");
+                                const next = e.target.checked ? [...current, proj] : current.filter(x => x !== proj);
+                                return { ...prev, project_types: next.length === 0 ? ["all"] : next };
+                              });
+                            }}
+                            className="rounded text-primary"
+                          />
+                          <span>{proj}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveModal({ type: null, kit: null })}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (activeModal.kit) {
+                    const kId = activeModal.kit.id || activeModal.kit._id;
+                    handleUpdateStoreConfig(kId, {
+                      industry_types: modalForm.industry_types,
+                      project_types: modalForm.project_types,
+                    });
+                    setPendingToggles(prev => ({ ...prev, [kId]: { ...prev[kId], industry_changed: true } }));
+                  }
+                  setActiveModal({ type: null, kit: null });
+                }}
+              >
+                Save Industry Restrictions
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

@@ -577,6 +577,9 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
     { key: "items", label: "Kit / Loose Qty" },
     { key: "amount", label: "Total Amount (INR)" },
     { key: "payment", label: "Payment Status" },
+    { key: "payment_date", label: "Payment Confirmed" },
+    { key: "days_elapsed", label: "Days Elapsed" },
+    { key: "days_remaining", label: "SLA / Overdue" },
     { key: "status", label: "Order Status" },
     { key: "actions", label: "Actions", align: "right" },
   ];
@@ -848,6 +851,70 @@ export default function LooseOrders({ moduleUniqueId = "ADM_LOOSE_ORDERS" }) {
                           UTR: {row.payment_utr}
                         </div>
                       )}
+                    </td>
+
+                    {/* Payment Confirmed Date */}
+                    <td className="p-4">
+                      {row.payment_confirmed_at || row.paid_at || (row.payment_status === "PAID" || row.payment_status === "VERIFIED" ? row.updated_at || row.created_at : null) ? (
+                        <div>
+                          <div className="text-xs font-mono font-medium text-text-primary">
+                            {new Date(row.payment_confirmed_at || row.paid_at || row.updated_at || row.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </div>
+                          <div className="text-[10px] text-text-muted font-mono">
+                            {new Date(row.payment_confirmed_at || row.paid_at || row.updated_at || row.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-text-muted font-mono">—</span>
+                      )}
+                    </td>
+
+                    {/* Days Elapsed */}
+                    <td className="p-4">
+                      {(() => {
+                        const payDate = row.payment_confirmed_at || row.paid_at || (row.payment_status === "PAID" || row.payment_status === "VERIFIED" ? row.updated_at || row.created_at : null);
+                        if (!payDate) return <span className="text-xs text-text-muted font-mono">—</span>;
+                        const elapsed = Math.max(0, Math.floor((Date.now() - new Date(payDate).getTime()) / (1000 * 60 * 60 * 24)));
+                        let badgeColor = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+                        if (elapsed > 30) badgeColor = "bg-red-500/10 text-red-600 border-red-500/20 font-black";
+                        else if (elapsed > 15) badgeColor = "bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold";
+                        return (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${badgeColor}`}>
+                            {elapsed}d elapsed
+                          </span>
+                        );
+                      })()}
+                    </td>
+
+                    {/* SLA / Overdue */}
+                    <td className="p-4">
+                      {(() => {
+                        const isDelivered = row.status === "DELIVERED" || row.status === "COMPLETED";
+                        if (isDelivered) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              <FaCheckCircle size={10} /> Delivered
+                            </span>
+                          );
+                        }
+                        const payDate = row.payment_confirmed_at || row.paid_at || (row.payment_status === "PAID" || row.payment_status === "VERIFIED" ? row.updated_at || row.created_at : null);
+                        if (!payDate) return <span className="text-xs text-text-muted">—</span>;
+                        const elapsed = Math.max(0, Math.floor((Date.now() - new Date(payDate).getTime()) / (1000 * 60 * 60 * 24)));
+                        const targetDays = 15;
+                        const remaining = targetDays - elapsed;
+                        if (remaining < 0) {
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black bg-red-500/10 text-red-600 border border-red-500/20">
+                              <FaExclamationTriangle size={10} /> Overdue {Math.abs(remaining)}d
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${remaining <= 3 ? "text-amber-600 bg-amber-500/10" : "text-text-secondary"}`}>
+                            {remaining}d left
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Order Status */}

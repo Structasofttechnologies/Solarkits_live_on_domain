@@ -548,6 +548,20 @@ async function handleMisPosting(req, res) {
 
     console.log(`🔔 [ICICI Real-Time Alert] Dispatched ${eventType} for ₹${amountNum} (UTR: ${UTR})`);
 
+    try {
+      const { sendAdminNotification } = require('../../admin-panel/services/admin.notification.service');
+      sendAdminNotification({
+        title: `Payment Received: ₹${amountNum.toLocaleString('en-IN')}`,
+        message: `Received ₹${amountNum.toLocaleString('en-IN')} via ${Mode || 'Bank Transfer'} from ${buyerDisplayName} (UTR: ${UTR}). Reconciled to ${reconciledOrderNumber || 'Order'}.`,
+        category: 'payments',
+        priority: 'high',
+        action_url: '/admin-panel/solar-shop/po-orders',
+        metadata: { utr: UTR, amount: amountNum, order_number: reconciledOrderNumber }
+      }).catch(e => console.warn('[Payment Notification Warning]:', e.message));
+    } catch (notifErr) {
+      console.warn('[Payment Admin Notification Error]:', notifErr.message);
+    }
+
     const finalResponse = isEncrypted ? encryptResponse(bankResponse) : bankResponse;
     return res.status(200).json(finalResponse);
 

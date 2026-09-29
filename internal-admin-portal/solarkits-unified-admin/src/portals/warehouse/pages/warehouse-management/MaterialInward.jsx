@@ -458,6 +458,7 @@ export default function MaterialInward() {
   const [deliveryFormError, setDeliveryFormError] = useState("");
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [itemDiscrepancies, setItemDiscrepancies] = useState([]);
 
   // (Pagination states moved to the top of MaterialInward)
 
@@ -669,6 +670,19 @@ export default function MaterialInward() {
     setSelectedFile(null);
     setUploadingPdf(false);
     setDeliveryFormError("");
+
+    const items = (po.items || []).map((it, idx) => ({
+      item_id: it._id || idx,
+      sku_code: it.sku_code || it.sku_id?.sku_code || `SKU-${idx + 1}`,
+      name: it.item_name || it.sku_id?.name || "Solar Item",
+      ordered_qty: it.qty || 1,
+      received_qty: it.qty || 1,
+      accepted_qty: it.qty || 1,
+      damaged_qty: 0,
+      discrepancy_notes: ""
+    }));
+    setItemDiscrepancies(items);
+
     setIsDeliverModalOpen(true);
   };
 
@@ -2089,6 +2103,98 @@ export default function MaterialInward() {
                 </div>
               )}
             </div>
+
+            {/* ── Section: Material Discrepancy & Inspection ── */}
+            <div className="col-span-2 space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-text-primary">
+                    Material Inward Discrepancy & QC Inspection
+                  </h4>
+                  <p className="text-[11px] text-text-muted">
+                    Record received counts, verified good units, shortage, and damages.
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
+                  {itemDiscrepancies.length} Line Items
+                </span>
+              </div>
+
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {itemDiscrepancies.map((item, idx) => {
+                  const shortage = Math.max(0, Number(item.ordered_qty) - Number(item.received_qty));
+                  return (
+                    <div key={idx} className="p-3 bg-surface-hover/40 rounded-xl border border-border space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-text-primary">{item.name}</span>
+                        <span className="font-mono text-text-muted">Ordered: {item.ordered_qty} pcs</span>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <label className="text-[10px] text-text-muted block">Received Qty</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.received_qty}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setItemDiscrepancies(prev => prev.map((it, i) => i === idx ? { ...it, received_qty: val, accepted_qty: Math.min(it.accepted_qty, val) } : it));
+                            }}
+                            className="w-full px-2 py-1 text-xs rounded border border-border bg-surface text-text-primary font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-text-muted block">Accepted Qty</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.accepted_qty}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setItemDiscrepancies(prev => prev.map((it, i) => i === idx ? { ...it, accepted_qty: val } : it));
+                            }}
+                            className="w-full px-2 py-1 text-xs rounded border border-border bg-surface text-text-primary font-bold text-emerald-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-text-muted block">Shortage</label>
+                          <div className={`px-2 py-1 text-xs font-bold rounded ${shortage > 0 ? "bg-red-500/10 text-red-600" : "bg-bg text-text-muted"}`}>
+                            {shortage > 0 ? `-${shortage} Short` : "0 Nil"}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-text-muted block">Damaged Qty</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.damaged_qty}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setItemDiscrepancies(prev => prev.map((it, i) => i === idx ? { ...it, damaged_qty: val } : it));
+                            }}
+                            className="w-full px-2 py-1 text-xs rounded border border-border bg-surface text-red-600 font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Discrepancy / damage inspection notes..."
+                          value={item.discrepancy_notes}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setItemDiscrepancies(prev => prev.map((it, i) => i === idx ? { ...it, discrepancy_notes: val } : it));
+                          }}
+                          className="w-full px-2 py-1 text-[11px] rounded border border-border bg-surface text-text-primary placeholder:text-text-muted"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-4 border-t border-border">
@@ -2107,7 +2213,7 @@ export default function MaterialInward() {
               loading={isDelivering}
               leftIcon={<HiOutlineCheckCircle />}
             >
-              Complete Delivery
+              Submit to Accounts for Verification
             </Button>
           </div>
         </form>

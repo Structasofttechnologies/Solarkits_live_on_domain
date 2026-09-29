@@ -24,18 +24,56 @@ import { authHeaderObj } from "@/app/authHeader";
 import ReactCountryFlag from "react-country-flag";
 import DropdownWithSearchInput from "./DropdownWithSearchInput";
 import { getAuthPortalUrl } from "@/utils/resolveApiUrl";
+import useAdminNotifications from "../hooks/useAdminNotifications";
+
+const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return 'Recently';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now - date) / 1000);
+
+    if (diffSec < 60) return 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+};
+
+const getCategoryBadge = (category) => {
+    switch (category) {
+        case 'configuration':
+            return { label: 'Config', color: 'bg-amber-500/10 text-amber-600 border border-amber-500/20' };
+        case 'orders':
+            return { label: 'Order', color: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' };
+        case 'payments':
+            return { label: 'Payment', color: 'bg-blue-500/10 text-blue-600 border border-blue-500/20' };
+        case 'service_tickets':
+            return { label: 'Ticket', color: 'bg-rose-500/10 text-rose-600 border border-rose-500/20' };
+        default:
+            return { label: 'System', color: 'bg-purple-500/10 text-purple-600 border border-purple-500/20' };
+    }
+};
 
 
 export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard" }) {
     const { theme, toggleTheme } = useTheme();
     const [showPopup, setShowPopup] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
-    const [notifications, setNotifications] = useState([
-        { id: 1, title: "New Message", message: "You have received a new message from John", time: "2 min ago", read: false },
-        { id: 2, title: "System Update", message: "System maintenance scheduled for tomorrow", time: "1 hour ago", read: true },
-        { id: 3, title: "Payment Received", message: "Payment of $500 has been processed", time: "3 hours ago", read: false },
-        { id: 4, title: "Welcome", message: "Welcome to the dashboard! Get started with our guide", time: "1 day ago", read: true },
-    ]);
+
+    const {
+        notifications,
+        unreadCount,
+        filter: notifFilter,
+        setFilter: setNotifFilter,
+        markAsRead,
+        markAllAsRead,
+        removeNotification,
+        clearAll: clearAllNotifications,
+    } = useAdminNotifications();
 
     const popupRef = useRef(null);
     const notificationsRef = useRef(null);
@@ -136,20 +174,15 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const unreadCount = notifications.filter(n => !n.read).length;
-
-    const markAsRead = (id) => {
-        setNotifications(notifications.map(notif =>
-            notif.id === id ? { ...notif, read: true } : notif
-        ));
-    };
-
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(notif => ({ ...notif, read: true })));
-    };
-
-    const deleteNotification = (id) => {
-        setNotifications(notifications.filter(notif => notif.id !== id));
+    const handleNotificationClick = (notification) => {
+        const id = notification._id || notification.id;
+        if (!notification.is_read) {
+            markAsRead(id);
+        }
+        setShowNotifications(false);
+        if (notification.action_url) {
+            navigate(notification.action_url);
+        }
     };
 
     // Resolve active panel name from allowed panels or fallback based on pathname
@@ -373,113 +406,172 @@ export default function Header({ isOpen, setIsOpen, isMobile, title = "Dashboard
                         variant="ghost"
                         size="md"
                         onClick={() => setShowNotifications(!showNotifications)}
-                        className="p-1.5 sm:p-2 relative hover:bg-primary/10 transition-colors flex-shrink-0"
+                        className="p-1.5 sm:p-2 relative hover:bg-primary/10 transition-colors flex-shrink-0 cursor-pointer"
+                        title={unreadCount > 0 ? `${unreadCount} unread notification(s)` : "Notifications"}
                     >
                         {unreadCount > 0 ? (
-                            <MdNotifications className="text-lg sm:text-xl text-primary" />
+                            <MdNotifications className="text-xl sm:text-2xl text-primary" />
                         ) : (
-                            <MdNotificationsNone className="text-lg sm:text-xl text-text-secondary hover:text-primary transition-colors" />
+                            <MdNotificationsNone className="text-xl sm:text-2xl text-text-secondary hover:text-primary transition-colors" />
                         )}
                         {unreadCount > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 bg-linear-120 from-danger to-danger/80 text-white text-[10px] font-semibold rounded-full w-4.5 h-4.5 flex items-center justify-center animate-pulse shadow-lg">
-                                {unreadCount}
+                            <span className="absolute -top-0.5 -right-0.5 bg-gradient-to-r from-red-500 to-rose-600 text-white text-[10px] font-bold rounded-full min-w-4.5 h-4.5 px-1 flex items-center justify-center animate-pulse shadow-md shadow-red-500/30">
+                                {unreadCount > 99 ? '99+' : unreadCount}
                             </span>
                         )}
                     </IconButton>
 
                     {/* Notifications Dropdown */}
                     {showNotifications && (
-                        <div className="absolute right-[-60px] sm:right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-80 bg-surface border border-border rounded-xl shadow-xl z-50 overflow-hidden">
-                            <div className="relative bg-linear-120 from-primary to-primary-end p-4">
-                                <div className="absolute inset-0 bg-grid-white/10 mask-[linear-gradient(0deg,transparent,black)]"></div>
-                                <div className="relative flex justify-between items-center">
+                        <div className="absolute right-[-60px] sm:right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-96 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            {/* Dropdown Header */}
+                            <div className="relative bg-gradient-to-r from-primary to-primary-end p-4 text-white">
+                                <div className="flex justify-between items-center mb-2.5">
                                     <div>
-                                        <h3 className="font-semibold text-white text-sm sm:text-base">Notifications</h3>
-                                        <p className="text-[10px] sm:text-xs text-white/80">{unreadCount} unread</p>
+                                        <h3 className="font-bold text-sm sm:text-base tracking-tight">Notifications</h3>
+                                        <p className="text-[11px] text-white/80 font-medium">
+                                            {unreadCount > 0 ? `${unreadCount} unread update(s)` : "All caught up"}
+                                        </p>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={markAllAsRead}
-                                        className="text-[10px] sm:text-xs bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm px-2 py-1"
-                                        disabled={unreadCount === 0}
+                                    <div className="flex items-center gap-1.5">
+                                        {unreadCount > 0 && (
+                                            <button
+                                                onClick={markAllAsRead}
+                                                className="text-[11px] font-medium bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                                            >
+                                                Mark all read
+                                            </button>
+                                        )}
+                                        {notifications.length > 0 && (
+                                            <button
+                                                onClick={clearAllNotifications}
+                                                className="text-[11px] font-medium text-white/70 hover:text-white hover:bg-white/10 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                                                title="Clear all"
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Filter Tabs */}
+                                <div className="flex items-center gap-2 pt-1 border-t border-white/15">
+                                    <button
+                                        onClick={() => setNotifFilter('all')}
+                                        className={`px-3 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
+                                            notifFilter === 'all'
+                                                ? 'bg-white text-primary shadow-sm'
+                                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                                        }`}
                                     >
-                                        Mark all read
-                                    </Button>
+                                        All ({notifications.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setNotifFilter('unread')}
+                                        className={`px-3 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
+                                            notifFilter === 'unread'
+                                                ? 'bg-white text-primary shadow-sm'
+                                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                                        }`}
+                                    >
+                                        Unread ({unreadCount})
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="max-h-80 sm:max-h-96 overflow-y-auto scrollbar-hover">
+                            {/* Notifications List */}
+                            <div className="max-h-80 sm:max-h-96 overflow-y-auto scrollbar-hover divide-y divide-border/60">
                                 {notifications.length === 0 ? (
                                     <div className="p-8 text-center">
-                                        <div className="w-12 h-12 sm:w-16 sm:h-16 bg-linear-120 from-primary/10 to-primary/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                                            <MdNotificationsNone className="text-2xl sm:text-3xl text-primary/40" />
+                                        <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                                            <MdNotificationsNone className="text-3xl text-primary/60" />
                                         </div>
-                                        <p className="text-xs sm:text-sm text-text-secondary">No notifications</p>
+                                        <p className="text-sm font-semibold text-text-primary">No notifications</p>
+                                        <p className="text-xs text-text-muted mt-1">You are all caught up with the latest system updates.</p>
                                     </div>
                                 ) : (
-                                    notifications.map((notification) => (
-                                        <div
-                                            key={notification.id}
-                                            className={`p-3 sm:p-4 border-b border-border hover:bg-linear-120 hover:from-primary/5 hover:to-primary/10 transition-all duration-200 ${!notification.read ? 'bg-linear-120 from-primary/5 to-primary/10' : ''
+                                    notifications.map((notification) => {
+                                        const notifId = notification._id || notification.id;
+                                        const badge = getCategoryBadge(notification.category);
+                                        const isUnread = !notification.is_read;
+
+                                        return (
+                                            <div
+                                                key={notifId}
+                                                onClick={() => handleNotificationClick(notification)}
+                                                className={`p-3.5 transition-all duration-200 cursor-pointer flex gap-3 items-start group ${
+                                                    isUnread
+                                                        ? 'bg-primary/5 hover:bg-primary/10'
+                                                        : 'hover:bg-surface-hover/80 bg-surface'
                                                 }`}
-                                        >
-                                            <div className="flex justify-between items-start">
+                                            >
+                                                {/* Left dot/indicator */}
+                                                <div className="pt-1 shrink-0">
+                                                    {isUnread ? (
+                                                        <span className="w-2.5 h-2.5 rounded-full bg-primary flex items-center justify-center animate-pulse" />
+                                                    ) : (
+                                                        <span className="w-2 h-2 rounded-full bg-border" />
+                                                    )}
+                                                </div>
+
+                                                {/* Notification Content */}
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <h4 className="font-medium text-text-primary text-xs sm:text-sm truncate">
+                                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${badge.color}`}>
+                                                            {badge.label}
+                                                        </span>
+                                                        <h4 className="font-semibold text-xs text-text-primary truncate flex-1">
                                                             {notification.title}
                                                         </h4>
-                                                        {!notification.read && (
-                                                            <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse flex-shrink-0"></span>
-                                                        )}
                                                     </div>
-                                                    <p className="text-xs sm:text-sm text-text-secondary mb-2 line-clamp-2">
+                                                    <p className="text-xs text-text-secondary leading-snug line-clamp-2 mb-1.5">
                                                         {notification.message}
                                                     </p>
-                                                    <div className="flex items-center gap-1 text-[10px] sm:text-xs text-text-muted">
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
                                                         <FaClock size={10} />
-                                                        {notification.time}
+                                                        <span>{formatTimeAgo(notification.created_at)}</span>
+                                                        {notification.action_url && (
+                                                            <span className="ml-auto text-primary font-semibold group-hover:underline text-[10.5px]">
+                                                                Open →
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-1 ml-2 flex-shrink-0">
-                                                    {!notification.read && (
-                                                        <IconButton
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => markAsRead(notification.id)}
-                                                            className="p-1 hover:bg-success/10 hover:text-success transition-colors"
+
+                                                {/* Actions */}
+                                                <div
+                                                    className="flex flex-col gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {isUnread && (
+                                                        <button
+                                                            onClick={() => markAsRead(notifId)}
+                                                            className="p-1 rounded-md hover:bg-emerald-500/10 text-emerald-600 transition-colors cursor-pointer"
                                                             title="Mark as read"
                                                         >
-                                                            <MdCheckCircle className="text-success text-xs sm:text-sm" />
-                                                        </IconButton>
+                                                            <MdCheckCircle size={15} />
+                                                        </button>
                                                     )}
-                                                    <IconButton
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => deleteNotification(notification.id)}
-                                                        className="p-1 hover:bg-danger/10 hover:text-danger transition-colors"
+                                                    <button
+                                                        onClick={() => removeNotification(notifId)}
+                                                        className="p-1 rounded-md hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
                                                         title="Delete"
                                                     >
-                                                        <MdDelete className="text-danger text-xs sm:text-sm" />
-                                                    </IconButton>
+                                                        <MdDelete size={15} />
+                                                    </button>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
 
+                            {/* Dropdown Footer */}
                             {notifications.length > 0 && (
-                                <div className="p-2 sm:p-3 border-t border-border bg-linear-120 from-primary/5 to-primary/10">
-                                    <Button
-                                        variant="link"
-                                        size="sm"
-                                        onClick={() => navigate('/notifications')}
-                                        className="w-full justify-center text-xs sm:text-sm text-primary hover:text-primary-hover font-medium"
-                                    >
-                                        View all notifications
-                                    </Button>
+                                <div className="p-2.5 border-t border-border bg-surface-hover/30 text-center">
+                                    <span className="text-[11px] text-text-muted">
+                                        Clicking a notification navigates directly to the action
+                                    </span>
                                 </div>
                             )}
                         </div>

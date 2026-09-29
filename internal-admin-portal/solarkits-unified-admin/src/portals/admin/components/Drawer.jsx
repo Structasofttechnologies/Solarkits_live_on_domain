@@ -4,6 +4,7 @@ import { MdExpandMore } from "react-icons/md";
 import { FaTimes } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import logo from "@/assets/images/logo.png";
+import usePipelineStatus from "../hooks/usePipelineStatus";
 
 const MotionLink = typeof motion.create === "function" ? motion.create(Link) : motion(Link);
 
@@ -103,6 +104,55 @@ function NavigationDrawer({
   const [openMenus, setOpenMenus] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
+  const { pipelineStatus } = usePipelineStatus();
+
+  const getItemPendingStatus = (item) => {
+    if (!pipelineStatus || !item) return null;
+
+    const marginPending = pipelineStatus.company_margin?.has_pending;
+    const marginCount = pipelineStatus.company_margin?.count || 0;
+
+    const activationPending = pipelineStatus.kit_activations?.has_pending;
+    const activationCount = pipelineStatus.kit_activations?.count || 0;
+
+    const isMarginItem =
+      item.unique_id === "ADM_CO_MARGIN" ||
+      item.name?.toLowerCase().includes("margin") ||
+      item.path?.includes("/company-margin");
+
+    if (isMarginItem && marginPending) {
+      return {
+        hasPending: true,
+        count: marginCount,
+        tooltip: `${marginCount} kit(s) pending company margin configuration`,
+      };
+    }
+
+    const isActivationItem =
+      item.unique_id === "ADM_WH_KIT_ACT" ||
+      item.name?.toLowerCase().includes("kit activation") ||
+      item.path?.includes("/warehouse-kit-activations");
+
+    if (isActivationItem && activationPending) {
+      return {
+        hasPending: true,
+        count: activationCount,
+        tooltip: `${activationCount} kit(s) pending warehouse kit activation`,
+      };
+    }
+
+    // Check if any sub-item has pending
+    if (Array.isArray(item.subMenu)) {
+      for (const sub of item.subMenu) {
+        const subStatus = getItemPendingStatus(sub);
+        if (subStatus?.hasPending) {
+          return subStatus;
+        }
+      }
+    }
+
+    return null;
+  };
 
   const isPathActive = (currentPath, itemPath) => {
     if (!itemPath) return false;
@@ -253,6 +303,7 @@ function NavigationDrawer({
           const isOpen = openMenus[item.name]?.open;
           const hasSub = Array.isArray(item.subMenu) && item.subMenu.length > 0;
           const targetPath = hasSub ? "" : getTargetPath(item.path);
+          const pendingStatus = getItemPendingStatus(item);
 
           return (
             <div key={item.name || Math.random()}>
@@ -268,7 +319,7 @@ function NavigationDrawer({
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
-                    <div className="flex gap-3 items-center max-w-[calc(100%-20px)]">
+                    <div className="flex gap-3 items-center max-w-[calc(100%-40px)]">
                       <span
                         className={`text-xl min-w-6 flex justify-center transition-colors ${
                           isActive ? "text-white" : "text-primary group-hover:scale-110"
@@ -284,13 +335,24 @@ function NavigationDrawer({
                         {item.name}
                       </span>
                     </div>
-                    <span
-                      className={`text-lg flex justify-center transition-transform duration-300 ${
-                        isOpen ? "rotate-180" : ""
-                      }`}
-                    >
-                      <MdExpandMore />
-                    </span>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      {pendingStatus?.hasPending && (
+                        <span
+                          className="relative flex items-center justify-center shrink-0 mr-1"
+                          title={pendingStatus.tooltip}
+                        >
+                          <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-sm shadow-amber-500/50"></span>
+                        </span>
+                      )}
+                      <span
+                        className={`text-lg flex justify-center transition-transform duration-300 ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      >
+                        <MdExpandMore />
+                      </span>
+                    </div>
                   </motion.button>
                 ) : (
                   <MotionLink
@@ -301,12 +363,12 @@ function NavigationDrawer({
                       if (isMobile && setIsOpen) setIsOpen(false);
                     }}
                     className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group
-                      ${isActive
+                    ${isActive
                         ? "gradient-primary text-white shadow-md shadow-primary/20"
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
-                    <div className="flex gap-3 items-center max-w-full">
+                    <div className="flex gap-3 items-center max-w-[calc(100%-24px)]">
                       <span
                         className={`text-xl min-w-6 flex justify-center transition-colors ${
                           isActive ? "text-white" : "text-primary group-hover:scale-110"
@@ -322,6 +384,15 @@ function NavigationDrawer({
                         {item.name}
                       </span>
                     </div>
+                    {pendingStatus?.hasPending && (
+                      <span
+                        className="relative flex items-center justify-center shrink-0 ml-auto"
+                        title={pendingStatus.tooltip}
+                      >
+                        <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-sm shadow-amber-500/50"></span>
+                      </span>
+                    )}
                   </MotionLink>
                 )}
               </li>

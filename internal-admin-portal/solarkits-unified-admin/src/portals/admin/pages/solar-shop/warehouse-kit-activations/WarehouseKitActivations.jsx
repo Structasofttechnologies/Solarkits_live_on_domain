@@ -263,6 +263,7 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
     { key: "location", label: "State & Cluster" },
     { key: "combo_status", label: "Combo Kits", align: "center" },
     { key: "customize_status", label: "Customize Kits", align: "center" },
+    { key: "store_display", label: "Store Display & Regions", align: "center" },
     { key: "actions", label: "Actions", align: "right" },
   ];
 
@@ -516,6 +517,23 @@ export default function WarehouseKitActivations({ moduleUniqueId }) {
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-surface-hover text-text-muted border border-border/40">
                             Not Configured
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {stats.activeCombos > 0 || stats.activeCustomizes > 0 ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black bg-primary/10 text-primary border border-primary/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                              Store Live ({stats.activeCombos + stats.activeCustomizes} Kits)
+                            </span>
+                            <span className="text-[9px] text-text-muted font-bold">
+                              Scope: {warehouse.cluster || "All Clusters"}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black bg-surface-hover text-text-muted border border-border/40">
+                            Hidden from Store
                           </span>
                         )}
                       </td>

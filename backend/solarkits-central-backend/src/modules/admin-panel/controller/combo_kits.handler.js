@@ -4,6 +4,7 @@ const ComboKitIndia = ComboKit;
 const { GeoLevel0, GeoLevel1, GeoLevel2, Cluster } = require('../models/geolocation_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
 const { delete_uploaded_files } = require('../utils/upload.files');
+const { sendAdminNotification } = require('../services/admin.notification.service');
 
 const parseJSON = (val, defaultVal = []) => {
     if (!val) return defaultVal;
@@ -238,6 +239,15 @@ const create_combo_kit = async (req, res) => {
 
             await newKit.save();
             createdKits.push(newKit);
+
+            sendAdminNotification({
+                title: `New Combo Kit Created: ${newKit.name}`,
+                message: `Combo Kit "${newKit.name}" (${newKit.capacity || 0}kW) created. Company Margin & Warehouse Kit Activation required to display in store.`,
+                category: 'configuration',
+                priority: 'high',
+                action_url: '/admin-panel/solar-shop/company-margin',
+                metadata: { combo_kit_id: newKit._id, kit_name: newKit.name }
+            }).catch(err => console.warn('[ComboKit Notification Warning]:', err.message));
         }
 
         res.status(201).json({ status: 'success', message: 'Combo Kit configured successfully.', data: createdKits });
@@ -725,6 +735,15 @@ const create_combo_kit_india = async (req, res) => {
 
             await newKit.save();
             createdKits.push(newKit);
+
+            sendAdminNotification({
+                title: `New Combo Kit Created: ${newKit.name}`,
+                message: `Combo Kit "${newKit.name}" (${newKit.capacity || 0}kW) created. Company Margin & Warehouse Kit Activation required to display in store.`,
+                category: 'configuration',
+                priority: 'high',
+                action_url: '/admin-panel/solar-shop/company-margin',
+                metadata: { combo_kit_id: newKit._id, kit_name: newKit.name }
+            }).catch(err => console.warn('[ComboKit Notification Warning]:', err.message));
         }
 
         res.status(201).json({ status: 'success', message: 'Combo Kit configured successfully.', data: createdKits });

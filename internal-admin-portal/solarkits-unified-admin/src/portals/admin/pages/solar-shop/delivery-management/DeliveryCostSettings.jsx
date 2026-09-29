@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '../../../features/alert.slice';
+import { Package } from 'lucide-react';
 import {
   FaSlidersH,
   FaPlus,
@@ -20,6 +21,8 @@ import {
   FaFileCsv,
   FaEdit,
   FaSearch,
+  FaChevronDown,
+  FaLayerGroup,
 } from 'react-icons/fa';
 import PageHeader from '../../../components/PageHeader';
 import Button from '../../../components/Button';
@@ -33,6 +36,27 @@ import axios from 'axios';
 import { authHeaderObj } from '../../../app/authHeader';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+export const ACTIVE_ORDER_TYPES = [
+  {
+    key: 'loose_order',
+    label: 'Loose Order',
+    description: 'Single or low-volume retail purchases',
+    defaultQty: 1,
+  },
+  {
+    key: 'trial_order',
+    label: 'Trial Order',
+    description: 'Sample testing & quality verification order',
+    defaultQty: 10,
+  },
+  {
+    key: 'po_order',
+    label: 'PO Order',
+    description: 'Formal Purchase Order & commercial contracts',
+    defaultQty: 500,
+  },
+];
 
 export default function DeliveryCostSettings() {
   const dispatch = useDispatch();
@@ -142,8 +166,12 @@ export default function DeliveryCostSettings() {
       if (bRes.status === 'success') setBenchmarks(bRes.data || []);
       if (rRes.status === 'success') setKitRules(rRes.data || []);
       if (vRes.status === 'success') setVehicleMasters(vRes.data || []);
-      if (indRes?.status === 'success' || Array.isArray(indRes?.data)) setIndustryTypes(indRes.data || []);
-      if (catRes?.status === 'success' || Array.isArray(catRes?.data)) setCategories(catRes.data || []);
+      if (indRes?.status === 'success' || Array.isArray(indRes?.data) || Array.isArray(indRes)) {
+        setIndustryTypes(Array.isArray(indRes?.data) ? indRes.data : Array.isArray(indRes) ? indRes : []);
+      }
+      if (catRes?.status === 'success' || Array.isArray(catRes?.data) || Array.isArray(catRes)) {
+        setCategories(Array.isArray(catRes?.data) ? catRes.data : Array.isArray(catRes) ? catRes : []);
+      }
       if (pRes?.status === 'success' || Array.isArray(pRes?.data)) setServiceProviders(pRes.data || []);
 
       // Load company warehouses, states & kit weights from existing APIs
@@ -156,7 +184,49 @@ export default function DeliveryCostSettings() {
 
       setWarehouses(whRes.data || []);
       setStates(stRes.data || stRes.states || []);
-      setKits(Array.isArray(fetchedKits) ? fetchedKits : (fetchedKits?.data || []));
+
+      // Consolidate all configured kits across all available sources
+      const combinedKitsMap = new Map();
+      const rawKits = Array.isArray(fetchedKits) ? fetchedKits : (fetchedKits?.data || []);
+      rawKits.forEach((k) => {
+        const id = getCleanId(k);
+        if (id) combinedKitsMap.set(id, k);
+      });
+
+      (kwRes?.data || []).forEach((w) => {
+        const kId = getCleanId(w.kit_id?._id || w.kit_id);
+        if (kId && !combinedKitsMap.has(kId)) {
+          combinedKitsMap.set(kId, {
+            _id: kId,
+            name: w.kit_name || w.kit_id?.name || 'Solar Kit',
+            capacity: w.capacity_kw || w.kit_id?.capacity || 0,
+          });
+        }
+      });
+
+      (kwRes?.unconfigured_kits || []).forEach((u) => {
+        const kId = getCleanId(u._id || u.id);
+        if (kId && !combinedKitsMap.has(kId)) {
+          combinedKitsMap.set(kId, {
+            _id: kId,
+            name: u.name || 'Solar Kit',
+            capacity: u.capacity || 0,
+          });
+        }
+      });
+
+      (rRes?.data || []).forEach((r) => {
+        const kId = getCleanId(r.kit_id);
+        if (kId && !combinedKitsMap.has(kId)) {
+          combinedKitsMap.set(kId, {
+            _id: kId,
+            name: r.kit_id?.name || 'Solar Kit',
+            capacity: r.kit_id?.capacity || 0,
+          });
+        }
+      });
+
+      setKits(Array.from(combinedKitsMap.values()));
 
       const wMap = {};
       (kwRes?.data || []).forEach((w) => {
@@ -190,7 +260,7 @@ export default function DeliveryCostSettings() {
 
     try {
       const res = await deliveryApi.getCategories(indId || null);
-      setCategories(res.data || []);
+      setCategories(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
     } catch (e) {
       console.error(e);
     }
@@ -208,7 +278,7 @@ export default function DeliveryCostSettings() {
     if (catId) {
       try {
         const res = await deliveryApi.getSubcategories(catId);
-        setSubcategories(res.data || []);
+        setSubcategories(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
       } catch (e) {
         console.error(e);
       }
@@ -225,7 +295,7 @@ export default function DeliveryCostSettings() {
     if (subId) {
       try {
         const res = await deliveryApi.getSystemTypes(subId);
-        setSystemTypes(res.data || []);
+        setSystemTypes(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
       } catch (e) {
         console.error(e);
       }
@@ -240,7 +310,7 @@ export default function DeliveryCostSettings() {
     if (typeId) {
       try {
         const res = await deliveryApi.getProjectRanges(typeId);
-        setProjectRanges(res.data || []);
+        setProjectRanges(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
       } catch (e) {
         console.error(e);
       }
@@ -251,7 +321,7 @@ export default function DeliveryCostSettings() {
     setSelectedProjectRange(rangeId);
   };
 
-  const clearHierarchyFilters = () => {
+  const clearHierarchyFilters = async () => {
     setSelectedIndustryType('');
     setSelectedCategory('');
     setSelectedSubcategory('');
@@ -260,7 +330,12 @@ export default function DeliveryCostSettings() {
     setSubcategories([]);
     setSystemTypes([]);
     setProjectRanges([]);
-    deliveryApi.getCategories().then(res => setCategories(res.data || []));
+    try {
+      const res = await deliveryApi.getCategories();
+      setCategories(Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Dynamic filter for combo kits based on cascading selections
@@ -268,28 +343,58 @@ export default function DeliveryCostSettings() {
     if (!kits || !Array.isArray(kits)) return [];
     return kits.filter((k) => {
       // 1. Industry Type
-      const kitIndId = getCleanId(k.solar_kit_id?.category_id?.industry_type_id?._id || k.solar_kit_id?.category_id?.industry_type_id);
+      const kitIndId = getCleanId(
+        k.solar_kit_id?.category_id?.industry_type_id?._id ||
+        k.solar_kit_id?.category_id?.industry_type_id ||
+        k.category_id?.industry_type_id?._id ||
+        k.category_id?.industry_type_id ||
+        k.industry_type_id?._id ||
+        k.industry_type_id
+      );
       const matchInd = !selectedIndustryType || kitIndId === selectedIndustryType;
 
       // 2. Category
-      const kitCatId = getCleanId(k.solar_kit_id?.category_id);
+      const kitCatId = getCleanId(
+        k.solar_kit_id?.category_id?._id ||
+        k.solar_kit_id?.category_id ||
+        k.category_id?._id ||
+        k.category_id
+      );
       const matchCat = !selectedCategory || kitCatId === selectedCategory;
 
       // 3. Subcategory
-      const kitSubId = getCleanId(k.solar_kit_id?.subcategory_id);
+      const kitSubId = getCleanId(
+        k.solar_kit_id?.subcategory_id?._id ||
+        k.solar_kit_id?.subcategory_id ||
+        k.subcategory_id?._id ||
+        k.subcategory_id
+      );
       const matchSub = !selectedSubcategory || kitSubId === selectedSubcategory;
 
       // 4. System Type
-      const kitTypeId = getCleanId(k.solar_kit_id?.type_id);
-      const matchType = !selectedType || kitTypeId === selectedType;
+      const kitSubtypeDocId = getCleanId(k.solar_kit_id?.type_id?._id || k.solar_kit_id?.type_id);
+      const kitTypeId = getCleanId(k.solar_kit_id?.type_id?.type?._id || k.solar_kit_id?.type_id?.type || k.type_id);
+      const matchType = !selectedType || kitSubtypeDocId === selectedType || kitTypeId === selectedType;
 
       // 5. Project Range
-      const kitRangeId = getCleanId(k.project_range_id);
-      const matchRange = !selectedProjectRange || kitRangeId === selectedProjectRange;
+      const kitRangeId = getCleanId(
+        k.project_range_id?._id ||
+        k.project_range_id ||
+        k.solar_kit_id?.project_range_id?._id ||
+        k.solar_kit_id?.project_range_id
+      );
+      const selectedPrObj = projectRanges.find((pr) => getCleanId(pr) === selectedProjectRange);
+      let matchRange = !selectedProjectRange || kitRangeId === selectedProjectRange;
+      if (!matchRange && selectedPrObj && selectedPrObj.min_value != null && selectedPrObj.max_value != null) {
+        const cap = Number(k.capacity || k.solar_kit_id?.capacity || 0);
+        if (cap >= Number(selectedPrObj.min_value) && cap <= Number(selectedPrObj.max_value)) {
+          matchRange = true;
+        }
+      }
 
       return matchInd && matchCat && matchSub && matchType && matchRange;
     });
-  }, [kits, selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
+  }, [kits, selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange, projectRanges]);
 
   // Multi-Field Search Filter across State, District, Price, Warehouse, Vendor, Vehicle
   const filteredBenchmarks = useMemo(() => {
@@ -384,92 +489,128 @@ export default function DeliveryCostSettings() {
     return filteredKits;
   }, [filteredKits, ruleForm.kit_id, kits]);
 
-  // Kit-Wise Rules Filter & Search
-  const filteredKitRules = useMemo(() => {
-    if (!kitRules || !Array.isArray(kitRules)) return [];
-    let list = kitRules;
+  // Kit-Wise Rules Mapped by Kit ID: { [kitId]: { loose_order: rule, trial_order: rule, po_order: rule } }
+  const kitRulesByKitId = useMemo(() => {
+    const map = {};
+    (kitRules || []).forEach((r) => {
+      const kId = getCleanId(r.kit_id);
+      if (!kId) return;
+      if (!map[kId]) map[kId] = {};
+      map[kId][r.order_type] = r;
+    });
+    return map;
+  }, [kitRules]);
 
+  // Accordion Expand/Collapse States for Kits
+  const [expandedKitIds, setExpandedKitIds] = useState(new Set());
+
+  // Quick Filters Active Check
+  const hasActiveQuickFilters = useMemo(() => {
+    return Boolean(
+      selectedIndustryType ||
+      selectedCategory ||
+      selectedSubcategory ||
+      selectedType ||
+      selectedProjectRange
+    );
+  }, [selectedIndustryType, selectedCategory, selectedSubcategory, selectedType, selectedProjectRange]);
+
+  // Filtered Kits for Kit-Centric List
+  const filteredKitCards = useMemo(() => {
+    if (!filteredKits || !Array.isArray(filteredKits)) return [];
+    let list = filteredKits;
+
+    // Filter by Order Type (loose_order, trial_order, po_order)
     if (selectedOrderTypeFilter) {
-      list = list.filter((r) => r.order_type === selectedOrderTypeFilter);
+      list = list.filter((k) => {
+        const kId = getCleanId(k);
+        const rules = kitRulesByKitId[kId] || {};
+        return !!rules[selectedOrderTypeFilter];
+      });
     }
 
+    // Filter by Search Query (Kit name, capacity, order type, vehicle, costs)
     if (ruleSearchQuery.trim()) {
       const q = ruleSearchQuery.toLowerCase().trim();
-      list = list.filter((r) => {
-        const kitName = (r.kit_id?.name || '').toLowerCase();
-        const orderType = (r.order_type || '').toLowerCase().replace(/_/g, ' ');
-        const vehicleName = (r.vehicle_master_id?.name || '').toLowerCase();
-        const minQty = String(r.number_of_kits || '').toLowerCase();
-        const totalCost = String(r.total_delivery_cost || '').toLowerCase();
-        const perKitCost = String(r.per_kit_delivery_cost || '').toLowerCase();
-        const isFree = r.free_delivery ? 'yes free' : 'no';
+      list = list.filter((k) => {
+        const kId = getCleanId(k);
+        const kitName = (k.name || '').toLowerCase();
+        const capStr = `${k.capacity || k.solar_kit_id?.capacity || ''} kw`.toLowerCase();
+        if (kitName.includes(q) || capStr.includes(q)) return true;
 
-        const kId = getCleanId(r.kit_id);
-        const unitWt = kitWeights[kId] || 0;
-        const totalWt = unitWt > 0 ? unitWt * Number(r.number_of_kits || 1) : Number(r.shipment_weight_kg || r.total_weight_kg || 0);
-        const weightStr = `${totalWt} kg`.toLowerCase();
-
-        return (
-          kitName.includes(q) ||
-          orderType.includes(q) ||
-          vehicleName.includes(q) ||
-          minQty.includes(q) ||
-          weightStr.includes(q) ||
-          totalCost.includes(q) ||
-          perKitCost.includes(q) ||
-          isFree.includes(q)
-        );
+        const rules = kitRulesByKitId[kId] || {};
+        for (const ord of ACTIVE_ORDER_TYPES) {
+          const rule = rules[ord.key];
+          if (rule) {
+            const ordLabel = ord.label.toLowerCase();
+            const vehName = (rule.vehicle_master_id?.name || '').toLowerCase();
+            const costStr = String(rule.total_delivery_cost || '');
+            const perCostStr = String(rule.per_kit_delivery_cost || '');
+            if (
+              ordLabel.includes(q) ||
+              vehName.includes(q) ||
+              costStr.includes(q) ||
+              perCostStr.includes(q)
+            ) {
+              return true;
+            }
+          }
+        }
+        return false;
       });
     }
 
     return list;
-  }, [kitRules, ruleSearchQuery, selectedOrderTypeFilter, kitWeights]);
+  }, [filteredKits, selectedOrderTypeFilter, ruleSearchQuery, kitRulesByKitId]);
 
-  // Bulk Selection Handlers for Kit Rules
-  const isAllRulesSelected = useMemo(() => {
-    if (filteredKitRules.length === 0) return false;
-    return filteredKitRules.every((r) => selectedRuleIds.includes(r._id));
-  }, [filteredKitRules, selectedRuleIds]);
+  const handleToggleExpandKit = (kitId) => {
+    setExpandedKitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kitId)) {
+        next.delete(kitId);
+      } else {
+        next.add(kitId);
+      }
+      return next;
+    });
+  };
 
-  const handleToggleSelectAllRules = () => {
-    if (isAllRulesSelected) {
-      const filteredIds = new Set(filteredKitRules.map((r) => r._id));
-      setSelectedRuleIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+  const handleExpandAllKits = () => {
+    setExpandedKitIds(new Set(filteredKitCards.map((k) => getCleanId(k))));
+  };
+
+  const handleCollapseAllKits = () => {
+    setExpandedKitIds(new Set());
+  };
+
+  const handleOpenConfigureOrder = (kit, orderTypeKey, existingRule = null) => {
+    const kId = getCleanId(kit);
+    if (existingRule) {
+      setEditingRuleId(existingRule._id);
+      setRuleForm({
+        kit_id: kId,
+        order_type: existingRule.order_type || orderTypeKey,
+        number_of_kits: existingRule.number_of_kits !== undefined ? existingRule.number_of_kits : 1,
+        vehicle_master_id: getCleanId(existingRule.vehicle_master_id),
+        total_delivery_cost: existingRule.total_delivery_cost !== undefined ? existingRule.total_delivery_cost : '',
+        per_kit_delivery_cost: existingRule.per_kit_delivery_cost !== undefined ? existingRule.per_kit_delivery_cost : '',
+        free_delivery: !!existingRule.free_delivery,
+      });
     } else {
-      const currentSet = new Set(selectedRuleIds);
-      filteredKitRules.forEach((r) => currentSet.add(r._id));
-      setSelectedRuleIds(Array.from(currentSet));
+      setEditingRuleId(null);
+      const defaultQty = ACTIVE_ORDER_TYPES.find((o) => o.key === orderTypeKey)?.defaultQty || 1;
+      setRuleForm({
+        kit_id: kId,
+        order_type: orderTypeKey,
+        number_of_kits: defaultQty,
+        vehicle_master_id: '',
+        total_delivery_cost: '',
+        per_kit_delivery_cost: '',
+        free_delivery: false,
+      });
     }
-  };
-
-  const handleToggleSelectRule = (id) => {
-    setSelectedRuleIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const handleBulkDeleteKitRules = async () => {
-    if (selectedRuleIds.length === 0) return;
-    if (
-      !window.confirm(
-        `Are you sure you want to delete ${selectedRuleIds.length} selected policy rule(s)? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await deliveryApi.bulkDeleteKitRules(selectedRuleIds);
-      showAlert(res.message || `Successfully deleted ${selectedRuleIds.length} policy rules.`);
-      setSelectedRuleIds([]);
-      await loadInitialData();
-    } catch (err) {
-      console.error(err);
-      showAlert(err.response?.data?.message || 'Failed to delete selected policy rules', 'error');
-    } finally {
-      setLoading(false);
-    }
+    setExpandedKitIds((prev) => new Set(prev).add(kId));
+    setRuleDrawerOpen(true);
   };
 
   const handleOpenBenchmarkDrawer = () => {
@@ -867,7 +1008,7 @@ export default function DeliveryCostSettings() {
           project_type_id: selectedType || selectedCategory || null,
           project_subtype_id: selectedSubcategory || null,
         });
-        showAlert('Kit delivery policy updated successfully.');
+        showAlert('Kit delivery Cost updated successfully.');
       } else {
         await deliveryApi.createKitRule({
           ...ruleForm,
@@ -878,23 +1019,28 @@ export default function DeliveryCostSettings() {
           project_type_id: selectedType || selectedCategory || null,
           project_subtype_id: selectedSubcategory || null,
         });
-        showAlert('Kit delivery policy created successfully.');
+        showAlert('Kit delivery Cost created successfully.');
       }
       setRuleDrawerOpen(false);
       setEditingRuleId(null);
       clearHierarchyFilters();
+      if (ruleForm.kit_id) {
+        setExpandedKitIds((prev) => new Set(prev).add(ruleForm.kit_id));
+      }
       loadInitialData();
     } catch (err) {
       showAlert(err.response?.data?.message || 'Failed to save rule', 'error');
     }
   };
 
-  const handleDeleteKitRule = async (id) => {
-    if (!window.confirm('Delete this kit rule?')) return;
+  const handleDeleteKitRule = async (id, kitId = null) => {
+    if (!window.confirm('Delete this kit order delivery Cost?')) return;
     try {
       await deliveryApi.deleteKitRule(id);
-      showAlert('Rule deleted.');
-      setSelectedRuleIds((prev) => prev.filter((item) => item !== id));
+      showAlert('Kit delivery Cost deleted.');
+      if (kitId) {
+        setExpandedKitIds((prev) => new Set(prev).add(kitId));
+      }
       loadInitialData();
     } catch (err) {
       showAlert('Failed to delete rule', 'error');
@@ -915,14 +1061,7 @@ export default function DeliveryCostSettings() {
             >
               <FaPlus /> Set Transport Benchmark
             </Button>
-          ) : (
-            <Button
-              onClick={handleOpenCreateRuleDrawer}
-              className="flex items-center gap-2 bg-white text-blue-700 hover:bg-white/90 font-semibold shadow-md px-4 py-2.5 rounded-xl text-sm transition-all cursor-pointer"
-            >
-              <FaPlus /> Add Kit Delivery Policy
-            </Button>
-          )
+          ) : null
         }
       />
 
@@ -930,23 +1069,27 @@ export default function DeliveryCostSettings() {
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setActiveTab('benchmarks')}
-          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'benchmarks'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${activeTab === 'benchmarks'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
         >
           Warehouse & Route Benchmarks ({filteredBenchmarks.length !== benchmarks.length ? `${filteredBenchmarks.length} / ${benchmarks.length}` : benchmarks.length})
         </button>
         <button
           onClick={() => setActiveTab('kit_rules')}
-          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'kit_rules'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
+          className={`px-5 py-3 font-semibold text-sm border-b-2 transition-colors cursor-pointer flex items-center gap-2 ${activeTab === 'kit_rules'
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
         >
-          Kit-Wise Purchase Policies ({filteredKitRules.length !== kitRules.length ? `${filteredKitRules.length} / ${kitRules.length}` : kitRules.length})
+          <span>Kit-Wise Delivery Cost</span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === 'kit_rules' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'
+              }`}
+          >
+            {filteredKitCards.length} Kits
+          </span>
         </button>
       </div>
 
@@ -1112,11 +1255,10 @@ export default function DeliveryCostSettings() {
                   filteredBenchmarks.map((b) => (
                     <tr
                       key={b._id}
-                      className={`transition-colors ${
-                        selectedBenchmarkIds.includes(b._id)
-                          ? 'bg-blue-50/60 hover:bg-blue-50/90'
-                          : 'hover:bg-slate-50/80'
-                      }`}
+                      className={`transition-colors ${selectedBenchmarkIds.includes(b._id)
+                        ? 'bg-blue-50/60 hover:bg-blue-50/90'
+                        : 'hover:bg-slate-50/80'
+                        }`}
                     >
                       <td className="py-3 px-3 text-center">
                         <input
@@ -1196,8 +1338,162 @@ export default function DeliveryCostSettings() {
           </div>
         </div>
       ) : (
-        /* Kit-Wise Rules Tab */
+        /* Kit-Wise Rules Tab (Kit-Centric Accordion View) */
         <div className="space-y-4">
+          {/* ─── QUICK FILTERS BAR (Matching Screenshot) ─── */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="w-4 h-4 text-blue-600 stroke-[2.2]" />
+                <h3 className="font-bold text-sm text-slate-800">
+                  Quick Filters
+                </h3>
+                {hasActiveQuickFilters && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    Filtered ({filteredKitCards.length} kits)
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={clearHierarchyFilters}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer transition-colors"
+              >
+                Clear Main
+              </button>
+            </div>
+
+            {/* 5 Cascading Dropdowns */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+              {/* 1. Industry Type */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Industry Type
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedIndustryType}
+                    onChange={(e) => handleIndustryChange(e.target.value)}
+                    className="w-full appearance-none px-3 py-2 pr-8 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
+                  >
+                    <option value="">All Industry Types</option>
+                    {industryTypes.map((ind) => {
+                      const id = ind._id || ind.id;
+                      return (
+                        <option key={id} value={id}>
+                          {ind.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none" />
+                </div>
+              </div>
+
+              {/* 2. Category */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Category
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
+                    className="w-full appearance-none px-3 py-2 pr-8 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
+                  >
+                    <option value="">All Categories</option>
+                    {categories.map((cat) => {
+                      const id = cat._id || cat.id;
+                      return (
+                        <option key={id} value={id}>
+                          {cat.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none" />
+                </div>
+              </div>
+
+              {/* 3. Sub Category */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Sub Category
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedSubcategory}
+                    onChange={(e) => handleSubcategoryChange(e.target.value)}
+                    className="w-full appearance-none px-3 py-2 pr-8 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
+                  >
+                    <option value="">All Sub-Categories</option>
+                    {subcategories.map((sub) => {
+                      const id = sub._id || sub.id;
+                      return (
+                        <option key={id} value={id}>
+                          {sub.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none" />
+                </div>
+              </div>
+
+              {/* 4. System Type */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  System Type
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedType}
+                    onChange={(e) => handleTypeChange(e.target.value)}
+                    className="w-full appearance-none px-3 py-2 pr-8 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
+                  >
+                    <option value="">All System Types</option>
+                    {systemTypes.map((st) => {
+                      const id = st._id || st.id || st.subcategory_type_id;
+                      return (
+                        <option key={id} value={id}>
+                          {st.name || st.type_name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none" />
+                </div>
+              </div>
+
+              {/* 5. Project Range */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Project Range
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedProjectRange}
+                    onChange={(e) => handleProjectRangeChange(e.target.value)}
+                    className="w-full appearance-none px-3 py-2 pr-8 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer"
+                  >
+                    <option value="">All Project Ranges</option>
+                    {projectRanges.map((pr) => {
+                      const id = pr._id || pr.id;
+                      const label = pr.range_label || pr.name || `${pr.min_value || 0} - ${pr.max_value || 0} ${pr.unit_symbol || 'kW'}`;
+                      return (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Search & Filter Bar */}
           <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             {/* Real-time Multi-Field Search Bar */}
@@ -1209,7 +1505,7 @@ export default function DeliveryCostSettings() {
                 type="text"
                 value={ruleSearchQuery}
                 onChange={(e) => setRuleSearchQuery(e.target.value)}
-                placeholder="Search by kit name, order type, vehicle, cost..."
+                placeholder="Search kits by name, capacity, order tier, vehicle, cost..."
                 className="w-full pl-10 pr-9 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder:text-slate-400 font-medium"
               />
               {ruleSearchQuery && (
@@ -1224,19 +1520,18 @@ export default function DeliveryCostSettings() {
               )}
             </div>
 
-            {/* Order Type Filter Dropdown */}
+            {/* Order Type Filter Dropdown - Only Loose, Trial, PO */}
             <div className="flex items-center gap-2">
               <FaBoxes className="text-blue-600 text-xs" />
               <label className="text-xs font-bold text-slate-600 uppercase tracking-wider hidden sm:inline">Order Type:</label>
               <select
                 value={selectedOrderTypeFilter}
                 onChange={(e) => setSelectedOrderTypeFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm bg-slate-50 focus:bg-white transition-colors"
+                className="px-3 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm bg-slate-50 focus:bg-white transition-colors cursor-pointer"
               >
-                <option value="">All Order Types</option>
+                <option value="">All Order Types (Loose, Trial, PO)</option>
                 <option value="loose_order">Loose Order</option>
                 <option value="trial_order">Trial Order</option>
-                <option value="bulk_buy">Bulk Buy</option>
                 <option value="po_order">PO Order</option>
               </select>
             </div>
@@ -1248,160 +1543,301 @@ export default function DeliveryCostSettings() {
                   setSelectedOrderTypeFilter('');
                   setRuleSearchQuery('');
                 }}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 ml-auto cursor-pointer flex items-center gap-1 py-1.5 px-2.5 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-800 cursor-pointer flex items-center gap-1 py-1.5 px-2.5 rounded-lg hover:bg-blue-50 transition-colors"
               >
                 <FaTimes className="text-[10px]" /> Reset
               </button>
             )}
+
+            {/* Fast Expand / Collapse All */}
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={handleExpandAllKits}
+                className="text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
+              >
+                Expand All
+              </button>
+              <button
+                type="button"
+                onClick={handleCollapseAllKits}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
+              >
+                Collapse All
+              </button>
+            </div>
           </div>
 
-          {/* Bulk Selection Action Bar */}
-          {selectedRuleIds.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 border border-blue-200 px-4 py-3 rounded-xl shadow-xs animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                  {selectedRuleIds.length}
-                </div>
-                <div>
-                  <span className="text-sm font-bold text-blue-950">
-                    {selectedRuleIds.length} polic{selectedRuleIds.length > 1 ? 'ies' : 'y'} selected
-                  </span>
-                  <span className="text-xs text-blue-700 ml-2">
-                    (out of {filteredKitRules.length} filtered)
-                  </span>
-                </div>
+          {/* Kits Accordion List */}
+          {filteredKitCards.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
+              <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-3">
+                <FaBoxes className="text-2xl" />
               </div>
-              <div className="flex items-center gap-2">
-                {selectedRuleIds.length < filteredKitRules.length && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRuleIds(filteredKitRules.map((r) => r._id))}
-                    className="text-xs font-semibold text-blue-700 hover:text-blue-900 bg-white px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors cursor-pointer"
+              <h3 className="text-sm font-bold text-slate-800 mb-1">No Solar Kits Found</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                {ruleSearchQuery || selectedOrderTypeFilter || hasActiveQuickFilters
+                  ? 'No combo kits match your search filter criteria. Try resetting filters.'
+                  : 'No combo kits are currently available in the system catalog.'}
+              </p>
+              {hasActiveQuickFilters && (
+                <button
+                  type="button"
+                  onClick={clearHierarchyFilters}
+                  className="mt-3 text-xs font-semibold text-blue-600 hover:text-blue-700 underline cursor-pointer"
+                >
+                  Clear Quick Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {filteredKitCards.map((kit) => {
+                const kId = getCleanId(kit);
+                const isExpanded = expandedKitIds.has(kId);
+                const rules = kitRulesByKitId[kId] || {};
+                const configuredCount = ACTIVE_ORDER_TYPES.filter((o) => !!rules[o.key]).length;
+                const unitWeight = kitWeights[kId] || 0;
+
+                return (
+                  <div
+                    key={kId}
+                    className={`bg-white rounded-2xl border transition-all duration-200 overflow-hidden shadow-xs ${isExpanded
+                      ? 'border-blue-300 ring-2 ring-blue-500/10 shadow-md'
+                      : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                      }`}
                   >
-                    Select All ({filteredKitRules.length})
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setSelectedRuleIds([])}
-                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Deselect All
-                </button>
-                <button
-                  type="button"
-                  onClick={handleBulkDeleteKitRules}
-                  className="flex items-center gap-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3.5 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer"
-                >
-                  <FaTrash className="text-[10px]" /> Delete Selected ({selectedRuleIds.length})
-                </button>
-              </div>
+                    {/* Kit Accordion Header Row (Click/Tap to Toggle Dropdown) */}
+                    <div
+                      onClick={() => handleToggleExpandKit(kId)}
+                      className="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 cursor-pointer select-none transition-colors hover:bg-slate-50/70"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-[280px] flex-1">
+                        {/* Chevron icon */}
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 transition-all duration-200 flex-shrink-0 ${isExpanded ? 'bg-blue-600 text-white rotate-180 shadow-xs' : 'bg-slate-100 text-slate-600'
+                            }`}
+                        >
+                          <FaChevronDown className="text-xs transition-transform" />
+                        </div>
+
+                        {/* Kit Name & Badges */}
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug">
+                              {kit.name || 'Solar Combo Kit'}
+                            </h3>
+                            {(kit.capacity || kit.solar_kit_id?.capacity) && (
+                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                {kit.capacity || kit.solar_kit_id?.capacity} kW
+                              </span>
+                            )}
+                            {unitWeight > 0 && (
+                              <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                ⚖️ {unitWeight.toLocaleString()} KG/kit
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Order Type Mini Status Badges (3 Tiers) */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            {ACTIVE_ORDER_TYPES.map((ord) => {
+                              const rule = rules[ord.key];
+                              return rule ? (
+                                <span
+                                  key={ord.key}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                >
+                                  <FaCheckCircle className="text-[10px] text-emerald-600" />
+                                  <span>{ord.label}:</span>
+                                  <span className="font-mono font-bold">₹{rule.per_kit_delivery_cost.toLocaleString()}</span>
+                                </span>
+                              ) : (
+                                <span
+                                  key={ord.key}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                  <span>{ord.label}: Not Set</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Progress Pill & Action Indicator */}
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`text-xs font-bold px-3 py-1 rounded-full border ${configuredCount === 3
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : configuredCount > 0
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}
+                        >
+                          {configuredCount} / 3 Orders Set
+                        </span>
+                        <span className="text-xs text-blue-600 font-semibold hidden md:inline">
+                          {isExpanded ? 'Collapse ▲' : 'Configure Orders ▼'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Expanded Dropdown Content (3 Order Types) */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-150 bg-slate-50/60 p-4 sm:p-5 transition-all animate-fadeIn">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
+                          <div className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                            <FaLayerGroup className="text-blue-600" />
+                            <span>Delivery Policies by Order Type (3 Tiers)</span>
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Configure minimum quantities & transport costs for each order tier for this kit.
+                          </div>
+                        </div>
+
+                        {/* 3 Order Type Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                          {ACTIVE_ORDER_TYPES.map((ord) => {
+                            const rule = rules[ord.key];
+                            const isConfigured = !!rule;
+
+                            return (
+                              <div
+                                key={ord.key}
+                                className={`rounded-2xl border transition-all p-4 flex flex-col justify-between ${isConfigured
+                                  ? 'bg-white border-slate-200 shadow-xs hover:border-blue-200'
+                                  : 'bg-white/80 border-dashed border-slate-300 hover:border-slate-400'
+                                  }`}
+                              >
+                                {/* Top: Order Type Title & Status */}
+                                <div>
+                                  <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
+                                    <div>
+                                      <span className="font-bold text-slate-900 text-sm block">
+                                        {ord.label}
+                                      </span>
+                                      <span className="text-[11px] text-slate-400 block font-normal">
+                                        {ord.description}
+                                      </span>
+                                    </div>
+                                    {isConfigured ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider flex-shrink-0 flex items-center gap-1">
+                                        <FaCheckCircle className="text-[9px]" /> Configured
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wider flex-shrink-0">
+                                        Unconfigured
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Body: Configured Metrics vs Unconfigured Empty State */}
+                                  {isConfigured ? (
+                                    <div className="space-y-2 py-1 text-xs">
+                                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                                        <span className="text-slate-500">Min Order Qty:</span>
+                                        <span className="font-mono font-bold text-slate-900">
+                                          {rule.number_of_kits} kits
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                                        <span className="text-slate-500">Shipment Weight:</span>
+                                        <span className="font-mono font-bold text-slate-900">
+                                          {(() => {
+                                            const totalWt = unitWeight > 0 ? unitWeight * Number(rule.number_of_kits || 1) : Number(rule.shipment_weight_kg || rule.total_weight_kg || 0);
+                                            return `${Number(totalWt || 0).toLocaleString()} KG`;
+                                          })()}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                                        <span className="text-slate-500">Vehicle Requirement:</span>
+                                        <span className="font-semibold text-slate-800 truncate max-w-[140px]" title={rule.vehicle_master_id?.name || 'Any'}>
+                                          {rule.vehicle_master_id?.name || 'Any'}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                                        <span className="text-slate-500">Total Delivery Cost:</span>
+                                        <span className="font-mono font-bold text-slate-900">
+                                          ₹{Number(rule.total_delivery_cost || 0).toLocaleString()}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                                        <span className="text-slate-500">Per-Kit Delivery Cost:</span>
+                                        <span className="font-mono font-bold text-emerald-700 text-sm">
+                                          ₹{Number(rule.per_kit_delivery_cost || 0).toLocaleString()}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center justify-between py-1">
+                                        <span className="text-slate-500">Free Delivery:</span>
+                                        <span>
+                                          {rule.free_delivery ? (
+                                            <span className="text-[11px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md">Yes</span>
+                                          ) : (
+                                            <span className="text-[11px] font-medium text-slate-400">No</span>
+                                          )}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="py-6 text-center">
+                                      <p className="text-xs text-slate-400 mb-1">
+                                        No delivery Cost set for this order tier.
+                                      </p>
+                                      <span className="text-[11px] text-slate-400 font-mono">
+                                        Default Min Qty: {ord.defaultQty} kits
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Card Actions Footer */}
+                                <div className="pt-3 border-t border-slate-100 mt-2">
+                                  {isConfigured ? (
+                                    <div className="flex items-center justify-between gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenConfigureOrder(kit, ord.key, rule)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                      >
+                                        <FaEdit className="text-xs" /> Edit Cost
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteKitRule(rule._id, kId)}
+                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                                        title="Delete Cost"
+                                      >
+                                        <FaTrash className="text-xs" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenConfigureOrder(kit, ord.key, null)}
+                                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                                    >
+                                      <FaPlus className="text-[10px]" /> Configure {ord.label}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
-
-          {/* Kit Rules Table */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 font-semibold uppercase text-xs">
-                <tr>
-                  <th className="py-3 px-3 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isAllRulesSelected}
-                      onChange={handleToggleSelectAllRules}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                      title={isAllRulesSelected ? 'Deselect all' : 'Select all visible'}
-                    />
-                  </th>
-                  <th className="py-3 px-4">Kit</th>
-                  <th className="py-3 px-4">Order Type</th>
-                  <th className="py-3 px-4">Min Qty</th>
-                  <th className="py-3 px-4">Shipment KG</th>
-                  <th className="py-3 px-4">Vehicle Requirement</th>
-                  <th className="py-3 px-4">Total Delivery Cost</th>
-                  <th className="py-3 px-4">Per-Kit Cost</th>
-                  <th className="py-3 px-4">Free Delivery</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredKitRules.length === 0 ? (
-                  <tr>
-                    <td colSpan="10" className="text-center py-8 text-slate-500">
-                      {ruleSearchQuery || selectedOrderTypeFilter
-                        ? 'No kit delivery policies found matching your search.'
-                        : 'No kit-wise delivery rules configured yet.'}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredKitRules.map((r) => (
-                    <tr
-                      key={r._id}
-                      className={`transition-colors ${
-                        selectedRuleIds.includes(r._id)
-                          ? 'bg-blue-50/60 hover:bg-blue-50/90'
-                          : 'hover:bg-slate-50/80'
-                      }`}
-                    >
-                      <td className="py-3 px-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedRuleIds.includes(r._id)}
-                          onChange={() => handleToggleSelectRule(r._id)}
-                          className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-900">{r.kit_id?.name || 'Solar Kit'}</td>
-                      <td className="py-3 px-4 capitalize font-medium text-slate-700">
-                        {r.order_type.replace('_', ' ')}
-                      </td>
-                      <td className="py-3 px-4 font-mono">{r.number_of_kits} kits</td>
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-900">
-                        {(() => {
-                          const kId = getCleanId(r.kit_id);
-                          const unitWt = kitWeights[kId] || 0;
-                          const totalWt = unitWt > 0 ? unitWt * Number(r.number_of_kits || 1) : Number(r.shipment_weight_kg || r.total_weight_kg || 0);
-                          return `${Number(totalWt || 0).toLocaleString()} KG`;
-                        })()}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">{r.vehicle_master_id?.name || 'Any'}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                        ₹{r.total_delivery_cost.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-emerald-700 font-semibold">
-                        ₹{r.per_kit_delivery_cost.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        {r.free_delivery ? (
-                          <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-semibold">Yes</span>
-                        ) : (
-                          <span className="text-xs text-slate-400">No</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleOpenEditRuleModal(r)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
-                            title="Edit Policy"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteKitRule(r._id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                            title="Delete Policy"
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 
@@ -1533,22 +1969,20 @@ export default function DeliveryCostSettings() {
               <button
                 type="button"
                 onClick={() => setEntryMode('bulk_sheet')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  entryMode === 'bulk_sheet'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${entryMode === 'bulk_sheet'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 <FaFileExcel className="text-emerald-600 text-sm" /> Bulk Upload District Sheet (Excel / CSV)
               </button>
               <button
                 type="button"
                 onClick={() => setEntryMode('single')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  entryMode === 'single'
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${entryMode === 'single'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 <FaEdit className="text-slate-500 text-sm" /> Manual Single District
               </button>
@@ -1606,9 +2040,8 @@ export default function DeliveryCostSettings() {
                   />
                   <label
                     htmlFor="sheetUploadInput"
-                    className={`cursor-pointer flex flex-col items-center justify-center space-y-2 ${
-                      !benchForm.state_id ? 'opacity-50 pointer-events-none' : ''
-                    }`}
+                    className={`cursor-pointer flex flex-col items-center justify-center space-y-2 ${!benchForm.state_id ? 'opacity-50 pointer-events-none' : ''
+                      }`}
                   >
                     <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-lg shadow-sm">
                       <FaUpload />
@@ -1815,148 +2248,60 @@ export default function DeliveryCostSettings() {
           setEditingRuleId(null);
           clearHierarchyFilters();
         }}
-        title={editingRuleId ? 'Edit Kit Delivery Policy' : 'Configure Kit Delivery Policy'}
+        title={editingRuleId ? 'Edit Kit Delivery Cost' : 'Configure Kit Delivery Cost'}
         width="max-w-2xl"
       >
         <form onSubmit={handleSaveKitRule} className="p-6 space-y-4">
-          {editingRuleId && (
-            <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs font-bold text-blue-800">
-              <span className="flex items-center gap-2">
-                <FaEdit className="text-blue-600" />
-                Editing Policy Rule
-              </span>
-              <span className="text-slate-500 font-normal">
-                {kits.find((k) => getCleanId(k) === ruleForm.kit_id)?.name || 'Selected Kit'}
-              </span>
+          {/* Target Solar Kit Summary Card */}
+          {ruleForm.kit_id ? (
+            (() => {
+              const currentKit = kits.find((k) => getCleanId(k) === ruleForm.kit_id);
+              const unitWt = kitWeights[ruleForm.kit_id] || 0;
+              return (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 shadow-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block mb-0.5">
+                        Target Solar Kit
+                      </span>
+                      <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                        {currentKit?.name || 'Selected Solar Kit'}
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(currentKit?.capacity || currentKit?.solar_kit_id?.capacity) && (
+                        <span className="text-xs font-bold px-2.5 py-1 bg-white text-blue-700 rounded-lg border border-blue-200 shadow-2xs">
+                          {currentKit.capacity || currentKit.solar_kit_id?.capacity} kW
+                        </span>
+                      )}
+                      {unitWt > 0 && (
+                        <span className="text-xs font-mono font-medium px-2.5 py-1 bg-white text-slate-700 rounded-lg border border-slate-200 shadow-2xs">
+                          ⚖️ {unitWt.toLocaleString()} KG/kit
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Select Solar Kit *</label>
+              <select
+                value={ruleForm.kit_id}
+                onChange={(e) => setRuleForm({ ...ruleForm, kit_id: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                required
+              >
+                <option value="">-- Choose Solar Kit --</option>
+                {kits.map((k) => (
+                  <option key={getCleanId(k)} value={getCleanId(k)}>
+                    {k.name} ({k.capacity || k.solar_kit_id?.capacity || 0} kW)
+                  </option>
+                ))}
+              </select>
             </div>
           )}
-
-          {/* Cascading Hierarchy Filters Box */}
-          <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <FaFilter className="text-blue-600" /> Filter Kits by Solar Hierarchy
-              </span>
-              {(selectedIndustryType || selectedCategory || selectedSubcategory || selectedType || selectedProjectRange) && (
-                <button
-                  type="button"
-                  onClick={clearHierarchyFilters}
-                  className="text-xs text-red-600 font-bold hover:underline cursor-pointer"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* 1. Industry Type */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Industry Type</label>
-                <select
-                  value={selectedIndustryType}
-                  onChange={(e) => handleIndustryChange(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
-                >
-                  <option value="">All Industry Types</option>
-                  {industryTypes.map((it) => (
-                    <option key={it.id || it._id} value={it.id || it._id}>{it.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 2. Category */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Category</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map((c) => (
-                    <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 3. Subcategory */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Subcategory</label>
-                <select
-                  value={selectedSubcategory}
-                  onChange={(e) => handleSubcategoryChange(e.target.value)}
-                  disabled={!selectedCategory}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">{selectedCategory ? "All Subcategories" : "Select Category first"}</option>
-                  {subcategories.map((s) => (
-                    <option key={s.id || s._id} value={s.id || s._id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 4. System Type */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">System Type</label>
-                <select
-                  value={selectedType}
-                  onChange={(e) => handleTypeChange(e.target.value)}
-                  disabled={!selectedSubcategory}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">{selectedSubcategory ? "All System Types" : "Select Subcategory first"}</option>
-                  {systemTypes.map((st) => (
-                    <option key={st.subcategory_type_id || st.id || st._id} value={st.subcategory_type_id || st.id || st._id}>{st.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 5. Project Range */}
-              <div className="sm:col-span-2 lg:col-span-2">
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Project Range</label>
-                <select
-                  value={selectedProjectRange}
-                  onChange={(e) => handleProjectRangeChange(e.target.value)}
-                  disabled={!selectedType}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">{selectedType ? "All Ranges" : "Select System Type first"}</option>
-                  {projectRanges.map((pr) => (
-                    <option key={pr.id || pr._id} value={pr.id || pr._id}>
-                      {pr.min_value} - {pr.max_value} {pr.unit_symbol || pr.unit_id?.symbol || "kW"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-slate-700">ComboKit *</label>
-              <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                {availableKitsForDropdown.length} kits matching
-              </span>
-            </div>
-            <select
-              value={ruleForm.kit_id}
-              onChange={(e) => setRuleForm({ ...ruleForm, kit_id: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
-              required
-            >
-              <option value="">-- Choose ComboKit ({availableKitsForDropdown.length} available) --</option>
-              {availableKitsForDropdown.map((k) => (
-                <option key={k._id} value={k._id}>
-                  {k.name} ({k.capacity || k.solar_kit_id?.capacity || 0} kW)
-                </option>
-              ))}
-            </select>
-            {availableKitsForDropdown.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1 font-medium">
-                No kits found matching the selected hierarchy filters. Try clearing or broadening some filters.
-              </p>
-            )}
-          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -1964,11 +2309,10 @@ export default function DeliveryCostSettings() {
               <select
                 value={ruleForm.order_type}
                 onChange={(e) => setRuleForm({ ...ruleForm, order_type: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white cursor-pointer"
               >
                 <option value="loose_order">Loose Order</option>
                 <option value="trial_order">Trial Order</option>
-                <option value="bulk_buy">Bulk Buy</option>
                 <option value="po_order">PO Order</option>
               </select>
             </div>
@@ -2008,14 +2352,28 @@ export default function DeliveryCostSettings() {
             <select
               value={ruleForm.vehicle_master_id}
               onChange={(e) => setRuleForm({ ...ruleForm, vehicle_master_id: e.target.value })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
               required
             >
               <option value="">-- Choose Vehicle --</option>
               {vehicleMasters.map((vm) => (
-                <option key={vm._id} value={vm._id}>{vm.name} ({vm.max_load_kg} KG)</option>
+                <option key={vm._id} value={vm._id}>{vm.name} ({vm.max_load_kg} KG max payload)</option>
               ))}
             </select>
+            {(() => {
+              const selectedVeh = vehicleMasters.find((v) => v._id === ruleForm.vehicle_master_id);
+              const unitWt = kitWeights[ruleForm.kit_id] || 0;
+              const estWeight = unitWt > 0 ? unitWt * (Number(ruleForm.number_of_kits) || 1) : 0;
+              if (selectedVeh && selectedVeh.max_load_kg && estWeight > selectedVeh.max_load_kg) {
+                return (
+                  <p className="text-xs text-amber-600 mt-1 font-medium flex items-center gap-1">
+                    <FaExclamationTriangle className="text-amber-500" />
+                    Shipment weight ({estWeight.toLocaleString()} KG) exceeds vehicle payload limit ({selectedVeh.max_load_kg.toLocaleString()} KG).
+                  </p>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           <div className="space-y-1">
@@ -2069,7 +2427,7 @@ export default function DeliveryCostSettings() {
               type="submit"
               className="bg-blue-600 text-white hover:bg-blue-700 font-semibold shadow-md px-5 py-2 text-sm rounded-xl transition-all cursor-pointer"
             >
-              {editingRuleId ? 'Update Policy Rule' : 'Save Policy Rule'}
+              {editingRuleId ? 'Update Cost Rule' : 'Save Cost Rule'}
             </Button>
           </div>
         </form>

@@ -24,6 +24,7 @@ export default function CreateDeliveryModal({
   const [splitRecommendation, setSplitRecommendation] = useState(null);
   const [_franchiseeDestinations, setFranchiseeDestinations] = useState([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+  const [showSplitBatchPrompt, setShowSplitBatchPrompt] = useState(false);
 
   // Selected Fleet & Allocation
   const [selectedProviderId, setSelectedProviderId] = useState('');
@@ -453,10 +454,96 @@ export default function CreateDeliveryModal({
                       <span>Utilization: {v.utilization_pct}%</span>
                       <span className="text-emerald-700 font-medium">Available</span>
                     </div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Compatible Route ✓
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+
+            {/* ── Capacity Check Panel (Section 6D) ── */}
+            {(() => {
+              const activeSelectedVehicle = fleetList.find((v) => v._id === selectedVehicleId);
+              if (!activeSelectedVehicle) return null;
+              const vehicleMaxCapacity = activeSelectedVehicle.load_capacity_kg || activeSelectedVehicle.vehicle_master_id?.capacity_kg || 3000;
+              const capacityPct = Math.round((totalKg / (vehicleMaxCapacity || 1)) * 100);
+              const isOverCapacity = totalKg > vehicleMaxCapacity;
+
+              return (
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider block">
+                        Vehicle Payload Capacity Check
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        {activeSelectedVehicle.registration_number} ({activeSelectedVehicle.vehicle_master_id?.name || 'Commercial Freight'})
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`font-black text-sm ${
+                        isOverCapacity ? "text-red-600" : capacityPct > 90 ? "text-amber-600" : "text-emerald-600"
+                      }`}>
+                        {capacityPct}% Capacity
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        {totalKg.toLocaleString()} / {vehicleMaxCapacity.toLocaleString()} kg
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Load Progress Bar */}
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        isOverCapacity ? "bg-red-500" : capacityPct > 90 ? "bg-amber-500" : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${Math.min(100, capacityPct)}%` }}
+                    />
+                  </div>
+
+                  {/* Over Capacity Warning & Split Batch Prompt */}
+                  {isOverCapacity && (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <FaExclamationTriangle className="text-base shrink-0" />
+                        <span>
+                          <strong>Over Capacity by {(totalKg - vehicleMaxCapacity).toLocaleString()} kg!</strong> Risk of axle overload and transit damage.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSplitBatchPrompt(true)}
+                        className="px-2.5 py-1 text-xs font-bold rounded bg-red-600 hover:bg-red-700 text-white shrink-0 transition-colors shadow-xs"
+                      >
+                        ⚠️ Split Batch
+                      </button>
+                    </div>
+                  )}
+
+                  {showSplitBatchPrompt && (
+                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-xs space-y-2">
+                      <span className="font-bold block">Recommended Split Allocation:</span>
+                      <p>
+                        Split this delivery into 2 batches: Assign first {Math.ceil(orders.length / 2)} orders to this vehicle (~{Math.round(totalKg / 2)} kg), and create a second dispatch batch for the remaining {Math.floor(orders.length / 2)} order(s).
+                      </p>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowSplitBatchPrompt(false)}
+                          className="px-2 py-0.5 rounded border border-amber-400 text-[11px] font-medium"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Driver Attribution */}

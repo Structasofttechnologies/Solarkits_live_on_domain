@@ -222,6 +222,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
         dispatch(setAlert({ type: "success", message: "Margins saved successfully" }));
         setDialogState((prev) => ({ ...prev, isOpen: false }));
         await fetchMargins(isIndia);
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (error) {
       console.error("Error saving warehouse kit margin details:", error);

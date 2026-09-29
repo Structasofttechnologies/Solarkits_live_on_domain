@@ -3180,6 +3180,20 @@ const create_epc_offline_checkout = async (req, res) => {
     // Clear cart on successful order placement
     await Cart.findOneAndUpdate({ account_id: epc_id }, { $set: { cart: [] } });
 
+    try {
+      const { sendAdminNotification } = require("../../../admin-panel/services/admin.notification.service");
+      sendAdminNotification({
+        title: `New EPC Order Placed (${result.order_code || 'Order'})`,
+        message: `EPC order placed with offline payment receipt. Submitted for verification.`,
+        category: 'orders',
+        priority: 'high',
+        action_url: '/admin-panel/solar-shop/po-orders',
+        metadata: { order_id: result._id, epc_id }
+      }).catch(err => console.warn('[Order Notification Warning]:', err.message));
+    } catch (notifErr) {
+      console.warn('[Admin Notification Error]:', notifErr.message);
+    }
+
     return res.status(201).json({
       success: true,
       status: "success",

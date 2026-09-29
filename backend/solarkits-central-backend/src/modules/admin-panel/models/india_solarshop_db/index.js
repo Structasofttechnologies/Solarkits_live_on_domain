@@ -120,8 +120,10 @@ const DeliveryCostBenchmark    = require('./delivery_cost_benchmark.schema');
 const KitDeliveryCostRule      = require('./kit_delivery_cost_rule.schema');
 const DeliveryRouteSetting     = require('./delivery_route_setting.schema');
 const DeliveryOrder            = require('./delivery_order.schema');
+const AdminNotification        = require('./admin_notifications.schema');
 
 module.exports = {
+  AdminNotification,
   EpcAccount,
   EpcSignupRequest,
   EpcResellerRelationship,

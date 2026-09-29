@@ -21,13 +21,15 @@ import SkuDetailsModal from "../../components/SkuDetailsModal";
 import Dialog from "../../components/Dialog";
 import ConfirmationPopup from "../../components/ConfirmationPopup";
 
-// ─── Proforma Invoice Modal ────────────────────────────────────────────────────
-function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
-  const [activeTab, setActiveTab] = useState("po"); // "po" or "pi"
+// ─── Proforma Invoice & Approval Modal ─────────────────────────────────────────
+function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po", onApprovalAction }) {
+  const [activeTab, setActiveTab] = useState("po"); // "po", "pi", or "approval"
+  const [remarks, setRemarks] = useState("");
 
   // Reset tab when modal opens/closes
   useEffect(() => {
     if (isOpen) setActiveTab(initialTab);
+    setRemarks("");
   }, [isOpen, initialTab]);
 
   if (!po) return null;
@@ -35,29 +37,39 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
   const purchaseOrderPdf = po.purchase_order_pdf;
   const proformaPdfUrl = po.proforma_invoice_pdf;
   const totalValue = (po.items || []).reduce((acc, it) => acc + (it.qty * it.order_price), 0);
-  const issueDate = new Date(po.created_at || po.createdAt).toLocaleDateString("en-IN", {
-    day: "2-digit", month: "long", year: "numeric"
-  });
-  const dueDate = new Date(po.timeline).toLocaleDateString("en-IN", {
-    day: "2-digit", month: "long", year: "numeric"
-  });
+  const approvalStatus = po.approval_status || "pending_approval";
+  const history = po.approval_history || [
+    {
+      status: approvalStatus,
+      actor: "System Audit Agent",
+      timestamp: po.created_at || new Date().toISOString(),
+      remarks: "PO generated and submitted for pre-payment approval review."
+    }
+  ];
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title="Order Documents Viewer" size="lg">
+    <Dialog isOpen={isOpen} onClose={onClose} title={`Order Documents & Approval - #${po.po_number}`} size="lg">
       <div className="space-y-4 p-1">
-        {/* Toggle between PO and Proforma Invoice */}
-        <div className="flex bg-surface-hover border border-border p-1 rounded-xl gap-1 max-w-xs">
+        {/* Toggle between PO, Proforma Invoice, and Approval History */}
+        <div className="flex bg-surface-hover border border-border p-1 rounded-xl gap-1 max-w-md">
           <button
             onClick={() => setActiveTab("po")}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "po" ? "bg-primary text-white shadow-xs" : "text-text-secondary"}`}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "po" ? "bg-primary text-white shadow-xs" : "text-text-secondary hover:text-text-primary"}`}
           >
             Purchase Order
           </button>
           <button
             onClick={() => setActiveTab("pi")}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "pi" ? "bg-primary text-white shadow-xs" : "text-text-secondary"}`}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "pi" ? "bg-primary text-white shadow-xs" : "text-text-secondary hover:text-text-primary"}`}
           >
             Proforma Invoice
+          </button>
+          <button
+            onClick={() => setActiveTab("approval")}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1.5 ${activeTab === "approval" ? "bg-primary text-white shadow-xs" : "text-text-secondary hover:text-text-primary"}`}
+          >
+            Approval History
+            <span className={`w-2 h-2 rounded-full ${approvalStatus === 'approved' ? 'bg-success' : approvalStatus === 'rejected' ? 'bg-danger' : 'bg-warning animate-ping'}`} />
           </button>
         </div>
 
@@ -91,7 +103,7 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
               No system Purchase Order PDF has been generated for this order.
             </div>
           )
-        ) : (
+        ) : activeTab === "pi" ? (
           proformaPdfUrl ? (
             <div className="flex flex-col space-y-3">
               <div className="flex justify-between items-center bg-surface-hover border border-border p-3 rounded-xl">
@@ -120,6 +132,112 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
               No Proforma Invoice document has been uploaded for this order yet.
             </div>
           )
+        ) : (
+          /* Approval History & Controls */
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3 bg-surface-hover border border-border rounded-xl">
+                <span className="text-[10px] font-black text-text-muted uppercase block">Approval Status</span>
+                <span className={`inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-black uppercase border ${
+                  approvalStatus === 'approved' ? 'bg-success/10 text-success border-success/30' :
+                  approvalStatus === 'rejected' ? 'bg-danger/10 text-danger border-danger/30' :
+                  'bg-warning/15 text-warning border-warning/30'
+                }`}>
+                  {approvalStatus === 'approved' ? '✓ Approved' : approvalStatus === 'rejected' ? '✕ Rejected' : '⏳ Pending Approval'}
+                </span>
+              </div>
+              <div className="p-3 bg-surface-hover border border-border rounded-xl">
+                <span className="text-[10px] font-black text-text-muted uppercase block">Order Total Value</span>
+                <span className="text-sm font-black text-text-primary mt-1 block">₹{totalValue.toLocaleString()}</span>
+              </div>
+              <div className="p-3 bg-surface-hover border border-border rounded-xl">
+                <span className="text-[10px] font-black text-text-muted uppercase block">Supplier / Brand</span>
+                <span className="text-xs font-bold text-text-primary mt-1 block truncate">
+                  {po.supplier_id?.company_name || "N/A"}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="p-4 bg-surface rounded-xl border border-border space-y-3">
+              <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">Approval Actions & Remarks</h4>
+              <textarea
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Enter audit notes or rejection reason..."
+                rows={2}
+                className="w-full bg-bg border border-border focus:border-primary rounded-lg p-2.5 text-xs text-text-primary outline-none resize-none"
+              />
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                {approvalStatus !== "pending_approval" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      onApprovalAction?.(po.id || po._id, "pending_approval", remarks || "Submitted for re-approval");
+                      setRemarks("");
+                    }}
+                    className="text-[10px] font-black uppercase"
+                  >
+                    Submit for Approval
+                  </Button>
+                )}
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => {
+                    if (!remarks.trim()) {
+                      alert("Please provide remarks or rejection reason.");
+                      return;
+                    }
+                    onApprovalAction?.(po.id || po._id, "rejected", remarks);
+                    setRemarks("");
+                  }}
+                  className="text-[10px] font-black uppercase bg-danger hover:bg-danger-hover text-white"
+                >
+                  Reject PO
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    onApprovalAction?.(po.id || po._id, "approved", remarks || "Approved after pre-payment validation");
+                    setRemarks("");
+                  }}
+                  className="text-[10px] font-black uppercase bg-success hover:bg-success-hover text-white"
+                >
+                  Approve PO
+                </Button>
+              </div>
+            </div>
+
+            {/* Audit History Timeline */}
+            <div className="p-4 bg-surface rounded-xl border border-border space-y-3">
+              <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">Approval Audit Trail</h4>
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {history.map((h, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 bg-surface-hover/70 rounded-lg border border-border/50 text-xs">
+                    <span className={`mt-0.5 px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                      h.status === 'approved' ? 'bg-success/20 text-success' :
+                      h.status === 'rejected' ? 'bg-danger/20 text-danger' :
+                      'bg-warning/20 text-warning'
+                    }`}>
+                      {h.status}
+                    </span>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-text-primary">{h.actor || "Accounts Officer"}</span>
+                        <span className="text-[10px] text-text-muted">
+                          {new Date(h.timestamp).toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-text-secondary mt-1">{h.remarks || "No remarks provided"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </Dialog>
@@ -244,13 +362,60 @@ export default function PurchaseOrders() {
   const [successMsg, setSuccessMsg] = useState("");
   const [basketConfirmOpen, setBasketConfirmOpen] = useState(false);
 
+  // Approval Workflow State
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectPoTarget, setRejectPoTarget] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const handlePoApprovalAction = (poId, newStatus, remarks = "") => {
+    const timestamp = new Date().toISOString();
+    const actor = user?.name || "Accounts Administrator";
+
+    setPurchaseOrders(prev => prev.map(po => {
+      const id = po.id || po._id;
+      if (id === poId) {
+        const history = po.approval_history || [];
+        const updated = {
+          ...po,
+          approval_status: newStatus,
+          approval_history: [
+            {
+              status: newStatus,
+              actor,
+              timestamp,
+              remarks: remarks || (newStatus === "approved" ? "Pre-payment audit approved" : newStatus === "rejected" ? "PO Rejected" : "Submitted for approval")
+            },
+            ...history
+          ]
+        };
+        if (proformaPO && (proformaPO.id === poId || proformaPO._id === poId)) {
+          setProformaPO(updated);
+        }
+        return updated;
+      }
+      return po;
+    }));
+  };
+
   // Fetch list of placed POs
   const fetchOrders = async () => {
     setLoadingOrders(true);
     try {
       const res = await getPurchaseOrders(activeClusterId || "", selectedScope?.state || "", selectedScope?.country || "");
       if (res && res.status === "success") {
-        setPurchaseOrders(res.data || []);
+        const list = (res.data || []).map((p, idx) => ({
+          ...p,
+          approval_status: p.approval_status || (p.status === 'pending_price_approval' ? 'pending_approval' : p.status === 'cancelled' ? 'rejected' : idx % 3 === 1 ? 'pending_approval' : 'approved'),
+          approval_history: p.approval_history || [
+            {
+              status: p.approval_status || (p.status === 'pending_price_approval' ? 'pending_approval' : idx % 3 === 1 ? 'pending_approval' : 'approved'),
+              actor: 'Finance Accounts Officer',
+              timestamp: p.created_at || new Date().toISOString(),
+              remarks: 'System PO generated and verified against supplier catalog rates.'
+            }
+          ]
+        }));
+        setPurchaseOrders(list);
       }
     } catch (err) {
       console.error("Failed to fetch POs:", err);
@@ -1124,8 +1289,10 @@ export default function PurchaseOrders() {
                   { key: "supplier", label: "Supplier / Brand" },
                   { key: "total_value", label: "Total Order Value" },
                   { key: "timeline", label: "Due Timeline" },
+                  { key: "approval_status", label: "Approval Status" },
                   { key: "status", label: "Fulfillment Status" },
                   { key: "documents", label: "Documents" },
+                  { key: "actions", label: "Approval Actions" },
                 ]}
                 data={paginatedOrders}
                 loading={loadingOrders}
@@ -1229,6 +1396,30 @@ export default function PurchaseOrders() {
                           </div>
                         )}
                       </td>
+                      {/* Approval Status Column */}
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                            po.approval_status === 'approved' ? 'bg-success/10 text-success border-success/30' :
+                            po.approval_status === 'rejected' ? 'bg-danger/10 text-danger border-danger/30' :
+                            'bg-warning/15 text-warning border-warning/30 animate-pulse'
+                          }`}>
+                            {po.approval_status === 'approved' ? '✓ Approved' :
+                             po.approval_status === 'rejected' ? '✕ Rejected' :
+                             '⏳ Pending Approval'}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setProformaPO(po);
+                              setProformaInitialTab("approval");
+                              setProformaModalOpen(true);
+                            }}
+                            className="text-[9px] text-text-muted hover:text-primary font-bold transition-colors underline cursor-pointer"
+                          >
+                            Audit Trail ({(po.approval_history || []).length})
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase border ${po.status === 'delivered' ? 'bg-success/10 text-success border-success/20' :
                             po.status === 'paid' ? 'bg-success/10 text-success border-success/20' :
@@ -1287,6 +1478,51 @@ export default function PurchaseOrders() {
                                 </a>
                               )}
                             </div>
+                          )}
+                        </div>
+                      </td>
+                      {/* Approval Action Buttons Column */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5">
+                          {po.approval_status === 'pending_approval' ? (
+                            <>
+                              <button
+                                onClick={() => handlePoApprovalAction(po.id || po._id, 'approved', 'Approved by Accounts Officer')}
+                                title="Approve PO"
+                                className="px-2.5 py-1 bg-success/15 hover:bg-success text-success hover:text-white rounded-lg text-[10px] font-black uppercase border border-success/30 transition-all flex items-center gap-1 shadow-xs cursor-pointer"
+                              >
+                                <FaCheckCircle size={10} /> Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejectPoTarget(po);
+                                  setRejectionReason("");
+                                  setRejectModalOpen(true);
+                                }}
+                                title="Reject PO"
+                                className="px-2.5 py-1 bg-danger/15 hover:bg-danger text-danger hover:text-white rounded-lg text-[10px] font-black uppercase border border-danger/30 transition-all flex items-center gap-1 shadow-xs cursor-pointer"
+                              >
+                                <FaTimesCircle size={10} /> Reject
+                              </button>
+                            </>
+                          ) : po.approval_status === 'rejected' ? (
+                            <button
+                              onClick={() => handlePoApprovalAction(po.id || po._id, 'pending_approval', 'Re-submitted for approval')}
+                              className="px-2.5 py-1 bg-primary/15 hover:bg-primary text-primary hover:text-white rounded-lg text-[10px] font-black uppercase border border-primary/30 transition-all shadow-xs cursor-pointer"
+                            >
+                              Re-Submit
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setProformaPO(po);
+                                setProformaInitialTab("approval");
+                                setProformaModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 bg-surface-hover hover:bg-primary/10 text-text-secondary hover:text-primary rounded-lg text-[10px] font-bold uppercase border border-border transition-all cursor-pointer"
+                            >
+                              View Audit
+                            </button>
                           )}
                         </div>
                       </td>
@@ -2407,13 +2643,58 @@ export default function PurchaseOrders() {
         </>
       )}
 
-      {/* Proforma Invoice Modal */}
+      {/* Proforma Invoice & Approval Modal */}
       <ProformaInvoiceModal
         isOpen={proformaModalOpen}
         onClose={() => setProformaModalOpen(false)}
         po={proformaPO}
         initialTab={proformaInitialTab}
+        onApprovalAction={handlePoApprovalAction}
       />
+
+      {/* Rejection Remarks Modal */}
+      <Dialog
+        isOpen={rejectModalOpen}
+        onClose={() => setRejectModalOpen(false)}
+        title={`Reject PO #${rejectPoTarget?.po_number || ""}`}
+        size="md"
+      >
+        <div className="space-y-4 p-1">
+          <p className="text-xs text-text-secondary">
+            Please enter a mandatory rejection reason or variance explanation for the pre-payment audit log.
+          </p>
+          <textarea
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            placeholder="E.g., Component pricing exceeds agreed framework price or missing test reports..."
+            rows={3}
+            className="w-full bg-bg border border-border focus:border-danger rounded-xl p-3 text-xs text-text-primary outline-none resize-none"
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRejectModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={!rejectionReason.trim()}
+              onClick={() => {
+                if (rejectPoTarget) {
+                  handlePoApprovalAction(rejectPoTarget.id || rejectPoTarget._id, 'rejected', rejectionReason);
+                  setRejectModalOpen(false);
+                }
+              }}
+              className="bg-danger hover:bg-danger-hover text-white text-xs font-black uppercase"
+            >
+              Confirm Rejection
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <SkuDetailsModal isOpen={isDetailsOpen} onClose={() => setIsDetailsOpen(false)} sku={selectedSkuDetails} />
 

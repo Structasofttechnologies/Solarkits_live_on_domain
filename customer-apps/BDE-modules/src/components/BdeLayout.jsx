@@ -41,7 +41,7 @@ export default function BdeLayout() {
     { name: 'Leaderboard Ranking', path: '/ranking', icon: Award },
     { name: 'Store Setup', path: '/store-setup', icon: ShoppingBag },
     { name: 'Notifications', path: '/notifications', icon: Bell },
-    { name: 'My Profile & KYC', path: '/profile', icon: User },
+    // { name: 'My Profile & KYC', path: '/profile', icon: User },
   ];
 
   const handleLogout = async () => {

@@ -1,7 +1,7 @@
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import Header from "../components/Header"
 import Drawer from "../components/Drawer";
-import { FaHome, FaFileInvoice, FaCreditCard, FaCheckCircle, FaHandshake } from "react-icons/fa"
+import { FaHome, FaFileInvoice, FaCreditCard, FaCheckCircle, FaHandshake, FaBoxes } from "react-icons/fa"
 import { lazy, Suspense, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { PermissionGuard } from "../components/PermissionGuard";
@@ -18,6 +18,8 @@ const InventoryInwardInvoices = lazy(() => import("../pages/accounts-management/
 
 const SupplierRegistry = lazy(() => import("../pages/accounts-management/SupplierRegistry"));
 const PurchaseOrders = lazy(() => import("../pages/accounts-management/PurchaseOrders"));
+const OemPurchaseOrders = lazy(() => import("../pages/accounts-management/OemPurchaseOrders"));
+const BoskitInventory = lazy(() => import("../pages/accounts-management/BoskitInventory"));
 const Payments = lazy(() => import("../pages/accounts-management/Payments"));
 
 const menus = [
@@ -40,6 +42,18 @@ const menus = [
       path: "/account-panel/purchase-orders",
       unique_id: "ACC_PO"
     },
+    // {
+    //   name: "OEM Partner Orders",
+    //   icon: <FaHandshake />,
+    //   path: "/account-panel/oem-purchase-orders",
+    //   unique_id: "ACC_OEM_PO"
+    // },
+    // {
+    //   name: "BOSKIT Inventory",
+    //   icon: <FaBoxes />,
+    //   path: "/account-panel/boskit-inventory",
+    //   unique_id: "ACC_BOSKIT_INV"
+    // },
     {
       name: "Supplier Payments",
       icon: <FaCreditCard />,
@@ -69,6 +83,8 @@ const menus = [
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
+  if (menu.unique_id === "ACC_OEM_PO" && allowedUniqueIds.includes("ACC_PO")) return true;
+  if (menu.unique_id === "ACC_BOSKIT_INV" && (allowedUniqueIds.includes("ACC_PO") || allowedUniqueIds.includes("ACC_INWARD_INV") || allowedUniqueIds.includes("ACC_HOME"))) return true;
   return allowedUniqueIds.includes(menu.unique_id);
 };
 
@@ -226,6 +242,26 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="ACC_PO">
                         <Suspense fallback={<Loader text="Loading Purchase Orders..." />}>
                           <PurchaseOrders />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/oem-purchase-orders/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="ACC_PO">
+                        <Suspense fallback={<Loader text="Loading OEM Purchase Orders..." />}>
+                          <OemPurchaseOrders />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/boskit-inventory/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="ACC_PO">
+                        <Suspense fallback={<Loader text="Loading BOSKIT Inventory..." />}>
+                          <BoskitInventory />
                         </Suspense>
                       </PermissionGuard>
                     }

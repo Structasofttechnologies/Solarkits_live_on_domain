@@ -1655,6 +1655,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         }
         setShowDrawer(false);
         fetchConfiguredKits(selectedCountry);
+        window.dispatchEvent(new Event('pipeline-status-refresh'));
       }
     } catch (err) {
       console.error(err);
