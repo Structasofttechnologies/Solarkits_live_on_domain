@@ -28,7 +28,7 @@ const NAV_SECTIONS = [
 const EXTERNAL_LINKS = [
   {
     label: "Solar Shop",
-    href: "https://solar-store-9r0g.onrender.com",
+    href: "https://store.solarkits.in/",
     badge: "Store",
     badgeColor: "#16a34a",
     badgeBg: "#dcfce7",
@@ -36,7 +36,7 @@ const EXTERNAL_LINKS = [
   },
   {
     label: "Become Franchisee",
-    href: "https://solarkits-reseller-portal.onrender.com",
+    href: "https://franchise.solarkits.in/",
     badge: "Partner",
     badgeColor: "#2563eb",
     badgeBg: "#dbeafe",
