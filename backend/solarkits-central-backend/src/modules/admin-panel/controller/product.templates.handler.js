@@ -996,9 +996,10 @@ const listBrandsByTemplate = async (req, res) => {
 
 const listBrandsBySubtype = async (req, res) => {
     try {
-        const { subtype_id } = req.query;
-        let brandIds = [];
-        if (subtype_id) {
+        const { subtype_id, only_mapped } = req.query;
+        let brands = [];
+
+        if (only_mapped === 'true' && subtype_id) {
             let querySubtype = subtype_id;
             if (typeof subtype_id === 'string' && subtype_id.includes(',')) {
                 querySubtype = { $in: subtype_id.split(',').map(id => id.trim()).filter(Boolean) };
@@ -1006,17 +1007,13 @@ const listBrandsBySubtype = async (req, res) => {
                 querySubtype = { $in: subtype_id };
             }
             const mapping = await BrandSubtypeMap.find({ subtype_id: querySubtype, deleted_at: null });
-            brandIds = mapping.map(m => m.brand_id);
-        }
-
-        let brands = [];
-        if (brandIds.length > 0) {
-            brands = await Brand.find({ _id: { $in: brandIds }, deleted_at: null }).lean();
-        }
-
-        // Fallback: If no subtype-specific brand mappings found, return ALL active brands in database
-        if (!brands || brands.length === 0) {
-            brands = await Brand.find({ deleted_at: null }).lean();
+            const brandIds = mapping.map(m => m.brand_id);
+            if (brandIds.length > 0) {
+                brands = await Brand.find({ _id: { $in: brandIds }, deleted_at: null }).sort({ brand_name: 1 }).lean();
+            }
+        } else {
+            // Return all active brands created from admin panel
+            brands = await Brand.find({ deleted_at: null }).sort({ brand_name: 1 }).lean();
         }
 
         const data = brands.map(b => ({ id: b._id, name: b.brand_name || b.name, logo: b.logo }));

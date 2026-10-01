@@ -57,12 +57,19 @@ export default function ProductTemplates({ moduleUniqueId }) {
   // ==================== COMPUTED STATE ====================
   const scopeOptions = useMemo(() => {
     const options = [];
-    projectHierarchy.forEach((cat) => {
-      (cat.subcategories || []).forEach((sub) => {
-        (sub.mappedTypes || []).forEach((mType) => {
-          options.push({
-            value: mType.subcategory_type_id,
-            text: `${cat.name} › ${sub.name} › ${mType.name}`,
+    (projectHierarchy || []).forEach((item) => {
+      // Support both 4-level hierarchy (industry -> categories) and 3-level fallback
+      const categories = item.categories || (item.subcategories ? [item] : []);
+      categories.forEach((cat) => {
+        (cat.subcategories || []).forEach((sub) => {
+          (sub.mappedTypes || []).forEach((mType) => {
+            const prefix = item.name && item.name !== "All Industry Types" && item.name !== cat.name 
+              ? `${item.name} › ` 
+              : "";
+            options.push({
+              value: mType.subcategory_type_id,
+              text: `${prefix}${cat.name} › ${sub.name} › ${mType.name}`,
+            });
           });
         });
       });

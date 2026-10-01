@@ -28,7 +28,12 @@ router.get(
 router.get(
     "/get-brands-with-logo-name-only",
     check_auth,
-    check_permissions([{ unique_code: "ADM_PROD_TMPL", permissions: ["view"] }, { unique_code: "ADM_SOLAR_KITS", permissions: ["view"] }, { unique_code: "ADM_CUSTOMIZE_KITS", permissions: ["view"] }]),
+    check_permissions([
+        { unique_code: "ADM_PROD_TMPL", permissions: ["view"] },
+        { unique_code: "ADM_SKU", permissions: ["view"] },
+        { unique_code: "ADM_SOLAR_KITS", permissions: ["view"] },
+        { unique_code: "ADM_CUSTOMIZE_KITS", permissions: ["view"] }
+    ]),
     handler.get_brands_with_logo_name_only
 );
 

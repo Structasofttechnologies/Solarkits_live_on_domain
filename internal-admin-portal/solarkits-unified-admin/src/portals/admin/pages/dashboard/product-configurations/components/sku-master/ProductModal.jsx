@@ -98,11 +98,23 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
   }, [nonVariantAttributes]);
 
   // Fetch functions
-  const fetchBrandsBySubtype = async (subtypeId) => {
+  const fetchBrands = async () => {
     try {
-      const res = await axios.get(`${API_URL}/product-templates/get-brands-by-subtype${getBaseQuery("view")}&subtype_id=${subtypeId}`, { headers: authHeaderObj() });
-      if (res.data?.status === "success") setFilteredBrands(res.data.data);
+      const res = await axios.get(`${API_URL}/brand-manufacturer/get-brands-with-logo-name-only${getBaseQuery("view")}`, { headers: authHeaderObj() });
+      if (res.data?.status === "success" && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        setFilteredBrands(res.data.data);
+        return res.data.data;
+      }
     } catch (error) { }
+
+    try {
+      const res = await axios.get(`${API_URL}/product-templates/get-brands-by-subtype${getBaseQuery("view")}`, { headers: authHeaderObj() });
+      if (res.data?.status === "success" && Array.isArray(res.data.data)) {
+        setFilteredBrands(res.data.data);
+        return res.data.data;
+      }
+    } catch (error) { }
+    return [];
   };
 
   const fetchScopesBySubtype = async (subtypeId) => {
@@ -257,7 +269,7 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
 
       if (!hasLoadedRef.current) {
         Promise.all([
-          subId ? fetchBrandsBySubtype(subId) : Promise.resolve(),
+          fetchBrands(),
           subId ? fetchScopesBySubtype(subId) : Promise.resolve(),
           (tmplId && subId) ? fetchTemplateAttributes(tmplId, subId) : Promise.resolve([])
         ]).then(([, , nonVariantAttrs = []]) => {
@@ -496,7 +508,7 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
                   <DropdownWithSearchInput
                     label="Manufacturing Brand"
                     options={filteredBrands.map(b => ({ 
-                      value: b.id, 
+                      value: b.id || b._id, 
                       text: (
                         <div className="flex items-center gap-3">
                           {b.logo && (
@@ -506,7 +518,7 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
                               className="w-5 h-5 rounded object-contain bg-surface shadow-xs border border-border shrink-0" 
                             />
                           )}
-                          <span className="font-bold">{b.name}</span>
+                          <span className="font-bold">{b.name || b.brand_name}</span>
                         </div>
                       )
                     }))}

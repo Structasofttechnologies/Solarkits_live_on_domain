@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const {
   Product, ProductSubtype, ProductTemplate, Brand,
   SubtypeAttribute, ProductAttributeValue,
-  ProductSku, AttributeOption, Unit, BrandSubtypeMap, ProjectSubcategoryType
+  ProductSku, AttributeOption, Unit, BrandSubtypeMap, BrandTemplateMap, ProjectSubcategoryType
 } = require("../models/core_db");
 const { solarkits_core_db } = require("../config/databases");
 const { delete_uploaded_files } = require("../utils/upload.files");
@@ -215,8 +215,16 @@ const create_product = async (req, res) => {
     const brand = await Brand.findOne({ _id: brand_id, deleted_at: null });
     if (!brand) throw new Error("Invalid brand");
 
-    const mapping = await BrandSubtypeMap.findOne({ brand_id: brand_id, subtype_id: subtype_id });
-    if (!mapping) throw new Error("Brand not allowed for this subtype");
+    let mapping = await BrandSubtypeMap.findOne({ brand_id: brand_id, subtype_id: subtype_id });
+    if (!mapping) {
+      mapping = await BrandSubtypeMap.create({ brand_id: brand._id, subtype_id: subtype._id });
+      if (subtype.template_id) {
+        const exists = await BrandTemplateMap.findOne({ brand_id: brand._id, template_id: subtype.template_id, deleted_at: null });
+        if (!exists) {
+          await BrandTemplateMap.create({ brand_id: brand._id, template_id: subtype.template_id });
+        }
+      }
+    }
 
     const attrErrors = await validateAttributes(subtype_id, parsedAttrs, false);
     if (attrErrors.length) throw new Error(attrErrors[0]);

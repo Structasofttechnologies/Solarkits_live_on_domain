@@ -94,9 +94,15 @@ export default function SKUMaster({ moduleUniqueId }) {
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await productTemplateApi.getTemplates(moduleUniqueId);
-      if (res.status === "success") {
-        setTemplates(res.data || []);
+      const [tmplRes, brandRes] = await Promise.all([
+        productTemplateApi.getTemplates(moduleUniqueId),
+        productTemplateApi.getBrandsBySubtype(undefined, moduleUniqueId)
+      ]);
+      if (tmplRes.status === "success") {
+        setTemplates(tmplRes.data || []);
+      }
+      if (brandRes?.status === "success") {
+        setBrands(brandRes.data || []);
       }
       // Fetch all products initially so the page is never blank
       fetchProducts(null, null);
@@ -104,11 +110,23 @@ export default function SKUMaster({ moduleUniqueId }) {
     finally { setLoading(false); }
   }, [moduleUniqueId, fetchProducts]);
 
+  const fetchSkusForProduct = useCallback(async (productId) => {
+    const cleanId = productId?._id || productId?.id || productId;
+    if (!cleanId) return;
+    setLoadingSkus(true);
+    try {
+      const res = await skuMasterApi.getSkusByProduct(cleanId, moduleUniqueId);
+      if (res.status === "success") setProductSkus(res.data || []);
+    } catch (error) { console.error(error); }
+    finally { setLoadingSkus(false); }
+  }, [moduleUniqueId]);
+
   // ==================== HANDLERS ====================
   const handleTemplateChange = (id) => {
     setSelectedTemplate(id);
     setSelectedSubtype(null);
     setSelectedBrand(null);
+    fetchBrands(null);
     if (id) {
       fetchSubtypes(id);
       fetchProducts(id, null);
@@ -130,12 +148,14 @@ export default function SKUMaster({ moduleUniqueId }) {
   };
 
   const handleProductSelect = (product) => {
-    if (selectedProduct?.id === product.id) {
+    const currentId = selectedProduct?.id || selectedProduct?._id;
+    const targetId = product?.id || product?._id;
+    if (currentId === targetId) {
       setSelectedProduct(null);
       setProductSkus([]);
     } else {
       setSelectedProduct(product);
-      fetchSkusForProduct(product.id);
+      fetchSkusForProduct(targetId);
     }
   };
 
@@ -146,7 +166,7 @@ export default function SKUMaster({ moduleUniqueId }) {
       if (res.status === "success") {
         dispatch(setAlert({ type: "success", message: successMsg }));
         fetchProducts(selectedTemplate, selectedSubtype);
-        if (selectedProduct) fetchSkusForProduct(selectedProduct.id);
+        if (selectedProduct) fetchSkusForProduct(selectedProduct.id || selectedProduct._id);
         return true;
       } else {
         dispatch(setAlert({ type: "error", message: res.message || "Operation failed" }));
@@ -243,7 +263,7 @@ export default function SKUMaster({ moduleUniqueId }) {
               options={[
                 { value: "", text: "All Brands View" }, 
                 ...brands.map(b => ({ 
-                  value: b.id, 
+                  value: b.id || b._id, 
                   text: (
                     <div className="flex items-center gap-3">
                       {b.logo && (
@@ -253,7 +273,7 @@ export default function SKUMaster({ moduleUniqueId }) {
                           className="w-4 h-4 rounded object-contain bg-surface border border-border shrink-0" 
                         />
                       )}
-                      <span className="font-bold">{b.name}</span>
+                      <span className="font-bold">{b.name || b.brand_name}</span>
                     </div>
                   )
                 }))
@@ -336,7 +356,7 @@ export default function SKUMaster({ moduleUniqueId }) {
 
       {/* MODALS */}
       <ProductModal moduleUniqueId={moduleUniqueId} isOpen={showProductModal} onClose={() => setShowProductModal(false)} editingProduct={editingProduct} selectedTemplate={selectedTemplate} selectedSubtype={selectedSubtype} onSuccess={() => fetchProducts(selectedTemplate, selectedSubtype)} />
-      <SkuModal moduleUniqueId={moduleUniqueId} isOpen={showSkuModal} onClose={() => setShowSkuModal(false)} editingSku={editingSku} selectedProduct={selectedProduct} selectedTemplate={selectedTemplate} selectedSubtype={selectedSubtype} onSuccess={() => { fetchSkusForProduct(selectedProduct?.id); fetchProducts(selectedTemplate, selectedSubtype); }} />
+      <SkuModal moduleUniqueId={moduleUniqueId} isOpen={showSkuModal} onClose={() => setShowSkuModal(false)} editingSku={editingSku} selectedProduct={selectedProduct} selectedTemplate={selectedTemplate} selectedSubtype={selectedSubtype} onSuccess={() => { fetchSkusForProduct(selectedProduct?.id || selectedProduct?._id); fetchProducts(selectedTemplate, selectedSubtype); }} />
       <ViewProductModal isOpen={showProductViewModal} onClose={() => setShowProductViewModal(false)} product={viewingProduct} />
       <ViewSkuModal isOpen={showSkuViewModal} onClose={() => setShowSkuViewModal(false)} sku={viewingSku} />
     </div>
