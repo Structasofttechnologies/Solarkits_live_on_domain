@@ -1740,6 +1740,12 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     }
   }, [formData.base_components, skuDetailsCache, baseComponentSkus]);
 
+  // Currently selected project range object
+  const selectedProjectRangeObj = useMemo(() => {
+    if (!formData.project_range_id || projectRanges.length === 0) return null;
+    return projectRanges.find(pr => String(pr._id || pr.id) === String(formData.project_range_id)) || null;
+  }, [formData.project_range_id, projectRanges]);
+
   // Handle auto-selected matched project range based on capacity
   const matchedProjectRangeObj = useMemo(() => {
     if (!formData.capacity || projectRanges.length === 0) return null;
@@ -1750,23 +1756,43 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     });
   }, [formData.capacity, projectRanges]);
 
+  // When matched project range changes due to capacity calculation, auto-sync project_range_id
   useEffect(() => {
     if (matchedProjectRangeObj) {
       const rangeId = matchedProjectRangeObj._id || matchedProjectRangeObj.id;
-      if (rangeId !== formData.project_range_id) {
-        setFormData(prev => ({ ...prev, project_range_id: rangeId }));
-      }
-    } else {
-      if (formData.project_range_id && projectRanges.length > 0) {
-        setFormData(prev => ({ ...prev, project_range_id: "" }));
-      }
+      setFormData(prev => {
+        if (prev.project_range_id !== rangeId) {
+          return { ...prev, project_range_id: rangeId };
+        }
+        return prev;
+      });
     }
-  }, [matchedProjectRangeObj, projectRanges, formData.project_range_id]);
+  }, [matchedProjectRangeObj]);
+
+  // If projectRanges change (e.g. user selected different solar kit), ensure selected range is still valid
+  useEffect(() => {
+    if (projectRanges.length > 0) {
+      setFormData(prev => {
+        if (prev.project_range_id) {
+          const isValid = projectRanges.some(pr => String(pr._id || pr.id) === String(prev.project_range_id));
+          if (!isValid) {
+            return { ...prev, project_range_id: "" };
+          }
+        }
+        return prev;
+      });
+    }
+  }, [projectRanges]);
 
   const isCapacityOutOfRange = useMemo(() => {
     if (projectRanges.length === 0 || !formData.capacity) return false;
+    if (selectedProjectRangeObj) {
+      const minVal = getRangeBoundInkW(selectedProjectRangeObj.min_value, selectedProjectRangeObj);
+      const maxVal = getRangeBoundInkW(selectedProjectRangeObj.max_value, selectedProjectRangeObj);
+      return formData.capacity < minVal || formData.capacity > maxVal;
+    }
     return !matchedProjectRangeObj;
-  }, [projectRanges, formData.capacity, matchedProjectRangeObj]);
+  }, [projectRanges, formData.capacity, selectedProjectRangeObj, matchedProjectRangeObj]);
 
   // Dropdown options
   const masterKitOptions = useMemo(() => {
@@ -2206,7 +2232,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         masterKitOptions={masterKitOptions}
         projectRangeOptions={projectRangeOptions}
         selectedSolarKitObj={selectedSolarKitObj}
-        selectedProjectRange={matchedProjectRangeObj}
+        selectedProjectRange={selectedProjectRangeObj || matchedProjectRangeObj}
         brands={brands}
         isCapacityOutOfRange={isCapacityOutOfRange}
         setKitImageFile={setKitImageFile}

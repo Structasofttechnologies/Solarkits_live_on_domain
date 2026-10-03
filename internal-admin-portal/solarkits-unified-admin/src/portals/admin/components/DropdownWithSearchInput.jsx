@@ -69,7 +69,7 @@ export default function DropdownWithSearchInput({
   }, [options, debouncedQuery, getTextFromNode, getOptionText]);
 
   const selectedOption = useMemo(() => 
-    options.find((opt) => opt.value === value),
+    options.find((opt) => opt.value === value || (value !== null && value !== undefined && value !== "" && String(opt.value) === String(value))),
     [options, value]
   );
 
@@ -202,7 +202,7 @@ export default function DropdownWithSearchInput({
                       {visibleOptions.map((opt, idx) => (
                         <Listbox.Option key={`${idx}_${opt.value}`} value={opt.value}>
                           {({ active }) => {
-                            const isSelected = value === opt.value;
+                            const isSelected = value === opt.value || (value !== null && value !== undefined && value !== "" && String(opt.value) === String(value));
                             return (
                               <div
                                 className={`cursor-pointer px-3 py-2 text-sm flex items-center justify-between rounded-md transition-all

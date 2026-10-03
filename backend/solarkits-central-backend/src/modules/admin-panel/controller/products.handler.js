@@ -190,11 +190,17 @@ const generateSkuCode = async (product_id, attributes, excludeSkuId = null) => {
   const skuCode = [templatePart, brandPart, productPart, subtypePart, finalSkuPart]
     .filter(Boolean).join("-");
 
-  const dupFilter = { sku_code: skuCode, deleted_at: null };
+  const dupFilter = { sku_code: skuCode };
   if (excludeSkuId) dupFilter._id = { $ne: excludeSkuId };
 
   const existing = await ProductSku.findOne(dupFilter);
-  if (existing) throw new Error("SKU already exists with same attributes");
+  if (existing) {
+    if (existing.deleted_at) {
+      await ProductSku.updateOne({ _id: existing._id }, { $set: { deleted_at: null, product_id: product._id } });
+      return existing.sku_code;
+    }
+    throw new Error(`SKU with code "${skuCode}" already exists with same attributes`);
+  }
 
   return skuCode;
 };
@@ -454,32 +460,69 @@ const delete_product = async (req, res) => {
 const add_sku = async (req, res) => {
   try {
     const { product_id, skus } = req.body;
+    if (!product_id || !mongoose.Types.ObjectId.isValid(product_id)) {
+      return res.status(400).json({ status: "error", message: "Valid Product ID is required" });
+    }
     const parsedSkus = parseJSON(skus) || [];
+    if (!parsedSkus.length) {
+      return res.status(400).json({ status: "error", message: "No SKU data provided" });
+    }
+
     const product = await Product.findOne({ _id: product_id, deleted_at: null });
-    if (!product) throw new Error("Product not found");
+    if (!product) return res.status(404).json({ status: "error", message: "Product not found" });
+
+    const fileMap = {};
+    (req.files || []).forEach(f => {
+      if (f.fieldname && f.fieldname.startsWith("attribute_")) {
+        fileMap[f.fieldname.split("_")[1]] = f.path;
+      }
+    });
 
     for (const sku of parsedSkus) {
-      const errors = await validateAttributes(product.subtype_id, sku.attributes, true);
-      if (errors.length) throw new Error(errors[0]);
+      const errors = await validateAttributes(product.subtype_id, sku.attributes || [], true);
+      if (errors.length) {
+        return res.status(400).json({ status: "error", message: errors[0] });
+      }
 
-      const sku_code = await generateSkuCode(product._id, sku.attributes);
-      const newSku = await ProductSku.create({ product_id: product._id, sku_code });
+      const sku_code = await generateSkuCode(product._id, sku.attributes || []);
+      let newSku = await ProductSku.findOne({ sku_code, product_id: product._id, deleted_at: null });
+      if (!newSku) {
+        newSku = await ProductSku.create({ product_id: product._id, sku_code });
+      }
 
-      for (const attr of sku.attributes) {
+      for (const attr of (sku.attributes || [])) {
+        if (!attr.attribute_id || !mongoose.Types.ObjectId.isValid(attr.attribute_id)) continue;
+
+        let numVal = null;
+        if (attr.value_number !== null && attr.value_number !== undefined && !isNaN(attr.value_number)) {
+          numVal = Number(attr.value_number);
+        }
+
+        let boolVal = null;
+        if (attr.value_boolean !== null && attr.value_boolean !== undefined) {
+          boolVal = Boolean(attr.value_boolean);
+        }
+
+        const optId = attr.value_option_id && mongoose.Types.ObjectId.isValid(attr.value_option_id) ? attr.value_option_id : null;
+        const uId = attr.unit_id && mongoose.Types.ObjectId.isValid(attr.unit_id) ? attr.unit_id : null;
+
         await ProductAttributeValue.create({
+          product_id: product._id,
           sku_id: newSku._id,
           attribute_id: attr.attribute_id,
           value_text: attr.value_text || null,
-          value_number: attr.value_number || null,
-          value_boolean: attr.value_boolean || null,
-          value_option_id: attr.value_option_id || null,
-          unit_id: attr.unit_id || null
+          value_number: numVal,
+          value_boolean: boolVal,
+          value_option_id: optId,
+          unit_id: uId,
+          value_file: fileMap[attr.attribute_id] || attr.value_file || null
         });
       }
     }
     return res.json({ status: "success", message: "SKUs created successfully" });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("ADD_SKU ERROR:", err);
+    return res.status(400).json({ status: "error", message: err.message || "Failed to create SKU" });
   }
 };
 
@@ -533,9 +576,12 @@ const get_skus_by_product = async (req, res) => {
 const update_sku = async (req, res) => {
   try {
     const { sku_id, skus } = req.body;
+    if (!sku_id || !mongoose.Types.ObjectId.isValid(sku_id)) {
+      return res.status(400).json({ status: "error", message: "Valid SKU ID is required" });
+    }
     const parsedSkus = parseJSON(skus) || [];
     const sku = await ProductSku.findOne({ _id: sku_id, deleted_at: null });
-    if (!sku) throw new Error("SKU not found");
+    if (!sku) return res.status(404).json({ status: "error", message: "SKU not found" });
 
     const attrs = parsedSkus[0]?.attributes || [];
     const newSkuCode = await generateSkuCode(sku.product_id, attrs, sku_id);
@@ -543,20 +589,45 @@ const update_sku = async (req, res) => {
     await ProductSku.updateOne({ _id: sku._id }, { $set: { sku_code: newSkuCode } });
     await ProductAttributeValue.deleteMany({ sku_id: sku._id });
 
+    const fileMap = {};
+    (req.files || []).forEach(f => {
+      if (f.fieldname && f.fieldname.startsWith("attribute_")) {
+        fileMap[f.fieldname.split("_")[1]] = f.path;
+      }
+    });
+
     for (const attr of attrs) {
+      if (!attr.attribute_id || !mongoose.Types.ObjectId.isValid(attr.attribute_id)) continue;
+
+      let numVal = null;
+      if (attr.value_number !== null && attr.value_number !== undefined && !isNaN(attr.value_number)) {
+        numVal = Number(attr.value_number);
+      }
+
+      let boolVal = null;
+      if (attr.value_boolean !== null && attr.value_boolean !== undefined) {
+        boolVal = Boolean(attr.value_boolean);
+      }
+
+      const optId = attr.value_option_id && mongoose.Types.ObjectId.isValid(attr.value_option_id) ? attr.value_option_id : null;
+      const uId = attr.unit_id && mongoose.Types.ObjectId.isValid(attr.unit_id) ? attr.unit_id : null;
+
       await ProductAttributeValue.create({
+        product_id: sku.product_id,
         sku_id: sku._id,
         attribute_id: attr.attribute_id,
         value_text: attr.value_text || null,
-        value_number: attr.value_number || null,
-        value_boolean: attr.value_boolean || null,
-        value_option_id: attr.value_option_id || null,
-        unit_id: attr.unit_id || null
+        value_number: numVal,
+        value_boolean: boolVal,
+        value_option_id: optId,
+        unit_id: uId,
+        value_file: fileMap[attr.attribute_id] || attr.value_file || null
       });
     }
     return res.json({ status: "success", message: "SKU updated successfully" });
   } catch (err) {
-    return res.status(500).json({ status: "error", message: err.message });
+    console.error("UPDATE_SKU ERROR:", err);
+    return res.status(400).json({ status: "error", message: err.message || "Failed to update SKU" });
   }
 };
 

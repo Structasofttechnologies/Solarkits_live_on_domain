@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 .env
-
+keys 
 # Migration tool artifacts
 migration-backups/
 migration-checkpoints/
