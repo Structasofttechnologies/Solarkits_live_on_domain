@@ -20,7 +20,8 @@ const schema = new mongoose.Schema({
   entity_type: {
     type: String,
     // Phase BOSKIT: Added 'boskit_distributor' and 'boskit_dealer' — backward-compatible addition
-    enum: ['reseller', 'epc_buyer', 'boskit_distributor', 'boskit_dealer'],
+    // Phase ACCOUNTS: Added 'supplier'
+    enum: ['reseller', 'epc_buyer', 'boskit_distributor', 'boskit_dealer', 'supplier'],
     required: true,
   },
   entity_id: {

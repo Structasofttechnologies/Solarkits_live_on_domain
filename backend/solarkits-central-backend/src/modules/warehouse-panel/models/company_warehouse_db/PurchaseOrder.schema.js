@@ -17,13 +17,18 @@ const schema = new mongoose.Schema({
   po_number:       { type: String, required: true, unique: true },
   warehouse_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'company_warehouses', required: true },
   supplier_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'suppliers', required: true },
+  supplier_name:   { type: String, default: null },
+  supplier_brand:  { type: String, default: null },
+  supplier_gst:    { type: String, default: null },
+  warehouse_code:  { type: String, default: null },
+  warehouse_name:  { type: String, default: null },
   items: [{
-    sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', required: true },
-    sku_code:         { type: String, required: true },
-    qty:              { type: Number, required: true, min: 1 },
-    benchmark_price:  { type: Number, required: true },
+    sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', required: false, default: null },
+    sku_code:         { type: String, default: 'PROCUREMENT-ITEM' },
+    qty:              { type: Number, default: 1 },
+    benchmark_price:  { type: Number, default: 0 },
     benchmark_price_per_watt: { type: Number, default: 0 },
-    order_price:      { type: Number, required: true },
+    order_price:      { type: Number, default: 0 },
     order_price_per_watt: { type: Number, default: 0 }
   }],
   status: {
@@ -31,6 +36,35 @@ const schema = new mongoose.Schema({
     enum: ['pending', 'accepted', 'invoiced', 'paid', 'delivered', 'cancelled', 'pending_price_approval'],
     default: 'pending'
   },
+  // ── Procurement Type: 'panel' | 'inverter' | 'mixed' ──
+  procurement_type: {
+    type: String,
+    enum: ['panel', 'inverter', 'mixed', null],
+    default: null
+  },
+  // ── PO Type: indicates whether this PO was created from EPC/Franchise combined payment ──
+  po_type: {
+    type: String,
+    enum: ['supplier_manual', 'epc_combined', 'franchise_combined', 'mixed_combined'],
+    default: 'supplier_manual'
+  },
+  // ── Source Orders: EPC / Franchise orders that triggered the need for this supplier PO ──
+  source_orders: [{
+    order_id:        { type: mongoose.Schema.Types.ObjectId, required: true },
+    order_type:      { type: String, enum: ['epc', 'franchise', 'manual'], required: true },
+    order_number:    { type: String, default: null },
+    customer_name:   { type: String, default: null },
+    customer_contact:{ type: String, default: null },
+    order_amount:    { type: Number, default: 0 },       // Amount in INR (original customer order)
+    delivery_address:{ type: mongoose.Schema.Types.Mixed, default: null },
+    items: [{
+      sku_id:    { type: mongoose.Schema.Types.ObjectId, default: null },
+      sku_code:  { type: String, default: null },
+      item_name: { type: String, default: null },
+      quantity:  { type: Number, default: 0 },
+      scope_type:{ type: String, default: null }
+    }]
+  }],
   timeline:        { type: Date, required: true },
   delivery_date:   { type: Date, default: null },
   invoice_no:           { type: String, default: null },

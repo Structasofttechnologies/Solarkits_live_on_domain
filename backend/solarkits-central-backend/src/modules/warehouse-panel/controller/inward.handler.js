@@ -969,52 +969,81 @@ const mark_purchase_order_delivered = async (req, res) => {
 
     await session.commitTransaction();
 
-    // ── Post-Commit: Trigger Delivery Queue for linked EPC / Franchise orders ──
-    // If this PO was created from combined EPC/Franchise orders, update their status
-    // so they appear in the Delivery Management Queue for warehouse dispatch.
+    // ── Post-Commit: Component-wise Procurement Update for linked EPC / Franchise orders ──
     if (po.po_type && po.po_type !== 'supplier_manual' && po.source_orders && po.source_orders.length > 0) {
       try {
-        const { EpcOrder } = require('../../admin-panel/models/india_solarshop_db');
-        const epcSourceIds = po.source_orders
-          .filter(s => s.order_type === 'epc')
-          .map(s => s.order_id);
+        const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+        const procType = po.procurement_type || 'mixed';
+        const isPanelProc = procType === 'panel' || procType === 'mixed';
+        const isInverterProc = procType === 'inverter' || procType === 'mixed';
 
-        if (epcSourceIds.length > 0) {
-          // Move from pending/confirmed → 'processing' and ensure payment_status is captured
-          // The warehouse delivery queue displays 'processing' orders with 'captured' payment
-          await EpcOrder.updateMany(
-            { _id: { $in: epcSourceIds } },
-            {
-              $set: {
-                order_status: 'processing',
-                payment_status: 'captured',
-                warehouse_id: warehouse_id
-              }
+        for (const src of po.source_orders) {
+          const Model = src.order_type === 'epc' ? EpcOrder : FpoOrder;
+          const doc = await Model.findById(src.order_id);
+          if (!doc) continue;
+
+          if (!doc.procurement_status) {
+            doc.procurement_status = {
+              panel: { required: true, status: 'pending_payment' },
+              inverter: { required: true, status: 'pending_payment' },
+              overall_status: 'awaiting_supplier_procurement'
+            };
+          }
+
+          if (isPanelProc) {
+            doc.procurement_status.panel = {
+              ...(doc.procurement_status.panel || {}),
+              required: true,
+              status: 'inwarded',
+              po_id: po._id,
+              po_number: po.po_number,
+              inward_grn_id: inward[0]?._id || null,
+              inward_grn_no: grn_no,
+              inward_at: new Date(),
+            };
+          }
+
+          if (isInverterProc) {
+            doc.procurement_status.inverter = {
+              ...(doc.procurement_status.inverter || {}),
+              required: true,
+              status: 'inwarded',
+              po_id: po._id,
+              po_number: po.po_number,
+              inward_grn_id: inward[0]?._id || null,
+              inward_grn_no: grn_no,
+              inward_at: new Date(),
+            };
+          }
+
+          // Check if BOTH Panel and Inverter are inwarded
+          const panelInwarded = doc.procurement_status.panel?.status === 'inwarded';
+          const inverterInwarded = doc.procurement_status.inverter?.status === 'inwarded';
+          const bothInwarded = panelInwarded && inverterInwarded;
+
+          if (bothInwarded) {
+            doc.procurement_status.overall_status = 'inward_completed';
+            doc.warehouse_id = warehouse_id;
+            doc.payment_status = 'captured';
+
+            if (src.order_type === 'epc') {
+              doc.order_status = 'processing';
+            } else {
+              doc.status = 'PROCESSING';
             }
-          );
-          console.log(`[InwardHandler] Delivery queue triggered for ${epcSourceIds.length} EPC order(s) linked to PO ${po.po_number}`);
-        }
+            console.log(`[InwardHandler] Both Panel & Inverter inwarded for ${src.order_type} order ${doc.order_number || doc.po_number}. Released to delivery queue!`);
+          } else {
+            doc.procurement_status.overall_status = 'awaiting_material_inward';
+            doc.warehouse_id = warehouse_id;
+            console.log(`[InwardHandler] Partial inward (${procType}) for ${src.order_type} order ${doc.order_number || doc.po_number}. Still awaiting remaining component inward before queue release.`);
+          }
 
-        const franchiseSourceIds = po.source_orders
-          .filter(s => s.order_type === 'franchise')
-          .map(s => s.order_id);
-
-        if (franchiseSourceIds.length > 0) {
-          const { FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
-          await FpoOrder.updateMany(
-            { _id: { $in: franchiseSourceIds } },
-            {
-              $set: {
-                status: 'PROCESSING',
-                warehouse_id: warehouse_id
-              }
-            }
-          );
-          console.log(`[InwardHandler] Delivery queue triggered for ${franchiseSourceIds.length} Franchise order(s) linked to PO ${po.po_number}`);
+          doc.markModified('procurement_status');
+          await doc.save();
         }
       } catch (triggerErr) {
-        // Non-fatal — stock was already received, just log the queue trigger failure
-        console.error('[InwardHandler] Failed to trigger delivery queue for source orders:', triggerErr.message);
+        // Non-fatal — stock was already received, log the error
+        console.error('[InwardHandler] Error updating source order procurement lifecycle:', triggerErr.message);
       }
     }
 
@@ -1028,11 +1057,127 @@ const mark_purchase_order_delivered = async (req, res) => {
   }
 };
 
+// ─── 7. Order Fulfillment Inward Progress ──────────────────────────────────────
+const get_order_inward_fulfillment = async (req, res) => {
+  try {
+    const { warehouse_id } = req.query;
+    const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
+    const { PurchaseOrder } = require('../models/company_warehouse_db');
+
+    const epcQuery = {
+      order_status: { $in: ['confirmed', 'processing', 'ready_for_dispatch', 'pending'] }
+    };
+    const fpoQuery = {
+      status: { $in: ['PAID', 'CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING'] },
+      deleted_at: null
+    };
+
+    if (warehouse_id && mongoose.Types.ObjectId.isValid(warehouse_id)) {
+      epcQuery.warehouse_id = warehouse_id;
+      fpoQuery.warehouse_id = warehouse_id;
+    }
+
+    const [epcOrders, fpoOrders, existingPOs] = await Promise.all([
+      EpcOrder.find(epcQuery)
+        .populate('epc_id', 'name email whatsapp company_name')
+        .populate('warehouse_id', 'warehouse_code address')
+        .sort({ created_at: -1 })
+        .limit(100)
+        .lean(),
+      FpoOrder.find(fpoQuery)
+        .populate('franchisee_id', 'business_name name mobile')
+        .sort({ created_at: -1 })
+        .limit(100)
+        .lean(),
+      PurchaseOrder.find({
+        status: { $in: ['paid', 'delivered'] }
+      }).select('po_number procurement_type status source_orders').lean()
+    ]);
+
+    const poMap = new Map();
+    for (const po of existingPOs) {
+      const type = po.procurement_type || 'mixed';
+      for (const so of po.source_orders || []) {
+        if (!so.order_id) continue;
+        const idStr = so.order_id.toString();
+        if (!poMap.has(idStr)) poMap.set(idStr, {});
+        const entry = poMap.get(idStr);
+        if (type === 'panel' || type === 'mixed') {
+          entry.panel = { po_number: po.po_number, po_status: po.status };
+        }
+        if (type === 'inverter' || type === 'mixed') {
+          entry.inverter = { po_number: po.po_number, po_status: po.status };
+        }
+      }
+    }
+
+    const mapOrder = (o, orderType) => {
+      const idStr = o._id.toString();
+      const ref = poMap.get(idStr) || {};
+
+      const panelProc = o.procurement_status?.panel || {};
+      const inverterProc = o.procurement_status?.inverter || {};
+
+      const isPanelInwarded = panelProc.status === 'inwarded' || ref.panel?.po_status === 'delivered';
+      const isPanelPaid = panelProc.status === 'paid_awaiting_inward' || isPanelInwarded || !!ref.panel;
+
+      const isInverterInwarded = inverterProc.status === 'inwarded' || ref.inverter?.po_status === 'delivered';
+      const isInverterPaid = inverterProc.status === 'paid_awaiting_inward' || isInverterInwarded || !!ref.inverter;
+
+      const isBothInwarded = isPanelInwarded && isInverterInwarded;
+      const isBothPaid = isPanelPaid && isInverterPaid;
+
+      return {
+        id: o._id,
+        order_number: o.order_number || o.po_number,
+        order_type: orderType,
+        customer_name: orderType === 'epc' 
+          ? (o.epc_id?.name || o.epc_id?.company_name || 'EPC Buyer') 
+          : (o.franchisee_id?.business_name || o.franchisee_id?.name || 'Franchise Partner'),
+        customer_phone: orderType === 'epc' ? (o.epc_id?.whatsapp || o.delivery_address?.contact_phone || '-') : (o.franchisee_id?.mobile || '-'),
+        warehouse_code: o.warehouse_id?.warehouse_code || 'WH-01',
+        destination: o.delivery_address?.district_name || o.destination_address || 'Direct Site',
+        order_status: o.order_status || o.status,
+        panel_status: isPanelInwarded ? 'inwarded' : (isPanelPaid ? 'paid_awaiting_inward' : 'pending_payment'),
+        panel_po_number: panelProc.po_number || ref.panel?.po_number || null,
+        panel_grn_no: panelProc.inward_grn_no || null,
+        panel_inward_at: panelProc.inward_at || null,
+        inverter_status: isInverterInwarded ? 'inwarded' : (isInverterPaid ? 'paid_awaiting_inward' : 'pending_payment'),
+        inverter_po_number: inverterProc.po_number || ref.inverter?.po_number || null,
+        inverter_grn_no: inverterProc.inward_grn_no || null,
+        inverter_inward_at: inverterProc.inward_at || null,
+        overall_readiness: isBothInwarded ? 'ready_for_dispatch' : (isBothPaid ? 'awaiting_inward' : 'awaiting_supplier_payment'),
+        created_at: o.created_at || o.createdAt,
+      };
+    };
+
+    const combinedList = [
+      ...epcOrders.map(o => mapOrder(o, 'epc')),
+      ...fpoOrders.map(o => mapOrder(o, 'franchise'))
+    ];
+
+    return res.status(200).json({
+      status: 'success',
+      data: combinedList,
+      summary: {
+        total_orders: combinedList.length,
+        ready_for_dispatch: combinedList.filter(o => o.overall_readiness === 'ready_for_dispatch').length,
+        awaiting_inward: combinedList.filter(o => o.overall_readiness === 'awaiting_inward').length,
+        awaiting_payment: combinedList.filter(o => o.overall_readiness === 'awaiting_supplier_payment').length,
+      }
+    });
+  } catch (err) {
+    console.error('Error in get_order_inward_fulfillment:', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch order inward fulfillment.', error: err.message });
+  }
+};
+
 module.exports = {
   get_active_skus,
   save_inward,
   get_inward_logs,
   get_stock_status,
   get_warehouse_purchase_orders,
-  mark_purchase_order_delivered
+  mark_purchase_order_delivered,
+  get_order_inward_fulfillment
 };

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { 
   FaUsers, FaPlus, FaEnvelope, FaPhone, FaBuilding, 
   FaClock, FaTimesCircle, FaCheckCircle, 
@@ -6,7 +6,7 @@ import {
 } from "react-icons/fa";
 import { useSelector } from "react-redux";
 import { 
-  getSuppliers, registerSupplier, gstGenerateOtp, gstSubmitOtp, getCountries, getStates 
+  getSuppliers, registerSupplier, verifyGst, gstGenerateOtp, gstSubmitOtp, getCountries, getStates 
 } from "../../api/accounts";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
@@ -64,6 +64,7 @@ export default function SupplierRegistry() {
   const [gstOtp, setGstOtp] = useState("");
   const [gstRequestId, setGstRequestId] = useState("");
   const [gstError, setGstError] = useState(null);
+  const [gstData, setGstData] = useState(null);
 
   useEffect(() => {
     fetchSuppliers();
@@ -140,6 +141,67 @@ export default function SupplierRegistry() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleGstVerify = async () => {
+    const gstin = formData.gst_number.trim().toUpperCase();
+    if (gstin.length !== 15) {
+      setGstError("Please enter a valid 15-character alphanumeric GSTIN (e.g. 24ABCDE1234A1ZN).");
+      return;
+    }
+    setGstVerifying(true);
+    setGstError(null);
+    try {
+      const res = await verifyGst(gstin);
+      if (res && res.status === "success" && res.data) {
+        const verified = res.data;
+        setGstData(verified);
+        setGstVerified(true);
+        setGstOtpSent(false);
+
+        // Match state ID with statesList
+        let matchedStateId = verified.state_id || "";
+        if (!matchedStateId && verified.state_name && statesList.length > 0) {
+          const normState = verified.state_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const found = statesList.find(s => s.name.toLowerCase().replace(/[^a-z0-9]/g, "") === normState);
+          if (found) {
+            matchedStateId = found.id;
+          }
+        }
+
+        const phoneVal = String(verified.phone || "");
+        let phoneCodeVal = formData.phone_code || "+91";
+        let phoneNumVal = phoneVal;
+        if (phoneVal.startsWith("+91") && phoneVal.length > 3) {
+          phoneCodeVal = "+91";
+          phoneNumVal = phoneVal.substring(3);
+        } else if (phoneVal.startsWith("91") && phoneVal.length > 10) {
+          phoneCodeVal = "+91";
+          phoneNumVal = phoneVal.substring(2);
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          gst_number: gstin,
+          company_name: verified.company_name || prev.company_name,
+          brand_name: prev.brand_name || verified.brand_name || verified.company_name,
+          pan_number: verified.pan_number || gstin.substring(2, 12),
+          state_id: matchedStateId || prev.state_id,
+          address: verified.address || prev.address,
+          email: prev.email || verified.email || "",
+          phone: phoneNumVal || prev.phone,
+          phone_code: phoneCodeVal,
+        }));
+      } else {
+        setGstError(res?.message || "GSTIN verification failed.");
+      }
+    } catch (err) {
+      console.error("verifyGst error:", err);
+      const msg = err.response?.data?.message || err.message || "Failed to verify GSTIN via QuickeKYC. Please try again.";
+      setGstError(msg);
+    } finally {
+      setGstVerifying(false);
+    }
   };
 
   const handleGstVerifyInit = async () => {
@@ -229,11 +291,13 @@ export default function SupplierRegistry() {
     setGstOtp("");
     setGstRequestId("");
     setGstError(null);
+    setGstData(null);
     setFormData((prev) => ({
       ...prev,
       gst_number: "",
       pan_number: "",
       company_name: "",
+      brand_name: "",
       address: "",
       state_id: "",
       email: "",
@@ -529,6 +593,14 @@ export default function SupplierRegistry() {
                           handleInputChange(e);
                           setGstError(null);
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (formData.gst_number.trim().length === 15 && !gstVerifying) {
+                              handleGstVerify();
+                            }
+                          }
+                        }}
                         maxLength={15}
                         disabled={gstVerifying || gstOtpSent}
                       />
@@ -537,10 +609,10 @@ export default function SupplierRegistry() {
                       <Button
                         type="button"
                         variant="primary"
-                        onClick={handleGstVerifyInit}
+                        onClick={handleGstVerify}
                         loading={gstVerifying}
-                        disabled={formData.gst_number.length !== 15 || gstVerifying}
-                        className="h-12 px-6 font-bold text-xs uppercase"
+                        disabled={formData.gst_number.trim().length !== 15 || gstVerifying}
+                        className="h-12 px-6 font-bold text-xs uppercase tracking-wider"
                       >
                         Verify GST
                       </Button>
@@ -590,21 +662,38 @@ export default function SupplierRegistry() {
                   )}
                 </div>
               ) : (
-                <div className="p-3 bg-success/5 border border-success/20 rounded-xl flex items-center justify-between animate-fade-in">
-                  <div className="flex items-center gap-2">
-                    <FaCheckCircle className="text-success text-base shrink-0" />
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                      <FaCheckCircle className="text-base" />
+                    </div>
                     <div>
-                      <p className="text-xs font-bold text-success">GST Verified Successfully</p>
-                      <p className="text-[10px] font-mono text-text-secondary">
-                        {formData.gst_number} | PAN: {formData.pan_number}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                          QuickeKYC Verified
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full uppercase">
+                          {gstData?.gstin_status || "Active"}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold text-text-primary mt-1">
+                        {formData.company_name}
                       </p>
+                      <p className="text-[10px] font-mono text-text-muted mt-0.5">
+                        GSTIN: <span className="font-bold text-text-secondary">{formData.gst_number}</span> &bull; PAN: <span className="font-bold text-text-secondary">{formData.pan_number}</span>
+                      </p>
+                      {gstData?.state_name && (
+                        <p className="text-[10px] text-text-secondary mt-0.5">
+                          State: <span className="font-semibold">{gstData.state_name}</span> {gstData.district_name ? `(${gstData.district_name})` : ''}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <Button
                     type="button"
                     variant="outline-primary"
                     onClick={resetGst}
-                    className="rounded-lg text-[9px] px-2.5 py-1 uppercase font-bold border-danger/30 text-danger hover:bg-danger/5"
+                    className="self-end sm:self-center rounded-xl text-[10px] px-3 py-1.5 uppercase font-bold border-danger/30 text-danger hover:bg-danger/10 shrink-0"
                   >
                     Change GST
                   </Button>
@@ -647,8 +736,9 @@ export default function SupplierRegistry() {
                   name="email"
                   type="email"
                   label="Corporate Email address *"
+                  placeholder="e.g. supplier@company.com"
                   value={formData.email}
-                  disabled
+                  onChange={handleInputChange}
                   required
                 />
                 <CustomInput
@@ -665,7 +755,7 @@ export default function SupplierRegistry() {
                     name="phone_code"
                     label="Dial Code *"
                     value={formData.phone_code}
-                    disabled
+                    onChange={handleInputChange}
                     required
                   />
                 </div>
@@ -673,8 +763,9 @@ export default function SupplierRegistry() {
                   <CustomInput
                     name="phone"
                     label="Phone Number *"
+                    placeholder="e.g. 9876543210"
                     value={formData.phone}
-                    disabled
+                    onChange={handleInputChange}
                     required
                   />
                 </div>
@@ -683,13 +774,14 @@ export default function SupplierRegistry() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <CustomInput
                   label="Registered State"
-                  value={statesList.find(s => s.id === formData.state_id)?.name || ''}
+                  value={statesList.find(s => s.id === formData.state_id)?.name || gstData?.state_name || ''}
                   disabled
                 />
                 <CustomInput
+                  name="address"
                   label="Registered Office Address"
                   value={formData.address}
-                  disabled
+                  onChange={handleInputChange}
                 />
               </div>
 

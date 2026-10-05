@@ -57,4 +57,9 @@ module.exports = {
 
   // --- Website Landing Page CMS ---
   WebsiteContent: require('./website_content.schema'),
+
+  // --- State-wise Cluster & Warehouse Routing ---
+  RegionalCluster: require('./regional_cluster.schema'),
+  WarehouseClusterMapping: require('./warehouse_cluster_mapping.schema'),
+  WarehouseKitCapability: require('./warehouse_kit_capability.schema'),
 };

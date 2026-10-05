@@ -980,7 +980,17 @@ export default function DeliveryQueue() {
                               </span>
                             ) : null}
                           </div>
-                          <span className="text-[11px] text-slate-400 capitalize">{o.order_type}</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] text-slate-400 capitalize">{o.order_type}</span>
+                            {o.procurement_details?.overall_status === 'inward_completed' && (
+                              <span 
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" 
+                                title={`Panel: ${o.procurement_details.panel_grn || 'Verified'} | Inverter: ${o.procurement_details.inverter_grn || 'Verified'}`}
+                              >
+                                ✓ Inward Verified
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-xs text-slate-600">
                           <div className="font-semibold text-slate-800">

@@ -12,5 +12,6 @@ router.use('/offers', require('./solarshop/offers.route'));
 router.use('/checkout-cart-settings', require('./solarshop/checkout_cart_settings.route'));
 router.use('/loose-order-settings', require('./solarshop/loose_order_settings.route'));
 router.use('/pipeline-status', require('./solarshop/pipeline_status.route'));
+router.use('/cluster-routing', require('./solarshop/cluster_routing.route'));
 
 module.exports = router

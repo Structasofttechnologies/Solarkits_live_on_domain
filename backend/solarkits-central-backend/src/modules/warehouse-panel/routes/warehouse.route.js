@@ -30,6 +30,7 @@ router.post('/inward/save',       check_auth, perm('WH_MAT_INWARD', 'add'),  inw
 router.get('/inward/logs',        check_auth, perm('WH_MAT_INWARD', 'view'), inward_handler.get_inward_logs);
 router.get('/inward/stock-status',check_auth, perm('WH_MAT_INWARD', 'view'), inward_handler.get_stock_status);
 router.get('/inward/purchase-orders', check_auth, perm('WH_MAT_INWARD', 'view'), inward_handler.get_warehouse_purchase_orders);
+router.get('/inward/order-fulfillment', check_auth, perm('WH_MAT_INWARD', 'view'), inward_handler.get_order_inward_fulfillment);
 router.post('/inward/purchase-orders/:id/deliver', check_auth, perm('WH_MAT_INWARD', 'add'), inward_handler.mark_purchase_order_delivered);
 router.post('/inward/upload-tax-invoice', check_auth, perm('WH_MAT_INWARD', 'add'), upload_files('public/uploads/tax-invoices', 20, 'file', 1), (req, res) => {
   if (req.files && req.files[0]) {

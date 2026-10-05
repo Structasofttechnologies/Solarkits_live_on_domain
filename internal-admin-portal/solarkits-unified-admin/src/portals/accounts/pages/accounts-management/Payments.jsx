@@ -6,13 +6,13 @@ import {
   FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaChevronUp, FaFilter,
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
   FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
-  FaStore
+  FaStore, FaBoxes, FaInfoCircle
 } from "react-icons/fa";
 import {
   getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder,
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
-  getStates, getDistricts, getAllComboKits
+  getStates, getDistricts, getAllComboKits, getSuppliers
 } from "../../api/accounts";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
@@ -95,9 +95,8 @@ function getItemBreakdown(item) {
 
 // ─── Proforma Invoice Modal ────────────────────────────────────────────────────
 function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
-  const [activeTab, setActiveTab] = useState("po"); // "po" or "pi"
+  const [activeTab, setActiveTab] = useState("po");
 
-  // Reset tab when modal opens/closes
   useEffect(() => {
     if (isOpen) setActiveTab(initialTab);
   }, [isOpen, initialTab]);
@@ -110,19 +109,18 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title="Order Documents Viewer" size="lg">
       <div className="space-y-4 p-1">
-        {/* Toggle between PO and Proforma Invoice */}
-        <div className="flex bg-surface-hover border border-border p-1 rounded-xl gap-1 max-w-xs">
+        <div className="flex bg-gray-100 border border-gray-200 p-1 rounded-xl gap-1 max-w-xs">
           <button
             onClick={() => setActiveTab("po")}
             type="button"
-            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "po" ? "bg-primary text-white shadow-xs" : "text-text-secondary"}`}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "po" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
           >
             Purchase Order
           </button>
           <button
             onClick={() => setActiveTab("pi")}
             type="button"
-            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "pi" ? "bg-primary text-white shadow-xs" : "text-text-secondary"}`}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-[10px] font-black uppercase transition-all ${activeTab === "pi" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
           >
             Proforma Invoice
           </button>
@@ -131,21 +129,21 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
         {activeTab === "po" ? (
           purchaseOrderPdf ? (
             <div className="flex flex-col space-y-3">
-              <div className="flex justify-between items-center bg-surface-hover border border-border p-3 rounded-xl">
+              <div className="flex justify-between items-center bg-gray-50 border border-gray-200 p-3 rounded-xl">
                 <div>
-                  <span className="text-[10px] font-black text-text-muted uppercase tracking-widest block">Purchase Order No.</span>
-                  <span className="text-sm font-black text-text-primary">#{po.po_number}</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Purchase Order No.</span>
+                  <span className="text-sm font-black text-gray-900">#{po.po_number}</span>
                 </div>
                 <a
                   href={purchaseOrderPdf}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary/95 transition-all shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-all shadow-sm"
                 >
                   <FaFilePdf size={10} /> Open In New Tab
                 </a>
               </div>
-              <div className="w-full h-[550px] border border-border rounded-xl overflow-hidden shadow-inner bg-slate-100 flex items-center justify-center">
+              <div className="w-full h-[550px] border border-gray-200 rounded-xl overflow-hidden shadow-inner bg-gray-50 flex items-center justify-center">
                 <iframe
                   src={purchaseOrderPdf}
                   className="w-full h-full"
@@ -154,27 +152,128 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
               </div>
             </div>
           ) : (
-            <div className="p-12 text-center text-xs text-text-muted bg-surface-hover rounded-xl border border-dashed border-border italic">
-              No system Purchase Order PDF has been generated for this order.
+            <div className="space-y-4">
+              <div className="flex justify-between items-start bg-primary/5 border border-primary/20 rounded-2xl p-5">
+                <div>
+                  <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Purchase Order (No PDF)</div>
+                  <div className="text-xl font-black text-gray-900">{po.po_number}</div>
+                  <div className="text-xs text-gray-600 mt-1">Issue Date: <span className="font-bold text-gray-900">{po.created_at ? new Date(po.created_at).toLocaleDateString("en-GB", { day: '2-digit', month: 'long', year: 'numeric' }) : "—"}</span></div>
+                  <div className="text-xs text-gray-600">Delivery Due: <span className="font-bold text-gray-900">{po.timeline ? new Date(po.timeline).toLocaleDateString("en-GB", { day: '2-digit', month: 'long', year: 'numeric' }) : "—"}</span></div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</div>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
+                    po.status === 'delivered' ? 'bg-green-100 text-green-700 border-green-200' :
+                    po.status === 'paid' ? 'bg-green-100 text-green-700 border-green-200' :
+                    po.status === 'invoiced' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                    'bg-amber-100 text-amber-700 border-amber-200'
+                  }`}>{po.status}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-1">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Supplier / Vendor</div>
+                  <div className="font-black text-gray-900 text-sm">{po.supplier_id?.company_name || po.supplier_name || "N/A"}</div>
+                  <div className="text-xs text-gray-600">Brand: {po.supplier_id?.brand_name || po.supplier_brand || "N/A"}</div>
+                  {(po.supplier_id?.gst_number || po.supplier_gst) && <div className="text-[10px] font-mono text-gray-500">GSTIN: {po.supplier_id?.gst_number || po.supplier_gst}</div>}
+                </div>
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 space-y-1">
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Delivery Warehouse</div>
+                  <div className="font-black text-gray-900 text-sm">{po.warehouse_id?.warehouse_code || po.warehouse_code || "N/A"}</div>
+                  <div className="text-xs text-gray-600 leading-relaxed">{po.warehouse_id?.address || "—"}</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Ordered Items</span>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-white">
+                      <th className="px-4 py-3 text-left font-black text-gray-400 uppercase tracking-wider text-[10px]">#</th>
+                      <th className="px-4 py-3 text-left font-black text-gray-400 uppercase tracking-wider text-[10px]">SKU Code</th>
+                      <th className="px-4 py-3 text-left font-black text-gray-400 uppercase tracking-wider text-[10px]">Product</th>
+                      <th className="px-4 py-3 text-right font-black text-gray-400 uppercase tracking-wider text-[10px]">Qty</th>
+                      <th className="px-4 py-3 text-right font-black text-gray-400 uppercase tracking-wider text-[10px]">Unit Price</th>
+                      <th className="px-4 py-3 text-right font-black text-gray-400 uppercase tracking-wider text-[10px]">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {(po.items || []).map((it, idx) => {
+                      const unitP = it.order_price || 0;
+                      const lineTot = (it.qty || 0) * unitP;
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3 text-gray-400">{idx + 1}</td>
+                          <td className="px-4 py-3 font-extrabold text-primary tracking-widest">{it.sku_code}</td>
+                          <td className="px-4 py-3 font-semibold text-gray-900">{it.item_name || it.sku_details?.product_name || it.sku_code}</td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">{it.qty?.toLocaleString()} pcs</td>
+                          <td className="px-4 py-3 text-right text-gray-600 font-mono">₹{Number(unitP).toLocaleString("en-IN")}</td>
+                          <td className="px-4 py-3 text-right font-black text-gray-900">₹{Number(lineTot).toLocaleString("en-IN")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-primary/5 border-t-2 border-primary/20">
+                      <td colSpan={5} className="px-4 py-3 text-right font-black text-gray-900 text-xs uppercase tracking-wider">Total Order Value</td>
+                      <td className="px-4 py-3 text-right font-black text-primary text-sm">
+                        ₹{((po.items || []).reduce((acc, it) => acc + (it.qty || 0) * (it.order_price || 0), 0)).toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {po.source_orders && po.source_orders.length > 0 && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3 space-y-2">
+                  <div className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-1.5">
+                    <FaUsers /> Customer Orders Covered by this Combined PO ({po.source_orders.length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {po.source_orders.map((so, sidx) => (
+                      <div key={sidx} className="bg-white border border-purple-200 rounded-lg p-2.5 shadow-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="font-extrabold text-purple-900 text-xs block">{so.order_number}</span>
+                            <span className="text-[11px] text-gray-600 font-medium">{so.customer_name}</span>
+                            {so.customer_contact && <span className="text-[10px] text-gray-400 block">{so.customer_contact}</span>}
+                          </div>
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
+                            {so.order_type}
+                          </span>
+                        </div>
+                        {so.order_amount > 0 && (
+                          <div className="text-xs font-black text-purple-700 mt-1">
+                            ₹{Number(so.order_amount).toLocaleString("en-IN")}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )
         ) : (
           proformaPdfUrl ? (
             <div className="flex flex-col space-y-3">
-              <div className="flex justify-between items-center bg-surface-hover border border-border p-3 rounded-xl">
+              <div className="flex justify-between items-center bg-gray-50 border border-gray-200 p-3 rounded-xl">
                 <div>
-                  <span className="text-[10px] font-black text-text-muted uppercase tracking-widest block">Proforma Invoice PDF</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Proforma Invoice PDF</span>
                 </div>
                 <a
                   href={proformaPdfUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-info text-white text-xs font-black uppercase tracking-wider hover:bg-info/95 transition-all shadow-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-sm"
                 >
                   <FaFilePdf size={10} /> Open In New Tab
                 </a>
               </div>
-              <div className="w-full h-[550px] border border-border rounded-xl overflow-hidden shadow-inner bg-slate-100 flex items-center justify-center">
+              <div className="w-full h-[550px] border border-gray-200 rounded-xl overflow-hidden shadow-inner bg-gray-50 flex items-center justify-center">
                 <iframe
                   src={proformaPdfUrl}
                   className="w-full h-full"
@@ -183,7 +282,7 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
               </div>
             </div>
           ) : (
-            <div className="p-12 text-center text-xs text-text-muted bg-surface-hover rounded-xl border border-dashed border-border italic">
+            <div className="p-12 text-center text-xs text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300 italic">
               No Proforma Invoice document has been uploaded for this order yet.
             </div>
           )
@@ -197,7 +296,7 @@ function ProformaInvoiceModal({ isOpen, onClose, po, initialTab = "po" }) {
 function CustomerOrdersTable({
   title,
   icon: Icon,
-  type, // "epc" | "franchise"
+  type,
   orders,
   totalPendingCount,
   selectedOrderIds,
@@ -213,12 +312,12 @@ function CustomerOrdersTable({
 }) {
   const isEpc = type === "epc";
   const themeAccent = isEpc ? "accent-blue-600" : "accent-purple-600";
-  const themeIconBg = isEpc ? "bg-blue-500/10 text-blue-600" : "bg-purple-500/10 text-purple-600";
-  const themeBadgeBg = isEpc ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300" : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300";
+  const themeIconBg = isEpc ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700";
+  const themeBadgeBg = isEpc ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800";
   const themeSelectedBg = isEpc
-    ? "text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800"
-    : "text-purple-600 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800";
-  const themeHighlightRow = isEpc ? "bg-blue-50/50 dark:bg-blue-900/10" : "bg-purple-50/50 dark:bg-purple-900/10";
+    ? "text-blue-700 bg-blue-50 border-blue-200"
+    : "text-purple-700 bg-purple-50 border-purple-200";
+  const themeHighlightRow = isEpc ? "bg-blue-50/60" : "bg-purple-50/60";
 
   return (
     <div className="space-y-3">
@@ -228,7 +327,7 @@ function CustomerOrdersTable({
           <span className={`p-1.5 rounded-lg flex-shrink-0 ${themeIconBg}`}>
             <Icon className="w-3.5 h-3.5" />
           </span>
-          <h3 className="font-bold text-sm text-text-primary leading-tight">
+          <h3 className="font-bold text-sm text-gray-900 leading-tight">
             {title}
           </h3>
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${themeBadgeBg}`}>
@@ -244,64 +343,64 @@ function CustomerOrdersTable({
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 bg-surface border border-border rounded-2xl">
+        <div className="flex items-center justify-center py-16 bg-white border border-gray-200 rounded-2xl">
           <FaSpinner className={`animate-spin ${isEpc ? "text-blue-600" : "text-purple-600"} text-2xl`} />
-          <span className="ml-3 text-sm text-text-secondary font-semibold">Loading {isEpc ? "EPC" : "Franchise"} orders...</span>
+          <span className="ml-3 text-sm text-gray-600 font-semibold">Loading {isEpc ? "EPC" : "Franchise"} orders...</span>
         </div>
       ) : totalPendingCount === 0 ? (
-        <div className="bg-surface border border-dashed border-border rounded-2xl p-10 text-center">
-          <FaBoxOpen className="text-4xl text-text-muted mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-bold text-text-secondary">No pending {isEpc ? "EPC customer" : "Franchise"} orders</p>
-          <p className="text-xs text-text-muted mt-0.5">All {isEpc ? "EPC" : "Franchise"} orders have been combined and paid to suppliers.</p>
+        <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-10 text-center">
+          <FaBoxOpen className="text-4xl text-gray-400 mx-auto mb-2 opacity-50" />
+          <p className="text-sm font-bold text-gray-700">No pending {isEpc ? "EPC customer" : "Franchise"} orders</p>
+          <p className="text-xs text-gray-500 mt-0.5">All {isEpc ? "EPC" : "Franchise"} orders have been combined and paid to suppliers.</p>
         </div>
       ) : orders.length === 0 ? (
-        <div className="bg-surface border border-dashed border-border rounded-2xl p-10 text-center">
-          <FaBoxOpen className="text-4xl text-text-muted mx-auto mb-2 opacity-50" />
-          <p className="text-sm font-bold text-text-secondary">No {isEpc ? "EPC" : "Franchise"} orders matching the selected master filters</p>
-          <p className="text-xs text-text-muted mt-0.5">Try adjusting or clearing your filter criteria above.</p>
+        <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-10 text-center">
+          <FaBoxOpen className="text-4xl text-gray-400 mx-auto mb-2 opacity-50" />
+          <p className="text-sm font-bold text-gray-700">No {isEpc ? "EPC" : "Franchise"} orders matching the selected master filters</p>
+          <p className="text-xs text-gray-500 mt-0.5">Try adjusting or clearing your filter criteria above.</p>
           <button
             type="button"
             onClick={onResetFilters}
-            className={`mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-bold transition-all cursor-pointer shadow-xs ${isEpc ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"}`}
+            className={`mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-white text-xs font-bold transition-all cursor-pointer shadow-sm ${isEpc ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"}`}
           >
             <FaTimes size={10} />
             <span>Reset All Filters</span>
           </button>
         </div>
       ) : (
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
           {/* Table header */}
-          <div className="px-3 sm:px-6 py-3 border-b border-border bg-surface-hover flex items-center justify-between gap-3">
+          <div className="px-3 sm:px-6 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 sm:gap-3">
               <input
                 type="checkbox"
                 checked={isAllSelected}
                 onChange={onSelectAll}
-                className={`w-4 h-4 rounded border-border ${themeAccent} cursor-pointer`}
+                className={`w-4 h-4 rounded border-gray-300 ${themeAccent} cursor-pointer`}
               />
-              <span className="text-xs font-black text-text-secondary uppercase tracking-wider">
+              <span className="text-xs font-black text-gray-700 uppercase tracking-wider">
                 Select All {isEpc ? "EPC" : "Franchise"} Orders
               </span>
             </div>
-            <span className="hidden md:inline-block text-[10px] text-text-muted font-bold">
+            <span className="hidden md:inline-block text-[10px] text-gray-500 font-bold">
               Click any order to view exact solar panels, inverters &amp; BOS breakdown with images
             </span>
           </div>
 
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-gray-200">
             {orders.map((order) => {
               const orderId = order.id || order._id;
               const isSelected = selectedOrderIds.has(orderId);
               const isExpanded = expandedOrderId === orderId;
               return (
-                <div key={orderId} className={`transition-all ${isSelected ? themeHighlightRow : "hover:bg-surface-hover/60"}`}>
+                <div key={orderId} className={`transition-all ${isSelected ? themeHighlightRow : "hover:bg-gray-50"}`}>
                   {/* Row */}
                   <div className="px-3 sm:px-6 py-3.5 sm:py-4 flex items-start gap-2.5 sm:gap-4">
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleOrderSelection(orderId)}
-                      className={`mt-1.5 w-4 h-4 rounded border-border ${themeAccent} cursor-pointer flex-shrink-0`}
+                      className={`mt-1.5 w-4 h-4 rounded border-gray-300 ${themeAccent} cursor-pointer flex-shrink-0`}
                     />
                     <div
                       className="flex-1 min-w-0 cursor-pointer select-none"
@@ -310,156 +409,198 @@ function CustomerOrdersTable({
                     >
                       {/* Mobile & Tablet Card Layout (< lg) */}
                       <div className="lg:hidden space-y-2.5">
-                        {/* Top: Order # + Badges + Order Value */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="text-[10px] text-text-muted uppercase font-bold">Order</div>
-                            <div className="text-xs font-black text-text-primary break-all">{order.order_number}</div>
-                            <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${order.order_type === "epc" ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700/40" : "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700/40"}`}>
+                            <div className="text-[10px] text-gray-500 uppercase font-black">Order</div>
+                            <div className="text-xs font-black text-gray-900 break-all">{order.order_number}</div>
+                            <span className={`inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border ${order.order_type === "epc" ? "bg-blue-100 text-blue-800 border-blue-300" : "bg-purple-100 text-purple-800 border-purple-300"}`}>
                               {order.order_type === "epc" ? <FaBuilding size={8} /> : <FaStore size={8} />} {order.order_type === "epc" ? "EPC Customer" : "Franchise Store"}
                             </span>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <div className="text-[10px] text-text-muted uppercase font-bold">Order Value</div>
-                            <div className="text-sm font-black text-text-primary">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
-                            <div className="mt-1 flex items-center justify-end gap-1.5">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border inline-block ${order.payment_status === "captured" || order.payment_status === "paid" ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"}`}>
-                                {order.payment_status === "captured" || order.payment_status === "paid" ? "Paid" : "Pending"}
+                            <div className="text-[10px] text-gray-500 uppercase font-black">Order Value</div>
+                            <div className="text-sm font-black text-gray-900">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
+                            <div className="mt-1 flex flex-col items-end gap-1">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${order.panel_paid
+                                ? "bg-green-100 text-green-800 border-green-300"
+                                : "bg-gray-100 text-gray-600 border-gray-300"
+                                }`}>
+                                ☀️ Panel: {order.panel_paid ? (order.panel_inwarded ? "Inwarded" : "Paid") : "Pending"}
                               </span>
+                              {order.procurement_status?.panel?.supplier_name && (
+                                <span className="text-[9px] font-bold text-gray-700">
+                                  To: {order.procurement_status.panel.supplier_name}
+                                </span>
+                              )}
+                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${order.inverter_paid
+                                ? "bg-teal-100 text-teal-800 border-teal-300"
+                                : "bg-gray-100 text-gray-600 border-gray-300"
+                                }`}>
+                                ⚡ Inverter: {order.inverter_paid ? (order.inverter_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                              </span>
+                              {order.procurement_status?.inverter?.supplier_name && (
+                                <span className="text-[9px] font-bold text-gray-700">
+                                  To: {order.procurement_status.inverter.supplier_name}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Middle: Buyer Details & Delivery Location */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-border/40 text-xs">
-                          {/* Buyer info */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-gray-200 text-xs">
                           <div className="space-y-1">
-                            <div className="text-[10px] text-text-muted uppercase font-bold">
+                            <div className="text-[10px] text-gray-500 uppercase font-black">
                               {order.order_type === "franchise" ? "Franchise Partner" : "EPC Buyer"}
                             </div>
-                            <div className="text-xs font-black text-text-primary truncate" title={order.customer_name}>
+                            <div className="text-xs font-black text-gray-900 truncate" title={order.customer_name}>
                               {order.customer_name}
                             </div>
                             {order.customer_gstin && order.customer_gstin !== "-" ? (
-                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300">
-                                <span className="text-[8px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">GSTIN:</span>
+                              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-50 border border-green-300 text-[10px] font-mono font-black text-gray-900">
+                                <span className="text-[9px] uppercase tracking-wider text-gray-600 font-black">GSTIN:</span>
                                 <span>{order.customer_gstin}</span>
                               </div>
                             ) : (
-                              <div className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-mono text-text-muted">
+                              <div className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 border border-gray-300 text-[10px] font-mono font-black text-gray-600">
                                 GST: Not Available
                               </div>
                             )}
                             {order.customer_contact && order.customer_contact !== "-" && (
-                              <div className="text-[10px] text-text-muted flex items-center gap-1">
-                                <FaPhone size={8} className="text-text-muted flex-shrink-0" />
+                              <div className="text-xs font-black text-gray-900 flex items-center gap-1">
+                                <FaPhone size={9} className="text-gray-500 flex-shrink-0" />
                                 <span>{order.customer_contact}</span>
                               </div>
                             )}
                           </div>
 
-                          {/* Delivery info */}
                           <div className="space-y-1">
-                            <div className="text-[10px] text-text-muted uppercase font-bold">
+                            <div className="text-[10px] text-gray-500 uppercase font-black">
                               {order.order_type === "franchise" ? "Store Location" : "Delivery To"}
                             </div>
                             {order.delivery_address ? (
                               <>
-                                <div className="text-xs font-semibold text-text-primary flex items-center gap-1">
-                                  <FaMapMarkerAlt size={9} className={`${isEpc ? "text-blue-500" : "text-purple-500"} flex-shrink-0`} />
+                                <div className="text-xs font-black text-gray-900 flex items-center gap-1">
+                                  <FaMapMarkerAlt size={9} className={`${isEpc ? "text-blue-600" : "text-purple-600"} flex-shrink-0`} />
                                   <span>{order.delivery_address.district_name || order.delivery_address.city || order.delivery_address.address_line || "—"}</span>
                                 </div>
-                                <div className="text-[10px] text-text-muted">
+                                <div className="text-[11px] font-black text-gray-700">
                                   {order.delivery_address.state_name || ""}{order.delivery_address.pincode ? ` • PIN: ${order.delivery_address.pincode}` : ""}
                                 </div>
                               </>
                             ) : (
-                              <div className="text-[10px] text-text-muted italic">No address</div>
+                              <div className="text-[10px] text-gray-400 italic font-bold">No address</div>
                             )}
-                            <div className="text-[10px] text-primary font-bold flex items-center gap-1 pt-0.5">
+                            <div className="text-[11px] text-gray-700 font-black flex items-center gap-1 pt-0.5">
                               <span>{order.items?.length || 0} item(s)</span>
                               {order.created_at && (
                                 <>
-                                  <span className="text-text-muted">•</span>
-                                  <span className="text-text-muted">{new Date(order.created_at).toLocaleDateString()}</span>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-600 font-bold">{new Date(order.created_at).toLocaleDateString()}</span>
                                 </>
                               )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Tap hint */}
-                        <div className="text-[10px] text-primary/80 font-bold flex items-center gap-1 pt-0.5">
+                        <div className="text-[11px] text-gray-700 font-black flex items-center gap-1 pt-0.5">
                           <span>{isExpanded ? "▲ Hide components breakdown" : "▼ Tap to view components breakdown & images"}</span>
                         </div>
                       </div>
 
                       {/* Desktop Grid Layout (visible on lg+) */}
                       <div className="hidden lg:grid lg:grid-cols-5 lg:gap-4 items-start">
-                        {/* Order Number + Type */}
                         <div>
-                          <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Order</div>
-                          <div className="text-xs font-black text-text-primary">{order.order_number}</div>
-                          <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${order.order_type === "epc" ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700/40" : "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700/40"}`}>
+                          <div className="text-[10px] text-gray-500 uppercase font-black mb-1">Order</div>
+                          <div className="text-xs font-black text-gray-900">{order.order_number}</div>
+                          <span className={`inline-flex items-center gap-1 mt-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border ${order.order_type === "epc" ? "bg-blue-100 text-blue-800 border-blue-300" : "bg-purple-100 text-purple-800 border-purple-300"}`}>
                             {order.order_type === "epc" ? <FaBuilding size={8} /> : <FaStore size={8} />} {order.order_type === "epc" ? "EPC Customer" : "Franchise Store"}
                           </span>
                         </div>
-                        {/* Customer */}
                         <div className="space-y-1">
-                          <div className="text-[10px] text-text-muted uppercase font-bold">
+                          <div className="text-[10px] text-gray-500 uppercase font-black">
                             {order.order_type === "franchise" ? "Franchise Partner" : "EPC Buyer"}
                           </div>
-                          <div className="text-xs font-black text-text-primary truncate" title={order.customer_name}>
+                          <div className="text-xs font-black text-gray-900 truncate" title={order.customer_name}>
                             {order.customer_name}
                           </div>
                           {order.customer_gstin && order.customer_gstin !== "-" ? (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300">
-                              <span className="text-[8px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">GSTIN:</span>
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-50 border border-green-300 text-[10px] font-mono font-black text-gray-900">
+                              <span className="text-[9px] uppercase tracking-wider text-gray-600 font-black">GSTIN:</span>
                               <span>{order.customer_gstin}</span>
                             </div>
                           ) : (
-                            <div className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-mono text-text-muted">
+                            <div className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 border border-gray-300 text-[10px] font-mono font-black text-gray-600">
                               GST: Not Available
                             </div>
                           )}
-                          <div className="text-[10px] text-text-muted flex items-center gap-1">
-                            <FaPhone size={8} className="text-text-muted flex-shrink-0" />
-                            <span>{order.customer_contact}</span>
-                          </div>
+                          {order.customer_contact && order.customer_contact !== "-" && (
+                            <div className="text-xs font-black text-gray-900 flex items-center gap-1">
+                              <FaPhone size={9} className="text-gray-500 flex-shrink-0" />
+                              <span>{order.customer_contact}</span>
+                            </div>
+                          )}
                         </div>
-                        {/* Delivery Location */}
                         <div>
-                          <div className="text-[10px] text-text-muted uppercase font-bold mb-1">
+                          <div className="text-[10px] text-gray-500 uppercase font-black mb-1">
                             {order.order_type === "franchise" ? "Store Location" : "Delivery To"}
                           </div>
                           {order.delivery_address ? (
                             <>
-                              <div className="text-xs font-semibold text-text-primary flex items-center gap-1">
-                                <FaMapMarkerAlt size={9} className={`${isEpc ? "text-blue-500" : "text-purple-500"} flex-shrink-0`} />
-                                {order.delivery_address.district_name || order.delivery_address.city || order.delivery_address.address_line || "—"}
+                              <div className="text-xs font-black text-gray-900 flex items-center gap-1">
+                                <FaMapMarkerAlt size={9} className={`${isEpc ? "text-blue-600" : "text-purple-600"} flex-shrink-0`} />
+                                <span>{order.delivery_address.district_name || order.delivery_address.city || order.delivery_address.address_line || "—"}</span>
                               </div>
-                              <div className="text-[10px] text-text-muted">{order.delivery_address.state_name || ""}</div>
+                              <div className="text-[11px] font-black text-gray-700">{order.delivery_address.state_name || ""}</div>
                               {order.delivery_address.pincode && (
-                                <div className="text-[9px] text-text-muted">PIN: {order.delivery_address.pincode}</div>
+                                <div className="text-[10px] font-mono font-black text-gray-600">PIN: {order.delivery_address.pincode}</div>
                               )}
                             </>
                           ) : (
-                            <div className="text-[10px] text-text-muted italic">No address</div>
+                            <div className="text-[10px] text-gray-400 italic font-bold">No address</div>
                           )}
                         </div>
-                        {/* Order Value */}
                         <div>
-                          <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Order Value</div>
-                          <div className="text-sm font-black text-text-primary">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
-                          <div className="text-[10px] text-text-muted mt-0.5">{order.items?.length || 0} item(s)</div>
+                          <div className="text-[10px] text-gray-500 uppercase font-black mb-1">Order Value</div>
+                          <div className="text-sm font-black text-gray-900">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
+                          <div className="text-[11px] font-bold text-gray-500 mt-0.5">{order.items?.length || 0} item(s)</div>
                         </div>
-                        {/* Status + Date */}
                         <div>
-                          <div className="text-[10px] text-text-muted uppercase font-bold mb-1">Status</div>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border inline-block ${order.payment_status === "captured" || order.payment_status === "paid" ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"}`}>
-                            {order.payment_status === "captured" || order.payment_status === "paid" ? "Paid" : "Pending Verification"}
-                          </span>
-                          <div className="text-[9px] text-text-muted mt-1.5">{order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}</div>
+                          <div className="text-[10px] text-gray-500 uppercase font-black mb-1">Procurement Status</div>
+                          <div className="space-y-1">
+                            <div>
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center gap-1 ${order.panel_paid
+                                ? "bg-green-100 text-green-800 border-green-300"
+                                : "bg-gray-100 text-gray-600 border-gray-300"
+                                }`}>
+                                ☀️ Panel: {order.panel_paid ? (order.panel_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                              </span>
+                              {order.procurement_status?.panel?.supplier_name && (
+                                <div className="text-[10px] font-bold text-gray-700 mt-0.5 truncate max-w-[190px]">
+                                  Paid to: <span className="font-black text-gray-900">{order.procurement_status.panel.supplier_name}</span>
+                                  {order.procurement_status.panel.po_number && (
+                                    <span className="text-gray-500 block text-[9px]">({order.procurement_status.panel.po_number})</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center gap-1 ${order.inverter_paid
+                                ? "bg-teal-100 text-teal-800 border-teal-300"
+                                : "bg-gray-100 text-gray-600 border-gray-300"
+                                }`}>
+                                ⚡ Inverter: {order.inverter_paid ? (order.inverter_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                              </span>
+                              {order.procurement_status?.inverter?.supplier_name && (
+                                <div className="text-[10px] font-bold text-gray-700 mt-0.5 truncate max-w-[190px]">
+                                  Paid to: <span className="font-black text-gray-900">{order.procurement_status.inverter.supplier_name}</span>
+                                  {order.procurement_status.inverter.po_number && (
+                                    <span className="text-gray-500 block text-[9px]">({order.procurement_status.inverter.po_number})</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-[10px] font-black text-gray-500 mt-1">{order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}</div>
                         </div>
                       </div>
                     </div>
@@ -472,7 +613,7 @@ function CustomerOrdersTable({
                       }}
                       className={`flex-shrink-0 p-1.5 rounded-lg border transition-all cursor-pointer ${isExpanded
                         ? "text-primary border-primary/30 bg-primary/10 hover:bg-primary/20"
-                        : "text-text-muted hover:text-primary border-transparent hover:border-border hover:bg-surface-hover"
+                        : "text-gray-400 hover:text-primary border-transparent hover:border-gray-200 hover:bg-gray-50"
                         }`}
                       title={isExpanded ? "Collapse / Close Order" : "View Breakdown & Images"}
                     >
@@ -482,23 +623,23 @@ function CustomerOrdersTable({
 
                   {/* Expanded item details with rich BOM breakdown & product images */}
                   {isExpanded && (
-                    <div className="px-3 sm:px-6 py-4 sm:py-5 bg-surface-hover/30 border-t border-border space-y-4">
+                    <div className="px-3 sm:px-6 py-4 sm:py-5 bg-gray-50 border-t border-gray-200 space-y-4">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="text-[11px] font-black text-text-muted uppercase tracking-widest flex items-center gap-2">
+                        <div className="text-[11px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
                           <FaBoxOpen className="text-primary text-xs" />
                           Order Items &amp; Complete Kit Component Breakdown
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold text-text-muted">
+                          <span className="text-[10px] font-bold text-gray-500">
                             {(order.items || []).length} item{(order.items || []).length !== 1 ? "s" : ""}
                           </span>
                           <button
                             type="button"
                             onClick={() => setExpandedOrderId(null)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-text-secondary hover:text-danger bg-surface border border-border hover:border-danger/30 hover:bg-danger/5 transition-all cursor-pointer shadow-xs"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-gray-600 hover:text-red-600 bg-white border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-all cursor-pointer shadow-sm"
                             title="Close Order Tab"
                           >
-                            <FaTimes size={10} className="text-danger" />
+                            <FaTimes size={10} className="text-red-500" />
                             <span>Close Order Tab</span>
                           </button>
                         </div>
@@ -510,134 +651,125 @@ function CustomerOrdersTable({
                           const breakdown = isKit ? getItemBreakdown(item) : null;
 
                           return (
-                            <div key={idx} className="bg-surface rounded-2xl border border-border shadow-xs overflow-hidden">
-                              {/* Item Title Bar */}
-                              <div className="p-4 bg-surface-hover/50 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div key={idx} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                              <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
                                 <div className="flex items-center gap-3.5 min-w-0">
                                   <img
                                     src={item.image || breakdown?.kit_image || DEFAULT_PANEL_IMG}
                                     alt={item.item_name}
-                                    className="w-14 h-14 rounded-xl object-cover border border-border shadow-xs flex-shrink-0 bg-white"
+                                    className="w-14 h-14 rounded-xl object-cover border border-gray-200 shadow-sm flex-shrink-0 bg-white"
                                   />
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="text-sm font-black text-text-primary tracking-tight">{item.item_name}</h4>
+                                      <h4 className="text-sm font-black text-gray-900 tracking-tight">{item.item_name}</h4>
                                       {isKit && (
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
                                           Combo Kit
                                         </span>
                                       )}
                                       {item.capacity && (
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/20">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
                                           {item.capacity}
                                         </span>
                                       )}
                                     </div>
-                                    <div className="text-xs text-text-secondary font-semibold mt-1 flex items-center gap-2 flex-wrap">
-                                      <span>Order Quantity: <strong className="text-text-primary font-black">{item.quantity} {isKit ? "Kit" : "Unit"}{item.quantity > 1 ? "s" : ""}</strong></span>
-                                      <span className="text-text-muted">•</span>
-                                      <span>Rate: <strong className="text-text-primary">₹{(item.unit_price || 0).toLocaleString("en-IN")}</strong> / {isKit ? "kit" : "unit"}</span>
+                                    <div className="text-xs text-gray-600 font-semibold mt-1 flex items-center gap-2 flex-wrap">
+                                      <span>Order Quantity: <strong className="text-gray-900 font-black">{item.quantity} {isKit ? "Kit" : "Unit"}{item.quantity > 1 ? "s" : ""}</strong></span>
+                                      <span className="text-gray-400">•</span>
+                                      <span>Rate: <strong className="text-gray-900">₹{(item.unit_price || 0).toLocaleString("en-IN")}</strong> / {isKit ? "kit" : "unit"}</span>
                                     </div>
                                   </div>
                                 </div>
-                                {/* <div className="text-right flex-shrink-0 bg-primary/5 px-4 py-2 rounded-xl border border-primary/10">
-                                  <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Item Total Value</div>
-                                  <div className="text-base font-black text-primary">₹{(item.total_price || 0).toLocaleString("en-IN")}</div>
-                                </div> */}
                               </div>
 
-                              {/* Rich Component Breakdown for Combo Kits */}
                               {breakdown && (
-                                <div className="p-4 bg-bg/40 space-y-3">
+                                <div className="p-4 bg-gray-50/50 space-y-3">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                                       <FaBoxOpen className="text-amber-500 text-xs" />
                                       Bill of Materials (BOM) Breakdown — Exact Components to Procure
                                     </span>
-                                    <span className="text-[10px] font-bold text-text-muted">
+                                    <span className="text-[10px] font-bold text-gray-500">
                                       Total components for {item.quantity} Kit{item.quantity > 1 ? "s" : ""}
                                     </span>
                                   </div>
 
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    {/* 1. Solar Panels Card */}
                                     {breakdown.panels && (
-                                      <div className="p-3.5 rounded-xl border border-amber-300/80 dark:border-amber-700/60 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent flex items-start gap-3">
+                                      <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
                                         <img
                                           src={breakdown.panels.image || DEFAULT_PANEL_IMG}
                                           alt={breakdown.panels.name}
-                                          className="w-16 h-16 rounded-lg object-cover border border-amber-300 dark:border-amber-700/60 flex-shrink-0 shadow-xs bg-white"
+                                          className="w-16 h-16 rounded-lg object-cover border border-amber-200 flex-shrink-0 shadow-sm bg-white"
                                         />
                                         <div className="min-w-0 flex-1">
                                           <div className="flex items-center justify-between gap-1 mb-1">
-                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500 text-white shadow-xs">
+                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-500 text-white shadow-sm">
                                               ☀️ Solar Panels
                                             </span>
-                                            <span className="text-xs font-black text-amber-700 dark:text-amber-300">
+                                            <span className="text-xs font-black text-amber-700">
                                               {breakdown.panels.total_quantity} Pcs Total
                                             </span>
                                           </div>
-                                          <div className="text-xs font-bold text-text-primary line-clamp-1">
+                                          <div className="text-xs font-bold text-gray-900 line-clamp-1">
                                             {breakdown.panels.name}
                                           </div>
-                                          <div className="text-[10px] text-text-secondary font-medium mt-0.5">
-                                            Brand: <strong className="text-text-primary">{breakdown.panels.brand}</strong>
+                                          <div className="text-[10px] text-gray-600 font-medium mt-0.5">
+                                            Brand: <strong className="text-gray-900">{breakdown.panels.brand}</strong>
                                           </div>
-                                          <div className="text-[10px] font-semibold text-amber-800 dark:text-amber-200/90 mt-1 bg-amber-100/70 dark:bg-amber-950/60 px-2 py-0.5 rounded-md inline-block">
-                                            {breakdown.panels.quantity_per_kit} pcs/kit × {item.quantity} kits = <strong className="font-black text-amber-900 dark:text-amber-100">{breakdown.panels.total_quantity} Panels</strong>
+                                          <div className="text-[10px] font-semibold text-amber-800 mt-1 bg-amber-100 px-2 py-0.5 rounded-md inline-block">
+                                            {breakdown.panels.quantity_per_kit} pcs/kit × {item.quantity} kits = <strong className="font-black text-amber-900">{breakdown.panels.total_quantity} Panels</strong>
                                           </div>
                                         </div>
                                       </div>
                                     )}
 
-                                    {/* 2. Inverters Card */}
                                     {breakdown.inverters && (
-                                      <div className="p-3.5 rounded-xl border border-blue-300/80 dark:border-blue-700/60 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent flex items-start gap-3">
+                                      <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50 flex items-start gap-3">
                                         <img
                                           src={breakdown.inverters.image || DEFAULT_INVERTER_IMG}
                                           alt={breakdown.inverters.name}
-                                          className="w-16 h-16 rounded-lg object-cover border border-blue-300 dark:border-blue-700/60 flex-shrink-0 shadow-xs bg-white"
+                                          className="w-16 h-16 rounded-lg object-cover border border-blue-200 flex-shrink-0 shadow-sm bg-white"
                                         />
                                         <div className="min-w-0 flex-1">
                                           <div className="flex items-center justify-between gap-1 mb-1">
-                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-xs">
+                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-sm">
                                               ⚡ Solar Inverter
                                             </span>
-                                            <span className="text-xs font-black text-blue-700 dark:text-blue-300">
+                                            <span className="text-xs font-black text-blue-700">
                                               {breakdown.inverters.total_quantity} Pcs Total
                                             </span>
                                           </div>
-                                          <div className="text-xs font-bold text-text-primary line-clamp-1">
+                                          <div className="text-xs font-bold text-gray-900 line-clamp-1">
                                             {breakdown.inverters.name}
                                           </div>
-                                          <div className="text-[10px] text-text-secondary font-medium mt-0.5">
-                                            Brand: <strong className="text-text-primary">{breakdown.inverters.brand}</strong>
+                                          <div className="text-[10px] text-gray-600 font-medium mt-0.5">
+                                            Brand: <strong className="text-gray-900">{breakdown.inverters.brand}</strong>
                                           </div>
-                                          <div className="text-[10px] font-semibold text-blue-800 dark:text-blue-200/90 mt-1 bg-blue-100/70 dark:bg-blue-950/60 px-2 py-0.5 rounded-md inline-block">
-                                            {breakdown.inverters.quantity_per_kit} pc/kit × {item.quantity} kits = <strong className="font-black text-blue-900 dark:text-blue-100">{breakdown.inverters.total_quantity} Inverters</strong>
+                                          <div className="text-[10px] font-semibold text-blue-800 mt-1 bg-blue-100 px-2 py-0.5 rounded-md inline-block">
+                                            {breakdown.inverters.quantity_per_kit} pc/kit × {item.quantity} kits = <strong className="font-black text-blue-900">{breakdown.inverters.total_quantity} Inverters</strong>
                                           </div>
                                         </div>
                                       </div>
                                     )}
 
-                                    {/* 3. BOS & Protection Items Card */}
                                     {breakdown.bos_components && breakdown.bos_components.length > 0 && (
-                                      <div className="p-3.5 rounded-xl border border-emerald-300/80 dark:border-emerald-700/60 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent flex flex-col justify-between">
+                                      <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 flex flex-col justify-between">
                                         <div>
                                           <div className="flex items-center justify-between gap-1 mb-2">
-                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
+                                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-sm">
                                               🔧 BOS &amp; Protection
                                             </span>
-                                            <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                                            <span className="text-[10px] font-extrabold text-emerald-700">
                                               Complete Kit Included
                                             </span>
                                           </div>
                                           <div className="space-y-1.5">
                                             {breakdown.bos_components.map((bos, bIdx) => (
-                                              <div key={bIdx} className="flex items-center gap-2 bg-white/70 dark:bg-surface/70 px-2 py-1 rounded-lg border border-emerald-100 dark:border-emerald-900/40 text-[10px]">
+                                              <div key={bIdx} className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-emerald-100 text-[10px]">
                                                 <img src={bos.image || DEFAULT_STRUCTURE_IMG} alt={bos.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />
-                                                <span className="font-bold text-text-primary truncate flex-1">{bos.name}</span>
-                                                <span className="font-black text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                                                <span className="font-bold text-gray-900 truncate flex-1">{bos.name}</span>
+                                                <span className="font-black text-emerald-700 whitespace-nowrap">
                                                   {bos.total_quantity} Sets
                                                 </span>
                                               </div>
@@ -654,15 +786,14 @@ function CustomerOrdersTable({
                         })}
                       </div>
 
-                      {/* Bottom close bar */}
-                      <div className="pt-2 flex items-center justify-between border-t border-border/60">
-                        <span className="text-[10px] text-text-muted font-medium">
-                          Viewing itemized Bill of Materials &amp; equipment specifications for order <strong className="text-text-primary font-bold">{order.order_number}</strong>
+                      <div className="pt-2 flex items-center justify-between border-t border-gray-200">
+                        <span className="text-[10px] text-gray-500 font-medium">
+                          Viewing itemized Bill of Materials &amp; equipment specifications for order <strong className="text-gray-900 font-bold">{order.order_number}</strong>
                         </span>
                         <button
                           type="button"
                           onClick={() => setExpandedOrderId(null)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-text-secondary hover:text-text-primary bg-surface border border-border hover:bg-surface-hover hover:border-primary/40 transition-all cursor-pointer shadow-xs"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:bg-gray-50 hover:border-primary/40 transition-all cursor-pointer shadow-sm"
                         >
                           <FaChevronUp size={11} className="text-primary" />
                           <span>Close / Collapse Tab</span>
@@ -687,7 +818,7 @@ export default function Payments() {
   const activeStateId = selectedScope?.state;
   const activeCountryId = selectedScope?.country;
 
-  const [activeTab, setActiveTab] = useState("pending"); // "pending" or "history"
+  const [activeTab, setActiveTab] = useState("pending");
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -696,15 +827,13 @@ export default function Payments() {
   const [warehouseFilter, setWarehouseFilter] = useState("All");
   const [supplierFilter, setSupplierFilter] = useState("All");
 
-  // ── Supplier Procurement Filters (Panel / Inverter) ────────────────────────
-  const [procurementTypeFilter, setProcurementTypeFilter] = useState("all"); // "all" | "panel" | "inverter"
-  const [procurementOrderFilter, setProcurementOrderFilter] = useState("all"); // order id or "all"
+  const [procurementTypeFilter, setProcurementTypeFilter] = useState("all");
+  const [procurementOrderFilter, setProcurementOrderFilter] = useState("all");
   const [orderDateFrom, setOrderDateFrom] = useState("");
   const [orderDateTo, setOrderDateTo] = useState("");
-  const [procurementSupplierFilter, setProcurementSupplierFilter] = useState("all"); // supplier id or "all"
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all"); // "all" | "pending" | "paid"
+  const [procurementSupplierFilter, setProcurementSupplierFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
 
-  // Quick Filters (Industry → Category → Sub Category → System Type → Project Range)
   const [quickFilters, setQuickFilters] = useState({
     industryType: "all",
     category: "all",
@@ -737,25 +866,21 @@ export default function Payments() {
     fetchHierarchy();
   }, []);
 
-  // ── Location Filter State (State & District) ───────────────────────────────
   const [selectedState, setSelectedState] = useState("all");
   const [selectedDistrict, setSelectedDistrict] = useState("all");
   const [statesList, setStatesList] = useState([]);
   const [districtsList, setDistrictsList] = useState([]);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
 
-  // ── Product Filter State (Admin Combo Kits) ────────────────────────────────
   const [selectedComboKit, setSelectedComboKit] = useState("all");
   const [allAdminKits, setAllAdminKits] = useState([]);
   const [loadingAdminKits, setLoadingAdminKits] = useState(false);
 
-  // ── EPC & Franchise Specific Entity Filter States ─────────────────────────
   const [selectedEpcId, setSelectedEpcId] = useState("all");
   const [selectedFranchiseId, setSelectedFranchiseId] = useState("all");
   const [epcList, setEpcList] = useState([]);
   const [franchiseList, setFranchiseList] = useState([]);
 
-  // Load States on mount
   useEffect(() => {
     const fetchStates = async () => {
       try {
@@ -770,7 +895,6 @@ export default function Payments() {
     fetchStates();
   }, []);
 
-  // Load Districts when state changes
   useEffect(() => {
     if (!selectedState || selectedState === "all") {
       setDistrictsList([]);
@@ -795,7 +919,6 @@ export default function Payments() {
     fetchDistricts();
   }, [selectedState, statesList]);
 
-  // Load All Admin Combo Kits on mount
   useEffect(() => {
     const fetchKits = async () => {
       setLoadingAdminKits(true);
@@ -813,7 +936,6 @@ export default function Payments() {
     fetchKits();
   }, []);
 
-  // Pay Modal State
   const [selectedPO, setSelectedPO] = useState(null);
   const [isPayOpen, setIsPayOpen] = useState(false);
   const [payForm, setPayForm] = useState({
@@ -832,28 +954,23 @@ export default function Payments() {
   const [uploadingPI, setUploadingPI] = useState(false);
   const [selectedPIFile, setSelectedPIFile] = useState(null);
 
-  // Proforma Invoice Modal State
   const [proformaModalOpen, setProformaModalOpen] = useState(false);
   const [proformaPO, setProformaPO] = useState(null);
   const [proformaInitialTab, setProformaInitialTab] = useState("po");
 
-  // Products Ordered Modal State
   const [itemsModalOpen, setItemsModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
 
-  // Cancel PO Dialog State
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelPoId, setCancelPoId] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  // ── EPC & Franchise Pending Orders ─────────────────────────────────────────
   const [pendingEpcOrders, setPendingEpcOrders] = useState([]);
   const [loadingEpcOrders, setLoadingEpcOrders] = useState(false);
-  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set()); // checked order IDs
-  const [expandedOrderId, setExpandedOrderId] = useState(null);        // expanded order detail row
-  const [awaitingSubFilter, setAwaitingSubFilter] = useState("all");    // "all" | "customer_orders" | "supplier_pos"
+  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
+  const [awaitingSubFilter, setAwaitingSubFilter] = useState("all");
 
-  // Auto-expand the first pending customer order only once upon initial data load
   const hasAutoExpandedRef = useRef(false);
   useEffect(() => {
     if (pendingEpcOrders.length > 0 && !hasAutoExpandedRef.current) {
@@ -866,15 +983,15 @@ export default function Payments() {
     return purchaseOrders.filter(po => po.status === "pending" || po.status === "accepted" || po.status === "invoiced").length;
   }, [purchaseOrders]);
 
-  // ── Combine & Pay Supplier Modal ───────────────────────────────────────────
   const [combineModalOpen, setCombineModalOpen] = useState(false);
   const [warehouses, setWarehouses] = useState([]);
+  const [allWarehouses, setAllWarehouses] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [allApprovedSuppliers, setAllApprovedSuppliers] = useState([]);
   const [combineForm, setCombineForm] = useState({
     warehouse_id: "",
     supplier_id: "",
-    timeline: new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-CA'), // +7 days
-    // Payment details
+    timeline: new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-CA'),
     reference_no: "",
     proforma_invoice_no: "",
     payment_date: new Date().toLocaleDateString('en-CA'),
@@ -882,7 +999,7 @@ export default function Payments() {
     payment_mode: "NEFT",
     receipt_url: "",
   });
-  const [combineProcurementType, setCombineProcurementType] = useState("panel"); // "panel" | "inverter" | "mixed"
+  const [combineProcurementType, setCombineProcurementType] = useState("panel");
   const [combineSubmitting, setCombineSubmitting] = useState(false);
   const [combineError, setCombineError] = useState("");
   const [combineSuccess, setCombineSuccess] = useState("");
@@ -891,7 +1008,6 @@ export default function Payments() {
   const [warehouseSkus, setWarehouseSkus] = useState([]);
   const [loadingSkus, setLoadingSkus] = useState(false);
 
-  // ── Live Procurement Amount Breakdown (Panel / Inverter / Other) ────────────
   const PANEL_KEYWORDS = ["panel", "solar panel", "pv module", "bifacial", "monocrystalline", "polycrystalline", "mono perc", "550w", "solar module", "pv panel"];
   const INVERTER_KEYWORDS = ["inverter", "on-grid", "off-grid", "hybrid", "string inverter", "microinverter", "growatt", "sungrow", "inv-", "onduleur"];
 
@@ -927,10 +1043,6 @@ export default function Payments() {
       });
     });
 
-    // In a standard Solar EPC project / Kit:
-    // Panels represent ~60% of total kit value
-    // Inverters represent ~25% of total kit value
-    // Balance of System (BOS/Structure/Cables) represents ~15%
     const panelTotal = Math.round(totalOrderAmount * 0.60);
     const inverterTotal = Math.round(totalOrderAmount * 0.25);
     const otherTotal = Math.max(0, totalOrderAmount - panelTotal - inverterTotal);
@@ -938,7 +1050,6 @@ export default function Payments() {
     return { totalOrderAmount, panelTotal, inverterTotal, otherTotal, panelQty, inverterQty, selectedCount: selected.length };
   }, [pendingEpcOrders, selectedOrderIds]);
 
-  // Auto-fill amount when procurement type or selected orders change
   useEffect(() => {
     const { panelTotal, inverterTotal, totalOrderAmount } = procurementAmountBreakdown;
     let autoAmount = "";
@@ -950,10 +1061,13 @@ export default function Payments() {
     }
   }, [procurementAmountBreakdown, combineProcurementType]);
 
-  const fetchPendingEpcOrders = async () => {
+  const [procurementComponentFilter, setProcurementComponentFilter] = useState("all");
+
+  const fetchPendingEpcOrders = async (typeOverride) => {
     setLoadingEpcOrders(true);
     try {
-      const res = await getPendingEpcFranchiseOrders();
+      const type = typeOverride !== undefined ? typeOverride : procurementComponentFilter;
+      const res = await getPendingEpcFranchiseOrders({ procurement_type: type });
       if (res?.status === "success") {
         const epc = res.data?.epc_orders || [];
         const fpo = res.data?.franchise_orders || [];
@@ -1020,8 +1134,8 @@ export default function Payments() {
 
   const handleCombineWarehouseChange = async (whId) => {
     setCombineForm(prev => ({ ...prev, warehouse_id: whId, supplier_id: "" }));
-    fetchSuppliersForWarehouse(whId);
     if (whId) {
+      fetchSuppliersForWarehouse(whId);
       setLoadingSkus(true);
       try {
         const res = await getWarehouseSkus(whId);
@@ -1035,22 +1149,113 @@ export default function Payments() {
       }
     } else {
       setWarehouseSkus([]);
+      if (allApprovedSuppliers.length > 0) {
+        setSuppliers(allApprovedSuppliers.map(s => ({
+          _id: s._id,
+          supplier_id: s._id,
+          company_name: s.company_name,
+          brand_name: s.brand_name || s.company_name,
+          gst_number: s.gst_number || "",
+          pan_number: s.pan_number || "",
+          email: s.email || "",
+          phone: s.phone || "",
+        })));
+      }
     }
   };
 
   const fetchWarehouses = async () => {
     try {
-      const res = await getWarehouses(activeClusterId || "", activeStateId || "", activeCountryId || "");
-      if (res?.status === "success") setWarehouses(res.data || []);
-    } catch (err) { console.error("Failed to load warehouses:", err); }
+      // 1. Fetch all company warehouses without restrictions for modal selection
+      const allRes = await getWarehouses("", "", "");
+      const allList = (allRes?.status === "success" && Array.isArray(allRes.data)) ? allRes.data : [];
+      setAllWarehouses(allList);
+
+      // 2. Fetch scoped warehouses if scope is active
+      if (activeClusterId || activeStateId || activeCountryId) {
+        const res = await getWarehouses(activeClusterId || "", activeStateId || "", activeCountryId || "");
+        const scopedList = (res?.status === "success" && Array.isArray(res.data) && res.data.length > 0) ? res.data : allList;
+        setWarehouses(scopedList);
+        return allList.length > 0 ? allList : scopedList;
+      } else {
+        setWarehouses(allList);
+        return allList;
+      }
+    } catch (err) {
+      console.error("Failed to load warehouses:", err);
+      try {
+        const allRes = await getWarehouses("", "", "");
+        if (allRes?.status === "success" && Array.isArray(allRes.data)) {
+          setAllWarehouses(allRes.data);
+          setWarehouses(allRes.data);
+          return allRes.data;
+        }
+      } catch (e) {
+        console.error("Fallback warehouse fetch failed:", e);
+      }
+    }
+    return [];
+  };
+
+  const fetchAllSuppliers = async () => {
+    try {
+      const res = await getSuppliers();
+      if (res?.status === "success") {
+        const approved = (res.data || []).filter(s => s.status === "approved" && s.is_deleted !== true);
+        setAllApprovedSuppliers(approved);
+        return approved;
+      }
+    } catch (err) {
+      console.error("Failed to load approved suppliers:", err);
+    }
+    return [];
   };
 
   const fetchSuppliersForWarehouse = async (warehouseId) => {
-    if (!warehouseId) { setSuppliers([]); return; }
+    if (!warehouseId) {
+      setSuppliers(allApprovedSuppliers.map(s => ({
+        _id: s._id,
+        supplier_id: s._id,
+        company_name: s.company_name,
+        brand_name: s.brand_name || s.company_name,
+        gst_number: s.gst_number || "",
+        pan_number: s.pan_number || "",
+        email: s.email || "",
+        phone: s.phone || "",
+      })));
+      return;
+    }
     try {
       const res = await getWarehouseSuppliers(warehouseId);
-      if (res?.status === "success") setSuppliers(res.data || []);
-    } catch (err) { console.error("Failed to load suppliers:", err); }
+      if (res?.status === "success" && Array.isArray(res.data) && res.data.length > 0) {
+        setSuppliers(res.data);
+      } else if (allApprovedSuppliers.length > 0) {
+        setSuppliers(allApprovedSuppliers.map(s => ({
+          _id: s._id,
+          supplier_id: s._id,
+          company_name: s.company_name,
+          brand_name: s.brand_name || s.company_name,
+          gst_number: s.gst_number || "",
+          pan_number: s.pan_number || "",
+          email: s.email || "",
+          phone: s.phone || "",
+        })));
+      }
+    } catch (err) {
+      console.error("Failed to load suppliers:", err);
+      if (allApprovedSuppliers.length > 0) {
+        setSuppliers(allApprovedSuppliers.map(s => ({
+          _id: s._id,
+          supplier_id: s._id,
+          company_name: s.company_name,
+          brand_name: s.brand_name || s.company_name,
+          gst_number: s.gst_number || "",
+          pan_number: s.pan_number || "",
+          email: s.email || "",
+          phone: s.phone || "",
+        })));
+      }
+    }
   };
 
   const fetchOrders = async () => {
@@ -1071,13 +1276,19 @@ export default function Payments() {
     fetchOrders();
     fetchPendingEpcOrders();
     fetchWarehouses();
+    fetchAllSuppliers();
     setWarehouseFilter("All");
     setSupplierFilter("All");
     setQuickFilters({ industryType: "all", category: "all", subCategory: "all", systemType: "all", projectRange: "all" });
     setPage(1);
   }, [activeClusterId, activeStateId, activeCountryId]);
 
-  // ── Dynamic State & District Order Counts & Options ───────────────────────
+  useEffect(() => {
+    if (activeTab === "history") {
+      fetchOrders();
+    }
+  }, [activeTab]);
+
   const ordersForLocationFilter = useMemo(() => {
     let list = pendingEpcOrders || [];
     if (awaitingSubFilter === "epc_orders") {
@@ -1093,7 +1304,6 @@ export default function Payments() {
     return list;
   }, [pendingEpcOrders, purchaseOrders, awaitingSubFilter]);
 
-  // Map of stateId or stateName (lowercase) -> count
   const stateOrderCounts = useMemo(() => {
     const counts = new Map();
     (ordersForLocationFilter || []).forEach(order => {
@@ -1121,7 +1331,6 @@ export default function Payments() {
     return 0;
   };
 
-  // States merged with any states found directly in orders, sorted with order-bearing states first
   const computedStatesList = useMemo(() => {
     const list = [...statesList];
     const seenNames = new Set(list.map(s => (s.name || "").trim().toLowerCase()));
@@ -1143,7 +1352,6 @@ export default function Payments() {
     });
   }, [statesList, ordersForLocationFilter, stateOrderCounts]);
 
-  // Orders in currently selected state
   const ordersInSelectedState = useMemo(() => {
     if (!selectedState || selectedState === "all") return [];
     const targetState = selectedState.toLowerCase();
@@ -1159,7 +1367,6 @@ export default function Payments() {
     });
   }, [ordersForLocationFilter, selectedState]);
 
-  // Map of districtId or districtName (lowercase) -> count
   const districtOrderCounts = useMemo(() => {
     const counts = new Map();
     ordersInSelectedState.forEach(order => {
@@ -1187,7 +1394,6 @@ export default function Payments() {
     return 0;
   };
 
-  // Districts merged with any districts found directly in orders for this state, sorted with order-bearing districts first
   const computedDistrictsList = useMemo(() => {
     const list = [...districtsList];
     const seenNames = new Set(list.map(d => (d.name || "").trim().toLowerCase()));
@@ -1209,7 +1415,6 @@ export default function Payments() {
     });
   }, [districtsList, ordersInSelectedState, districtOrderCounts]);
 
-  // Toggle selection of an EPC/Franchise order
   const toggleOrderSelection = (id) => {
     setSelectedOrderIds(prev => {
       const next = new Set(prev);
@@ -1227,10 +1432,31 @@ export default function Payments() {
     }
   };
 
-  const openCombineModal = () => {
+  const openCombineModal = async () => {
     if (selectedOrderIds.size === 0) return;
+
+    // Guarantee warehouses are loaded
+    let whList = allWarehouses.length > 0 ? allWarehouses : warehouses;
+    if (!whList || whList.length === 0) {
+      whList = await fetchWarehouses();
+    }
+    if (!whList || whList.length === 0) {
+      try {
+        const directRes = await getWarehouses("", "", "");
+        if (directRes?.status === "success" && Array.isArray(directRes.data)) {
+          whList = directRes.data;
+          setAllWarehouses(whList);
+          setWarehouses(whList);
+        }
+      } catch (e) {
+        console.error("Direct warehouse load error:", e);
+      }
+    }
+
+    const defaultWh = (whList && whList.length > 0) ? String(whList[0]._id || whList[0].id) : "";
+
     setCombineForm({
-      warehouse_id: "",
+      warehouse_id: defaultWh,
       supplier_id: "",
       timeline: new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-CA'),
       reference_no: "",
@@ -1240,13 +1466,28 @@ export default function Payments() {
       payment_mode: "NEFT",
       receipt_url: "",
     });
-    setCombineProcurementType("panel"); // reset to panel by default
-    setSuppliers([]);
+    setCombineProcurementType(procurementComponentFilter === "inverter" ? "inverter" : "panel");
     setWarehouseSkus([]);
     setCombineError("");
     setCombineSuccess("");
     setCombineReceiptFile(null);
     setCombineModalOpen(true);
+
+    const supList = await fetchAllSuppliers();
+    if (defaultWh) {
+      fetchSuppliersForWarehouse(defaultWh);
+    } else if (supList && supList.length > 0) {
+      setSuppliers(supList.map(s => ({
+        _id: s._id,
+        supplier_id: s._id,
+        company_name: s.company_name,
+        brand_name: s.brand_name || s.company_name,
+        gst_number: s.gst_number || "",
+        pan_number: s.pan_number || "",
+        email: s.email || "",
+        phone: s.phone || "",
+      })));
+    }
   };
 
   const handleCombineSubmit = async (e) => {
@@ -1285,18 +1526,48 @@ export default function Payments() {
     }
 
     const selectedOrders = pendingEpcOrders.filter(o => selectedOrderIds.has(o.id || o._id));
+    const totalAmount = Number(combineForm.amount) || 0;
+
+    let calculatedQty = 1;
+    let itemDescription = "";
+    let itemSkuCode = "PROCUREMENT-ITEM";
+
+    if (combineProcurementType === "panel") {
+      calculatedQty = procurementAmountBreakdown.panelQty || 1;
+      itemDescription = "Solar PV Modules (540W/550W Mono PERC Bifacial)";
+      itemSkuCode = "PANEL-PROCUREMENT";
+    } else if (combineProcurementType === "inverter") {
+      calculatedQty = procurementAmountBreakdown.inverterQty || 1;
+      itemDescription = "Solar Inverters (On-Grid / String Inverters)";
+      itemSkuCode = "INVERTER-PROCUREMENT";
+    } else {
+      calculatedQty = selectedOrders.reduce((acc, o) => {
+        return acc + (o.items || []).reduce((s, it) => s + (Number(it.quantity) || 1), 0);
+      }, 0) || 1;
+      itemDescription = "Complete Solar Rooftop Combo Kits";
+      itemSkuCode = "MIXED-KIT-PROCUREMENT";
+    }
+
+    const unitPrice = Math.round(totalAmount / calculatedQty);
+
     const payload = {
       warehouse_id: combineForm.warehouse_id,
       supplier_id: combineForm.supplier_id,
       timeline: combineForm.timeline,
-      procurement_type: combineProcurementType, // "panel" | "inverter" | "mixed"
+      procurement_type: combineProcurementType,
       source_order_ids: selectedOrders.map(o => ({ order_id: o.id || o._id, order_type: o.order_type })),
-      items: [],
+      items: [{
+        sku_code: itemSkuCode,
+        item_name: `${itemDescription} (${calculatedQty} Pcs)`,
+        qty: calculatedQty,
+        order_price: unitPrice,
+        benchmark_price: unitPrice,
+      }],
       payment: {
         reference_no: combineForm.reference_no,
         proforma_invoice_no: combineForm.proforma_invoice_no,
         payment_date: combineForm.payment_date,
-        amount: Number(combineForm.amount),
+        amount: totalAmount,
         payment_mode: combineForm.payment_mode,
         receipt_url: receiptUrl,
       },
@@ -1317,12 +1588,13 @@ export default function Payments() {
         setCombineError(res.message || "Failed to create combined payment.");
       }
     } catch (err) {
-      setCombineError(err.response?.data?.message || err.message || "Failed to create combined payment.");
+      const backendErr = err.response?.data?.error;
+      const backendMsg = err.response?.data?.message;
+      setCombineError(backendErr ? `${backendMsg ? backendMsg + ': ' : ''}${backendErr}` : (backendMsg || err.message || "Failed to create combined payment."));
     } finally {
       setCombineSubmitting(false);
     }
   };
-
 
   const handleOpenPay = (po) => {
     setSelectedPO(po);
@@ -1347,7 +1619,6 @@ export default function Payments() {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setSelectedFile(file);
     setFormError("");
   };
@@ -1477,10 +1748,8 @@ export default function Payments() {
     }
   };
 
-  // ── All Orders for Dropdown (Pending + Existing PO Source Orders) ───────────
   const allOrdersForDropdown = useMemo(() => {
     const map = new Map();
-    // From pending EPC/Franchise customer orders
     pendingEpcOrders.forEach((o) => {
       const id = String(o.id || o._id);
       if (!map.has(id)) {
@@ -1490,7 +1759,6 @@ export default function Payments() {
         });
       }
     });
-    // From existing supplier POs → their source_orders
     purchaseOrders.forEach((po) => {
       (po.source_orders || []).forEach((so) => {
         const id = String(so.order_id || so._id || so.id || "");
@@ -1501,7 +1769,6 @@ export default function Payments() {
           });
         }
       });
-      // Also add PO itself
       const poId = String(po._id || po.id);
       const poKey = `po_${poId}`;
       if (!map.has(poKey)) {
@@ -1526,7 +1793,6 @@ export default function Payments() {
     return Array.from(map.values());
   }, [purchaseOrders]);
 
-  // ── Quick Filter Options (from Shop Hierarchy) ───────────────────────────
   const shopHierarchy = useMemo(() => hierarchy.shopHierarchy || [], [hierarchy.shopHierarchy]);
 
   const qfIndustryTypeOptions = useMemo(() => {
@@ -1822,10 +2088,8 @@ export default function Payments() {
     setPage(1);
   };
 
-  // ── Filter Franchise & EPC Customer Orders ────────────────────────────────
   const filteredEpcOrders = useMemo(() => {
     return pendingEpcOrders.filter((order) => {
-      // 1. Search Query (Matches Order #, Customer / Partner Name, Phone / Contact, GSTIN, and Products)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesNum = (order.order_number || "").toLowerCase().includes(q);
@@ -1838,7 +2102,6 @@ export default function Payments() {
         }
       }
 
-      // 1.1 Dedicated EPC Partner Filter (by entity ID, name, or GSTIN)
       if (selectedEpcId !== "all") {
         if (order.order_type !== "epc") return false;
         const target = selectedEpcId.toLowerCase();
@@ -1848,7 +2111,6 @@ export default function Payments() {
         if (!matchesId && !matchesName && !matchesGstin) return false;
       }
 
-      // 1.2 Dedicated Franchise Partner Filter (by entity ID, name, or GSTIN)
       if (selectedFranchiseId !== "all") {
         if (order.order_type !== "franchise") return false;
         const target = selectedFranchiseId.toLowerCase();
@@ -1858,7 +2120,6 @@ export default function Payments() {
         if (!matchesId && !matchesName && !matchesGstin) return false;
       }
 
-      // 2. Location Filter (State & District)
       if (selectedState !== "all") {
         const targetState = selectedState.toLowerCase();
         const orderStateId = (order.delivery_address?.state_id || order.state_id || "").toString().toLowerCase();
@@ -1877,7 +2138,6 @@ export default function Payments() {
         }
       }
 
-      // 3. Product / ComboKit Filter (Admin Combo Kits)
       if (selectedComboKit !== "all") {
         const targetKitId = selectedComboKit.toString().toLowerCase();
         const selectedKitObj = allAdminKits.find(k => String(k._id || k.id).toLowerCase() === targetKitId);
@@ -1895,7 +2155,6 @@ export default function Payments() {
         if (!hasKit) return false;
       }
 
-      // 4. Classification Quick Filters (Industry, Category, SubCategory, SystemType, ProjectRange)
       if (hasActiveQuickFilters) {
         if (quickFilters.industryType !== "all") {
           const target = quickFilters.industryType.toLowerCase();
@@ -1942,7 +2201,6 @@ export default function Payments() {
     });
   }, [pendingEpcOrders, searchQuery, selectedEpcId, selectedFranchiseId, selectedState, selectedDistrict, selectedComboKit, quickFilters, hasActiveQuickFilters]);
 
-  // Separate EPC & Franchise Orders
   const pendingEpcCount = useMemo(() => {
     return pendingEpcOrders.filter(o => o.order_type === "epc").length;
   }, [pendingEpcOrders]);
@@ -2003,14 +2261,15 @@ export default function Payments() {
     });
   };
 
-  // ── Filter Supplier Purchase Orders (POs) ─────────────────────────────────
   const filteredPOList = useMemo(() => {
     return purchaseOrders.filter((po) => {
       const matchesSearch =
         !searchQuery.trim() ||
         po.po_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (po.invoice_no || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (po.supplier_id?.company_name || "").toLowerCase().includes(searchQuery.toLowerCase());
+        (po.invoice_no || po.proforma_invoice_no || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (po.supplier_id?.company_name || po.supplier_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (po.supplier_id?.brand_name || po.supplier_brand || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (po.warehouse_code || po.warehouse_id?.warehouse_code || "").toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesTab =
         activeTab === "pending"
@@ -2025,7 +2284,6 @@ export default function Payments() {
         supplierFilter === "All" ? true :
           (po.supplier_id?._id || po.supplier_id?.id) === supplierFilter;
 
-      // Location Filter (State & District)
       if (selectedState !== "all") {
         const targetState = selectedState.toLowerCase();
         const poStateId = (po.state_id || po.warehouse_id?.level_1 || "").toString().toLowerCase();
@@ -2054,7 +2312,6 @@ export default function Payments() {
         }
       }
 
-      // Product / ComboKit Filter (Admin Combo Kits)
       if (selectedComboKit !== "all") {
         const targetKit = selectedComboKit.toString().toLowerCase();
         const selectedKitObj = allAdminKits.find(k => String(k._id || k.id).toLowerCase() === targetKit);
@@ -2078,7 +2335,6 @@ export default function Payments() {
         }
       }
 
-      // Quick Filters — match if ANY item or PO matches active filters
       const matchesQuickFilters = (() => {
         if (!hasActiveQuickFilters) return true;
 
@@ -2125,7 +2381,6 @@ export default function Payments() {
         return true;
       })();
 
-      // ── Supplier Procurement Filter: Order ──────────────────────────────
       if (procurementOrderFilter !== "all") {
         const targetOrder = String(procurementOrderFilter).toLowerCase();
         const hasOrder =
@@ -2138,7 +2393,6 @@ export default function Payments() {
         if (!hasOrder) return false;
       }
 
-      // ── Supplier Procurement Filter: Order Date Range ────────────────────
       if (orderDateFrom) {
         const poDate = new Date(po.created_at || po.payment?.payment_date || po.payment_date || 0);
         if (poDate < new Date(orderDateFrom)) return false;
@@ -2148,7 +2402,6 @@ export default function Payments() {
         if (poDate > new Date(orderDateTo + "T23:59:59")) return false;
       }
 
-      // ── Supplier Procurement Filter: Panel / Inverter Type ───────────────
       if (procurementTypeFilter !== "all") {
         const panelKeywords = ["panel", "solar panel", "pv module", "bifacial", "monocrystalline", "polycrystalline", "mono perc", "550w", "solar module"];
         const inverterKeywords = ["inverter", "on-grid", "off-grid", "hybrid", "string inverter", "microinverter", "growatt", "sungrow", "inv-"];
@@ -2168,13 +2421,11 @@ export default function Payments() {
         if (!hasProcType) return false;
       }
 
-      // ── Supplier Procurement Filter: Supplier ────────────────────────────
       if (procurementSupplierFilter !== "all") {
         const suppId = String(po.supplier_id?._id || po.supplier_id?.id || po.supplier_id || "");
         if (suppId !== String(procurementSupplierFilter)) return false;
       }
 
-      // ── Supplier Procurement Filter: Payment Status ──────────────────────
       if (paymentStatusFilter !== "all") {
         if (paymentStatusFilter === "paid") {
           if (po.status !== "paid" && po.status !== "delivered") return false;
@@ -2187,14 +2438,13 @@ export default function Payments() {
     });
   }, [purchaseOrders, searchQuery, activeTab, warehouseFilter, supplierFilter, selectedState, selectedDistrict, selectedComboKit, quickFilters, hasActiveQuickFilters, procurementOrderFilter, orderDateFrom, orderDateTo, procurementTypeFilter, procurementSupplierFilter, paymentStatusFilter]);
 
-  // Paginated POs
   const paginatedPOs = useMemo(() => {
     const start = (page - 1) * pageSize;
     return filteredPOList.slice(start, start + pageSize);
   }, [filteredPOList, page]);
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-10 bg-white">
       <PageHeader
         title="Supplier Payments Control"
         subtitle={`Process supplier proforma payments and track transaction logs for ${activeClusterName}.`}
@@ -2202,10 +2452,10 @@ export default function Payments() {
       />
 
       {/* Tabs */}
-      <div className="flex bg-surface border border-border p-1 rounded-xl gap-1 max-w-xl">
+      <div className="flex bg-white border border-gray-200 p-1 rounded-xl gap-1 max-w-xl shadow-sm">
         <button
           onClick={() => { setActiveTab("pending"); setPage(1); }}
-          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-surface-hover"}`}
+          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
           <FaClipboardList />
           Awaiting Order
@@ -2216,8 +2466,8 @@ export default function Payments() {
           )}
         </button>
         <button
-          onClick={() => { setActiveTab("history"); setPage(1); }}
-          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:bg-surface-hover"}`}
+          onClick={() => { setActiveTab("history"); setPage(1); fetchOrders(); }}
+          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
           <FaHistory />
           Payment History
@@ -2226,15 +2476,15 @@ export default function Payments() {
 
       {/* ─── Sub-filters & Actions for Awaiting Payment ─────────────────────── */}
       {activeTab === "pending" && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface border border-border p-2.5 rounded-2xl shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-gray-200 p-2.5 rounded-2xl shadow-sm">
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
               onClick={() => { setAwaitingSubFilter("all"); setPage(1); }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "all" ? "bg-primary text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "all" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
             >
               <span>All Orders Awaiting Action</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "all" ? "bg-white/20 text-white" : "bg-primary/10 text-primary"}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${awaitingSubFilter === "all" ? "bg-white/20 text-white" : "bg-primary/10 text-primary"}`}>
                 {pendingEpcOrders.length + pendingPOCount}
               </span>
             </button>
@@ -2245,11 +2495,11 @@ export default function Payments() {
                 setSelectedFranchiseId("all");
                 setPage(1);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "epc_orders" ? "bg-blue-600 text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "epc_orders" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
             >
               <FaBuilding size={11} />
               <span>EPC Orders</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "epc_orders" ? "bg-white text-blue-600" : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${awaitingSubFilter === "epc_orders" ? "bg-white text-blue-600" : "bg-blue-100 text-blue-800"}`}>
                 {hasActiveMasterFilters ? filteredEpcOnlyOrders.length : pendingEpcCount}
               </span>
             </button>
@@ -2260,34 +2510,33 @@ export default function Payments() {
                 setSelectedEpcId("all");
                 setPage(1);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "franchise_orders" ? "bg-purple-600 text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "franchise_orders" ? "bg-purple-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
             >
               <FaStore size={11} />
               <span>Franchise Orders</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "franchise_orders" ? "bg-white text-purple-600" : "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${awaitingSubFilter === "franchise_orders" ? "bg-white text-purple-600" : "bg-purple-100 text-purple-800"}`}>
                 {hasActiveMasterFilters ? filteredFranchiseOnlyOrders.length : pendingFranchiseCount}
               </span>
             </button>
             <button
               type="button"
               onClick={() => setAwaitingSubFilter("supplier_pos")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "supplier_pos" ? "bg-primary text-white shadow-xs" : "text-text-secondary hover:bg-surface-hover"}`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${awaitingSubFilter === "supplier_pos" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
             >
               <FaClipboardList size={11} />
               <span>Supplier Purchase Orders (PO)</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${awaitingSubFilter === "supplier_pos" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${awaitingSubFilter === "supplier_pos" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
                 {pendingPOCount}
               </span>
             </button>
           </div>
 
-          {/* Action button: Combine & Pay Supplier */}
           {(awaitingSubFilter === "all" || awaitingSubFilter === "epc_orders" || awaitingSubFilter === "franchise_orders") && (
-            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/50">
+            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-200">
               <button
                 type="button"
                 onClick={fetchPendingEpcOrders}
-                className="text-xs text-text-secondary hover:text-primary font-semibold px-3 py-1.5 border border-border rounded-lg hover:border-primary/30 transition-all cursor-pointer"
+                className="text-xs text-gray-600 hover:text-primary font-semibold px-3 py-1.5 border border-gray-200 rounded-lg hover:border-primary/30 transition-all cursor-pointer"
               >
                 Refresh
               </button>
@@ -2295,8 +2544,8 @@ export default function Payments() {
                 onClick={openCombineModal}
                 disabled={selectedOrderIds.size === 0}
                 className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-sm ${selectedOrderIds.size > 0
-                  ? "bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200 dark:shadow-amber-900 cursor-pointer"
-                  : "bg-surface border border-border text-text-muted cursor-not-allowed opacity-60"
+                  ? "bg-primary hover:bg-primary/90 text-white cursor-pointer"
+                  : "bg-white border border-gray-200 text-gray-400 cursor-not-allowed opacity-60"
                   }`}
               >
                 <FaLink />
@@ -2308,22 +2557,22 @@ export default function Payments() {
       )}
 
       {/* ─── Master Order Filters Bar ───────────────────────────────────────── */}
-      <div className="bg-surface border border-border rounded-2xl p-4.5 space-y-3.5 shadow-xs">
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3.5 shadow-sm">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-border/60">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-gray-200">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="p-2 rounded-xl bg-primary/10 text-primary">
               <FaFilter className="w-3.5 h-3.5" />
             </span>
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-text-primary tracking-tight">Master Order Filters</h3>
+              <h3 className="font-bold text-sm text-gray-900 tracking-tight">Master Order Filters</h3>
               {activeFiltersCount > 0 && (
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20">
                   {activeFiltersCount} active
                 </span>
               )}
             </div>
-            <span className="text-[11px] text-text-muted hidden md:inline">
+            <span className="text-[11px] text-gray-500 hidden md:inline">
               — Filter customer orders and supplier POs by industry classification, geography, and combo kit
             </span>
           </div>
@@ -2343,7 +2592,7 @@ export default function Payments() {
               <button
                 type="button"
                 onClick={resetAllMasterFilters}
-                className="text-xs font-bold text-text-secondary hover:text-danger px-2.5 py-1 rounded-lg border border-border hover:border-danger/30 hover:bg-danger/5 transition-all cursor-pointer flex items-center gap-1.5"
+                className="text-xs font-bold text-gray-600 hover:text-red-600 px-2.5 py-1 rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition-all cursor-pointer flex items-center gap-1.5"
                 title="Reset all classification, location, and product filters"
               >
                 <FaTimes size={10} />
@@ -2353,16 +2602,16 @@ export default function Payments() {
           </div>
         </div>
 
-        {/* Row 1: Classification Quick Filters (Industry Type -> Category -> Sub Category -> System Type -> Project Range) */}
+        {/* Row 1: Classification Quick Filters */}
         <div>
-          <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <FaLayerGroup size={10} className="text-primary/70" />
             <span>1. Classification Filters</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {/* 1. Industry Type */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                 Industry Type
               </label>
               <div className="relative">
@@ -2378,19 +2627,19 @@ export default function Payments() {
                     });
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   {qfIndustryTypeOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.text}</option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* 2. Category */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                 Category
               </label>
               <div className="relative">
@@ -2406,19 +2655,19 @@ export default function Payments() {
                     }));
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   {qfCategoryOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.text}</option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* 3. Sub Category */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                 Sub Category
               </label>
               <div className="relative">
@@ -2433,19 +2682,19 @@ export default function Payments() {
                     }));
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   {qfSubCategoryOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.text}</option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* 4. System Type */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                 System Type
               </label>
               <div className="relative">
@@ -2459,19 +2708,19 @@ export default function Payments() {
                     }));
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   {qfSystemTypeOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.text}</option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* 5. Project Range */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                 Project Range
               </label>
               <div className="relative">
@@ -2481,32 +2730,32 @@ export default function Payments() {
                     setQuickFilters(prev => ({ ...prev, projectRange: e.target.value }));
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   {qfProjectRangeOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.text}</option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Row 2: Location (State & District), Product (Combo Kit), and Search Input */}
-        <div className="pt-2 border-t border-border/40">
-          <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center justify-between">
+        {/* Row 2: Location, Customer & Product Filters */}
+        <div className="pt-2 border-t border-gray-200">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <FaMapMarkerAlt size={10} className="text-amber-500/80" />
               <span>2. Location, Customer &amp; Product Filters</span>
             </div>
             {awaitingSubFilter === "epc_orders" && (
-              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider flex items-center gap-1">
                 <FaBuilding size={9} /> EPC Filter Mode Active
               </span>
             )}
             {awaitingSubFilter === "franchise_orders" && (
-              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider flex items-center gap-1">
+              <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider flex items-center gap-1">
                 <FaStore size={9} /> Franchise Filter Mode Active
               </span>
             )}
@@ -2517,7 +2766,7 @@ export default function Payments() {
             } gap-3`}>
             {/* 1. State */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider flex items-center justify-between">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider flex items-center justify-between">
                 <span>Location: State</span>
                 <span className="text-[9px] font-black text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                   {ordersForLocationFilter.length} {ordersForLocationFilter.length === 1 ? "Order" : "Orders"}
@@ -2531,7 +2780,7 @@ export default function Payments() {
                     setSelectedDistrict("all");
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   <option value="all">All States ({ordersForLocationFilter.length})</option>
                   {computedStatesList.map(st => {
@@ -2543,17 +2792,17 @@ export default function Payments() {
                     );
                   })}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* 2. District */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider flex items-center justify-between">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider flex items-center justify-between">
                 <span>Location: District</span>
                 <div className="flex items-center gap-1.5">
                   {selectedState !== "all" && (
-                    <span className="text-[9px] font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
                       {ordersInSelectedState.length} in State
                     </span>
                   )}
@@ -2568,7 +2817,7 @@ export default function Payments() {
                     setPage(1);
                   }}
                   disabled={!selectedState || selectedState === "all"}
-                  className={`w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none transition-colors ${!selectedState || selectedState === "all" ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  className={`w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none transition-colors ${!selectedState || selectedState === "all" ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
                     }`}
                 >
                   <option value="all">
@@ -2585,13 +2834,13 @@ export default function Payments() {
                     );
                   })}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* 3. Product / Admin Combo Kit */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider flex items-center justify-between">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider flex items-center justify-between">
                 <span>Product: Combo Kit</span>
                 {loadingAdminKits && <FaSpinner className="animate-spin text-primary text-[10px]" />}
               </label>
@@ -2602,7 +2851,7 @@ export default function Payments() {
                     setSelectedComboKit(e.target.value);
                     setPage(1);
                   }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                 >
                   <option value="all">All Admin Combo Kits</option>
                   {allAdminKits.map(kit => (
@@ -2611,19 +2860,19 @@ export default function Payments() {
                     </option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
-            {/* 4. Dedicated EPC Partner Filter (when viewing EPC tab) */}
+            {/* 4. Dedicated EPC Partner Filter */}
             {awaitingSubFilter === "epc_orders" && (
               <div>
-                <label className="block text-[10px] font-semibold text-blue-600 dark:text-blue-400 mb-1 uppercase tracking-wider flex items-center justify-between">
+                <label className="block text-[10px] font-semibold text-blue-600 mb-1 uppercase tracking-wider flex items-center justify-between">
                   <span className="flex items-center gap-1">
                     <FaBuilding size={9} />
                     EPC Partner &amp; GSTIN
                   </span>
-                  <span className="text-[9px] text-text-muted font-bold">({computedEpcOptions.length})</span>
+                  <span className="text-[9px] text-gray-500 font-bold">({computedEpcOptions.length})</span>
                 </label>
                 <div className="relative">
                   <select
@@ -2632,7 +2881,7 @@ export default function Payments() {
                       setSelectedEpcId(e.target.value);
                       setPage(1);
                     }}
-                    className="w-full appearance-none h-9 bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 focus:border-blue-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                    className="w-full appearance-none h-9 bg-blue-50 border border-blue-200 focus:border-blue-500 rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                   >
                     <option value="all">All EPC Partners ({computedEpcOptions.length})</option>
                     {computedEpcOptions.map((epc) => (
@@ -2646,15 +2895,15 @@ export default function Payments() {
               </div>
             )}
 
-            {/* 4. Dedicated Franchise Partner Filter (when viewing Franchise tab) */}
+            {/* 4. Dedicated Franchise Partner Filter */}
             {awaitingSubFilter === "franchise_orders" && (
               <div>
-                <label className="block text-[10px] font-semibold text-purple-600 dark:text-purple-400 mb-1 uppercase tracking-wider flex items-center justify-between">
+                <label className="block text-[10px] font-semibold text-purple-600 mb-1 uppercase tracking-wider flex items-center justify-between">
                   <span className="flex items-center gap-1">
                     <FaStore size={9} />
                     Franchise Partner &amp; GSTIN
                   </span>
-                  <span className="text-[9px] text-text-muted font-bold">({computedFranchiseOptions.length})</span>
+                  <span className="text-[9px] text-gray-500 font-bold">({computedFranchiseOptions.length})</span>
                 </label>
                 <div className="relative">
                   <select
@@ -2663,7 +2912,7 @@ export default function Payments() {
                       setSelectedFranchiseId(e.target.value);
                       setPage(1);
                     }}
-                    className="w-full appearance-none h-9 bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 focus:border-purple-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                    className="w-full appearance-none h-9 bg-purple-50 border border-purple-200 focus:border-purple-500 rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                   >
                     <option value="all">All Franchise Partners ({computedFranchiseOptions.length})</option>
                     {computedFranchiseOptions.map((fran) => (
@@ -2677,10 +2926,10 @@ export default function Payments() {
               </div>
             )}
 
-            {/* 4. Customer Filter (when viewing All Orders awaiting action) */}
+            {/* 4. Customer Filter (All) */}
             {awaitingSubFilter === "all" && (
               <div>
-                <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+                <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                   Partner / Customer (Name &amp; GST)
                 </label>
                 <div className="relative">
@@ -2700,7 +2949,7 @@ export default function Payments() {
                       }
                       setPage(1);
                     }}
-                    className="w-full appearance-none h-9 bg-bg border border-border focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                    className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-primary rounded-xl px-3 pr-8 text-xs font-medium text-gray-900 outline-none cursor-pointer transition-colors"
                   >
                     <option value="all">All Partners &amp; Customers</option>
                     {computedEpcOptions.length > 0 && (
@@ -2722,14 +2971,14 @@ export default function Payments() {
                       </optgroup>
                     )}
                   </select>
-                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
                 </div>
               </div>
             )}
 
             {/* 5. Search Filter Input */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">
+              <label className="block text-[10px] font-semibold text-gray-600 mb-1 uppercase tracking-wider">
                 {awaitingSubFilter === "epc_orders"
                   ? "Search EPC Orders"
                   : awaitingSubFilter === "franchise_orders"
@@ -2737,7 +2986,7 @@ export default function Payments() {
                     : "Search Orders & POs"}
               </label>
               <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none" />
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -2752,13 +3001,13 @@ export default function Payments() {
                         ? "Franchise Name, GSTIN, Order #..."
                         : "Order #, Customer, GSTIN, PO..."
                   }
-                  className="w-full h-9 bg-bg border border-border focus:border-primary rounded-xl pl-8 pr-7 text-xs font-medium text-text-primary outline-none transition-colors"
+                  className="w-full h-9 bg-white border border-gray-300 focus:border-primary rounded-xl pl-8 pr-7 text-xs font-medium text-gray-900 outline-none transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => { setSearchQuery(""); setPage(1); }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 cursor-pointer"
                   >
                     <FaTimes size={10} />
                   </button>
@@ -2768,14 +3017,18 @@ export default function Payments() {
           </div>
         </div>
 
-        {/* Row 3: Supplier Procurement Filters (Panel / Inverter) */}
-        <div className="pt-2 border-t border-border/40">
-          <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <FaShoppingCart size={10} className="text-amber-500" />
-              <span>3. Supplier Procurement Filters (Panel / Inverter)</span>
+        {/* Row 3: Supplier Procurement Filters */}
+        <div className="pt-2 border-t border-gray-200">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-gray-100 text-gray-700">
+                <FaShoppingCart size={11} />
+              </span>
+              <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                3. Supplier Procurement Filters (Panel / Inverter)
+              </span>
               {hasActiveProcurementFilters && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 text-[9px] font-black border border-amber-500/20">
+                <span className="px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-black tracking-wider shadow-sm">
                   ACTIVE
                 </span>
               )}
@@ -2784,23 +3037,25 @@ export default function Payments() {
               <button
                 type="button"
                 onClick={clearProcurementFilters}
-                className="text-[10px] font-bold text-amber-600 hover:text-amber-700 hover:underline cursor-pointer transition-colors"
+                className="text-[11px] font-black text-gray-600 hover:text-red-600 bg-white hover:bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-300 cursor-pointer transition-all shadow-sm"
               >
                 Clear Procurement
               </button>
             )}
           </div>
 
-          {/* Procurement Type Toggle — full width styled pills */}
+          {/* Procurement Type Toggle */}
           <div className="mb-3">
-            <label className="block text-[10px] font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Procurement Type</label>
-            <div className="inline-flex bg-bg border border-border rounded-xl p-0.5 gap-0.5">
+            <label className="block text-[10px] font-black text-gray-700 mb-1.5 uppercase tracking-wider">
+              Procurement Type
+            </label>
+            <div className="inline-flex bg-gray-100 border border-gray-300 rounded-xl p-0.5 gap-1">
               <button
                 type="button"
                 onClick={() => { setProcurementTypeFilter("all"); setPage(1); }}
                 className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all cursor-pointer ${procurementTypeFilter === "all"
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-text-secondary hover:bg-surface-hover"
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "text-gray-700 hover:bg-gray-200"
                   }`}
               >
                 All Types
@@ -2809,8 +3064,8 @@ export default function Payments() {
                 type="button"
                 onClick={() => { setProcurementTypeFilter("panel"); setPage(1); }}
                 className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "panel"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-text-secondary hover:bg-surface-hover"
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "text-gray-700 hover:bg-gray-200"
                   }`}
               >
                 <span>☀️</span> Panel
@@ -2819,8 +3074,8 @@ export default function Payments() {
                 type="button"
                 onClick={() => { setProcurementTypeFilter("inverter"); setPage(1); }}
                 className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "inverter"
-                  ? "bg-teal-600 text-white shadow-sm"
-                  : "text-text-secondary hover:bg-surface-hover"
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "text-gray-700 hover:bg-gray-200"
                   }`}
               >
                 <span>⚡</span> Inverter
@@ -2828,126 +3083,121 @@ export default function Payments() {
             </div>
           </div>
 
-          {/* 4 more filters: Order, Date From, Date To, Supplier, Payment Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-
+          {/* 4 more filters: Order, Date From, Date To, Supplier */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {/* Order */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Order</label>
+              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order</label>
               <div className="relative">
                 <select
                   value={procurementOrderFilter}
                   onChange={(e) => { setProcurementOrderFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-amber-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
                 >
-                  <option value="all">All Orders</option>
+                  <option value="all" className="text-gray-900 bg-white font-bold">All Orders</option>
                   {allOrdersForDropdown.map((ord) => (
-                    <option key={ord.id} value={ord.id}>
+                    <option key={ord.id} value={ord.id} className="text-gray-900 bg-white font-bold">
                       {ord.label}
                     </option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
 
             {/* Order Date From */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Order Date: From</label>
+              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: From</label>
               <input
                 type="date"
                 value={orderDateFrom}
                 onChange={(e) => { setOrderDateFrom(e.target.value); setPage(1); }}
-                className="w-full h-9 bg-bg border border-border focus:border-amber-500 rounded-xl px-3 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
               />
             </div>
 
             {/* Order Date To */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Order Date: To</label>
+              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: To</label>
               <input
                 type="date"
                 value={orderDateTo}
                 min={orderDateFrom || undefined}
                 onChange={(e) => { setOrderDateTo(e.target.value); setPage(1); }}
-                className="w-full h-9 bg-bg border border-border focus:border-amber-500 rounded-xl px-3 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
               />
             </div>
 
             {/* Procurement Supplier */}
             <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Supplier</label>
+              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Supplier</label>
               <div className="relative">
                 <select
                   value={procurementSupplierFilter}
                   onChange={(e) => { setProcurementSupplierFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-amber-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
+                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
                 >
-                  <option value="all">All Suppliers</option>
+                  <option value="all" className="text-gray-900 bg-white font-bold">All Suppliers</option>
                   {uniqueSuppliers.map((sup) => (
-                    <option key={sup._id || sup.id} value={sup._id || sup.id}>
+                    <option key={sup._id || sup.id} value={sup._id || sup.id} className="text-gray-900 bg-white font-bold">
                       {sup.company_name || sup.name}
                     </option>
                   ))}
                 </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
+                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
               </div>
             </div>
-
-            {/* Payment Status */}
-            {/* <div>
-              <label className="block text-[10px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Payment Status</label>
-              <div className="relative">
-                <select
-                  value={paymentStatusFilter}
-                  onChange={(e) => { setPaymentStatusFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-bg border border-border focus:border-amber-500 rounded-xl px-3 pr-8 text-xs font-medium text-text-primary outline-none cursor-pointer transition-colors"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="pending">⏳ Pending / Awaiting</option>
-                  <option value="paid">✅ Paid / Delivered</option>
-                </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-[9px] pointer-events-none" />
-              </div>
-            </div> */}
-
           </div>
 
-          {/* Procurement summary stats (shown when type filter is active) */}
+          {/* Procurement summary stats */}
           {procurementTypeFilter !== "all" && (
-            <div className={`mt-3 p-3 rounded-xl border flex items-center gap-4 flex-wrap text-[11px] font-semibold ${procurementTypeFilter === "panel"
-              ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
-              : "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300"
-              }`}>
-              <span className="font-black uppercase tracking-wider text-[10px]">
-                {procurementTypeFilter === "panel" ? "☀️ Panel Procurement" : "⚡ Inverter Procurement"} — Filtered View:
-              </span>
-              <span>
-                <span className="font-black">{filteredPOList.length}</span> supplier PO{filteredPOList.length !== 1 ? "s" : ""} match
-              </span>
-              <span>
-                Total Value:{" "}
-                <span className="font-black">
-                  ₹{filteredPOList.reduce((acc, po) =>
-                    acc + (po.items || []).reduce((s, it) => s + (Number(it.qty || it.quantity || 0) * Number(it.order_price || it.price || 0)), 0), 0
-                  ).toLocaleString("en-IN")}
+            <div className="mt-3 p-3.5 rounded-2xl border border-gray-300 bg-gray-50 flex items-center justify-between gap-4 flex-wrap text-xs shadow-sm transition-all">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="px-3.5 py-1.5 rounded-xl text-white font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-sm bg-gray-900">
+                  <span>{procurementTypeFilter === "panel" ? "☀️" : "⚡"}</span>
+                  <span>{procurementTypeFilter === "panel" ? "Panel Procurement" : "Inverter Procurement"} — Filtered View</span>
                 </span>
-              </span>
-              <span>
-                Suppliers:{" "}
-                <span className="font-black">
-                  {new Set(filteredPOList.map(po => po.supplier_id?._id || po.supplier_id?.id || po.supplier_id)).size}
-                </span>
-              </span>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                    <span className="text-gray-900 font-black text-sm mr-1.5">{filteredPOList.length}</span>
+                    <span className="text-gray-600 font-bold">supplier PO{filteredPOList.length !== 1 ? "s" : ""} match</span>
+                  </span>
+
+                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                    <span className="text-gray-500 mr-1.5 font-bold">Total Value:</span>
+                    <span className="text-gray-900 font-black text-sm">
+                      ₹{filteredPOList.reduce((acc, po) =>
+                        acc + (po.items || []).reduce((s, it) => s + (Number(it.qty || it.quantity || 0) * Number(it.order_price || it.price || 0)), 0), 0
+                      ).toLocaleString("en-IN")}
+                    </span>
+                  </span>
+
+                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                    <span className="text-gray-500 mr-1.5 font-bold">Suppliers:</span>
+                    <span className="font-black text-sm text-gray-900">
+                      {new Set(filteredPOList.map(po => po.supplier_id?._id || po.supplier_id?.id || po.supplier_id)).size}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={clearProcurementFilters}
+                className="text-xs font-black text-gray-700 hover:text-red-600 cursor-pointer bg-white hover:bg-gray-100 px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm ml-auto transition-all"
+              >
+                Reset Filter ✕
+              </button>
             </div>
           )}
         </div>
 
         {/* Row 4: Active Filters Chips */}
         {hasActiveMasterFilters && (
-          <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-3 flex-wrap">
+          <div className="pt-2 border-t border-gray-200 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider mr-1">Active:</span>
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider mr-1">Active:</span>
 
               {quickFilters.industryType !== "all" && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold border border-primary/20">
@@ -2955,7 +3205,7 @@ export default function Payments() {
                   <button
                     type="button"
                     onClick={() => { setQuickFilters(prev => ({ ...prev, industryType: "all" })); setPage(1); }}
-                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                    className="hover:text-primary/70 ml-0.5 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
@@ -2968,7 +3218,7 @@ export default function Payments() {
                   <button
                     type="button"
                     onClick={() => { setQuickFilters(prev => ({ ...prev, category: "all" })); setPage(1); }}
-                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                    className="hover:text-primary/70 ml-0.5 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
@@ -2981,7 +3231,7 @@ export default function Payments() {
                   <button
                     type="button"
                     onClick={() => { setQuickFilters(prev => ({ ...prev, subCategory: "all" })); setPage(1); }}
-                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                    className="hover:text-primary/70 ml-0.5 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
@@ -2994,7 +3244,7 @@ export default function Payments() {
                   <button
                     type="button"
                     onClick={() => { setQuickFilters(prev => ({ ...prev, systemType: "all" })); setPage(1); }}
-                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                    className="hover:text-primary/70 ml-0.5 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
@@ -3007,7 +3257,7 @@ export default function Payments() {
                   <button
                     type="button"
                     onClick={() => { setQuickFilters(prev => ({ ...prev, projectRange: "all" })); setPage(1); }}
-                    className="hover:text-primary-dark ml-0.5 cursor-pointer"
+                    className="hover:text-primary/70 ml-0.5 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
@@ -3015,7 +3265,7 @@ export default function Payments() {
               )}
 
               {selectedState !== "all" && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-semibold border border-amber-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-[11px] font-semibold border border-amber-200">
                   <FaMapMarkerAlt size={9} />
                   <span>State: {statesList.find(s => String(s.id || s._id) === String(selectedState))?.name || selectedState}</span>
                   <button
@@ -3029,7 +3279,7 @@ export default function Payments() {
               )}
 
               {selectedDistrict !== "all" && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-semibold border border-amber-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-[11px] font-semibold border border-amber-200">
                   <FaMapMarkerAlt size={9} />
                   <span>District: {districtsList.find(d => String(d.id || d._id) === String(selectedDistrict))?.name || selectedDistrict}</span>
                   <button
@@ -3043,7 +3293,7 @@ export default function Payments() {
               )}
 
               {selectedComboKit !== "all" && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 text-[11px] font-semibold border border-indigo-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 text-[11px] font-semibold border border-indigo-200">
                   <FaBoxOpen size={9} />
                   <span>Kit: {allAdminKits.find(k => String(k._id || k.id) === String(selectedComboKit))?.name || "Selected Kit"}</span>
                   <button
@@ -3057,11 +3307,11 @@ export default function Payments() {
               )}
 
               {selectedEpcId !== "all" && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400 text-[11px] font-semibold border border-blue-500/20">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 text-[11px] font-semibold border border-blue-200">
                   <FaBuilding size={9} />
                   <span>EPC: {computedEpcOptions.find(e => String(e.id || e.name) === String(selectedEpcId))?.name || selectedEpcId}</span>
                   {computedEpcOptions.find(e => String(e.id || e.name) === String(selectedEpcId))?.gstin && (
-                    <span className="font-mono text-[9px] bg-blue-100 dark:bg-blue-900/60 px-1 py-0.2 rounded font-bold">
+                    <span className="font-mono text-[9px] bg-blue-200 px-1 py-0.5 rounded font-bold">
                       {computedEpcOptions.find(e => String(e.id || e.name) === String(selectedEpcId))?.gstin}
                     </span>
                   )}
@@ -3076,11 +3326,11 @@ export default function Payments() {
               )}
 
               {selectedFranchiseId !== "all" && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-400 text-[11px] font-semibold border border-purple-500/20">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-100 text-purple-800 text-[11px] font-semibold border border-purple-200">
                   <FaStore size={9} />
                   <span>Franchise: {computedFranchiseOptions.find(f => String(f.id || f.name) === String(selectedFranchiseId))?.name || selectedFranchiseId}</span>
                   {computedFranchiseOptions.find(f => String(f.id || f.name) === String(selectedFranchiseId))?.gstin && (
-                    <span className="font-mono text-[9px] bg-purple-100 dark:bg-purple-900/60 px-1 py-0.2 rounded font-bold">
+                    <span className="font-mono text-[9px] bg-purple-200 px-1 py-0.5 rounded font-bold">
                       {computedFranchiseOptions.find(f => String(f.id || f.name) === String(selectedFranchiseId))?.gstin}
                     </span>
                   )}
@@ -3095,31 +3345,30 @@ export default function Payments() {
               )}
 
               {searchQuery.trim() && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 text-[11px] font-semibold border border-slate-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-semibold border border-gray-300">
                   <FaSearch size={9} />
                   <span>"{searchQuery.trim()}"</span>
                   <button
                     type="button"
                     onClick={() => { setSearchQuery(""); setPage(1); }}
-                    className="hover:text-slate-900 ml-0.5 cursor-pointer"
+                    className="hover:text-gray-900 ml-0.5 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
                 </span>
               )}
 
-              {/* Procurement Filter Chips */}
               {procurementTypeFilter !== "all" && (
-                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${procurementTypeFilter === "panel"
-                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
-                  : "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20"
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-extrabold border shadow-sm ${procurementTypeFilter === "panel"
+                  ? "bg-amber-100 text-amber-900 border-amber-300"
+                  : "bg-teal-100 text-teal-900 border-teal-300"
                   }`}>
                   <span>{procurementTypeFilter === "panel" ? "☀️" : "⚡"}</span>
                   <span>Procurement: {procurementTypeFilter === "panel" ? "Panel" : "Inverter"}</span>
                   <button
                     type="button"
                     onClick={() => { setProcurementTypeFilter("all"); setPage(1); }}
-                    className="ml-0.5 cursor-pointer hover:opacity-70"
+                    className="ml-1 p-0.5 rounded-full hover:bg-gray-200 cursor-pointer"
                   >
                     <FaTimes size={9} />
                   </button>
@@ -3131,7 +3380,7 @@ export default function Payments() {
                   || purchaseOrders.find(po => String(po._id || po.id) === String(procurementOrderFilter));
                 const label = matchedOrder?.order_number || matchedOrder?.po_number || procurementOrderFilter;
                 return (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-semibold border border-emerald-200">
                     <FaShoppingCart size={9} />
                     <span>Order: {label}</span>
                     <button
@@ -3146,7 +3395,7 @@ export default function Payments() {
               })()}
 
               {(orderDateFrom || orderDateTo) && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300 text-[11px] font-semibold border border-slate-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-semibold border border-gray-300">
                   <span>📅</span>
                   <span>
                     Date: {orderDateFrom ? new Date(orderDateFrom).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Any"}
@@ -3166,7 +3415,7 @@ export default function Payments() {
               {procurementSupplierFilter !== "all" && (() => {
                 const sup = uniqueSuppliers.find(s => String(s._id || s.id) === String(procurementSupplierFilter));
                 return (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/10 text-orange-700 dark:text-orange-400 text-[11px] font-semibold border border-orange-500/20">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-100 text-orange-800 text-[11px] font-semibold border border-orange-200">
                     <FaUsers size={9} />
                     <span>Supplier: {sup?.company_name || sup?.name || procurementSupplierFilter}</span>
                     <button
@@ -3182,8 +3431,8 @@ export default function Payments() {
 
               {paymentStatusFilter !== "all" && (
                 <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border ${paymentStatusFilter === "paid"
-                  ? "bg-success/10 text-success border-success/20"
-                  : "bg-warning/10 text-warning border-warning/20"
+                  ? "bg-green-100 text-green-800 border-green-300"
+                  : "bg-yellow-100 text-yellow-800 border-yellow-300"
                   }`}>
                   <span>{paymentStatusFilter === "paid" ? "✅" : "⏳"}</span>
                   <span>Status: {paymentStatusFilter === "paid" ? "Paid" : "Pending"}</span>
@@ -3198,7 +3447,7 @@ export default function Payments() {
               )}
             </div>
 
-            <div className="text-[11px] font-bold text-text-secondary">
+            <div className="text-xs font-black text-gray-900">
               Matches: <span className="text-blue-600 font-black">{filteredEpcOnlyOrders.length}</span> EPC Orders,{" "}
               <span className="text-purple-600 font-black">{filteredFranchiseOnlyOrders.length}</span> Franchise Orders,{" "}
               <span className="text-primary font-black">{filteredPOList.length}</span> Supplier POs
@@ -3206,6 +3455,72 @@ export default function Payments() {
           </div>
         )}
       </div>
+
+      {/* ─── Procurement Component Sub-Filter ─── */}
+      {activeTab === "pending" && (
+        <div className="bg-white border border-gray-200 p-2.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-black text-gray-900 uppercase tracking-wider pl-2 pr-1">Supplier Stream:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setProcurementComponentFilter("all");
+                fetchPendingEpcOrders("all");
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${procurementComponentFilter === "all"
+                ? "bg-primary text-white shadow-sm"
+                : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }`}
+            >
+              All Pending Orders
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProcurementComponentFilter("panel");
+                fetchPendingEpcOrders("panel");
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${procurementComponentFilter === "panel"
+                ? "bg-amber-600 text-white"
+                : "bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100"
+                }`}
+            >
+              <span>☀️</span>
+              <span>Pending Panel Supplier Payment</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProcurementComponentFilter("inverter");
+                fetchPendingEpcOrders("inverter");
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${procurementComponentFilter === "inverter"
+                ? "bg-teal-600 text-white"
+                : "bg-teal-50 text-teal-900 border border-teal-300 hover:bg-teal-100"
+                }`}
+            >
+              <span>⚡</span>
+              <span>Pending Inverter Supplier Payment</span>
+            </button>
+          </div>
+
+          {selectedOrderIds.size > 0 && (
+            <div className="flex items-center gap-2 pr-2">
+              <span className="text-xs font-bold text-gray-600">
+                {selectedOrderIds.size} orders selected
+              </span>
+              <button
+                type="button"
+                onClick={openCombineModal}
+                className="px-4 py-1.5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <FaLayerGroup size={12} />
+                <span>Combine &amp; Pay Supplier</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── EPC Customer Orders Section ─────── */}
       {activeTab === "pending" && (awaitingSubFilter === "all" || awaitingSubFilter === "epc_orders") && (
@@ -3252,14 +3567,13 @@ export default function Payments() {
       {/* ─── Supplier Purchase Orders Section (POs) ───────────────────────── */}
       {((activeTab === "pending" && (awaitingSubFilter === "all" || awaitingSubFilter === "supplier_pos")) || activeTab === "history") && (
         <div className="space-y-6">
-          {/* Section Title Header when viewing All */}
           {activeTab === "pending" && awaitingSubFilter === "all" && (
             <div className="flex items-center justify-between px-1 pt-2">
               <div className="flex items-center gap-2">
                 <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
                   <FaClipboardList className="w-3.5 h-3.5" />
                 </span>
-                <h3 className="font-bold text-sm text-text-primary">
+                <h3 className="font-bold text-sm text-gray-900">
                   Supplier Purchase Orders (PO) Awaiting Order
                 </h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
@@ -3270,11 +3584,11 @@ export default function Payments() {
           )}
 
           {/* Table Section */}
-          <div className="card bg-surface border border-border">
-            <div className="p-4 border-b border-border flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="card bg-white border border-gray-200 rounded-2xl shadow-sm">
+            <div className="p-4 border-b border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex flex-col md:flex-row gap-3 flex-1">
                 <div className="relative flex-1 max-w-xs">
-                  <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-xs" />
+                  <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
                   <input
                     type="text"
                     value={searchQuery}
@@ -3283,11 +3597,10 @@ export default function Payments() {
                       setPage(1);
                     }}
                     placeholder="Search PO, Proforma Invoice, supplier..."
-                    className="w-full h-10 bg-bg border border-border focus:border-primary rounded-xl pl-9 pr-4 text-xs font-semibold outline-none text-text-primary"
+                    className="w-full h-10 bg-white border border-gray-300 focus:border-primary rounded-xl pl-9 pr-4 text-xs font-semibold outline-none text-gray-900"
                   />
                 </div>
 
-                {/* Warehouse Filter */}
                 <DropdownWithSearchInput
                   value={warehouseFilter}
                   onChange={(val) => { setWarehouseFilter(val); setPage(1); }}
@@ -3299,7 +3612,6 @@ export default function Payments() {
                   className="w-56 text-left"
                 />
 
-                {/* Supplier Filter */}
                 <DropdownWithSearchInput
                   value={supplierFilter}
                   onChange={(val) => { setSupplierFilter(val); setPage(1); }}
@@ -3318,7 +3630,8 @@ export default function Payments() {
                 containerClassName="shadow-none border-none bg-transparent"
                 headers={[
                   { key: "po_number", label: "PO Details" },
-                  { key: "supplier", label: "Supplier / Brand" },
+                  { key: "supplier", label: "Supplier / Recipient" },
+                  { key: "warehouse", label: "Destination Warehouse" },
                   { key: "items", label: "Products ordered" },
                   { key: "total_amount", label: "Total Order Price" },
                   { key: "timeline", label: "Due Timeline" },
@@ -3329,7 +3642,7 @@ export default function Payments() {
                 data={paginatedPOs}
                 loading={loadingOrders}
                 renderRow={(po) => {
-                  const totalVal = (po.items || []).reduce((acc, it) => acc + (it.qty * it.order_price), 0);
+                  const totalVal = (po.items || []).reduce((acc, it) => acc + (it.qty * it.order_price), 0) || po.payment_details?.amount || 0;
                   const timelineDateObj = new Date(po.timeline);
                   timelineDateObj.setHours(0, 0, 0, 0);
                   const todayObj = new Date();
@@ -3342,12 +3655,12 @@ export default function Payments() {
                     <>
                       <td className="px-6 py-4">
                         <span className="font-extrabold text-primary text-xs uppercase block">{po.po_number}</span>
-                        <span className="text-[10px] text-text-secondary font-bold block mt-0.5">PI No: {po.invoice_no || "—"}</span>
+                        <span className="text-[10px] text-gray-500 font-bold block mt-0.5">PI No: {po.invoice_no || po.proforma_invoice_no || "—"}</span>
                         {po.procurement_type && (
                           <span className={`inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase border ${po.procurement_type === "panel"
-                            ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
                             : po.procurement_type === "inverter"
-                              ? "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-400"
+                              ? "bg-teal-50 text-teal-700 border-teal-200"
                               : "bg-primary/10 text-primary border-primary/20"
                             }`}>
                             {po.procurement_type === "panel" ? "☀️ Panel" : po.procurement_type === "inverter" ? "⚡ Inverter" : "📦 Mixed"}
@@ -3355,14 +3668,57 @@ export default function Payments() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <span className="font-bold text-text-primary text-xs">{po.supplier_id?.company_name || "N/A"}</span>
-                        <div className="text-[10px] text-text-secondary">Brand: {po.supplier_id?.brand_name || "N/A"}</div>
+                        <div className="flex items-start gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center text-xs flex-shrink-0 font-bold">
+                            🏢
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-gray-900 text-xs block leading-tight">
+                              {po.supplier_id?.company_name || po.supplier_name || "N/A"}
+                            </span>
+                            {(po.supplier_id?.brand_name || po.supplier_brand) && (
+                              <div className="text-[10px] text-gray-500 font-bold mt-0.5">
+                                Brand: <span className="text-gray-700">{po.supplier_id?.brand_name || po.supplier_brand}</span>
+                              </div>
+                            )}
+                            {(po.supplier_id?.gst_number || po.supplier_gst) && (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200 text-[9px] font-mono font-bold text-gray-700">
+                                  GST: {po.supplier_id?.gst_number || po.supplier_gst}
+                                </span>
+                              </div>
+                            )}
+                            {po.payment_details?.reference_no && (
+                              <div className="text-[9px] text-green-700 font-bold mt-0.5">
+                                Ref: {po.payment_details.reference_no}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-xs font-bold text-text-primary">
+                        <div className="flex items-start gap-1.5">
+                          <FaMapMarkerAlt size={12} className="text-primary flex-shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-black text-gray-900 text-xs block">
+                              {po.warehouse_id?.warehouse_code || po.warehouse_code || "WH-MAIN"}
+                            </span>
+                            <span className="text-[11px] font-bold text-gray-600 block mt-0.5">
+                              {[po.district_name, po.state_name].filter(Boolean).join(", ") || po.warehouse_id?.address || "Gujarat Hub"}
+                            </span>
+                            {po.warehouse_id?.warehouse_type && (
+                              <span className="inline-block mt-0.5 text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                {po.warehouse_id.warehouse_type} warehouse
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-xs font-bold text-gray-900">
                           {(po.items || []).length} SKU{(po.items || []).length !== 1 ? "s" : ""}
                         </div>
-                        <div className="text-[10px] text-text-secondary mt-0.5">
+                        <div className="text-[10px] text-gray-500 mt-0.5">
                           {((po.items || []).reduce((acc, it) => acc + (it.qty || 0), 0)).toLocaleString()} pcs total
                         </div>
                         <button
@@ -3375,15 +3731,15 @@ export default function Payments() {
                           <FaEye size={10} /> View Items
                         </button>
                       </td>
-                      <td className="px-6 py-4 font-black text-text-primary text-xs">
+                      <td className="px-6 py-4 font-black text-gray-900 text-xs">
                         ₹{totalVal.toLocaleString()}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`text-xs font-semibold ${isPoOverdue ? 'text-danger font-extrabold' : 'text-text-primary'}`}>
+                        <span className={`text-xs font-semibold ${isPoOverdue ? 'text-red-600 font-extrabold' : 'text-gray-700'}`}>
                           {new Date(po.timeline).toLocaleDateString()}
                         </span>
                         {isPoOverdue && (
-                          <span className="block text-[9px] font-black text-danger uppercase tracking-wider animate-pulse mt-0.5">
+                          <span className="block text-[9px] font-black text-red-600 uppercase tracking-wider mt-0.5">
                             ⚠️ Overdue ({overdueDays} {overdueDays === 1 ? 'day' : 'days'})
                           </span>
                         )}
@@ -3402,7 +3758,7 @@ export default function Payments() {
                               <FaFilePdf size={9} /> PO PDF
                             </button>
                           ) : (
-                            <span className="text-[9px] text-text-muted italic text-center">No PO PDF</span>
+                            <span className="text-[9px] text-gray-400 italic text-center">No PO PDF</span>
                           )}
                           {po.proforma_invoice_pdf ? (
                             <button
@@ -3411,22 +3767,22 @@ export default function Payments() {
                                 setProformaInitialTab("pi");
                                 setProformaModalOpen(true);
                               }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-info/10 text-info border border-info/20 text-[9px] font-bold uppercase tracking-wide hover:bg-info/20 transition-all justify-center"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold uppercase tracking-wide hover:bg-blue-100 transition-all justify-center"
                             >
                               <FaFilePdf size={9} /> PI PDF
                             </button>
                           ) : (
-                            <span className="text-[9px] text-text-muted italic text-center">No PI PDF</span>
+                            <span className="text-[9px] text-gray-400 italic text-center">No PI PDF</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase border ${po.status === 'delivered' ? 'bg-success/10 text-success border-success/20' :
-                          po.status === 'paid' ? 'bg-success/10 text-success border-success/20' :
-                            po.status === 'invoiced' ? 'bg-warning/10 text-warning border-warning/20' :
-                              po.status === 'pending' ? 'bg-primary/10 text-primary border-primary/20' :
-                                po.status === 'cancelled' ? 'bg-danger/10 text-danger border-danger/20' :
-                                  'bg-warning/10 text-warning border-warning/20'
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase border ${po.status === 'delivered' ? 'bg-green-50 text-green-700 border-green-200' :
+                          po.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' :
+                            po.status === 'invoiced' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                              po.status === 'pending' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                po.status === 'cancelled' ? 'bg-red-50 text-red-700 border-red-200' :
+                                  'bg-yellow-50 text-yellow-700 border-yellow-200'
                           }`}>
                           {po.status === 'pending' ? 'Pending Payment' : po.status === 'invoiced' ? 'Awaiting Payment' : po.status === 'paid' ? 'Paid / Awaiting Delivery' : po.status}
                         </span>
@@ -3445,25 +3801,25 @@ export default function Payments() {
                             <button
                               type="button"
                               onClick={() => openCancelConfirm(po.id || po._id)}
-                              className="text-[10px] text-danger font-bold hover:underline"
+                              className="text-[10px] text-red-600 font-bold hover:underline"
                             >
                               Cancel PO
                             </button>
                           </div>
                         ) : po.status === "cancelled" ? (
-                          <span className="text-[10px] text-text-muted italic">Order Cancelled</span>
+                          <span className="text-[10px] text-gray-400 italic">Order Cancelled</span>
                         ) : (
-                          <div className="text-left text-[10px] space-y-0.5 bg-bg p-2 rounded-xl border border-border max-w-[170px] inline-block font-medium">
-                            <div className="text-text-secondary">UTR: <span className="font-bold text-text-primary">{po.payment_details?.reference_no}</span></div>
-                            <div className="text-text-secondary">Mode: <span className="font-bold text-text-primary">{po.payment_details?.payment_mode}</span></div>
-                            <div className="text-text-secondary">Paid: <span className="font-bold text-text-primary">₹{po.payment_details?.amount?.toLocaleString()}</span></div>
+                          <div className="text-left text-[10px] space-y-0.5 bg-gray-50 p-2 rounded-xl border border-gray-200 max-w-[170px] inline-block font-medium">
+                            <div className="text-gray-500">UTR: <span className="font-bold text-gray-900">{po.payment_details?.reference_no}</span></div>
+                            <div className="text-gray-500">Mode: <span className="font-bold text-gray-900">{po.payment_details?.payment_mode}</span></div>
+                            <div className="text-gray-500">Paid: <span className="font-bold text-gray-900">₹{po.payment_details?.amount?.toLocaleString()}</span></div>
                             {po.payment_details?.receipt_url && (
                               <div className="mt-1">
                                 <a
                                   href={po.payment_details.receipt_url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="text-primary underline font-extrabold hover:text-primary-dark"
+                                  className="text-primary underline font-extrabold hover:text-primary/80"
                                 >
                                   📄 View Receipt
                                 </a>
@@ -3479,7 +3835,7 @@ export default function Payments() {
               />
             </div>
 
-            <div className="p-6 border-t border-border">
+            <div className="p-6 border-t border-gray-200">
               <Pagination
                 currentPage={page}
                 totalPages={Math.ceil(filteredPOList.length / pageSize)}
@@ -3501,20 +3857,20 @@ export default function Payments() {
       >
         <form onSubmit={handlePaySubmit} className="space-y-4">
           {formError && (
-            <div className="p-3 bg-danger/5 border border-danger/25 text-danger rounded-xl text-xs font-semibold">
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold">
               ⚠️ {formError}
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3 bg-success/5 border border-success/25 text-success rounded-xl text-xs font-semibold">
+            <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-semibold">
               ✅ {successMsg}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-[10px] font-black text-text-secondary uppercase">Select Payment Mode *</label>
+              <label className="text-[10px] font-black text-gray-600 uppercase">Select Payment Mode *</label>
               <DropdownWithSearchInput
                 value={payForm.payment_mode}
                 onChange={(val) => setPayForm({ ...payForm, payment_mode: val })}
@@ -3585,13 +3941,13 @@ export default function Payments() {
                 </div>
               )}
               {(selectedFile || payForm.receipt_url) && (
-                <div className="text-[10px] text-success font-black flex items-center gap-1 mt-1">
+                <div className="text-[10px] text-green-700 font-black flex items-center gap-1 mt-1">
                   <FaCheckCircle className="text-xs" /> Document selected: {selectedFile ? selectedFile.name : "receipt_url"} {" "}
                   <a
                     href={selectedFile ? URL.createObjectURL(selectedFile) : payForm.receipt_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-primary underline font-extrabold hover:text-primary-dark ml-1"
+                    className="text-primary underline font-extrabold hover:text-primary/80 ml-1"
                   >
                     View File
                   </a>
@@ -3599,7 +3955,7 @@ export default function Payments() {
               )}
             </div>
 
-            <div className="col-span-2 space-y-2 border-t border-border/30 pt-3">
+            <div className="col-span-2 space-y-2 border-t border-gray-200 pt-3">
               <CustomFilePicker
                 name="proforma_invoice_pdf"
                 label="Proforma Invoice PDF (from Supplier) *"
@@ -3620,13 +3976,13 @@ export default function Payments() {
                 </div>
               )}
               {(selectedPIFile || selectedPO?.proforma_invoice_pdf) && (
-                <div className="text-[10px] text-success font-black flex items-center gap-1 mt-1">
+                <div className="text-[10px] text-green-700 font-black flex items-center gap-1 mt-1">
                   <FaCheckCircle className="text-xs" /> PI Document selected: {selectedPIFile ? selectedPIFile.name : "proforma_invoice_pdf"} {" "}
                   <a
                     href={selectedPIFile ? URL.createObjectURL(selectedPIFile) : selectedPO?.proforma_invoice_pdf}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-primary underline font-extrabold hover:text-primary-dark ml-1"
+                    className="text-primary underline font-extrabold hover:text-primary/80 ml-1"
                   >
                     View File
                   </a>
@@ -3635,7 +3991,7 @@ export default function Payments() {
             </div>
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t border-border">
+          <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
             <Button
               type="button"
               variant="secondary"
@@ -3683,22 +4039,22 @@ export default function Payments() {
         title="Products Ordered"
         size="md"
       >
-        <div className="space-y-3 p-1 divide-y divide-border/60 max-h-[400px] overflow-y-auto">
+        <div className="space-y-3 p-1 divide-y divide-gray-200 max-h-[400px] overflow-y-auto">
           {selectedItems.map((it, idx) => {
             const buyingPrice = it.order_price || 0;
             const totalPrice = it.qty * buyingPrice;
             return (
               <div key={idx} className="pt-3 first:pt-0 pb-2 flex justify-between items-center gap-4">
                 <div className="flex flex-col">
-                  <span className="text-xs font-bold text-text-primary">
-                    {it.sku_details?.product_name || it.sku_code}
+                  <span className="text-xs font-bold text-gray-900">
+                    {it.item_name || it.sku_details?.product_name || it.sku_code}
                   </span>
-                  <span className="text-[10px] text-text-secondary mt-0.5">
+                  <span className="text-[10px] text-gray-500 mt-0.5">
                     Qty: {it.qty} pcs
                   </span>
                 </div>
                 <div className="flex flex-col items-end text-right">
-                  <span className="text-xs font-semibold text-text-secondary">
+                  <span className="text-xs font-semibold text-gray-600">
                     ₹{buyingPrice.toLocaleString("en-IN")} / pc
                   </span>
                   <span className="text-xs font-extrabold text-primary mt-0.5">
@@ -3710,8 +4066,6 @@ export default function Payments() {
           })}
         </div>
       </Dialog>
-
-
 
       {/* ─── Combine & Pay Supplier Modal ──────────────────────────────────── */}
       <Dialog
@@ -3725,39 +4079,49 @@ export default function Payments() {
       >
         <form onSubmit={handleCombineSubmit} className="space-y-5">
           {combineError && (
-            <div className="p-3 bg-danger/5 border border-danger/25 text-danger rounded-xl text-xs font-semibold">⚠️ {combineError}</div>
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold">⚠️ {combineError}</div>
           )}
           {combineSuccess && (
-            <div className="p-3 bg-success/5 border border-success/25 text-success rounded-xl text-xs font-semibold">{combineSuccess}</div>
+            <div className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-semibold">{combineSuccess}</div>
           )}
 
           {/* Selected Orders Summary */}
-          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/40 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <FaLink className="text-amber-600" />
-              <span className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wide">Selected Orders Being Combined</span>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center gap-2">
+                <FaLink className="text-primary text-xs" />
+                <span className="text-xs font-black text-gray-900 uppercase tracking-wider">Selected Orders Being Combined</span>
+              </div>
+              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                {selectedOrderIds.size} Orders Selected
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
               {pendingEpcOrders.filter(o => selectedOrderIds.has(o.id || o._id)).map(o => (
-                <span key={o.id || o._id} className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-white dark:bg-surface border border-amber-300 dark:border-amber-700/50 text-amber-800 dark:text-amber-300 px-2.5 py-1 rounded-full">
-                  <FaBuilding size={8} /> {o.order_number} — {o.customer_name} — ₹{(o.order_amount || 0).toLocaleString("en-IN")}
+                <span key={o.id || o._id} className="inline-flex items-center gap-2 text-xs font-semibold bg-white border border-gray-300 text-gray-800 px-3 py-1.5 rounded-lg shadow-sm">
+                  <FaBuilding className="text-primary flex-shrink-0" size={11} />
+                  <span className="font-extrabold text-gray-900">{o.order_number}</span>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-700 font-medium truncate max-w-[180px]">{o.customer_name}</span>
+                  <span className="text-gray-400">•</span>
+                  <span className="font-black text-primary">₹{(o.order_amount || 0).toLocaleString("en-IN")}</span>
                 </span>
               ))}
             </div>
           </div>
 
-          {/* Procurement Type Selector — Panel vs Inverter */}
-          <div className="bg-surface border border-border rounded-xl p-4">
-            <label className="text-[10px] font-black text-text-secondary uppercase block mb-2 tracking-wider">
+          {/* Procurement Type Selector */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <label className="text-xs font-black text-gray-800 uppercase block mb-2 tracking-wider">
               Procurement Type for This Payment *
             </label>
-            <div className="flex flex-col sm:flex-row bg-bg border border-border rounded-xl p-1 gap-1 w-full mb-3">
+            <div className="flex flex-col sm:flex-row bg-gray-100 border border-gray-200 rounded-xl p-1 gap-1 w-full mb-3">
               <button
                 type="button"
                 onClick={() => setCombineProcurementType("panel")}
-                className={`flex-1 justify-center px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "panel"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-text-secondary hover:bg-surface-hover"
+                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "panel"
+                  ? "bg-primary text-white shadow-md font-extrabold"
+                  : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold"
                   }`}
               >
                 <span>☀️</span> Solar Panel Procurement
@@ -3765,9 +4129,9 @@ export default function Payments() {
               <button
                 type="button"
                 onClick={() => setCombineProcurementType("inverter")}
-                className={`flex-1 justify-center px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "inverter"
-                  ? "bg-teal-600 text-white shadow-sm"
-                  : "text-text-secondary hover:bg-surface-hover"
+                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "inverter"
+                  ? "bg-primary text-white shadow-md font-extrabold"
+                  : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold"
                   }`}
               >
                 <span>⚡</span> Inverter Procurement
@@ -3775,225 +4139,358 @@ export default function Payments() {
               <button
                 type="button"
                 onClick={() => setCombineProcurementType("mixed")}
-                className={`flex-1 justify-center px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "mixed"
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-text-secondary hover:bg-surface-hover"
+                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "mixed"
+                  ? "bg-primary text-white shadow-md font-extrabold"
+                  : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold"
                   }`}
               >
                 <span>📦</span> Mixed / Full Kit
               </button>
             </div>
-            <div className={`text-[11px] font-semibold px-3 py-2 rounded-lg border ${combineProcurementType === "panel"
-              ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
-              : combineProcurementType === "inverter"
-                ? "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300"
-                : "bg-primary/5 border-primary/20 text-primary"
-              }`}>
-              {combineProcurementType === "panel" && (
-                <>
-                  ☀️ <strong>Panel Procurement:</strong> Yeh payment sirf Solar Panels ke liye hogi.
-                  Select a Panel supplier below. Inverter ka payment alag supplier ko alag transaction mein hoga.
-                </>
-              )}
-              {combineProcurementType === "inverter" && (
-                <>
-                  ⚡ <strong>Inverter Procurement:</strong> Yeh payment sirf Inverters ke liye hogi.
-                  Select an Inverter supplier below. Panel ka payment alag supplier ko alag transaction mein hoga.
-                </>
-              )}
-              {combineProcurementType === "mixed" && (
-                <>
-                  📦 <strong>Mixed/Full Kit:</strong> Yeh payment complete solar kit ke liye ek hi supplier ko hogi
-                  (Panels + Inverter + BOS sab ek saath).
-                </>
-              )}
+            <div className="text-xs font-medium px-4 py-3 rounded-xl border border-blue-200 bg-blue-50 text-gray-800 flex items-start gap-2.5">
+              <div className="p-1 rounded-md bg-blue-100 text-primary mt-0.5 flex-shrink-0">
+                <FaInfoCircle size={14} />
+              </div>
+              <div className="leading-relaxed">
+                {combineProcurementType === "panel" && (
+                  <>
+                    <strong className="font-black text-gray-900">☀️ Panel Procurement Mode:</strong>{" "}
+                    Yeh payment sirf Solar Panels ke liye hogi. Select a Panel supplier below. Inverter ka payment alag supplier ko alag transaction mein hoga.
+                  </>
+                )}
+                {combineProcurementType === "inverter" && (
+                  <>
+                    <strong className="font-black text-gray-900">⚡ Inverter Procurement Mode:</strong>{" "}
+                    Yeh payment sirf Inverters ke liye hogi. Select an Inverter supplier below. Panel ka payment alag supplier ko alag transaction mein hoga.
+                  </>
+                )}
+                {combineProcurementType === "mixed" && (
+                  <>
+                    <strong className="font-black text-gray-900">📦 Mixed/Full Kit Mode:</strong>{" "}
+                    Yeh payment complete solar kit ke liye ek hi supplier ko hogi (Panels + Inverter + BOS sab ek saath).
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Warehouse & Supplier */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">Destination Warehouse *</label>
+              <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">Destination Warehouse *</label>
               <select
                 value={combineForm.warehouse_id}
                 onChange={(e) => handleCombineWarehouseChange(e.target.value)}
-                className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 required
               >
                 <option value="">Select warehouse...</option>
-                {warehouses.map(wh => (
-                  <option key={wh._id} value={wh._id}>{wh.warehouse_code || wh.address?.city || wh._id}</option>
-                ))}
+                {(allWarehouses.length > 0 ? allWarehouses : warehouses).map(wh => {
+                  const whId = String(wh._id || wh.id);
+                  return (
+                    <option key={whId} value={whId}>
+                      {wh.display_name || wh.warehouse_code || wh.address?.city || wh.name || whId}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">
+              <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">
                 {combineProcurementType === "panel" ? "☀️ Panel Supplier *" : combineProcurementType === "inverter" ? "⚡ Inverter Supplier *" : "Supplier *"}
               </label>
               <select
                 value={combineForm.supplier_id}
                 onChange={(e) => setCombineForm({ ...combineForm, supplier_id: e.target.value })}
-                className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 required
-                disabled={!combineForm.warehouse_id}
               >
                 <option value="">Select supplier...</option>
-                {suppliers.map(s => (
-                  <option key={s.supplier_id} value={s.supplier_id}>{s.company_name} — GST: {s.gst_number || "N/A"}</option>
-                ))}
+                {suppliers.map(s => {
+                  const sId = s.supplier_id || s._id;
+                  const brandText = s.brand_name && s.brand_name !== s.company_name ? ` (${s.brand_name})` : "";
+                  return (
+                    <option key={sId} value={sId}>
+                      {s.company_name}{brandText} — GST: {s.gst_number || "N/A"}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">Expected Delivery By *</label>
+              <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">Expected Delivery By *</label>
               <input
                 type="date"
                 value={combineForm.timeline}
                 min={new Date().toLocaleDateString('en-CA')}
                 onChange={(e) => setCombineForm({ ...combineForm, timeline: e.target.value })}
-                className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 required
               />
             </div>
             <div>
-              <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">PI / Reference No. (Optional)</label>
+              <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">PI / Reference No. (Optional)</label>
               <input
                 type="text"
                 value={combineForm.proforma_invoice_no}
                 onChange={(e) => setCombineForm({ ...combineForm, proforma_invoice_no: e.target.value })}
                 placeholder="e.g. PI-2026-001"
-                className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
               />
             </div>
           </div>
 
-          {/* Procurement Components Overview from Selected Orders */}
-          <div className="p-3.5 rounded-xl bg-surface-hover border border-border">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[10px] font-black text-text-secondary uppercase tracking-wider">
+          {/* Beneficiary Recipient Information Card */}
+          {(() => {
+            const selectedSupplierObj = suppliers.find(s => String(s.supplier_id || s._id) === String(combineForm.supplier_id)) ||
+              allApprovedSuppliers.find(s => String(s._id) === String(combineForm.supplier_id));
+            const selectedWarehouseObj = (allWarehouses.length > 0 ? allWarehouses : warehouses).find(
+              w => String(w._id || w.id) === String(combineForm.warehouse_id)
+            );
+
+            if (!selectedSupplierObj && !selectedWarehouseObj) return null;
+
+            return (
+              <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-blue-50/90 border border-blue-200/90 shadow-sm animate-fadeIn">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
+                  {selectedSupplierObj ? (
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-lg flex-shrink-0 shadow-sm">
+                        🏢
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-1.5">
+                          <span>Payment Beneficiary (Recipient Supplier)</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                          <span className="text-[9px] text-green-700 font-bold lowercase">active</span>
+                        </div>
+                        <div className="text-sm font-black text-gray-900 truncate">
+                          {selectedSupplierObj.company_name}
+                        </div>
+                        {selectedSupplierObj.brand_name && selectedSupplierObj.brand_name !== selectedSupplierObj.company_name && (
+                          <div className="text-xs font-bold text-gray-600">
+                            Brand: <span className="text-gray-900 font-black">{selectedSupplierObj.brand_name}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 mt-2 flex-wrap text-xs">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-white border border-blue-200 font-mono font-black text-gray-900 shadow-2xs">
+                            <span className="text-[9px] text-gray-500 uppercase">GSTIN:</span>
+                            {selectedSupplierObj.gst_number || "N/A"}
+                          </span>
+                          {selectedSupplierObj.pan_number && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-white border border-blue-200 font-mono font-black text-gray-900 shadow-2xs">
+                              <span className="text-[9px] text-gray-500 uppercase">PAN:</span>
+                              {selectedSupplierObj.pan_number}
+                            </span>
+                          )}
+                          {selectedSupplierObj.phone && (
+                            <span className="text-gray-700 font-bold flex items-center gap-1">
+                              <FaPhone size={10} className="text-blue-600" /> {selectedSupplierObj.phone}
+                            </span>
+                          )}
+                          {selectedSupplierObj.email && (
+                            <span className="text-gray-700 font-bold flex items-center gap-1">
+                              <FaEnvelope size={10} className="text-blue-600" /> {selectedSupplierObj.email}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-blue-700 font-bold flex items-center gap-2">
+                      <FaInfoCircle className="text-blue-500" /> Select a supplier above to preview recipient legal name, brand and GST details.
+                    </div>
+                  )}
+
+                  {selectedWarehouseObj && (
+                    <div className="sm:text-right sm:pl-4 sm:border-l sm:border-blue-200 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-blue-100 w-full sm:w-auto">
+                      <div className="text-[10px] font-black text-blue-700 uppercase tracking-widest">
+                        Destination Warehouse
+                      </div>
+                      <div className="text-xs font-black text-gray-900 flex sm:justify-end items-center gap-1 mt-0.5">
+                        <FaMapMarkerAlt size={10} className="text-primary flex-shrink-0" />
+                        <span>{selectedWarehouseObj.warehouse_code}</span>
+                      </div>
+                      <div className="text-[11px] font-bold text-gray-600 mt-0.5">
+                        {[selectedWarehouseObj.district_name, selectedWarehouseObj.state_name].filter(Boolean).join(", ") || selectedWarehouseObj.address || "Gujarat Hub"}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Procurement Components Overview */}
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
                 {combineProcurementType === "panel" ? "☀️ Selected Orders — Solar Panels to Procure" :
                   combineProcurementType === "inverter" ? "⚡ Selected Orders — Inverters to Procure" :
                     "📦 Selected Orders — All Components to Procure"}
               </span>
-              <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+              <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-md">
                 {selectedOrderIds.size} Orders Selected
               </span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              <div className={`p-3 rounded-xl border text-center transition-all ${combineProcurementType === "panel"
-                ? "bg-amber-500/10 border-amber-500/40 text-amber-800 dark:text-amber-300 ring-2 ring-amber-400/30"
-                : "bg-surface border-border text-text-secondary"
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className={`p-3.5 rounded-xl border text-center transition-all ${combineProcurementType === "panel"
+                ? "bg-white border-2 border-primary shadow-sm ring-2 ring-primary/20"
+                : "bg-white/80 border-gray-200"
                 }`}>
-                <div className="text-[10px] font-bold uppercase tracking-wider">☀️ Solar Panels</div>
-                <div className="text-lg font-black mt-1">
-                  {procurementAmountBreakdown.panelQty || 0} <span className="text-[11px] font-bold text-text-muted">Pcs</span>
+                <div className="text-xs font-extrabold text-gray-800 uppercase tracking-wide flex items-center justify-center gap-1.5">
+                  <span>☀️</span> Solar Panels
+                  {combineProcurementType === "panel" && (
+                    <span className="text-[9px] font-black bg-primary text-white px-2 py-0.5 rounded-full">ACTIVE</span>
+                  )}
                 </div>
-                <div className="text-[10px] font-bold text-text-muted mt-0.5">Est: ₹{(procurementAmountBreakdown.panelTotal || 0).toLocaleString("en-IN")}</div>
+                <div className="text-2xl font-black text-gray-900 mt-1.5">
+                  {procurementAmountBreakdown.panelQty || 0} <span className="text-xs font-bold text-gray-500">Pcs</span>
+                </div>
+                <div className="text-xs font-bold text-gray-600 mt-1">
+                  Est: <span className="font-extrabold text-primary">₹{(procurementAmountBreakdown.panelTotal || 0).toLocaleString("en-IN")}</span>
+                </div>
               </div>
 
-              <div className={`p-3 rounded-xl border text-center transition-all ${combineProcurementType === "inverter"
-                ? "bg-teal-500/10 border-teal-500/40 text-teal-800 dark:text-teal-300 ring-2 ring-teal-400/30"
-                : "bg-surface border-border text-text-secondary"
+              <div className={`p-3.5 rounded-xl border text-center transition-all ${combineProcurementType === "inverter"
+                ? "bg-white border-2 border-primary shadow-sm ring-2 ring-primary/20"
+                : "bg-white/80 border-gray-200"
                 }`}>
-                <div className="text-[10px] font-bold uppercase tracking-wider">⚡ Inverters</div>
-                <div className="text-lg font-black mt-1">
-                  {procurementAmountBreakdown.inverterQty || 0} <span className="text-[11px] font-bold text-text-muted">Pcs</span>
+                <div className="text-xs font-extrabold text-gray-800 uppercase tracking-wide flex items-center justify-center gap-1.5">
+                  <span>⚡</span> Inverters
+                  {combineProcurementType === "inverter" && (
+                    <span className="text-[9px] font-black bg-primary text-white px-2 py-0.5 rounded-full">ACTIVE</span>
+                  )}
                 </div>
-                <div className="text-[10px] font-bold text-text-muted mt-0.5">Est: ₹{(procurementAmountBreakdown.inverterTotal || 0).toLocaleString("en-IN")}</div>
+                <div className="text-2xl font-black text-gray-900 mt-1.5">
+                  {procurementAmountBreakdown.inverterQty || 0} <span className="text-xs font-bold text-gray-500">Pcs</span>
+                </div>
+                <div className="text-xs font-bold text-gray-600 mt-1">
+                  Est: <span className="font-extrabold text-primary">₹{(procurementAmountBreakdown.inverterTotal || 0).toLocaleString("en-IN")}</span>
+                </div>
               </div>
 
-              <div className="p-3 rounded-xl border border-border bg-surface text-text-secondary text-center col-span-2 sm:col-span-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider">💰 Orders Value</div>
-                <div className="text-lg font-black text-text-primary mt-1">
+              <div className="p-3.5 rounded-xl border border-gray-200 bg-white/80 text-center col-span-2 sm:col-span-1">
+                <div className="text-xs font-extrabold text-gray-800 uppercase tracking-wide">💰 Orders Value</div>
+                <div className="text-2xl font-black text-green-600 mt-1.5">
                   ₹{(procurementAmountBreakdown.totalOrderAmount || 0).toLocaleString("en-IN")}
                 </div>
-                <div className="text-[10px] font-bold text-text-muted mt-0.5">Total of {selectedOrderIds.size} orders</div>
+                <div className="text-xs font-medium text-gray-500 mt-1">Total of {selectedOrderIds.size} orders</div>
               </div>
             </div>
           </div>
 
           {/* Payment Details */}
-          <div className="border-t border-border pt-4">
-            <div className="text-xs font-black text-text-secondary uppercase tracking-widest mb-3 flex items-center gap-2">
+          <div className="border-t border-gray-200 pt-4">
+            <div className="text-xs font-black text-gray-900 uppercase tracking-widest mb-3 flex items-center gap-2">
               <FaCreditCard className="text-primary" /> Supplier Payment Details
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">Payment Mode *</label>
+                <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">Payment Mode *</label>
                 <select
                   value={combineForm.payment_mode}
                   onChange={(e) => setCombineForm({ ...combineForm, payment_mode: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 >
                   {["NEFT", "RTGS", "IMPS", "UPI", "Card", "Cash"].map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">UTR / Reference No. *</label>
+                <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">UTR / Reference No. *</label>
                 <input
                   type="text"
                   placeholder="e.g. UTR123456789"
                   value={combineForm.reference_no}
                   onChange={(e) => setCombineForm({ ...combineForm, reference_no: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   required
                 />
               </div>
               <div>
-                <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">Payment Date *</label>
+                <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">Payment Date *</label>
                 <input
                   type="date"
                   value={combineForm.payment_date}
                   max={new Date().toLocaleDateString('en-CA')}
                   onChange={(e) => setCombineForm({ ...combineForm, payment_date: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-surface text-text-primary text-xs font-semibold px-3 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  className="w-full rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-semibold px-3.5 py-2.5 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   required
                 />
               </div>
               <div className="col-span-1 sm:col-span-2">
-                {/* Amount Breakdown Summary Card */}
                 {(procurementAmountBreakdown.panelTotal > 0 || procurementAmountBreakdown.inverterTotal > 0 || procurementAmountBreakdown.otherTotal > 0) && (
-                  <div className="mb-3 p-3 rounded-xl bg-surface-hover border border-border space-y-1.5">
-                    <div className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">Item-wise Procurement Breakdown</div>
+                  <div className="mb-3.5 p-3.5 rounded-xl bg-gray-50 border border-gray-200 space-y-2">
+                    <div className="text-xs font-black text-gray-800 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <span>Item-wise Procurement Breakdown</span>
+                      <span className="text-[10px] text-gray-500 font-semibold lowercase">click type above to auto-select</span>
+                    </div>
                     {procurementAmountBreakdown.panelTotal > 0 && (
-                      <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold ${combineProcurementType === "panel"
-                        ? "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 ring-2 ring-amber-400/40"
-                        : "bg-surface border-border text-text-secondary"
+                      <div className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs transition-all ${combineProcurementType === "panel"
+                        ? "bg-white border-2 border-primary shadow-sm"
+                        : "bg-white/70 border-gray-200"
                         }`}>
-                        <span className="flex items-center gap-1.5">
-                          <span>☀️</span> Solar Panel ({procurementAmountBreakdown.panelQty} pcs)
-                          {combineProcurementType === "panel" && <span className="text-[9px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded-full">AUTO-SELECTED</span>}
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm">☀️</span>
+                          <span className="font-extrabold text-gray-900">
+                            Solar Panel ({procurementAmountBreakdown.panelQty} pcs)
+                          </span>
+                          {combineProcurementType === "panel" && (
+                            <span className="text-[9px] font-black bg-primary text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              AUTO-SELECTED
+                            </span>
+                          )}
                         </span>
-                        <span className="font-black text-sm">₹{procurementAmountBreakdown.panelTotal.toLocaleString("en-IN")}</span>
+                        <span className="font-black text-sm text-gray-900">
+                          ₹{procurementAmountBreakdown.panelTotal.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     )}
                     {procurementAmountBreakdown.inverterTotal > 0 && (
-                      <div className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold ${combineProcurementType === "inverter"
-                        ? "bg-teal-50 dark:bg-teal-950/30 border-teal-300 dark:border-teal-700 text-teal-800 dark:text-teal-300 ring-2 ring-teal-400/40"
-                        : "bg-surface border-border text-text-secondary"
+                      <div className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs transition-all ${combineProcurementType === "inverter"
+                        ? "bg-white border-2 border-primary shadow-sm"
+                        : "bg-white/70 border-gray-200"
                         }`}>
-                        <span className="flex items-center gap-1.5">
-                          <span>⚡</span> Inverter ({procurementAmountBreakdown.inverterQty} pcs)
-                          {combineProcurementType === "inverter" && <span className="text-[9px] font-black bg-teal-600 text-white px-1.5 py-0.5 rounded-full">AUTO-SELECTED</span>}
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm">⚡</span>
+                          <span className="font-extrabold text-gray-900">
+                            Inverter ({procurementAmountBreakdown.inverterQty} pcs)
+                          </span>
+                          {combineProcurementType === "inverter" && (
+                            <span className="text-[9px] font-black bg-primary text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              AUTO-SELECTED
+                            </span>
+                          )}
                         </span>
-                        <span className="font-black text-sm">₹{procurementAmountBreakdown.inverterTotal.toLocaleString("en-IN")}</span>
+                        <span className="font-black text-sm text-gray-900">
+                          ₹{procurementAmountBreakdown.inverterTotal.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     )}
                     {procurementAmountBreakdown.otherTotal > 0 && (
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-border bg-surface text-xs font-bold text-text-secondary">
-                        <span>📦 Other / BOS Components</span>
-                        <span>₹{procurementAmountBreakdown.otherTotal.toLocaleString("en-IN")}</span>
+                      <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white/70 text-xs font-semibold text-gray-700">
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm">📦</span>
+                          <span className="font-bold text-gray-900">Other / BOS Components</span>
+                        </span>
+                        <span className="font-bold text-gray-900">
+                          ₹{procurementAmountBreakdown.otherTotal.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 text-xs font-black text-primary mt-1">
-                      <span>💰 Grand Total (all items)</span>
-                      <span>₹{(procurementAmountBreakdown.panelTotal + procurementAmountBreakdown.inverterTotal + procurementAmountBreakdown.otherTotal).toLocaleString("en-IN")}</span>
+                    <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-xs font-extrabold text-primary mt-1">
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm">💰</span>
+                        <span className="font-black">Grand Total (all items)</span>
+                      </span>
+                      <span className="text-sm font-black">
+                        ₹{(procurementAmountBreakdown.panelTotal + procurementAmountBreakdown.inverterTotal + procurementAmountBreakdown.otherTotal).toLocaleString("en-IN")}
+                      </span>
                     </div>
                   </div>
                 )}
 
-                <label className={`text-[10px] font-black uppercase block mb-1 ${combineProcurementType === "panel" ? "text-amber-700 dark:text-amber-400" :
-                  combineProcurementType === "inverter" ? "text-teal-700 dark:text-teal-400" : "text-text-secondary"
-                  }`}>
+                <label className="text-xs font-black uppercase block mb-1.5 text-gray-900">
                   {combineProcurementType === "panel" ? "☀️ Panel Payment Amount (₹) *" :
                     combineProcurementType === "inverter" ? "⚡ Inverter Payment Amount (₹) *" :
                       "Amount Paid (₹) *"}
@@ -4002,26 +4499,20 @@ export default function Payments() {
                   <input
                     type="number"
                     min="1"
-                    placeholder="Auto-calculated from items above"
+                    placeholder="Enter or auto-calculated amount"
                     value={combineForm.amount}
                     onChange={(e) => setCombineForm({ ...combineForm, amount: e.target.value })}
-                    className={`w-full rounded-xl border text-sm font-black px-3 py-2.5 focus:ring-2 outline-none transition-all ${combineProcurementType === "panel"
-                      ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 focus:ring-amber-400/30 focus:border-amber-400"
-                      : combineProcurementType === "inverter"
-                        ? "border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/20 text-teal-900 dark:text-teal-200 focus:ring-teal-400/30 focus:border-teal-400"
-                        : "border-border bg-surface text-text-primary focus:ring-primary/20 focus:border-primary"
-                      }`}
+                    className="w-full rounded-xl border-2 border-gray-300 bg-white text-gray-900 text-base font-black px-4 py-3 pr-32 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all shadow-sm"
                     required
                   />
                   {combineForm.amount > 0 && (
-                    <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black ${combineProcurementType === "panel" ? "text-amber-600" :
-                      combineProcurementType === "inverter" ? "text-teal-600" : "text-primary"
-                      }`}>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-100 text-gray-900 px-2.5 py-1 rounded-lg border border-gray-300 text-xs font-black pointer-events-none">
                       ₹{Number(combineForm.amount).toLocaleString("en-IN")}
-                    </span>
+                    </div>
                   )}
                 </div>
-                <p className="text-[10px] text-text-muted mt-1">
+                <p className="text-xs font-semibold text-gray-600 mt-1.5 flex items-center gap-1.5">
+                  <FaInfoCircle className="text-gray-400 flex-shrink-0" size={12} />
                   {combineProcurementType === "panel"
                     ? "☀️ Sirf Solar Panel items ka total auto-fill hua hai. Manual override kar sakte hain."
                     : combineProcurementType === "inverter"
@@ -4030,12 +4521,12 @@ export default function Payments() {
                 </p>
               </div>
               <div className="col-span-1 sm:col-span-2">
-                <label className="text-[10px] font-black text-text-secondary uppercase block mb-1">Payment Receipt (Optional)</label>
+                <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block mb-1.5">Payment Receipt (Optional)</label>
                 <input
                   type="file"
                   accept="application/pdf,image/*"
                   onChange={(e) => setCombineReceiptFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs text-text-primary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
+                  className="w-full text-xs text-gray-700 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all cursor-pointer"
                 />
                 {uploadingCombineReceipt && (
                   <div className="text-[10px] text-primary font-bold flex items-center gap-1.5 animate-pulse mt-1">
@@ -4046,19 +4537,19 @@ export default function Payments() {
             </div>
           </div>
 
-          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 justify-end pt-4 border-t border-border">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 justify-end pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={() => setCombineModalOpen(false)}
               disabled={combineSubmitting}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold border border-border text-text-secondary hover:bg-surface-hover transition-all text-center"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all text-center cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={combineSubmitting}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wide transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {combineSubmitting ? <FaSpinner className="animate-spin" /> : <FaCheckCircle />}
               {combineSubmitting ? "Processing..." : `Confirm & Pay Supplier`}
@@ -4070,18 +4561,18 @@ export default function Payments() {
       {/* ─── Mobile Sticky Action Bar for Selected Orders ─────────────────── */}
       {selectedOrderIds.size > 0 && activeTab === "pending" && (
         <div className="fixed bottom-4 left-3 right-3 z-40 lg:hidden">
-          <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-between gap-2.5">
+          <div className="bg-gray-900 text-white backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-2xl border border-gray-700 flex items-center justify-between gap-2.5">
             <div className="min-w-0">
-              <div className="text-xs font-black flex items-center gap-1.5 text-amber-400">
+              <div className="text-xs font-black flex items-center gap-1.5 text-blue-400">
                 <FaCheckCircle size={12} className="flex-shrink-0" />
                 <span className="truncate">{selectedOrderIds.size} Order{selectedOrderIds.size !== 1 ? "s" : ""} Selected</span>
               </div>
-              <div className="text-[10px] text-slate-300 truncate">Ready for Combined Supplier Payment</div>
+              <div className="text-[10px] text-gray-300 truncate">Ready for Combined Supplier Payment</div>
             </div>
             <button
               type="button"
               onClick={openCombineModal}
-              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wide transition-all shadow-md flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-black uppercase tracking-wide transition-all shadow-md flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
             >
               <FaBoxes size={12} />
               <span>Combine &amp; Pay</span>
@@ -4093,4 +4584,3 @@ export default function Payments() {
     </div>
   );
 }
-

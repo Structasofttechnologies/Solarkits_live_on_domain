@@ -414,7 +414,12 @@ const getDeliveryQueue = async ({
   const query = {
     // Only paid orders eligible for delivery
     payment_status: { $in: ['captured', 'approved', 'PAID', 'paid'] },
-    order_status: { $in: ['confirmed', 'processing', 'pending_dispatch', 'vehicle_assigned'] },
+    order_status: { $in: ['processing', 'pending_dispatch', 'vehicle_assigned', 'ready_for_dispatch'] },
+    // Strict Gate: Order MUST have completed both Supplier Payment and Material Inward
+    $or: [
+      { 'procurement_status.overall_status': 'inward_completed' },
+      { procurement_status: { $exists: false }, order_status: { $in: ['processing', 'vehicle_assigned', 'ready_for_dispatch'] } } // legacy fallback
+    ]
   };
 
   if (validWarehouseId) {
@@ -430,7 +435,12 @@ const getDeliveryQueue = async ({
 
   // Fetch from FpoOrder
   const fpoQuery = {
-    status: { $in: ['PAID', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED'] },
+    status: { $in: ['PROCESSING', 'VEHICLE_ASSIGNED', 'READY_FOR_DISPATCH'] },
+    // Strict Gate: Order MUST have completed both Supplier Payment and Material Inward
+    $or: [
+      { 'procurement_status.overall_status': 'inward_completed' },
+      { procurement_status: { $exists: false }, status: { $in: ['PROCESSING', 'VEHICLE_ASSIGNED', 'READY_FOR_DISPATCH'] } } // legacy fallback
+    ]
   };
   if (validWarehouseId) fpoQuery.warehouse_id = validWarehouseId;
 
@@ -501,6 +511,12 @@ const getDeliveryQueue = async ({
       order_status: o.order_status,
       is_priority: Boolean(o.is_priority),
       priority_reason: o.priority_reason || null,
+      procurement_details: {
+        panel_grn: o.procurement_status?.panel?.inward_grn_no || null,
+        panel_inward_at: o.procurement_status?.panel?.inward_at || null,
+        inverter_grn: o.procurement_status?.inverter?.inward_grn_no || null,
+        inverter_inward_at: o.procurement_status?.inverter?.inward_at || null,
+      },
     });
   }
 
@@ -542,6 +558,12 @@ const getDeliveryQueue = async ({
       order_status: o.status,
       is_priority: Boolean(o.is_priority),
       priority_reason: o.priority_reason || null,
+      procurement_details: {
+        panel_grn: o.procurement_status?.panel?.inward_grn_no || null,
+        panel_inward_at: o.procurement_status?.panel?.inward_at || null,
+        inverter_grn: o.procurement_status?.inverter?.inward_grn_no || null,
+        inverter_inward_at: o.procurement_status?.inverter?.inward_at || null,
+      },
     });
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { MdExpandMore } from "react-icons/md";
 import { FaTimes } from "react-icons/fa";
@@ -154,124 +154,6 @@ function NavigationDrawer({
     return null;
   };
 
-  const isPathActive = (currentPath, itemPath) => {
-    if (!itemPath) return false;
-
-    // Skip country slug normalization for global industry content and website configuration pages
-    if (
-      currentPath.includes("/industry-content/") ||
-      itemPath.includes("/industry-content/") ||
-      currentPath.includes("/website-configuration") ||
-      itemPath.includes("/website-configuration")
-    ) {
-      return currentPath === itemPath || currentPath.startsWith(itemPath + "/");
-    }
-
-    // Normalize current path by removing the country name segment if present
-    let normalizedCurrent = currentPath;
-    const slugs = [
-      "solar-shop",
-      "solar-shop-solarkits",
-      "solar-shop-bos-kits",
-      "solar-shop-boskits",
-    ];
-    for (const slug of slugs) {
-      if (currentPath.includes(`/${slug}/`)) {
-        normalizedCurrent = currentPath.replace(new RegExp(`/${slug}/[^/]+`), `/${slug}`);
-        break;
-      }
-    }
-
-    if (normalizedCurrent === itemPath) return true;
-
-    if (normalizedCurrent.startsWith(itemPath + "/")) {
-      const remaining = normalizedCurrent.slice(itemPath.length + 1);
-      const firstSubSegment = remaining.split("/")[0];
-      if (["offers", "inventory"].includes(firstSubSegment)) {
-        return false;
-      }
-      return true;
-    }
-
-    return false;
-  };
-
-  const checkIsActive = (currentPath, item) => {
-    if (!item) return false;
-    if (item.path && isPathActive(currentPath, item.path)) {
-      return true;
-    }
-    if (Array.isArray(item.subMenu)) {
-      return item.subMenu.some((subItem) => checkIsActive(currentPath, subItem));
-    }
-    return false;
-  };
-
-  const getActiveParents = (items, currentPath) => {
-    const activeParents = {};
-    const traverse = (list, depth = 0) => {
-      let hasActiveChild = false;
-      if (!Array.isArray(list)) return false;
-      for (const item of list) {
-        if (!item) continue;
-        let isCurrentActive = false;
-        if (item.path && isPathActive(currentPath, item.path)) {
-          isCurrentActive = true;
-        }
-        let isSubActive = false;
-        if (Array.isArray(item.subMenu) && item.subMenu.length > 0) {
-          isSubActive = traverse(item.subMenu, depth + 1);
-          if (isSubActive) {
-            activeParents[item.name] = { open: true, depth };
-          }
-        }
-        if (isCurrentActive || isSubActive) {
-          hasActiveChild = true;
-        }
-      }
-      return hasActiveChild;
-    };
-    if (Array.isArray(items)) {
-      traverse(items);
-    }
-    return activeParents;
-  };
-
-  const toggleMenu = (name, depth) => {
-    setOpenMenus((prev) => {
-      const newOpenMenus = { ...prev };
-
-      Object.keys(newOpenMenus).forEach((key) => {
-        if (newOpenMenus[key]?.depth === depth) delete newOpenMenus[key];
-      });
-
-      const isCurrentlyOpen = prev[name]?.open;
-      newOpenMenus[name] = { open: !isCurrentlyOpen, depth };
-      return newOpenMenus;
-    });
-  };
-
-  useEffect(() => {
-    if (!Array.isArray(menuItems) || menuItems.length === 0) return;
-    const activeParents = {};
-    for (const section of menuItems) {
-      if (Array.isArray(section)) {
-        Object.assign(activeParents, getActiveParents(section, location.pathname));
-      }
-    }
-    if (Object.keys(activeParents).length > 0) {
-      setOpenMenus((prev) => {
-        const nextOpen = { ...prev };
-        Object.keys(activeParents).forEach((name) => {
-          if (!nextOpen[name]?.open) {
-            nextOpen[name] = { open: true, depth: activeParents[name].depth };
-          }
-        });
-        return nextOpen;
-      });
-    }
-  }, [location.pathname, menuItems]);
-
   const getTargetPath = (path) => {
     if (!path) return "";
     if (path.includes("/industry-content/") || path.includes("/website-configuration")) {
@@ -293,15 +175,137 @@ function NavigationDrawer({
     return targetPath;
   };
 
+  // Collect all leaf navigation items with both rawPath and targetPath
+  const leafNavItems = useMemo(() => {
+    const leaves = [];
+    const extract = (list) => {
+      if (!Array.isArray(list)) return;
+      for (const item of list) {
+        if (!item) continue;
+        if (Array.isArray(item)) {
+          extract(item);
+        } else if (Array.isArray(item.subMenu) && item.subMenu.length > 0) {
+          extract(item.subMenu);
+        } else if (item.path) {
+          const target = getTargetPath(item.path);
+          leaves.push({
+            name: item.name,
+            path: item.path,
+            targetPath: target.replace(/\/+$/, ""),
+            rawPath: item.path.replace(/\/+$/, ""),
+          });
+        }
+      }
+    };
+    extract(menuItems);
+    return leaves;
+  }, [menuItems]);
+
+  // Determine the single active leaf item (exact match first, then longest matching prefix)
+  const activeLeafItem = useMemo(() => {
+    const current = (location.pathname || "").replace(/\/+$/, "");
+    if (!current || leafNavItems.length === 0) return null;
+
+    // 1. Exact match with targetPath or rawPath
+    const exact = leafNavItems.find(
+      (leaf) => leaf.targetPath === current || leaf.rawPath === current
+    );
+    if (exact) return exact;
+
+    // 2. Prefix match for sub-routes (e.g. details, edit forms)
+    // Longest matching prefix wins so deeper child paths take priority over shorter base paths
+    const prefixMatches = leafNavItems.filter(
+      (leaf) =>
+        (leaf.targetPath && current.startsWith(leaf.targetPath + "/")) ||
+        (leaf.rawPath && current.startsWith(leaf.rawPath + "/"))
+    );
+
+    if (prefixMatches.length > 0) {
+      prefixMatches.sort((a, b) => {
+        const lenA = Math.max(a.targetPath.length, a.rawPath.length);
+        const lenB = Math.max(b.targetPath.length, b.rawPath.length);
+        return lenB - lenA;
+      });
+      return prefixMatches[0];
+    }
+
+    return null;
+  }, [location.pathname, leafNavItems]);
+
+  // Check if a parent item contains the active leaf
+  const isParentOfActive = (parentItem) => {
+    if (!parentItem || !activeLeafItem || !Array.isArray(parentItem.subMenu)) return false;
+    return parentItem.subMenu.some((child) => {
+      if (!child.subMenu || child.subMenu.length === 0) {
+        return child.path === activeLeafItem.path && child.name === activeLeafItem.name;
+      }
+      return isParentOfActive(child);
+    });
+  };
+
+  const toggleMenu = (name, depth) => {
+    setOpenMenus((prev) => {
+      const newOpenMenus = { ...prev };
+
+      Object.keys(newOpenMenus).forEach((key) => {
+        if (newOpenMenus[key]?.depth === depth) delete newOpenMenus[key];
+      });
+
+      const isCurrentlyOpen = prev[name]?.open;
+      newOpenMenus[name] = { open: !isCurrentlyOpen, depth };
+      return newOpenMenus;
+    });
+  };
+
+  useEffect(() => {
+    if (!activeLeafItem || !Array.isArray(menuItems) || menuItems.length === 0) return;
+
+    const activeParents = {};
+    const traverse = (items, depth = 0) => {
+      if (!Array.isArray(items)) return false;
+      let hasActive = false;
+      for (const item of items) {
+        if (!item) continue;
+        if (Array.isArray(item)) {
+          if (traverse(item, depth)) hasActive = true;
+        } else if (Array.isArray(item.subMenu) && item.subMenu.length > 0) {
+          const isChildActive = traverse(item.subMenu, depth + 1);
+          if (isChildActive) {
+            activeParents[item.name] = { open: true, depth };
+            hasActive = true;
+          }
+        } else if (item.path === activeLeafItem.path && item.name === activeLeafItem.name) {
+          hasActive = true;
+        }
+      }
+      return hasActive;
+    };
+
+    traverse(menuItems);
+
+    if (Object.keys(activeParents).length > 0) {
+      setOpenMenus((prev) => {
+        const nextOpen = { ...prev };
+        Object.keys(activeParents).forEach((name) => {
+          if (!nextOpen[name]?.open) {
+            nextOpen[name] = { open: true, depth: activeParents[name].depth };
+          }
+        });
+        return nextOpen;
+      });
+    }
+  }, [activeLeafItem, menuItems]);
+
   const renderMenuItems = (items, depth = 0) => {
     if (!Array.isArray(items)) return null;
     return (
       <ul className={`${depth > 0 ? "ps-2 mt-1 space-y-1" : "px-2 space-y-1"}`}>
         {items.map((item) => {
           if (!item) return null;
-          const isActive = checkIsActive(location.pathname, item);
-          const isOpen = openMenus[item.name]?.open;
           const hasSub = Array.isArray(item.subMenu) && item.subMenu.length > 0;
+          const isOpen = openMenus[item.name]?.open;
+          const isLeafActive = !hasSub && activeLeafItem && (activeLeafItem.path === item.path && activeLeafItem.name === item.name);
+          const isParentActive = hasSub && isParentOfActive(item);
           const targetPath = hasSub ? "" : getTargetPath(item.path);
           const pendingStatus = getItemPendingStatus(item);
 
@@ -313,23 +317,23 @@ function NavigationDrawer({
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     onClick={() => toggleMenu(item.name, depth)}
-                    className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group
-                      ${isActive
-                        ? "gradient-primary text-white shadow-md shadow-primary/20"
+                    className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group cursor-pointer
+                      ${isParentActive
+                        ? "bg-primary/10 text-primary border border-primary/20 font-semibold shadow-xs"
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
                   >
                     <div className="flex gap-3 items-center max-w-[calc(100%-40px)]">
                       <span
                         className={`text-xl min-w-6 flex justify-center transition-colors ${
-                          isActive ? "text-white" : "text-primary group-hover:scale-110"
+                          isParentActive ? "text-primary" : "text-primary group-hover:scale-110"
                         }`}
                       >
                         {item.icon}
                       </span>
                       <span
                         className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${
-                          isActive ? "text-white" : "text-text-primary"
+                          isParentActive ? "text-primary font-bold" : "text-text-primary"
                         }`}
                       >
                         {item.name}
@@ -363,7 +367,7 @@ function NavigationDrawer({
                       if (isMobile && setIsOpen) setIsOpen(false);
                     }}
                     className={`flex items-center justify-between w-full px-4 py-2.5 rounded-xl transition-all duration-300 whitespace-nowrap group
-                    ${isActive
+                    ${isLeafActive
                         ? "gradient-primary text-white shadow-md shadow-primary/20"
                         : "text-text-secondary bg-transparent hover:bg-surface-hover hover:text-primary"
                       }`}
@@ -371,14 +375,14 @@ function NavigationDrawer({
                     <div className="flex gap-3 items-center max-w-[calc(100%-24px)]">
                       <span
                         className={`text-xl min-w-6 flex justify-center transition-colors ${
-                          isActive ? "text-white" : "text-primary group-hover:scale-110"
+                          isLeafActive ? "text-white" : "text-primary group-hover:scale-110"
                         }`}
                       >
                         {item.icon}
                       </span>
                       <span
                         className={`flex-1 font-semibold text-[13.5px] tracking-tight truncate overflow-hidden text-ellipsis whitespace-nowrap ${
-                          isActive ? "text-white" : "text-text-primary"
+                          isLeafActive ? "text-white" : "text-text-primary"
                         }`}
                       >
                         {item.name}

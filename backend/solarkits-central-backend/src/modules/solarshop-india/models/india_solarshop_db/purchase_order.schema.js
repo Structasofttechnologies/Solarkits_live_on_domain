@@ -36,4 +36,4 @@ const schema = new mongoose.Schema({
 
 schema.virtual('id').get(function () { return this._id; });
 
-module.exports = db.model('purchase_orders', schema);
+module.exports = db.model('solarshop_purchase_orders', schema);

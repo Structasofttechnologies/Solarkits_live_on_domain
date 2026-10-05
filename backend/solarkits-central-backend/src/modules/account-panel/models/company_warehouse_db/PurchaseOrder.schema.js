@@ -17,9 +17,15 @@ const schema = new mongoose.Schema({
   po_number:       { type: String, required: true, unique: true },
   warehouse_id:    { type: mongoose.Schema.Types.ObjectId, ref: 'company_warehouses', required: true },
   supplier_id:     { type: mongoose.Schema.Types.ObjectId, ref: 'suppliers', required: true },
+  supplier_name:   { type: String, default: null },
+  supplier_brand:  { type: String, default: null },
+  supplier_gst:    { type: String, default: null },
+  warehouse_code:  { type: String, default: null },
+  warehouse_name:  { type: String, default: null },
   items: [{
     sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', required: false, default: null },
     sku_code:         { type: String, default: 'PROCUREMENT-ITEM' },
+    item_name:        { type: String, default: null },
     qty:              { type: Number, default: 1 },
     benchmark_price:  { type: Number, default: 0 },
     benchmark_price_per_watt: { type: Number, default: 0 },
@@ -56,7 +62,8 @@ const schema = new mongoose.Schema({
       sku_id:    { type: mongoose.Schema.Types.ObjectId, default: null },
       sku_code:  { type: String, default: null },
       item_name: { type: String, default: null },
-      quantity:  { type: Number, default: 0 }
+      quantity:  { type: Number, default: 0 },
+      scope_type:{ type: String, default: null }
     }]
   }],
   timeline:        { type: Date, required: true },

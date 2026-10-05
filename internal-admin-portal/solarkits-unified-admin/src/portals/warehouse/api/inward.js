@@ -112,3 +112,10 @@ export const getPoRequests = async (skuId = null) => {
   const res = await axios.get(url, { headers: authHeaderObj() });
   return res.data;
 };
+
+export const getOrderInwardFulfillment = async (warehouseId = null, moduleUniqueId = "WH_MAT_INWARD") => {
+  let url = `${API_URL}/warehouse/inward/order-fulfillment?unique_id=${moduleUniqueId}&req_for=view`;
+  if (warehouseId) url += `&warehouse_id=${warehouseId}`;
+  const res = await axios.get(url, { headers: authHeaderObj() });
+  return res.data;
+};

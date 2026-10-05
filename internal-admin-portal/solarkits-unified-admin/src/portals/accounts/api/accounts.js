@@ -58,6 +58,15 @@ export const registerSupplier = async (data) => {
   return res.data;
 };
 
+export const verifyGst = async (gstin) => {
+  const res = await axios.post(
+    `${API_URL}/accounts/gst/verify`,
+    { gstin },
+    { headers: authHeaderObj() }
+  );
+  return res.data;
+};
+
 export const gstGenerateOtp = async (gstin) => {
   const res = await axios.post(
     `${API_URL}/accounts/gst/generate-otp`,
@@ -244,8 +253,12 @@ export const updatePoRequestStatus = async (id, status) => {
 
 // ── EPC & Franchise Combined Supplier Payment ─────────────────────────────────
 
-export const getPendingEpcFranchiseOrders = async () => {
-  const res = await axios.get(`${API_URL}/accounts/pending-epc-franchise-orders`, {
+export const getPendingEpcFranchiseOrders = async (params = {}) => {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== ''))
+  ).toString();
+  const url = `${API_URL}/accounts/pending-epc-franchise-orders${query ? `?${query}` : ''}`;
+  const res = await axios.get(url, {
     headers: authHeaderObj(),
   });
   return res.data;

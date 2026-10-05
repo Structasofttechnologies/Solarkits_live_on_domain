@@ -216,6 +216,45 @@ const schema = new mongoose.Schema(
     },
     status_history: [statusHistorySchema],
 
+    // ── Supplier Procurement & Material Inward Lifecycle ─────────────────────
+    procurement_status: {
+      panel: {
+        required:      { type: Boolean, default: true },
+        po_id:         { type: mongoose.Schema.Types.ObjectId, ref: 'purchase_orders', default: null },
+        po_number:     { type: String, default: null },
+        supplier_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'suppliers', default: null },
+        supplier_name: { type: String, default: null },
+        supplier_brand:{ type: String, default: null },
+        supplier_gst:  { type: String, default: null },
+        status:        { type: String, enum: ['pending_payment', 'paid_awaiting_inward', 'inwarded'], default: 'pending_payment' },
+        inward_grn_id: { type: mongoose.Schema.Types.ObjectId, ref: 'warehouse_inwards', default: null },
+        inward_grn_no: { type: String, default: null },
+        inward_at:     { type: Date, default: null },
+      },
+      inverter: {
+        required:      { type: Boolean, default: true },
+        po_id:         { type: mongoose.Schema.Types.ObjectId, ref: 'purchase_orders', default: null },
+        po_number:     { type: String, default: null },
+        supplier_id:   { type: mongoose.Schema.Types.ObjectId, ref: 'suppliers', default: null },
+        supplier_name: { type: String, default: null },
+        supplier_brand:{ type: String, default: null },
+        supplier_gst:  { type: String, default: null },
+        status:        { type: String, enum: ['pending_payment', 'paid_awaiting_inward', 'inwarded'], default: 'pending_payment' },
+        inward_grn_id: { type: mongoose.Schema.Types.ObjectId, ref: 'warehouse_inwards', default: null },
+        inward_grn_no: { type: String, default: null },
+        inward_at:     { type: Date, default: null },
+      },
+      overall_status: {
+        type: String,
+        enum: [
+          'awaiting_supplier_procurement', // pending payment to panel or inverter supplier
+          'awaiting_material_inward',       // suppliers paid, waiting for warehouse inward
+          'inward_completed'               // both inwarded, ready for dispatch queue
+        ],
+        default: 'awaiting_supplier_procurement',
+      },
+    },
+
     // ── Approval ─────────────────────────────────────────────────────────────
     requires_approval: { type: Boolean, default: true },
     approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },

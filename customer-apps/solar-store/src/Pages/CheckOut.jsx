@@ -898,7 +898,11 @@ export default function CheckOut() {
             </div>
           </div>
 
-          {/* Official ICICI Virtual Account Card */}
+          {/* =========================================================================
+              TEMPORARILY HIDDEN: ICICI Virtual Account (VAN) Details Card
+              To re-enable: Remove the comment tags below and at the end of the card
+             ========================================================================= */}
+          {/*
           <div className="bg-gradient-to-br from-[#264baa]/10 via-surface to-[#264baa]/5 p-5 sm:p-6 rounded-2xl border-2 border-[#264baa]/40 shadow-md space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#264baa]/20 pb-3.5">
               <div>
@@ -945,7 +949,6 @@ export default function CheckOut() {
                 </div>
               </div>
 
-              {/* Highlighted VAN Box */}
               <div className="bg-[#264baa]/10 dark:bg-[#264baa]/20 p-4 rounded-xl border-2 border-[#264baa]/50 flex justify-between items-center shadow-sm">
                 <div>
                   <span className="text-[#264baa] dark:text-blue-300 block text-[11px] font-extrabold uppercase tracking-wide">
@@ -985,6 +988,7 @@ export default function CheckOut() {
 
 
           </div>
+          */}
 
           {/* Checkout Submission Form */}
           <form onSubmit={handleSubmitOfflineOrder} className="space-y-6">

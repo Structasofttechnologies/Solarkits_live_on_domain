@@ -58,6 +58,7 @@ router.post('/accounts/combined-supplier-payment', check_auth, accounts_handler.
 // Supplier Registration & Listing
 router.get('/accounts/suppliers', check_auth, accounts_handler.list_suppliers);
 router.post('/accounts/suppliers', check_auth, accounts_handler.create_supplier);
+router.post('/accounts/gst/verify', check_auth, accounts_handler.gst_verify);
 router.post('/accounts/gst/generate-otp', check_auth, accounts_handler.gst_generate_otp);
 router.post('/accounts/gst/submit-otp', check_auth, accounts_handler.gst_submit_otp);
 
