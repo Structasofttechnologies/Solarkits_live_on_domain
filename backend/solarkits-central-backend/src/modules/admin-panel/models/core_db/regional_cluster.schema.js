@@ -7,6 +7,8 @@ const schema = new mongoose.Schema({
   states: [{ type: String, required: true, trim: true }],
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
   description: { type: String, default: null },
+  oem_brand_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'brands', default: [] }],
+  supplier_brand_ids: [{ type: mongoose.Schema.Types.ObjectId, ref: 'brands', default: [] }],
   is_active: { type: Boolean, default: true },
   deleted_at: { type: Date, default: null },
   created_at: { type: Date, default: Date.now },

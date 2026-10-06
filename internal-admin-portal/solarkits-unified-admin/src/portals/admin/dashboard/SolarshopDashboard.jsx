@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -64,6 +64,7 @@ const ComboKitWeightMaster = lazy(() => import("../pages/solar-shop/delivery-man
 const DeliveryCostSettings = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryCostSettings"));
 const DeliveryApprovalQueue = lazy(() => import("../pages/solar-shop/delivery-management/DeliveryApprovalQueue"));
 const ClusterWarehouseRouting = lazy(() => import("../pages/solar-shop/order-management-settings/ClusterWarehouseRouting"));
+const AdminSupplierSettings = lazy(() => import("../pages/solar-shop/order-management-settings/AdminSupplierSettings"));
 const KitDisplayChecklist = lazy(() => import("../pages/solar-shop/order-management-settings/KitDisplayChecklist"));
 const OrderOverdueSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderOverdueSettings"));
 const OrderJourneyDashboard = lazy(() => import("../pages/solar-shop/order-management-settings/OrderJourneyDashboard"));
@@ -238,6 +239,12 @@ const menus = [
                     name: "Cluster Warehouse Routing",
                     icon: <FiMapPin />,
                     path: "/admin-panel/solar-shop/order-management-settings/cluster-routing",
+                    unique_id: "ADM_ORDER_SETTINGS"
+                },
+                {
+                    name: "Admin Supplier Settings",
+                    icon: <FaHandshake />,
+                    path: "/admin-panel/solar-shop/order-management-settings/admin-supplier-settings",
                     unique_id: "ADM_ORDER_SETTINGS"
                 },
                 {
@@ -846,6 +853,16 @@ export default function SolarShopDashboard() {
                                         }
                                     />
                                     <Route
+                                        path="/order-management-settings/admin-supplier-settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Supplier Settings..." />}>
+                                                    <AdminSupplierSettings />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
                                         path="/order-management-settings/kit-checklist"
                                         element={
                                             <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
@@ -911,6 +928,16 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
                                                 <Suspense fallback={<Loader text="Loading Cluster Routing..." />}>
                                                     <ClusterWarehouseRouting />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-management-settings/admin-supplier-settings"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_SETTINGS">
+                                                <Suspense fallback={<Loader text="Loading Supplier Settings..." />}>
+                                                    <AdminSupplierSettings />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

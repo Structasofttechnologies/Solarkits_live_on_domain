@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Routes, Route, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setAlert } from "../../features/alert.slice";
 import { motion, AnimatePresence } from "framer-motion";
@@ -395,6 +395,18 @@ export default function MaterialInward() {
   }, []);
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleViewInQueue = (ord) => {
+    const prefix = location.pathname.startsWith("/warehouse-management-panel")
+      ? "/warehouse-management-panel"
+      : location.pathname.startsWith("/warehouse")
+      ? "/warehouse"
+      : location.pathname.startsWith("/admin-panel")
+      ? "/admin-panel/solar-shop/india"
+      : "/warehouse-management-panel";
+    navigate(`${prefix}/delivery-management/queue`);
+  };
 
   const [activeTab, setActiveTab] = useState(() => {
     return sessionStorage.getItem("inwardActiveTab") || "local";
@@ -2023,7 +2035,7 @@ export default function MaterialInward() {
                                   </button>
                                 ) : isReady ? (
                                   <button
-                                    onClick={() => navigate("/solar-shop/delivery-management/queue")}
+                                    onClick={() => handleViewInQueue(ord)}
                                     className="px-3 py-1.5 rounded-xl text-xs font-bold bg-success/10 text-success border border-success/20 hover:bg-success hover:text-white transition-all flex items-center gap-1 ml-auto"
                                   >
                                     View in Queue <FaShippingFast />

@@ -15,7 +15,7 @@ const {
   Reseller,
   StoreSetup,
 } = require('../models/india_solarshop_db');
-const { CompanyWarehouse } = require('../models/company_warehouse_db');
+const { CompanyWarehouse, PurchaseOrder: WarehousePurchaseOrder } = require('../models/company_warehouse_db');
 const { GeoLevel2 } = require('../models/geolocation_db');
 const {
   IndustryType,
@@ -411,6 +411,38 @@ const getDeliveryQueue = async ({
 }) => {
   const validWarehouseId = (warehouse_id && warehouse_id !== 'null' && warehouse_id !== 'undefined' && mongoose.Types.ObjectId.isValid(warehouse_id)) ? warehouse_id : null;
 
+  // 1. Proactively check if any source orders have purchase orders marked 'delivered'
+  let fullyDeliveredSourceOrderIds = [];
+  try {
+    const deliveredPOs = await WarehousePurchaseOrder.find({
+      status: 'delivered',
+      'source_orders.0': { $exists: true }
+    }).select('po_number procurement_type status delivery_date source_orders').lean();
+
+    const poStatusMap = new Map();
+    for (const po of deliveredPOs) {
+      const ptype = po.procurement_type || 'mixed';
+      for (const so of po.source_orders || []) {
+        if (!so.order_id) continue;
+        const idStr = so.order_id.toString();
+        if (!poStatusMap.has(idStr)) {
+          poStatusMap.set(idStr, { panelDelivered: false, inverterDelivered: false });
+        }
+        const entry = poStatusMap.get(idStr);
+        if (ptype === 'panel' || ptype === 'mixed') entry.panelDelivered = true;
+        if (ptype === 'inverter' || ptype === 'mixed') entry.inverterDelivered = true;
+      }
+    }
+
+    for (const [orderIdStr, flags] of poStatusMap.entries()) {
+      if (flags.panelDelivered && flags.inverterDelivered) {
+        fullyDeliveredSourceOrderIds.push(new mongoose.Types.ObjectId(orderIdStr));
+      }
+    }
+  } catch (poErr) {
+    console.warn('deliveredPOs lookup warning:', poErr.message);
+  }
+
   const query = {
     // Only paid orders eligible for delivery
     payment_status: { $in: ['captured', 'approved', 'PAID', 'paid'] },
@@ -418,6 +450,8 @@ const getDeliveryQueue = async ({
     // Strict Gate: Order MUST have completed both Supplier Payment and Material Inward
     $or: [
       { 'procurement_status.overall_status': 'inward_completed' },
+      { 'procurement_status.panel.status': 'inwarded', 'procurement_status.inverter.status': 'inwarded' },
+      ...(fullyDeliveredSourceOrderIds.length > 0 ? [{ _id: { $in: fullyDeliveredSourceOrderIds } }] : []),
       { procurement_status: { $exists: false }, order_status: { $in: ['processing', 'vehicle_assigned', 'ready_for_dispatch'] } } // legacy fallback
     ]
   };
@@ -439,6 +473,8 @@ const getDeliveryQueue = async ({
     // Strict Gate: Order MUST have completed both Supplier Payment and Material Inward
     $or: [
       { 'procurement_status.overall_status': 'inward_completed' },
+      { 'procurement_status.panel.status': 'inwarded', 'procurement_status.inverter.status': 'inwarded' },
+      ...(fullyDeliveredSourceOrderIds.length > 0 ? [{ _id: { $in: fullyDeliveredSourceOrderIds } }] : []),
       { procurement_status: { $exists: false }, status: { $in: ['PROCESSING', 'VEHICLE_ASSIGNED', 'READY_FOR_DISPATCH'] } } // legacy fallback
     ]
   };
@@ -512,6 +548,7 @@ const getDeliveryQueue = async ({
       is_priority: Boolean(o.is_priority),
       priority_reason: o.priority_reason || null,
       procurement_details: {
+        overall_status: o.procurement_status?.overall_status || 'inward_completed',
         panel_grn: o.procurement_status?.panel?.inward_grn_no || null,
         panel_inward_at: o.procurement_status?.panel?.inward_at || null,
         inverter_grn: o.procurement_status?.inverter?.inward_grn_no || null,
@@ -559,6 +596,7 @@ const getDeliveryQueue = async ({
       is_priority: Boolean(o.is_priority),
       priority_reason: o.priority_reason || null,
       procurement_details: {
+        overall_status: o.procurement_status?.overall_status || 'inward_completed',
         panel_grn: o.procurement_status?.panel?.inward_grn_no || null,
         panel_inward_at: o.procurement_status?.panel?.inward_at || null,
         inverter_grn: o.procurement_status?.inverter?.inward_grn_no || null,

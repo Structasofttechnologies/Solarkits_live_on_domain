@@ -1609,7 +1609,7 @@ export default function PreconfiguredComboKit({ showBestSellers = true }) {
 
       {/* Selected Kit Dialog */}
       {selectedKit && (
-        <Dialog isOpen={!!selectedKit} title={selectedKit.kitName} onClose={() => setSelected(null)} size="xl">
+        <Dialog isOpen={!!selectedKit} title={selectedKit.kitName} onClose={() => { setSelected(null); setSelectedKit(null); }} size="xl">
           <SelectedKitCard kit={selectedKit} initialVariantIndex={selected ? parseInt(selected.split('-')[1]) || 0 : 0} activeOffers={activeOffers} />
         </Dialog>
       )}

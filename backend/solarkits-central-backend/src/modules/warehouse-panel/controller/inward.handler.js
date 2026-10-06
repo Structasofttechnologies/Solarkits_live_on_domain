@@ -954,7 +954,7 @@ const mark_purchase_order_delivered = async (req, res) => {
       }
     }
 
-    await WarehouseInward.create([{
+    const inward = await WarehouseInward.create([{
       grn_no,
       warehouse_id,
       inward_type: 'supplier',
@@ -1016,9 +1016,41 @@ const mark_purchase_order_delivered = async (req, res) => {
             };
           }
 
-          // Check if BOTH Panel and Inverter are inwarded
-          const panelInwarded = doc.procurement_status.panel?.status === 'inwarded';
-          const inverterInwarded = doc.procurement_status.inverter?.status === 'inwarded';
+          // Cross-check all delivered purchase orders linked to this source order
+          const linkedDeliveredPOs = await PurchaseOrder.find({
+            'source_orders.order_id': doc._id,
+            status: 'delivered'
+          }).lean();
+
+          for (const lpo of linkedDeliveredPOs) {
+            const ltype = lpo.procurement_type || 'mixed';
+            if ((ltype === 'panel' || ltype === 'mixed') && doc.procurement_status.panel?.status !== 'inwarded') {
+              doc.procurement_status.panel = {
+                ...(doc.procurement_status.panel || {}),
+                required: true,
+                status: 'inwarded',
+                po_id: lpo._id,
+                po_number: lpo.po_number,
+                inward_at: lpo.delivery_date || new Date(),
+              };
+            }
+            if ((ltype === 'inverter' || ltype === 'mixed') && doc.procurement_status.inverter?.status !== 'inwarded') {
+              doc.procurement_status.inverter = {
+                ...(doc.procurement_status.inverter || {}),
+                required: true,
+                status: 'inwarded',
+                po_id: lpo._id,
+                po_number: lpo.po_number,
+                inward_at: lpo.delivery_date || new Date(),
+              };
+            }
+          }
+
+          // Check if BOTH Panel and Inverter are inwarded (or not required)
+          const panelRequired = doc.procurement_status.panel?.required !== false;
+          const inverterRequired = doc.procurement_status.inverter?.required !== false;
+          const panelInwarded = !panelRequired || doc.procurement_status.panel?.status === 'inwarded';
+          const inverterInwarded = !inverterRequired || doc.procurement_status.inverter?.status === 'inwarded';
           const bothInwarded = panelInwarded && inverterInwarded;
 
           if (bothInwarded) {

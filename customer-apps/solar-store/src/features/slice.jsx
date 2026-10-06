@@ -305,16 +305,20 @@ const slice = createSlice({
           .filter(item => item.id === kit.id && item.districtId === districtId)
           .reduce((sum, item) => sum + item.qty, 0);
 
+        // Bulk/wholesale kits with orderQuantities are made-to-order;
+        // skip stock validation so 200/500/1000+ qty orders can be added.
+        const isBulkOrderQty = orderQuantities.length > 0;
+
         if (exists) {
           if (replaceQty) {
             exists.qty = requestedQty;
           } else {
-            if (currentCartQtySum + requestedQty <= liveAvailable) {
+            if (isBulkOrderQty || currentCartQtySum + requestedQty <= liveAvailable) {
               exists.qty += requestedQty;
             }
           }
         } else {
-          if (requestedQty <= liveAvailable && liveAvailable > 0) {
+          if (isBulkOrderQty || (requestedQty <= liveAvailable && liveAvailable > 0)) {
             state.cart.push(cartItem);
             // Record the district when first item was added
             if (state.cart.length === 1) {

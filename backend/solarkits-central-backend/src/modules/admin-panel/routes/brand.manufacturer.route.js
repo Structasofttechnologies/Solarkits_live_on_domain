@@ -21,7 +21,10 @@ router.post(
 router.get(
     "/get-brands",
     check_auth,
-    check_permissions([{ unique_code: "ADM_MFG_BRANDS", permissions: ["view"] }]),
+    check_permissions([
+        { unique_code: "ADM_MFG_BRANDS", permissions: ["view"] },
+        { unique_code: "ADM_ORDER_SETTINGS", permissions: ["view"] }
+    ]),
     handler.get_brands
 );
 

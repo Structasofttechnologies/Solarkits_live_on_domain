@@ -286,6 +286,12 @@ exports.update_cluster = async (req, res) => {
     if (states && Array.isArray(states)) cluster.states = states.map(s => s.trim());
     if (status) cluster.status = status;
     if (description !== undefined) cluster.description = description;
+    if (req.body.oem_brand_ids !== undefined) {
+      cluster.oem_brand_ids = Array.isArray(req.body.oem_brand_ids) ? req.body.oem_brand_ids : [];
+    }
+    if (req.body.supplier_brand_ids !== undefined) {
+      cluster.supplier_brand_ids = Array.isArray(req.body.supplier_brand_ids) ? req.body.supplier_brand_ids : [];
+    }
 
     await cluster.save();
 

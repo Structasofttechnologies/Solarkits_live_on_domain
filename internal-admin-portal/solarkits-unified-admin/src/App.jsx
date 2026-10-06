@@ -60,6 +60,11 @@ export default function App() {
           <Route path="/unauthorized/*" element={<WarehousePortalApp />} />
           <Route path="/warehouse/*" element={<WarehousePortalApp />} />
 
+          {/* Legacy / Direct shortcuts for solar-shop to avoid dropping to panel choose */}
+          <Route path="/solar-shop/delivery-management/queue/*" element={<Navigate to="/warehouse-management-panel/delivery-management/queue" replace />} />
+          <Route path="/solar-shop/delivery-management/*" element={<Navigate to="/warehouse-management-panel/delivery-management" replace />} />
+          <Route path="/solar-shop/*" element={<Navigate to="/admin-panel/solar-shop/india/home" replace />} />
+
           {/* CMS Auth Portal & Fallback */}
           <Route path="/*" element={<CmsAuthPortalApp />} />
         </Routes>
