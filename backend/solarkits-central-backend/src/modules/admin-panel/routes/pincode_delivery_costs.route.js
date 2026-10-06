@@ -12,6 +12,7 @@ const permissionCodes = [
 ];
 
 router.get('/', check_auth, check_permissions(permissionCodes), handler.get_delivery_costs);
+router.get('/kit-stats', check_auth, check_permissions(permissionCodes), handler.get_kit_stats);
 router.post('/', check_auth, check_permissions(permissionCodes), handler.create_delivery_cost);
 router.put('/:id', check_auth, check_permissions(permissionCodes), handler.update_delivery_cost);
 router.delete('/:id', check_auth, check_permissions(permissionCodes), handler.delete_delivery_cost);

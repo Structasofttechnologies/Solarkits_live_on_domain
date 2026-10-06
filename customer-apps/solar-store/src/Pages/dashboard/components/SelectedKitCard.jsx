@@ -76,9 +76,9 @@ const ImageWithPlaceholder = ({ src, alt }) => {
     return (
       <div className="flex items-center justify-center bg-surface-hover rounded-xl p-3 w-[200px] h-[120px] mx-auto border border-dashed border-border">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-300">
-          <rect x="2" y="2" width="20" height="20" rx="4" fill="#F3F4F6" stroke="#E5E7EB" strokeWidth="1"/>
-          <circle cx="8.5" cy="8.5" r="1.5" fill="#D1D5DB"/>
-          <path d="M4 20L9 13L14 17L17 14L20 18" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <rect x="2" y="2" width="20" height="20" rx="4" fill="#F3F4F6" stroke="#E5E7EB" strokeWidth="1" />
+          <circle cx="8.5" cy="8.5" r="1.5" fill="#D1D5DB" />
+          <path d="M4 20L9 13L14 17L17 14L20 18" stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
     );
@@ -234,7 +234,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
     const tierLabel = tier || "Standard Upgrade";
     const hasCustomColor = !!color;
     const iconColor = hasCustomColor ? color : undefined;
-    
+
     // Create a dynamic description from the first benefit or a default placeholder
     const firstBenefit = benefits && benefits.length > 0 ? benefits[0] : "";
     const description = firstBenefit || "Custom configured upgrade variant with premium components";
@@ -552,11 +552,11 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
           icon: isPanel ? <FaSolarPanel className="text-amber-500" /> : isInverter ? <FaBolt className="text-blue-600" /> : <FaCogs className="text-purple-600" />,
           title: isPanel ? "Panel" : isInverter ? "Inverter" : comp.name || "Component",
           data: comp,
-          fields: isPanel 
+          fields: isPanel
             ? ["brandName", "technologyType", "wattPerPanel", "quantity", "efficiencyPercent", "warrantyYears"]
-            : isInverter 
-            ? ["brandName", "type", "category", "capacityKW", "efficiencyPercent", "warrantyYears", "quantity"]
-            : ["brandName", "skuCode", "quantity"],
+            : isInverter
+              ? ["brandName", "type", "category", "capacityKW", "efficiencyPercent", "warrantyYears", "quantity"]
+              : ["brandName", "skuCode", "quantity"],
           imageField: "image"
         });
       });

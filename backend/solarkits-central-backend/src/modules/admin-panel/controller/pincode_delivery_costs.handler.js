@@ -408,8 +408,39 @@ const bulk_import_delivery_costs = async (req, res) => {
   }
 };
 
+/**
+ * GET /admin-api/pincode-delivery-costs/kit-stats
+ * Returns aggregated pincode count and price ranges grouped by combo_kit_id
+ */
+const get_kit_stats = async (req, res) => {
+  try {
+    const stats = await PincodeDeliveryCost.aggregate([
+      {
+        $group: {
+          _id: '$combo_kit_id',
+          total_pincodes: { $sum: 1 },
+          min_cost: { $min: '$delivery_cost' },
+          max_cost: { $max: '$delivery_cost' },
+          active_count: {
+            $sum: { $cond: [{ $eq: ['$is_active', true] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      status: 'success',
+      data: stats,
+    });
+  } catch (error) {
+    console.error('Error in get_kit_stats:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Internal Server Error' });
+  }
+};
+
 module.exports = {
   get_delivery_costs,
+  get_kit_stats,
   create_delivery_cost,
   update_delivery_cost,
   delete_delivery_cost,
