@@ -21,7 +21,8 @@ import {
   FaEdit,
   FaStore,
   FaImage,
-  FaCheckCircle
+  FaCheckCircle,
+  FaCheck
 } from "react-icons/fa";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -57,6 +58,8 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
     country_ids: [],
     state_ids: [],
     district_ids: [],
+    is_oem_partner: false,
+    is_supplier: false,
   });
 
   // Confirmation Popup State
@@ -316,6 +319,8 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
     formData.append("country_ids", JSON.stringify(brandForm.country_ids));
     formData.append("state_ids", JSON.stringify(brandForm.state_ids));
     formData.append("district_ids", JSON.stringify(brandForm.district_ids));
+    formData.append("is_oem_partner", brandForm.is_oem_partner);
+    formData.append("is_supplier", brandForm.is_supplier);
 
     if (brandForm.logo) {
       formData.append("logo", brandForm.logo);
@@ -440,6 +445,8 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
         country_ids: brand.country_ids || [],
         state_ids: brand.state_ids || [],
         district_ids: brand.district_ids || [],
+        is_oem_partner: Boolean(brand.is_oem_partner),
+        is_supplier: Boolean(brand.is_supplier),
       });
 
       setIsPreloadingData(false);
@@ -454,6 +461,8 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
         country_ids: [],
         state_ids: [],
         district_ids: [],
+        is_oem_partner: false,
+        is_supplier: false,
       });
       setStates([]);
       setDistricts([]);
@@ -474,6 +483,8 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
       country_ids: [],
       state_ids: [],
       district_ids: [],
+      is_oem_partner: false,
+      is_supplier: false,
     });
     setStates([]);
     setDistricts([]);
@@ -620,13 +631,25 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
                       </div>
                     </td>
                     <td className="p-6">
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         <div className="font-bold text-text-primary text-base flex items-center gap-2 group-hover:text-primary transition-colors">
                           {brand.brand_name}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary opacity-60">
-                           <FaTrademark size={10} />
-                           Brand ID: {brand.id}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary opacity-60">
+                             <FaTrademark size={10} />
+                             Brand ID: {brand.id}
+                          </div>
+                          {brand.is_oem_partner && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                              OEM Partner
+                            </span>
+                          )}
+                          {brand.is_supplier && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Supplier
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -725,6 +748,74 @@ export default function ManufacturingBrands({ moduleUniqueId }) {
               className="w-full"
               leftIcon={<FaIndustry className="text-primary/60" />}
             />
+          </div>
+
+          {/* Brand Role / Partner Type Checkboxes */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-black uppercase tracking-widest text-text-secondary ml-1">
+              Brand Classification
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* OEM Partner Checkbox */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setBrandForm(prev => ({ ...prev, is_oem_partner: !prev.is_oem_partner }))}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setBrandForm(prev => ({ ...prev, is_oem_partner: !prev.is_oem_partner }));
+                  }
+                }}
+                className={`flex items-center gap-3.5 p-3.5 rounded-xl border cursor-pointer transition-all duration-200 select-none ${
+                  brandForm.is_oem_partner
+                    ? "bg-primary/10 border-primary/50 text-text-primary shadow-xs"
+                    : "bg-surface-hover/30 border-border text-text-secondary hover:border-primary/30 hover:text-text-primary"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                  brandForm.is_oem_partner
+                    ? "bg-primary border-primary text-white"
+                    : "border-border bg-surface"
+                }`}>
+                  {brandForm.is_oem_partner && <FaCheck size={10} />}
+                </div>
+                <div>
+                  <div className="font-bold text-sm text-text-primary">OEM Partner</div>
+                  <div className="text-[11px] text-text-secondary">Original Equipment Manufacturer</div>
+                </div>
+              </div>
+
+              {/* Supplier Checkbox */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setBrandForm(prev => ({ ...prev, is_supplier: !prev.is_supplier }))}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setBrandForm(prev => ({ ...prev, is_supplier: !prev.is_supplier }));
+                  }
+                }}
+                className={`flex items-center gap-3.5 p-3.5 rounded-xl border cursor-pointer transition-all duration-200 select-none ${
+                  brandForm.is_supplier
+                    ? "bg-primary/10 border-primary/50 text-text-primary shadow-xs"
+                    : "bg-surface-hover/30 border-border text-text-secondary hover:border-primary/30 hover:text-text-primary"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                  brandForm.is_supplier
+                    ? "bg-primary border-primary text-white"
+                    : "border-border bg-surface"
+                }`}>
+                  {brandForm.is_supplier && <FaCheck size={10} />}
+                </div>
+                <div>
+                  <div className="font-bold text-sm text-text-primary">Supplier</div>
+                  <div className="text-[11px] text-text-secondary">Direct Component / Equipment Supplier</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">

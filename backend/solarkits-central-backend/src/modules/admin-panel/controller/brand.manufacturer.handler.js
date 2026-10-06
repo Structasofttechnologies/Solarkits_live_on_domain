@@ -62,6 +62,8 @@ const add_brand = async (req, res) => {
         const state_ids = parseJSONArray(req.body.state_ids);
         const district_ids = parseJSONArray(req.body.district_ids);
         const { brand_name, company_name } = req.body;
+        const is_oem_partner = req.body.is_oem_partner === 'true' || req.body.is_oem_partner === true;
+        const is_supplier = req.body.is_supplier === 'true' || req.body.is_supplier === true;
 
         if (!brand_name) return res.status(400).json({ status: "error", message: "brand_name is required" });
 
@@ -75,7 +77,9 @@ const add_brand = async (req, res) => {
             logo,
             country_ids,
             state_ids,
-            district_ids
+            district_ids,
+            is_oem_partner,
+            is_supplier
         }], { session });
 
         await session.commitTransaction();
@@ -126,6 +130,8 @@ const get_brands = async (req, res) => {
                 country_ids: b.country_ids,
                 state_ids: b.state_ids,
                 district_ids: b.district_ids,
+                is_oem_partner: Boolean(b.is_oem_partner),
+                is_supplier: Boolean(b.is_supplier),
                 country_names,
                 state_names,
                 district_names,
@@ -169,6 +175,13 @@ const update_brand = async (req, res) => {
             state_ids,
             district_ids
         };
+
+        if (req.body.is_oem_partner !== undefined) {
+            updateData.is_oem_partner = req.body.is_oem_partner === 'true' || req.body.is_oem_partner === true;
+        }
+        if (req.body.is_supplier !== undefined) {
+            updateData.is_supplier = req.body.is_supplier === 'true' || req.body.is_supplier === true;
+        }
 
         if (logo) updateData.logo = logo;
 
