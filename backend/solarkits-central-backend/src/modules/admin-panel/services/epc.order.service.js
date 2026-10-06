@@ -178,12 +178,20 @@ async function processEpcCheckout({
   const reservationTTL = 15 * 60 * 1000; // 15 minutes
   const expiresAt = new Date(Date.now() + reservationTTL);
 
+  let fulfillmentSource = 'company_warehouse';
   if (targetResellerId) {
+    let allInStock = true;
     for (const item of totals.items) {
       const availableStock = await calculateCurrentItemStock(targetResellerId, item.item_type, item.product_id, item.kit_id);
       if (availableStock < item.quantity) {
-        throw new Error(`Insufficient stock for item "${item.product_id || item.kit_id}". Available: ${availableStock}, Requested: ${item.quantity}`);
+        allInStock = false;
+        break;
       }
+    }
+    if (allInStock && totals.items.length > 0) {
+      fulfillmentSource = 'franchise_warehouse';
+    } else {
+      fulfillmentSource = 'company_warehouse';
     }
   }
 
@@ -214,11 +222,43 @@ async function processEpcCheckout({
     totalResellerMarginPaise += netMargin;
     totalPlatformCommissionPaise += commission;
 
+    const isKitItem = Boolean(item.kit_id) || item.item_type === 'kit' || item.scope_type === 'kit';
+    let itemCapacity = item.capacity || null;
+    let itemName = item.item_name || item.name || item.kitName || null;
+    let itemImage = item.image || item.kit_image || null;
+    let itemDescription = item.description || null;
+
+    if (isKitItem && item.kit_id && (!itemName || itemName === 'Solar Component' || !itemImage || !itemCapacity)) {
+      try {
+        const rawDb = mongoose.connection.db;
+        if (rawDb && mongoose.Types.ObjectId.isValid(item.kit_id)) {
+          const kDoc = await rawDb.collection('pc_combo_kits').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) })
+                    || await rawDb.collection('pc_comobo_kit').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) });
+          if (kDoc) {
+            if (!itemName || itemName === 'Solar Component') itemName = kDoc.name || kDoc.kit_name || kDoc.title;
+            if (!itemImage) itemImage = kDoc.kit_image || kDoc.image;
+            if (!itemCapacity && kDoc.capacity) itemCapacity = `${kDoc.capacity} kW`;
+            if (!itemDescription) itemDescription = kDoc.description;
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching kit doc in processEpcCheckout:', err.message);
+      }
+    }
+
+    if (!itemCapacity) {
+      const match = `${itemName || ''} ${item.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+      if (match) itemCapacity = `${match[1]} kW`;
+    }
+
     processedItems.push({
-      scope_type: item.item_type,
-      product_id: item.product_id || null,
-      kit_id: item.kit_id || null,
-      item_name: item.item_name || 'Solar Component',
+      scope_type: isKitItem ? 'kit' : (item.item_type || item.scope_type || 'product'),
+      product_id: isKitItem ? null : (item.product_id || null),
+      kit_id: isKitItem ? (item.kit_id || null) : null,
+      item_name: itemName || (isKitItem ? 'Solar Combo Kit' : 'Solar Component'),
+      image: itemImage || null,
+      capacity: itemCapacity,
+      description: itemDescription || null,
       quantity: item.quantity,
       unit_price_paise: item.unit_price_paise,
       cost_price_paise: costPrice,
@@ -238,6 +278,7 @@ async function processEpcCheckout({
     epc_id: epc_id,
     reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
+    fulfillment_source: fulfillmentSource,
     items: processedItems,
     subtotal_paise: totals.subtotal_paise,
     tax_total_paise: totals.tax_total_paise,
@@ -254,25 +295,27 @@ async function processEpcCheckout({
   });
 
 
-  // 7. Hold stock reservation in ResellerInventoryLedger if reseller assigned
-  if (targetResellerId) {
+  // 7. Hold stock reservation in ResellerInventoryLedger ONLY IF fulfilling from franchise warehouse stock
+  if (targetResellerId && fulfillmentSource === 'franchise_warehouse') {
     for (const item of processedItems) {
       const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
-      await ResellerInventoryLedger.create({
-        reseller_id: targetResellerId,
-        item_type: item.scope_type,
-        product_id: item.product_id || null,
-        kit_id: item.kit_id || null,
-        movement_type: 'reservation_hold',
-        quantity: -item.quantity,
-        balance_after: currentBalance - item.quantity,
-        unit_cost_paise: item.unit_price_paise,
-        total_valuation_paise: item.total_price_paise,
-        reference_type: 'epc_order',
-        reference_id: epcOrder._id,
-        reason: `15-min stock hold for pending checkout ${orderNumber}`,
-        actor_id: actor_id || epc_id,
-      });
+      if (currentBalance >= item.quantity) {
+        await ResellerInventoryLedger.create({
+          reseller_id: targetResellerId,
+          item_type: item.scope_type,
+          product_id: item.product_id || null,
+          kit_id: item.kit_id || null,
+          movement_type: 'reservation_hold',
+          quantity: -item.quantity,
+          balance_after: Math.max(0, currentBalance - item.quantity),
+          unit_cost_paise: item.unit_price_paise,
+          total_valuation_paise: item.total_price_paise,
+          reference_type: 'epc_order',
+          reference_id: epcOrder._id,
+          reason: `15-min stock hold for pending checkout ${orderNumber}`,
+          actor_id: actor_id || epc_id,
+        });
+      }
     }
   }
 
@@ -317,7 +360,7 @@ async function confirmEpcOrderPayment(orderId, paymentReference, actor_id = null
   order.payment_reference = paymentReference || order.payment_reference;
   await order.save();
 
-  if (order.reseller_id) {
+  if (order.reseller_id && order.fulfillment_source === 'franchise_warehouse') {
     for (const item of order.items) {
       const currentBalance = await calculateCurrentItemStock(order.reseller_id, item.scope_type, item.product_id, item.kit_id);
       await ResellerInventoryLedger.create({
@@ -327,7 +370,7 @@ async function confirmEpcOrderPayment(orderId, paymentReference, actor_id = null
         kit_id: item.kit_id || null,
         movement_type: 'sales_out',
         quantity: -item.quantity,
-        balance_after: currentBalance, // stock already deducted during hold, converting to sales_out
+        balance_after: Math.max(0, currentBalance), // stock already deducted during hold, converting to sales_out
         unit_cost_paise: item.unit_price_paise,
         total_valuation_paise: item.total_price_paise,
         reference_type: 'epc_order',

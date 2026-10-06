@@ -171,16 +171,41 @@ async function calculateCheckoutPrice(resellerId, items = []) {
     if (item.kit_id) filter.kit_id = item.kit_id;
 
     let listing = await ResellerListing.findOne(filter).lean();
-    let unitPricePaise = listing?.selling_price_paise;
-    let itemType = listing?.item_type || item.item_type || (item.kit_id ? 'kit' : 'product');
-    let platformCommPct = listing?.platform_commission_pct || 5.0;
+    const rawKitId = item.kit_id || listing?.kit_id || (!item.product_id ? (item.id || item._id) : null) || null;
+    const isKit = Boolean(rawKitId) || item.item_type === 'kit' || item.scope_type === 'kit' || listing?.item_type === 'kit';
+    const itemType = isKit ? 'kit' : (listing?.item_type || item.item_type || 'product');
+    const resolvedKitId = isKit ? (rawKitId ? rawKitId.toString() : null) : null;
+    const resolvedProductId = !isKit ? (item.product_id || listing?.product_id || null) : null;
+
+    let resolvedTitle = listing?.title || item.item_name || item.kitName || item.name || item.title || null;
+    let resolvedImage = listing?.image_url || item.image || item.kit_image || null;
+    let resolvedCapacity = item.capacity || null;
+    let resolvedDesc = listing?.description || item.description || null;
+
+    if (isKit && resolvedKitId && (!resolvedTitle || resolvedTitle === 'Solar Component' || !resolvedImage || !resolvedCapacity)) {
+      try {
+        const rawDb = require('mongoose').connection.db;
+        if (rawDb && require('mongoose').Types.ObjectId.isValid(resolvedKitId)) {
+          const kDoc = await rawDb.collection('pc_combo_kits').findOne({ _id: new (require('mongoose').Types.ObjectId)(resolvedKitId) })
+                    || await rawDb.collection('pc_comobo_kit').findOne({ _id: new (require('mongoose').Types.ObjectId)(resolvedKitId) });
+          if (kDoc) {
+            if (!resolvedTitle || resolvedTitle === 'Solar Component') resolvedTitle = kDoc.name || kDoc.kit_name || kDoc.title;
+            if (!resolvedImage) resolvedImage = kDoc.kit_image || kDoc.image;
+            if (!resolvedCapacity && kDoc.capacity) resolvedCapacity = `${kDoc.capacity} kW`;
+            if (!resolvedDesc) resolvedDesc = kDoc.description;
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching kit doc in calculateCheckoutPrice:', err.message);
+      }
+    }
 
     if (!unitPricePaise || unitPricePaise <= 0) {
       const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 0);
       if (ourPriceRupees > 0) {
         unitPricePaise = Math.round(ourPriceRupees * 100);
-      } else if (item.kit_id) {
-        const kitDoc = await WarehouseComboKit.findById(item.kit_id).lean();
+      } else if (resolvedKitId) {
+        const kitDoc = await WarehouseComboKit.findById(resolvedKitId).lean();
         unitPricePaise = Math.round((kitDoc?.selling_price_cached || kitDoc?.base_price || 180000) * 100);
       } else {
         unitPricePaise = 18000000;
@@ -195,8 +220,13 @@ async function calculateCheckoutPrice(resellerId, items = []) {
 
     processedItems.push({
       item_type: itemType,
-      product_id: item.product_id || null,
-      kit_id: item.kit_id || null,
+      scope_type: itemType,
+      product_id: resolvedProductId,
+      kit_id: resolvedKitId,
+      item_name: resolvedTitle || (isKit ? 'Solar Combo Kit' : 'Solar Product'),
+      image: resolvedImage || null,
+      capacity: resolvedCapacity || null,
+      description: resolvedDesc || null,
       quantity: qty,
       unit_price_paise: unitPricePaise,
       tax_paise: itemTax,

@@ -304,20 +304,43 @@ async function createEpcOfflineOrder({
     totalResellerMarginPaise += netMargin;
     totalPlatformCommissionPaise += commission;
 
+    const isKitItem = Boolean(item.kit_id) || item.item_type === 'kit' || item.scope_type === 'kit';
     let itemCapacity = item.capacity || null;
+    let itemName = item.item_name || item.name || item.kitName || null;
+    let itemImage = item.image || item.kit_image || null;
+    let itemDescription = item.description || null;
+
+    if (isKitItem && item.kit_id && (!itemName || itemName === 'Solar Component' || !itemImage || !itemCapacity)) {
+      try {
+        const rawDb = mongoose.connection.db;
+        if (rawDb && mongoose.Types.ObjectId.isValid(item.kit_id)) {
+          const kDoc = await rawDb.collection('pc_combo_kits').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) })
+                    || await rawDb.collection('pc_comobo_kit').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) });
+          if (kDoc) {
+            if (!itemName || itemName === 'Solar Component') itemName = kDoc.name || kDoc.kit_name || kDoc.title;
+            if (!itemImage) itemImage = kDoc.kit_image || kDoc.image;
+            if (!itemCapacity && kDoc.capacity) itemCapacity = `${kDoc.capacity} kW`;
+            if (!itemDescription) itemDescription = kDoc.description;
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching kit doc in createEpcOfflineOrder:', err.message);
+      }
+    }
+
     if (!itemCapacity) {
-      const match = `${item.item_name || ''} ${item.name || ''} ${item.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+      const match = `${itemName || ''} ${item.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
       if (match) itemCapacity = `${match[1]} kW`;
     }
 
     processedItems.push({
-      scope_type: item.item_type || item.scope_type || 'kit',
-      product_id: item.product_id || null,
-      kit_id: item.kit_id || null,
-      item_name: item.item_name || item.name || 'Solar Component',
-      image: item.image || item.kit_image || null,
+      scope_type: isKitItem ? 'kit' : (item.item_type || item.scope_type || 'product'),
+      product_id: isKitItem ? null : (item.product_id || null),
+      kit_id: isKitItem ? (item.kit_id || null) : null,
+      item_name: itemName || (isKitItem ? 'Solar Combo Kit' : 'Solar Component'),
+      image: itemImage || null,
       capacity: itemCapacity,
-      description: item.description || null,
+      description: itemDescription || null,
       quantity: item.quantity,
       unit_price_paise: item.unit_price_paise,
       cost_price_paise: costPrice,
@@ -330,7 +353,26 @@ async function createEpcOfflineOrder({
   }
 
   const orderNumber = generateEpcOrderNumber();
-  const fulfillmentSource = targetResellerId ? 'franchise_warehouse' : 'company_warehouse';
+
+  // Determine actual fulfillment source:
+  // If assigned reseller has sufficient on-hand inventory for all items, fulfill from franchise warehouse.
+  // Otherwise, fulfill via central company warehouse buffer.
+  let fulfillmentSource = 'company_warehouse';
+  if (targetResellerId) {
+    let franchiseHasAllStock = true;
+    for (const item of processedItems) {
+      const stock = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
+      if (stock < item.quantity) {
+        franchiseHasAllStock = false;
+        break;
+      }
+    }
+    if (franchiseHasAllStock && processedItems.length > 0) {
+      fulfillmentSource = 'franchise_warehouse';
+    } else {
+      fulfillmentSource = 'company_warehouse';
+    }
+  }
 
   // Lookup warehouse matching delivery address state or default company warehouse
   let assignedWarehouseId = null;
@@ -351,129 +393,139 @@ async function createEpcOfflineOrder({
     if (defaultWh) assignedWarehouseId = defaultWh._id;
   }
 
-  // 4. Create EPC Order in 'pending_verification' status
-  const epcOrder = await EpcOrder.create({
-    order_number: orderNumber,
-    epc_id,
-    warehouse_id: assignedWarehouseId,
-    reseller_id: targetResellerId || null,
-    routing_source: route.routing_source,
-    fulfillment_source: fulfillmentSource,
-    fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
-    order_load_metrics: (() => {
-      // Always compute server-side from processedItems — never blindly trust frontend values.
-      // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
-      const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-      const serverKw = processedItems.reduce((acc, it) => {
-        let kw = parseFloat(it.capacity || '0') || 0;
-        if (kw === 0) {
-          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
-          if (match) kw = parseFloat(match[1]) || 0;
-        }
-        return acc + (it.quantity || 0) * kw;
-      }, 0);
-      const serverWeight = processedItems.reduce((acc, it) => {
-        let kw = parseFloat(it.capacity || '0') || 0;
-        if (kw === 0) {
-          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
-          if (match) kw = parseFloat(match[1]) || 0;
-        }
-        const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
-        return acc + (it.quantity || 0) * unitW;
-      }, 0);
-
-      // Supplement with frontend metrics only when they have richer data (higher kit count)
-      const frontendKits = (order_load_metrics?.total_kits || 0);
-      return {
-        total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
-        total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
-        total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
-      };
-    })(),
-    items: processedItems,
-    subtotal_paise: totals.subtotal_paise,
-    tax_total_paise: totals.tax_total_paise,
-    shipping_fee_paise: totals.shipping_fee_paise || 0,
-    grand_total_paise: totals.grand_total_paise,
-    reseller_total_margin_paise: totalResellerMarginPaise,
-    platform_total_commission_paise: totalPlatformCommissionPaise,
-    order_status: 'pending',
-    payment_method: 'offline_bank_transfer',
-    payment_status: 'pending_verification',
-    payment_reference: cleanUtr,
-    offline_payment: {
-      utr_number: cleanUtr,
-      amount_paid: Number(amount_paid) || (totals.grand_total_paise / 100),
-      payment_date: payment_date ? new Date(payment_date) : new Date(),
-      receipt_url: receipt_url || null,
-      receipt_filename: receipt_filename || null,
-      sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
-      account_holder_name: account_holder_name ? account_holder_name.trim() : null,
-      verification_status: 'pending',
-      resubmitted_count: 0,
-    },
-    is_end_customer_sale: true,
-    delivery_address: {
-      line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
-      state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
-      state_name: delivery_address.state_name || epc?.state_name || null,
-      district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
-      district_name: delivery_address.district_name || epc?.district_name || null,
-      pincode: delivery_address.pincode || epc?.pincode || null,
-      contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
-      contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
-    },
-    reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
-  });
-
-  // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
-  if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
-    const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-    try {
-      await Reseller.findByIdAndUpdate(targetResellerId, {
-        $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
-      });
-    } catch (capacityErr) {
-      console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
-    }
-  }
-
-  // 5. Hold stock in inventory ledger if reseller assigned
-  if (targetResellerId) {
-    for (const item of processedItems) {
-      const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
-      await ResellerInventoryLedger.create({
-        reseller_id: targetResellerId,
-        item_type: item.scope_type,
-        product_id: item.product_id || null,
-        kit_id: item.kit_id || null,
-        movement_type: 'reservation_hold',
-        quantity: -item.quantity,
-        balance_after: currentBalance - item.quantity,
-        unit_cost_paise: item.unit_price_paise,
-        total_valuation_paise: item.total_price_paise,
-        reference_type: 'epc_order',
-        reference_id: epcOrder._id,
-        reason: `Pending offline UTR verification for order ${orderNumber}`,
-        actor_id: actor_id || epc_id,
-      });
-    }
-  }
-
-  await logAudit({
-    actor_type: 'epc_buyer',
-    actor_id: epc_id,
-    action: 'EPC_OFFLINE_PAYMENT_SUBMITTED',
-    entity_type: 'epc_orders',
-    entity_id: epcOrder._id,
-    after_snapshot: {
+  // 4. Create EPC Order in 'pending_verification' status with atomic rollback guard
+  let epcOrder = null;
+  try {
+    epcOrder = await EpcOrder.create({
       order_number: orderNumber,
+      epc_id,
+      warehouse_id: assignedWarehouseId,
+      reseller_id: targetResellerId || null,
+      routing_source: route.routing_source,
+      fulfillment_source: fulfillmentSource,
+      fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
+      order_load_metrics: (() => {
+        // Always compute server-side from processedItems — never blindly trust frontend values.
+        // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
+        const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+        const serverKw = processedItems.reduce((acc, it) => {
+          let kw = parseFloat(it.capacity || '0') || 0;
+          if (kw === 0) {
+            const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+            if (match) kw = parseFloat(match[1]) || 0;
+          }
+          return acc + (it.quantity || 0) * kw;
+        }, 0);
+        const serverWeight = processedItems.reduce((acc, it) => {
+          let kw = parseFloat(it.capacity || '0') || 0;
+          if (kw === 0) {
+            const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+            if (match) kw = parseFloat(match[1]) || 0;
+          }
+          const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
+          return acc + (it.quantity || 0) * unitW;
+        }, 0);
+
+        // Supplement with frontend metrics only when they have richer data (higher kit count)
+        const frontendKits = (order_load_metrics?.total_kits || 0);
+        return {
+          total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
+          total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
+          total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
+        };
+      })(),
+      items: processedItems,
+      subtotal_paise: totals.subtotal_paise,
+      tax_total_paise: totals.tax_total_paise,
+      shipping_fee_paise: totals.shipping_fee_paise || 0,
       grand_total_paise: totals.grand_total_paise,
-      utr_number: cleanUtr,
-      reseller_id: targetResellerId,
-    },
-    req,
-  });
+      reseller_total_margin_paise: totalResellerMarginPaise,
+      platform_total_commission_paise: totalPlatformCommissionPaise,
+      order_status: 'pending',
+      payment_method: 'offline_bank_transfer',
+      payment_status: 'pending_verification',
+      payment_reference: cleanUtr,
+      offline_payment: {
+        utr_number: cleanUtr,
+        amount_paid: Number(amount_paid) || (totals.grand_total_paise / 100),
+        payment_date: payment_date ? new Date(payment_date) : new Date(),
+        receipt_url: receipt_url || null,
+        receipt_filename: receipt_filename || null,
+        sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+        account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+        verification_status: 'pending',
+        resubmitted_count: 0,
+      },
+      is_end_customer_sale: true,
+      delivery_address: {
+        line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
+        state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
+        state_name: delivery_address.state_name || epc?.state_name || null,
+        district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
+        district_name: delivery_address.district_name || epc?.district_name || null,
+        pincode: delivery_address.pincode || epc?.pincode || null,
+        contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
+        contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
+      },
+      reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
+    });
+
+    // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
+    if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
+      const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+      try {
+        await Reseller.findByIdAndUpdate(targetResellerId, {
+          $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
+        });
+      } catch (capacityErr) {
+        console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
+      }
+    }
+
+    // 5. Hold stock in inventory ledger ONLY IF fulfilling directly from franchise warehouse stock
+    if (targetResellerId && fulfillmentSource === 'franchise_warehouse') {
+      for (const item of processedItems) {
+        const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
+        if (currentBalance >= item.quantity) {
+          await ResellerInventoryLedger.create({
+            reseller_id: targetResellerId,
+            item_type: item.scope_type,
+            product_id: item.product_id || null,
+            kit_id: item.kit_id || null,
+            movement_type: 'reservation_hold',
+            quantity: -item.quantity,
+            balance_after: Math.max(0, currentBalance - item.quantity),
+            unit_cost_paise: item.unit_price_paise,
+            total_valuation_paise: item.total_price_paise,
+            reference_type: 'epc_order',
+            reference_id: epcOrder._id,
+            reason: `Pending offline UTR verification for order ${orderNumber}`,
+            actor_id: actor_id || epc_id,
+          });
+        }
+      }
+    }
+
+    await logAudit({
+      actor_type: 'epc_buyer',
+      actor_id: epc_id,
+      action: 'EPC_OFFLINE_PAYMENT_SUBMITTED',
+      entity_type: 'epc_orders',
+      entity_id: epcOrder._id,
+      after_snapshot: {
+        order_number: orderNumber,
+        grand_total_paise: totals.grand_total_paise,
+        utr_number: cleanUtr,
+        reseller_id: targetResellerId,
+      },
+      req,
+    });
+  } catch (creationErr) {
+    if (epcOrder?._id) {
+      await EpcOrder.findByIdAndDelete(epcOrder._id).catch(() => {});
+    }
+    throw creationErr;
+  }
 
   return {
     order: epcOrder,
@@ -587,8 +639,8 @@ async function reviewEpcOfflinePayment({
 
     await order.save();
 
-    // Deduct stock permanently (sales_out) in ResellerInventoryLedger
-    if (order.reseller_id) {
+    // Deduct stock permanently (sales_out) in ResellerInventoryLedger ONLY IF fulfilled from franchise stock
+    if (order.reseller_id && order.fulfillment_source === 'franchise_warehouse') {
       for (const item of order.items) {
         const currentBalance = await calculateCurrentItemStock(order.reseller_id, item.scope_type, item.product_id, item.kit_id);
         await ResellerInventoryLedger.create({
@@ -598,7 +650,7 @@ async function reviewEpcOfflinePayment({
           kit_id: item.kit_id || null,
           movement_type: 'sales_out',
           quantity: -item.quantity,
-          balance_after: currentBalance,
+          balance_after: Math.max(0, currentBalance),
           unit_cost_paise: item.unit_price_paise,
           total_valuation_paise: item.total_price_paise,
           reference_type: 'epc_order',

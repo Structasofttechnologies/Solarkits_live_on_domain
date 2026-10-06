@@ -647,8 +647,8 @@ function CustomerOrdersTable({
 
                       <div className="space-y-4">
                         {(order.items || []).map((item, idx) => {
-                          const isKit = item.scope_type === "kit" || (!item.scope_type && item.kit_id) || (item.item_name || "").toLowerCase().includes("kit") || item.breakdown;
-                          const breakdown = isKit ? getItemBreakdown(item) : null;
+                          const isKit = item.scope_type === "kit" || Boolean(item.kit_id) || (!item.scope_type && item.kit_id) || (item.item_name || "").toLowerCase().includes("kit") || (item.item_name || "").toLowerCase().includes("solution") || Boolean(item.breakdown);
+                          const breakdown = item.breakdown || (isKit ? getItemBreakdown(item) : null);
 
                           return (
                             <div key={idx} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -658,6 +658,10 @@ function CustomerOrdersTable({
                                     src={item.image || breakdown?.kit_image || DEFAULT_PANEL_IMG}
                                     alt={item.item_name}
                                     className="w-14 h-14 rounded-xl object-cover border border-gray-200 shadow-sm flex-shrink-0 bg-white"
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = DEFAULT_PANEL_IMG;
+                                    }}
                                   />
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
@@ -701,6 +705,10 @@ function CustomerOrdersTable({
                                           src={breakdown.panels.image || DEFAULT_PANEL_IMG}
                                           alt={breakdown.panels.name}
                                           className="w-16 h-16 rounded-lg object-cover border border-amber-200 flex-shrink-0 shadow-sm bg-white"
+                                          onError={(e) => {
+                                            e.currentTarget.onerror = null;
+                                            e.currentTarget.src = DEFAULT_PANEL_IMG;
+                                          }}
                                         />
                                         <div className="min-w-0 flex-1">
                                           <div className="flex items-center justify-between gap-1 mb-1">
@@ -730,6 +738,10 @@ function CustomerOrdersTable({
                                           src={breakdown.inverters.image || DEFAULT_INVERTER_IMG}
                                           alt={breakdown.inverters.name}
                                           className="w-16 h-16 rounded-lg object-cover border border-blue-200 flex-shrink-0 shadow-sm bg-white"
+                                          onError={(e) => {
+                                            e.currentTarget.onerror = null;
+                                            e.currentTarget.src = DEFAULT_INVERTER_IMG;
+                                          }}
                                         />
                                         <div className="min-w-0 flex-1">
                                           <div className="flex items-center justify-between gap-1 mb-1">
@@ -767,7 +779,15 @@ function CustomerOrdersTable({
                                           <div className="space-y-1.5">
                                             {breakdown.bos_components.map((bos, bIdx) => (
                                               <div key={bIdx} className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-emerald-100 text-[10px]">
-                                                <img src={bos.image || DEFAULT_STRUCTURE_IMG} alt={bos.name} className="w-5 h-5 rounded object-cover flex-shrink-0" />
+                                                <img
+                                                  src={bos.image || DEFAULT_STRUCTURE_IMG}
+                                                  alt={bos.name}
+                                                  className="w-5 h-5 rounded object-cover flex-shrink-0"
+                                                  onError={(e) => {
+                                                    e.currentTarget.onerror = null;
+                                                    e.currentTarget.src = DEFAULT_STRUCTURE_IMG;
+                                                  }}
+                                                />
                                                 <span className="font-bold text-gray-900 truncate flex-1">{bos.name}</span>
                                                 <span className="font-black text-emerald-700 whitespace-nowrap">
                                                   {bos.total_quantity} Sets
@@ -1033,7 +1053,7 @@ export default function Payments() {
     selected.forEach(order => {
       totalOrderAmount += (Number(order.order_amount) || 0);
       (order.items || []).forEach(item => {
-        const bd = getItemBreakdown(item);
+        const bd = item.breakdown || getItemBreakdown(item);
         if (bd?.panels) {
           panelQty += Number(bd.panels.total_quantity || 0);
         }

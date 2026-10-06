@@ -2374,6 +2374,7 @@ async function resolveKitComponents(kitId, orderQty = 1, itemName = '', itemCapa
   }
 
   return {
+    kit_name: kitDoc?.name || itemName || 'Solar Kit',
     capacity_kw: capacityKw,
     kit_image: kitDoc?.kit_image || kitDoc?.image || DEFAULT_PANEL_IMG,
     panels,
@@ -2490,19 +2491,28 @@ const get_pending_epc_franchise_orders = async (req, res) => {
       const distName = o.delivery_address?.district_name || (distId ? geoDistMap[distId.toString()] : null);
 
       const items = await Promise.all((o.items || []).map(async it => {
-        const breakdown = it.scope_type === 'kit' || (!it.scope_type && it.kit_id)
+        const isKitItem = Boolean(it.kit_id) || it.scope_type === 'kit' || (it.item_name || '').toLowerCase().includes('kit') || (it.item_name || '').toLowerCase().includes('solution') || (it.item_name === 'Solar Component' && Boolean(it.kit_id));
+        const breakdown = (isKitItem && it.kit_id)
           ? await resolveKitComponents(it.kit_id, it.quantity, it.item_name, it.capacity)
           : null;
+
+        const resolvedItemName = (it.item_name && it.item_name !== 'Solar Component')
+          ? it.item_name
+          : (breakdown?.kit_name || (breakdown?.capacity_kw ? `${breakdown.capacity_kw} kW Solar Combo Kit` : 'Solar Combo Kit'));
+
+        const resolvedCapacity = it.capacity || (breakdown?.capacity_kw ? `${breakdown.capacity_kw} kW` : null);
+        const resolvedImage = it.image || breakdown?.kit_image || DEFAULT_PANEL_IMG;
+
         return {
-          item_name: it.item_name,
+          item_name: resolvedItemName,
           quantity: it.quantity,
           unit_price: (it.unit_price_paise || 0) / 100,
           total_price: (it.total_price_paise || 0) / 100,
           kit_id: it.kit_id ? it.kit_id.toString() : null,
           product_id: it.product_id ? it.product_id.toString() : null,
-          scope_type: it.scope_type || 'kit',
-          capacity: it.capacity || (breakdown ? `${breakdown.capacity_kw} kW` : null),
-          image: it.image || breakdown?.kit_image || null,
+          scope_type: isKitItem ? 'kit' : (it.scope_type || 'product'),
+          capacity: resolvedCapacity,
+          image: resolvedImage,
           breakdown,
         };
       }));
@@ -2587,19 +2597,28 @@ const get_pending_epc_franchise_orders = async (req, res) => {
       const distName = (distId ? geoDistMap[distId.toString()] : null) || o.territory_snapshot?.district_name || null;
 
       const items = await Promise.all((o.items || []).map(async it => {
-        const breakdown = it.kit_id
+        const isKitItem = Boolean(it.kit_id) || it.scope_type === 'kit' || (it.item_name || '').toLowerCase().includes('kit') || (it.item_name || '').toLowerCase().includes('solution');
+        const breakdown = (isKitItem && it.kit_id)
           ? await resolveKitComponents(it.kit_id, it.quantity, it.item_name, null)
           : null;
+
+        const resolvedItemName = (it.item_name && it.item_name !== 'Solar Component')
+          ? it.item_name
+          : (breakdown?.kit_name || (breakdown?.capacity_kw ? `${breakdown.capacity_kw} kW Solar Combo Kit` : 'Solar Combo Kit'));
+
+        const resolvedCapacity = (breakdown?.capacity_kw ? `${breakdown.capacity_kw} kW` : null);
+        const resolvedImage = it.image || breakdown?.kit_image || DEFAULT_PANEL_IMG;
+
         return {
-          item_name: it.item_name,
+          item_name: resolvedItemName,
           quantity: it.quantity,
           unit_price: (it.unit_price_paise || 0) / 100,
           total_price: (it.total_price_paise || 0) / 100,
           kit_id: it.kit_id ? it.kit_id.toString() : null,
           product_id: it.product_id ? it.product_id.toString() : null,
-          scope_type: 'franchise_po',
-          capacity: breakdown ? `${breakdown.capacity_kw} kW` : null,
-          image: breakdown?.kit_image || null,
+          scope_type: isKitItem ? 'kit' : 'franchise_po',
+          capacity: resolvedCapacity,
+          image: resolvedImage,
           breakdown,
         };
       }));
@@ -2851,6 +2870,14 @@ const create_combined_supplier_payment = async (req, res) => {
             for (const it of (epcOrder.items || [])) {
               const q = Number(it.quantity) || 1;
               totalKitsCount += q;
+              if (it.kit_id) {
+                const bd = await resolveKitComponents(it.kit_id, q, it.item_name, it.capacity);
+                if (bd) {
+                  if (bd.panels?.total_quantity) calculatedPanelQty += Number(bd.panels.total_quantity);
+                  if (bd.inverters?.total_quantity) calculatedInverterQty += Number(bd.inverters.total_quantity);
+                  continue;
+                }
+              }
               const nameLower = (it.item_name || '').toLowerCase();
               const kwMatch = nameLower.match(/(\d+(\.\d+)?)\s*kw/) || (it.capacity || '').match(/(\d+(\.\d+)?)/);
               const capacityKw = kwMatch ? parseFloat(kwMatch[1]) : 5;
