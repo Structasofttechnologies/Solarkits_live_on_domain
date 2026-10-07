@@ -42,7 +42,9 @@ const add_po_settings = async (req, res) => {
     const { plan_id, po_enabled, min_po_quantity, max_po_quantity, allow_mixed_project_types, max_line_items,
       allowed_industry_type_ids, allowed_project_type_ids, allowed_category_ids, allowed_subcategory_ids,
       allowed_combo_kit_ids, allowed_product_ids,
-      allowed_territory_levels, po_validity_days, requires_approval, payment_terms, advance_percentage,
+      allowed_territory_levels, po_validity_days, requires_approval,
+      token_booking_enabled, token_type, token_value, min_token_amount, po_lock_days,
+      payment_terms, advance_percentage,
       credit_period_eligible, credit_period_days, cancellation_rules, amendment_rules,
       contributes_to_monthly_target, effective_from, effective_until } = req.body;
 
@@ -89,7 +91,12 @@ const add_po_settings = async (req, res) => {
       allowed_combo_kit_ids:       Array.isArray(allowed_combo_kit_ids) ? allowed_combo_kit_ids : [],
       allowed_product_ids:         Array.isArray(allowed_product_ids) ? allowed_product_ids : [],
       allowed_territory_levels:    Array.isArray(allowed_territory_levels) ? allowed_territory_levels : [],
-      po_validity_days:            po_validity_days != null ? Number(po_validity_days) : 30,
+      po_validity_days:            po_validity_days != null ? Number(po_validity_days) : (po_lock_days != null ? Number(po_lock_days) : 30),
+      token_booking_enabled:       token_booking_enabled !== false,
+      token_type:                  ['FIXED_AMOUNT', 'PERCENTAGE'].includes(token_type) ? token_type : 'FIXED_AMOUNT',
+      token_value:                 token_value != null ? Number(token_value) : 50000,
+      min_token_amount:            min_token_amount != null ? Number(min_token_amount) : 10000,
+      po_lock_days:                po_lock_days != null ? Number(po_lock_days) : (po_validity_days != null ? Number(po_validity_days) : 30),
       requires_approval:           requires_approval !== false,
       payment_terms:               payment_terms || 'FULL_ADVANCE',
       advance_percentage:          advance_percentage != null ? Number(advance_percentage) : null,
@@ -150,6 +157,7 @@ const update_po_settings = async (req, res) => {
       'max_line_items', 'allowed_industry_type_ids', 'allowed_project_type_ids', 'allowed_category_ids',
       'allowed_subcategory_ids', 'allowed_combo_kit_ids',
       'allowed_product_ids', 'allowed_territory_levels', 'po_validity_days', 'requires_approval',
+      'token_booking_enabled', 'token_type', 'token_value', 'min_token_amount', 'po_lock_days',
       'payment_terms', 'advance_percentage', 'credit_period_eligible', 'credit_period_days',
       'cancellation_rules', 'amendment_rules', 'contributes_to_monthly_target', 'effective_from', 'effective_until', 'is_active'];
 

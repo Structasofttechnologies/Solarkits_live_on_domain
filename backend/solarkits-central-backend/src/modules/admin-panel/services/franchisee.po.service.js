@@ -104,6 +104,9 @@ async function createPoDraft({
   idempotency_key,
   payment_terms,
   order_type = 'po_order',
+  po_category = 'SINGLE_PO',
+  is_token_booking = false,
+  parent_po_id = null,
   destination_type = 'hub_stock',
   destination_address = null,
   destination_pincode = null,
@@ -275,6 +278,7 @@ async function createPoDraft({
   }
 
   const grand_total_paise = subtotal_paise + tax_total_paise;
+  const totalItemQty = builtItems.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
   const po_number = await generatePoNumber();
   const ikey = idempotency_key || `${franchisee_id}-${Date.now()}`;
 
@@ -282,6 +286,73 @@ async function createPoDraft({
 
   const po_validity_days = po_settings.po_validity_days || 30;
   const expires_at = new Date(Date.now() + po_validity_days * 24 * 60 * 60 * 1000);
+
+  // ── Dynamic Token Amount Calculation & Quota Handling ───────────────────────
+  const isPoOrder = (order_type === 'po_order' || order_type === 'bulk_po');
+  let token_amount_paise = 0;
+  let token_paid_paise = 0;
+  let token_payment_status = 'PENDING';
+  let total_booked_quantity = 0;
+  let remaining_quantity = 0;
+  let lock_expires_at = null;
+
+  if (isPoOrder) {
+    total_booked_quantity = totalItemQty;
+    remaining_quantity = totalItemQty;
+    const lockDays = Number(po_settings.po_lock_days || po_settings.po_validity_days || 30);
+    lock_expires_at = new Date(Date.now() + lockDays * 24 * 60 * 60 * 1000);
+
+    if (po_settings.token_booking_enabled !== false) {
+      if (po_settings.token_type === 'PERCENTAGE') {
+        const pct = Number(po_settings.token_value) || 10;
+        token_amount_paise = Math.round(grand_total_paise * (pct / 100));
+      } else {
+        // FIXED_AMOUNT (default)
+        const fixedAmt = Number(po_settings.token_value) || 50000;
+        token_amount_paise = Math.round(fixedAmt * 100);
+      }
+      // Floor/Cap
+      if (token_amount_paise > grand_total_paise) token_amount_paise = grand_total_paise;
+    } else {
+      token_amount_paise = grand_total_paise;
+    }
+
+    if (offline_payment) {
+      token_paid_paise = offline_payment.amount_paid ? Math.round(offline_payment.amount_paid * 100) : token_amount_paise;
+      token_payment_status = token_paid_paise >= token_amount_paise ? 'PAID' : 'PENDING';
+    }
+  }
+
+  // ── Loose Order PO Linkage & Final Settlement Adjustment ─────────────────────
+  let parentPoDoc = null;
+  let is_final_po_settlement = false;
+  let token_adjusted_paise = 0;
+  let net_payable_paise = grand_total_paise;
+
+  if (!isPoOrder && parent_po_id) {
+    parentPoDoc = await FpoOrder.findOne({
+      _id: parent_po_id,
+      franchisee_id,
+      deleted_at: null,
+    });
+
+    if (!parentPoDoc) {
+      throw new Error('Linked parent PO order not found or unauthorized.');
+    }
+
+    const currentRemaining = parentPoDoc.remaining_quantity != null ? parentPoDoc.remaining_quantity : (parentPoDoc.total_booked_quantity || 0);
+    if (totalItemQty > currentRemaining) {
+      throw new Error(`Insufficient PO quota! Remaining quota in PO ${parentPoDoc.po_number} is ${currentRemaining} kits, but you requested ${totalItemQty} kits.`);
+    }
+
+    // Check if this loose order is the final / last order that exhausts the PO quota
+    if (totalItemQty === currentRemaining) {
+      is_final_po_settlement = true;
+      const parentTokenPaise = parentPoDoc.token_amount_paise || parentPoDoc.token_paid_paise || 0;
+      token_adjusted_paise = Math.min(parentTokenPaise, grand_total_paise);
+      net_payable_paise = Math.max(0, grand_total_paise - token_adjusted_paise);
+    }
+  }
 
   const order = await FpoOrder.create({
     po_number,
@@ -292,6 +363,7 @@ async function createPoDraft({
     po_settings_snapshot: po_settings,
     industry_type_id:  items[0]?.industry_type_id || null,
     order_type,
+    po_category:       po_category || 'SINGLE_PO',
     destination_type,
     destination_address,
     destination_pincode,
@@ -304,6 +376,23 @@ async function createPoDraft({
     grand_total_paise,
     payment_terms:    payment_terms || po_settings.payment_terms || 'FULL_ADVANCE',
     advance_percentage: po_settings.advance_percentage || 0,
+
+    // Token & Quota fields
+    is_token_booking: isPoOrder ? Boolean(is_token_booking || po_settings.token_booking_enabled !== false) : false,
+    token_amount_paise,
+    token_paid_paise,
+    token_payment_status,
+    total_booked_quantity,
+    remaining_quantity,
+    fulfilled_quantity: 0,
+    lock_expires_at,
+
+    // Loose order linked fields
+    parent_po_id: parentPoDoc ? parentPoDoc._id : null,
+    is_final_po_settlement,
+    token_adjusted_paise,
+    net_payable_paise,
+
     status: 'DRAFT',
     status_history: [{ status: 'DRAFT', changed_by: actor_id, actor_type: actor_id ? 'reseller' : 'system', note: 'PO Draft Created', changed_at: new Date() }],
     requires_approval:  po_settings.requires_approval !== false,
@@ -313,6 +402,23 @@ async function createPoDraft({
     created_by: actor_id,
     updated_by: actor_id,
   });
+
+  // If a parent PO was consumed by this loose order, atomically update its quota
+  if (parentPoDoc) {
+    parentPoDoc.fulfilled_quantity = (parentPoDoc.fulfilled_quantity || 0) + totalItemQty;
+    parentPoDoc.remaining_quantity = Math.max(0, (parentPoDoc.remaining_quantity != null ? parentPoDoc.remaining_quantity : (parentPoDoc.total_booked_quantity || 0)) - totalItemQty);
+    if (!Array.isArray(parentPoDoc.linked_loose_order_ids)) {
+      parentPoDoc.linked_loose_order_ids = [];
+    }
+    parentPoDoc.linked_loose_order_ids.push(order._id);
+    if (is_final_po_settlement) {
+      parentPoDoc.token_payment_status = 'ADJUSTED';
+      if (parentPoDoc.remaining_quantity === 0) {
+        parentPoDoc.status = 'COMPLETED';
+      }
+    }
+    await parentPoDoc.save();
+  }
 
   const now = new Date();
   recalculateProgress({ franchisee_id, month: now.getMonth() + 1, year: now.getFullYear(), req }).catch(() => {});

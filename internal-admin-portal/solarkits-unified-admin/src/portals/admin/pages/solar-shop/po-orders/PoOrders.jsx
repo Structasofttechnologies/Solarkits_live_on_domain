@@ -595,7 +595,8 @@ export default function PoOrders({ moduleUniqueId }) {
             headers={[
               { key: "po_number", label: "PO Number & Date" },
               { key: "franchisee", label: "Franchisee Partner" },
-              { key: "plan", label: "Plan Badge" },
+              { key: "po_type_quota", label: "PO Type & Quota" },
+              { key: "token_deposit", label: "Token Deposit" },
               { key: "product", label: "Product & Kit" },
               { key: "epc_allocations", label: "EPC Allocations" },
               { key: "total_quantity", label: "Total Quantity", align: "center" },
@@ -652,11 +653,62 @@ export default function PoOrders({ moduleUniqueId }) {
                     </div>
                   </td>
 
-                  {/* Plan Badge */}
+                  {/* PO Type & Quota */}
                   <td className="px-5 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-3 py-1 rounded-lg text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20">
-                      {order.plan_id?.name || "Franchise Plan"}
-                    </span>
+                    <div className="space-y-1">
+                      {order.po_category === "COMBINE_PO" || (order.items?.[0]?.epc_allocations || []).length > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200">
+                          Combine PO
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200">
+                          Single PO
+                        </span>
+                      )}
+                      {order.total_booked_quantity ? (
+                        <div className="text-[10px] font-bold text-text-primary">
+                          {order.fulfilled_quantity || 0} / {order.total_booked_quantity} Kits
+                          <span className="text-emerald-600 ml-1">
+                            ({order.remaining_quantity != null ? order.remaining_quantity : order.total_booked_quantity} left)
+                          </span>
+                        </div>
+                      ) : order.parent_po_id ? (
+                        <div className="text-[10px] text-text-muted">
+                          Drawn from {order.parent_po_id.po_number || "Parent PO"}
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
+
+                  {/* Token Deposit */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    {order.token_amount_paise > 0 ? (
+                      <div>
+                        <div className="font-black text-emerald-600 dark:text-emerald-400 text-xs">
+                          ₹{Math.round(order.token_amount_paise / 100).toLocaleString("en-IN")}
+                        </div>
+                        <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black ${
+                          order.token_payment_status === "ADJUSTED"
+                            ? "bg-blue-100 text-blue-800"
+                            : order.token_payment_status === "PAID"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}>
+                          {order.token_payment_status || "PENDING"}
+                        </span>
+                      </div>
+                    ) : order.token_adjusted_paise > 0 ? (
+                      <div>
+                        <div className="font-black text-emerald-600 text-xs">
+                          -₹{Math.round(order.token_adjusted_paise / 100).toLocaleString("en-IN")}
+                        </div>
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1 rounded">
+                          Token Adjusted ✓
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-text-muted">—</span>
+                    )}
                   </td>
 
                   {/* Product & Kit */}
@@ -968,6 +1020,73 @@ export default function PoOrders({ moduleUniqueId }) {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+              {/* PO Type, Quota & Token Deposit Summary */}
+              <div className="p-4 rounded-2xl bg-surface-hover/80 border border-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-text-primary uppercase tracking-wider text-[11px]">
+                      PO Category:
+                    </span>
+                    {selectedOrder.po_category === "COMBINE_PO" || (selectedOrder.items?.[0]?.epc_allocations || []).length > 0 ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800">
+                        Combine PO (Multi-EPC)
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
+                        Single PO (Hub Stock)
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedOrder.token_amount_paise > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-text-muted font-bold">Escrow Token:</span>
+                      <span className="font-black text-emerald-600 text-xs">
+                        ₹{Math.round(selectedOrder.token_amount_paise / 100).toLocaleString("en-IN")}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                        selectedOrder.token_payment_status === "ADJUSTED"
+                          ? "bg-blue-100 text-blue-800"
+                          : selectedOrder.token_payment_status === "PAID"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {selectedOrder.token_payment_status || "PENDING"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedOrder.total_booked_quantity ? (
+                  <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-border/50">
+                    <div className="p-2 bg-surface rounded-xl border border-border">
+                      <div className="text-[10px] text-text-muted">Total Booked</div>
+                      <div className="font-black text-text-primary text-xs">{selectedOrder.total_booked_quantity} Kits</div>
+                    </div>
+                    <div className="p-2 bg-surface rounded-xl border border-border">
+                      <div className="text-[10px] text-text-muted">Fulfilled (Loose)</div>
+                      <div className="font-black text-blue-600 text-xs">{selectedOrder.fulfilled_quantity || 0} Kits</div>
+                    </div>
+                    <div className="p-2 bg-surface rounded-xl border border-border">
+                      <div className="text-[10px] text-text-muted">Remaining Quota</div>
+                      <div className="font-black text-emerald-600 text-xs">
+                        {selectedOrder.remaining_quantity != null ? selectedOrder.remaining_quantity : selectedOrder.total_booked_quantity} Kits
+                      </div>
+                    </div>
+                  </div>
+                ) : selectedOrder.parent_po_id ? (
+                  <div className="p-2.5 bg-surface rounded-xl border border-border flex items-center justify-between">
+                    <span className="text-text-muted">Linked Parent PO:</span>
+                    <span className="font-mono font-bold text-primary">{selectedOrder.parent_po_id.po_number || "Parent PO"}</span>
+                    {selectedOrder.is_final_po_settlement && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                        Token -₹{Math.round((selectedOrder.token_adjusted_paise || 0) / 100).toLocaleString("en-IN")} Adjusted ✓
+                      </span>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
               {/* Product Info */}
               <div className="space-y-2">
                 <h4 className="font-bold text-text-primary uppercase tracking-wider text-[11px]">

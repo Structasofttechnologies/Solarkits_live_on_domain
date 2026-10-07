@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiShoppingCart,
@@ -30,7 +30,9 @@ import {
   FiUploadCloud,
   FiCopy,
   FiMapPin,
-  FiExternalLink
+  FiExternalLink,
+  FiLock,
+  FiAward,
 } from "react-icons/fi";
 import { FaSolarPanel, FaWarehouse, FaBuilding, FaBolt } from "react-icons/fa";
 import api from "../services/api";
@@ -63,10 +65,14 @@ function StatusBadge({ status }) {
 }
 
 export default function LooseOrder() {
+  const [searchParams] = useSearchParams();
+  const queryPoId = searchParams.get("po_id");
+
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
   const [epcBuyers, setEpcBuyers] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [activePos, setActivePos] = useState([]);
   const [goalData, setGoalData] = useState(null);
   const [viewMode, setViewMode] = useState("table"); // "table" | "card"
   const [search, setSearch] = useState("");
@@ -74,6 +80,8 @@ export default function LooseOrder() {
 
   // Create Loose Order Modal State
   const [createModal, setCreateModal] = useState(false);
+  const [deductFromPo, setDeductFromPo] = useState(true);
+  const [selectedParentPoId, setSelectedParentPoId] = useState("");
   const [selectedKitId, setSelectedKitId] = useState("");
   const [looseQuantity, setLooseQuantity] = useState(10);
   const [destinationMode, setDestinationMode] = useState("hub_stock"); // "hub_stock" | "epc_allocation"
@@ -97,11 +105,11 @@ export default function LooseOrder() {
   // Escrow Bank Details
   const bankDetails = {
     account_name: "SolarKits Technologies Pvt Ltd",
-    bank_name: "HDFC Bank",
-    account_number: "50200088991122",
-    ifsc_code: "HDFC0001234",
-    branch_name: "Corporate Financial Center, Mumbai",
-    upi_id: "solarkits.pay@hdfcbank",
+    bank_name: "ICICI Bank Corporate Banking",
+    account_number: "000205018899",
+    ifsc_code: "ICIC0000002",
+    branch_name: "Bandra Kurla Complex, Mumbai",
+    upi_id: "solarkits.token@icici",
   };
   const [copiedField, setCopiedField] = useState("");
 
@@ -111,14 +119,15 @@ export default function LooseOrder() {
     setTimeout(() => setCopiedField(""), 2000);
   };
 
-  // Fetch Authorized Solar Kits, EPC Buyers, Orders & Goal Data
+  // Fetch Authorized Solar Kits, EPC Buyers, Orders, Active PO Quotas & Goal Data
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [settingsRes, buyersRes, ordersRes, goalRes] = await Promise.all([
+      const [settingsRes, buyersRes, ordersRes, activePosRes, goalRes] = await Promise.all([
         api.get("/india/v1/reseller/po/plan-settings").catch(() => ({ data: { status: "error" } })),
         api.get("/india/v1/reseller/epc-buyers/list").catch(() => ({ data: { data: [] } })),
         api.get("/india/v1/reseller/po/my-orders").catch(() => ({ data: { data: [] } })),
+        api.get("/india/v1/reseller/po/active-quotas").catch(() => ({ data: { data: [] } })),
         api.get("/india/v1/reseller/goals/my-goal").catch(() => ({ data: { data: null } })),
       ]);
 
@@ -135,6 +144,23 @@ export default function LooseOrder() {
       if (ordersRes.data?.status === "success") {
         setOrders(ordersRes.data.data || []);
       }
+      if (activePosRes.data?.status === "success") {
+        const pos = activePosRes.data.data || [];
+        setActivePos(pos);
+
+        if (queryPoId) {
+          const matched = pos.find((p) => String(p._id) === String(queryPoId));
+          if (matched) {
+            setSelectedParentPoId(matched._id);
+            setDeductFromPo(true);
+            setCreateModal(true);
+          } else if (pos.length > 0) {
+            setSelectedParentPoId(pos[0]._id);
+          }
+        } else if (pos.length > 0) {
+          setSelectedParentPoId(pos[0]._id);
+        }
+      }
       if (goalRes.data?.status === "success" && goalRes.data.data) {
         setGoalData(goalRes.data.data);
       }
@@ -143,7 +169,7 @@ export default function LooseOrder() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryPoId]);
 
   useEffect(() => {
     fetchData();
@@ -175,6 +201,31 @@ export default function LooseOrder() {
     return () => es.close();
   }, [fetchData]);
 
+  // Selected Active Parent PO Object
+  const selectedParentPo = useMemo(() => {
+    if (!deductFromPo || !selectedParentPoId) return null;
+    return activePos.find((p) => String(p._id) === String(selectedParentPoId)) || null;
+  }, [deductFromPo, selectedParentPoId, activePos]);
+
+  // Quota remaining on selected Parent PO
+  const parentRemainingQuota = useMemo(() => {
+    if (!selectedParentPo) return null;
+    return selectedParentPo.remaining_quantity != null
+      ? selectedParentPo.remaining_quantity
+      : (selectedParentPo.total_booked_quantity || 0);
+  }, [selectedParentPo]);
+
+  // When parent PO changes, sync selected kit with parent PO's kit
+  useEffect(() => {
+    if (selectedParentPo && selectedParentPo.items?.[0]) {
+      const parentKit = selectedParentPo.items[0].kit_id;
+      const parentKitId = parentKit?._id || parentKit?.id || parentKit;
+      if (parentKitId) {
+        setSelectedKitId(String(parentKitId));
+      }
+    }
+  }, [selectedParentPo]);
+
   // Selected Authorized Solar Kit Object
   const selectedKit = useMemo(() => {
     if (!planData?.combo_kits || !selectedKitId) return null;
@@ -187,6 +238,11 @@ export default function LooseOrder() {
 
   // Dynamic Loose Order Quantity Variations for Selected Kit
   const kitLooseQuantities = useMemo(() => {
+    if (parentRemainingQuota != null && parentRemainingQuota > 0) {
+      const presets = [10, 25, 50, 100].filter((q) => q < parentRemainingQuota);
+      presets.push(parentRemainingQuota); // Always include remaining quota for full final settlement!
+      return Array.from(new Set(presets)).sort((a, b) => a - b);
+    }
     if (!selectedKit) return [5, 10, 15, 20, 25, 30, 50];
     const raw = selectedKit.loose_order_quantities || selectedKit.looseOrderQuantities;
     if (Array.isArray(raw) && raw.length > 0) {
@@ -194,13 +250,7 @@ export default function LooseOrder() {
       if (valid.length > 0) return valid;
     }
     return [5, 10, 15, 20, 25, 30, 50];
-  }, [selectedKit]);
-
-  useEffect(() => {
-    if (kitLooseQuantities.length > 0 && !kitLooseQuantities.includes(looseQuantity)) {
-      setLooseQuantity(kitLooseQuantities[0]);
-    }
-  }, [kitLooseQuantities]);
+  }, [selectedKit, parentRemainingQuota]);
 
   // Total Quantity determination based on destination mode
   const totalLooseQuantity = useMemo(() => {
@@ -212,28 +262,56 @@ export default function LooseOrder() {
 
   // Unit Price Calculation
   const unitPriceINR = useMemo(() => {
+    // If drawing from locked PO, use PO's locked unit price
+    if (selectedParentPo?.items?.[0]?.unit_price_paise) {
+      return selectedParentPo.items[0].unit_price_paise / 100;
+    }
     if (!selectedKit) return 0;
     if (selectedKit.dealer_price) return selectedKit.dealer_price;
     if (selectedKit.selling_price_cached) return selectedKit.selling_price_cached;
     if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
-    if (selectedKit.price_with_tax) return selectedKit.price_with_tax;
     if (selectedKit.unit_price) return selectedKit.unit_price;
     if (selectedKit.price) return selectedKit.price;
     if (selectedKit.base_price) return selectedKit.base_price;
     return 45000;
-  }, [selectedKit]);
+  }, [selectedParentPo, selectedKit]);
 
-  const gstRatePercent = selectedKit?.gst_rate || 13.8;
+  const gstRatePercent = selectedKit?.gst_rate || 12;
   const subtotalINR = totalLooseQuantity * unitPriceINR;
   const taxINR = Math.round((subtotalINR * gstRatePercent) / 100);
   const grandTotalINR = subtotalINR + taxINR;
 
-  // Auto-fill amount paid
+  // ── Final PO Settlement & Token Amount Adjustment Mechanics ─────────────────
+  const isFinalSettlement = useMemo(() => {
+    return Boolean(
+      deductFromPo &&
+      selectedParentPo &&
+      parentRemainingQuota != null &&
+      totalLooseQuantity === parentRemainingQuota
+    );
+  }, [deductFromPo, selectedParentPo, parentRemainingQuota, totalLooseQuantity]);
+
+  const tokenAvailableINR = useMemo(() => {
+    if (!selectedParentPo) return 0;
+    const tokenPaise = selectedParentPo.token_amount_paise || selectedParentPo.token_paid_paise || 0;
+    return Math.round(tokenPaise / 100);
+  }, [selectedParentPo]);
+
+  const tokenAdjustedINR = useMemo(() => {
+    if (!isFinalSettlement) return 0;
+    return Math.min(tokenAvailableINR, grandTotalINR);
+  }, [isFinalSettlement, tokenAvailableINR, grandTotalINR]);
+
+  const netPayableINR = useMemo(() => {
+    return Math.max(0, grandTotalINR - tokenAdjustedINR);
+  }, [grandTotalINR, tokenAdjustedINR]);
+
+  // Auto-fill amount paid with netPayableINR
   useEffect(() => {
-    if (grandTotalINR > 0) {
-      setAmountPaid(grandTotalINR);
+    if (netPayableINR >= 0) {
+      setAmountPaid(netPayableINR);
     }
-  }, [grandTotalINR]);
+  }, [netPayableINR]);
 
   // EPC Allocation Handlers
   const handleQuantityChange = (buyerId, val) => {
@@ -282,6 +360,16 @@ export default function LooseOrder() {
       setFormError("Please enter a valid loose quantity.");
       return;
     }
+
+    if (deductFromPo && selectedParentPo && parentRemainingQuota != null) {
+      if (totalLooseQuantity > parentRemainingQuota) {
+        setFormError(
+          `Requested quantity (${totalLooseQuantity} kits) exceeds available PO quota (${parentRemainingQuota} kits).`
+        );
+        return;
+      }
+    }
+
     if (destinationMode === "epc_allocation" && totalLooseQuantity === 0) {
       setFormError("Please allocate quantities to at least one onboarded EPC Buyer.");
       return;
@@ -290,7 +378,7 @@ export default function LooseOrder() {
       setFormError("Please enter the UTR / Transaction Reference Number.");
       return;
     }
-    if (!amountPaid || Number(amountPaid) <= 0) {
+    if (netPayableINR > 0 && (!amountPaid || Number(amountPaid) <= 0)) {
       setFormError("Please enter a valid payment amount.");
       return;
     }
@@ -298,15 +386,15 @@ export default function LooseOrder() {
     const epcAllocationsList =
       destinationMode === "epc_allocation"
         ? Object.entries(allocations).map(([buyerId, qty]) => {
-          const buyer = epcBuyers.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
-          return {
-            epc_buyer_id: buyerId,
-            company_name: buyer?.company_name || buyer?.name || "EPC Buyer",
-            buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
-            gstin: buyer?.gstin || null,
-            allocated_quantity: qty,
-          };
-        })
+            const buyer = epcBuyers.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
+            return {
+              epc_buyer_id: buyerId,
+              company_name: buyer?.company_name || buyer?.name || "EPC Buyer",
+              buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
+              gstin: buyer?.gstin || null,
+              allocated_quantity: qty,
+            };
+          })
         : [];
 
     const itemPayload = {
@@ -323,6 +411,7 @@ export default function LooseOrder() {
     try {
       const payload = {
         order_type: "loose_kit_order",
+        parent_po_id: deductFromPo && selectedParentPoId ? selectedParentPoId : null,
         destination_type: destinationMode,
         destination_address: destinationAddress || "Franchise Regional Hub Warehouse",
         destination_pincode: destinationPincode || "380001",
@@ -332,7 +421,7 @@ export default function LooseOrder() {
           utr_number: utrNumber.trim().toUpperCase(),
           amount_paid: Number(amountPaid),
           payment_date: paymentDate,
-          sender_bank_name: senderBankName,
+          sender_bank_name: senderBankName || "Bank Transfer",
         },
         auto_submit: true,
       };
@@ -359,6 +448,9 @@ export default function LooseOrder() {
   // Filtered Orders List
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
+      // Show loose kit orders or orders linked to PO
+      const isLoose = o.order_type === "loose_kit_order" || Boolean(o.parent_po_id);
+      if (!isLoose) return false;
       if (statusFilter && (o.status || o.order_status) !== statusFilter) return false;
       if (search) {
         const q = search.toLowerCase();
@@ -372,18 +464,18 @@ export default function LooseOrder() {
 
   return (
     <div className="space-y-6 pb-24 max-w-7xl mx-auto">
-      {/* ── Top Header Banner (Styled like PoOrder) ─────────────────────────── */}
+      {/* ── Top Header Banner ─────────────────────────────────────────────────── */}
       <div
         className="relative rounded-3xl p-6 sm:p-8 text-white shadow-xl overflow-hidden"
-        style={{ background: "var(--gradient-primary, linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%))" }}
+        style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #2563eb 100%)" }}
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-400/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-white/20 backdrop-blur-md border border-white/20 text-white">
-                <FiShield size={12} /> Franchisee Loose Solar Kit Ordering
+                <FiShield size={12} /> Franchisee Loose Delivery Ordering
               </span>
               {planData?.plan?.name && (
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-400/30 text-amber-200 border border-amber-400/40">
@@ -392,10 +484,10 @@ export default function LooseOrder() {
               )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Loose Solar Kit PO Orders
+              Loose Orders & PO Quota Consumption
             </h1>
             <p className="text-white/80 text-xs sm:text-sm max-w-xl">
-              Procure your authorized Solar Kits in flexible loose quantities (e.g. 10, 20, 30 kits) for local hub buffer stock or direct EPC buyer allocation.
+              Order flexible kit quantities against your booked PO. Loose orders decrement your locked quota, and your <strong>Token Deposit is auto-adjusted on your final settlement order</strong>.
             </p>
           </div>
 
@@ -416,101 +508,109 @@ export default function LooseOrder() {
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FiPlus size={18} />
-              <span>Create Loose Solar Kit Order</span>
+              <span>Place Loose Solar Kit Order</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Monthly Kit Target & Goal Achievement Bar ────────────────────────── */}
-      {goalData && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/10 text-blue-600 flex items-center justify-center font-bold shrink-0">
-              <FiTarget size={20} />
+      {/* ── ACTIVE PRICE-LOCKED PO QUOTA BANNER ───────────────────────────────── */}
+      {activePos.length > 0 && (
+        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border-2 border-emerald-500/30 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+              <FiLock size={22} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-text-muted">
-                  {goalData.period || "Monthly Franchise Target Goal"}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                  Active Price-Locked PO Found
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${(goalData.achievement_pct || 0) >= 100
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                  }`}>
-                  {goalData.achievement_pct || 0}% Achieved
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white">
+                  {activePos.length} Locked PO(s)
                 </span>
               </div>
-              <div className="text-xs sm:text-sm font-black text-text-primary mt-0.5">
-                {goalData.eligible_kits || 0} / {goalData.monthly_goal || 100} Kits Procured
-              </div>
+              <h3 className="text-sm sm:text-base font-black text-text-primary mt-0.5">
+                {activePos[0]?.po_number} ({activePos[0]?.remaining_quantity || activePos[0]?.total_booked_quantity} Kits Remaining)
+              </h3>
+              <p className="text-xs text-text-muted mt-0.5">
+                Token Deposit: <strong>₹{Math.round(((activePos[0]?.token_amount_paise || activePos[0]?.token_paid_paise || 0) / 100)).toLocaleString("en-IN")}</strong> held safely in escrow. Deducts automatically when you order your final kits!
+              </p>
             </div>
           </div>
 
-          <div className="w-full md:w-64 space-y-1.5">
-            <div className="flex justify-between text-[11px] font-extrabold">
-              <span className="text-text-muted">Procurement Progress</span>
-              <span className="text-primary">{goalData.achievement_pct || 0}%</span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-              <div
-                className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, goalData.achievement_pct || 0)}%` }}
-              />
-            </div>
-          </div>
+          <button
+            onClick={() => {
+              setSelectedParentPoId(activePos[0]._id);
+              setDeductFromPo(true);
+              setFormError("");
+              setCreateModal(true);
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md transition-all cursor-pointer shrink-0"
+          >
+            <span>Order from this PO</span>
+            <FiArrowRight size={14} />
+          </button>
         </div>
       )}
 
       {/* ── Search & Filter Controls ────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {[
-            { id: "", label: "All Loose Orders" },
-            { id: "SUBMITTED", label: "Submitted" },
-            { id: "APPROVED", label: "Approved" },
-            { id: "PROCESSING", label: "Processing" },
-            { id: "DISPATCHED", label: "Dispatched" },
-            { id: "DELIVERED", label: "Delivered" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-all cursor-pointer ${statusFilter === tab.id
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "bg-surface hover:bg-surface-hover text-text-secondary border border-border"
-                }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by Loose Order Number or Kit..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-semibold border transition-all"
+            style={{
+              background: "var(--color-surface)",
+              borderColor: "var(--color-border)",
+              color: "var(--color-text-primary)",
+            }}
+          />
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 sm:w-64">
-            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
-            <input
-              type="text"
-              placeholder="Search PO number or kit..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-2 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:border-primary"
-            />
-          </div>
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-xs font-semibold border cursor-pointer"
+            style={{
+              background: "var(--color-surface)",
+              borderColor: "var(--color-border)",
+              color: "var(--color-text-primary)",
+            }}
+          >
+            <option value="">All Statuses</option>
+            <option value="SUBMITTED">Submitted</option>
+            <option value="PENDING_APPROVAL">Pending Approval</option>
+            <option value="APPROVED">Approved</option>
+            <option value="AWAITING_PAYMENT">Awaiting Payment</option>
+            <option value="PAID">Paid</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="DISPATCHED">Dispatched</option>
+            <option value="DELIVERED">Delivered</option>
+          </select>
 
-          <div className="flex items-center bg-surface border border-border rounded-xl p-1 shrink-0">
+          <div
+            className="flex items-center bg-surface border border-border rounded-xl p-1 shrink-0"
+          >
             <button
               onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-                }`}
+              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+              }`}
               title="Table View"
             >
               <FiList size={15} />
             </button>
             <button
               onClick={() => setViewMode("card")}
-              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-                }`}
+              className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+              }`}
               title="Card Grid View"
             >
               <FiGrid size={15} />
@@ -533,7 +633,7 @@ export default function LooseOrder() {
           <div className="space-y-1">
             <h3 className="text-base font-black text-text-primary">No Loose Solar Kit Orders Placed Yet</h3>
             <p className="text-xs text-text-secondary max-w-md mx-auto">
-              Place loose quantity purchase orders (e.g. 10, 20, 30 kits) for your authorized solar kits to keep local inventory ready.
+              Place loose quantity purchase orders against your active booked PO to consume your quota and adjust your token amount.
             </p>
           </div>
           <button
@@ -550,10 +650,11 @@ export default function LooseOrder() {
               <thead className="bg-surface-hover/60 border-b border-border text-text-secondary uppercase font-black tracking-wider">
                 <tr>
                   <th className="px-6 py-4">PO Number &amp; Date</th>
+                  <th className="px-6 py-4">Linked Parent PO</th>
                   <th className="px-6 py-4">Authorized Solar Kit</th>
                   <th className="px-6 py-4 text-center">Loose Qty</th>
                   <th className="px-6 py-4">Destination</th>
-                  <th className="px-6 py-4 text-right">Total Payable</th>
+                  <th className="px-6 py-4 text-right">Net Payable</th>
                   <th className="px-6 py-4 text-center">Status</th>
                   <th className="px-6 py-4 text-center">Action</th>
                 </tr>
@@ -563,9 +664,13 @@ export default function LooseOrder() {
                   const firstItem = order.items?.[0] || {};
                   const totalQty = (order.items || []).reduce((sum, i) => sum + (i.quantity || 1), 0);
                   const orderTotal =
-                    order.grand_total_inr ||
-                    (order.grand_total_paise ? order.grand_total_paise / 100 : order.total_amount) ||
-                    0;
+                    order.net_payable_paise != null
+                      ? order.net_payable_paise / 100
+                      : order.grand_total_inr ||
+                        (order.grand_total_paise ? order.grand_total_paise / 100 : order.total_amount) ||
+                        0;
+
+                  const parentPo = order.parent_po_id;
 
                   return (
                     <tr key={order._id || order.id} className="hover:bg-surface-hover/50 transition-colors">
@@ -574,12 +679,31 @@ export default function LooseOrder() {
                           {order.po_number || order.order_number || `#LPO-${String(order._id).slice(-6).toUpperCase()}`}
                         </div>
                         <div className="text-[11px] text-text-muted mt-0.5">
-                          {new Date(order.created_at).toLocaleDateString("en-IN", {
+                          {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
                           })}
                         </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {parentPo ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 font-mono font-bold text-xs text-primary">
+                              <FiLock size={11} /> {parentPo.po_number || "Parent PO"}
+                            </span>
+                            {order.is_final_po_settlement && (
+                              <div>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                                  🎉 Token -₹{Math.round((order.token_adjusted_paise || 0) / 100).toLocaleString("en-IN")} Adjusted
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-text-muted">Standalone Order</span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4">
@@ -610,9 +734,11 @@ export default function LooseOrder() {
                         <div className="font-black text-text-primary text-sm">
                           ₹{orderTotal.toLocaleString("en-IN")}
                         </div>
-                        <div className="text-[10px] text-text-muted font-mono">
-                          UTR: {order.offline_payment?.utr_number || order.payment_reference || "N/A"}
-                        </div>
+                        {order.token_adjusted_paise > 0 && (
+                          <div className="text-[10px] text-emerald-600 font-bold">
+                            Token Adjusted ✓
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-6 py-4 text-center">
@@ -641,14 +767,17 @@ export default function LooseOrder() {
             const firstItem = order.items?.[0] || {};
             const totalQty = (order.items || []).reduce((sum, i) => sum + (i.quantity || 1), 0);
             const orderTotal =
-              order.grand_total_inr ||
-              (order.grand_total_paise ? order.grand_total_paise / 100 : order.total_amount) ||
-              0;
+              order.net_payable_paise != null
+                ? order.net_payable_paise / 100
+                : order.grand_total_inr ||
+                  (order.grand_total_paise ? order.grand_total_paise / 100 : order.total_amount) ||
+                  0;
+            const parentPo = order.parent_po_id;
 
             return (
               <div
                 key={order._id || order.id}
-                className="p-5 rounded-2xl bg-surface border border-border shadow-xs hover:border-primary/40 transition-all flex flex-col justify-between space-y-4"
+                className="p-5 rounded-3xl bg-surface border border-border shadow-xs hover:border-primary/40 transition-all flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2 border-b border-border pb-3">
@@ -657,7 +786,7 @@ export default function LooseOrder() {
                         {order.po_number || order.order_number || `#LPO-${String(order._id).slice(-6).toUpperCase()}`}
                       </span>
                       <span className="text-[11px] text-text-muted">
-                        {new Date(order.created_at).toLocaleDateString("en-IN", {
+                        {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
@@ -675,11 +804,25 @@ export default function LooseOrder() {
                       Procured Quantity: <strong className="text-primary font-mono">{totalQty} Kits</strong>
                     </p>
                   </div>
+
+                  {parentPo && (
+                    <div className="p-3 rounded-2xl bg-surface-hover/80 border border-border text-xs space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-text-muted">Deducted from PO:</span>
+                        <span className="font-mono text-primary font-black">{parentPo.po_number}</span>
+                      </div>
+                      {order.is_final_po_settlement && (
+                        <div className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                          <FiCheckCircle size={12} /> Final PO Settlement Order (Token Adjusted)
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-border flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] text-text-muted block">Order Total</span>
+                    <span className="text-[10px] text-text-muted block">Net Payable</span>
                     <span className="font-black text-base text-text-primary">
                       ₹{orderTotal.toLocaleString("en-IN")}
                     </span>
@@ -705,11 +848,11 @@ export default function LooseOrder() {
             {/* Modal Header */}
             <div className="flex justify-between items-center border-b border-border pb-4">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-blue-500/15 text-blue-600 rounded">
-                  Authorized Loose Procurement
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 bg-blue-500/15 text-blue-600 rounded-full">
+                  Flexible Delivery Order
                 </span>
                 <h3 className="text-xl font-black text-text-primary mt-1 flex items-center gap-2">
-                  <FaSolarPanel className="text-primary" /> Create Loose Solar Kit Purchase Order
+                  <FaSolarPanel className="text-primary" /> Place Loose Solar Kit Delivery Order
                 </h3>
               </div>
               <button
@@ -721,29 +864,115 @@ export default function LooseOrder() {
             </div>
 
             <form onSubmit={handleCreateLooseOrder} className="space-y-5">
+              {/* Step 0: Active PO Quota Deduction Selector */}
+              {activePos.length > 0 && (
+                <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-r from-blue-500/5 via-emerald-500/5 to-teal-500/5 border-2 border-emerald-500/30">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-2">
+                      <FiLock className="text-emerald-500" /> Deduct from Active Price-Locked PO Quota?
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDeductFromPo(true)}
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                          deductFromPo
+                            ? "bg-emerald-600 text-white shadow-xs"
+                            : "bg-surface hover:bg-surface-hover text-text-muted border border-border"
+                        }`}
+                      >
+                        Yes, Deduct from PO
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeductFromPo(false)}
+                        className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                          !deductFromPo
+                            ? "bg-slate-800 text-white shadow-xs"
+                            : "bg-surface hover:bg-surface-hover text-text-muted border border-border"
+                        }`}
+                      >
+                        Standalone Order
+                      </button>
+                    </div>
+                  </div>
+
+                  {deductFromPo && (
+                    <div className="space-y-3 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {activePos.map((po) => {
+                          const isSelected = selectedParentPoId === po._id;
+                          const rem = po.remaining_quantity != null ? po.remaining_quantity : po.total_booked_quantity;
+                          const tok = Math.round(((po.token_amount_paise || po.token_paid_paise || 0) / 100));
+
+                          return (
+                            <div
+                              key={po._id}
+                              onClick={() => setSelectedParentPoId(po._id)}
+                              className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer space-y-1.5 ${
+                                isSelected
+                                  ? "border-emerald-600 bg-emerald-500/10 shadow-xs"
+                                  : "border-border bg-surface hover:border-emerald-400"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono font-black text-xs text-text-primary">
+                                  {po.po_number}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white">
+                                  {rem} Kits Remaining
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-text-muted truncate">
+                                {po.items?.[0]?.item_name || "Solar Kit Package"}
+                              </div>
+                              <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                                💰 Escrow Token: ₹{tok.toLocaleString("en-IN")}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {selectedParentPo && (
+                        <div className="p-3 rounded-xl bg-surface border border-border text-xs flex items-center justify-between">
+                          <span className="text-text-muted">Quota Consumption Visualizer:</span>
+                          <span className="font-black text-text-primary">
+                            Current: <strong>{parentRemainingQuota} kits</strong> → After order:{" "}
+                            <strong className="text-emerald-600">
+                              {Math.max(0, (parentRemainingQuota || 0) - totalLooseQuantity)} kits left
+                            </strong>
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Step 1: Select Authorized Solar Kit */}
               <div className="space-y-2">
                 <label className="block text-xs font-black uppercase tracking-wider text-text-primary">
-                  Step 1: Select Authorized Solar Kit
+                  Step 1: Select Solar Combo Kit
                 </label>
-                <p className="text-xs text-text-muted">
-                  Only the Solar Kits assigned to your Franchise Partner Plan &amp; Territory are available.
-                </p>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {(planData?.combo_kits || []).map((kit) => {
                     const kitId = kit._id || kit.id;
                     const isSelected = selectedKitId?.toString() === kitId?.toString();
-                    const kitPrice = kit.dealer_price || kit.selling_price_cached || kit.base_price_cached || 45000;
+                    const kitPrice =
+                      selectedParentPo?.items?.[0]?.unit_price_paise
+                        ? selectedParentPo.items[0].unit_price_paise / 100
+                        : kit.dealer_price || kit.selling_price_cached || kit.base_price_cached || 45000;
 
                     return (
                       <div
                         key={kitId}
                         onClick={() => setSelectedKitId(kitId)}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${isSelected
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                          isSelected
                             ? "bg-primary/10 border-primary shadow-sm"
                             : "bg-surface hover:bg-surface-hover border-border"
-                          }`}
+                        }`}
                       >
                         <div className="space-y-1">
                           <div className="flex items-center justify-between">
@@ -761,7 +990,7 @@ export default function LooseOrder() {
                         </div>
 
                         <div className="pt-2 mt-2 border-t border-border flex justify-between items-baseline">
-                          <span className="text-[10px] text-text-muted">Dealer Price</span>
+                          <span className="text-[10px] text-text-muted">Unit Rate</span>
                           <span className="font-black text-text-primary text-sm">
                             ₹{kitPrice.toLocaleString("en-IN")}
                           </span>
@@ -777,18 +1006,20 @@ export default function LooseOrder() {
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <label className="text-xs font-black uppercase tracking-wider text-text-primary block">
-                      Step 2: Select Loose Quantity (Units / Kits)
+                      Step 2: Enter Order Quantity (Units / Kits)
                     </label>
-                    <p className="text-xs text-text-muted mt-0.5">
-                      Choose flexible quantities (e.g. 10, 20, 25 kits) for your order.
-                    </p>
+                    {parentRemainingQuota != null && deductFromPo && (
+                      <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        Max available from PO quota: <strong>{parentRemainingQuota} kits</strong>.
+                      </p>
+                    )}
                   </div>
 
                   {destinationMode === "hub_stock" && (
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setLooseQuantity(Math.max(1, looseQuantity - 1))}
+                        onClick={() => setLooseQuantity(Math.max(1, looseQuantity - 5))}
                         className="w-8 h-8 rounded-xl bg-surface border border-border font-bold text-sm flex items-center justify-center cursor-pointer hover:bg-surface-hover"
                       >
                         -
@@ -796,13 +1027,24 @@ export default function LooseOrder() {
                       <input
                         type="number"
                         min={1}
+                        max={deductFromPo && parentRemainingQuota ? parentRemainingQuota : undefined}
                         value={looseQuantity}
-                        onChange={(e) => setLooseQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        className="w-16 py-1.5 text-center font-mono font-black text-sm bg-surface border border-border rounded-xl text-primary"
+                        onChange={(e) => {
+                          const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                          setLooseQuantity(val);
+                        }}
+                        className="w-20 py-1.5 text-center font-mono font-black text-sm bg-surface border border-border rounded-xl text-primary"
                       />
                       <button
                         type="button"
-                        onClick={() => setLooseQuantity(looseQuantity + 1)}
+                        onClick={() => {
+                          const nextVal = looseQuantity + 5;
+                          if (deductFromPo && parentRemainingQuota && nextVal > parentRemainingQuota) {
+                            setLooseQuantity(parentRemainingQuota);
+                          } else {
+                            setLooseQuantity(nextVal);
+                          }
+                        }}
                         className="w-8 h-8 rounded-xl bg-surface border border-border font-bold text-sm flex items-center justify-center cursor-pointer hover:bg-surface-hover"
                       >
                         +
@@ -818,32 +1060,34 @@ export default function LooseOrder() {
                         key={presetQty}
                         type="button"
                         onClick={() => setLooseQuantity(presetQty)}
-                        className={`py-2 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${looseQuantity === presetQty
+                        className={`py-2 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                          looseQuantity === presetQty
                             ? "bg-primary text-white shadow-sm"
                             : "bg-surface hover:bg-surface-hover text-text-primary border border-border"
-                          }`}
+                        }`}
                       >
-                        {presetQty} Kits
+                        {presetQty} Kits {presetQty === parentRemainingQuota && "(Final Settle)"}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Step 3: Destination & Purpose (Hub Stock vs Multi-EPC Allocation) */}
+              {/* Step 3: Destination Mode (Hub Stock vs Multi-EPC Allocation) */}
               <div className="space-y-3">
                 <label className="block text-xs font-black uppercase tracking-wider text-text-primary">
-                  Step 3: Fulfillment Destination &amp; Purpose
+                  Step 3: Fulfillment Destination
                 </label>
 
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => setDestinationMode("hub_stock")}
-                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${destinationMode === "hub_stock"
+                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${
+                      destinationMode === "hub_stock"
                         ? "bg-primary/10 border-primary text-primary"
                         : "bg-surface hover:bg-surface-hover border-border text-text-secondary"
-                      }`}
+                    }`}
                   >
                     <FaWarehouse size={20} className="shrink-0" />
                     <div>
@@ -855,109 +1099,59 @@ export default function LooseOrder() {
                   <button
                     type="button"
                     onClick={() => setDestinationMode("epc_allocation")}
-                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${destinationMode === "epc_allocation"
+                    className={`p-3.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-3 cursor-pointer ${
+                      destinationMode === "epc_allocation"
                         ? "bg-primary/10 border-primary text-primary"
                         : "bg-surface hover:bg-surface-hover border-border text-text-secondary"
-                      }`}
+                    }`}
                   >
                     <FiUsers size={20} className="shrink-0" />
                     <div>
                       <p className="font-extrabold text-sm text-text-primary">Allocate to EPC Buyers</p>
-                      <p className="text-[11px] text-text-muted">Distribute across contractors</p>
+                      <p className="text-[11px] text-text-muted">Direct dispatch to contractors</p>
                     </div>
                   </button>
                 </div>
-
-                {/* Multi-EPC Allocation Table if selected */}
-                {destinationMode === "epc_allocation" && (
-                  <div className="border border-border rounded-2xl overflow-hidden bg-surface">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-surface-hover text-text-secondary font-bold">
-                        <tr>
-                          <th className="p-3">Onboarded EPC Contractor</th>
-                          <th className="p-3">Contact &amp; GSTIN</th>
-                          <th className="p-3 text-center">Allocated Loose Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {epcBuyers.map((buyer) => {
-                          const bId = buyer._id || buyer.id;
-                          const currentQty = allocations[bId] || 0;
-
-                          return (
-                            <tr key={bId}>
-                              <td className="p-3 font-bold text-text-primary">
-                                {buyer.company_name || buyer.name}
-                              </td>
-                              <td className="p-3 text-text-muted">
-                                {buyer.whatsapp || buyer.mobile} • GST: {buyer.gstin || "N/A"}
-                              </td>
-                              <td className="p-3 text-center">
-                                <div className="inline-flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStepQty(bId, -1)}
-                                    className="w-6 h-6 rounded bg-surface-hover hover:bg-border text-text-primary font-bold text-xs cursor-pointer transition-colors"
-                                  >
-                                    -
-                                  </button>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={currentQty || ""}
-                                    onChange={(e) => handleQuantityChange(bId, e.target.value)}
-                                    placeholder="0"
-                                    className="w-12 text-center font-mono font-bold py-1 bg-surface border border-border rounded text-xs text-text-primary outline-none focus:border-primary"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStepQty(bId, 1)}
-                                    className="w-6 h-6 rounded bg-surface-hover hover:bg-border text-text-primary font-bold text-xs cursor-pointer transition-colors"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                                {kitLooseQuantities.length > 0 && (
-                                  <div className="flex flex-wrap justify-center gap-1 mt-1.5">
-                                    {kitLooseQuantities.slice(0, 5).map((q) => (
-                                      <button
-                                        key={q}
-                                        type="button"
-                                        onClick={() => handleQuantityChange(bId, currentQty === q ? 0 : q)}
-                                        className={`px-1.5 py-0.5 rounded text-[10px] font-black cursor-pointer border transition-colors ${
-                                          currentQty === q
-                                            ? "bg-primary text-white border-primary shadow-2xs"
-                                            : "bg-surface hover:bg-surface-hover text-text-secondary border-border"
-                                        }`}
-                                      >
-                                        {q}K
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
               </div>
 
-              {/* Step 4: Pricing Summary & Escrow Bank Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
-                {/* Financial Summary */}
-                <div className="p-4 bg-surface-hover/60 rounded-2xl border border-border space-y-2 text-xs">
-                  <span className="font-black text-text-primary uppercase tracking-wider block text-[11px]">
-                    Order Financial Calculation
-                  </span>
+              {/* Step 4: Live Invoice Breakdown & Final Settlement Token Adjustment */}
+              <div className="space-y-3 pt-2 border-t border-border">
+                <label className="block text-xs font-black uppercase tracking-wider text-text-primary">
+                  Step 4: Invoice Calculation &amp; Token Adjustment
+                </label>
+
+                {/* THE CELEBRATORY MAGIC MOMENT BANNER FOR FINAL SETTLEMENT */}
+                {isFinalSettlement ? (
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-blue-500/20 border-2 border-emerald-500 shadow-sm flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <FiAward size={20} />
+                    </div>
+                    <div>
+                      <div className="font-black text-sm text-emerald-800 dark:text-emerald-300">
+                        🎉 Final PO Settlement Order!
+                      </div>
+                      <p className="text-xs text-text-primary font-medium mt-0.5">
+                        This order fulfills the remaining <strong>{totalLooseQuantity} kits</strong> of PO {selectedParentPo?.po_number}. Your previously paid Token Deposit of <strong>₹{tokenAdjustedINR.toLocaleString("en-IN")}</strong> is being automatically deducted from this invoice!
+                      </p>
+                    </div>
+                  </div>
+                ) : deductFromPo && selectedParentPo ? (
+                  <div className="p-3.5 rounded-2xl bg-surface-hover border border-border text-xs flex items-center justify-between">
+                    <span className="text-text-muted">Intermediate Loose Order:</span>
+                    <span className="text-text-primary font-medium">
+                      Token deposit of <strong>₹{tokenAvailableINR.toLocaleString("en-IN")}</strong> remains safely held in escrow and will auto-deduct when you order your final remaining {Math.max(0, (parentRemainingQuota || 0) - totalLooseQuantity)} kits.
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* Financial Summary Breakdown */}
+                <div className="p-5 bg-surface-hover/60 rounded-3xl border border-border space-y-2.5 text-xs">
                   <div className="flex justify-between text-text-secondary">
-                    <span>Kit Unit Price (Excl. Tax):</span>
+                    <span>Kit Unit Price (Base):</span>
                     <span className="font-bold text-text-primary">₹{unitPriceINR.toLocaleString("en-IN")}</span>
                   </div>
                   <div className="flex justify-between text-text-secondary">
-                    <span>Total Quantity:</span>
+                    <span>Quantity ({totalLooseQuantity} kits):</span>
                     <span className="font-black text-primary font-mono">{totalLooseQuantity} Kits</span>
                   </div>
                   <div className="flex justify-between text-text-secondary">
@@ -968,17 +1162,34 @@ export default function LooseOrder() {
                     <span>GST ({gstRatePercent}%):</span>
                     <span className="font-bold text-text-primary">₹{taxINR.toLocaleString("en-IN")}</span>
                   </div>
-                  <div className="flex justify-between items-baseline pt-2 border-t border-border text-sm">
-                    <span className="font-black text-text-primary">Total Payable:</span>
-                    <span className="text-xl font-black text-primary">₹{grandTotalINR.toLocaleString("en-IN")}</span>
+                  <div className="flex justify-between text-text-secondary pt-1 border-t border-border">
+                    <span>Gross Order Total:</span>
+                    <span className="font-black text-text-primary">₹{grandTotalINR.toLocaleString("en-IN")}</span>
+                  </div>
+
+                  {/* Token Adjustment Line */}
+                  {tokenAdjustedINR > 0 && (
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-black text-sm pt-1 border-t border-emerald-500/20">
+                      <span className="flex items-center gap-1">
+                        <FiCheckCircle size={14} /> (-) Token Amount Adjusted:
+                      </span>
+                      <span>-₹{tokenAdjustedINR.toLocaleString("en-IN")}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-baseline pt-2 border-t border-border text-base">
+                    <span className="font-black text-text-primary">Net Payable to Pay Now:</span>
+                    <span className="text-2xl font-black text-primary">
+                      ₹{netPayableINR.toLocaleString("en-IN")}
+                    </span>
                   </div>
                 </div>
 
-                {/* Bank Account Details */}
+                {/* Escrow Bank Account Details Card */}
                 <div className="p-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-xs space-y-2 text-text-primary">
                   <div className="flex justify-between items-center">
                     <span className="font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider text-[11px]">
-                      SolarKits Escrow Account
+                      Deposit Net Amount to Official Escrow Account
                     </span>
                     <span className="text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 font-bold px-2 py-0.5 rounded">
                       RTGS / NEFT / IMPS
@@ -1006,10 +1217,10 @@ export default function LooseOrder() {
                 </div>
               </div>
 
-              {/* Step 5: Offline Payment UTR & Receipt */}
+              {/* Step 5: Offline Payment UTR & Submission */}
               <div className="space-y-3 pt-2 border-t border-border">
                 <label className="block text-xs font-black uppercase tracking-wider text-text-primary">
-                  Step 5: Enter Bank Transfer (UTR) &amp; Upload Receipt
+                  Step 5: Bank Transfer (UTR) &amp; Proof
                 </label>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1020,7 +1231,7 @@ export default function LooseOrder() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. HDFC0001928374"
+                      placeholder="e.g. ICICR24098123456"
                       value={utrNumber}
                       onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
                       className="w-full p-2.5 text-xs bg-surface border border-border rounded-xl font-mono uppercase font-bold focus:outline-none focus:border-primary"
@@ -1034,7 +1245,7 @@ export default function LooseOrder() {
                     <input
                       type="number"
                       required
-                      placeholder="Grand Total"
+                      placeholder="Net Payable"
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(e.target.value)}
                       className="w-full p-2.5 text-xs bg-surface border border-border rounded-xl font-mono font-bold focus:outline-none focus:border-primary"
@@ -1053,28 +1264,6 @@ export default function LooseOrder() {
                       className="w-full p-2.5 text-xs bg-surface border border-border rounded-xl focus:outline-none focus:border-primary"
                     />
                   </div>
-                </div>
-
-                {/* Receipt Upload Box */}
-                <div className="border-2 border-dashed border-border hover:border-primary rounded-2xl p-4 text-center cursor-pointer relative bg-surface-hover/30">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  {receiptPreview ? (
-                    <img src={receiptPreview} alt="Receipt preview" className="max-h-24 mx-auto rounded object-contain border" />
-                  ) : receiptFile ? (
-                    <p className="text-xs font-bold text-primary">{receiptFile.name} (Attached)</p>
-                  ) : (
-                    <div className="space-y-1">
-                      <FiUploadCloud size={24} className="mx-auto text-primary" />
-                      <p className="text-xs font-bold text-text-primary">
-                        Upload Bank Transfer Receipt Screenshot (JPG, PNG, PDF)
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -1097,7 +1286,7 @@ export default function LooseOrder() {
                   disabled={submitting || totalLooseQuantity <= 0}
                   className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl text-xs font-black shadow-md transition-all cursor-pointer disabled:opacity-50"
                 >
-                  {submitting ? "Submitting Loose PO..." : "Submit Loose Solar Kit PO Order"}
+                  {submitting ? "Submitting Loose Order..." : `Submit Order (Pay ₹${netPayableINR.toLocaleString("en-IN")})`}
                 </button>
               </div>
             </form>
@@ -1111,7 +1300,7 @@ export default function LooseOrder() {
           <div className="bg-surface rounded-3xl border border-border shadow-2xl max-w-2xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-border pb-3">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-blue-500/15 text-blue-600 rounded">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 bg-blue-500/15 text-blue-600 rounded-full">
                   Loose Solar Kit Order
                 </span>
                 <h3 className="text-lg font-black text-text-primary mt-1 font-mono">
@@ -1125,6 +1314,23 @@ export default function LooseOrder() {
                 <FiX size={20} />
               </button>
             </div>
+
+            {/* Parent PO Reference if linked */}
+            {selectedOrder.parent_po_id && (
+              <div className="p-4 rounded-2xl bg-surface-hover border border-border text-xs space-y-1.5">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="text-text-muted">Linked Parent PO:</span>
+                  <span className="font-mono text-primary font-black">
+                    {selectedOrder.parent_po_id.po_number || selectedOrder.parent_po_id}
+                  </span>
+                </div>
+                {selectedOrder.is_final_po_settlement && (
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1.5">
+                    <FiAward size={15} /> Final PO Settlement Order — ₹{Math.round((selectedOrder.token_adjusted_paise || 0) / 100).toLocaleString("en-IN")} Token Adjusted!
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Solar Kit Summary */}
             <div className="space-y-2">
@@ -1147,11 +1353,25 @@ export default function LooseOrder() {
             </div>
 
             {/* Financial Summary */}
-            <div className="p-3.5 bg-surface-hover rounded-xl border border-border flex justify-between items-center text-xs">
-              <span className="font-bold text-text-secondary">Total PO Amount:</span>
-              <span className="text-base font-black text-primary">
-                ₹{((selectedOrder.grand_total_inr || selectedOrder.grand_total_paise / 100 || selectedOrder.total_amount) || 0).toLocaleString("en-IN")}
-              </span>
+            <div className="p-4 bg-surface-hover rounded-2xl border border-border space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-text-muted">Gross PO Total:</span>
+                <span className="font-bold">
+                  ₹{((selectedOrder.grand_total_inr || selectedOrder.grand_total_paise / 100 || selectedOrder.total_amount) || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+              {selectedOrder.token_adjusted_paise > 0 && (
+                <div className="flex justify-between text-emerald-600 font-black">
+                  <span>(-) Token Amount Adjusted:</span>
+                  <span>-₹{Math.round(selectedOrder.token_adjusted_paise / 100).toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-border font-black text-sm">
+                <span>Net Payable:</span>
+                <span className="text-primary">
+                  ₹{Math.round(((selectedOrder.net_payable_paise != null ? selectedOrder.net_payable_paise : selectedOrder.grand_total_paise) || 0) / 100).toLocaleString("en-IN")}
+                </span>
+              </div>
             </div>
 
             {/* Offline Payment Status */}
@@ -1166,27 +1386,6 @@ export default function LooseOrder() {
                 Payment Status: <strong className="capitalize">{selectedOrder.payment_status || "In Verification"}</strong>
               </p>
             </div>
-
-            {/* Dispatch Tracking Section if Dispatched */}
-            {selectedOrder.dispatch_tracking?.tracking_number && (
-              <div className="p-3.5 bg-purple-500/10 rounded-xl border border-purple-500/20 space-y-1 text-xs text-purple-900 dark:text-purple-200">
-                <span className="font-bold uppercase tracking-wider text-[11px] block text-purple-700">
-                  Logistics &amp; Dispatch Tracking
-                </span>
-                <p>Courier: <strong>{selectedOrder.dispatch_tracking.courier_name || "Express Freight"}</strong></p>
-                <p className="font-mono">LR/Waybill: <strong>{selectedOrder.dispatch_tracking.tracking_number}</strong></p>
-                {selectedOrder.dispatch_tracking.tracking_url && (
-                  <a
-                    href={selectedOrder.dispatch_tracking.tracking_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary font-bold hover:underline inline-flex items-center gap-1 mt-1"
-                  >
-                    <FiExternalLink /> Live Courier Tracking URL
-                  </a>
-                )}
-              </div>
-            )}
 
             <div className="flex justify-end pt-2">
               <button

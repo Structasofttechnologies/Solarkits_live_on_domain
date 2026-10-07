@@ -140,6 +140,29 @@ const schema = new mongoose.Schema(
       enum: ['po_order', 'loose_order', 'loose_kit_order', 'bulk_po'],
       default: 'po_order',
     },
+    // ── PO Classification (Single PO vs Combine PO) ───────────────────────────
+    po_category: {
+      type: String,
+      enum: ['SINGLE_PO', 'COMBINE_PO'],
+      default: 'SINGLE_PO',
+    },
+    // ── Token Amount Booking & Quota Fields (for PO Orders) ───────────────────
+    is_token_booking:      { type: Boolean, default: false },
+    token_amount_paise:    { type: Number, default: 0 },
+    token_paid_paise:      { type: Number, default: 0 },
+    token_payment_status:  { type: String, enum: ['PENDING', 'PAID', 'ADJUSTED'], default: 'PENDING' },
+    total_booked_quantity: { type: Number, default: 0 },
+    fulfilled_quantity:    { type: Number, default: 0 },
+    remaining_quantity:    { type: Number, default: 0 },
+    lock_expires_at:       { type: Date, default: null },
+    linked_loose_order_ids:[{ type: mongoose.Schema.Types.ObjectId, ref: 'fpo_orders' }],
+
+    // ── Loose Order PO Linkage & Final Settlement (for Loose Orders) ───────────
+    parent_po_id:          { type: mongoose.Schema.Types.ObjectId, ref: 'fpo_orders', default: null },
+    is_final_po_settlement:{ type: Boolean, default: false },
+    token_adjusted_paise:  { type: Number, default: 0 },
+    net_payable_paise:     { type: Number, default: 0 },
+
     destination_type: {
       type: String,
       enum: ['hub_stock', 'epc_allocation', 'warehouse', 'direct'],

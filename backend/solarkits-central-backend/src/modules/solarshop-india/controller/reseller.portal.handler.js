@@ -3312,6 +3312,10 @@ const get_my_plan_po_settings = async (req, res) => {
       min_po_quantity: defSetting?.min_po_quantity ?? 1,
       max_po_quantity: defSetting?.max_po_quantity ?? null,
       po_validity_days: defSetting?.po_validity_days ?? 30,
+      po_lock_days: defSetting?.po_lock_days ?? 30,
+      token_booking_enabled: defSetting?.token_booking_enabled !== false,
+      token_type: defSetting?.token_type || 'FIXED_AMOUNT',
+      token_value: defSetting?.token_value ?? 50000,
     }));
 
     // Deduplicate combo kits
@@ -3348,6 +3352,7 @@ const list_my_po_orders = async (req, res) => {
     const resellerId = req.reseller?._id || req.reseller?.id;
     const orders = await FpoOrder.find({ franchisee_id: resellerId, deleted_at: null })
       .populate('plan_id', 'name slug territory_level')
+      .populate('parent_po_id', 'po_number token_amount_paise token_paid_paise total_booked_quantity remaining_quantity')
       .sort({ created_at: -1 })
       .lean();
 
@@ -3361,10 +3366,46 @@ const list_my_po_orders = async (req, res) => {
   }
 };
 
+const get_my_active_po_quotas = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const activePos = await FpoOrder.find({
+      franchisee_id: resellerId,
+      order_type: { $in: ['po_order', 'bulk_po'] },
+      remaining_quantity: { $gt: 0 },
+      status: { $nin: ['CANCELLED', 'REJECTED', 'EXPIRED'] },
+      deleted_at: null,
+    })
+      .populate('plan_id', 'name slug territory_level')
+      .populate('items.kit_id', 'name kit_code capacity_kw selling_price_cached dealer_price')
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.status(200).json({
+      status: 'success',
+      data: activePos,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] get_my_active_po_quotas error:', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to retrieve active PO quotas' });
+  }
+};
+
 const create_my_po_order = async (req, res) => {
   try {
     const resellerId = req.reseller?._id || req.reseller?.id;
-    const { items, auto_submit, order_type, destination_type, destination_address, destination_pincode, offline_payment } = req.body;
+    const {
+      items,
+      auto_submit,
+      order_type,
+      po_category,
+      is_token_booking,
+      parent_po_id,
+      destination_type,
+      destination_address,
+      destination_pincode,
+      offline_payment,
+    } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ status: 'error', message: 'Items array is required' });
@@ -3376,6 +3417,9 @@ const create_my_po_order = async (req, res) => {
       franchisee_id: resellerId,
       items,
       order_type: order_type || 'po_order',
+      po_category: po_category || 'SINGLE_PO',
+      is_token_booking: Boolean(is_token_booking),
+      parent_po_id: parent_po_id || null,
       destination_type: destination_type || 'hub_stock',
       destination_address: destination_address || null,
       destination_pincode: destination_pincode || null,
@@ -3386,8 +3430,6 @@ const create_my_po_order = async (req, res) => {
 
     let finalOrder = result.order;
     if (auto_submit && finalOrder?._id) {
-      // ✅ FIX Bug #7: submitPo expects named-object { po_id, franchisee_id, actor_id, req }
-      // Previous: submitPo(finalOrder._id, {...}) — positional args caused po_id = undefined crash
       finalOrder = await submitPo({
         po_id: finalOrder._id,
         franchisee_id: resellerId,
@@ -3985,6 +4027,7 @@ module.exports = {
   purchase_and_onboard,
   get_my_plan_po_settings,
   list_my_po_orders,
+  get_my_active_po_quotas,
   create_my_po_order,
   get_my_po_order_detail,
   get_my_goal_progress,

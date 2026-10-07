@@ -437,6 +437,10 @@ export default function FranchiseeSettings() {
       max_po_quantity: "",
       po_validity_days: 30,
       max_line_items: 50,
+      token_booking_enabled: true,
+      token_type: "FIXED_AMOUNT",
+      token_value: 50000,
+      po_lock_days: 30,
       payment_terms: "FULL_ADVANCE",
       requires_approval: true,
       contributes_to_monthly_target: true,
@@ -550,6 +554,10 @@ export default function FranchiseeSettings() {
         max_po_quantity: formData.max_po_quantity ? Number(formData.max_po_quantity) : null,
         po_validity_days: Number(formData.po_validity_days || 30),
         max_line_items: Number(formData.max_line_items || 50),
+        token_booking_enabled: Boolean(formData.token_booking_enabled),
+        token_type: formData.token_type || "FIXED_AMOUNT",
+        token_value: Number(formData.token_value || 50000),
+        po_lock_days: Number(formData.po_lock_days || formData.po_validity_days || 30),
         payment_terms: formData.payment_terms || "FULL_ADVANCE",
         requires_approval: Boolean(formData.requires_approval),
         contributes_to_monthly_target: Boolean(formData.contributes_to_monthly_target),
@@ -1785,7 +1793,7 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">PO Validity (Days) <span className="text-danger">*</span></label>
-              <input type="number" min={1} required className="w-full px-3.5 py-2 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary" value={form.po_validity_days} onChange={(e) => setForm({ ...form, po_validity_days: e.target.value })} />
+              <input type="number" min={1} required className="w-full px-3.5 py-2 rounded-xl border border-border bg-bg text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary" value={form.po_validity_days} onChange={(e) => setForm({ ...form, po_validity_days: e.target.value, po_lock_days: e.target.value })} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1">Payment Terms</label>
@@ -1796,6 +1804,83 @@ function PoSettingsModal({ targetProduct, plan, initialData, saving, onClose, on
                 <option value="CREDIT_PERIOD">Credit Terms</option>
               </select>
             </div>
+          </div>
+
+          {/* Token Amount Booking Setting */}
+          <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <FiDollarSign size={14} className="text-emerald-600" />
+                Token Amount Booking
+              </span>
+              <input
+                type="checkbox"
+                checked={form.token_booking_enabled}
+                onChange={(e) => setForm({ ...form, token_booking_enabled: e.target.checked })}
+                className="rounded border-border text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+              />
+            </div>
+
+            {form.token_booking_enabled && (
+              <div className="space-y-3 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, token_type: "FIXED_AMOUNT" })}
+                    className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all ${
+                      form.token_type === "FIXED_AMOUNT"
+                        ? "bg-white dark:bg-slate-800 border-emerald-500 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20"
+                        : "bg-surface/50 border-border text-text-muted"
+                    }`}
+                  >
+                    Fixed Amount (₹)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, token_type: "PERCENTAGE" })}
+                    className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all ${
+                      form.token_type === "PERCENTAGE"
+                        ? "bg-white dark:bg-slate-800 border-emerald-500 text-emerald-700 shadow-xs ring-1 ring-emerald-500/20"
+                        : "bg-surface/50 border-border text-text-muted"
+                    }`}
+                  >
+                    Percentage (%)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary mb-1">
+                      {form.token_type === "FIXED_AMOUNT" ? "Fixed Token (₹) *" : "Token Percentage (%) *"}
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      required
+                      className="w-full px-3 py-1.5 rounded-xl border border-border bg-bg text-text-primary text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                      value={form.token_value}
+                      onChange={(e) => setForm({ ...form, token_value: e.target.value })}
+                      placeholder={form.token_type === "FIXED_AMOUNT" ? "50000" : "10"}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-secondary mb-1">Lock Duration (Days) *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      required
+                      className="w-full px-3 py-1.5 rounded-xl border border-border bg-bg text-text-primary text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                      value={form.po_lock_days}
+                      onChange={(e) => setForm({ ...form, po_lock_days: e.target.value, po_validity_days: e.target.value })}
+                      placeholder="30"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                  Token amount auto-adjusts with the franchise&apos;s final loose delivery order.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

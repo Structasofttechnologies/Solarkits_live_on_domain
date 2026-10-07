@@ -79,6 +79,7 @@ router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-
 // ── Franchisee Self-Service PO Ordering Routes ─────────────────────────────
 router.get('/po/plan-settings', verify_reseller_auth, handler.get_my_plan_po_settings);
 router.get('/po/my-orders',     verify_reseller_auth, handler.list_my_po_orders);
+router.get('/po/active-quotas', verify_reseller_auth, handler.get_my_active_po_quotas);
 router.post('/po/create',       verify_reseller_auth, handler.create_my_po_order);
 router.get('/po/detail/:id',    verify_reseller_auth, handler.get_my_po_order_detail);
 router.get('/goals/my-goal',    verify_reseller_auth, handler.get_my_goal_progress);

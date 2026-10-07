@@ -65,7 +65,17 @@ const schema = new mongoose.Schema(
     // ── Approval ─────────────────────────────────────────────────────────────
     requires_approval: { type: Boolean, default: true },
 
-    // ── Payment Terms ─────────────────────────────────────────────────────────
+    // ── Payment & Token Booking Terms ─────────────────────────────────────────
+    token_booking_enabled: { type: Boolean, default: true },
+    token_type: {
+      type: String,
+      enum: ['FIXED_AMOUNT', 'PERCENTAGE'],
+      default: 'FIXED_AMOUNT',
+    },
+    token_value: { type: Number, default: 50000 }, // Fixed ₹ amount (e.g. 50000) or Percentage (e.g. 10)
+    min_token_amount: { type: Number, default: 10000 },
+    po_lock_days: { type: Number, default: 30 },
+
     payment_terms: {
       type: String,
       enum: [

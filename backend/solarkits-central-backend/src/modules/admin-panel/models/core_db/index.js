@@ -62,4 +62,7 @@ module.exports = {
   RegionalCluster: require('./regional_cluster.schema'),
   WarehouseClusterMapping: require('./warehouse_cluster_mapping.schema'),
   WarehouseKitCapability: require('./warehouse_kit_capability.schema'),
+
+  // --- OEM Partner Product Assignment ---
+  OemPartnerProduct: require('./oem_partner_products.schema'),
 };

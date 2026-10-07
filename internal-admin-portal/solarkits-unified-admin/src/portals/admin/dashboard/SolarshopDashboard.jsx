@@ -247,6 +247,12 @@ const menus = [
                     path: "/admin-panel/solar-shop/order-management-settings/admin-supplier-settings",
                     unique_id: "ADM_ORDER_SETTINGS"
                 },
+                // {
+                //     name: "OEM Partner Products",
+                //     icon: <HiCube />,
+                //     path: "/admin-panel/solar-shop/order-management-settings/admin-supplier-settings?tab=oem-products",
+                //     unique_id: "ADM_ORDER_SETTINGS"
+                // },
                 {
                     name: "Kit Display Checklist",
                     icon: <FiCheckSquare />,

@@ -30,6 +30,7 @@ import {
   FiLock,
   FiGrid,
   FiList,
+  FiDollarSign,
 } from "react-icons/fi";
 import { useDispatch } from "react-redux";
 import { authHeaderObj } from "@/app/authHeader";
@@ -58,6 +59,10 @@ const EMPTY_FORM = {
   po_validity_days: "30",
   max_line_items: "50",
   allow_mixed_project_types: true,
+  token_booking_enabled: true,
+  token_type: "FIXED_AMOUNT",
+  token_value: "50000",
+  po_lock_days: "30",
   allowed_industry_type_ids: [],
   allowed_category_ids: [],
   allowed_subcategory_ids: [],
@@ -492,6 +497,10 @@ export default function FranchiseePOSettings() {
       po_validity_days: s.po_validity_days ?? "30",
       max_line_items: s.max_line_items ?? "50",
       allow_mixed_project_types: s.allow_mixed_project_types !== false,
+      token_booking_enabled: s.token_booking_enabled !== false,
+      token_type: s.token_type || "FIXED_AMOUNT",
+      token_value: s.token_value != null ? String(s.token_value) : "50000",
+      po_lock_days: s.po_lock_days != null ? String(s.po_lock_days) : String(s.po_validity_days || "30"),
       allowed_industry_type_ids: indIds,
       allowed_category_ids: catIds,
       allowed_subcategory_ids: subCatIds,
@@ -536,6 +545,10 @@ export default function FranchiseePOSettings() {
         po_validity_days: Number(form.po_validity_days),
         max_line_items: Number(form.max_line_items || 50),
         allow_mixed_project_types: Boolean(form.allow_mixed_project_types),
+        token_booking_enabled: Boolean(form.token_booking_enabled),
+        token_type: form.token_type || "FIXED_AMOUNT",
+        token_value: Number(form.token_value) || 0,
+        po_lock_days: Number(form.po_lock_days || form.po_validity_days || 30),
         requires_approval: true,
         payment_terms: "FULL_ADVANCE",
         contributes_to_monthly_target: true,
@@ -1523,6 +1536,21 @@ export default function FranchiseePOSettings() {
                           </p>
                         </div>
                       </div>
+
+                      {/* Token Amount Booking Summary Strip */}
+                      <div className="p-2.5 rounded-xl border border-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center justify-between text-xs">
+                        <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                          <FiDollarSign size={13} className="text-emerald-600" />
+                          Token Booking:
+                        </span>
+                        <span className="font-extrabold text-emerald-700 dark:text-emerald-300 text-xs">
+                          {s.token_booking_enabled !== false
+                            ? s.token_type === "PERCENTAGE"
+                              ? `${s.token_value || 10}% of PO Value`
+                              : `₹${Number(s.token_value || 50000).toLocaleString("en-IN")} Flat`
+                            : "Disabled (100% Advance)"}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Active Date Range */}
@@ -1945,6 +1973,145 @@ export default function FranchiseePOSettings() {
                       <p className="text-[11px] text-text-muted mt-1">Validity before PO expires</p>
                     </div>
                   </div>
+                </div>
+
+                {/* 4.5 PO Token Amount & Price Lock Setting */}
+                <div className="space-y-4 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                        <FiDollarSign size={16} />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-text-primary">
+                          PO Token Amount Booking Setting
+                        </h4>
+                        <p className="text-[11px] text-text-muted">
+                          Decide how token amount is charged when franchise books a PO order
+                        </p>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer bg-surface border border-border px-3 py-1.5 rounded-xl hover:bg-surface-hover">
+                      <input
+                        type="checkbox"
+                        checked={form.token_booking_enabled}
+                        onChange={(e) => setForm({ ...form, token_booking_enabled: e.target.checked })}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-border cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-text-secondary">
+                        {form.token_booking_enabled ? "Token Booking Active" : "Disabled (Full Payment Required)"}
+                      </span>
+                    </label>
+                  </div>
+
+                  {form.token_booking_enabled && (
+                    <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-500/20 space-y-4">
+                      <div>
+                        <label className="text-xs font-bold text-text-secondary uppercase tracking-wide mb-2 block">
+                          Token Decision Mode (Fixed vs Percentage) *
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, token_type: "FIXED_AMOUNT" })}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                              form.token_type === "FIXED_AMOUNT"
+                                ? "bg-white dark:bg-slate-800 border-emerald-500 shadow-xs ring-1 ring-emerald-500/30"
+                                : "bg-surface/50 border-border opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                              form.token_type === "FIXED_AMOUNT" ? "border-emerald-600 bg-emerald-600" : "border-border"
+                            }`}>
+                              {form.token_type === "FIXED_AMOUNT" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-text-primary">Fixed Amount (₹)</div>
+                              <div className="text-[10px] text-text-muted">Flat booking amount per PO</div>
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, token_type: "PERCENTAGE" })}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                              form.token_type === "PERCENTAGE"
+                                ? "bg-white dark:bg-slate-800 border-emerald-500 shadow-xs ring-1 ring-emerald-500/30"
+                                : "bg-surface/50 border-border opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                              form.token_type === "PERCENTAGE" ? "border-emerald-600 bg-emerald-600" : "border-border"
+                            }`}>
+                              {form.token_type === "PERCENTAGE" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-text-primary">Percentage (%)</div>
+                              <div className="text-[10px] text-text-muted">% of total PO order value</div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-bold text-text-secondary uppercase tracking-wide mb-1.5 block">
+                            {form.token_type === "FIXED_AMOUNT" ? "Fixed Token Amount (₹) *" : "Token Percentage (%) *"}
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted">
+                              {form.token_type === "FIXED_AMOUNT" ? "₹" : "%"}
+                            </span>
+                            <input
+                              required
+                              type="number"
+                              min="1"
+                              className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 font-bold"
+                              value={form.token_value}
+                              onChange={(e) => setForm({ ...form, token_value: e.target.value })}
+                              placeholder={form.token_type === "FIXED_AMOUNT" ? "50000" : "10"}
+                            />
+                          </div>
+                          <p className="text-[10px] text-text-muted mt-1">
+                            {form.token_type === "FIXED_AMOUNT"
+                              ? "Franchise will pay this flat amount to book and lock their PO"
+                              : "Franchise pays this percentage of order value as token"}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold text-text-secondary uppercase tracking-wide mb-1.5 block">
+                            PO Price & Quota Lock Period (Days) *
+                          </label>
+                          <input
+                            required
+                            type="number"
+                            min="1"
+                            max="365"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 font-bold"
+                            value={form.po_lock_days}
+                            onChange={(e) => {
+                              setForm({ ...form, po_lock_days: e.target.value, po_validity_days: e.target.value });
+                            }}
+                            placeholder="30"
+                          />
+                          <p className="text-[10px] text-text-muted mt-1">
+                            Duration for which the kits & prices remain locked (e.g. 30 days / 1 month)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-emerald-800 dark:text-emerald-300 bg-emerald-500/10 p-3 rounded-xl flex items-start gap-2 border border-emerald-500/20">
+                        <FiCheckCircle size={15} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                        <div>
+                          <strong>Token Amount Auto-Adjustment Rule:</strong>
+                          <p className="mt-0.5">
+                            Franchise pays this token amount to book the PO. As loose quantity orders are placed, kits are deducted from the PO quota. The token amount is held and <strong>automatically adjusted on the franchise&apos;s final loose delivery order</strong>.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 5. Rule Effective Date Range */}

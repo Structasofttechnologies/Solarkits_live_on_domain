@@ -13,5 +13,6 @@ router.use('/checkout-cart-settings', require('./solarshop/checkout_cart_setting
 router.use('/loose-order-settings', require('./solarshop/loose_order_settings.route'));
 router.use('/pipeline-status', require('./solarshop/pipeline_status.route'));
 router.use('/cluster-routing', require('./solarshop/cluster_routing.route'));
+router.use('/oem-partner-products', require('./solarshop/oem_partner_products.route'));
 
 module.exports = router
