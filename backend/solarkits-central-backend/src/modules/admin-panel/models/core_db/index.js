@@ -65,4 +65,5 @@ module.exports = {
 
   // --- OEM Partner Product Assignment ---
   OemPartnerProduct: require('./oem_partner_products.schema'),
+  WarehouseKitPartnerMapping: require('./warehouse_kit_partner_mapping.schema'),
 };

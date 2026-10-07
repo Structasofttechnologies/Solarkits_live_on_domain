@@ -14,5 +14,6 @@ router.use('/loose-order-settings', require('./solarshop/loose_order_settings.ro
 router.use('/pipeline-status', require('./solarshop/pipeline_status.route'));
 router.use('/cluster-routing', require('./solarshop/cluster_routing.route'));
 router.use('/oem-partner-products', require('./solarshop/oem_partner_products.route'));
+router.use('/warehouse-partner-mappings', require('./solarshop/warehouse_partner_mappings.route'));
 
 module.exports = router
