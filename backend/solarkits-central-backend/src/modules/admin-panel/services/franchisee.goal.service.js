@@ -310,6 +310,15 @@ async function recalculateProgress(paramsOrId, maybeMonth, maybeYear) {
   return progress;
 }
 
+// In-memory cache for franchisee goal widget (TTL: 60s)
+const goalWidgetCache = new Map();
+const GOAL_WIDGET_CACHE_TTL = 60 * 1000;
+
+function invalidateGoalCache(franchisee_id) {
+  if (!franchisee_id) return;
+  goalWidgetCache.delete(franchisee_id.toString());
+}
+
 /**
  * Get goal widget data for the franchisee dashboard.
  *
@@ -317,6 +326,14 @@ async function recalculateProgress(paramsOrId, maybeMonth, maybeYear) {
  * @returns {Promise<object>}
  */
 async function getGoalWidget(franchisee_id) {
+  const fIdStr = franchisee_id ? franchisee_id.toString() : null;
+  if (fIdStr) {
+    const cached = goalWidgetCache.get(fIdStr);
+    if (cached && Date.now() - cached.timestamp < GOAL_WIDGET_CACHE_TTL) {
+      return cached.data;
+    }
+  }
+
   const now = new Date();
   const month = now.getMonth() + 1;
   const year  = now.getFullYear();
@@ -348,7 +365,7 @@ async function getGoalWidget(franchisee_id) {
 
   const monthName = new Date(year, month - 1, 1).toLocaleString('en-IN', { month: 'long' });
 
-  return {
+  const widgetData = {
     period:          `${monthName} ${year}`,
     target_month:    month,
     target_year:     year,
@@ -367,6 +384,12 @@ async function getGoalWidget(franchisee_id) {
       performance_status: prevProgress.performance_status,
     } : null,
   };
+
+  if (fIdStr) {
+    goalWidgetCache.set(fIdStr, { data: widgetData, timestamp: Date.now() });
+  }
+
+  return widgetData;
 }
 
 /**
@@ -416,5 +439,6 @@ module.exports = {
   recalculateProgress,
   classifyPerformance,
   getGoalWidget,
+  invalidateGoalCache,
   getPerformanceAnalytics,
 };

@@ -32,7 +32,7 @@ const bomItemSnapshotSchema = new mongoose.Schema(
 const schema = new mongoose.Schema(
   {
     // ── Identity & Status ─────────────────────────────────────────────────────
-    estimate_number: { type: String, required: true, trim: true, uppercase: true, index: true },
+    estimate_number: { type: String, required: true, trim: true, uppercase: true },
     title:           { type: String, default: 'Solar Project Margin Estimate', trim: true },
     status: {
       type: String,

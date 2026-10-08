@@ -3194,9 +3194,39 @@ const purchase_and_onboard = async (req, res) => {
 
 // ── Franchisee Self-Service PO Ordering (Phase FPO) ─────────────────────────
 
+// High-speed In-Memory Cache for Plan Settings & Orders
+const planSettingsCache = new Map();
+const PLAN_SETTINGS_CACHE_TTL = 60 * 1000; // 60s
+
+const poOrdersCache = new Map();
+const PO_ORDERS_CACHE_TTL = 15 * 1000; // 15s micro-cache
+
+function clearResellerPoCache(resellerId) {
+  if (!resellerId) return;
+  const idStr = resellerId.toString();
+  planSettingsCache.delete(idStr);
+  poOrdersCache.delete(idStr);
+  try {
+    const { invalidateGoalCache } = require('../../admin-panel/services/franchisee.goal.service');
+    invalidateGoalCache(resellerId);
+  } catch (_e) {}
+}
+
 const get_my_plan_po_settings = async (req, res) => {
   try {
     const resellerId = req.reseller?._id || req.reseller?.id;
+    if (!resellerId) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+
+    const cached = planSettingsCache.get(resellerId.toString());
+    if (cached && Date.now() - cached.timestamp < PLAN_SETTINGS_CACHE_TTL) {
+      return res.status(200).json({
+        status: 'success',
+        data: cached.data,
+      });
+    }
+
     const subscription = await ResellerPlanSubscription.findOne({
       reseller_id: resellerId,
       status: 'active',
@@ -3206,12 +3236,14 @@ const get_my_plan_po_settings = async (req, res) => {
       .lean();
 
     if (!subscription) {
+      const emptyData = {
+        has_active_plan: false,
+        message: 'No active franchise plan subscription found.',
+      };
+      planSettingsCache.set(resellerId.toString(), { data: emptyData, timestamp: Date.now() });
       return res.status(200).json({
         status: 'success',
-        data: {
-          has_active_plan: false,
-          message: 'No active franchise plan subscription found.',
-        },
+        data: emptyData,
       });
     }
 
@@ -3330,16 +3362,23 @@ const get_my_plan_po_settings = async (req, res) => {
     });
     const uniqueKits = Array.from(uniqueKitsMap.values());
 
+    const planResponseData = {
+      has_active_plan: true,
+      subscription,
+      plan,
+      po_settings: poSettingsList[0] || null,
+      po_settings_list: poSettingsList,
+      combo_kits: uniqueKits,
+    };
+
+    planSettingsCache.set(resellerId.toString(), {
+      data: planResponseData,
+      timestamp: Date.now(),
+    });
+
     return res.status(200).json({
       status: 'success',
-      data: {
-        has_active_plan: true,
-        subscription,
-        plan,
-        po_settings: poSettingsList[0] || null,
-        po_settings_list: poSettingsList,
-        combo_kits: uniqueKits,
-      },
+      data: planResponseData,
     });
   } catch (error) {
     console.error('[reseller.portal] get_my_plan_po_settings error:', error);
@@ -3350,11 +3389,28 @@ const get_my_plan_po_settings = async (req, res) => {
 const list_my_po_orders = async (req, res) => {
   try {
     const resellerId = req.reseller?._id || req.reseller?.id;
+    if (!resellerId) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+
+    const cached = poOrdersCache.get(resellerId.toString());
+    if (cached && Date.now() - cached.timestamp < PO_ORDERS_CACHE_TTL) {
+      return res.status(200).json({
+        status: 'success',
+        data: cached.data,
+      });
+    }
+
     const orders = await FpoOrder.find({ franchisee_id: resellerId, deleted_at: null })
       .populate('plan_id', 'name slug territory_level')
       .populate('parent_po_id', 'po_number token_amount_paise token_paid_paise total_booked_quantity remaining_quantity')
       .sort({ created_at: -1 })
       .lean();
+
+    poOrdersCache.set(resellerId.toString(), {
+      data: orders,
+      timestamp: Date.now(),
+    });
 
     return res.status(200).json({
       status: 'success',
@@ -3438,6 +3494,8 @@ const create_my_po_order = async (req, res) => {
       });
     }
 
+    clearResellerPoCache(resellerId);
+
     return res.status(201).json({
       status: 'success',
       message: 'Purchase Order created successfully',
@@ -3469,6 +3527,133 @@ const get_my_po_order_detail = async (req, res) => {
   } catch (error) {
     console.error('[reseller.portal] get_my_po_order_detail error:', error);
     return res.status(500).json({ status: 'error', message: 'Failed to retrieve PO details' });
+  }
+};
+
+const preview_po_penalty = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { id } = req.params;
+
+    const order = await FpoOrder.findOne({ _id: id, franchisee_id: resellerId, deleted_at: null })
+      .populate('plan_id', 'name slug territory_level')
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Purchase order not found' });
+    }
+
+    const { calculatePoPenalty } = require('../../admin-panel/services/po.penalty.service');
+    const committedQty = Number(order.total_booked_quantity || order.total_quantity || order.items?.[0]?.quantity || 0);
+    const purchasedQty = Number(order.fulfilled_quantity || 0);
+    const tokenPaidPaise = Number(order.token_paid_paise || order.token_amount_paise || 0);
+    const tokenAdjustedPaise = Number(order.token_adjusted_total_paise || 0);
+    const unitPricePaise = Number(order.items?.[0]?.unit_price_paise || 4500000);
+
+    const penaltyResult = calculatePoPenalty({
+      committedQty,
+      purchasedQty,
+      tokenPaidPaise,
+      tokenAdjustedPaise,
+      unitPricePaise,
+      penaltyRuleSnapshot: order.penalty_rule_snapshot || order.po_settings_snapshot,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        order,
+        penalty_preview: penaltyResult,
+      },
+    });
+  } catch (error) {
+    console.error('[reseller.portal] preview_po_penalty error:', error);
+    return res.status(500).json({ status: 'error', message: error.message || 'Failed to calculate penalty preview' });
+  }
+};
+
+const request_po_refund = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { id } = req.params;
+    const { bank_details } = req.body;
+
+    const { createPoRefundRequest } = require('../../admin-panel/services/po.refund.service');
+    const refundDoc = await createPoRefundRequest({
+      po_id: id,
+      requester_id: resellerId,
+      requester_role: 'FRANCHISEE',
+      requester_name: req.reseller?.business_name || req.reseller?.contact_person || 'Franchise Partner',
+      requester_phone: req.reseller?.mobile || null,
+      requester_email: req.reseller?.email || null,
+      bank_details: bank_details || {},
+      req,
+    });
+
+    clearResellerPoCache(resellerId);
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Token refund request submitted successfully. Our Accounts team will review and process your payout.',
+      data: refundDoc,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] request_po_refund error:', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to submit refund request' });
+  }
+};
+
+const reorder_against_po = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { id } = req.params;
+    const {
+      items,
+      destination_type,
+      destination_address,
+      destination_pincode,
+      offline_payment,
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Items array is required for reorder' });
+    }
+
+    const { createPoDraft, submitPo } = require('../../admin-panel/services/franchisee.po.service');
+
+    const result = await createPoDraft({
+      franchisee_id: resellerId,
+      items,
+      order_type: 'loose_kit_order',
+      parent_po_id: id,
+      destination_type: destination_type || 'hub_stock',
+      destination_address: destination_address || null,
+      destination_pincode: destination_pincode || null,
+      offline_payment: offline_payment || null,
+      actor_id: resellerId,
+      req,
+    });
+
+    let finalOrder = result.order;
+    if (finalOrder?._id) {
+      finalOrder = await submitPo({
+        po_id: finalOrder._id,
+        franchisee_id: resellerId,
+        actor_id: resellerId,
+        req,
+      });
+    }
+
+    clearResellerPoCache(resellerId);
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Linked reorder placed successfully against PO',
+      data: finalOrder,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] reorder_against_po error:', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to place reorder' });
   }
 };
 
@@ -4030,6 +4215,9 @@ module.exports = {
   get_my_active_po_quotas,
   create_my_po_order,
   get_my_po_order_detail,
+  preview_po_penalty,
+  request_po_refund,
+  reorder_against_po,
   get_my_goal_progress,
   get_current_agreement,
   sign_agreement,

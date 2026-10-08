@@ -33,7 +33,7 @@ export const getUserData = createAsyncThunk(
       const authHeader = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
       const res = await axios.get(`${import.meta.env.VITE_DEVELOPER_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/developer-api'}/user-data`, {
         headers: { Authorization: authHeader },
-        timeout: 7000,
+        timeout: 30000,
       });
 
       dispatch(setAlert({ type: "success", message: "User data loaded successfully" }));

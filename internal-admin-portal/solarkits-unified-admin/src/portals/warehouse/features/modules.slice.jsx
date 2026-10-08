@@ -35,7 +35,7 @@ export const fetchUserModules = createAsyncThunk(
 
       const res = await axios.get(`${import.meta.env.VITE_WAREHOUSE_API_URL || import.meta.env.VITE_API_URL}/user-modules`, {
         headers: { Authorization: token },
-        timeout: 7000,
+        timeout: 30000,
       });
 
       const modules = res.data?.data || [];

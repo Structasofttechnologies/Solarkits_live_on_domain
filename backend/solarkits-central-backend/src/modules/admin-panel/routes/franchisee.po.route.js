@@ -53,10 +53,15 @@ router.post('/assign-vehicle',   check_auth, check_permissions(PERM_EDIT), h.ass
 
 // ── EPC Receipt Verification (Admin Panel) ───────────────────────────────────
 // GET: List all FPO orders that have pending EPC payment receipts
-router.get('/pending-receipts',       check_auth, check_permissions(PERM_VIEW), h.list_pending_epc_receipts);
+router.get('/pending-receipts',             check_auth, check_permissions(PERM_VIEW), h.list_pending_epc_receipts);
 // POST: Verify or reject a specific EPC buyer's payment receipt
-// Body: { po_id, epc_buyer_id, action: 'verify'|'reject', rejection_note? }
-router.post('/verify-epc-receipt',    check_auth, check_permissions(PERM_EDIT), h.verify_epc_receipt);
+router.post('/verify-epc-receipt',          check_auth, check_permissions(PERM_EDIT), h.verify_epc_receipt);
+
+// ── PO Token Refund Requests & Expiry Settlement (Admin Panel) ───────────────
+router.get('/refund-requests',              check_auth, check_permissions(PERM_VIEW), h.list_refund_requests);
+router.post('/refund-requests/:id/approve', check_auth, check_permissions(PERM_EDIT), h.approve_refund_request);
+router.post('/refund-requests/:id/reject',  check_auth, check_permissions(PERM_EDIT), h.reject_refund_request);
+router.post('/:id/settle-expiry',           check_auth, check_permissions(PERM_EDIT), h.settle_po_expiry);
 
 module.exports = router;
 

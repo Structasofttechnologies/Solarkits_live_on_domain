@@ -20,7 +20,7 @@ export const refreshAccessToken = createAsyncThunk(
       const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/auth-api'}/refresh-access-token`, {}, {
         headers,
         withCredentials: true,
-        timeout: ms_conversion('7s'),
+        timeout: ms_conversion('30s'),
       });
       const { token, url_prefix } = res.data || {};
       if (token) {

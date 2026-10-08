@@ -213,7 +213,7 @@ export default function DashboardLayout() {
     : null;
 
   return (
-    <div className="min-h-screen flex font-sans antialiased" style={{ background: "var(--color-bg)", color: "var(--color-text-primary)" }}>
+    <div className="h-screen flex font-sans antialiased overflow-hidden" style={{ background: "var(--color-bg)", color: "var(--color-text-primary)" }}>
 
       {/* Mobile Overlay */}
       <AnimatePresence>
@@ -241,7 +241,7 @@ export default function DashboardLayout() {
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className={`flex flex-col shrink-0 shadow-lg ${isMobile
               ? "fixed top-0 left-0 h-screen z-50 w-64"
-              : "h-screen w-60"
+              : "sticky top-0 h-screen w-60 z-30"
               }`}
             style={{
               background: "var(--color-surface)",
@@ -250,7 +250,7 @@ export default function DashboardLayout() {
           >
             {/* Logo */}
             <div
-              className="flex items-center justify-center p-4 min-h-[100px]"
+              className="flex items-center justify-center p-4 min-h-[100px] shrink-0"
               style={{ borderBottom: "1px solid var(--color-border)" }}
             >
               <img src={logoImg} alt="SolarKits Logo" className="w-28 h-auto" />
@@ -258,7 +258,7 @@ export default function DashboardLayout() {
 
             {/* Reseller info + Verified Partner badge */}
             {reseller && (
-              <div className="px-3 py-2" style={{ borderBottom: "1px solid var(--color-border)" }}>
+              <div className="px-3 py-2 shrink-0" style={{ borderBottom: "1px solid var(--color-border)" }}>
                 <div
                   className="px-3 py-2 rounded-xl flex items-center gap-2"
                   style={{ background: "var(--color-bg)" }}
@@ -309,7 +309,7 @@ export default function DashboardLayout() {
             )}
 
             {/* Navigation */}
-            <div className="flex-1 overflow-y-auto scrollbar-hover py-2">
+            <div className="flex-1 overflow-y-auto scrollbar-hover py-2 min-h-0">
               <ul className="px-2 space-y-1">
                 {filteredNav.map((item, idx) => {
                   const itemKey = item.path || item.name || `nav-${idx}`;
@@ -471,7 +471,7 @@ export default function DashboardLayout() {
             </div>
 
             {/* Logout */}
-            <div className="p-3" style={{ borderTop: "1px solid var(--color-border)" }}>
+            <div className="p-3 shrink-0" style={{ borderTop: "1px solid var(--color-border)" }}>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
@@ -498,11 +498,11 @@ export default function DashboardLayout() {
       </AnimatePresence>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
 
         {/* Header - matches EPC Solar dashboard style */}
         <header
-          className="flex items-center justify-between px-6 py-3 relative z-30 transition-colors duration-200"
+          className="shrink-0 flex items-center justify-between px-6 py-3 relative z-30 transition-colors duration-200"
           style={{
             background: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
@@ -848,7 +848,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Body */}
-        <main className="flex-1 p-6 overflow-y-auto scrollbar-hover" style={{ background: "var(--color-bg)" }}>
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto scrollbar-hover min-h-0" style={{ background: "var(--color-bg)" }}>
           <Outlet context={{ reseller, refreshUser: fetchMe }} />
         </main>
       </div>

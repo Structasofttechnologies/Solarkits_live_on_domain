@@ -512,6 +512,91 @@ const assign_vehicle = async (req, res) => {
   }
 };
 
+const list_refund_requests = async (req, res) => {
+  try {
+    const { status, page, limit, search } = req.query;
+    const { listPoRefundRequests } = require('../services/po.refund.service');
+    const result = await listPoRefundRequests({ status, page, limit, search });
+    return res.status(200).json({
+      status: 'success',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[po.handler] list_refund_requests error:', error.message);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+const approve_refund_request = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approval_notes, payment_method, payment_reference } = req.body;
+    const { approvePoRefundRequest } = require('../services/po.refund.service');
+    const result = await approvePoRefundRequest({
+      request_id: id,
+      admin_user_id: req.user?.id || req.user?._id,
+      admin_name: req.user?.name || req.user?.username || 'Admin',
+      approval_notes,
+      payment_method: payment_method || 'bank_transfer',
+      payment_reference: payment_reference || null,
+      req,
+    });
+    return res.status(200).json({
+      status: 'success',
+      message: payment_reference ? 'Refund processed and marked settled successfully!' : 'Refund request approved.',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[po.handler] approve_refund_request error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+const reject_refund_request = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejection_reason } = req.body;
+    const { rejectPoRefundRequest } = require('../services/po.refund.service');
+    const result = await rejectPoRefundRequest({
+      request_id: id,
+      admin_user_id: req.user?.id || req.user?._id,
+      admin_name: req.user?.name || req.user?.username || 'Admin',
+      rejection_reason,
+      req,
+    });
+    return res.status(200).json({
+      status: 'success',
+      message: 'Refund request rejected.',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[po.handler] reject_refund_request error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
+const settle_po_expiry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const { settleExpiredPo } = require('../services/po.penalty.service');
+    const result = await settleExpiredPo(id, {
+      actor_id: req.user?.id || req.user?._id,
+      actor_type: 'cms_user',
+      note: note || 'Manually settled and expired by Admin',
+      req,
+    });
+    return res.status(200).json({
+      status: 'success',
+      message: 'PO marked expired and penalty settlement calculated successfully.',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[po.handler] settle_po_expiry error:', error.message);
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
   list_po_orders,
   get_po_order,
@@ -528,4 +613,8 @@ module.exports = {
   verify_epc_receipt,
   advance_stage,
   assign_vehicle,
+  list_refund_requests,
+  approve_refund_request,
+  reject_refund_request,
+  settle_po_expiry,
 };

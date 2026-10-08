@@ -26,7 +26,7 @@ const { india_solarshop_db: db } = require('../../admin-panel/config/databases')
 const schema = new mongoose.Schema({
   // ── Rule Identity ─────────────────────────────────────────────────────────
   rule_name:   { type: String, required: true, trim: true, maxlength: 200 },
-  rule_code:   { type: String, required: true, trim: true, uppercase: true, maxlength: 100, unique: true },
+  rule_code:   { type: String, required: true, trim: true, uppercase: true, maxlength: 100 },
   description: { type: String, default: null, trim: true, maxlength: 1000 },
 
   // ── Scope / Priority ──────────────────────────────────────────────────────

@@ -43,7 +43,6 @@ const schema = new mongoose.Schema({
   ticket_number: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     uppercase: true,
     // Format: SKT-2026-000001

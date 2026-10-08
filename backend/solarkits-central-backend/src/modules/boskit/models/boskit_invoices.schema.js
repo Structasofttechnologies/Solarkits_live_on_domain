@@ -22,7 +22,6 @@ const schema = new mongoose.Schema({
   invoice_number: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     uppercase: true,
     // Format: BKI-2026-000001

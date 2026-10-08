@@ -78,7 +78,7 @@ async function autoSeedCustomerAccounts() {
               is_primary: true,
               deleted_at: null
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
           );
         }
       } else {

@@ -27,12 +27,41 @@ dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 // Configure Mongoose global options to eliminate deprecation warning logs
 mongoose.set('returnDocument', 'after');
 
+// Intercept queries to automatically convert deprecated { new: true } to { returnDocument: 'after' }
+const patchDeprecatedOptions = (options) => {
+  if (options && typeof options === 'object') {
+    if (options.new !== undefined) {
+      if (options.new && !options.returnDocument) {
+        options.returnDocument = 'after';
+      }
+      delete options.new;
+    }
+  }
+};
+
+const origFindOneAndUpdate = mongoose.Query.prototype.findOneAndUpdate;
+mongoose.Query.prototype.findOneAndUpdate = function (conditions, update, options, callback) {
+  patchDeprecatedOptions(options);
+  if (this.options) patchDeprecatedOptions(this.options);
+  return origFindOneAndUpdate.call(this, conditions, update, options, callback);
+};
+
+const origFindOneAndReplace = mongoose.Query.prototype.findOneAndReplace;
+mongoose.Query.prototype.findOneAndReplace = function (conditions, replacement, options, callback) {
+  patchDeprecatedOptions(options);
+  if (this.options) patchDeprecatedOptions(this.options);
+  return origFindOneAndReplace.call(this, conditions, replacement, options, callback);
+};
+
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
   console.error('❌ MONGODB_URI environment variable is missing in .env');
 } else {
-  mongoose.connect(MONGODB_URI)
+  mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 15000,
+    socketTimeoutMS: 45000,
+  })
     .then(() => console.log('✅ Connected to Single Unified MongoDB Database'))
     .catch((error) => console.error('❌ MongoDB Connection Error:', error));
 }

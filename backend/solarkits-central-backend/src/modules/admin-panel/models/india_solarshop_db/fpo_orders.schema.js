@@ -151,6 +151,9 @@ const schema = new mongoose.Schema(
     token_amount_paise:    { type: Number, default: 0 },
     token_paid_paise:      { type: Number, default: 0 },
     token_payment_status:  { type: String, enum: ['PENDING', 'PAID', 'ADJUSTED'], default: 'PENDING' },
+    token_settlement_mode: { type: String, enum: ['PRO_RATA', 'FINAL_ORDER', 'UPFRONT'], default: 'PRO_RATA' },
+    token_adjusted_total_paise: { type: Number, default: 0, min: 0 },
+    token_balance_paise:   { type: Number, default: 0, min: 0 },
     total_booked_quantity: { type: Number, default: 0 },
     fulfilled_quantity:    { type: Number, default: 0 },
     remaining_quantity:    { type: Number, default: 0 },
@@ -162,6 +165,27 @@ const schema = new mongoose.Schema(
     is_final_po_settlement:{ type: Boolean, default: false },
     token_adjusted_paise:  { type: Number, default: 0 },
     net_payable_paise:     { type: Number, default: 0 },
+
+    // ── Expiry, Penalty & Settlement Lifecycle ─────────────────────────────────
+    penalty_rule_snapshot:    { type: Object, default: null },
+    applicable_penalty_paise: { type: Number, default: 0, min: 0 },
+    unpurchased_quantity:     { type: Number, default: 0, min: 0 },
+    refundable_token_paise:   { type: Number, default: 0, min: 0 },
+    settlement_status: {
+      type: String,
+      enum: [
+        'ACTIVE',
+        'EXPIRED_PENDING_SETTLEMENT',
+        'SETTLED',
+        'REFUND_REQUESTED',
+        'REFUND_APPROVED',
+        'REFUND_PROCESSED',
+        'REFUND_REJECTED',
+      ],
+      default: 'ACTIVE',
+    },
+    refund_request_id:       { type: mongoose.Schema.Types.ObjectId, ref: 'po_refund_requests', default: null },
+    refund_request_snapshot: { type: Object, default: null },
 
     destination_type: {
       type: String,
@@ -179,18 +203,45 @@ const schema = new mongoose.Schema(
       receipt_url: { type: String, default: null },
     },
 
-    // ── Ownership ─────────────────────────────────────────────────────────────
+    // ── Ownership & Creator Attribution ───────────────────────────────────────
     franchisee_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'resellers',
-      required: true,
+      default: null,
     },
+    epc_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'epc_accounts',
+      default: null,
+    },
+    customer_type: {
+      type: String,
+      enum: ['FRANCHISEE', 'SOLAR_EPC'],
+      default: 'FRANCHISEE',
+    },
+    customer_details: {
+      name:         { type: String, default: null },
+      company_name: { type: String, default: null },
+      gstin:        { type: String, default: null },
+      phone:        { type: String, default: null },
+      email:        { type: String, default: null },
+      address:      { type: String, default: null },
+      state:        { type: String, default: null },
+      district:     { type: String, default: null },
+    },
+    created_by_role: {
+      type: String,
+      enum: ['FRANCHISEE', 'BDE', 'SOLAR_EPC', 'ADMIN', 'SYSTEM'],
+      default: 'FRANCHISEE',
+    },
+    creator_name: { type: String, default: null },
+    creator_code: { type: String, default: null },
 
     // ── Plan Snapshot (immutable after submission) ─────────────────────────────
     plan_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'reseller_plans',
-      required: true,
+      default: null,
     },
     plan_snapshot: { type: Object, default: null }, // Full plan object at creation time
     po_settings_snapshot: { type: Object, default: null }, // PO settings at creation time

@@ -68,6 +68,7 @@ const FranchiseeKitTarget      = require('./franchisee_kit_targets.schema');
 const FranchiseeTargetProgress = require('./franchisee_target_progress.schema');
 const FpoOrder                 = require('./fpo_orders.schema');
 const FpoCommissionLedger      = require('./fpo_commission_ledgers.schema');
+const PoRefundRequest          = require('./po_refund_requests.schema');
 const FranchiseeAlert          = require('./franchisee_alerts.schema');
 const FranchiseeAlertConfig    = require('./franchisee_alert_configs.schema');
 
@@ -186,6 +187,7 @@ module.exports = {
   FranchiseeTargetProgress,
   FpoOrder,
   FpoCommissionLedger,
+  PoRefundRequest,
   FranchiseeAlert,
   FranchiseeAlertConfig,
   // --- Phase BDE: SolarKits BDE System ---

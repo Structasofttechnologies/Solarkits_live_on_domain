@@ -71,6 +71,17 @@ const runScheduler = async () => {
       }
     }
 
+    // 4. Auto-expire and calculate penalty settlement for PO orders past validity
+    try {
+      const { processDailyExpiredPos } = require('../../admin-panel/services/po.penalty.service');
+      const expiredPoSummary = await processDailyExpiredPos();
+      if (expiredPoSummary.processed > 0) {
+        console.log(`⏰ [Scheduler] Automatically processed ${expiredPoSummary.processed} expired POs with penalty calculation.`);
+      }
+    } catch (poErr) {
+      console.error("[Scheduler PO Expiry Error]:", poErr);
+    }
+
   } catch (err) {
     console.error("[Scheduler Error]:", err);
   }

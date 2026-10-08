@@ -30,52 +30,71 @@ const get_user_data = async (req, res) => {
             const isSuperAdmin = role.name === 'Super Admin' || department?.level === 'global';
             if (isSuperAdmin) {
                 const allActivePanels = await CmsPanel.find({ is_active: true, is_deleted: false }).lean();
-                allowedPanels = await Promise.all(allActivePanels.map(async (p) => {
-                    const mappedProducts = await PanelSaaSProduct.find({ panel_id: p._id })
-                        .populate('saas_product_id')
-                        .lean();
+                const allPanelProducts = await PanelSaaSProduct.find({ panel_id: { $in: allActivePanels.map(p => p._id) } })
+                    .populate('saas_product_id')
+                    .lean();
+
+                const panelProductMap = new Map();
+                allPanelProducts.forEach(mp => {
+                    const pKey = mp.panel_id.toString();
+                    if (!panelProductMap.has(pKey)) panelProductMap.set(pKey, []);
+                    if (mp.saas_product_id && mp.saas_product_id.is_active && !mp.saas_product_id.is_deleted) {
+                        panelProductMap.get(pKey).push({
+                            id: mp.saas_product_id._id,
+                            name: mp.saas_product_id.name,
+                            slug: mp.saas_product_id.slug
+                        });
+                    }
+                });
+
+                allowedPanels = allActivePanels.map(p => ({
+                    id: p._id,
+                    name: p.name,
+                    url_prefix: p.url_prefix,
+                    saas_products: panelProductMap.get(p._id.toString()) || []
+                }));
+            } else {
+                const pivotPanels = await RolePanel.find({ role_id: role._id })
+                    .populate('panel_id')
+                    .lean();
+                const validPanels = pivotPanels.filter(p => p.panel_id && !p.panel_id.deleted_at && p.panel_id.is_active !== false);
+                const panelIds = validPanels.map(p => p.panel_id._id);
+
+                const [allPanelProducts, allUserPanels] = await Promise.all([
+                    PanelSaaSProduct.find({ panel_id: { $in: panelIds } }).populate('saas_product_id').lean(),
+                    UserPanel.find({ user_id: userId, panel_id: { $in: panelIds } }).lean()
+                ]);
+
+                const userPanelMap = new Map();
+                allUserPanels.forEach(up => {
+                    userPanelMap.set(up.panel_id.toString(), (up.saas_product_ids || []).map(id => id.toString()));
+                });
+
+                const panelProductMap = new Map();
+                allPanelProducts.forEach(mp => {
+                    const pKey = mp.panel_id.toString();
+                    if (!panelProductMap.has(pKey)) panelProductMap.set(pKey, []);
+                    panelProductMap.get(pKey).push(mp);
+                });
+
+                allowedPanels = validPanels.map(p => {
+                    const pIdStr = p.panel_id._id.toString();
+                    const mappedProducts = panelProductMap.get(pIdStr) || [];
+                    const allowedIds = userPanelMap.get(pIdStr) || [];
+
                     return {
-                        id: p._id,
-                        name: p.name,
-                        url_prefix: p.url_prefix,
+                        id: p.panel_id._id,
+                        name: p.panel_id.name,
+                        url_prefix: p.panel_id.url_prefix,
                         saas_products: mappedProducts
-                            .filter(mp => mp.saas_product_id && mp.saas_product_id.is_active && !mp.saas_product_id.is_deleted)
+                            .filter(mp => mp.saas_product_id && mp.saas_product_id.is_active && !mp.saas_product_id.is_deleted && allowedIds.includes(mp.saas_product_id._id.toString()))
                             .map(mp => ({
                                 id: mp.saas_product_id._id,
                                 name: mp.saas_product_id.name,
                                 slug: mp.saas_product_id.slug
                             }))
                     };
-                }));
-            } else {
-                const pivotPanels = await RolePanel.find({ role_id: role._id })
-                    .populate('panel_id')
-                    .lean();
-                allowedPanels = await Promise.all(
-                    pivotPanels
-                        .filter(p => p.panel_id && !p.panel_id.deleted_at && p.panel_id.is_active !== false)
-                        .map(async (p) => {
-                            const mappedProducts = await PanelSaaSProduct.find({ panel_id: p.panel_id._id })
-                                .populate('saas_product_id')
-                                .lean();
-
-                            const userPanelMapping = await UserPanel.findOne({ user_id: userId, panel_id: p.panel_id._id }).lean();
-                            const allowedIds = (userPanelMapping?.saas_product_ids || []).map(id => id.toString());
-
-                            return {
-                                id: p.panel_id._id,
-                                name: p.panel_id.name,
-                                url_prefix: p.panel_id.url_prefix,
-                                saas_products: mappedProducts
-                                    .filter(mp => mp.saas_product_id && mp.saas_product_id.is_active && !mp.saas_product_id.is_deleted && allowedIds.includes(mp.saas_product_id._id.toString()))
-                                    .map(mp => ({
-                                        id: mp.saas_product_id._id,
-                                        name: mp.saas_product_id.name,
-                                        slug: mp.saas_product_id.slug
-                                    }))
-                            };
-                        })
-                );
+                });
             }
         }
 

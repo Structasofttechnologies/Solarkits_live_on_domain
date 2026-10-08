@@ -89,6 +89,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
       subcategory_id: "",
       type_id: "",
       project_range_id: "",
+      token_settlement_rule: "PRO_RATA",
+      default_penalty_type: "PERCENTAGE",
+      default_penalty_rate: 10,
       is_active: true
     }
   });
@@ -368,6 +371,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
         subcategory_id: "",
         type_id: "",
         project_range_id: "",
+        token_settlement_rule: "PRO_RATA",
+        default_penalty_type: "PERCENTAGE",
+        default_penalty_rate: 10,
         is_active: true
       }
     });
@@ -406,6 +412,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
         subcategory_id: subcategoryId,
         type_id: typeId,
         project_range_id: rangeId,
+        token_settlement_rule: plan.token_settlement_rule || "PRO_RATA",
+        default_penalty_type: plan.default_penalty_type || "PERCENTAGE",
+        default_penalty_rate: plan.default_penalty_rate != null ? plan.default_penalty_rate : 10,
         is_active: plan.is_active
       }
     });
@@ -435,6 +444,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
       subcategory_id,
       type_id,
       project_range_id,
+      token_settlement_rule,
+      default_penalty_type,
+      default_penalty_rate,
       is_active
     } = formDialog.data;
 
@@ -510,6 +522,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
           subcategory_id,
           type_id,
           project_range_id: project_range_id || null,
+          token_settlement_rule: token_settlement_rule || "PRO_RATA",
+          default_penalty_type: default_penalty_type || "PERCENTAGE",
+          default_penalty_rate: default_penalty_rate != null ? Number(default_penalty_rate) : 10,
           disabled_kits: initialDisabledKits
         };
         const response = await axios.post(
@@ -558,6 +573,9 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
           subcategory_id,
           type_id,
           project_range_id: project_range_id || null,
+          token_settlement_rule: token_settlement_rule || "PRO_RATA",
+          default_penalty_type: default_penalty_type || "PERCENTAGE",
+          default_penalty_rate: default_penalty_rate != null ? Number(default_penalty_rate) : 10,
           is_active,
           disabled_kits: updatedDisabledKits
         };
@@ -1294,6 +1312,81 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
               )}
             </div>
           )}
+
+          {/* PO Token Settlement & Expiry Penalty Rules */}
+          <div className="p-4 rounded-2xl bg-surface-hover/40 border-2 border-border/80 space-y-4">
+            <div className="flex items-center justify-between border-b border-border/60 pb-2">
+              <span className="text-text-primary font-black uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <FaFileInvoiceDollar className="text-primary" /> Token Settlement & Expiry Penalty Rules
+              </span>
+              <span className="text-[10px] text-text-muted font-bold">Automated Lifecycle</span>
+            </div>
+
+            {/* Token Settlement Rule */}
+            <div className="space-y-1.5">
+              <label className="text-text-secondary font-bold uppercase tracking-widest text-[10px] block">
+                Repeat Order Token Settlement Mode *
+              </label>
+              <select
+                value={formDialog.data.token_settlement_rule || "PRO_RATA"}
+                onChange={(e) => setFormDialog(prev => ({
+                  ...prev,
+                  data: { ...prev.data, token_settlement_rule: e.target.value }
+                }))}
+                className="w-full px-3 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer focus:outline-none focus:border-primary"
+              >
+                <option value="PRO_RATA">Pro-Rata Settlement (Recommended: Token adjusted proportionally on each repeat kit order)</option>
+                <option value="FINAL_ORDER">Final Fulfillment Settlement (Token held in escrow until last remaining batch)</option>
+                <option value="UPFRONT">Upfront Settlement (100% token adjusted against the very first linked order)</option>
+              </select>
+              <p className="text-[10px] text-text-muted italic">
+                Controls how the initial commitment token is deducted when EPCs or Franchisees reorder kits against this PO card.
+              </p>
+            </div>
+
+            {/* Expiry Penalty Configuration */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1.5">
+                <label className="text-text-secondary font-bold uppercase tracking-widest text-[10px] block">
+                  Default Expiry Penalty Type *
+                </label>
+                <select
+                  value={formDialog.data.default_penalty_type || "PERCENTAGE"}
+                  onChange={(e) => setFormDialog(prev => ({
+                    ...prev,
+                    data: { ...prev.data, default_penalty_type: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer focus:outline-none focus:border-primary"
+                >
+                  <option value="PERCENTAGE">Percentage of Escrow Token (% of unfulfilled value)</option>
+                  <option value="FIXED_PER_KIT">Fixed Penalty per Unpurchased Kit (₹)</option>
+                  <option value="FULL_FORFEIT">100% Token Forfeiture (No refund)</option>
+                </select>
+              </div>
+
+              {formDialog.data.default_penalty_type !== "FULL_FORFEIT" && (
+                <div className="space-y-1.5">
+                  <label className="text-text-secondary font-bold uppercase tracking-widest text-[10px] block">
+                    {formDialog.data.default_penalty_type === "FIXED_PER_KIT"
+                      ? "Penalty Amount per Kit (₹) *"
+                      : "Penalty Rate (%) *"}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step={formDialog.data.default_penalty_type === "FIXED_PER_KIT" ? "100" : "1"}
+                    value={formDialog.data.default_penalty_rate != null ? formDialog.data.default_penalty_rate : 10}
+                    onChange={(e) => setFormDialog(prev => ({
+                      ...prev,
+                      data: { ...prev.data, default_penalty_rate: e.target.value }
+                    }))}
+                    placeholder={formDialog.data.default_penalty_type === "FIXED_PER_KIT" ? "e.g. 5000" : "e.g. 10"}
+                    className="w-full px-3 py-2 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary focus:outline-none focus:border-primary"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Active status for edit mode */}
           {formDialog.mode === "edit" && (

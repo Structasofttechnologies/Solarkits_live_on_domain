@@ -3982,6 +3982,261 @@ const verify_epc_po_payment = async (req, res) => {
   });
 };
 
+// ── SOLAR EPC PURCHASE ORDER LIFECYCLE (Cards, Reorder, Settlement & Refund) ──
+const list_epc_po_orders = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    if (!accountId) {
+      return res.status(401).json({ status: "error", message: "Unauthorized" });
+    }
+
+    const { FpoOrder } = require("../../../admin-panel/models/india_solarshop_db");
+    const orders = await FpoOrder.find({
+      $or: [
+        { epc_id: accountId },
+        { "items.epc_allocations.epc_buyer_id": accountId },
+      ],
+      deleted_at: null,
+    })
+      .populate('franchisee_id', 'business_name mobile email contact_person')
+      .populate('parent_po_id', 'po_number token_amount_paise token_paid_paise total_booked_quantity remaining_quantity')
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.status(200).json({
+      status: "success",
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    console.error("list_epc_po_orders error:", error);
+    return res.status(500).json({ status: "error", success: false, message: error.message });
+  }
+};
+
+const get_epc_active_po_quotas = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    if (!accountId) {
+      return res.status(401).json({ status: "error", message: "Unauthorized" });
+    }
+
+    const { FpoOrder } = require("../../../admin-panel/models/india_solarshop_db");
+    const activePos = await FpoOrder.find({
+      $or: [
+        { epc_id: accountId },
+        { "items.epc_allocations.epc_buyer_id": accountId },
+      ],
+      order_type: { $in: ['po_order', 'bulk_po'] },
+      remaining_quantity: { $gt: 0 },
+      status: { $nin: ['CANCELLED', 'REJECTED', 'EXPIRED'] },
+      deleted_at: null,
+    })
+      .populate('franchisee_id', 'business_name mobile email')
+      .sort({ created_at: -1 })
+      .lean();
+
+    return res.status(200).json({
+      status: "success",
+      success: true,
+      data: activePos,
+    });
+  } catch (error) {
+    console.error("get_epc_active_po_quotas error:", error);
+    return res.status(500).json({ status: "error", success: false, message: error.message });
+  }
+};
+
+const create_epc_po_order = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    if (!accountId) {
+      return res.status(401).json({ status: "error", message: "Unauthorized" });
+    }
+
+    const {
+      items,
+      auto_submit,
+      order_type,
+      po_category,
+      is_token_booking,
+      parent_po_id,
+      destination_type,
+      destination_address,
+      destination_pincode,
+      offline_payment,
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: "error", message: "Items array is required" });
+    }
+
+    const { createPoDraft, submitPo } = require('../../../admin-panel/services/franchisee.po.service');
+
+    const result = await createPoDraft({
+      epc_id: accountId,
+      created_by_role: 'SOLAR_EPC',
+      creator_name: req.user?.name || req.user?.company_name || 'Solar EPC Partner',
+      items,
+      order_type: order_type || 'po_order',
+      po_category: po_category || 'SINGLE_PO',
+      is_token_booking: Boolean(is_token_booking),
+      parent_po_id: parent_po_id || null,
+      destination_type: destination_type || 'direct',
+      destination_address: destination_address || null,
+      destination_pincode: destination_pincode || null,
+      offline_payment: offline_payment || null,
+      actor_id: accountId,
+      req,
+    });
+
+    let finalOrder = result.order;
+    if (auto_submit && finalOrder?._id) {
+      finalOrder = await submitPo({
+        po_id: finalOrder._id,
+        actor_id: accountId,
+        req,
+      });
+    }
+
+    return res.status(201).json({
+      status: "success",
+      message: "EPC Purchase Order created successfully",
+      data: finalOrder,
+    });
+  } catch (error) {
+    console.error("create_epc_po_order error:", error);
+    return res.status(400).json({ status: "error", message: error.message || "Failed to create PO order" });
+  }
+};
+
+const preview_epc_po_penalty = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    const { id } = req.params;
+
+    const { FpoOrder } = require("../../../admin-panel/models/india_solarshop_db");
+    const order = await FpoOrder.findOne({
+      _id: id,
+      $or: [{ epc_id: accountId }, { "items.epc_allocations.epc_buyer_id": accountId }],
+      deleted_at: null,
+    }).lean();
+
+    if (!order) {
+      return res.status(404).json({ status: "error", message: "PO Order not found" });
+    }
+
+    const { calculatePoPenalty } = require('../../../admin-panel/services/po.penalty.service');
+    const committedQty = Number(order.total_booked_quantity || order.total_quantity || order.items?.[0]?.quantity || 0);
+    const purchasedQty = Number(order.fulfilled_quantity || 0);
+    const tokenPaidPaise = Number(order.token_paid_paise || order.token_amount_paise || 0);
+    const tokenAdjustedPaise = Number(order.token_adjusted_total_paise || 0);
+    const unitPricePaise = Number(order.items?.[0]?.unit_price_paise || 4500000);
+
+    const penaltyResult = calculatePoPenalty({
+      committedQty,
+      purchasedQty,
+      tokenPaidPaise,
+      tokenAdjustedPaise,
+      unitPricePaise,
+      penaltyRuleSnapshot: order.penalty_rule_snapshot || order.po_settings_snapshot,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: {
+        order,
+        penalty_preview: penaltyResult,
+      },
+    });
+  } catch (error) {
+    console.error("preview_epc_po_penalty error:", error);
+    return res.status(500).json({ status: "error", message: error.message || "Failed to calculate penalty preview" });
+  }
+};
+
+const request_epc_po_refund = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    const { id } = req.params;
+    const { bank_details } = req.body;
+
+    const { createPoRefundRequest } = require('../../../admin-panel/services/po.refund.service');
+    const refundDoc = await createPoRefundRequest({
+      po_id: id,
+      requester_id: accountId,
+      requester_role: 'SOLAR_EPC',
+      requester_name: req.user?.name || req.user?.company_name || 'Solar EPC Partner',
+      requester_phone: req.user?.whatsapp || req.user?.mobile || null,
+      requester_email: req.user?.email || null,
+      bank_details: bank_details || {},
+      req,
+    });
+
+    return res.status(201).json({
+      status: "success",
+      message: "Refund request submitted successfully. Our Accounts team will process your payout.",
+      data: refundDoc,
+    });
+  } catch (error) {
+    console.error("request_epc_po_refund error:", error);
+    return res.status(400).json({ status: "error", message: error.message || "Failed to submit refund request" });
+  }
+};
+
+const reorder_against_epc_po = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    const { id } = req.params;
+    const {
+      items,
+      destination_type,
+      destination_address,
+      destination_pincode,
+      offline_payment,
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: "error", message: "Items array is required for reorder" });
+    }
+
+    const { createPoDraft, submitPo } = require('../../../admin-panel/services/franchisee.po.service');
+
+    const result = await createPoDraft({
+      epc_id: accountId,
+      created_by_role: 'SOLAR_EPC',
+      creator_name: req.user?.name || req.user?.company_name || 'Solar EPC Partner',
+      items,
+      order_type: 'loose_kit_order',
+      parent_po_id: id,
+      destination_type: destination_type || 'direct',
+      destination_address: destination_address || null,
+      destination_pincode: destination_pincode || null,
+      offline_payment: offline_payment || null,
+      actor_id: accountId,
+      req,
+    });
+
+    let finalOrder = result.order;
+    if (finalOrder?._id) {
+      finalOrder = await submitPo({
+        po_id: finalOrder._id,
+        actor_id: accountId,
+        req,
+      });
+    }
+
+    return res.status(201).json({
+      status: "success",
+      message: "Linked reorder placed successfully against PO",
+      data: finalOrder,
+    });
+  } catch (error) {
+    console.error("reorder_against_epc_po error:", error);
+    return res.status(400).json({ status: "error", message: error.message || "Failed to place reorder" });
+  }
+};
+
 module.exports = {
   get_combo_kits_by_district,
   get_best_seller_kits,
@@ -4019,6 +4274,12 @@ module.exports = {
   get_epc_po_allocations,
   submit_epc_po_receipt,
   verify_epc_po_payment,
+  list_epc_po_orders,
+  get_epc_active_po_quotas,
+  create_epc_po_order,
+  preview_epc_po_penalty,
+  request_epc_po_refund,
+  reorder_against_epc_po,
 };
 
 

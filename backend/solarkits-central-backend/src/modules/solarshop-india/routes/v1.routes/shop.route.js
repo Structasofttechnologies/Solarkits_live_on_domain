@@ -36,7 +36,13 @@ const {
   get_epc_order_invoice_data,
   get_epc_po_allocations,
   submit_epc_po_receipt,
-  verify_epc_po_payment
+  verify_epc_po_payment,
+  list_epc_po_orders,
+  get_epc_active_po_quotas,
+  create_epc_po_order,
+  preview_epc_po_penalty,
+  request_epc_po_refund,
+  reorder_against_epc_po
 } = require("../../controller/v1.handlers/shop.handler");
 
 const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
@@ -101,6 +107,13 @@ router.post("/po-allocations/:poId/upload-receipt", verify_auth, epcReceiptUploa
 // POST body: { epc_buyer_id, action: 'verify'|'reject', rejection_note? }
 router.post("/po-allocations/:poId/verify-epc-receipt", verify_reseller_auth, verify_epc_po_payment);
 
+// ── Direct Solar EPC PO Orders Lifecycle & Reordering ─────────────
+router.get("/po/my-orders", verify_auth, list_epc_po_orders);
+router.get("/po/active-quotas", verify_auth, get_epc_active_po_quotas);
+router.post("/po/create", verify_auth, create_epc_po_order);
+router.get("/po/:id/penalty-preview", verify_auth, preview_epc_po_penalty);
+router.post("/po/:id/request-refund", verify_auth, request_epc_po_refund);
+router.post("/po/:id/reorder", verify_auth, reorder_against_epc_po);
 
 // ── EPC Industry Content Dashboard Routes ─────────────────────────────────────
 // These routes serve industry-aware content to authenticated EPC buyers.

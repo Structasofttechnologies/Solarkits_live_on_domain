@@ -61,7 +61,6 @@ const schema = new mongoose.Schema({
   order_number: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     uppercase: true,
     // Format: BK-2026-000001

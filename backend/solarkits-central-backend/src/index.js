@@ -222,6 +222,16 @@ require('./modules/warehouse-panel/utils/scheduler');
 require('./utils/autoSeedAccounts');
 
 // Start Express unified server
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`🚀 Centralized backend server running on ${ipv4}:${port}`);
 });
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${port} is already in use by another running process.`);
+    console.error(`💡 Tip: Check task manager or kill previous node instance occupying port ${port}.`);
+  } else {
+    console.error(`❌ Server error:`, err);
+  }
+});
+

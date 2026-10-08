@@ -16,7 +16,7 @@ const { india_solarshop_db: db } = require('../../admin-panel/config/databases')
 const schema = new mongoose.Schema({
   // ── 1. Plan Identity ───────────────────────────────────────────────────────
   name:              { type: String, required: true, trim: true, maxlength: 200 },
-  plan_code:         { type: String, required: true, trim: true, uppercase: true, maxlength: 50, unique: true },
+  plan_code:         { type: String, required: true, trim: true, uppercase: true, maxlength: 50 },
   short_description: { type: String, default: null, trim: true, maxlength: 500 },
   description:       { type: String, default: null, trim: true, maxlength: 3000 },
   sort_order:        { type: Number, default: 0 },

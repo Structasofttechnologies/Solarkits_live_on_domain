@@ -126,7 +126,11 @@ const create_po_setting_india = async (req, res) => {
             subcategory_id,
             type_id,
             project_range_id,
-            disabled_kits
+            disabled_kits,
+            token_settlement_rule = 'PRO_RATA',
+            default_penalty_type = 'PERCENTAGE',
+            default_penalty_rate = 10,
+            penalty_rules = []
         } = req.body;
 
         if (!country_id || !state_id || !cluster_id || !warehouse_id || !name || subscription_rate === undefined || order_size === undefined || !order_size_unit_id || !category_id || !subcategory_id || !type_id) {
@@ -192,7 +196,11 @@ const create_po_setting_india = async (req, res) => {
             subcategory_id,
             type_id,
             project_range_id: project_range_id || null,
-            disabled_kits: Array.isArray(disabled_kits) ? disabled_kits : []
+            disabled_kits: Array.isArray(disabled_kits) ? disabled_kits : [],
+            token_settlement_rule: ['PRO_RATA', 'FINAL_ORDER', 'UPFRONT'].includes(token_settlement_rule) ? token_settlement_rule : 'PRO_RATA',
+            default_penalty_type: ['PERCENTAGE', 'FIXED_PER_KIT', 'FULL_FORFEIT'].includes(default_penalty_type) ? default_penalty_type : 'PERCENTAGE',
+            default_penalty_rate: default_penalty_rate != null ? Number(default_penalty_rate) : 10,
+            penalty_rules: Array.isArray(penalty_rules) ? penalty_rules : []
         });
 
         await newSetting.save();
@@ -219,7 +227,11 @@ const update_po_setting_india = async (req, res) => {
             category_id,
             subcategory_id,
             type_id,
-            project_range_id
+            project_range_id,
+            token_settlement_rule,
+            default_penalty_type,
+            default_penalty_rate,
+            penalty_rules
         } = req.body;
 
         if (!id) {
@@ -318,6 +330,24 @@ const update_po_setting_india = async (req, res) => {
         }
 
         if (is_active !== undefined) setting.is_active = is_active;
+        if (token_settlement_rule !== undefined) {
+            if (['PRO_RATA', 'FINAL_ORDER', 'UPFRONT'].includes(token_settlement_rule)) {
+                setting.token_settlement_rule = token_settlement_rule;
+            }
+        }
+        if (default_penalty_type !== undefined) {
+            if (['PERCENTAGE', 'FIXED_PER_KIT', 'FULL_FORFEIT'].includes(default_penalty_type)) {
+                setting.default_penalty_type = default_penalty_type;
+            }
+        }
+        if (default_penalty_rate !== undefined && default_penalty_rate !== null) {
+            setting.default_penalty_rate = Number(default_penalty_rate);
+        }
+        if (penalty_rules !== undefined) {
+            if (Array.isArray(penalty_rules)) {
+                setting.penalty_rules = penalty_rules;
+            }
+        }
         if (disabled_kits !== undefined) {
             if (!Array.isArray(disabled_kits)) {
                 return res.status(400).json({ status: 'error', message: 'disabled_kits must be an array.' });

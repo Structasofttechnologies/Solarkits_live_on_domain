@@ -99,7 +99,12 @@ async function generatePoNumber() {
  * @param {object} [params.req]
  */
 async function createPoDraft({
-  franchisee_id,
+  franchisee_id = null,
+  epc_id = null,
+  created_by_role = 'FRANCHISEE',
+  creator_name = null,
+  creator_code = null,
+  customer_details = null,
   items,
   idempotency_key,
   payment_terms,
@@ -122,91 +127,137 @@ async function createPoDraft({
     }
   }
 
-  const franchisee = await Reseller.findOne({ _id: franchisee_id, deleted_at: null }).lean();
-  if (!franchisee) throw new Error('Franchisee account not found.');
-  if (franchisee.activation_status !== 'active') throw new Error('Franchisee account is not active.');
-  if (!['kyc_verified', 'agreement_pending', 'territory_pending', 'active'].includes(franchisee.reseller_lifecycle_status)) {
-    throw new Error('Franchisee KYC and onboarding must be completed before placing PO orders.');
+  let franchisee = null;
+  let subscription = null;
+  let plan_id = null;
+  let custDetails = customer_details || {};
+
+  if (franchisee_id) {
+    franchisee = await Reseller.findOne({ _id: franchisee_id, deleted_at: null }).lean();
+    if (!franchisee) throw new Error('Franchisee account not found.');
+    if (franchisee.activation_status !== 'active') throw new Error('Franchisee account is not active.');
+    if (!['kyc_verified', 'agreement_pending', 'territory_pending', 'active'].includes(franchisee.reseller_lifecycle_status)) {
+      throw new Error('Franchisee KYC and onboarding must be completed before placing PO orders.');
+    }
+
+    // Active plan subscription
+    subscription = await ResellerPlanSubscription.findOne({
+      reseller_id: franchisee_id,
+      status: 'active',
+    })
+      .sort({ start_date: -1 })
+      .lean();
+    if (!subscription) throw new Error('No active plan subscription found for this franchisee.');
+
+    plan_id = subscription.plan_id;
+    custDetails = {
+      name: franchisee.contact_person || franchisee.name || custDetails.name,
+      company_name: franchisee.business_name || custDetails.company_name,
+      gstin: franchisee.gstin || custDetails.gstin,
+      phone: franchisee.mobile || custDetails.phone,
+      email: franchisee.email || custDetails.email,
+      address: franchisee.registered_address || destination_address || custDetails.address,
+      state: franchisee.state || custDetails.state,
+      district: franchisee.district || custDetails.district,
+    };
+  } else if (epc_id) {
+    const { EpcAccount } = require('../models/india_solarshop_db');
+    const epc = await EpcAccount.findOne({ _id: epc_id, deleted_at: null }).lean();
+    if (!epc) throw new Error('Solar EPC account not found.');
+    custDetails = {
+      name: epc.name || epc.contact_person || custDetails.name,
+      company_name: epc.company_name || custDetails.company_name,
+      gstin: epc.gstin || custDetails.gstin,
+      phone: epc.whatsapp || epc.mobile || custDetails.phone,
+      email: epc.email || custDetails.email,
+      address: epc.address || destination_address || custDetails.address,
+      state: epc.state || custDetails.state,
+      district: epc.district || custDetails.district,
+    };
   }
-
-  // Active plan subscription
-  const subscription = await ResellerPlanSubscription.findOne({
-    reseller_id: franchisee_id,
-    status: 'active',
-  })
-    .sort({ start_date: -1 })
-    .lean();
-  if (!subscription) throw new Error('No active plan subscription found for this franchisee.');
-
-  const plan_id = subscription.plan_id;
 
   // PO settings check
-  const allPlanPoSettings = await FranchiseePlanPoSetting.find({
-    plan_id,
-    is_active: true,
-    po_enabled: true,
-    deleted_at: null,
-  }).lean();
-
-  if (!allPlanPoSettings || allPlanPoSettings.length === 0) {
-    throw new Error('PO ordering is not enabled for your current plan.');
+  let allPlanPoSettings = [];
+  if (plan_id) {
+    allPlanPoSettings = await FranchiseePlanPoSetting.find({
+      plan_id,
+      is_active: true,
+      po_enabled: true,
+      deleted_at: null,
+    }).lean();
   }
 
-  const po_settings = allPlanPoSettings[0];
+  const defaultPoSetting = {
+    po_validity_days: 30,
+    po_lock_days: 30,
+    min_po_quantity: 1,
+    max_line_items: 50,
+    token_booking_enabled: true,
+    token_type: 'FIXED_AMOUNT',
+    token_value: 50000,
+    token_settlement_rule: 'PRO_RATA',
+    default_penalty_type: 'FLAT_PER_UNPURCHASED_KIT',
+    default_penalty_rate: 500,
+    penalty_rules: [],
+  };
+
+  const po_settings = (allPlanPoSettings && allPlanPoSettings.length > 0) ? allPlanPoSettings[0] : defaultPoSetting;
 
   // Validate that items are authorized under the plan's PO settings and category allocations
-  const allIndustryIds = new Set([
-    ...(subscription.plan_id?.allowed_industry_type_ids || []).map(String),
-    ...allPlanPoSettings.flatMap((s) => (s.allowed_industry_type_ids || []).map(String)),
-  ]);
-  const allCategoryIds = new Set([
-    ...(subscription.plan_id?.allowed_category_ids || []).map(String),
-    ...allPlanPoSettings.flatMap((s) => (s.allowed_category_ids || []).map(String)),
-  ]);
-  const allSubcatIds = new Set([
-    ...(subscription.plan_id?.allowed_subcategory_ids || []).map(String),
-    ...allPlanPoSettings.flatMap((s) => (s.allowed_subcategory_ids || []).map(String)),
-  ]);
-  const allProjectTypeIds = new Set([
-    ...(subscription.plan_id?.allowed_project_type_ids || []).map(String),
-    ...allPlanPoSettings.flatMap((s) => (s.allowed_project_type_ids || []).map(String)),
-  ]);
+  if (subscription?.plan_id) {
+    const allIndustryIds = new Set([
+      ...(subscription.plan_id?.allowed_industry_type_ids || []).map(String),
+      ...allPlanPoSettings.flatMap((s) => (s.allowed_industry_type_ids || []).map(String)),
+    ]);
+    const allCategoryIds = new Set([
+      ...(subscription.plan_id?.allowed_category_ids || []).map(String),
+      ...allPlanPoSettings.flatMap((s) => (s.allowed_category_ids || []).map(String)),
+    ]);
+    const allSubcatIds = new Set([
+      ...(subscription.plan_id?.allowed_subcategory_ids || []).map(String),
+      ...allPlanPoSettings.flatMap((s) => (s.allowed_subcategory_ids || []).map(String)),
+    ]);
+    const allProjectTypeIds = new Set([
+      ...(subscription.plan_id?.allowed_project_type_ids || []).map(String),
+      ...allPlanPoSettings.flatMap((s) => (s.allowed_project_type_ids || []).map(String)),
+    ]);
 
-  const authorizedKitIds = new Set();
-  allPlanPoSettings.forEach((s) => {
-    (s.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
-  });
-  (subscription.plan_id?.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
+    const authorizedKitIds = new Set();
+    allPlanPoSettings.forEach((s) => {
+      (s.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
+    });
+    (subscription.plan_id?.allowed_combo_kit_ids || []).forEach((id) => authorizedKitIds.add(String(id)));
 
-  if (allIndustryIds.size > 0) {
-    const { ProjectCategory } = require('../models/core_db');
-    const cats = await ProjectCategory.find({
-      industry_type_id: { $in: Array.from(allIndustryIds) },
-      deleted_at: null,
-    }).select('_id').lean();
-    cats.forEach((c) => allCategoryIds.add(String(c._id)));
-  }
-
-  if (allCategoryIds.size > 0 || allSubcatIds.size > 0 || allProjectTypeIds.size > 0) {
-    const { SolarKit } = require('../models/core_db');
-    const { WarehouseComboKit } = require('../models/india_solarshop_db');
-    const conds = [];
-    if (allCategoryIds.size > 0) conds.push({ category_id: { $in: Array.from(allCategoryIds) } });
-    if (allSubcatIds.size > 0) conds.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
-    if (allProjectTypeIds.size > 0) conds.push({ type_id: { $in: Array.from(allProjectTypeIds) } });
-
-    const matchedDefs = await SolarKit.find({ $or: conds, deleted_at: null }).select('_id').lean();
-    const defIds = matchedDefs.map((d) => d._id);
-    if (defIds.length > 0) {
-      const matchingKits = await WarehouseComboKit.find({ solar_kit_id: { $in: defIds }, is_active: { $ne: false }, deleted_at: null }).select('_id').lean();
-      matchingKits.forEach((k) => authorizedKitIds.add(String(k._id)));
+    if (allIndustryIds.size > 0) {
+      const { ProjectCategory } = require('../models/core_db');
+      const cats = await ProjectCategory.find({
+        industry_type_id: { $in: Array.from(allIndustryIds) },
+        deleted_at: null,
+      }).select('_id').lean();
+      cats.forEach((c) => allCategoryIds.add(String(c._id)));
     }
-  }
 
-  if (authorizedKitIds.size > 0) {
-    for (const item of items) {
-      if (item.kit_id && !authorizedKitIds.has(String(item.kit_id))) {
-        throw new Error(`The selected product "${item.item_name || 'Solar Kit'}" is not assigned for Purchase Orders under your franchise plan.`);
+    if (allCategoryIds.size > 0 || allSubcatIds.size > 0 || allProjectTypeIds.size > 0) {
+      const { SolarKit } = require('../models/core_db');
+      const { WarehouseComboKit } = require('../models/india_solarshop_db');
+      const conds = [];
+      if (allCategoryIds.size > 0) conds.push({ category_id: { $in: Array.from(allCategoryIds) } });
+      if (allSubcatIds.size > 0) conds.push({ subcategory_id: { $in: Array.from(allSubcatIds) } });
+      if (allProjectTypeIds.size > 0) conds.push({ type_id: { $in: Array.from(allProjectTypeIds) } });
+
+      const matchedDefs = await SolarKit.find({ $or: conds, deleted_at: null }).select('_id').lean();
+      const defIds = matchedDefs.map((d) => d._id);
+      if (defIds.length > 0) {
+        const matchingKits = await WarehouseComboKit.find({ solar_kit_id: { $in: defIds }, is_active: { $ne: false }, deleted_at: null }).select('_id').lean();
+        matchingKits.forEach((k) => authorizedKitIds.add(String(k._id)));
+      }
+    }
+
+    if (authorizedKitIds.size > 0) {
+      for (const item of items) {
+        if (item.kit_id && !authorizedKitIds.has(String(item.kit_id))) {
+          throw new Error(`The selected product "${item.item_name || 'Solar Kit'}" is not assigned for Purchase Orders under your franchise plan.`);
+        }
       }
     }
   }
@@ -230,7 +281,7 @@ async function createPoDraft({
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const moq_rule = validationResults[i].moq_rule;
+    const moq_rule = validationResults[i]?.moq_rule;
 
     const tax_paise = Math.round((item.unit_price_paise || 0) * item.quantity * ((item.gst_rate || 0) / 100));
     const total_price_paise = (item.unit_price_paise || 0) * item.quantity + tax_paise;
@@ -239,14 +290,16 @@ async function createPoDraft({
     tax_total_paise += tax_paise;
 
     // Commission snapshot
-    const commissionRule = await resolveCommissionRule(plan_id);
     let commission_method   = null;
     let commission_snapshot = 0;
-    if (commissionRule) {
-      commission_method = commissionRule.commission_method;
-      commission_snapshot = commissionRule.commission_method === 'FIXED_PER_KIT'
-        ? (commissionRule.fixed_amount_per_kit_paise || 0)
-        : (commissionRule.commission_percentage || 0) * 100; // stored as percentage×100 for clarity
+    if (plan_id) {
+      const commissionRule = await resolveCommissionRule(plan_id);
+      if (commissionRule) {
+        commission_method = commissionRule.commission_method;
+        commission_snapshot = commissionRule.commission_method === 'FIXED_PER_KIT'
+          ? (commissionRule.fixed_amount_per_kit_paise || 0)
+          : (commissionRule.commission_percentage || 0) * 100;
+      }
     }
 
     builtItems.push({
@@ -280,9 +333,9 @@ async function createPoDraft({
   const grand_total_paise = subtotal_paise + tax_total_paise;
   const totalItemQty = builtItems.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
   const po_number = await generatePoNumber();
-  const ikey = idempotency_key || `${franchisee_id}-${Date.now()}`;
+  const ikey = idempotency_key || `${franchisee_id || epc_id || 'PO'}-${Date.now()}`;
 
-  const commissionRule = await resolveCommissionRule(plan_id);
+  const commissionRule = plan_id ? await resolveCommissionRule(plan_id) : null;
 
   const po_validity_days = po_settings.po_validity_days || 30;
   const expires_at = new Date(Date.now() + po_validity_days * 24 * 60 * 60 * 1000);
@@ -323,44 +376,95 @@ async function createPoDraft({
     }
   }
 
-  // ── Loose Order PO Linkage & Final Settlement Adjustment ─────────────────────
+  // ── Loose Order PO Linkage & Admin-Configured Token Settlement ────────────────
   let parentPoDoc = null;
   let is_final_po_settlement = false;
   let token_adjusted_paise = 0;
   let net_payable_paise = grand_total_paise;
 
   if (!isPoOrder && parent_po_id) {
-    parentPoDoc = await FpoOrder.findOne({
-      _id: parent_po_id,
-      franchisee_id,
-      deleted_at: null,
-    });
+    const parentQuery = { _id: parent_po_id, deleted_at: null };
+    if (franchisee_id) parentQuery.franchisee_id = franchisee_id;
+    else if (epc_id) parentQuery.epc_id = epc_id;
+
+    parentPoDoc = await FpoOrder.findOne(parentQuery);
 
     if (!parentPoDoc) {
       throw new Error('Linked parent PO order not found or unauthorized.');
     }
 
+    // 1. Strict Expiry & Status Validations
+    if (parentPoDoc.status === 'EXPIRED') {
+      throw new Error(`Cannot reorder against PO ${parentPoDoc.po_number}: This Purchase Order is already EXPIRED.`);
+    }
+    if (['CANCELLED', 'REJECTED', 'COMPLETED'].includes(parentPoDoc.status)) {
+      throw new Error(`Cannot reorder against PO ${parentPoDoc.po_number}: PO status is ${parentPoDoc.status}.`);
+    }
+
+    const now = new Date();
+    const poExpiryDate = parentPoDoc.lock_expires_at || parentPoDoc.expires_at;
+    if (poExpiryDate && now > new Date(poExpiryDate)) {
+      throw new Error(
+        `Cannot reorder against PO ${parentPoDoc.po_number}: The PO validity expired on ${new Date(poExpiryDate).toLocaleDateString('en-IN')}. Please settle or request a refund.`
+      );
+    }
+
+    // 2. Quota Availability Check
     const currentRemaining = parentPoDoc.remaining_quantity != null ? parentPoDoc.remaining_quantity : (parentPoDoc.total_booked_quantity || 0);
     if (totalItemQty > currentRemaining) {
       throw new Error(`Insufficient PO quota! Remaining quota in PO ${parentPoDoc.po_number} is ${currentRemaining} kits, but you requested ${totalItemQty} kits.`);
     }
 
-    // Check if this loose order is the final / last order that exhausts the PO quota
-    if (totalItemQty === currentRemaining) {
+    // 3. Admin-Configured Token Settlement Modes (Pro-rata vs Final Order vs Upfront)
+    const totalCommitted = Number(parentPoDoc.total_booked_quantity || parentPoDoc.items?.[0]?.quantity || 100);
+    const totalTokenPaid = Number(parentPoDoc.token_amount_paise || parentPoDoc.token_paid_paise || 0);
+    const adjustedSoFar = Number(parentPoDoc.token_adjusted_total_paise || 0);
+    const availableToken = Math.max(0, totalTokenPaid - adjustedSoFar);
+    const settlementMode = parentPoDoc.token_settlement_mode || 'PRO_RATA';
+
+    let tokenToAdjust = 0;
+    const isClosingOrder = (totalItemQty === currentRemaining);
+
+    if (isClosingOrder) {
       is_final_po_settlement = true;
-      const parentTokenPaise = parentPoDoc.token_amount_paise || parentPoDoc.token_paid_paise || 0;
-      token_adjusted_paise = Math.min(parentTokenPaise, grand_total_paise);
-      net_payable_paise = Math.max(0, grand_total_paise - token_adjusted_paise);
+      tokenToAdjust = Math.min(availableToken, grand_total_paise);
+    } else if (settlementMode === 'PRO_RATA') {
+      const tokenPerKit = totalCommitted > 0 ? Math.floor(totalTokenPaid / totalCommitted) : 0;
+      tokenToAdjust = Math.min(availableToken, totalItemQty * tokenPerKit, grand_total_paise);
+    } else if (settlementMode === 'UPFRONT') {
+      tokenToAdjust = Math.min(availableToken, grand_total_paise);
+    } else {
+      // FINAL_ORDER only
+      tokenToAdjust = 0;
     }
+
+    token_adjusted_paise = tokenToAdjust;
+    net_payable_paise = Math.max(0, grand_total_paise - tokenToAdjust);
   }
+
+  const penaltyRuleSnapshot = {
+    token_settlement_rule: po_settings.token_settlement_rule || 'PRO_RATA',
+    default_penalty_type:  po_settings.default_penalty_type || 'FLAT_PER_UNPURCHASED_KIT',
+    default_penalty_rate:  Number(po_settings.default_penalty_rate ?? 500),
+    penalty_rules:         po_settings.penalty_rules || [],
+  };
 
   const order = await FpoOrder.create({
     po_number,
     idempotency_key: ikey,
-    franchisee_id,
-    plan_id,
-    plan_snapshot:     subscription,
+    franchisee_id: franchisee_id || null,
+    epc_id: epc_id || null,
+    customer_type: epc_id ? 'SOLAR_EPC' : 'FRANCHISEE',
+    customer_details: custDetails,
+    created_by_role: created_by_role || (epc_id ? 'SOLAR_EPC' : 'FRANCHISEE'),
+    creator_name: creator_name || custDetails.name || null,
+    creator_code: creator_code || null,
+
+    plan_id: plan_id || null,
+    plan_snapshot: subscription,
     po_settings_snapshot: po_settings,
+    penalty_rule_snapshot: penaltyRuleSnapshot,
+    token_settlement_mode: po_settings.token_settlement_rule || 'PRO_RATA',
     industry_type_id:  items[0]?.industry_type_id || null,
     order_type,
     po_category:       po_category || 'SINGLE_PO',
@@ -382,6 +486,8 @@ async function createPoDraft({
     token_amount_paise,
     token_paid_paise,
     token_payment_status,
+    token_adjusted_total_paise: 0,
+    token_balance_paise: token_paid_paise,
     total_booked_quantity,
     remaining_quantity,
     fulfilled_quantity: 0,
@@ -393,8 +499,9 @@ async function createPoDraft({
     token_adjusted_paise,
     net_payable_paise,
 
+    settlement_status: 'ACTIVE',
     status: 'DRAFT',
-    status_history: [{ status: 'DRAFT', changed_by: actor_id, actor_type: actor_id ? 'reseller' : 'system', note: 'PO Draft Created', changed_at: new Date() }],
+    status_history: [{ status: 'DRAFT', changed_by: actor_id, actor_type: actor_id ? (created_by_role === 'ADMIN' ? 'cms_user' : 'reseller') : 'system', note: 'PO Draft Created', changed_at: new Date() }],
     requires_approval:  po_settings.requires_approval !== false,
     commission_rule_id: commissionRule?._id || null,
     commission_rule_snapshot: commissionRule || null,
@@ -403,25 +510,34 @@ async function createPoDraft({
     updated_by: actor_id,
   });
 
-  // If a parent PO was consumed by this loose order, atomically update its quota
+  // If a parent PO was consumed by this repeat order, atomically update its quota & token balance
   if (parentPoDoc) {
+    const prevAdjusted = Number(parentPoDoc.token_adjusted_total_paise || 0);
+    const newAdjusted = prevAdjusted + token_adjusted_paise;
+    const totalToken = Number(parentPoDoc.token_amount_paise || parentPoDoc.token_paid_paise || 0);
+
     parentPoDoc.fulfilled_quantity = (parentPoDoc.fulfilled_quantity || 0) + totalItemQty;
     parentPoDoc.remaining_quantity = Math.max(0, (parentPoDoc.remaining_quantity != null ? parentPoDoc.remaining_quantity : (parentPoDoc.total_booked_quantity || 0)) - totalItemQty);
+    parentPoDoc.token_adjusted_total_paise = newAdjusted;
+    parentPoDoc.token_balance_paise = Math.max(0, totalToken - newAdjusted);
+
     if (!Array.isArray(parentPoDoc.linked_loose_order_ids)) {
       parentPoDoc.linked_loose_order_ids = [];
     }
     parentPoDoc.linked_loose_order_ids.push(order._id);
-    if (is_final_po_settlement) {
+
+    if (parentPoDoc.remaining_quantity === 0) {
       parentPoDoc.token_payment_status = 'ADJUSTED';
-      if (parentPoDoc.remaining_quantity === 0) {
-        parentPoDoc.status = 'COMPLETED';
-      }
+      parentPoDoc.status = 'COMPLETED';
+      parentPoDoc.settlement_status = 'SETTLED';
     }
     await parentPoDoc.save();
   }
 
   const now = new Date();
-  recalculateProgress({ franchisee_id, month: now.getMonth() + 1, year: now.getFullYear(), req }).catch(() => {});
+  if (franchisee_id) {
+    recalculateProgress({ franchisee_id, month: now.getMonth() + 1, year: now.getFullYear(), req }).catch(() => {});
+  }
 
   return { created: true, already_exists: false, order };
 }

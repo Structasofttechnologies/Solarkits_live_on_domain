@@ -77,12 +77,15 @@ router.get('/epc-orders/:id/tracking', verify_reseller_auth, handler.get_epc_ord
 router.post('/checkout/validate', verify_reseller_auth, require('../../../admin-panel/controller/reseller.checkout.handler').validate_checkout);
 
 // ── Franchisee Self-Service PO Ordering Routes ─────────────────────────────
-router.get('/po/plan-settings', verify_reseller_auth, handler.get_my_plan_po_settings);
-router.get('/po/my-orders',     verify_reseller_auth, handler.list_my_po_orders);
-router.get('/po/active-quotas', verify_reseller_auth, handler.get_my_active_po_quotas);
-router.post('/po/create',       verify_reseller_auth, handler.create_my_po_order);
-router.get('/po/detail/:id',    verify_reseller_auth, handler.get_my_po_order_detail);
-router.get('/goals/my-goal',    verify_reseller_auth, handler.get_my_goal_progress);
+router.get('/po/plan-settings',       verify_reseller_auth, handler.get_my_plan_po_settings);
+router.get('/po/my-orders',           verify_reseller_auth, handler.list_my_po_orders);
+router.get('/po/active-quotas',       verify_reseller_auth, handler.get_my_active_po_quotas);
+router.post('/po/create',             verify_reseller_auth, handler.create_my_po_order);
+router.get('/po/detail/:id',          verify_reseller_auth, handler.get_my_po_order_detail);
+router.get('/po/:id/penalty-preview', verify_reseller_auth, handler.preview_po_penalty);
+router.post('/po/:id/request-refund', verify_reseller_auth, handler.request_po_refund);
+router.post('/po/:id/reorder',        verify_reseller_auth, handler.reorder_against_po);
+router.get('/goals/my-goal',          verify_reseller_auth, handler.get_my_goal_progress);
 
 // Bank Details Routes (commission payout account management)
 router.get('/profile/bank-details',  verify_reseller_auth, handler.get_reseller_bank_details);

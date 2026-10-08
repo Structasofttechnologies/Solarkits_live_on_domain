@@ -30,24 +30,24 @@ const MODULE_UID = "RSL_MGMT";
 
 // ─── Status Badge Helpers ───────────────────────────────────────────────────
 const STATUS_CFG = {
-  PAID:                 { label: "Paid",                 bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
-  paid:                 { label: "Paid",                 bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
-  AWAITING_PAYMENT:     { label: "Awaiting Payment",     bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
-  SUBMITTED:            { label: "Submitted",            bg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
-  PENDING_APPROVAL:     { label: "Pending Approval",     bg: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800" },
-  CONFIRMED:            { label: "Confirmed",            bg: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800" },
-  confirmed:            { label: "Confirmed",            bg: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800" },
-  DISPATCHED:           { label: "Dispatched",           bg: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800" },
-  DELIVERED:            { label: "Delivered",            bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
-  delivered:            { label: "Delivered",            bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
-  COMPLETED:            { label: "Completed",            bg: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800" },
-  completed:            { label: "Completed",            bg: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800" },
-  CANCELLED:            { label: "Cancelled",            bg: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" },
-  cancelled:            { label: "Cancelled",            bg: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" },
-  PENDING:              { label: "Pending",              bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
-  pending:              { label: "Pending",              bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
-  RECEIPT_SUBMITTED:    { label: "Receipt Under Review", bg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
-  VERIFIED:             { label: "Verified ✓",           bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
+  PAID: { label: "Paid", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
+  paid: { label: "Paid", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
+  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  SUBMITTED: { label: "Submitted", bg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
+  PENDING_APPROVAL: { label: "Pending Approval", bg: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800" },
+  CONFIRMED: { label: "Confirmed", bg: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800" },
+  confirmed: { label: "Confirmed", bg: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800" },
+  DISPATCHED: { label: "Dispatched", bg: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800" },
+  DELIVERED: { label: "Delivered", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
+  delivered: { label: "Delivered", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
+  COMPLETED: { label: "Completed", bg: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800" },
+  completed: { label: "Completed", bg: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800" },
+  CANCELLED: { label: "Cancelled", bg: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" },
+  cancelled: { label: "Cancelled", bg: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" },
+  PENDING: { label: "Pending", bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  pending: { label: "Pending", bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  RECEIPT_SUBMITTED: { label: "Receipt Under Review", bg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
+  VERIFIED: { label: "Verified ✓", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
 };
 
 function StatusPill({ status }) {
@@ -249,34 +249,30 @@ export default function ResellerOrders({ moduleUniqueId }) {
       <div className="flex border-b border-border">
         <button
           onClick={() => { setActiveTab("po_orders"); setStatusFilter("ALL"); setSearch(""); }}
-          className={`px-6 py-3.5 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${
-            activeTab === "po_orders"
-              ? "border-primary text-primary"
-              : "border-transparent text-text-muted hover:text-text-primary"
-          }`}
+          className={`px-6 py-3.5 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${activeTab === "po_orders"
+            ? "border-primary text-primary"
+            : "border-transparent text-text-muted hover:text-text-primary"
+            }`}
         >
           <FiLayers size={17} />
           Franchisee PO Orders
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
-            activeTab === "po_orders" ? "bg-primary text-white" : "bg-surface-hover text-text-muted"
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === "po_orders" ? "bg-primary text-white" : "bg-surface-hover text-text-muted"
+            }`}>
             {poOrders.length}
           </span>
         </button>
 
         <button
           onClick={() => { setActiveTab("loose_orders"); setStatusFilter("ALL"); setSearch(""); }}
-          className={`px-6 py-3.5 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${
-            activeTab === "loose_orders"
-              ? "border-primary text-primary"
-              : "border-transparent text-text-muted hover:text-text-primary"
-          }`}
+          className={`px-6 py-3.5 text-sm font-bold border-b-2 transition-all flex items-center gap-2.5 cursor-pointer ${activeTab === "loose_orders"
+            ? "border-primary text-primary"
+            : "border-transparent text-text-muted hover:text-text-primary"
+            }`}
         >
           <FiBox size={17} />
           Loose Orders (Direct &amp; EPC)
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
-            activeTab === "loose_orders" ? "bg-primary text-white" : "bg-surface-hover text-text-muted"
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === "loose_orders" ? "bg-primary text-white" : "bg-surface-hover text-text-muted"
+            }`}>
             {looseOrders.length}
           </span>
         </button>
@@ -670,7 +666,7 @@ export default function ResellerOrders({ moduleUniqueId }) {
                     <p className="font-mono text-text-muted text-[10px] mt-0.5">GSTIN: {selectedLooseOrder.buyer?.gstin || "N/A"}</p>
                   </div>
                   <div>
-                    <span className="text-[10px] text-text-muted uppercase font-bold">Attributed Reseller</span>
+                    <span className="text-[10px] text-text-muted uppercase font-bold">Attributed Franchisee</span>
                     {selectedLooseOrder.reseller ? (
                       <>
                         <p className="font-bold text-text-primary mt-0.5">{selectedLooseOrder.reseller.business_name}</p>

@@ -33,6 +33,10 @@ import {
   FiPercent,
   FiCopy,
   FiExternalLink,
+  FiAlertTriangle,
+  FiCornerDownRight,
+  FiCheckSquare,
+  FiArchive,
 } from "react-icons/fi";
 import api from "../services/api";
 
@@ -46,10 +50,16 @@ const STATUS_CONFIG = {
   AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FiDollarSign },
   PARTIALLY_PAID: { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", icon: FiDollarSign },
   PAID: { label: "Paid", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  CONFIRMED: { label: "Confirmed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
   PROCESSING: { label: "Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400", icon: FiRefreshCw },
   DISPATCHED: { label: "Dispatched", bg: "bg-purple-50 dark:bg-purple-900/30", text: "text-purple-600 dark:text-purple-400", icon: FiBox },
   DELIVERED: { label: "Delivered", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
   COMPLETED: { label: "Completed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
+  EXPIRED: { label: "Expired", bg: "bg-rose-50 dark:bg-rose-950/30", text: "text-rose-600 dark:text-rose-400", icon: FiClock },
+  REFUND_REQUESTED: { label: "Refund Requested", bg: "bg-amber-50 dark:bg-amber-950/30", text: "text-amber-600 dark:text-amber-400", icon: FiClock },
+  REFUND_APPROVED: { label: "Refund Approved", bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-600 dark:text-blue-400", icon: FiCheckCircle },
+  REFUND_SETTLED: { label: "Refund Settled", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiDollarSign },
+  REFUND_REJECTED: { label: "Refund Rejected", bg: "bg-rose-50 dark:bg-rose-950/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
   CANCELLED: { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
 };
 
@@ -63,13 +73,369 @@ function StatusBadge({ status }) {
   );
 }
 
+// ── PO Order Card Component (Mandatory 11 Fields + Inline Actions) ───────────
+function PoCardItem({ order, onSelectOrder, onOpenReorder, onOpenRefund }) {
+  const item = order.items?.[0] || {};
+  const isCombine = order.po_category === "COMBINE_PO" || (item.epc_allocations || []).length > 0;
+  const booked = order.total_booked_quantity || order.total_quantity || item.quantity || 0;
+  const fulfilled = order.fulfilled_quantity || 0;
+  const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
+  const progressPct = booked > 0 ? Math.min(100, Math.round((fulfilled / booked) * 100)) : 0;
+
+  const tokenPaidINR = Math.round((order.token_amount_paise || order.token_paid_paise || 0) / 100);
+  const tokenAdjustedINR = Math.round((order.token_adjusted_total_paise || 0) / 100);
+  const tokenBalanceINR = order.token_balance_paise != null
+    ? Math.round(order.token_balance_paise / 100)
+    : Math.max(0, tokenPaidINR - tokenAdjustedINR);
+
+  const settlementMode = order.token_settlement_mode || order.penalty_rule_snapshot?.token_settlement_rule || "PRO_RATA";
+  const expiryDate = order.lock_expires_at || order.expires_at;
+  const isExpired = order.status === "EXPIRED" || (expiryDate && new Date(expiryDate).getTime() < Date.now());
+  const daysLeft = expiryDate
+    ? Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : 30;
+  const validityDays = order.po_settings_snapshot?.po_validity_days || order.po_settings_snapshot?.po_lock_days || 30;
+
+  const penaltyPaise = order.applicable_penalty_paise || 0;
+  const penaltyINR = Math.round(penaltyPaise / 100);
+
+  // Refund Snapshot
+  const refundReq = order.refund_request_snapshot;
+  const hasRefundReq = Boolean(refundReq && refundReq.status);
+
+  // Creator Attribution
+  const isBdeCreated = order.created_by_role === "BDE";
+  const creatorDisplay = isBdeCreated
+    ? `BDE: ${order.creator_name || "Assigned BDE"}${order.creator_code ? ` (${order.creator_code})` : ""}`
+    : "Franchisee Direct";
+
+  // Customer / Hub details
+  const customerName = order.customer_details?.company_name || order.customer_details?.name || "Franchisee Hub";
+  const customerLocation = [order.customer_details?.district, order.customer_details?.state].filter(Boolean).join(", ") || order.customer_details?.phone || "India";
+
+  // Reorder & Refund eligibility
+  const canReorder = remaining > 0 && !isExpired && !["CANCELLED", "REJECTED", "EXPIRED"].includes(order.status);
+  const canRequestRefund = !hasRefundReq && tokenBalanceINR > 0 && (isExpired || remaining === 0);
+
+  return (
+    <div
+      className="rounded-3xl border-2 p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-5 relative overflow-hidden transition-all hover:shadow-lg hover:border-primary/40"
+      style={{
+        background: "var(--color-surface)",
+        borderColor: "var(--color-border)",
+      }}
+    >
+      <div className="space-y-4">
+        {/* Row 1: PO Number, Creator Badge, Category Badge & Status */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono font-black text-sm text-text-primary px-2.5 py-1 rounded-xl bg-surface-hover border border-border">
+              {order.po_number}
+            </span>
+            {/* Created By Badge */}
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
+                isBdeCreated
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
+              }`}
+            >
+              {isBdeCreated ? <FiUsers size={11} /> : <FiShield size={11} />}
+              {creatorDisplay}
+            </span>
+            {isCombine ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                <FiUsers size={11} /> Combine PO ({(item.epc_allocations || []).length} EPCs)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                <FiBox size={11} /> Single PO
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <StatusBadge status={order.status} />
+          </div>
+        </div>
+
+        {/* Row 2: Customer / EPC Details & Created Date */}
+        <div className="p-3 rounded-2xl bg-surface-hover/50 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+              Partner / EPC Details
+            </div>
+            <div className="font-bold text-text-primary text-xs mt-0.5">{customerName}</div>
+            <div className="text-[11px] text-text-muted">{customerLocation}</div>
+          </div>
+          <div className="sm:text-right">
+            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+              Created Date
+            </div>
+            <div className="font-semibold text-text-secondary text-xs mt-0.5">
+              {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Product Name & Committed Quantity */}
+        <div>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black text-text-primary line-clamp-1">
+              {item.item_name || "Solar Combo Kit Package"}
+            </h3>
+            <span className="text-xs font-black text-primary shrink-0 ml-2">
+              {booked} Kits Committed
+            </span>
+          </div>
+          {item.item_code && (
+            <p className="text-[10px] font-mono text-text-muted mt-0.5">Code: {item.item_code}</p>
+          )}
+        </div>
+
+        {/* Row 4: Purchased Qty vs Pending Qty Strip with Visual Progress Bar */}
+        <div
+          className="p-3.5 rounded-2xl border space-y-2.5"
+          style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
+        >
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="space-y-0.5">
+              <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+                📦 Committed
+              </div>
+              <div className="text-sm font-black text-text-primary">{booked} Kits</div>
+            </div>
+
+            <div className="space-y-0.5 border-x border-border/60">
+              <div className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                🚚 Purchased
+              </div>
+              <div className="text-sm font-black text-blue-600 dark:text-blue-400">
+                {fulfilled} ({progressPct}%)
+              </div>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                🟢 Pending
+              </div>
+              <div className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                {remaining} Kits
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full h-2 rounded-full bg-border overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-blue-500 to-emerald-500"
+              style={{ width: `${Math.min(100, Math.max(progressPct, 4))}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Row 5: Token Paid & Amount Adjusted Strip */}
+        <div className="p-3 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
+              <FiDollarSign size={12} /> Token Escrow & Settlement
+            </span>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-600 text-white">
+              {settlementMode === "PRO_RATA" ? "Pro-Rata Settlement" : settlementMode === "FINAL_ORDER" ? "Final Order Settlement" : "Upfront Settlement"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/40 text-center">
+            <div>
+              <div className="text-[10px] text-text-muted">Token Paid</div>
+              <div className="text-xs font-black text-text-primary">₹{tokenPaidINR.toLocaleString("en-IN")}</div>
+            </div>
+            <div className="border-x border-emerald-200/60 dark:border-emerald-800/40">
+              <div className="text-[10px] text-text-muted">Adjusted</div>
+              <div className="text-xs font-black text-blue-600">₹{tokenAdjustedINR.toLocaleString("en-IN")}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-text-muted">In Escrow</div>
+              <div className="text-xs font-black text-emerald-600">₹{tokenBalanceINR.toLocaleString("en-IN")}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 6: PO Validity, Expiry & Days Left */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="p-2.5 rounded-xl border border-border bg-surface-hover/30">
+            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted flex items-center gap-1">
+              <FiCalendar size={11} /> Validity & Expiry
+            </div>
+            <div className="font-black text-text-primary text-xs mt-0.5">
+              {validityDays} Days Validity
+            </div>
+            <div className="text-[10px] text-text-muted truncate">
+              {expiryDate ? `Till ${new Date(expiryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : "Ongoing"}
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl border border-border bg-surface-hover/30">
+            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted flex items-center gap-1">
+              <FiClock size={11} /> Remaining Days
+            </div>
+            <div className="mt-1">
+              {isExpired ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                  🔴 Lock Expired ({Math.abs(daysLeft)}d ago)
+                </span>
+              ) : daysLeft <= 5 ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  🟠 Expiring Soon ({daysLeft}d left)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                  🟢 Active ({daysLeft}d left)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 7: Applicable Penalty & Refund Eligibility & Status */}
+        <div className="p-3 rounded-2xl border border-border/80 bg-surface-hover/40 space-y-1.5 text-xs">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-text-muted font-bold flex items-center gap-1">
+              <FiAlertCircle size={12} className="text-amber-500" /> Applicable Penalty:
+            </span>
+            <span className="font-mono font-black text-text-primary">
+              {penaltyINR > 0 ? (
+                <span className="text-rose-600">₹{penaltyINR.toLocaleString("en-IN")} (Applied)</span>
+              ) : isExpired && remaining > 0 ? (
+                <span className="text-amber-600">₹{Math.min(tokenBalanceINR, remaining * 500).toLocaleString("en-IN")} (Pending Settle)</span>
+              ) : (
+                <span className="text-text-muted">₹500 / kit on unpurchased</span>
+              )}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40">
+            <span className="text-text-muted font-bold flex items-center gap-1">
+              <FiCheckCircle size={12} className="text-primary" /> Refund Status:
+            </span>
+            <span>
+              {hasRefundReq ? (
+                <StatusBadge status={`REFUND_${refundReq.status}`} />
+              ) : isExpired || (remaining === 0 && tokenBalanceINR > 0) ? (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  🎁 Eligible for Refund
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-text-muted">
+                  🔒 Locked in Escrow
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {/* EPC breakdown if Combine PO */}
+        {isCombine && (item.epc_allocations || []).length > 0 && (
+          <div className="space-y-1 pt-1">
+            <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+              EPC Pool Allocations:
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {item.epc_allocations.map((a, i) => (
+                <span
+                  key={i}
+                  className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-surface border border-border text-text-primary"
+                >
+                  {a.company_name || a.buyer_name}: <strong>{a.allocated_quantity} Kits</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Card Action Footer */}
+      <div className="pt-3 border-t border-border flex flex-wrap items-center justify-between gap-2">
+        <button
+          onClick={() => onSelectOrder(order)}
+          className="px-3.5 py-2 rounded-xl text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-surface-hover border border-border transition-all cursor-pointer"
+        >
+          View Full PO
+        </button>
+
+        <div className="flex items-center gap-2">
+          {canRequestRefund && (
+            <button
+              onClick={() => onOpenRefund(order)}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-black bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-all cursor-pointer"
+            >
+              <FiDollarSign size={13} />
+              <span>Request Refund</span>
+            </button>
+          )}
+
+          {canReorder && (
+            <button
+              onClick={() => onOpenReorder(order)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-90 transition-all shadow-md cursor-pointer transform active:scale-95"
+            >
+              <FiPlus size={14} />
+              <span>⚡ Reorder Kits ({remaining} left)</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// SessionStorage Caching Helpers for 0ms Perceived Page Load
+const CACHE_KEYS = {
+  ORDERS: "solarkits_fpo_orders_v2",
+  PLAN: "solarkits_fpo_plan_v2",
+  GOAL: "solarkits_fpo_goal_v2",
+  BUYERS: "solarkits_fpo_buyers_v2",
+};
+
+const getCached = (key, fallback = null) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return fallback;
+    const { data, timestamp } = JSON.parse(raw);
+    if (Date.now() - timestamp < 5 * 60 * 1000) return data;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const setCached = (key, data) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch { }
+};
+
 export default function PoOrder() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [planData, setPlanData] = useState(null);
-  const [epcBuyers, setEpcBuyers] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [goalData, setGoalData] = useState(null);
+
+  // Instant Cache Hydration (0ms initial load if visited previously)
+  const cachedOrders = getCached(CACHE_KEYS.ORDERS, null);
+  const cachedPlan = getCached(CACHE_KEYS.PLAN, null);
+  const cachedGoal = getCached(CACHE_KEYS.GOAL, null);
+
+  const [ordersLoading, setOrdersLoading] = useState(cachedOrders === null);
+  const [planLoading, setPlanLoading] = useState(cachedPlan === null);
+  const [goalLoading, setGoalLoading] = useState(cachedGoal === null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [planData, setPlanData] = useState(cachedPlan);
+  const [epcBuyers, setEpcBuyers] = useState(() => getCached(CACHE_KEYS.BUYERS, []));
+  const [loadingBuyers, setLoadingBuyers] = useState(false);
+  const [orders, setOrders] = useState(cachedOrders || []);
+  const [goalData, setGoalData] = useState(cachedGoal);
   const [viewMode, setViewMode] = useState("card"); // "table" | "card"
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -78,8 +444,12 @@ export default function PoOrder() {
   // Create Order Modal State
   const [createModal, setCreateModal] = useState(false);
   const [poCategory, setPoCategory] = useState("SINGLE_PO"); // "SINGLE_PO" | "COMBINE_PO"
-  const [singlePoQty, setSinglePoQty] = useState(100);
-  const [selectedKitId, setSelectedKitId] = useState("");
+  const [singlePoQty, setSinglePoQty] = useState(() => {
+    return cachedPlan?.combo_kits?.[0]?.min_po_quantity || cachedPlan?.po_settings?.min_po_quantity || 100;
+  });
+  const [selectedKitId, setSelectedKitId] = useState(() => {
+    return cachedPlan?.combo_kits?.[0]?._id || cachedPlan?.combo_kits?.[0]?.id || "";
+  });
   const [allocations, setAllocations] = useState({}); // { [epcBuyerId]: quantity }
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -92,6 +462,34 @@ export default function PoOrder() {
 
   // Detail Modal State
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  // Reorder Modal State
+  const [reorderModal, setReorderModal] = useState(false);
+  const [reorderOrder, setReorderOrder] = useState(null);
+  const [reorderQty, setReorderQty] = useState(1);
+  const [reorderUtr, setReorderUtr] = useState("");
+  const [reorderBank, setReorderBank] = useState("");
+  const [reorderDate, setReorderDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reorderSubmitting, setReorderSubmitting] = useState(false);
+  const [reorderError, setReorderError] = useState("");
+  const [reorderSuccess, setReorderSuccess] = useState(null);
+
+  // Refund Modal State
+  const [refundModal, setRefundModal] = useState(false);
+  const [refundOrder, setRefundOrder] = useState(null);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundPreview, setRefundPreview] = useState(null);
+  const [refundForm, setRefundForm] = useState({
+    account_holder_name: "",
+    bank_name: "",
+    account_number: "",
+    confirm_account_number: "",
+    ifsc_code: "",
+    notes: ""
+  });
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundError, setRefundError] = useState("");
+  const [refundSuccess, setRefundSuccess] = useState(null);
 
   // Escrow Bank Details for Token Booking
   const escrowBank = {
@@ -109,44 +507,97 @@ export default function PoOrder() {
     setTimeout(() => setCopiedField(""), 2000);
   };
 
-  // ── Fetch Plan PO Settings & Orders ──────────────────────────────────────────
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // ── 1. Orders Fetch (Fastest: ~30ms, renders PO cards/tables immediately) ──
+  const fetchOrders = useCallback(async (isSilent = false) => {
+    if (!isSilent && orders.length === 0) setOrdersLoading(true);
     try {
-      const [settingsRes, buyersRes, ordersRes, goalRes] = await Promise.all([
-        api.get("/india/v1/reseller/po/plan-settings").catch(() => ({ data: { status: "error" } })),
-        api.get("/india/v1/reseller/epc-buyers/list").catch(() => ({ data: { data: [] } })),
-        api.get("/india/v1/reseller/po/my-orders").catch(() => ({ data: { data: [] } })),
-        api.get("/india/v1/reseller/goals/my-goal").catch(() => ({ data: { data: null } })),
-      ]);
-
-      if (settingsRes.data?.status === "success") {
-        setPlanData(settingsRes.data.data);
-        if (settingsRes.data.data?.combo_kits?.length > 0) {
-          const firstKit = settingsRes.data.data.combo_kits[0];
-          setSelectedKitId(firstKit._id || firstKit.id);
-          const minQ = firstKit.min_po_quantity || settingsRes.data.data.po_settings?.min_po_quantity || 100;
-          setSinglePoQty(minQ);
-        }
-      }
-      if (buyersRes.data?.status === "success") {
-        setEpcBuyers(buyersRes.data.data || []);
-      }
-      if (ordersRes.data?.status === "success") {
-        setOrders(ordersRes.data.data || []);
-      }
-      if (goalRes.data?.status === "success" && goalRes.data.data) {
-        setGoalData(goalRes.data.data);
+      const res = await api.get("/india/v1/reseller/po/my-orders");
+      if (res.data?.status === "success" && Array.isArray(res.data.data)) {
+        setOrders(res.data.data);
+        setCached(CACHE_KEYS.ORDERS, res.data.data);
       }
     } catch (err) {
-      console.error("Failed to load PO order context:", err);
+      console.error("Failed to load PO orders:", err);
     } finally {
-      setLoading(false);
+      setOrdersLoading(false);
+    }
+  }, [orders.length]);
+
+  // ── 2. Plan Settings Fetch (Runs in parallel, doesn't block orders) ─────────
+  const fetchPlanSettings = useCallback(async (isSilent = false) => {
+    if (!isSilent && !planData) setPlanLoading(true);
+    try {
+      const res = await api.get("/india/v1/reseller/po/plan-settings");
+      if (res.data?.status === "success" && res.data.data) {
+        setPlanData(res.data.data);
+        setCached(CACHE_KEYS.PLAN, res.data.data);
+        if (res.data.data?.combo_kits?.length > 0) {
+          const firstKit = res.data.data.combo_kits[0];
+          setSelectedKitId((prev) => prev || (firstKit._id || firstKit.id));
+          const minQ = firstKit.min_po_quantity || res.data.data.po_settings?.min_po_quantity || 100;
+          setSinglePoQty((prev) => (prev && prev !== 100 ? prev : minQ));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load plan settings:", err);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [planData]);
+
+  // ── 3. Goal Progress Fetch (Runs in parallel, doesn't block orders) ──────────
+  const fetchGoal = useCallback(async () => {
+    try {
+      const res = await api.get("/india/v1/reseller/goals/my-goal");
+      if (res.data?.status === "success" && res.data.data) {
+        setGoalData(res.data.data);
+        setCached(CACHE_KEYS.GOAL, res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to load goal:", err);
+    } finally {
+      setGoalLoading(false);
     }
   }, []);
 
+  // ── 4. EPC Buyers Fetch (Deferred / On-Demand for Create Modal) ──────────────
+  const fetchBuyers = useCallback(async () => {
+    if (epcBuyers.length > 0) return;
+    setLoadingBuyers(true);
+    try {
+      const res = await api.get("/india/v1/reseller/epc-buyers/list");
+      if (res.data?.status === "success" && Array.isArray(res.data.data)) {
+        setEpcBuyers(res.data.data);
+        setCached(CACHE_KEYS.BUYERS, res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to load EPC buyers:", err);
+    } finally {
+      setLoadingBuyers(false);
+    }
+  }, [epcBuyers.length]);
+
+  // ── Unified Refresh Handler ────────────────────────────────────────────────
+  const fetchData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsRefreshing(true);
+    try {
+      await Promise.allSettled([
+        fetchOrders(isSilent),
+        fetchPlanSettings(isSilent),
+        fetchGoal(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchOrders, fetchPlanSettings, fetchGoal]);
+
   useEffect(() => {
-    fetchData();
+    fetchData(Boolean(cachedOrders && cachedPlan));
+
+    // Prefetch buyers quietly in the background after initial paint
+    const timer = setTimeout(() => {
+      fetchBuyers();
+    }, 1500);
 
     // Real-time listener for ICICI PO payments
     const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -155,7 +606,7 @@ export default function PoOrder() {
     try {
       const saved = localStorage.getItem("reseller_user");
       if (saved) resellerId = JSON.parse(saved)?._id || JSON.parse(saved)?.id;
-    } catch (_e) {}
+    } catch (_e) { }
 
     const streamUrl = `${baseUrl}/api/v1/payments/icici/stream?role=reseller&reseller_id=${resellerId || ""}`;
     const es = new EventSource(streamUrl);
@@ -165,15 +616,22 @@ export default function PoOrder() {
         const data = JSON.parse(event.data);
         if (data.type === "ICICI_PAYMENT_CREDITED") {
           console.log("⚡ PO Orders auto-refreshing on ICICI payment credit:", data);
-          fetchData();
+          fetchData(true);
         }
       } catch (err) {
         console.error(err);
       }
     };
 
-    return () => es.close();
-  }, [fetchData]);
+    es.onerror = () => {
+      // Suppress noisy reconnection logs
+    };
+
+    return () => {
+      clearTimeout(timer);
+      es.close();
+    };
+  }, [fetchData, fetchBuyers, cachedOrders, cachedPlan]);
 
   // Active Kit Object
   const selectedKit = useMemo(() => {
@@ -348,12 +806,12 @@ export default function PoOrder() {
         items: [itemPayload],
         offline_payment: utrNumber.trim()
           ? {
-              payment_method: "offline_bank_transfer",
-              utr_number: utrNumber.trim().toUpperCase(),
-              amount_paid: calculatedTokenAmountINR,
-              payment_date: paymentDate,
-              sender_bank_name: senderBankName || "Bank Transfer",
-            }
+            payment_method: "offline_bank_transfer",
+            utr_number: utrNumber.trim().toUpperCase(),
+            amount_paid: calculatedTokenAmountINR,
+            payment_date: paymentDate,
+            sender_bank_name: senderBankName || "Bank Transfer",
+          }
           : null,
         auto_submit: true,
       };
@@ -364,6 +822,10 @@ export default function PoOrder() {
         setCreateModal(false);
         setAllocations({});
         setUtrNumber("");
+        try {
+          sessionStorage.removeItem(CACHE_KEYS.ORDERS);
+          sessionStorage.removeItem(CACHE_KEYS.GOAL);
+        } catch {}
         fetchData();
       } else {
         setFormError(res.data?.message || "Failed to submit Purchase Order.");
@@ -372,6 +834,165 @@ export default function PoOrder() {
       setFormError(err.response?.data?.message || "Failed to submit Purchase Order.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── Reorder from PO Handlers ───────────────────────────────────────────────
+  const handleOpenReorderModal = (order) => {
+    setReorderOrder(order);
+    const booked = order.total_booked_quantity || order.total_quantity || order.items?.[0]?.quantity || 1;
+    const fulfilled = order.fulfilled_quantity || 0;
+    const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(1, booked - fulfilled);
+    setReorderQty(Math.min(1, remaining));
+    setReorderUtr("");
+    setReorderBank("");
+    setReorderDate(new Date().toISOString().slice(0, 10));
+    setReorderError("");
+    setReorderSuccess(null);
+    setReorderModal(true);
+  };
+
+  const handleSubmitReorder = async (e) => {
+    e.preventDefault();
+    setReorderError("");
+    if (!reorderUtr.trim()) {
+      setReorderError("Please enter the UTR / Payment Transaction reference number.");
+      return;
+    }
+
+    const item = reorderOrder?.items?.[0] || {};
+    const unitPriceINR = (item.unit_price_paise || 0) / 100;
+    const gstRate = item.gst_rate || 13.85;
+    const subtotal = reorderQty * unitPriceINR;
+    const grossTotal = Math.round(subtotal + subtotal * (gstRate / 100));
+
+    const totalCommitted = Number(reorderOrder?.total_booked_quantity || item.quantity || 100);
+    const totalToken = Math.round((reorderOrder?.token_amount_paise || reorderOrder?.token_paid_paise || 0) / 100);
+    const adjustedSoFar = Math.round((reorderOrder?.token_adjusted_total_paise || 0) / 100);
+    const availableToken = Math.max(0, totalToken - adjustedSoFar);
+    const settlementMode = reorderOrder?.token_settlement_mode || reorderOrder?.penalty_rule_snapshot?.token_settlement_rule || "PRO_RATA";
+    const currentRemaining = reorderOrder?.remaining_quantity != null ? reorderOrder.remaining_quantity : totalCommitted;
+
+    let tokenAdjusted = 0;
+    if (reorderQty === currentRemaining) {
+      tokenAdjusted = Math.min(availableToken, grossTotal);
+    } else if (settlementMode === "PRO_RATA") {
+      const perKit = totalCommitted > 0 ? Math.floor(totalToken / totalCommitted) : 0;
+      tokenAdjusted = Math.min(availableToken, reorderQty * perKit, grossTotal);
+    } else if (settlementMode === "UPFRONT") {
+      tokenAdjusted = Math.min(availableToken, grossTotal);
+    }
+
+    const netPayable = Math.max(0, grossTotal - tokenAdjusted);
+
+    setReorderSubmitting(true);
+    try {
+      const payload = {
+        quantity: reorderQty,
+        kit_id: item.kit_id || item.product_id,
+        offline_payment: {
+          payment_method: "offline_bank_transfer",
+          utr_number: reorderUtr.trim().toUpperCase(),
+          amount_paid: netPayable,
+          payment_date: reorderDate,
+          sender_bank_name: reorderBank || "Bank Transfer",
+        },
+      };
+
+      const res = await api.post(`/india/v1/reseller/po/${reorderOrder._id}/reorder`, payload);
+      if (res.data?.status === "success") {
+        setReorderSuccess({
+          orderNumber: res.data.data?.order?.po_number,
+          adjusted: res.data.data?.token_adjustment?.token_adjusted_inr,
+          payable: res.data.data?.token_adjustment?.net_payable_inr,
+        });
+        try {
+          sessionStorage.removeItem(CACHE_KEYS.ORDERS);
+        } catch {}
+        fetchOrders(true);
+      } else {
+        setReorderError(res.data?.message || "Failed to create repeat order.");
+      }
+    } catch (err) {
+      setReorderError(err.response?.data?.message || "Failed to create repeat order.");
+    } finally {
+      setReorderSubmitting(false);
+    }
+  };
+
+  // ── Refund Request Handlers ────────────────────────────────────────────────
+  const handleOpenRefundModal = async (order) => {
+    setRefundOrder(order);
+    setRefundError("");
+    setRefundSuccess(null);
+    setRefundForm({
+      account_holder_name: order.customer_details?.name || order.customer_details?.company_name || "",
+      bank_name: "",
+      account_number: "",
+      confirm_account_number: "",
+      ifsc_code: "",
+      notes: "PO quota completion / validity settlement",
+    });
+    setRefundModal(true);
+    setRefundLoading(true);
+
+    try {
+      const res = await api.get(`/india/v1/reseller/po/${order._id}/penalty-preview`);
+      if (res.data?.status === "success") {
+        setRefundPreview(res.data.data);
+      } else {
+        setRefundError(res.data?.message || "Unable to load penalty preview.");
+      }
+    } catch (err) {
+      setRefundError(err.response?.data?.message || "Unable to load penalty preview.");
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  const handleSubmitRefund = async (e) => {
+    e.preventDefault();
+    setRefundError("");
+
+    if (!refundForm.account_number.trim()) {
+      setRefundError("Please enter your bank account number.");
+      return;
+    }
+    if (refundForm.account_number.trim() !== refundForm.confirm_account_number.trim()) {
+      setRefundError("Account number and confirmation do not match.");
+      return;
+    }
+    if (!refundForm.ifsc_code.trim()) {
+      setRefundError("Please enter your bank IFSC code.");
+      return;
+    }
+
+    setRefundSubmitting(true);
+    try {
+      const payload = {
+        bank_details: {
+          account_holder_name: refundForm.account_holder_name.trim(),
+          bank_name: refundForm.bank_name.trim(),
+          account_number: refundForm.account_number.trim(),
+          ifsc_code: refundForm.ifsc_code.trim().toUpperCase(),
+        },
+        reason: refundForm.notes.trim(),
+      };
+
+      const res = await api.post(`/india/v1/reseller/po/${refundOrder._id}/request-refund`, payload);
+      if (res.data?.status === "success") {
+        setRefundSuccess("Refund request submitted successfully! Accounts team will review and process payout.");
+        try {
+          sessionStorage.removeItem(CACHE_KEYS.ORDERS);
+        } catch {}
+        fetchOrders(true);
+      } else {
+        setRefundError(res.data?.message || "Failed to submit refund request.");
+      }
+    } catch (err) {
+      setRefundError(err.response?.data?.message || "Failed to submit refund request.");
+    } finally {
+      setRefundSubmitting(false);
     }
   };
 
@@ -448,15 +1069,16 @@ export default function PoOrder() {
 
           <div className="flex flex-wrap items-center gap-3">
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(false)}
               className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
               title="Refresh Data"
             >
-              <FiRefreshCw size={17} className={loading ? "animate-spin" : ""} />
+              <FiRefreshCw size={17} className={isRefreshing || ordersLoading || planLoading ? "animate-spin" : ""} />
             </button>
             <button
               onClick={() => {
                 setFormError("");
+                fetchBuyers();
                 setCreateModal(true);
               }}
               disabled={!planData?.has_active_plan}
@@ -482,11 +1104,10 @@ export default function PoOrder() {
                   {goalData.period || "Monthly Target Goal"}
                 </span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                    (goalData.achievement_pct || 0) >= 100
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${(goalData.achievement_pct || 0) >= 100
                       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
                       : "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
-                  }`}
+                    }`}
                 >
                   {goalData.achievement_pct || 0}% Achieved
                 </span>
@@ -507,9 +1128,8 @@ export default function PoOrder() {
             </div>
             <div className="h-2.5 w-full bg-bg rounded-full overflow-hidden p-0.5 border border-border">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  (goalData.achievement_pct || 0) >= 100 ? "bg-emerald-500" : "bg-blue-600"
-                }`}
+                className={`h-full rounded-full transition-all duration-500 ${(goalData.achievement_pct || 0) >= 100 ? "bg-emerald-500" : "bg-blue-600"
+                  }`}
                 style={{ width: `${Math.min(Math.max(goalData.achievement_pct || 0, 4), 100)}%` }}
               />
             </div>
@@ -518,7 +1138,22 @@ export default function PoOrder() {
       )}
 
       {/* ── Active Plan & Dynamic Token Policy Context Strip ─────────────────── */}
-      {planData?.has_active_plan ? (
+      {planLoading && !planData ? (
+        <div
+          className="rounded-2xl p-4 sm:p-5 border shadow-xs animate-pulse"
+          style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 w-20 bg-slate-200 dark:bg-slate-700/60 rounded" />
+                <div className="h-5 w-28 bg-slate-200 dark:bg-slate-700/60 rounded" />
+                <div className="h-3 w-16 bg-slate-200 dark:bg-slate-700/60 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : planData?.has_active_plan ? (
         <div
           className="rounded-2xl p-4 sm:p-5 border shadow-xs"
           style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
@@ -612,173 +1247,15 @@ export default function PoOrder() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeQuotas.map((order) => {
-              const item = order.items?.[0] || {};
-              const isCombine = order.po_category === "COMBINE_PO" || (item.epc_allocations || []).length > 0;
-              const booked = order.total_booked_quantity || order.total_quantity || item.quantity || 0;
-              const fulfilled = order.fulfilled_quantity || 0;
-              const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
-              const progressPct = booked > 0 ? Math.min(100, Math.round((fulfilled / booked) * 100)) : 0;
-
-              const tokenPaise = order.token_amount_paise || order.token_paid_paise || 0;
-              const tokenINR = Math.round(tokenPaise / 100);
-
-              const expiryDate = order.lock_expires_at || order.expires_at;
-              const daysLeft = expiryDate
-                ? Math.max(0, Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24)))
-                : 30;
-
-              return (
-                <div
-                  key={order._id}
-                  className="rounded-3xl border-2 p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-5 relative overflow-hidden transition-all hover:shadow-md"
-                  style={{
-                    background: "var(--color-surface)",
-                    borderColor: "var(--color-border)",
-                  }}
-                >
-                  <div className="space-y-4">
-                    {/* Card Top: PO Number, Badges, Lock Timer */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-sm text-text-primary">
-                          {order.po_number}
-                        </span>
-                        {isCombine ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                            <FiUsers size={11} /> Combine PO ({(item.epc_allocations || []).length} EPCs)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                            <FiBox size={11} /> Single PO (Hub Stock)
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                        <FiClock size={11} /> {daysLeft > 0 ? `Locked • ${daysLeft}d left` : "Lock Expired"}
-                      </div>
-                    </div>
-
-                    {/* Product Name */}
-                    <div>
-                      <h3 className="text-sm font-black text-text-primary line-clamp-1">
-                        {item.item_name || "Solar Combo Kit Package"}
-                      </h3>
-                      <p className="text-[11px] text-text-muted mt-0.5">
-                        Locked on {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-
-                    {/* Quota Progress Visualizer */}
-                    <div
-                      className="p-4 rounded-2xl border space-y-3"
-                      style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
-                    >
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="space-y-0.5">
-                          <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
-                            📦 Total Booked
-                          </div>
-                          <div className="text-sm font-black text-text-primary">{booked} Kits</div>
-                        </div>
-
-                        <div className="space-y-0.5 border-x border-border/60">
-                          <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
-                            🚚 Ordered (Loose)
-                          </div>
-                          <div className="text-sm font-black text-blue-600 dark:text-blue-400">
-                            {fulfilled} Kits ({progressPct}%)
-                          </div>
-                        </div>
-
-                        <div className="space-y-0.5">
-                          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                            🟢 Remaining Quota
-                          </div>
-                          <div className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                            {remaining} Kits
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Progress Bar */}
-                      <div className="w-full h-2 rounded-full bg-border overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-blue-500 to-emerald-500"
-                          style={{ width: `${Math.min(100, Math.max(progressPct, 4))}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Financial & Token Escrow Box */}
-                    {tokenINR > 0 && (
-                      <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                        <div className="space-y-0.5">
-                          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-                            <FiDollarSign size={12} /> Token Deposit in Escrow
-                          </div>
-                          <div className="text-sm font-black text-emerald-700 dark:text-emerald-300">
-                            ₹{tokenINR.toLocaleString("en-IN")}{" "}
-                            <span className="text-[10px] font-semibold text-text-muted">
-                              ({order.token_payment_status === "ADJUSTED" ? "Settled & Credited" : "Held in Safe Escrow"})
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-text-muted">
-                            Auto-adjusted when you order your final remaining <strong>{remaining} kits</strong>.
-                          </div>
-                        </div>
-
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs shrink-0">
-                          {order.token_payment_status === "ADJUSTED" ? "ADJUSTED ✓" : "LOCKED & SECURED"}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* EPC Breakdown (if Combine PO) */}
-                    {isCombine && (item.epc_allocations || []).length > 0 && (
-                      <div className="space-y-1.5 pt-1">
-                        <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
-                          EPC Contractor Pool Breakdown:
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.epc_allocations.map((a, i) => (
-                            <span
-                              key={i}
-                              className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-surface border border-border text-text-primary"
-                            >
-                              {a.company_name || a.buyer_name}: <strong>{a.allocated_quantity} Kits</strong>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Action Buttons */}
-                  <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
-                    <button
-                      onClick={() => setSelectedOrder(order)}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-surface-hover border border-border transition-all cursor-pointer"
-                    >
-                      View Full PO
-                    </button>
-
-                    <Link
-                      to={`/loose-order?po_id=${order._id}`}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-90 transition-all shadow-md cursor-pointer"
-                    >
-                      <FiPlus size={14} />
-                      <span>Draw Loose Order ({remaining} left)</span>
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+            {activeQuotas.map((order) => (
+              <PoCardItem
+                key={order._id}
+                order={order}
+                onSelectOrder={setSelectedOrder}
+                onOpenReorder={handleOpenReorderModal}
+                onOpenRefund={handleOpenRefundModal}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -787,11 +1264,10 @@ export default function PoOrder() {
       <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-surface border border-border shadow-2xs overflow-x-auto">
         <button
           onClick={() => setCategoryTab("ALL")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-            categoryTab === "ALL"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${categoryTab === "ALL"
               ? "bg-primary text-white shadow-sm"
               : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
-          }`}
+            }`}
         >
           <span>All PO Orders</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20">{orders.length}</span>
@@ -799,11 +1275,10 @@ export default function PoOrder() {
 
         <button
           onClick={() => setCategoryTab("SINGLE_PO")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-            categoryTab === "SINGLE_PO"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${categoryTab === "SINGLE_PO"
               ? "bg-primary text-white shadow-sm"
               : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
-          }`}
+            }`}
         >
           <FiBox size={13} />
           <span>Single PO (Hub Stock)</span>
@@ -812,11 +1287,10 @@ export default function PoOrder() {
 
         <button
           onClick={() => setCategoryTab("COMBINE_PO")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-            categoryTab === "COMBINE_PO"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${categoryTab === "COMBINE_PO"
               ? "bg-primary text-white shadow-sm"
               : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
-          }`}
+            }`}
         >
           <FiUsers size={13} />
           <span>Combine PO (Multi-EPC Pooled)</span>
@@ -871,18 +1345,16 @@ export default function PoOrder() {
           >
             <button
               onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-              }`}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "table" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+                }`}
               title="Table View"
             >
               <FiList size={15} />
             </button>
             <button
               onClick={() => setViewMode("card")}
-              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
-              }`}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "card" ? "bg-primary text-white shadow-xs" : "text-text-muted hover:text-text-primary"
+                }`}
               title="Card View"
             >
               <FiGrid size={15} />
@@ -892,11 +1364,44 @@ export default function PoOrder() {
       </div>
 
       {/* ── Orders Table / Grid ────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center gap-3">
-          <FiLoader size={28} className="animate-spin text-primary" />
-          <p className="text-xs font-semibold text-text-muted">Loading purchase orders...</p>
-        </div>
+      {ordersLoading && orders.length === 0 ? (
+        viewMode === "card" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                className="p-5 rounded-3xl border shadow-xs space-y-4 animate-pulse"
+                style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-4 w-28 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                  <div className="h-5 w-20 bg-slate-200 dark:bg-slate-700/60 rounded-full" />
+                </div>
+                <div className="h-3 w-24 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                <div className="h-5 w-48 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                <div className="h-16 w-full bg-slate-200/60 dark:bg-slate-800/60 rounded-2xl" />
+                <div className="h-10 w-full bg-slate-200/40 dark:bg-slate-800/40 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            className="rounded-2xl border shadow-xs overflow-hidden animate-pulse"
+            style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+          >
+            <div className="p-4 space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="flex items-center justify-between gap-4 py-2 border-b border-border/40">
+                  <div className="h-4 w-28 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                  <div className="h-4 w-20 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                  <div className="h-4 w-40 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                  <div className="h-4 w-20 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                  <div className="h-4 w-24 bg-slate-200 dark:bg-slate-700/60 rounded-md" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )
       ) : filteredOrders.length === 0 ? (
         <div
           className="p-12 text-center rounded-3xl border border-dashed flex flex-col items-center justify-center gap-3"
@@ -910,7 +1415,11 @@ export default function PoOrder() {
             Create your first purchase order according to your plan's MOQ and lock your rates with a token deposit.
           </p>
           <button
-            onClick={() => setCreateModal(true)}
+            onClick={() => {
+              setFormError("");
+              fetchBuyers();
+              setCreateModal(true);
+            }}
             disabled={!planData?.has_active_plan}
             className="mt-2 px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
           >
@@ -1035,103 +1544,16 @@ export default function PoOrder() {
         </div>
       ) : (
         /* Card Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredOrders.map((order) => {
-            const item = order.items?.[0] || {};
-            const isCombine = order.po_category === "COMBINE_PO" || (item.epc_allocations || []).length > 0;
-            const grandTotal = (order.grand_total_paise || 0) / 100;
-            const booked = order.total_booked_quantity || order.total_quantity || item.quantity || 0;
-            const fulfilled = order.fulfilled_quantity || 0;
-            const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
-            const tokenVal = Math.round((order.token_amount_paise || order.token_paid_paise || 0) / 100);
-
-            return (
-              <div
-                key={order._id}
-                className="p-5 rounded-3xl border shadow-xs flex flex-col justify-between gap-4 hover:shadow-md transition-all"
-                style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-black text-xs text-primary">
-                      {order.po_number}
-                    </span>
-                    <StatusBadge status={order.status} />
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {isCombine ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                        <FiUsers size={10} /> Combine PO
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                        <FiBox size={10} /> Single PO (Hub Stock)
-                      </span>
-                    )}
-                    <span className="text-[10px] text-text-muted">
-                      {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-text-primary text-sm line-clamp-1">
-                      {item.item_name || "Solar Combo Kit"}
-                    </h4>
-                  </div>
-
-                  {/* Quota Progress Strip */}
-                  <div
-                    className="p-3 rounded-2xl border text-xs space-y-2"
-                    style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
-                  >
-                    <div className="flex items-center justify-between text-[11px] font-bold">
-                      <span className="text-text-muted">Quota Balance</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
-                        {remaining} / {booked} Kits Left
-                      </span>
-                    </div>
-
-                    <div className="w-full h-1.5 rounded-full bg-border overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-emerald-500"
-                        style={{ width: `${booked > 0 ? ((fulfilled / booked) * 100) : 0}%` }}
-                      />
-                    </div>
-
-                    {tokenVal > 0 && (
-                      <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[10px]">
-                        <span className="text-text-muted">Token in Escrow:</span>
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                          ₹{tokenVal.toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-border flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Grand Total</div>
-                    <div className="text-base font-black text-text-primary">
-                      ₹{grandTotal.toLocaleString("en-IN")}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setSelectedOrder(order)}
-                    className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:opacity-90 transition-all cursor-pointer shadow-xs"
-                  >
-                    <FiEye size={13} /> View
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredOrders.map((order) => (
+            <PoCardItem
+              key={order._id}
+              order={order}
+              onSelectOrder={setSelectedOrder}
+              onOpenReorder={handleOpenReorderModal}
+              onOpenRefund={handleOpenRefundModal}
+            />
+          ))}
         </div>
       )}
 
@@ -1192,16 +1614,14 @@ export default function PoOrder() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div
                       onClick={() => setPoCategory("SINGLE_PO")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                        poCategory === "SINGLE_PO"
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "SINGLE_PO"
                           ? "border-primary bg-primary/5 shadow-sm"
                           : "border-border hover:border-primary/40 bg-surface"
-                      }`}
+                        }`}
                     >
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
-                        }`}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                          }`}
                       >
                         <FiBox size={18} />
                       </div>
@@ -1218,16 +1638,14 @@ export default function PoOrder() {
 
                     <div
                       onClick={() => setPoCategory("COMBINE_PO")}
-                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
-                        poCategory === "COMBINE_PO"
+                      className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "COMBINE_PO"
                           ? "border-purple-600 bg-purple-500/5 shadow-sm"
                           : "border-border hover:border-purple-400 bg-surface"
-                      }`}
+                        }`}
                     >
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          poCategory === "COMBINE_PO" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
-                        }`}
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
+                          }`}
                       >
                         <FiUsers size={18} />
                       </div>
@@ -1342,11 +1760,10 @@ export default function PoOrder() {
                           key={preset}
                           type="button"
                           onClick={() => setSinglePoQty(preset)}
-                          className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer border ${
-                            singlePoQty === preset
+                          className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer border ${singlePoQty === preset
                               ? "bg-primary text-white border-primary shadow-xs"
                               : "bg-surface hover:bg-surface-hover text-text-primary border-border"
-                          }`}
+                            }`}
                         >
                           {preset} Kits
                         </button>
@@ -1374,7 +1791,12 @@ export default function PoOrder() {
                       </Link>
                     </div>
 
-                    {epcBuyers.length === 0 ? (
+                    {loadingBuyers ? (
+                      <div className="p-6 rounded-xl border border-dashed flex flex-col items-center justify-center gap-2 text-center text-xs text-text-muted">
+                        <FiLoader size={20} className="animate-spin text-primary" />
+                        <span>Loading onboarded EPC buyers...</span>
+                      </div>
+                    ) : epcBuyers.length === 0 ? (
                       <div className="p-4 rounded-xl border border-dashed text-center text-xs text-text-muted space-y-2">
                         <p>You haven't onboarded any EPC Buyers yet.</p>
                         <Link
@@ -1393,9 +1815,8 @@ export default function PoOrder() {
                           return (
                             <div
                               key={buyerId}
-                              className={`p-3.5 rounded-2xl border transition-all flex flex-col gap-2.5 ${
-                                qty > 0 ? "border-purple-500/50 bg-purple-500/5 shadow-2xs" : "border-border bg-surface"
-                              }`}
+                              className={`p-3.5 rounded-2xl border transition-all flex flex-col gap-2.5 ${qty > 0 ? "border-purple-500/50 bg-purple-500/5 shadow-2xs" : "border-border bg-surface"
+                                }`}
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
@@ -1458,9 +1879,8 @@ export default function PoOrder() {
 
                   <div className="w-full h-2 rounded-full bg-border overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        isMoqSatisfied ? "bg-emerald-500" : "bg-amber-500"
-                      }`}
+                      className={`h-full rounded-full transition-all duration-300 ${isMoqSatisfied ? "bg-emerald-500" : "bg-amber-500"
+                        }`}
                       style={{ width: `${Math.min(100, (totalAllocatedQty / minPoQty) * 100)}%` }}
                     />
                   </div>
@@ -1810,7 +2230,624 @@ export default function PoOrder() {
                     <StatusBadge status={selectedOrder.status} />
                   </div>
                 </div>
+
+                {/* Audit & Settlement History */}
+                {selectedOrder.refund_request_snapshot && (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1.5">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                      Token Refund Audit Trail
+                    </div>
+                    <div className="text-xs">
+                      Status: <strong>{selectedOrder.refund_request_snapshot.status}</strong>
+                    </div>
+                    {selectedOrder.refund_request_snapshot.payment_utr && (
+                      <div className="text-xs font-mono">
+                        Payment UTR: <strong>{selectedOrder.refund_request_snapshot.payment_utr}</strong>
+                      </div>
+                    )}
+                    {selectedOrder.refund_request_snapshot.rejection_reason && (
+                      <div className="text-xs text-rose-600">
+                        Reason: {selectedOrder.refund_request_snapshot.rejection_reason}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── REORDER FROM PO MODAL ────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {reorderModal && reorderOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => !reorderSubmitting && setReorderModal(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10"
+              style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+            >
+              <div className="p-5 border-b border-border flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                      <FiRefreshCw size={15} />
+                    </span>
+                    <h2 className="text-base font-black text-text-primary">
+                      Reorder Kits against PO: {reorderOrder.po_number}
+                    </h2>
+                  </div>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Draw repeat kit orders against locked prices & settle your token escrow deposit.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => !reorderSubmitting && setReorderModal(false)}
+                  className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              {reorderSuccess ? (
+                <div className="p-6 space-y-4 text-center">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 mx-auto flex items-center justify-center">
+                    <FiCheckCircle size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-black text-text-primary">
+                      Repeat Order Successfully Placed!
+                    </h3>
+                    <p className="text-xs text-text-muted">
+                      Linked Repeat Order Generated:{" "}
+                      <span className="font-mono font-bold text-primary">{reorderSuccess.orderNumber}</span>
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-surface-hover border border-border text-xs space-y-2 text-left">
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Parent PO Reference:</span>
+                      <span className="font-mono font-bold text-text-primary">{reorderOrder.po_number}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Token Escrow Adjusted:</span>
+                      <span className="font-bold text-emerald-600">₹{(reorderSuccess.adjusted || 0).toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-1">
+                      <span className="text-text-muted font-bold">Net Amount Paid:</span>
+                      <span className="font-black text-text-primary">₹{(reorderSuccess.payable || 0).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setReorderModal(false);
+                      setReorderSuccess(null);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-black shadow-md hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    Done & Return to PO List
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitReorder} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+                  {reorderError && (
+                    <div className="p-3 rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 text-xs flex items-center gap-2">
+                      <FiAlertCircle size={15} className="shrink-0" />
+                      <span>{reorderError}</span>
+                    </div>
+                  )}
+
+                  {/* PO Status Header Card */}
+                  {(() => {
+                    const it = reorderOrder.items?.[0] || {};
+                    const unitPrice = (it.unit_price_paise || 0) / 100;
+                    const gstRate = it.gst_rate || 13.85;
+                    const committed = Number(reorderOrder.total_booked_quantity || it.quantity || 100);
+                    const fulfilled = Number(reorderOrder.fulfilled_quantity || 0);
+                    const remaining = reorderOrder.remaining_quantity != null ? reorderOrder.remaining_quantity : Math.max(1, committed - fulfilled);
+
+                    const tokenPaid = Math.round((reorderOrder.token_amount_paise || reorderOrder.token_paid_paise || 0) / 100);
+                    const tokenAdjusted = Math.round((reorderOrder.token_adjusted_total_paise || 0) / 100);
+                    const tokenBalance = Math.max(0, tokenPaid - tokenAdjusted);
+                    const settlementMode = reorderOrder.token_settlement_mode || reorderOrder.penalty_rule_snapshot?.token_settlement_rule || "PRO_RATA";
+
+                    const subtotal = reorderQty * unitPrice;
+                    const tax = Math.round(subtotal * (gstRate / 100));
+                    const grossTotal = subtotal + tax;
+
+                    let tokenToDeduct = 0;
+                    const isClosing = reorderQty === remaining;
+                    if (isClosing) {
+                      tokenToDeduct = Math.min(tokenBalance, grossTotal);
+                    } else if (settlementMode === "PRO_RATA") {
+                      const perKit = committed > 0 ? Math.floor(tokenPaid / committed) : 0;
+                      tokenToDeduct = Math.min(tokenBalance, reorderQty * perKit, grossTotal);
+                    } else if (settlementMode === "UPFRONT") {
+                      tokenToDeduct = Math.min(tokenBalance, grossTotal);
+                    }
+                    const netPayable = Math.max(0, grossTotal - tokenToDeduct);
+
+                    return (
+                      <>
+                        <div className="p-3.5 rounded-2xl bg-surface-hover border border-border space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-text-primary text-xs line-clamp-1">
+                              {it.item_name || "Solar Combo Kit"}
+                            </span>
+                            <span className="text-xs font-black text-primary">
+                              ₹{unitPrice.toLocaleString("en-IN")}/kit + GST
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-border/60 text-center">
+                            <div>
+                              <div className="text-[10px] text-text-muted">Total Committed</div>
+                              <div className="font-black text-text-primary">{committed} Kits</div>
+                            </div>
+                            <div className="border-x border-border/60">
+                              <div className="text-[10px] text-text-muted">Remaining Quota</div>
+                              <div className="font-black text-emerald-600">{remaining} Kits</div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-text-muted">Escrow Balance</div>
+                              <div className="font-black text-emerald-600">₹{tokenBalance.toLocaleString("en-IN")}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reorder Quantity Input */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[11px] font-bold text-text-primary">
+                              Select Reorder Quantity (Max: {remaining} kits)
+                            </label>
+                            <span className="text-[10px] text-text-muted">
+                              Mode: {settlementMode}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setReorderQty((q) => Math.max(1, q - 1))}
+                              disabled={reorderQty <= 1}
+                              className="w-10 h-10 rounded-xl border border-border flex items-center justify-center font-bold text-base hover:bg-surface-hover transition-colors disabled:opacity-40"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              max={remaining}
+                              value={reorderQty}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10) || 1;
+                                setReorderQty(Math.min(remaining, Math.max(1, val)));
+                              }}
+                              className="flex-1 px-4 py-2.5 rounded-xl border text-center font-black text-sm border-border bg-surface text-text-primary outline-none focus:border-primary"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setReorderQty((q) => Math.min(remaining, q + 1))}
+                              disabled={reorderQty >= remaining}
+                              className="w-10 h-10 rounded-xl border border-border flex items-center justify-center font-bold text-base hover:bg-surface-hover transition-colors disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Quick selection chips */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            {[1, 5, 10, remaining].filter((val, idx, arr) => val <= remaining && arr.indexOf(val) === idx).map((val) => (
+                              <button
+                                key={val}
+                                type="button"
+                                onClick={() => setReorderQty(val)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                  reorderQty === val
+                                    ? "bg-primary text-white"
+                                    : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
+                                }`}
+                              >
+                                {val === remaining ? `All Remaining (${val})` : `${val} Kits`}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Real-time Financial Breakdown */}
+                        <div className="p-3.5 rounded-2xl bg-surface-hover/80 border border-border space-y-2">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+                            Financial Settlement Breakdown
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-text-muted">
+                              <span>Kit Subtotal ({reorderQty} kits × ₹{unitPrice.toLocaleString("en-IN")}):</span>
+                              <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between text-text-muted">
+                              <span>GST @ {gstRate}%:</span>
+                              <span>₹{tax.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-text-primary pt-1 border-t border-border/40">
+                              <span>Order Gross Total:</span>
+                              <span>₹{grossTotal.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-emerald-600 dark:text-emerald-400">
+                              <span className="flex items-center gap-1">
+                                <FiDollarSign size={12} /> Less: Escrow Token Adjustment ({isClosing ? "Final Order" : settlementMode}):
+                              </span>
+                              <span>- ₹{tokenToDeduct.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between font-black text-sm text-text-primary pt-1.5 border-t-2 border-border">
+                              <span>Net Amount Payable Now:</span>
+                              <span className="text-primary font-mono text-base">₹{netPayable.toLocaleString("en-IN")}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Escrow Bank Info */}
+                        <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 space-y-1.5 text-[11px]">
+                          <div className="font-bold text-blue-900 dark:text-blue-300 flex items-center justify-between">
+                            <span>Transfer to Company Escrow Account:</span>
+                            <span className="text-[10px] text-text-muted">ICICI Corporate</span>
+                          </div>
+                          <div className="flex items-center justify-between font-mono">
+                            <span>A/C: {escrowBank.account_number}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(escrowBank.account_number, "reorder_acc")}
+                              className="text-primary cursor-pointer hover:underline text-[10px]"
+                            >
+                              {copiedField === "reorder_acc" ? "Copied!" : "Copy"}
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between font-mono">
+                            <span>IFSC: {escrowBank.ifsc_code}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(escrowBank.ifsc_code, "reorder_ifsc")}
+                              className="text-primary cursor-pointer hover:underline text-[10px]"
+                            >
+                              {copiedField === "reorder_ifsc" ? "Copied!" : "Copy"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Payment UTR & Details */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-text-primary mb-1">
+                              Payment UTR / Reference <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={reorderUtr}
+                              onChange={(e) => setReorderUtr(e.target.value)}
+                              placeholder="e.g. ICICR24098123456"
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary font-mono text-xs outline-none focus:border-primary"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-text-primary mb-1">
+                              Sender Bank Name
+                            </label>
+                            <input
+                              type="text"
+                              value={reorderBank}
+                              onChange={(e) => setReorderBank(e.target.value)}
+                              placeholder="e.g. HDFC / SBI"
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs outline-none focus:border-primary"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-border flex items-center justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setReorderModal(false)}
+                            disabled={reorderSubmitting}
+                            className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-text-secondary hover:bg-surface-hover transition-all cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={reorderSubmitting || !reorderUtr.trim()}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-black shadow-lg hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {reorderSubmitting ? (
+                              <>
+                                <FiLoader size={14} className="animate-spin" />
+                                <span>Placing Reorder...</span>
+                              </>
+                            ) : (
+                              <>
+                                <FiCheck size={14} />
+                                <span>Place Reorder & Settle ₹{netPayable.toLocaleString("en-IN")}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── REQUEST TOKEN REFUND MODAL ───────────────────────────────────────── */}
+      <AnimatePresence>
+        {refundModal && refundOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => !refundSubmitting && setRefundModal(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10"
+              style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+            >
+              <div className="p-5 border-b border-border flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
+                      <FiDollarSign size={15} />
+                    </span>
+                    <h2 className="text-base font-black text-text-primary">
+                      Request Token Refund: {refundOrder.po_number}
+                    </h2>
+                  </div>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Token settlement and penalty reconciliation for expired or fulfilled Purchase Orders.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => !refundSubmitting && setRefundModal(false)}
+                  className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              {refundSuccess ? (
+                <div className="p-6 space-y-4 text-center">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 mx-auto flex items-center justify-center">
+                    <FiCheckCircle size={32} />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-black text-text-primary">
+                      Refund Request Submitted!
+                    </h3>
+                    <p className="text-xs text-text-muted">
+                      Your refund request has been placed in the Admin / Accounts queue for approval and payment disbursement.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setRefundModal(false);
+                      setRefundSuccess(null);
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-black shadow-md hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    Done & Return to PO List
+                  </button>
+                </div>
+              ) : refundLoading ? (
+                <div className="p-12 text-center space-y-3">
+                  <FiLoader size={28} className="animate-spin text-primary mx-auto" />
+                  <p className="text-xs text-text-muted">
+                    Calculating penalty rules & unpurchased kit balances...
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitRefund} className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+                  {refundError && (
+                    <div className="p-3 rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 text-xs flex items-center gap-2">
+                      <FiAlertCircle size={15} className="shrink-0" />
+                      <span>{refundError}</span>
+                    </div>
+                  )}
+
+                  {/* Penalty & Settlement Metric Strip */}
+                  {refundPreview && (
+                    <div className="p-4 rounded-2xl bg-surface-hover border border-border space-y-3">
+                      <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
+                        Settlement & Penalty Reconciliation
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="p-2 rounded-xl bg-surface border border-border">
+                          <div className="text-[10px] text-text-muted">Committed</div>
+                          <div className="font-black text-text-primary">{refundPreview.total_committed_qty} Kits</div>
+                        </div>
+                        <div className="p-2 rounded-xl bg-surface border border-border">
+                          <div className="text-[10px] text-blue-600">Purchased</div>
+                          <div className="font-black text-blue-600">{refundPreview.total_purchased_qty} Kits</div>
+                        </div>
+                        <div className="p-2 rounded-xl bg-surface border border-border">
+                          <div className="text-[10px] text-rose-600">Unpurchased</div>
+                          <div className="font-black text-rose-600">{refundPreview.unpurchased_qty} Kits</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 pt-1 text-xs">
+                        <div className="flex justify-between text-text-muted">
+                          <span>Token Paid Initially:</span>
+                          <span>₹{(refundPreview.token_paid_paise / 100).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex justify-between text-text-muted">
+                          <span>Token Already Adjusted on Orders:</span>
+                          <span>- ₹{(refundPreview.token_adjusted_total_paise / 100).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex justify-between text-text-muted">
+                          <span>Escrow Token Balance Available:</span>
+                          <span>₹{(refundPreview.token_balance_paise / 100).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-rose-600 pt-1 border-t border-border/40">
+                          <span>Applicable Penalty ({refundPreview.penalty_calculation?.rule_type || "Rule"}):</span>
+                          <span>- ₹{(refundPreview.applicable_penalty_paise / 100).toLocaleString("en-IN")}</span>
+                        </div>
+                        {refundPreview.penalty_calculation?.explanation && (
+                          <div className="text-[11px] text-text-muted italic bg-surface p-2 rounded-lg border border-border/60">
+                            ℹ {refundPreview.penalty_calculation.explanation}
+                          </div>
+                        )}
+                        <div className="flex justify-between font-black text-sm text-emerald-600 dark:text-emerald-400 pt-2 border-t-2 border-border">
+                          <span>Net Refundable Token Amount:</span>
+                          <span className="font-mono text-base">₹{(refundPreview.refundable_token_paise / 100).toLocaleString("en-IN")}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bank Account Details Form */}
+                  <div className="space-y-3">
+                    <div className="text-[11px] font-black uppercase tracking-wider text-text-primary">
+                      Payout Bank Account Details
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-muted mb-1">
+                          Account Holder Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={refundForm.account_holder_name}
+                          onChange={(e) => setRefundForm({ ...refundForm, account_holder_name: e.target.value })}
+                          placeholder="e.g. Apex Solar Solutions"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs outline-none focus:border-primary"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-muted mb-1">
+                          Bank Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={refundForm.bank_name}
+                          onChange={(e) => setRefundForm({ ...refundForm, bank_name: e.target.value })}
+                          placeholder="e.g. HDFC Bank"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-muted mb-1">
+                          Account Number <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={refundForm.account_number}
+                          onChange={(e) => setRefundForm({ ...refundForm, account_number: e.target.value })}
+                          placeholder="••••••••••••"
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary font-mono text-xs outline-none focus:border-primary"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-text-muted mb-1">
+                          Confirm Account Number <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={refundForm.confirm_account_number}
+                          onChange={(e) => setRefundForm({ ...refundForm, confirm_account_number: e.target.value })}
+                          placeholder="Confirm Account No."
+                          className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary font-mono text-xs outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-text-muted mb-1">
+                        Bank IFSC Code <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={refundForm.ifsc_code}
+                        onChange={(e) => setRefundForm({ ...refundForm, ifsc_code: e.target.value })}
+                        placeholder="e.g. HDFC0001234"
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary font-mono text-xs uppercase outline-none focus:border-primary"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-text-muted mb-1">
+                        Notes / Remarks
+                      </label>
+                      <input
+                        type="text"
+                        value={refundForm.notes}
+                        onChange={(e) => setRefundForm({ ...refundForm, notes: e.target.value })}
+                        placeholder="Optional remarks for accounts team"
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs outline-none focus:border-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setRefundModal(false)}
+                      disabled={refundSubmitting}
+                      className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-text-secondary hover:bg-surface-hover transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={refundSubmitting}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-black shadow-lg hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {refundSubmitting ? (
+                        <>
+                          <FiLoader size={14} className="animate-spin" />
+                          <span>Submitting Request...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiCheck size={14} />
+                          <span>Submit Token Refund Request</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
             </motion.div>
           </div>
         )}

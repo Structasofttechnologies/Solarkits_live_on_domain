@@ -76,6 +76,33 @@ const schema = new mongoose.Schema(
     min_token_amount: { type: Number, default: 10000 },
     po_lock_days: { type: Number, default: 30 },
 
+    // ── Token Settlement & Penalty Rules ──────────────────────────────────────
+    token_settlement_rule: {
+      type: String,
+      enum: ['PRO_RATA', 'FINAL_ORDER', 'UPFRONT'],
+      default: 'PRO_RATA',
+    },
+    default_penalty_type: {
+      type: String,
+      enum: ['FLAT_PER_UNPURCHASED_KIT', 'PERCENTAGE_OF_TOKEN', 'PERCENTAGE_OF_UNPURCHASED_VALUE'],
+      default: 'FLAT_PER_UNPURCHASED_KIT',
+    },
+    default_penalty_rate: { type: Number, default: 500 }, // ₹500 flat per unpurchased kit or %
+    penalty_rules: [
+      {
+        min_committed_qty: { type: Number, default: 1 },
+        max_committed_qty: { type: Number, default: null },
+        kit_type_ids:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'sys_filter_types' }],
+        penalty_type:      {
+          type: String,
+          enum: ['FLAT_PER_UNPURCHASED_KIT', 'PERCENTAGE_OF_TOKEN', 'PERCENTAGE_OF_UNPURCHASED_VALUE'],
+          default: 'FLAT_PER_UNPURCHASED_KIT',
+        },
+        penalty_rate:          { type: Number, default: 500 },
+        max_penalty_cap_paise: { type: Number, default: 0 },
+      },
+    ],
+
     payment_terms: {
       type: String,
       enum: [

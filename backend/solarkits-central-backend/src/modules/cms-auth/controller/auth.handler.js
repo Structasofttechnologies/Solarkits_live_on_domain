@@ -33,15 +33,15 @@ const cookieOptions = {
   path: '/',
 };
 
-const _get_url_prefix = async (userId) => {
-  const user = await CmsUser.findById(userId, { role_id: 1 }).lean();
-  if (!user?.role_id) {
+const _get_url_prefix = async (userId, userRoleId = null) => {
+  const roleId = userRoleId || (await CmsUser.findById(userId, { role_id: 1 }).lean())?.role_id;
+  if (!roleId) {
     console.warn(`[Auth] User ${userId} has no role_id assigned.`);
     return null;
   }
-  const role = await CmsRole.findById(user.role_id, { department_id: 1, name: 1 }).lean();
+  const role = await CmsRole.findById(roleId, { department_id: 1, name: 1 }).lean();
   if (!role) {
-    console.warn(`[Auth] Role ${user.role_id} not found.`);
+    console.warn(`[Auth] Role ${roleId} not found.`);
     return null;
   }
   const rolePanel = await RolePanel.findOne({ role_id: role._id }).lean();
@@ -57,8 +57,8 @@ const _get_url_prefix = async (userId) => {
 };
 
 const _get_detailed_auth_response = async (userDoc) => {
-  const role = await CmsRole.findById(userDoc.role_id).lean();
-  const dept = role ? await CmsDept.findById(role.department_id).lean() : null;
+  const role = userDoc.role_id ? await CmsRole.findById(userDoc.role_id).lean() : null;
+  const dept = role?.department_id ? await CmsDept.findById(role.department_id).lean() : null;
 
   const isSuperAdmin = role?.name === 'Super Admin' || dept?.level === 'global';
 
@@ -88,21 +88,10 @@ const _get_detailed_auth_response = async (userDoc) => {
     }
   }
 
-  // 3. Map panels with products
+  // 3. Map panels with products (Batched queries to prevent 15+ roundtrips over remote MongoDB)
   const panelsData = [];
-  for (const p of allowedPanels) {
-    let products = [];
-    if (isSuperAdmin) {
-      products = await SaaSProduct.find({ is_active: true, is_deleted: false }).lean();
-    } else {
-      const panelProducts = await PanelSaaSProduct.find({ panel_id: p._id }).lean();
-      const productIds = panelProducts.map(pp => pp.saas_product_id.toString());
-      const userPanelMapping = await UserPanel.findOne({ user_id: userDoc._id, panel_id: p._id }).lean();
-      const allowedUserProductIds = (userPanelMapping?.saas_product_ids || []).map(id => id.toString());
-      const activeForPanel = productIds.filter(id => activeProductIds.includes(id) && allowedUserProductIds.includes(id));
-      products = await SaaSProduct.find({ _id: { $in: activeForPanel }, is_active: true, is_deleted: false }).lean();
-    }
-
+  if (isSuperAdmin) {
+    const products = await SaaSProduct.find({ is_active: true, is_deleted: false }).lean();
     const mappedProds = products.map(prod => ({
       id: prod._id.toString(),
       _id: prod._id.toString(),
@@ -111,15 +100,75 @@ const _get_detailed_auth_response = async (userDoc) => {
       description: prod.description
     }));
 
-    panelsData.push({
-      id: p._id.toString(),
-      _id: p._id.toString(),
-      name: p.name,
-      url_prefix: p.url_prefix,
-      slug: p.slug,
-      products: mappedProds,
-      saas_products: mappedProds
+    for (const p of allowedPanels) {
+      panelsData.push({
+        id: p._id.toString(),
+        _id: p._id.toString(),
+        name: p.name,
+        url_prefix: p.url_prefix,
+        slug: p.slug,
+        products: mappedProds,
+        saas_products: mappedProds
+      });
+    }
+  } else {
+    const panelIds = allowedPanels.map(p => p._id);
+    const [allPanelProducts, allUserPanels] = await Promise.all([
+      PanelSaaSProduct.find({ panel_id: { $in: panelIds } }).lean(),
+      UserPanel.find({ user_id: userDoc._id, panel_id: { $in: panelIds } }).lean()
+    ]);
+
+    const userPanelMap = new Map();
+    allUserPanels.forEach(up => {
+      userPanelMap.set(up.panel_id.toString(), (up.saas_product_ids || []).map(id => id.toString()));
     });
+
+    const panelProductMap = new Map();
+    allPanelProducts.forEach(pp => {
+      const pKey = pp.panel_id.toString();
+      if (!panelProductMap.has(pKey)) panelProductMap.set(pKey, []);
+      panelProductMap.get(pKey).push(pp.saas_product_id.toString());
+    });
+
+    const neededProductIds = new Set();
+    allowedPanels.forEach(p => {
+      const pIdStr = p._id.toString();
+      const pProdIds = panelProductMap.get(pIdStr) || [];
+      const allowedUserProdIds = userPanelMap.get(pIdStr) || [];
+      pProdIds
+        .filter(id => activeProductIds.includes(id) && allowedUserProdIds.includes(id))
+        .forEach(id => neededProductIds.add(id));
+    });
+
+    const products = neededProductIds.size > 0
+      ? await SaaSProduct.find({ _id: { $in: Array.from(neededProductIds) }, is_active: true, is_deleted: false }).lean()
+      : [];
+
+    const productMap = new Map(products.map(prod => [prod._id.toString(), {
+      id: prod._id.toString(),
+      _id: prod._id.toString(),
+      name: prod.name,
+      slug: prod.slug,
+      description: prod.description
+    }]));
+
+    for (const p of allowedPanels) {
+      const pIdStr = p._id.toString();
+      const pProdIds = panelProductMap.get(pIdStr) || [];
+      const allowedUserProdIds = userPanelMap.get(pIdStr) || [];
+      const activeForPanel = pProdIds.filter(id => activeProductIds.includes(id) && allowedUserProdIds.includes(id));
+      const mappedProds = activeForPanel.map(id => productMap.get(id)).filter(Boolean);
+
+      panelsData.push({
+        id: p._id.toString(),
+        _id: p._id.toString(),
+        name: p.name,
+        url_prefix: p.url_prefix,
+        slug: p.slug,
+        products: mappedProds,
+        saas_products: mappedProds
+      });
+    }
   }
 
   return {
@@ -408,7 +457,7 @@ const login = async (req, res) => {
 
     await CmsUser.findByIdAndUpdate(userDoc._id, { $set: { failed_login_attempts: 0, last_failed_login_at: null } });
 
-    const url_prefix = await _get_url_prefix(userDoc._id);
+    const url_prefix = await _get_url_prefix(userDoc._id, userDoc.role_id);
 
     const REFRESH_EXP = process.env.AUTH_JWT_REFRESH_EXPIRES || '30d';
     const refresh_token = jwt.generate_token(
@@ -504,7 +553,7 @@ const identify_user_panel = async (req, res) => {
       return res.status(403).json({ status: 'error', message: 'Your account is inactive or deleted.', auth: false });
     }
 
-    const url_prefix = await _get_url_prefix(userDoc._id);
+    const url_prefix = await _get_url_prefix(userDoc._id, userDoc.role_id);
     const detailedPayload = await _get_detailed_auth_response(userDoc);
     const token = jwt.generate_token(
       { user: { id: userDoc._id.toString(), token_version: userDoc.token_version, token_type: 'access' } },
@@ -583,7 +632,7 @@ const refresh_access_token = async (req, res) => {
       return res.status(403).json({ message: 'Your account is inactive or deleted.', auth: false });
     }
 
-    const url_prefix = await _get_url_prefix(user._id);
+    const url_prefix = await _get_url_prefix(user._id, user.role_id);
     const token = jwt.generate_token(
       { user: { id: user._id.toString(), token_version: user.token_version, token_type: 'access' } },
       process.env.AUTH_JWT_ACCESS_EXPIRES || '7d'

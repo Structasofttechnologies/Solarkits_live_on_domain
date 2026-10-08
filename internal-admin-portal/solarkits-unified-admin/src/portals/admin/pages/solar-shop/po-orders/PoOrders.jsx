@@ -7,7 +7,6 @@ import {
   FaFileInvoiceDollar,
   FaGlobe,
   FaMapMarkerAlt,
-  FaWarehouse,
   FaClipboardList,
   FaEdit,
   FaUsers,
@@ -20,12 +19,14 @@ import {
   FaMoneyBillWave,
   FaTimes,
   FaTruckMoving,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaUniversity,
+  FaUndoAlt,
+  FaBan
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
 import CustomTable from "@/components/CustomTable";
-import Dropdown from "@/components/Dropdown";
 import Loader from "@/components/Loader";
 import { authHeaderObj } from "@/app/authHeader";
 import Product8StageJourneyModal from "../../../../accounts/components/Product8StageJourneyModal";
@@ -33,27 +34,27 @@ import Product8StageJourneyModal from "../../../../accounts/components/Product8S
 const API_URL = import.meta.env.VITE_API_URL;
 
 const STATUS_BADGES = {
-  DRAFT:                { label: "Draft", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
-  SUBMITTED:            { label: "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
-  PENDING_APPROVAL:     { label: "Pending Approval", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
-  CHANGES_REQUESTED:    { label: "Changes Requested", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
-  APPROVED:             { label: "Approved (Awaiting Payment)", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  REJECTED:             { label: "Rejected", bg: "#fef2f2", text: "#b91c1c", border: "#fca5a5" },
-  AWAITING_PAYMENT:     { label: "Awaiting Payment", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
-  PARTIALLY_PAID:       { label: "Partially Paid", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
-  PAID:                 { label: "1. Confirmed (Paid)", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
-  CONFIRMED:            { label: "1. Confirmed", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
-  STOCK_ALLOCATED:      { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
-  PROCESSING:           { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
-  VEHICLE_ASSIGNED:     { label: "3. Vehicle Assigned", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
-  READY_FOR_DISPATCH:   { label: "4. Ready for Dispatch", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+  DRAFT: { label: "Draft", bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" },
+  SUBMITTED: { label: "Submitted", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
+  PENDING_APPROVAL: { label: "Pending Approval", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+  CHANGES_REQUESTED: { label: "Changes Requested", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
+  APPROVED: { label: "Approved (Awaiting Payment)", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  REJECTED: { label: "Rejected", bg: "#fef2f2", text: "#b91c1c", border: "#fca5a5" },
+  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+  PARTIALLY_PAID: { label: "Partially Paid", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  PAID: { label: "1. Confirmed (Paid)", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+  CONFIRMED: { label: "1. Confirmed", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+  STOCK_ALLOCATED: { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+  PROCESSING: { label: "2. Processing", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" },
+  VEHICLE_ASSIGNED: { label: "3. Vehicle Assigned", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" },
+  READY_FOR_DISPATCH: { label: "4. Ready for Dispatch", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
   PARTIALLY_DISPATCHED: { label: "5. Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
-  DISPATCHED:           { label: "5. Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
-  IN_TRANSIT:           { label: "6. In Transit", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
-  REACHED_DESTINATION:  { label: "7. Reached Dest.", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
-  DELIVERED:            { label: "8. Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  COMPLETED:            { label: "8. Settled & Completed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
-  CANCELLED:            { label: "Cancelled", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
+  DISPATCHED: { label: "5. Dispatched", bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
+  IN_TRANSIT: { label: "6. In Transit", bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
+  REACHED_DESTINATION: { label: "7. Reached Dest.", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" },
+  DELIVERED: { label: "8. Delivered", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  COMPLETED: { label: "8. Settled & Completed", bg: "#f0fdf4", text: "#15803d", border: "#86efac" },
+  CANCELLED: { label: "Cancelled", bg: "#fff1f2", text: "#be123c", border: "#fecdd3" },
 };
 
 function getStageBadgeText(status) {
@@ -97,8 +98,8 @@ export default function PoOrders({ moduleUniqueId }) {
   const dispatch = useDispatch();
   const token = useSelector((state) => state.auth.token);
 
-  // Tab State
-  const [activeTab, setActiveTab] = useState("franchisee_po"); // "franchisee_po" | "warehouse_po"
+  // Tab State ("franchisee_po" | "refund_requests")
+  const [activeTab, setActiveTab] = useState("franchisee_po");
 
   // Franchisee PO Orders State
   const [fpoOrders, setFpoOrders] = useState([]);
@@ -115,15 +116,23 @@ export default function PoOrders({ moduleUniqueId }) {
   const [paymentRefInput, setPaymentRefInput] = useState("");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Warehouse PO Settings State
+  // PO Token Refund Requests State
+  const [refundRequests, setRefundRequests] = useState([]);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundSearch, setRefundSearch] = useState("");
+  const [refundStatusFilter, setRefundStatusFilter] = useState("");
+  const [selectedRefundApprove, setSelectedRefundApprove] = useState(null);
+  const [selectedRefundReject, setSelectedRefundReject] = useState(null);
+  const [viewingRefund, setViewingRefund] = useState(null);
+  const [approveForm, setApproveForm] = useState({
+    payment_method: "RTGS",
+    payment_reference: "",
+    approval_notes: "",
+  });
+  const [rejectReasonInput, setRejectReasonInput] = useState("");
+
+  // Active Countries State
   const [activeCountries, setActiveCountries] = useState([]);
-  const [states, setStates] = useState([]);
-  const [clusters, setClusters] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [settings, setSettings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stateFilter, setStateFilter] = useState("");
-  const [clusterFilter, setClusterFilter] = useState("");
 
   // ── Fetch Franchisee PO Orders ─────────────────────────────────────────────
   const fetchFpoOrders = useCallback(async () => {
@@ -143,23 +152,33 @@ export default function PoOrders({ moduleUniqueId }) {
     }
   }, [moduleUniqueId]);
 
-  // ── Fetch Warehouse Configurations ────────────────────────────────────────
-  const fetchCountriesAndSettings = async () => {
-    setLoading(true);
+  // ── Fetch PO Refund Requests ──────────────────────────────────────────────
+  const fetchRefundRequests = useCallback(async () => {
+    setRefundLoading(true);
     try {
-      const [countriesRes, warehousesRes, globalRes, indiaRes] = await Promise.all([
-        axios.get(
-          `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`,
-          { headers: authHeaderObj() }
-        ),
-        axios.get(
-          `${API_URL}/warehouses?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`,
-          { headers: authHeaderObj() }
-        ),
-        axios.get(`${API_URL}/solarshop/po-settings?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: [] } })),
-        axios.get(`${API_URL}/solarshop/india/po-settings?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`, { headers: authHeaderObj() }).catch(() => ({ data: { data: [] } }))
-      ]);
+      const res = await axios.get(
+        `${API_URL}/franchisee/po/refund-requests?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`,
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        const payload = res.data.data;
+        const list = Array.isArray(payload) ? payload : (payload?.requests || []);
+        setRefundRequests(list);
+      }
+    } catch (err) {
+      console.error("Error fetching PO refund requests:", err);
+    } finally {
+      setRefundLoading(false);
+    }
+  }, [moduleUniqueId]);
 
+  // ── Fetch Active Countries ────────────────────────────────────────────────
+  const fetchActiveCountries = useCallback(async () => {
+    try {
+      const countriesRes = await axios.get(
+        `${API_URL}/geolocation/active-countries?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`,
+        { headers: authHeaderObj() }
+      );
       const activeCountriesList = countriesRes.data?.countries || [];
       setActiveCountries(activeCountriesList);
 
@@ -172,50 +191,109 @@ export default function PoOrders({ moduleUniqueId }) {
             : activeCountriesList[0].name.toLowerCase();
 
           navigate(`/admin-panel/solar-shop/${defaultCountry}/po-orders`, { replace: true });
-          return;
         }
       }
-
-      const currentCountryObj = activeCountriesList.find(
-        (c) => c.name.toLowerCase() === countryName?.toLowerCase()
-      );
-
-      const allWarehouses = warehousesRes.data?.warehouses || [];
-      const countryWarehouses = currentCountryObj
-        ? allWarehouses.filter((w) => (w.country_id || w.level_0)?.toString() === currentCountryObj.id?.toString())
-        : allWarehouses;
-      setWarehouses(countryWarehouses);
-
-      const allSettings = [...(globalRes.data?.data || []), ...(indiaRes.data?.data || [])];
-      setSettings(allSettings);
-
-      if (currentCountryObj) {
-        axios.post(
-          `${API_URL}/geolocation/active-states?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=view`,
-          { country_id: currentCountryObj.id },
-          { headers: authHeaderObj() }
-        ).then((statesRes) => {
-          setStates(statesRes.data?.states || []);
-        }).catch((err) => console.error("Error fetching states:", err));
-      }
     } catch (error) {
-      console.error("Error fetching PO settings data:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching active countries:", error);
     }
-  };
+  }, [moduleUniqueId, countryName, navigate]);
 
   useEffect(() => {
     if (token) {
       fetchFpoOrders();
-      fetchCountriesAndSettings();
+      fetchActiveCountries();
+      fetchRefundRequests();
     }
-  }, [token, countryName, fetchFpoOrders]);
+  }, [token, countryName, fetchFpoOrders, fetchActiveCountries, fetchRefundRequests]);
 
   // Current Country
   const currentCountry = activeCountries.find(
     (c) => c.name.toLowerCase() === countryName?.toLowerCase()
   );
+
+  // ── Refund Action Handlers ─────────────────────────────────────────────────
+  const handleApproveRefund = async (e) => {
+    e.preventDefault();
+    if (!selectedRefundApprove) return;
+    if (!approveForm.payment_reference) {
+      dispatch(setAlert({ type: "warning", message: "Please enter Bank UTR / Payment Reference" }));
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/franchisee/po/refund-requests/${selectedRefundApprove._id}/approve?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
+        {
+          payment_method: approveForm.payment_method,
+          payment_reference: approveForm.payment_reference,
+          approval_notes: approveForm.approval_notes,
+        },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: res.data.message || "Refund request approved & settled successfully!" }));
+        setSelectedRefundApprove(null);
+        setApproveForm({ payment_method: "RTGS", payment_reference: "", approval_notes: "" });
+        fetchRefundRequests();
+        fetchFpoOrders();
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to approve refund." }));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectRefund = async (e) => {
+    e.preventDefault();
+    if (!selectedRefundReject) return;
+    if (!rejectReasonInput.trim()) {
+      dispatch(setAlert({ type: "warning", message: "Please enter a mandatory rejection reason" }));
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/franchisee/po/refund-requests/${selectedRefundReject._id}/reject?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
+        { rejection_reason: rejectReasonInput.trim() },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: "Refund request rejected successfully." }));
+        setSelectedRefundReject(null);
+        setRejectReasonInput("");
+        fetchRefundRequests();
+        fetchFpoOrders();
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to reject refund." }));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSettlePoExpiry = async (orderId) => {
+    const note = window.prompt("Enter optional expiry settlement note for this PO:", "Settled & Expired by Admin");
+    if (note === null) return;
+    setActionLoading(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/franchisee/po/${orderId}/settle-expiry?unique_id=${moduleUniqueId || "ADM_PO_ORDERS"}&req_for=edit`,
+        { note },
+        { headers: authHeaderObj() }
+      );
+      if (res.data?.status === "success") {
+        dispatch(setAlert({ type: "success", message: "PO marked as expired and token penalty settled successfully!" }));
+        setSelectedOrder(null);
+        fetchFpoOrders();
+        fetchRefundRequests();
+      }
+    } catch (err) {
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Failed to settle PO expiry." }));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // ── Workflow Action Handlers ───────────────────────────────────────────────
   const handleApprovePo = async (orderId) => {
@@ -412,25 +490,30 @@ export default function PoOrders({ moduleUniqueId }) {
   ).length;
   const completedFpoCount = fpoOrders.filter((o) => ["DELIVERED", "COMPLETED"].includes(o.status)).length;
 
-  // Table Warehouse PO Settings
-  const displayWarehouses = warehouses.filter((w) => {
-    if (stateFilter && (w.state_id || w.level_1)?.toString() !== stateFilter?.toString()) return false;
-    if (clusterFilter && (w.cluster_id || w.cluster?.id || w.cluster)?.toString() !== clusterFilter?.toString()) return false;
-    return true;
-  });
+  // Metrics & Filtering for Refund Requests
+  const filteredRefundRequests = useMemo(() => {
+    return refundRequests.filter((r) => {
+      if (refundStatusFilter && refundStatusFilter !== "ALL" && r.status !== refundStatusFilter) return false;
+      if (refundSearch) {
+        const q = refundSearch.toLowerCase();
+        const poNum = (r.po_number || r.po_id?.po_number || "").toLowerCase();
+        const name = (r.requester_name || "").toLowerCase();
+        const phone = (r.requester_phone || "").toLowerCase();
+        const acc = (r.bank_details?.account_number || "").toLowerCase();
+        return poNum.includes(q) || name.includes(q) || phone.includes(q) || acc.includes(q);
+      }
+      return true;
+    });
+  }, [refundRequests, refundStatusFilter, refundSearch]);
 
-  const tableData = displayWarehouses.map((w) => {
-    const targetId = (w.id || w._id)?.toString();
-    const warehousePlans = settings.filter(
-      (s) => (s.warehouse_id || s.warehouse?.id || s.warehouse?._id)?.toString() === targetId
-    );
-    return { warehouse: w, plans: warehousePlans };
-  });
+  const totalRefundRequestsCount = refundRequests.length;
+  const pendingRefundsCount = refundRequests.filter((r) => r.status === "PENDING").length;
+  const approvedRefundsCount = refundRequests.filter((r) => ["APPROVED", "PROCESSED"].includes(r.status)).length;
+  const totalSettledRefundPaise = refundRequests
+    .filter((r) => ["APPROVED", "PROCESSED"].includes(r.status))
+    .reduce((sum, r) => sum + (r.refundable_amount_paise || 0), 0);
 
-  const handleConfigurePO = (w) => {
-    const targetId = w.id || w._id;
-    navigate(`/admin-panel/solar-shop/${countryName?.toLowerCase()}/po-orders/${targetId}`);
-  };
+
 
   return (
     <div className="space-y-6 pb-24">
@@ -453,7 +536,7 @@ export default function PoOrders({ moduleUniqueId }) {
                 )}
               </div>
               <p className="text-white/90 text-xs sm:text-sm mt-1">
-                Manage Franchisee Purchase Orders with EPC Buyer allocations and Warehouse PO rules.
+                Manage Franchisee & EPC Purchase Orders, repeat allocations, token escrow, and refund settlements.
               </p>
             </div>
           </div>
@@ -462,25 +545,28 @@ export default function PoOrders({ moduleUniqueId }) {
           <div className="flex items-center p-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20">
             <button
               onClick={() => setActiveTab("franchisee_po")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                activeTab === "franchisee_po"
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${activeTab === "franchisee_po"
                   ? "bg-white text-primary shadow-lg"
                   : "text-white/80 hover:text-white"
-              }`}
+                }`}
             >
               <FaUsers size={14} />
-              <span>Franchisee PO Orders ({fpoOrders.length})</span>
+              <span>Franchisee & EPC PO Orders ({fpoOrders.length})</span>
             </button>
             <button
-              onClick={() => setActiveTab("warehouse_po")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                activeTab === "warehouse_po"
+              onClick={() => setActiveTab("refund_requests")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer relative ${activeTab === "refund_requests"
                   ? "bg-white text-primary shadow-lg"
                   : "text-white/80 hover:text-white"
-              }`}
+                }`}
             >
-              <FaWarehouse size={14} />
-              <span>Warehouse PO Configurations</span>
+              <FaUndoAlt size={13} />
+              <span>PO Token Refund Requests ({refundRequests.length})</span>
+              {pendingRefundsCount > 0 && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-[9px] font-black rounded-full bg-amber-400 text-amber-950 ml-0.5">
+                  {pendingRefundsCount} new
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -687,13 +773,12 @@ export default function PoOrders({ moduleUniqueId }) {
                         <div className="font-black text-emerald-600 dark:text-emerald-400 text-xs">
                           ₹{Math.round(order.token_amount_paise / 100).toLocaleString("en-IN")}
                         </div>
-                        <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black ${
-                          order.token_payment_status === "ADJUSTED"
+                        <span className={`inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black ${order.token_payment_status === "ADJUSTED"
                             ? "bg-blue-100 text-blue-800"
                             : order.token_payment_status === "PAID"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}>
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-800"
+                          }`}>
                           {order.token_payment_status || "PENDING"}
                         </span>
                       </div>
@@ -873,125 +958,310 @@ export default function PoOrders({ moduleUniqueId }) {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════════ */}
-      {/* TAB 2: WAREHOUSE PO CONFIGURATIONS                                        */}
+      {/* TAB 2: PO TOKEN REFUND REQUESTS & ACCOUNTS SETTLEMENT                    */}
       {/* ══════════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "warehouse_po" && (
+      {activeTab === "refund_requests" && (
         <div className="space-y-6">
-          {/* Filtering Section */}
-          <div className="bg-surface rounded-2xl border-2 border-border p-6 shadow-sm flex flex-col md:flex-row items-center gap-4">
-            <div className="flex-1 w-full">
-              <Dropdown
-                label="Filter by State"
-                value={stateFilter}
-                onChange={setStateFilter}
-                placeholder="All States"
-                options={states.map((s) => ({ value: s.id, text: s.name }))}
-              />
+          {/* Top Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-5 border-2 border-border shadow-xs flex items-center gap-4">
+              <div className="p-3.5 bg-primary/10 rounded-2xl text-primary border border-primary/20">
+                <FaUndoAlt size={22} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Total Refund Claims</div>
+                <div className="text-2xl font-black text-text-primary mt-0.5">{totalRefundRequestsCount} Claims</div>
+                <div className="text-[10px] text-text-muted">EPC & Franchisee POs</div>
+              </div>
             </div>
-            <div className="flex-1 w-full">
-              <Dropdown
-                label="Filter by Cluster"
-                value={clusterFilter}
-                onChange={setClusterFilter}
-                placeholder={stateFilter ? "All Clusters" : "Select a state first..."}
-                disabled={!stateFilter}
-                options={clusters.map((c) => ({ value: c.id, text: c.name }))}
-              />
-            </div>
-            {(stateFilter || clusterFilter) && (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setStateFilter("");
-                  setClusterFilter("");
-                }}
-                className="mt-6 md:mt-0 rounded-xl"
-              >
-                Clear Filters
-              </Button>
-            )}
-          </div>
 
-          {/* Warehouse Table */}
-          <div className="bg-surface rounded-2xl border-2 border-border/60 shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-            <div className="px-6 py-4 bg-surface-hover/30 border-b border-border flex items-center justify-between">
-              <h2 className="text-xs font-black text-text-primary flex items-center gap-3 uppercase tracking-[0.2em]">
-                <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/10">
-                  <FaWarehouse size={14} />
+            <div className="card p-5 border-2 border-border shadow-xs flex items-center gap-4">
+              <div className="p-3.5 bg-amber-500/10 rounded-2xl text-amber-600 border border-amber-500/20">
+                <FaClock size={22} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Pending Accounts Review</div>
+                <div className="text-2xl font-black text-text-primary mt-0.5">{pendingRefundsCount} Pending</div>
+                <div className="text-[10px] text-amber-600 font-bold">Needs payout approval</div>
+              </div>
+            </div>
+
+            <div className="card p-5 border-2 border-border shadow-xs flex items-center gap-4">
+              <div className="p-3.5 bg-emerald-500/10 rounded-2xl text-emerald-600 border border-emerald-500/20">
+                <FaCheckCircle size={22} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Approved & Settled</div>
+                <div className="text-2xl font-black text-text-primary mt-0.5">{approvedRefundsCount} Settled</div>
+                <div className="text-[10px] text-emerald-600 font-bold">UTR logged & verified</div>
+              </div>
+            </div>
+
+            <div className="card p-5 border-2 border-border shadow-xs flex items-center gap-4">
+              <div className="p-3.5 bg-indigo-500/10 rounded-2xl text-indigo-600 border border-indigo-500/20">
+                <FaMoneyBillWave size={22} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black text-text-muted uppercase tracking-wider">Net Settled Payouts</div>
+                <div className="text-2xl font-black text-emerald-600 mt-0.5">
+                  ₹{Math.round(totalSettledRefundPaise / 100).toLocaleString("en-IN")}
                 </div>
-                {currentCountry ? currentCountry.name : ""} Warehouses List
-              </h2>
-              <span className="text-[10px] font-black text-text-muted uppercase tracking-widest bg-surface-hover px-3 py-1.5 rounded-lg border border-border/40">
-                {displayWarehouses.length} Warehouses Listed
-              </span>
-            </div>
-
-            <div className="flex-1 p-6">
-              <CustomTable
-                headers={[
-                  { key: "warehouse_code", label: "Warehouse" },
-                  { key: "address", label: "Address" },
-                  { key: "location", label: "State & Cluster" },
-                  { key: "plans_count", label: "Active Plans" },
-                  { key: "actions", label: "Actions", align: "right" },
-                ]}
-                data={tableData}
-                loading={loading}
-                emptyMessage="No warehouses identified matching filters."
-                containerClassName="border-none shadow-none rounded-none bg-transparent"
-                renderRow={({ warehouse, plans }, index) => {
-                  return (
-                    <tr
-                      key={warehouse.id || warehouse._id || index}
-                      className="group hover:bg-primary/[0.03] transition-colors border-b border-border/60"
-                    >
-                      <td className="px-6 py-4 font-black text-text-primary tracking-tight text-sm whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 group-hover:scale-105 transition-transform">
-                            <FaWarehouse size={15} />
-                          </div>
-                          <span>{warehouse.warehouse_code || warehouse.name || "N/A"}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-xs font-semibold text-text-secondary truncate max-w-xs">
-                        {warehouse.address || "N/A"}
-                      </td>
-                      <td className="px-6 py-4 text-xs font-bold text-text-secondary whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-text-primary font-bold">
-                          <FaMapMarkerAlt className="text-primary text-[11px]" />
-                          <span>{warehouse.state || "N/A"}</span>
-                        </div>
-                        <div className="text-text-muted text-[10px] font-normal mt-0.5">
-                          Cluster: {warehouse.cluster || "N/A"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-black ${
-                            plans.length > 0
-                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
-                              : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                          }`}
-                        >
-                          {plans.length > 0 ? `✓ ${plans.length} Configured` : "No Plans Configured"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <Button
-                          onClick={() => handleConfigurePO(warehouse)}
-                          size="sm"
-                          leftIcon={<FaEdit size={12} />}
-                          className="rounded-xl text-xs font-black py-2 px-3.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
-                        >
-                          Configure PO Settings
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                }}
-              />
+                <div className="text-[10px] text-indigo-600 font-bold">Disbursed to partners</div>
+              </div>
             </div>
           </div>
+
+          {/* Search & Filter Bar */}
+          <div className="card p-4 border-2 border-border shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" size={14} />
+              <input
+                type="text"
+                value={refundSearch}
+                onChange={(e) => setRefundSearch(e.target.value)}
+                placeholder="Search by PO number, partner name, phone, or bank account..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs font-semibold border border-border bg-surface text-text-primary focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <select
+                value={refundStatusFilter}
+                onChange={(e) => setRefundStatusFilter(e.target.value)}
+                className="px-3.5 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer focus:outline-none focus:border-primary"
+              >
+                <option value="">All Settlement Statuses</option>
+                <option value="PENDING">⚡ Pending Review ({pendingRefundsCount})</option>
+                <option value="APPROVED">Approved (Awaiting Payout)</option>
+                <option value="PROCESSED">✓ Settled & Paid</option>
+                <option value="REJECTED">✕ Rejected</option>
+              </select>
+
+              {(refundSearch || refundStatusFilter) && (
+                <button
+                  onClick={() => {
+                    setRefundSearch("");
+                    setRefundStatusFilter("");
+                  }}
+                  className="px-3 py-2.5 rounded-xl text-xs font-bold text-text-muted hover:text-text-primary hover:bg-surface-hover border border-border transition-all cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+
+              <button
+                onClick={fetchRefundRequests}
+                className="px-4 py-2.5 rounded-xl bg-surface-hover hover:bg-border text-text-primary text-xs font-bold border border-border transition-all cursor-pointer"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Refund Requests Table */}
+          <CustomTable
+            headers={[
+              { key: "po_number", label: "PO Details & Date" },
+              { key: "requester", label: "Requester Account" },
+              { key: "quota", label: "Quota Commitment" },
+              { key: "token_accounting", label: "Token Breakdown" },
+              { key: "penalty", label: "Penalty Deducted" },
+              { key: "net_refund", label: "Net Refund Amount" },
+              { key: "bank", label: "Payout Bank Details" },
+              { key: "status", label: "Status", align: "center" },
+              { key: "actions", label: "Actions", align: "right" },
+            ]}
+            data={filteredRefundRequests}
+            loading={refundLoading}
+            emptyMessage="No PO Token Refund Requests Found"
+            renderRow={(req, index) => {
+              const statusCfg = {
+                PENDING: { label: "Pending Review", bg: "#fffbeb", text: "#b45309", border: "#fde68a" },
+                APPROVED: { label: "Approved (Pending UTR)", bg: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
+                PROCESSED: { label: "Settled & Paid ✓", bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+                REJECTED: { label: "Rejected ✕", bg: "#fef2f2", text: "#b91c1c", border: "#fca5a5" },
+              }[req.status] || { label: req.status, bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" };
+
+              const netRefund = (req.refundable_amount_paise || 0) / 100;
+              const penaltyAmt = (req.penalty_paise || 0) / 100;
+
+              return (
+                <tr
+                  key={req._id || req.id || index}
+                  className="group hover:bg-primary/[0.03] transition-colors border-b border-border/60"
+                >
+                  {/* PO Details */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-600 shrink-0">
+                        <FaUndoAlt size={16} />
+                      </div>
+                      <div>
+                        <div className="font-mono font-black text-text-primary text-xs tracking-tight">
+                          {req.po_number || req.po_id?.po_number || "PO Order"}
+                        </div>
+                        <div className="text-[11px] font-medium text-text-muted mt-0.5 flex items-center gap-1">
+                          <FaClock size={10} className="opacity-60" />
+                          {new Date(req.created_at || req.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Requester */}
+                  <td className="px-5 py-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-2 py-0.2 rounded-md text-[9px] font-black uppercase ${req.requester_role === "EPC"
+                            ? "bg-blue-100 text-blue-800 border border-blue-200"
+                            : "bg-purple-100 text-purple-800 border border-purple-200"
+                          }`}>
+                          {req.requester_role || "Partner"}
+                        </span>
+                        <span className="font-bold text-text-primary text-xs truncate max-w-[150px]" title={req.requester_name}>
+                          {req.requester_name || "Applicant"}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-text-muted font-medium truncate max-w-[170px]">
+                        {req.requester_phone || req.requester_email || "—"}
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Quota */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <div className="space-y-0.5 text-xs">
+                      <div className="font-bold text-text-primary">
+                        {req.committed_quantity || req.po_id?.total_booked_quantity || 0} Kits Committed
+                      </div>
+                      <div className="text-[10px] text-text-muted">
+                        Fulfilled: <strong className="text-text-primary">{req.purchased_quantity || req.po_id?.fulfilled_quantity || 0}</strong> • Unpurchased: <strong className="text-amber-600">{req.unpurchased_quantity || 0}</strong>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Token Breakdown */}
+                  <td className="px-5 py-4 whitespace-nowrap text-xs">
+                    <div className="space-y-0.5">
+                      <div className="text-text-muted text-[11px]">
+                        Deposit: <strong className="text-text-primary">₹{Math.round((req.token_paid_paise || 0) / 100).toLocaleString("en-IN")}</strong>
+                      </div>
+                      {req.token_adjusted_paise > 0 && (
+                        <div className="text-text-muted text-[11px]">
+                          Adjusted: <strong className="text-blue-600">-₹{Math.round(req.token_adjusted_paise / 100).toLocaleString("en-IN")}</strong>
+                        </div>
+                      )}
+                      <div className="text-[11px] font-bold text-text-primary">
+                        Escrow: ₹{Math.round((req.token_escrow_balance_paise || 0) / 100).toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Penalty */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    {penaltyAmt > 0 ? (
+                      <div>
+                        <div className="font-black text-red-600 text-xs">
+                          -₹{Math.round(penaltyAmt).toLocaleString("en-IN")}
+                        </div>
+                        <span className="text-[9px] font-bold text-red-700 bg-red-100 dark:bg-red-950/40 px-1.5 py-0.2 rounded">
+                          {req.penalty_type} {req.penalty_rate ? `(${req.penalty_rate}%)` : ""}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-bold text-emerald-600">₹0 (Zero Penalty)</span>
+                    )}
+                  </td>
+
+                  {/* Net Refund Amount */}
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <div className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                      ₹{Math.round(netRefund).toLocaleString("en-IN")}
+                    </div>
+                    <span className="text-[9px] font-bold text-text-muted">Net Payout Amount</span>
+                  </td>
+
+                  {/* Bank Details */}
+                  <td className="px-5 py-4">
+                    {req.bank_details ? (
+                      <div className="text-xs space-y-0.5 max-w-[190px]">
+                        <div className="font-bold text-text-primary truncate" title={req.bank_details.bank_name}>
+                          {req.bank_details.bank_name || "Bank Account"}
+                        </div>
+                        <div className="font-mono text-[11px] text-text-secondary truncate">
+                          A/C: ••••{String(req.bank_details.account_number || "").slice(-4)}
+                        </div>
+                        <div className="text-[10px] text-text-muted truncate">
+                          IFSC: {req.bank_details.ifsc_code || "—"} • {req.bank_details.account_holder_name}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-text-muted italic">Bank details pending</span>
+                    )}
+                  </td>
+
+                  {/* Status Badge */}
+                  <td className="px-5 py-4 text-center whitespace-nowrap">
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black shadow-2xs"
+                      style={{ backgroundColor: statusCfg.bg, color: statusCfg.text, border: `1px solid ${statusCfg.border}` }}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusCfg.text }} />
+                      {statusCfg.label}
+                    </span>
+                    {req.payout_details?.payment_reference && (
+                      <div className="font-mono text-[10px] text-text-muted mt-1 truncate max-w-[130px] mx-auto">
+                        UTR: {req.payout_details.payment_reference}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Action Buttons */}
+                  <td className="px-5 py-4 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {req.status === "PENDING" && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedRefundApprove(req);
+                              setApproveForm({
+                                payment_method: "RTGS",
+                                payment_reference: "",
+                                approval_notes: `Refund approved for PO ${req.po_number || ""}`,
+                              });
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer shadow-xs"
+                          >
+                            ✓ Approve & Settle
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedRefundReject(req);
+                              setRejectReasonInput("");
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs cursor-pointer shadow-xs"
+                          >
+                            ✕ Reject
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => setViewingRefund(req)}
+                        className="px-3 py-1.5 rounded-xl bg-surface-hover hover:bg-border text-text-primary font-bold text-xs border border-border cursor-pointer shadow-2xs"
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            }}
+          />
         </div>
       )}
 
@@ -1010,6 +1280,21 @@ export default function PoOrders({ moduleUniqueId }) {
                 <p className="text-xs text-text-muted mt-0.5">
                   Partner: <strong className="text-text-primary">{selectedOrder.franchisee_id?.business_name || "Franchisee"}</strong> • Plan: <strong className="text-primary">{selectedOrder.plan_id?.name || "Standard Plan"}</strong>
                 </p>
+                {/* Creator Attribution */}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[10px] text-text-muted font-bold">Created By:</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase ${selectedOrder.created_by_role === "BDE"
+                      ? "bg-blue-100 text-blue-800 border border-blue-200"
+                      : "bg-purple-100 text-purple-800 border border-purple-200"
+                    }`}>
+                    {selectedOrder.created_by_role === "BDE" ? "BDE" : "Franchisee Partner"}
+                  </span>
+                  {(selectedOrder.creator_name || selectedOrder.creator_code) && (
+                    <span className="text-[11px] font-bold text-text-secondary">
+                      ({selectedOrder.creator_name || selectedOrder.creator_code})
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setSelectedOrder(null)}
@@ -1017,7 +1302,7 @@ export default function PoOrders({ moduleUniqueId }) {
               >
                 <FaTimes size={16} />
               </button>
-            </div>
+            </div>c
 
             <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
               {/* PO Type, Quota & Token Deposit Summary */}
@@ -1044,13 +1329,12 @@ export default function PoOrders({ moduleUniqueId }) {
                       <span className="font-black text-emerald-600 text-xs">
                         ₹{Math.round(selectedOrder.token_amount_paise / 100).toLocaleString("en-IN")}
                       </span>
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                        selectedOrder.token_payment_status === "ADJUSTED"
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${selectedOrder.token_payment_status === "ADJUSTED"
                           ? "bg-blue-100 text-blue-800"
                           : selectedOrder.token_payment_status === "PAID"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}>
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-800"
+                        }`}>
                         {selectedOrder.token_payment_status || "PENDING"}
                       </span>
                     </div>
@@ -1086,6 +1370,81 @@ export default function PoOrders({ moduleUniqueId }) {
                   </div>
                 ) : null}
               </div>
+
+              {/* PO Validity, Escrow Accounting & Expiry Penalty Snapshot */}
+              {(() => {
+                const expiryDate = selectedOrder.lock_expires_at || selectedOrder.expires_at;
+                const daysLeft = expiryDate
+                  ? Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                  : null;
+                const tokenPaid = (selectedOrder.token_amount_paise || 0) / 100;
+                const tokenAdjusted = (selectedOrder.token_adjusted_total_paise || selectedOrder.token_adjusted_paise || 0) / 100;
+                const escrowBal = (selectedOrder.token_balance_paise || (selectedOrder.token_amount_paise - (selectedOrder.token_adjusted_total_paise || selectedOrder.token_adjusted_paise || 0))) / 100;
+                const penaltyAmt = (selectedOrder.applicable_penalty_paise || 0) / 100;
+                const refundableToken = (selectedOrder.refundable_token_paise || 0) / 100;
+
+                return (
+                  <div className="p-4 rounded-2xl bg-surface-hover/50 border-2 border-border/80 space-y-3">
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                      <span className="font-black text-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                        <FaClock className="text-primary" /> PO Validity, Escrow & Expiry Penalty Lifecycle
+                      </span>
+                      <span className={`px-2 py-0.2 rounded text-[9px] font-black uppercase ${selectedOrder.settlement_status === "REFUNDED"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : selectedOrder.settlement_status === "EXPIRED"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-blue-100 text-blue-800"
+                        }`}>
+                        Settlement: {selectedOrder.settlement_status || "ACTIVE"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                      <div className="p-2.5 rounded-xl bg-surface border border-border">
+                        <span className="text-[10px] text-text-muted block">Expiry Date</span>
+                        <strong className="text-text-primary text-[11px]">
+                          {expiryDate ? new Date(expiryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "30 Days SLA"}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-surface border border-border">
+                        <span className="text-[10px] text-text-muted block">Days to Expiry</span>
+                        <strong className={`text-[11px] ${daysLeft != null && daysLeft <= 0
+                            ? "text-red-600 font-black"
+                            : daysLeft != null && daysLeft <= 7
+                              ? "text-amber-600 font-black"
+                              : "text-emerald-600 font-black"
+                          }`}>
+                          {daysLeft != null ? (daysLeft <= 0 ? "EXPIRED" : `${daysLeft} Days Left`) : "Active"}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-surface border border-border">
+                        <span className="text-[10px] text-text-muted block">Escrow Balance</span>
+                        <strong className="text-text-primary text-[11px]">
+                          ₹{Math.max(0, Math.round(escrowBal)).toLocaleString("en-IN")}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-surface border border-border">
+                        <span className="text-[10px] text-text-muted block">Applicable Penalty</span>
+                        <strong className={`text-[11px] ${penaltyAmt > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          {penaltyAmt > 0 ? `-₹${Math.round(penaltyAmt).toLocaleString("en-IN")}` : "₹0"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-surface border border-border/80 flex items-center justify-between text-[11px]">
+                      <div>
+                        <span className="text-text-muted">Token Accounting: </span>
+                        <span>Paid <strong>₹{Math.round(tokenPaid).toLocaleString("en-IN")}</strong> • Adjusted <strong>₹{Math.round(tokenAdjusted).toLocaleString("en-IN")}</strong></span>
+                      </div>
+                      {refundableToken > 0 && (
+                        <div className="font-black text-emerald-600">
+                          Refundable Escrow: ₹{Math.round(refundableToken).toLocaleString("en-IN")}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Product Info */}
               <div className="space-y-2">
@@ -1271,6 +1630,17 @@ export default function PoOrders({ moduleUniqueId }) {
                   >
                     <FaTruckMoving size={12} /> 8-Step Journey ({getStageBadgeText(selectedOrder.status)})
                   </button>
+
+                  {/* Manual Settle & Expire PO Action */}
+                  {!["EXPIRED", "CANCELLED", "COMPLETED"].includes(selectedOrder.status) && (
+                    <button
+                      onClick={() => handleSettlePoExpiry(selectedOrder._id)}
+                      disabled={actionLoading}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5"
+                    >
+                      <FaExclamationTriangle size={12} /> Settle & Expire PO
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1325,21 +1695,378 @@ export default function PoOrders({ moduleUniqueId }) {
         </div>
       )}
 
-      {/* ── PRODUCT 8-STAGE JOURNEY MODAL ──────────────────────────────────── */}
-      {journeyOrder && (
-        <Product8StageJourneyModal
-          isOpen={!!journeyOrder}
-          onClose={() => {
-            setJourneyOrder(null);
-            setJourneyProduct(null);
-          }}
-          order={journeyOrder}
-          product={journeyProduct}
-          orderType="po"
-          onStageUpdated={() => {
-            fetchFpoOrders();
-          }}
-        />
+      {/* ── APPROVE & SETTLE PO REFUND MODAL ─────────────────────────────── */}
+      {selectedRefundApprove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg rounded-3xl bg-surface border border-border shadow-2xl p-6 space-y-5 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-600 border border-emerald-500/20">
+                  <FaCheckCircle size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-text-primary">
+                    Approve & Settle Token Refund
+                  </h3>
+                  <div className="text-xs text-text-muted mt-0.5">
+                    PO Order: <strong className="font-mono text-text-primary">{selectedRefundApprove.po_number || selectedRefundApprove.po_id?.po_number}</strong>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRefundApprove(null)}
+                className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+              >
+                <FaTimes size={16} />
+              </button>
+            </div>
+
+            {/* Payout Summary Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border border-emerald-500/20 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black text-text-muted uppercase tracking-wider block">Net Approved Payout</span>
+                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                  ₹{Math.round((selectedRefundApprove.refundable_amount_paise || 0) / 100).toLocaleString("en-IN")}
+                </span>
+                <div className="text-[10px] text-text-muted mt-0.5">
+                  Token: ₹{Math.round((selectedRefundApprove.token_paid_paise || 0) / 100).toLocaleString("en-IN")} • Penalty: -₹{Math.round((selectedRefundApprove.penalty_paise || 0) / 100).toLocaleString("en-IN")}
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-text-muted font-bold block">Requester Role</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-surface text-text-primary border border-border shadow-2xs">
+                  {selectedRefundApprove.requester_role || "PARTNER"}
+                </span>
+                <div className="text-xs font-bold text-text-primary mt-1 truncate max-w-[140px]">
+                  {selectedRefundApprove.requester_name}
+                </div>
+              </div>
+            </div>
+
+            {/* Beneficiary Bank Details Card */}
+            {selectedRefundApprove.bank_details ? (
+              <div className="p-3.5 rounded-2xl bg-surface-hover border border-border space-y-1.5 text-xs">
+                <div className="flex items-center gap-1.5 text-text-secondary font-black uppercase text-[10px] tracking-wider">
+                  <FaUniversity className="text-primary" /> Verified Beneficiary Bank Account
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                  <div>
+                    <span className="text-text-muted block text-[10px]">Bank Name</span>
+                    <strong className="text-text-primary">{selectedRefundApprove.bank_details.bank_name || "N/A"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[10px]">Account Holder</span>
+                    <strong className="text-text-primary">{selectedRefundApprove.bank_details.account_holder_name || "N/A"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[10px]">Account Number</span>
+                    <strong className="font-mono text-text-primary">{selectedRefundApprove.bank_details.account_number || "N/A"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-text-muted block text-[10px]">IFSC Code</span>
+                    <strong className="font-mono text-text-primary">{selectedRefundApprove.bank_details.ifsc_code || "N/A"}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 font-medium">
+                Warning: No bank details attached. Payout will be tracked manually.
+              </div>
+            )}
+
+            {/* Settlement Payout Form */}
+            <form onSubmit={handleApproveRefund} className="space-y-4 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black text-text-secondary uppercase tracking-wider mb-1">
+                    Disbursement Mode *
+                  </label>
+                  <select
+                    value={approveForm.payment_method}
+                    onChange={(e) => setApproveForm(prev => ({ ...prev, payment_method: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary cursor-pointer focus:outline-none focus:border-primary"
+                  >
+                    <option value="RTGS">RTGS Transfer</option>
+                    <option value="NEFT">NEFT Transfer</option>
+                    <option value="IMPS">IMPS Immediate</option>
+                    <option value="UPI">UPI Direct</option>
+                    <option value="BANK_TRANSFER">Bank Wire / Transfer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-text-secondary uppercase tracking-wider mb-1">
+                    Bank Transaction UTR / Ref *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={approveForm.payment_reference}
+                    onChange={(e) => setApproveForm(prev => ({ ...prev, payment_reference: e.target.value }))}
+                    placeholder="e.g. UTR-2026-998811"
+                    className="w-full px-3.5 py-2 rounded-xl text-xs font-bold border border-border bg-surface text-text-primary focus:outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-text-secondary uppercase tracking-wider mb-1">
+                  Settlement & Payout Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={approveForm.approval_notes}
+                  onChange={(e) => setApproveForm(prev => ({ ...prev, approval_notes: e.target.value }))}
+                  placeholder="e.g. Disbursed post SLA audit and 10% penalty deduction"
+                  className="w-full px-3.5 py-2 rounded-xl text-xs font-semibold border border-border bg-surface text-text-primary focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefundApprove(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold border border-border text-text-muted hover:bg-surface-hover cursor-pointer transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md cursor-pointer transition-all"
+                >
+                  {actionLoading ? "Processing..." : "Confirm & Settle Payout"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── REJECT PO REFUND MODAL ────────────────────────────────────────── */}
+      {selectedRefundReject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="relative w-full max-w-md rounded-3xl bg-surface border border-border shadow-2xl p-6 space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2.5 bg-red-500/10 rounded-xl text-red-600 border border-red-500/20">
+                  <FaBan size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-text-primary">
+                    Reject Refund Request
+                  </h3>
+                  <div className="text-xs text-text-muted mt-0.5">
+                    PO Order: <strong className="font-mono text-text-primary">{selectedRefundReject.po_number || selectedRefundReject.po_id?.po_number}</strong>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRefundReject(null)}
+                className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+              >
+                <FaTimes size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-text-secondary">
+              Please enter the mandatory reason for declining this refund request. This explanation will be logged and visible to the applicant.
+            </p>
+
+            <form onSubmit={handleRejectRefund} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-text-secondary uppercase tracking-wider mb-1">
+                  Rejection Reason *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={rejectReasonInput}
+                  onChange={(e) => setRejectReasonInput(e.target.value)}
+                  placeholder="e.g. Committed kits quota not eligible for refund; PO was cancelled due to partner breach."
+                  className="w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold border border-border bg-surface text-text-primary focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefundReject(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold border border-border text-text-muted hover:bg-surface-hover cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-red-600 hover:bg-red-700 text-white shadow-md cursor-pointer"
+                >
+                  {actionLoading ? "Rejecting..." : "Confirm Rejection"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEW REFUND DETAILS MODAL ─────────────────────────────────────── */}
+      {viewingRefund && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl bg-surface border border-border shadow-2xl overflow-hidden animate-in fade-in duration-300">
+            <div className="p-6 border-b border-border flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-text-primary">
+                    Refund Claim Details: {viewingRefund.po_number || viewingRefund.po_id?.po_number}
+                  </h3>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${viewingRefund.status === "PROCESSED"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : viewingRefund.status === "APPROVED"
+                        ? "bg-blue-100 text-blue-800"
+                        : viewingRefund.status === "REJECTED"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-amber-100 text-amber-800"
+                    }`}>
+                    {viewingRefund.status}
+                  </span>
+                </div>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Requested on {new Date(viewingRefund.created_at || viewingRefund.createdAt).toLocaleString("en-IN")}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingRefund(null)}
+                className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+              >
+                <FaTimes size={16} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+              {/* Requester & Quota Information */}
+              <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-surface-hover/60 border border-border">
+                <div>
+                  <span className="text-[10px] text-text-muted uppercase font-bold block">Applicant</span>
+                  <div className="font-bold text-text-primary mt-0.5">{viewingRefund.requester_name}</div>
+                  <div className="text-[11px] text-text-muted">{viewingRefund.requester_phone || viewingRefund.requester_email || "—"}</div>
+                  <span className="inline-block mt-1 px-2 py-0.2 rounded text-[9px] font-black uppercase bg-surface text-text-primary border border-border">
+                    Role: {viewingRefund.requester_role}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-text-muted uppercase font-bold block">Kit Fulfillment</span>
+                  <div className="font-bold text-text-primary mt-0.5">
+                    {viewingRefund.committed_quantity || viewingRefund.po_id?.total_booked_quantity || 0} Total Kits Committed
+                  </div>
+                  <div className="text-[11px] text-emerald-600 font-bold">
+                    ✓ {viewingRefund.purchased_quantity || viewingRefund.po_id?.fulfilled_quantity || 0} Kits Fulfilled
+                  </div>
+                  <div className="text-[11px] text-amber-600 font-bold">
+                    ⚡ {viewingRefund.unpurchased_quantity || 0} Kits Unpurchased
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Breakdown Table */}
+              <div className="space-y-2">
+                <h4 className="font-black text-text-primary uppercase tracking-wider text-[11px]">
+                  Token Accounting & Penalty Calculation
+                </h4>
+                <div className="p-4 rounded-2xl bg-surface-hover/40 border border-border space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-text-muted">Initial Commitment Token Paid:</span>
+                    <strong className="text-text-primary">₹{Math.round((viewingRefund.token_paid_paise || 0) / 100).toLocaleString("en-IN")}</strong>
+                  </div>
+                  {viewingRefund.token_adjusted_paise > 0 && (
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-text-muted">Adjusted Against Previous Kits:</span>
+                      <strong className="text-blue-600">-₹{Math.round(viewingRefund.token_adjusted_paise / 100).toLocaleString("en-IN")}</strong>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-text-muted">Available Escrow Balance:</span>
+                    <strong className="text-text-primary">₹{Math.round((viewingRefund.token_escrow_balance_paise || 0) / 100).toLocaleString("en-IN")}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-xs pt-1 border-t border-border">
+                    <span className="text-red-600 font-semibold">
+                      Applicable Expiry Penalty ({viewingRefund.penalty_type} {viewingRefund.penalty_rate ? `@ ${viewingRefund.penalty_rate}%` : ""}):
+                    </span>
+                    <strong className="text-red-600">-₹{Math.round((viewingRefund.penalty_paise || 0) / 100).toLocaleString("en-IN")}</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-sm pt-2 border-t-2 border-border font-black">
+                    <span className="text-text-primary">Net Refundable Balance:</span>
+                    <span className="text-emerald-600 text-base">
+                      ₹{Math.round((viewingRefund.refundable_amount_paise || 0) / 100).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              {viewingRefund.bank_details && (
+                <div className="space-y-2">
+                  <h4 className="font-black text-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <FaUniversity className="text-primary" /> Payout Bank Beneficiary
+                  </h4>
+                  <div className="p-3.5 rounded-2xl bg-surface-hover/80 border border-border grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-text-muted block text-[10px]">Bank Name</span>
+                      <strong className="text-text-primary">{viewingRefund.bank_details.bank_name || "N/A"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-text-muted block text-[10px]">Account Holder</span>
+                      <strong className="text-text-primary">{viewingRefund.bank_details.account_holder_name || "N/A"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-text-muted block text-[10px]">Account Number</span>
+                      <strong className="font-mono text-text-primary">{viewingRefund.bank_details.account_number || "N/A"}</strong>
+                    </div>
+                    <div>
+                      <span className="text-text-muted block text-[10px]">IFSC Code</span>
+                      <strong className="font-mono text-text-primary">{viewingRefund.bank_details.ifsc_code || "N/A"}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payout Details (if approved / processed) */}
+              {viewingRefund.payout_details && viewingRefund.payout_details.payment_reference && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5">
+                  <span className="text-[10px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">
+                    ✓ Accounts Settlement Record
+                  </span>
+                  <div className="text-xs">
+                    UTR / Reference: <strong className="font-mono text-emerald-700 dark:text-emerald-400">{viewingRefund.payout_details.payment_reference}</strong>
+                  </div>
+                  <div className="text-[11px] text-text-muted">
+                    Mode: <strong>{viewingRefund.payout_details.payment_method || "RTGS"}</strong> • Disbursed: {viewingRefund.payout_details.processed_at ? new Date(viewingRefund.payout_details.processed_at).toLocaleString("en-IN") : "Recorded"}
+                  </div>
+                </div>
+              )}
+
+              {/* Rejection Note (if rejected) */}
+              {viewingRefund.rejection_reason && (
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 space-y-1">
+                  <span className="text-[10px] font-black text-red-800 dark:text-red-300 uppercase tracking-wider block">
+                    ✕ Decline / Rejection Reason
+                  </span>
+                  <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+                    {viewingRefund.rejection_reason}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-border flex justify-end">
+              <button
+                onClick={() => setViewingRefund(null)}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-primary text-white cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

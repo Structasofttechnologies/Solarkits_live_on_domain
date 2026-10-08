@@ -60,8 +60,8 @@ export default function Board() {
       { name: "Cart", icon: <MdShoppingCart />, path: "/cart", requiresAuth: true },
     ];
 
-    if (isFranchiseeEpc) {
-      defaultGroup.push({ name: "PO Orders", icon: <FaShoppingBag />, path: "/po-allocations", requiresAuth: true });
+    if (isAuthenticated) {
+      defaultGroup.push({ name: "PO Orders", icon: <FaShoppingBag />, path: "/po-orders", requiresAuth: true });
     }
 
     return [
@@ -72,7 +72,7 @@ export default function Board() {
       ],
       [{ name: "Settings", icon: <MdSettings />, path: "/settings", requiresAuth: true }]
     ];
-  }, [isFranchiseeEpc]);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -140,8 +140,9 @@ export default function Board() {
             <Route path="/know-my-margin/*" element={<KnowMyMargin />} />
             <Route path="/know-my-margin" element={<KnowMyMargin />} />
 
-            {/* Franchisee Product Catalogue (optional fallback) */}
+            {/* Franchisee Product Catalogue & PO Lifecycle */}
             <Route path="/epc-catalogue" element={<ProtectedRoute><EpcCatalogue /></ProtectedRoute>} />
+            <Route path="/po-orders" element={<ProtectedRoute><EpcPoAllocations /></ProtectedRoute>} />
             <Route path="/po-allocations" element={<ProtectedRoute><EpcPoAllocations /></ProtectedRoute>} />
 
             <Route path="/bulk-buy" element={<ProtectedRoute><BulkBuy /></ProtectedRoute>} />
