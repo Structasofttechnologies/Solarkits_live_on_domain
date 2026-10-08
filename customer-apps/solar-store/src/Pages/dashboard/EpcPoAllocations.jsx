@@ -399,6 +399,90 @@ export default function EpcPoAllocations() {
   const [manualUtr, setManualUtr] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  // Escrow Token Deposit State for EPC
+  const [tokenModal, setTokenModal] = useState(false);
+  const [tokenOrder, setTokenOrder] = useState(null);
+  const [tokenAlloc, setTokenAlloc] = useState(null);
+  const [tokenAmountINR, setTokenAmountINR] = useState(50000);
+  const [tokenUtr, setTokenUtr] = useState("");
+  const [tokenBank, setTokenBank] = useState("");
+  const [tokenDate, setTokenDate] = useState(new Date().toISOString().slice(0, 10));
+  const [tokenReceiptFile, setTokenReceiptFile] = useState(null);
+  const [tokenSubmitting, setTokenSubmitting] = useState(false);
+  const [tokenError, setTokenError] = useState("");
+  const [tokenSuccess, setTokenSuccess] = useState(false);
+
+  const handleOpenTokenModal = (order, epcAlloc, item) => {
+    setTokenOrder(order);
+    setTokenAlloc(epcAlloc);
+    const reqPaise = epcAlloc?.token_amount_paise || order.token_amount_paise || 5000000;
+    setTokenAmountINR(Math.round(reqPaise / 100));
+    setTokenUtr("");
+    setTokenBank("");
+    setTokenDate(new Date().toISOString().slice(0, 10));
+    setTokenReceiptFile(null);
+    setTokenError("");
+    setTokenSuccess(false);
+    setTokenModal(true);
+  };
+
+  const handleSubmitTokenPayment = async (e) => {
+    e.preventDefault();
+    setTokenError("");
+    if (!tokenUtr.trim()) {
+      setTokenError("Please enter your Bank UTR / Payment Transaction reference number.");
+      return;
+    }
+
+    setTokenSubmitting(true);
+    try {
+      let receiptUrl = null;
+      if (tokenReceiptFile) {
+        const formData = new FormData();
+        formData.append("files", tokenReceiptFile);
+        formData.append("utr_number", tokenUtr.trim().toUpperCase());
+        try {
+          const uploadRes = await axiosInstance.post(
+            `/india/v1/shop/po-allocations/${tokenOrder._id}/upload-receipt`,
+            formData,
+            { headers: { "Content-Type": "multipart/form-data" } }
+          );
+          if (uploadRes.data?.data?.url) {
+            receiptUrl = uploadRes.data.data.url;
+          }
+        } catch (uploadErr) {
+          console.warn("Receipt file upload error:", uploadErr);
+        }
+      }
+
+      const payload = {
+        utr_number: tokenUtr.trim().toUpperCase(),
+        amount_paid: Number(tokenAmountINR),
+        sender_bank_name: tokenBank.trim() || "Bank Transfer",
+        payment_date: tokenDate,
+        payment_receipt_url: receiptUrl,
+      };
+
+      const res = await axiosInstance.post(
+        `/india/v1/shop/po-allocations/${tokenOrder._id}/pay-token`,
+        payload
+      );
+
+      if (res.data?.success || res.data?.status === "success") {
+        setTokenSuccess(true);
+        toast.success("Token deposit recorded! Purchase Order is now officially STARTED ✓", { duration: 6000 });
+        fetchAllocations();
+        fetchDirectOrders();
+      } else {
+        setTokenError(res.data?.message || "Failed to record token payment.");
+      }
+    } catch (err) {
+      setTokenError(err.response?.data?.message || "Failed to record token payment.");
+    } finally {
+      setTokenSubmitting(false);
+    }
+  };
+
   // Escrow Bank Info
   const escrowBank = {
     account_name: "SolarKits Technologies Pvt Ltd (Escrow Account)",
@@ -673,13 +757,13 @@ export default function EpcPoAllocations() {
   };
 
   // Franchisee Allocation Status Badge Helper
-  const AllocationStatusBadge = ({ status, utr }) => {
-    if (status === "VERIFIED" || status === "PAID") {
+  const AllocationStatusBadge = ({ status, utr, poStatus }) => {
+    if (status === "VERIFIED" || status === "PAID" || poStatus === "PO_STARTED" || poStatus === "VALIDATED") {
       return (
         <div className="flex items-center gap-1.5">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-500/30 shadow-xs">
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-500/30 shadow-xs">
             <FiCheckCircle className="mr-1 text-emerald-600" />
-            PAID & VERIFIED
+            TOKEN PAID & PO STARTED ✓
           </span>
           {utr && (
             <span className="text-[11px] font-mono font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
@@ -698,9 +782,9 @@ export default function EpcPoAllocations() {
       );
     }
     return (
-      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-500/30 shadow-xs">
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-500/30 shadow-xs animate-pulse">
         <FiClock className="mr-1 text-amber-600" />
-        PAYMENT PENDING
+        TOKEN DEPOSIT PENDING (PO NOT STARTED)
       </span>
     );
   };
@@ -842,7 +926,8 @@ export default function EpcPoAllocations() {
                 order.items?.forEach((item) => {
                   const match = item.epc_allocations?.find(
                     (a) => a.epc_buyer_id?.toString() === user?._id?.toString() ||
-                           a.epc_buyer_id?.toString() === user?.id?.toString()
+                           a.epc_buyer_id?.toString() === user?.id?.toString() ||
+                           a.epc_buyer_id?.toString() === user?.account_id?.toString()
                   );
                   if (match) {
                     epcAlloc = match;
@@ -850,140 +935,205 @@ export default function EpcPoAllocations() {
                   }
                 });
 
-                const allocatedQty = epcAlloc?.allocated_quantity || 0;
+                if (!epcAlloc && order.items?.[0]?.epc_allocations?.length === 1) {
+                  epcAlloc = order.items[0].epc_allocations[0];
+                  allocatedItem = order.items[0];
+                } else if (!epcAlloc && order.items?.[0]) {
+                  allocatedItem = order.items[0];
+                  epcAlloc = order.items[0].epc_allocations?.[0] || { allocated_quantity: order.total_booked_quantity || 25 };
+                }
+
+                const allocatedQty = epcAlloc?.allocated_quantity || order.total_booked_quantity || 0;
                 const unitPrice = (allocatedItem?.unit_price_paise || 0) / 100;
                 const gstRate = allocatedItem?.gst_rate || 0;
                 const totalAmount = allocatedQty * unitPrice * (1 + gstRate / 100);
-                const isPaid = epcAlloc?.payment_status === "VERIFIED" || epcAlloc?.payment_status === "PAID";
+                const tokenPaise = epcAlloc?.token_amount_paise || order.token_amount_paise || 5000000;
+                const tokenRequiredINR = Math.round(tokenPaise / 100);
+                const isPaid = epcAlloc?.payment_status === "VERIFIED" || epcAlloc?.payment_status === "PAID" || order.status === "PO_STARTED" || order.token_payment_status === "PAID";
 
                 return (
                   <div
                     key={order._id}
-                    className="bg-surface border border-border rounded-2xl shadow-xs overflow-hidden transition-all hover:border-[#264baa]/40"
+                    className="bg-surface border border-border rounded-2xl shadow-xs overflow-hidden transition-all hover:border-[#264baa]/40 flex flex-col justify-between"
                   >
-                    <div className="bg-surface-hover/60 border-b border-border p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#264baa]/10 text-[#264baa] flex items-center justify-center font-bold">
-                          <FiLayers size={18} />
-                        </div>
-                        <div>
-                          <div className="text-xs text-text-secondary font-mono">PO: {order.po_number}</div>
-                          <div className="text-sm font-black text-text-primary dark:text-white">
-                            {allocatedItem?.item_name || "Solar Combo Kit Allocation"}
+                    <div>
+                      <div className="bg-surface-hover/60 border-b border-border p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#264baa]/10 text-[#264baa] flex items-center justify-center font-bold">
+                            <FiLayers size={18} />
                           </div>
-                        </div>
-                      </div>
-                      <AllocationStatusBadge status={epcAlloc?.payment_status} utr={epcAlloc?.payment_utr} />
-                    </div>
-
-                    <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="space-y-3">
-                        <h4 className="text-xs font-black uppercase text-text-secondary tracking-wider">
-                          Allocation Details
-                        </h4>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-text-secondary">Allocated Quantity:</span>
-                            <span className="font-bold text-text-primary dark:text-white">{allocatedQty} Kits</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-text-secondary">Unit Price (excl. GST):</span>
-                            <span className="font-bold text-text-primary dark:text-white">₹{unitPrice.toLocaleString("en-IN")}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-text-secondary">GST Rate:</span>
-                            <span className="font-bold text-text-primary dark:text-white">{gstRate}%</span>
-                          </div>
-                          <div className="flex justify-between pt-2 border-t border-border font-black text-sm">
-                            <span className="text-text-primary dark:text-white">Total Landed Amount:</span>
-                            <span className="text-[#264baa] dark:text-blue-400">₹{totalAmount.toLocaleString("en-IN")}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ICICI VAN Details */}
-                      <div className="md:col-span-2 space-y-3">
-                        {!isPaid && (
-                          <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 p-4 rounded-xl space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
-                                ICICI Virtual Escrow Account (Instant Settlement)
-                              </span>
-                              <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">
-                                Auto-Verify in 10s
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
-                              <div className="flex justify-between bg-surface p-2 rounded border border-border">
-                                <span className="text-text-muted">A/C: {iciciVanDetails?.account_number || escrowBank.account_number}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyText(iciciVanDetails?.account_number || escrowBank.account_number, `acc_${order._id}`)}
-                                  className="text-primary hover:underline text-[10px]"
-                                >
-                                  {copiedField === `acc_${order._id}` ? "Copied!" : "Copy"}
-                                </button>
-                              </div>
-                              <div className="flex justify-between bg-surface p-2 rounded border border-border">
-                                <span className="text-text-muted">IFSC: {iciciVanDetails?.ifsc_code || escrowBank.ifsc_code}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || escrowBank.ifsc_code, `ifsc_${order._id}`)}
-                                  className="text-primary hover:underline text-[10px]"
-                                >
-                                  {copiedField === `ifsc_${order._id}` ? "Copied!" : "Copy"}
-                                </button>
-                              </div>
+                          <div>
+                            <div className="text-xs text-text-secondary font-mono">PO: {order.po_number}</div>
+                            <div className="text-sm font-black text-text-primary dark:text-white">
+                              {allocatedItem?.item_name || "Solar Combo Kit Allocation"}
                             </div>
                           </div>
-                        )}
+                        </div>
+                        <AllocationStatusBadge status={epcAlloc?.payment_status} utr={epcAlloc?.payment_utr} poStatus={order.status} />
+                      </div>
 
-                        {/* Upload Slip Option */}
-                        {!isPaid && (
-                          activeUploadOrderId === order._id ? (
-                            <div className="space-y-2 bg-surface p-3 rounded-xl border border-border">
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="font-bold text-text-primary">Upload Bank Transfer Receipt (UTR)</span>
+                      {/* Stage 3 Notice Banner for EPC */}
+                      {!isPaid && (
+                        <div className="mx-4 sm:mx-6 mt-4 p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 text-xs space-y-1">
+                          <div className="flex items-center justify-between font-black text-amber-800 dark:text-amber-300">
+                            <span className="flex items-center gap-1.5">
+                              <FiAlertCircle className="text-amber-600 shrink-0" size={15} /> Stage 3: EPC Token Deposit Required to Start PO
+                            </span>
+                            <span className="font-mono text-sm text-amber-700 dark:text-amber-300">
+                              ₹{tokenRequiredINR.toLocaleString("en-IN")} Due
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                            🔒 <strong>Purchase Order will not commence until the token deposit is paid.</strong> The onboarded EPC Partner must complete their token deposit first to officially start the PO. Click "Pay Token Deposit" below to record payment.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="p-5 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-3">
+                          <h4 className="text-xs font-black uppercase text-text-secondary tracking-wider">
+                            Allocation & Token Details
+                          </h4>
+                          <div className="space-y-2 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-text-secondary">Allocated Quantity:</span>
+                              <span className="font-bold text-text-primary dark:text-white">{allocatedQty} Kits</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-text-secondary">Unit Price (excl. GST):</span>
+                              <span className="font-bold text-text-primary dark:text-white">₹{unitPrice.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-text-secondary">GST Rate:</span>
+                              <span className="font-bold text-text-primary dark:text-white">{gstRate}%</span>
+                            </div>
+                            <div className="flex justify-between pt-2 border-t border-border font-black text-sm">
+                              <span className="text-text-primary dark:text-white">Total Landed Amount:</span>
+                              <span className="text-[#264baa] dark:text-blue-400">₹{totalAmount.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between pt-1 text-xs">
+                              <span className="text-text-secondary font-bold">Required Token Deposit:</span>
+                              <span className="font-black text-amber-700 dark:text-amber-400">₹{tokenRequiredINR.toLocaleString("en-IN")}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ICICI VAN Details */}
+                        <div className="md:col-span-2 space-y-3">
+                          {!isPaid && (
+                            <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 p-4 rounded-xl space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
+                                  ICICI Virtual Escrow Account (Instant Settlement)
+                                </span>
+                                <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">
+                                  Auto-Verify in 10s
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                                <div className="flex justify-between bg-surface p-2 rounded border border-border">
+                                  <span className="text-text-muted">A/C: {iciciVanDetails?.account_number || escrowBank.account_number}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyText(iciciVanDetails?.account_number || escrowBank.account_number, `acc_${order._id}`)}
+                                    className="text-primary hover:underline text-[10px]"
+                                  >
+                                    {copiedField === `acc_${order._id}` ? "Copied!" : "Copy"}
+                                  </button>
+                                </div>
+                                <div className="flex justify-between bg-surface p-2 rounded border border-border">
+                                  <span className="text-text-muted">IFSC: {iciciVanDetails?.ifsc_code || escrowBank.ifsc_code}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || escrowBank.ifsc_code, `ifsc_${order._id}`)}
+                                    className="text-primary hover:underline text-[10px]"
+                                  >
+                                    {copiedField === `ifsc_${order._id}` ? "Copied!" : "Copy"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Upload Slip Option */}
+                          {!isPaid && (
+                            activeUploadOrderId === order._id ? (
+                              <div className="space-y-2 bg-surface p-3 rounded-xl border border-border">
+                                <div className="flex justify-between items-center text-xs">
+                                  <span className="font-bold text-text-primary">Upload Bank Transfer Receipt (UTR)</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveUploadOrderId(null)}
+                                    className="text-text-secondary hover:text-text-primary text-[11px]"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Enter Bank UTR / Reference No."
+                                  value={manualUtr}
+                                  onChange={(e) => setManualUtr(e.target.value)}
+                                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-surface-hover font-mono"
+                                />
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={(e) => setReceiptFile(e.target.files[0])}
+                                  className="block w-full text-xs text-text-secondary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-primary/10 file:text-primary file:font-bold"
+                                />
                                 <button
                                   type="button"
-                                  onClick={() => setActiveUploadOrderId(null)}
-                                  className="text-text-secondary hover:text-text-primary text-[11px]"
+                                  onClick={() => handleUpload(order._id)}
+                                  disabled={uploading}
+                                  className="w-full bg-primary hover:opacity-90 text-white py-2 px-3 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                                 >
-                                  Cancel
+                                  {uploading ? "Submitting Receipt..." : "Submit Receipt for Accounts Verification"}
                                 </button>
                               </div>
-                              <input
-                                type="text"
-                                placeholder="Enter Bank UTR / Reference No."
-                                value={manualUtr}
-                                onChange={(e) => setManualUtr(e.target.value)}
-                                className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-surface-hover font-mono"
-                              />
-                              <input
-                                type="file"
-                                accept="image/*,.pdf"
-                                onChange={(e) => setReceiptFile(e.target.files[0])}
-                                className="block w-full text-xs text-text-secondary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-primary/10 file:text-primary file:font-bold"
-                              />
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => handleUpload(order._id)}
-                                disabled={uploading}
-                                className="w-full bg-primary hover:opacity-90 text-white py-2 px-3 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                                onClick={() => setActiveUploadOrderId(order._id)}
+                                className="w-full py-2.5 px-3 rounded-xl bg-surface hover:bg-surface-hover border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                               >
-                                {uploading ? "Submitting Receipt..." : "Submit Receipt for Accounts Verification"}
+                                <FiUploadCloud className="text-primary" />
+                                <span>Paid via Traditional Bank Transfer? Upload Receipt Slip / UTR</span>
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setActiveUploadOrderId(order._id)}
-                              className="w-full py-2.5 px-3 rounded-xl bg-surface hover:bg-surface-hover border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <FiUploadCloud className="text-primary" />
-                              <span>Paid via Traditional Bank Transfer? Upload Receipt Slip / UTR</span>
-                            </button>
-                          )
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Footer with Franchise Partner Info & Pay Token Button */}
+                    <div className="bg-surface-hover/50 border-t border-border px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-bold text-text-secondary">Franchise Partner:</span>
+                        <span className="font-black text-text-primary">
+                          {order.franchisee_id?.business_name || order.franchisee_id?.contact_person || "SolarKits Franchise Partner"}
+                        </span>
+                        {order.franchisee_id?.mobile && (
+                          <span className="text-text-muted">({order.franchisee_id.mobile})</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!isPaid && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenTokenModal(order, epcAlloc, allocatedItem)}
+                            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-95 transition-all shadow-md cursor-pointer transform active:scale-95"
+                          >
+                            <FiDollarSign size={15} />
+                            <span>💳 Pay Token Deposit (₹{tokenRequiredINR.toLocaleString("en-IN")})</span>
+                          </button>
+                        )}
+                        {isPaid && (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-500/30">
+                            <FiCheckCircle size={14} className="text-emerald-600" />
+                            <span>Token Deposited ✓ (PO Started)</span>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1713,6 +1863,259 @@ export default function EpcPoAllocations() {
                         <>
                           <FiCheck size={14} />
                           <span>Submit Token Refund Request</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── EPC TOKEN DEPOSIT MODAL ─────────────────────────────────────────── */}
+      <AnimatePresence>
+        {tokenModal && tokenOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => !tokenSubmitting && setTokenModal(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-xl max-h-[90vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10 bg-surface border-border"
+            >
+              <div className="p-5 border-b border-border flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                      Stage 3 of 4
+                    </span>
+                    <h2 className="text-base font-black text-text-primary flex items-center gap-1.5">
+                      <FiDollarSign className="text-emerald-600" /> Pay EPC Token Deposit
+                    </h2>
+                  </div>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    PO Order: <strong className="font-mono text-text-primary">{tokenOrder.po_number}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTokenModal(false)}
+                  disabled={tokenSubmitting}
+                  className="p-2 rounded-xl hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              {tokenSuccess ? (
+                <div className="p-8 space-y-5 text-center">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400 mx-auto flex items-center justify-center shadow-md">
+                    <FiCheckCircle size={32} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-lg font-black text-text-primary">
+                      Token Deposit Recorded Successfully!
+                    </h3>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 font-bold">
+                      PO is now Officially STARTED (Stage 3 Complete ✓)
+                    </p>
+                    <p className="text-xs text-text-muted max-w-md mx-auto">
+                      Your token deposit of ₹{tokenAmountINR.toLocaleString("en-IN")} has been credited to escrow. Your quota prices are now locked.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTokenModal(false);
+                      setTokenSuccess(false);
+                    }}
+                    className="px-6 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    Close & View Order
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitTokenPayment} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+                  {/* Strict Workflow Rule */}
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 text-amber-900 dark:text-amber-200 text-xs space-y-1">
+                    <div className="font-black flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                      <FiAlertCircle size={15} className="shrink-0 text-amber-600" />
+                      Strict Workflow Rule:
+                    </div>
+                    <p className="text-[11px] leading-relaxed">
+                      <strong>Purchase Order will not commence until the token deposit is paid.</strong> The onboarded EPC Partner must complete their token deposit first. Once received, the PO will officially start.
+                    </p>
+                  </div>
+
+                  {tokenError && (
+                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950 dark:border-rose-900 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                      <FiAlertCircle size={16} className="shrink-0" />
+                      <span>{tokenError}</span>
+                    </div>
+                  )}
+
+                  {/* Escrow Bank Account Card */}
+                  <div className="p-4 rounded-2xl bg-surface-hover/80 border border-border text-xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black uppercase tracking-wider text-[10px] text-text-muted flex items-center gap-1">
+                        <FiShield size={12} className="text-emerald-500" /> Official Escrow Account
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600">Verified ICICI Corporate</span>
+                    </div>
+
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-text-muted">Account Name:</span>
+                        <span className="font-bold text-text-primary">{escrowBank.account_name}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">Account Number:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-text-primary">
+                            {iciciVanDetails?.account_number || escrowBank.account_number}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(iciciVanDetails?.account_number || escrowBank.account_number, "modal_acc")}
+                            className="text-primary hover:underline text-[10px] font-bold"
+                          >
+                            {copiedField === "modal_acc" ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">IFSC Code:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-text-primary">
+                            {iciciVanDetails?.ifsc_code || escrowBank.ifsc_code}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || escrowBank.ifsc_code, "modal_ifsc")}
+                            className="text-primary hover:underline text-[10px] font-bold"
+                          >
+                            {copiedField === "modal_ifsc" ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-text-muted">UPI ID:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-text-primary">{escrowBank.upi_id}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(escrowBank.upi_id, "modal_upi")}
+                            className="text-primary hover:underline text-[10px] font-bold"
+                          >
+                            {copiedField === "modal_upi" ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form Inputs */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold text-text-primary mb-1">
+                        Token Deposit Amount (INR) <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={tokenAmountINR}
+                        onChange={(e) => setTokenAmountINR(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface text-text-primary font-black text-sm outline-none focus:border-primary"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-text-primary mb-1">
+                        Payment UTR / Transaction Reference Number <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. ICIC123456789 or 20261008001"
+                        value={tokenUtr}
+                        onChange={(e) => setTokenUtr(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-surface text-text-primary font-mono text-xs uppercase outline-none focus:border-primary"
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-text-primary mb-1">
+                          Sender Bank Name
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. HDFC Bank, SBI"
+                          value={tokenBank}
+                          onChange={(e) => setTokenBank(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs outline-none focus:border-primary"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-text-primary mb-1">
+                          Payment Date
+                        </label>
+                        <input
+                          type="date"
+                          value={tokenDate}
+                          onChange={(e) => setTokenDate(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl border border-border bg-surface text-text-primary text-xs outline-none focus:border-primary"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-text-primary mb-1">
+                        Payment Receipt Slip / Screenshot (Optional)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => setTokenReceiptFile(e.target.files[0] || null)}
+                        className="block w-full text-xs text-text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-primary/10 file:text-primary file:font-bold cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setTokenModal(false)}
+                      disabled={tokenSubmitting}
+                      className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-text-secondary hover:bg-surface-hover transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={tokenSubmitting}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black shadow-lg hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {tokenSubmitting ? (
+                        <>
+                          <FiLoader size={14} className="animate-spin" />
+                          <span>Recording Deposit...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiCheck size={14} />
+                          <span>Confirm & Submit Token Deposit</span>
                         </>
                       )}
                     </button>

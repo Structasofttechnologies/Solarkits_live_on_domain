@@ -37,6 +37,7 @@ const {
   get_epc_po_allocations,
   submit_epc_po_receipt,
   verify_epc_po_payment,
+  pay_epc_po_token,
   list_epc_po_orders,
   get_epc_active_po_quotas,
   create_epc_po_order,
@@ -101,6 +102,7 @@ router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);
 // ── EPC PO Allocations from Franchisees ───────────────────────────────────
 router.get("/po-allocations", verify_auth, get_epc_po_allocations);
 router.post("/po-allocations/:poId/upload-receipt", verify_auth, epcReceiptUpload, submit_epc_po_receipt);
+router.post("/po-allocations/:poId/pay-token", verify_auth, pay_epc_po_token);
 
 // ── Reseller/Franchisee verifies an EPC buyer's payment receipt ────────────
 // Called from the Reseller Portal /orders detail modal

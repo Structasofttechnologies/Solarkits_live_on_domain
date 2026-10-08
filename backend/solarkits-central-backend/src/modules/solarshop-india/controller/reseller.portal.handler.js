@@ -3451,7 +3451,8 @@ const create_my_po_order = async (req, res) => {
   try {
     const resellerId = req.reseller?._id || req.reseller?.id;
     const {
-      items,
+      items = [],
+      target_committed_quantity,
       auto_submit,
       order_type,
       po_category,
@@ -3463,18 +3464,15 @@ const create_my_po_order = async (req, res) => {
       offline_payment,
     } = req.body;
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'Items array is required' });
-    }
-
     const { createPoDraft, submitPo } = require('../../admin-panel/services/franchisee.po.service');
 
     const result = await createPoDraft({
       franchisee_id: resellerId,
-      items,
+      items: Array.isArray(items) ? items : [],
+      target_committed_quantity: Number(target_committed_quantity) || 0,
       order_type: order_type || 'po_order',
       po_category: po_category || 'SINGLE_PO',
-      is_token_booking: Boolean(is_token_booking),
+      is_token_booking: is_token_booking !== undefined ? Boolean(is_token_booking) : true,
       parent_po_id: parent_po_id || null,
       destination_type: destination_type || 'hub_stock',
       destination_address: destination_address || null,
@@ -3485,7 +3483,7 @@ const create_my_po_order = async (req, res) => {
     });
 
     let finalOrder = result.order;
-    if (auto_submit && finalOrder?._id) {
+    if (auto_submit && finalOrder?._id && finalOrder.status !== 'PENDING_ALLOCATION') {
       finalOrder = await submitPo({
         po_id: finalOrder._id,
         franchisee_id: resellerId,
@@ -3498,12 +3496,113 @@ const create_my_po_order = async (req, res) => {
 
     return res.status(201).json({
       status: 'success',
-      message: 'Purchase Order created successfully',
+      message: finalOrder.status === 'PENDING_ALLOCATION'
+        ? 'Purchase Order container created. Please allocate products to proceed.'
+        : 'Purchase Order created successfully',
       data: finalOrder,
     });
   } catch (error) {
     console.error('[reseller.portal] create_my_po_order error:', error);
     return res.status(400).json({ status: 'error', message: error.message || 'Failed to create PO order' });
+  }
+};
+
+const allocate_po_products = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { id } = req.params;
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Items array with allocated quantities is required' });
+    }
+
+    const { allocatePoProducts } = require('../../admin-panel/services/franchisee.po.service');
+    const updatedOrder = await allocatePoProducts({
+      po_id: id,
+      franchisee_id: resellerId,
+      items,
+      actor_id: resellerId,
+      req,
+    });
+
+    clearResellerPoCache(resellerId);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Products allocated successfully. Token payment required to start PO.',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] allocate_po_products error:', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to allocate products' });
+  }
+};
+
+const pay_po_token = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { id } = req.params;
+    const {
+      epc_buyer_id,
+      utr_number,
+      amount_paid,
+      sender_bank_name,
+      payment_date,
+      payment_receipt_url,
+    } = req.body;
+
+    const { recordEpcTokenPayment } = require('../../admin-panel/services/franchisee.po.service');
+    const updatedOrder = await recordEpcTokenPayment({
+      po_id: id,
+      franchisee_id: resellerId,
+      epc_buyer_id: epc_buyer_id || null,
+      utr_number: (utr_number || '').trim().toUpperCase(),
+      amount_paid_inr: amount_paid,
+      sender_bank_name,
+      payment_date,
+      payment_receipt_url,
+      actor_id: resellerId,
+      req,
+    });
+
+    clearResellerPoCache(resellerId);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Token payment recorded successfully. PO is now started!',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] pay_po_token error:', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to record token payment' });
+  }
+};
+
+const validate_my_po = async (req, res) => {
+  try {
+    const resellerId = req.reseller?._id || req.reseller?.id;
+    const { id } = req.params;
+
+    const { validatePo } = require('../../admin-panel/services/franchisee.po.service');
+    const updatedOrder = await validatePo({
+      po_id: id,
+      franchisee_id: resellerId,
+      actor_id: resellerId,
+      notes: req.body?.notes || 'Validated by Franchisee',
+      req,
+    });
+
+    clearResellerPoCache(resellerId);
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'PO Order validated successfully!',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('[reseller.portal] validate_my_po error:', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to validate PO' });
   }
 };
 
@@ -4214,6 +4313,9 @@ module.exports = {
   list_my_po_orders,
   get_my_active_po_quotas,
   create_my_po_order,
+  allocate_po_products,
+  pay_po_token,
+  validate_my_po,
   get_my_po_order_detail,
   preview_po_penalty,
   request_po_refund,

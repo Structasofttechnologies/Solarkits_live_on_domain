@@ -3982,6 +3982,48 @@ const verify_epc_po_payment = async (req, res) => {
   });
 };
 
+// ── EPC PARTNER PAYS TOKEN DEPOSIT (Directly from EPC Dashboard) ──────────────
+const pay_epc_po_token = async (req, res) => {
+  try {
+    const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
+    if (!accountId) {
+      return res.status(401).json({ status: "error", success: false, message: "Unauthorized" });
+    }
+
+    const { poId } = req.params;
+    const { utr_number, amount_paid, sender_bank_name, payment_date, payment_receipt_url } = req.body;
+
+    if (!utr_number || !utr_number.trim()) {
+      return res.status(400).json({ status: "error", success: false, message: "UTR / Transaction reference number is required." });
+    }
+
+    const { recordEpcTokenPayment } = require("../../../admin-panel/services/franchisee.po.service");
+    const updatedOrder = await recordEpcTokenPayment({
+      po_id: poId,
+      franchisee_id: null,
+      epc_buyer_id: accountId,
+      utr_number: utr_number.trim().toUpperCase(),
+      amount_paid_inr: amount_paid,
+      sender_bank_name: sender_bank_name || "Bank Transfer",
+      payment_date: payment_date || new Date().toISOString().slice(0, 10),
+      payment_receipt_url: payment_receipt_url || null,
+      actor_id: accountId,
+      req,
+    });
+
+    return res.status(200).json({
+      status: "success",
+      success: true,
+      message: "Token payment recorded successfully. PO is now officially STARTED!",
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error("pay_epc_po_token error:", error);
+    return res.status(400).json({ status: "error", success: false, message: error.message || "Failed to record token payment" });
+  }
+};
+
+
 // ── SOLAR EPC PURCHASE ORDER LIFECYCLE (Cards, Reorder, Settlement & Refund) ──
 const list_epc_po_orders = async (req, res) => {
   try {
@@ -4274,6 +4316,7 @@ module.exports = {
   get_epc_po_allocations,
   submit_epc_po_receipt,
   verify_epc_po_payment,
+  pay_epc_po_token,
   list_epc_po_orders,
   get_epc_active_po_quotas,
   create_epc_po_order,

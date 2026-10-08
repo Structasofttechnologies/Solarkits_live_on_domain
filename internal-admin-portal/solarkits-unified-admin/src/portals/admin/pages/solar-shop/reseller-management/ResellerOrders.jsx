@@ -30,6 +30,11 @@ const MODULE_UID = "RSL_MGMT";
 
 // ─── Status Badge Helpers ───────────────────────────────────────────────────
 const STATUS_CFG = {
+  PENDING_ALLOCATION: { label: "Pending Allocation", bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  AWAITING_TOKEN_PAYMENT: { label: "Awaiting Token Payment", bg: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800" },
+  PO_STARTED: { label: "PO Started", bg: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
+  VALIDATING: { label: "Validating...", bg: "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800" },
+  VALIDATED: { label: "Validated ✓", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
   PAID: { label: "Paid", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
   paid: { label: "Paid", bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" },
   AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },

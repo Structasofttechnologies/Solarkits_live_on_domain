@@ -22,6 +22,11 @@ const { india_solarshop_db } = require('../../config/databases');
 
 const VALID_STATUSES = [
   'DRAFT',
+  'PENDING_ALLOCATION',
+  'AWAITING_TOKEN_PAYMENT',
+  'PO_STARTED',
+  'VALIDATING',
+  'VALIDATED',
   'SUBMITTED',
   'PENDING_APPROVAL',
   'CHANGES_REQUESTED',
@@ -74,7 +79,10 @@ const epcAllocationSchema = new mongoose.Schema(
     buyer_name: { type: String, default: null },
     gstin: { type: String, default: null },
     allocated_quantity: { type: Number, required: true, min: 1 },
+    token_amount_paise: { type: Number, default: 0 },
+    token_paid_paise: { type: Number, default: 0 },
     payment_status: { type: String, enum: ['PENDING', 'PAID', 'RECEIPT_SUBMITTED', 'VERIFIED'], default: 'PENDING' },
+    payment_utr: { type: String, default: null },
     payment_receipt_url: { type: String, default: null },
     payment_notes: { type: String, default: null },
     paid_at: { type: Date, default: null },

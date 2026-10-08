@@ -81,6 +81,9 @@ router.get('/po/plan-settings',       verify_reseller_auth, handler.get_my_plan_
 router.get('/po/my-orders',           verify_reseller_auth, handler.list_my_po_orders);
 router.get('/po/active-quotas',       verify_reseller_auth, handler.get_my_active_po_quotas);
 router.post('/po/create',             verify_reseller_auth, handler.create_my_po_order);
+router.put('/po/:id/allocate',        verify_reseller_auth, handler.allocate_po_products);
+router.post('/po/:id/pay-token',      verify_reseller_auth, handler.pay_po_token);
+router.post('/po/:id/validate',       verify_reseller_auth, handler.validate_my_po);
 router.get('/po/detail/:id',          verify_reseller_auth, handler.get_my_po_order_detail);
 router.get('/po/:id/penalty-preview', verify_reseller_auth, handler.preview_po_penalty);
 router.post('/po/:id/request-refund', verify_reseller_auth, handler.request_po_refund);
