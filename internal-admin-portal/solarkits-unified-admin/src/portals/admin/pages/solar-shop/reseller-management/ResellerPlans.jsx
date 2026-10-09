@@ -579,7 +579,10 @@ function PlanSettingsModal({ plan, onClose, onSaved }) {
       .get(`${API_BASE}/resellers/plans/config-options?unique_id=${MODULE_UID}&req_for=view`, { headers: authHeaderObj() })
       .then((res) => {
         if (res.data?.status === "success") {
-          setConfigOptions(res.data.data);
+          const cfgData = res.data.data;
+          setConfigOptions(cfgData);
+          const validAvailableIds = new Set((cfgData?.combo_kits || []).map((k) => String(k.id || k._id)));
+          setSelectedComboKitIds((prev) => prev.filter((id) => validAvailableIds.has(String(id))));
         }
       })
       .catch((err) => {

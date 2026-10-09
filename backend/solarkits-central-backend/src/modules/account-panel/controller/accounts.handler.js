@@ -2403,11 +2403,15 @@ const get_pending_epc_franchise_orders = async (req, res) => {
       .lean();
 
     // 2. Fetch Franchise orders (FpoOrder) awaiting stock procurement
+    // CRITICAL: Only paid/confirmed orders (Accounts payment verified) qualify for supplier procurement.
+    // Master PO quota containers (order_type === 'po_order') await actual repeat kit orders and are excluded.
     const fpoOrders = await FpoOrder.find({
-      status: { $in: ['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'AWAITING_PAYMENT', 'PAID', 'CONFIRMED'] },
+      status: { $in: ['PAID', 'CONFIRMED'] },
+      order_type: { $ne: 'po_order' },
       deleted_at: null,
     })
       .populate('franchisee_id', 'business_name name company_name email mobile gst_number gstin contact_person')
+      .populate('epc_id', 'name company_name email whatsapp gstin')
       .sort({ created_at: -1 })
       .lean();
 

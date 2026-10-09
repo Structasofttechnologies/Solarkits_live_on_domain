@@ -22,7 +22,8 @@ import {
   FaExclamationTriangle,
   FaUniversity,
   FaUndoAlt,
-  FaBan
+  FaBan,
+  FaShoppingCart
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -742,13 +743,17 @@ export default function PoOrders({ moduleUniqueId }) {
                   {/* PO Type & Quota */}
                   <td className="px-5 py-4 whitespace-nowrap">
                     <div className="space-y-1">
-                      {order.po_category === "COMBINE_PO" || (order.items?.[0]?.epc_allocations || []).length > 0 ? (
+                      {order.po_category === "COMBINE_PO" ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200">
-                          Combine PO
+                          Combine PO ({(order.items?.[0]?.epc_allocations || []).length} EPCs)
+                        </span>
+                      ) : (order.items?.[0]?.epc_allocations || []).length > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200">
+                          Single PO ({order.items[0].epc_allocations[0].company_name || order.items[0].epc_allocations[0].buyer_name || "1 EPC"})
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200">
-                          Single PO
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200">
+                          Single PO (Warehouse)
                         </span>
                       )}
                       {order.total_booked_quantity ? (
@@ -1559,6 +1564,92 @@ export default function PoOrders({ moduleUniqueId }) {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* Linked Drawdown Repeat Orders Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <FaShoppingCart size={12} className="text-primary" /> Linked Drawdown Repeat Orders
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                    {(selectedOrder.linked_repeat_orders || []).length} Drawdown(s) Placed
+                  </span>
+                </div>
+
+                {(selectedOrder.linked_repeat_orders || []).length === 0 ? (
+                  <div className="p-3.5 rounded-xl bg-surface-hover/50 border border-border text-center text-text-muted text-[11px]">
+                    No drawdown repeat orders have been placed against this PO yet.
+                  </div>
+                ) : (
+                  <div className="border border-border rounded-xl overflow-hidden shadow-2xs">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-surface-hover border-b border-border text-[10px] font-black uppercase text-text-muted">
+                        <tr>
+                          <th className="py-2.5 px-3">Order Number & Date</th>
+                          <th className="py-2.5 px-3">Buyer Partner</th>
+                          <th className="py-2.5 px-3 text-center">Kits Drawn</th>
+                          <th className="py-2.5 px-3">Net Payable (₹)</th>
+                          <th className="py-2.5 px-3">Bank UTR</th>
+                          <th className="py-2.5 px-3 text-right">Payment Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {selectedOrder.linked_repeat_orders.map((child, cIdx) => {
+                          const isChildPaid = ["PAID", "CONFIRMED", "PROCESSING", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(child.status);
+                          const childTotal = (child.net_payable_paise || child.grand_total_paise || 0) / 100;
+                          const buyerName = child.created_by_role === "SOLAR_EPC" || child.epc_id
+                            ? (child.epc_id?.name || child.epc_id?.company_name || "Solar EPC")
+                            : (child.franchisee_id?.business_name || "Franchisee Partner");
+
+                          return (
+                            <tr key={cIdx} className="hover:bg-surface-hover/50 transition-colors">
+                              <td className="py-2.5 px-3 font-mono font-bold text-xs text-text-primary">
+                                {child.order_number || child.po_number}
+                                <div className="text-[9px] text-text-muted font-sans font-normal">
+                                  {new Date(child.created_at || child.createdAt).toLocaleDateString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric"
+                                  })}
+                                </div>
+                              </td>
+
+                              <td className="py-2.5 px-3 font-bold text-text-primary text-xs">
+                                {buyerName}
+                                <span className="block text-[9px] text-text-muted font-normal">
+                                  {child.created_by_role === "SOLAR_EPC" ? "Onboarded EPC" : "Franchisee"}
+                                </span>
+                              </td>
+
+                              <td className="py-2.5 px-3 text-center font-black text-primary text-xs">
+                                {child.total_quantity || child.items?.[0]?.quantity || 1} Kits
+                              </td>
+
+                              <td className="py-2.5 px-3 font-mono font-black text-text-primary text-xs">
+                                ₹{childTotal.toLocaleString("en-IN")}
+                              </td>
+
+                              <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted">
+                                {child.payment_reference || child.offline_payment?.utr_number || "—"}
+                              </td>
+
+                              <td className="py-2.5 px-3 text-right">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                  isChildPaid
+                                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                    : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                }`}>
+                                  {isChildPaid ? "✓ Paid & Cleared" : "⏳ Pending Clearance"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Workflow Action Buttons */}

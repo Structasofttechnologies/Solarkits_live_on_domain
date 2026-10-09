@@ -185,7 +185,7 @@ export default function FranchiseeSettings() {
   // Map of all products in system by ID
   const allProductsMap = useMemo(() => {
     const map = new Map();
-    (configOptions.combo_kits || []).forEach((k) => map.set(String(k.id), k));
+    (configOptions.combo_kits || []).forEach((k) => map.set(String(k.id || k._id), k));
     return map;
   }, [configOptions.combo_kits]);
 
@@ -197,7 +197,13 @@ export default function FranchiseeSettings() {
     const rawIds = (plan.allowed_combo_kit_ids || plan.allowed_combo_kits || [])
       .map((k) => (k && k._id ? String(k._id) : (k && k.id ? String(k.id) : String(k))))
       .filter((id) => id && id !== "null" && id !== "undefined");
-    const assignedKitIds = Array.from(new Set(rawIds));
+    const uniqueRawIds = Array.from(new Set(rawIds));
+
+    // Filter to only actual, existing combo kits (remove orphan/deleted references)
+    const assignedKitIds = uniqueRawIds.filter((idStr) => {
+      const meta = allProductsMap.get(idStr) || (plan.allowed_combo_kits || []).find((k) => String(k._id || k.id) === idStr);
+      return Boolean(meta && meta.name && meta.name !== "Assigned Combo Kit");
+    });
     const totalProducts = assignedKitIds.length;
 
     // Filter rules belonging to this plan
@@ -264,7 +270,7 @@ export default function FranchiseeSettings() {
       planCommRules,
       planPoSettings,
     };
-  }, [moqRules, commissionRules, poSettings, kitTargets]);
+  }, [moqRules, commissionRules, poSettings, kitTargets, allProductsMap]);
 
   // Overall Global Counts
   const globalSummary = useMemo(() => {
@@ -314,9 +320,15 @@ export default function FranchiseeSettings() {
       .filter((id) => id && id !== "null" && id !== "undefined");
     const assignedKitIds = Array.from(new Set(rawIds));
 
-    return assignedKitIds.map((kitId) => {
+    const validProducts = [];
+    assignedKitIds.forEach((kitId) => {
       const idStr = String(kitId);
-      const kitMeta = allProductsMap.get(idStr) || (selectedPlan.allowed_combo_kits || []).find((k) => String(k._id || k.id) === idStr) || { id: idStr, name: "Assigned Combo Kit", capacity_kw: 0, kit_code: "SKU" };
+      const kitMeta = allProductsMap.get(idStr) || (selectedPlan.allowed_combo_kits || []).find((k) => String(k._id || k.id) === idStr);
+
+      // Only display actual combo kits. Do not render dummy, deleted, or orphan cards!
+      if (!kitMeta || !kitMeta.name || kitMeta.name === "Assigned Combo Kit") {
+        return;
+      }
 
       // Find specific MOQ rule for this product, or plan-level fallback
       const specificMoq = stats.planMoqRules.find((r) => r.combo_kit_id && String(r.combo_kit_id._id || r.combo_kit_id) === idStr);
@@ -333,10 +345,10 @@ export default function FranchiseeSettings() {
       const fallbackPo = stats.planPoSettings.find((s) => !s.allowed_combo_kit_ids || s.allowed_combo_kit_ids.length === 0);
       const activePo = specificPo || fallbackPo || null;
 
-      return {
+      validProducts.push({
         id: idStr,
         name: kitMeta.name,
-        kit_code: kitMeta.kit_code,
+        kit_code: kitMeta.kit_code || (idStr ? `CK-${idStr.slice(-6).toUpperCase()}` : "KIT"),
         capacity_kw: kitMeta.capacity_kw || kitMeta.capacity || 0,
         category_name: kitMeta.category_name || "",
         subcategory_name: kitMeta.subcategory_name || "",
@@ -353,8 +365,10 @@ export default function FranchiseeSettings() {
 
         po: activePo,
         isPoConfigured: Boolean(activePo),
-      };
+      });
     });
+
+    return validProducts;
   }, [selectedPlan, allProductsMap, getPlanStats]);
 
   // Filtered Products for Active Tab
@@ -1378,7 +1392,7 @@ export default function FranchiseeSettings() {
                       {isConfigured ? <FiEdit2 size={13} /> : <FiPlus size={13} />}
                       {isConfigured
                         ? activeTab === "moq" ? "Edit MOQ" : activeTab === "commission" ? "Edit Commission" : "Edit PO Rules"
-                        : activeTab === "moq" ? "+ Set MOQ Rule" : activeTab === "commission" ? "+ Set Commission" : "+ Set PO Rules"}
+                        : activeTab === "moq" ? "Set MOQ Rule" : activeTab === "commission" ? "Set Commission" : "Set PO Rules"}
                     </button>
                   </motion.div>
                 );

@@ -27,8 +27,12 @@ const {
 // ── LIST ──────────────────────────────────────────────────────────────────────
 const list_po_orders = async (req, res) => {
   try {
-    const { franchisee_id, status, plan_id, state_id, district_id, from_date, to_date, page = 1, limit = 20 } = req.query;
+    const { franchisee_id, status, plan_id, state_id, district_id, from_date, to_date, page = 1, limit = 20, include_children } = req.query;
     const query = { deleted_at: null };
+
+    if (!include_children || include_children === 'false') {
+      query.parent_po_id = null;
+    }
 
     if (franchisee_id) query.franchisee_id = franchisee_id;
     if (status) query.status = { $in: status.split(',') };
@@ -55,6 +59,34 @@ const list_po_orders = async (req, res) => {
 
     // Enrich order items with complete combo kit details & images
     await enrichOrdersWithKits(orders);
+
+    // Fetch and link child repeat orders for all parent POs
+    const poIds = orders.map((o) => o._id);
+    if (poIds.length > 0) {
+      const childOrders = await FpoOrder.find({
+        parent_po_id: { $in: poIds },
+        deleted_at: null,
+      })
+        .populate('franchisee_id', 'business_name name mobile email contact_person')
+        .populate('epc_id', 'name company_name email whatsapp gstin')
+        .sort({ created_at: -1 })
+        .lean();
+
+      if (childOrders.length > 0) {
+        await enrichOrdersWithKits(childOrders);
+      }
+
+      const childMap = new Map();
+      childOrders.forEach((co) => {
+        const pId = co.parent_po_id?.toString();
+        if (!childMap.has(pId)) childMap.set(pId, []);
+        childMap.get(pId).push(co);
+      });
+
+      orders.forEach((o) => {
+        o.linked_repeat_orders = childMap.get(o._id.toString()) || [];
+      });
+    }
 
     return res.json({
       status: 'success',
@@ -86,10 +118,13 @@ const enrichOrdersWithKits = async (orders) => {
 
     if (kitIds.length === 0) return orders;
 
+    const rawDb = mongoose.connection.db;
+    if (!rawDb) return orders;
+
     // Fetch from MongoDB collections (checking pc_comobo_kit and pc_combo_kits)
-    let kits = await mongoose.connection.collection('pc_comobo_kit').find({ _id: { $in: kitIds } }).toArray();
+    let kits = await rawDb.collection('pc_comobo_kit').find({ _id: { $in: kitIds } }).toArray().catch(() => []);
     if (!kits || kits.length === 0) {
-      kits = await mongoose.connection.collection('pc_combo_kits').find({ _id: { $in: kitIds } }).toArray();
+      kits = await rawDb.collection('pc_combo_kits').find({ _id: { $in: kitIds } }).toArray().catch(() => []);
     }
 
     const kitMap = new Map();
@@ -107,10 +142,10 @@ const enrichOrdersWithKits = async (orders) => {
     // Fetch brands and product templates for rich specification breakdown
     const [brands, templates] = await Promise.all([
       brandIds.length > 0
-        ? mongoose.connection.collection('brands').find({ _id: { $in: brandIds } }).toArray()
+        ? rawDb.collection('brands').find({ _id: { $in: brandIds } }).toArray().catch(() => [])
         : [],
       templateIds.length > 0
-        ? mongoose.connection.collection('pc_product_templates').find({ _id: { $in: templateIds } }).toArray()
+        ? rawDb.collection('pc_product_templates').find({ _id: { $in: templateIds } }).toArray().catch(() => [])
         : []
     ]);
 
@@ -175,6 +210,19 @@ const get_po_order = async (req, res) => {
     if (!order) return res.status(404).json({ status: 'error', message: 'PO not found' });
 
     await enrichOrdersWithKits([order]);
+
+    const childOrders = await FpoOrder.find({
+      parent_po_id: order._id,
+      deleted_at: null,
+    })
+      .populate('franchisee_id', 'business_name name mobile email contact_person')
+      .populate('epc_id', 'name company_name email whatsapp gstin')
+      .sort({ created_at: -1 })
+      .lean();
+    if (childOrders && childOrders.length > 0) {
+      await enrichOrdersWithKits(childOrders);
+    }
+    order.linked_repeat_orders = childOrders || [];
 
     return res.json({ status: 'success', data: order });
   } catch (error) {

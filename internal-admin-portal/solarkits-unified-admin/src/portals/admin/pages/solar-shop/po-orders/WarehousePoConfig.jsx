@@ -289,7 +289,7 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
         // 4. Fetch specific warehouse plans
         const isIndia = foundCountry.iso2?.toLowerCase() === "in";
         const endpoint = isIndia ? "india/po-settings" : "po-settings";
-        
+
         const [plansRes, comboRes, customizeRes] = await Promise.all([
           axios.get(
             `${API_URL}/solarshop/${endpoint}?unique_id=${moduleUniqueId}&req_for=view&warehouse_id=${warehouseId}`,
@@ -758,18 +758,18 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
       const isIndia = countryObj?.iso2?.toLowerCase() === "in";
       const endpointBase = isIndia ? "india/po-settings" : "po-settings";
       const { plan, disabledKits } = manageKitsDialog;
-      
+
       const payload = {
         id: plan.id || plan._id,
         disabled_kits: disabledKits
       };
-      
+
       const response = await axios.put(
         `${API_URL}/solarshop/${endpointBase}/update?unique_id=${moduleUniqueId}&req_for=edit`,
         payload,
         { headers: authHeaderObj() }
       );
-      
+
       if (response.data.status === "success") {
         dispatch(setAlert({ type: "success", message: "PO kits settings updated successfully" }));
         setManageKitsDialog({ isOpen: false, plan: null, disabledKits: [] });
@@ -1240,11 +1240,10 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
                   ...prev,
                   data: { ...prev.data, po_validity_type: "days" }
                 }))}
-                className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${
-                  formDialog.data.po_validity_type === "days"
+                className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${formDialog.data.po_validity_type === "days"
                     ? "bg-primary text-white shadow-sm"
                     : "text-text-secondary hover:bg-surface-hover"
-                }`}
+                  }`}
               >
                 No. of Days
               </button>
@@ -1254,11 +1253,10 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
                   ...prev,
                   data: { ...prev.data, po_validity_type: "monthly_date" }
                 }))}
-                className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${
-                  formDialog.data.po_validity_type === "monthly_date"
+                className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${formDialog.data.po_validity_type === "monthly_date"
                     ? "bg-primary text-white shadow-sm"
                     : "text-text-secondary hover:bg-surface-hover"
-                }`}
+                  }`}
               >
                 Day of Month
               </button>
@@ -1294,11 +1292,10 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
                         ...prev,
                         data: { ...prev.data, po_validity_date: day }
                       }))}
-                      className={`h-10 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border transition-all hover:scale-105 ${
-                        isSelected
+                      className={`h-10 rounded-lg flex items-center justify-center font-bold text-xs cursor-pointer border transition-all hover:scale-105 ${isSelected
                           ? "bg-primary border-primary text-white shadow-md"
                           : "bg-surface hover:bg-surface-hover border-border text-text-primary"
-                      }`}
+                        }`}
                     >
                       {day}
                     </button>
@@ -1524,11 +1521,10 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
             <button
               type="button"
               onClick={() => setKitsTab("combokit")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${
-                kitsTab === "combokit"
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${kitsTab === "combokit"
                   ? "bg-primary text-white shadow-sm"
                   : "text-text-secondary hover:bg-surface-hover"
-              }`}
+                }`}
             >
               <FaLayerGroup size={12} />
               Combo Kits ({filteredComboKits.length})
@@ -1536,11 +1532,10 @@ export default function WarehousePoConfig({ moduleUniqueId }) {
             <button
               type="button"
               onClick={() => setKitsTab("customizekit")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${
-                kitsTab === "customizekit"
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all border-none outline-none cursor-pointer ${kitsTab === "customizekit"
                   ? "bg-primary text-white shadow-sm"
                   : "text-text-secondary hover:bg-surface-hover"
-              }`}
+                }`}
             >
               <FaSlidersH size={12} />
               Customized Kits ({filteredCustomizeKits.length})

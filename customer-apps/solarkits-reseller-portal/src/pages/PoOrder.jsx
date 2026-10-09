@@ -38,6 +38,7 @@ import {
   FiCheckSquare,
   FiArchive,
   FiZap,
+  FiUserCheck,
 } from "react-icons/fi";
 import api from "../services/api";
 
@@ -89,7 +90,8 @@ function PoCardItem({
   onValidateOrder,
 }) {
   const item = order.items?.[0] || {};
-  const isCombine = order.po_category === "COMBINE_PO" || (item.epc_allocations || []).length > 0;
+  const isCombine = order.po_category === "COMBINE_PO";
+  const singleEpcAlloc = (!isCombine && item.epc_allocations?.length === 1) ? item.epc_allocations[0] : null;
   const booked = order.total_booked_quantity || order.total_quantity || item.quantity || 0;
   const fulfilled = order.fulfilled_quantity || 0;
   const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
@@ -193,9 +195,13 @@ function PoCardItem({
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
                 <FiUsers size={11} /> Combine PO ({(item.epc_allocations || []).length} EPCs)
               </span>
+            ) : singleEpcAlloc ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                <FiUserCheck size={11} /> Single PO (EPC: {singleEpcAlloc.company_name || singleEpcAlloc.buyer_name || "1 EPC"})
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                <FiBox size={11} /> Single PO
+                <FiBox size={11} /> Single PO (Warehouse Stock)
               </span>
             )}
           </div>
@@ -231,10 +237,22 @@ function PoCardItem({
         <div className="p-3 rounded-2xl bg-surface-hover/50 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
           <div>
             <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
-              Partner / EPC Details
+              {isCombine ? "EPC Allocation Pool" : (singleEpcAlloc ? "Allocated Single EPC Partner" : "Franchise Hub Stock")}
             </div>
-            <div className="font-bold text-text-primary text-xs mt-0.5">{customerName}</div>
-            <div className="text-[11px] text-text-muted">{customerLocation}</div>
+            <div className="font-bold text-text-primary text-xs mt-0.5">
+              {isCombine
+                ? `${(item.epc_allocations || []).length} EPC Contractors Pooled`
+                : singleEpcAlloc
+                  ? (singleEpcAlloc.company_name || singleEpcAlloc.buyer_name || "Single EPC Partner")
+                  : `${customerName} (Warehouse Self-Stock)`}
+            </div>
+            <div className="text-[11px] text-text-muted">
+              {isCombine
+                ? `${booked} kits committed across contractors`
+                : singleEpcAlloc
+                  ? (singleEpcAlloc.gstin ? `GSTIN: ${singleEpcAlloc.gstin} • Single EPC Allocation` : "Onboarded EPC Client")
+                  : customerLocation}
+            </div>
           </div>
           <div className="sm:text-right">
             <div className="text-[10px] font-black uppercase tracking-wider text-text-muted">
@@ -280,7 +298,7 @@ function PoCardItem({
             <p className="text-[11px] text-orange-700 dark:text-orange-300 leading-tight">
               🔒 <strong>Purchase Order will not commence until the token deposit is paid.</strong> The onboarded EPC Partner must deposit the token amount from their portal to officially start the PO.
             </p>
-            {isCombine && (item.epc_allocations || []).length > 0 && (
+            {(item.epc_allocations || []).length > 0 && (
               <div className="pt-2 border-t border-orange-500/20 space-y-1.5">
                 <span className="text-[10px] font-black uppercase tracking-wider text-orange-800 dark:text-orange-300">
                   EPC Partner Token Deposit Status:
@@ -615,6 +633,8 @@ export default function PoOrder() {
   // Create Order Modal State
   const [createModal, setCreateModal] = useState(false);
   const [poCategory, setPoCategory] = useState("SINGLE_PO"); // "SINGLE_PO" | "COMBINE_PO"
+  const [singleTargetType, setSingleTargetType] = useState("single_epc"); // "single_epc" | "warehouse"
+  const [selectedSingleEpcId, setSelectedSingleEpcId] = useState("");
   const [singlePoQty, setSinglePoQty] = useState(() => {
     return cachedPlan?.combo_kits?.[0]?.min_po_quantity || cachedPlan?.po_settings?.min_po_quantity || 100;
   });
@@ -629,6 +649,8 @@ export default function PoOrder() {
   const [allocateModal, setAllocateModal] = useState(false);
   const [allocatingOrder, setAllocatingOrder] = useState(null);
   const [allocateKitId, setAllocateKitId] = useState("");
+  const [allocateSingleTarget, setAllocateSingleTarget] = useState("single_epc"); // "single_epc" | "warehouse"
+  const [allocateSingleEpcId, setAllocateSingleEpcId] = useState("");
   const [allocateSingleQty, setAllocateSingleQty] = useState(100);
   const [allocateAllocations, setAllocateAllocations] = useState({}); // { [epcBuyerId]: quantity }
   const [allocateSubmitting, setAllocateSubmitting] = useState(false);
@@ -951,6 +973,11 @@ export default function PoOrder() {
       return;
     }
 
+    if (poCategory === "SINGLE_PO" && singleTargetType === "single_epc" && !selectedSingleEpcId && epcBuyers.length > 0) {
+      setFormError("Please select an onboarded EPC Partner for this Single PO, or choose Franchise Warehouse stock.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload = {
@@ -958,6 +985,7 @@ export default function PoOrder() {
         po_category: poCategory,
         target_committed_quantity: targetQty,
         is_token_booking: true,
+        epc_id: poCategory === "SINGLE_PO" && singleTargetType === "single_epc" ? (selectedSingleEpcId || null) : null,
         items: [],
       };
 
@@ -1003,6 +1031,7 @@ export default function PoOrder() {
     setAllocateSingleQty(targetQty);
 
     const existingAllocs = {};
+    const firstAlloc = order.items?.[0]?.epc_allocations?.[0];
     if (order.items?.[0]?.epc_allocations?.length > 0) {
       order.items[0].epc_allocations.forEach((a) => {
         const bId = a.epc_buyer_id || a.buyer_id;
@@ -1010,6 +1039,25 @@ export default function PoOrder() {
       });
     }
     setAllocateAllocations(existingAllocs);
+
+    // Single PO: Single EPC vs Warehouse Stock target
+    if (firstAlloc?.epc_buyer_id) {
+      setAllocateSingleTarget("single_epc");
+      setAllocateSingleEpcId(firstAlloc.epc_buyer_id);
+    } else if (order.epc_id) {
+      const epcIdStr = (order.epc_id?._id || order.epc_id)?.toString();
+      setAllocateSingleTarget("single_epc");
+      setAllocateSingleEpcId(epcIdStr);
+    } else {
+      if (epcBuyers.length > 0) {
+        setAllocateSingleTarget("single_epc");
+        setAllocateSingleEpcId((epcBuyers[0]._id || epcBuyers[0].id)?.toString() || "");
+      } else {
+        setAllocateSingleTarget("warehouse");
+        setAllocateSingleEpcId("");
+      }
+    }
+
     setAllocateError("");
     fetchBuyers();
     setAllocateModal(true);
@@ -1058,6 +1106,28 @@ export default function PoOrder() {
       if (totalQty <= 0) {
         setAllocateError("Please enter a valid allocation quantity.");
         return;
+      }
+
+      if (allocateSingleTarget === "single_epc") {
+        if (!allocateSingleEpcId) {
+          setAllocateError("Please select an onboarded EPC Partner for this Single PO, or switch to Franchise Warehouse Stock.");
+          return;
+        }
+        const buyer = epcBuyers.find(
+          (b) => (b._id || b.id)?.toString() === allocateSingleEpcId?.toString()
+        );
+        epcList = [
+          {
+            epc_buyer_id: allocateSingleEpcId,
+            company_name: buyer?.company_name || buyer?.name || "EPC Partner",
+            buyer_name: buyer?.name || buyer?.company_name || "EPC Partner",
+            gstin: buyer?.gstin || null,
+            allocated_quantity: totalQty,
+          },
+        ];
+      } else {
+        // Warehouse stock (no EPC)
+        epcList = [];
       }
     }
 
@@ -1121,7 +1191,8 @@ export default function PoOrder() {
     const tokenPaidSoFar = Math.round((order.token_paid_paise || 0) / 100);
     const remainingToken = Math.max(0, totalTokenReq - tokenPaidSoFar);
 
-    setTokenPayingEpcId(epcBuyerId || "");
+    const defaultEpcId = epcBuyerId || (order.po_category === "SINGLE_PO" && order.items?.[0]?.epc_allocations?.[0]?.epc_buyer_id) || "";
+    setTokenPayingEpcId(defaultEpcId);
     setTokenPayAmount(
       remainingToken > 0 ? remainingToken : totalTokenReq > 0 ? totalTokenReq : 50000
     );
@@ -1376,21 +1447,21 @@ export default function PoOrder() {
   const singlePoCount = useMemo(() => {
     return orders.filter((o) => {
       const isPo = !o.order_type || o.order_type === "po_order" || o.order_type === "bulk_po";
-      return isPo && ((o.po_category || "SINGLE_PO") === "SINGLE_PO" && (o.items?.[0]?.epc_allocations || []).length === 0);
+      return isPo && (o.po_category !== "COMBINE_PO");
     }).length;
   }, [orders]);
 
   const combinePoCount = useMemo(() => {
     return orders.filter((o) => {
       const isPo = !o.order_type || o.order_type === "po_order" || o.order_type === "bulk_po";
-      return isPo && (o.po_category === "COMBINE_PO" || (o.items?.[0]?.epc_allocations || []).length > 0);
+      return isPo && (o.po_category === "COMBINE_PO");
     }).length;
   }, [orders]);
 
   // Filtered Orders
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
-      const isCombine = o.po_category === "COMBINE_PO" || (o.items?.[0]?.epc_allocations || []).length > 0;
+      const isCombine = o.po_category === "COMBINE_PO";
       if (categoryTab === "SINGLE_PO" && isCombine) return false;
       if (categoryTab === "COMBINE_PO" && !isCombine) return false;
       if (statusFilter && o.status !== statusFilter) return false;
@@ -1649,7 +1720,7 @@ export default function PoOrder() {
             }`}
         >
           <FiBox size={13} />
-          <span>Single PO (Hub Stock)</span>
+          <span>Single PO (Single EPC / Stock)</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20">{singlePoCount}</span>
         </button>
 
@@ -1819,7 +1890,8 @@ export default function PoOrder() {
               <tbody className="divide-y divide-border/40">
                 {filteredOrders.map((order) => {
                   const item = order.items?.[0] || {};
-                  const isCombine = order.po_category === "COMBINE_PO" || (item.epc_allocations || []).length > 0;
+                  const isCombine = order.po_category === "COMBINE_PO";
+                  const singleEpcAlloc = (!isCombine && item.epc_allocations?.length === 1) ? item.epc_allocations[0] : null;
                   const grandTotal = (order.grand_total_paise || 0) / 100;
                   const booked = order.total_booked_quantity || order.total_quantity || item.quantity || 0;
                   const remaining = order.remaining_quantity != null ? order.remaining_quantity : booked;
@@ -1844,11 +1916,15 @@ export default function PoOrder() {
                       <td className="py-3.5 px-4">
                         {isCombine ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                            Combine PO
+                            Combine PO ({(item.epc_allocations || []).length} EPCs)
+                          </span>
+                        ) : singleEpcAlloc ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            Single PO (EPC: {singleEpcAlloc.company_name || singleEpcAlloc.buyer_name || "1 EPC"})
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                            Single PO
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            Single PO (Warehouse)
                           </span>
                         )}
                       </td>
@@ -1920,12 +1996,18 @@ export default function PoOrder() {
                             </button>
                           )}
                           {(order.status === "VALIDATED" || ["APPROVED", "CONFIRMED", "PROCESSING", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(order.status)) && (
-                            <button
-                              onClick={() => handleOpenReorderModal(order)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-all cursor-pointer whitespace-nowrap"
-                            >
-                              ⚡ Reorder
-                            </button>
+                            (order.remaining_quantity == null || order.remaining_quantity > 0) ? (
+                              <button
+                                onClick={() => handleOpenReorderModal(order)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-all cursor-pointer whitespace-nowrap"
+                              >
+                                ⚡ Reorder
+                              </button>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 whitespace-nowrap">
+                                ✓ Quota Fulfilled
+                              </span>
+                            )
                           )}
                           <button
                             onClick={() => setSelectedOrder(order)}
@@ -2041,15 +2123,15 @@ export default function PoOrder() {
                           poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
                         }`}
                       >
-                        <FiBox size={18} />
+                        <FiUserCheck size={18} />
                       </div>
                       <div className="space-y-1">
                         <div className="font-black text-xs text-text-primary flex items-center gap-1.5">
-                          Single PO (Hub Stock)
+                          Single PO (Single EPC / Stock)
                           {poCategory === "SINGLE_PO" && <FiCheck className="text-primary" size={14} />}
                         </div>
                         <p className="text-[11px] text-text-muted leading-tight">
-                          Dedicated bulk stock for Franchise Warehouse.
+                          Dedicated to 1 EPC Partner or Franchise Warehouse stock.
                         </p>
                       </div>
                     </div>
@@ -2080,6 +2162,70 @@ export default function PoOrder() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Single PO Beneficiary Selector */}
+                  {poCategory === "SINGLE_PO" && (
+                    <div
+                      className="p-3.5 rounded-2xl border space-y-2.5 mt-2"
+                      style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
+                    >
+                      <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted">
+                        Single PO Destination / Beneficiary <span className="text-danger">*</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div
+                          onClick={() => setSingleTargetType("single_epc")}
+                          className={`p-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-2 ${
+                            singleTargetType === "single_epc" ? "border-primary bg-primary/10 text-primary font-bold" : "border-border bg-surface text-text-secondary"
+                          }`}
+                        >
+                          <FiUserCheck size={15} />
+                          <span className="text-xs">1 Onboarded EPC Partner</span>
+                        </div>
+                        <div
+                          onClick={() => setSingleTargetType("warehouse")}
+                          className={`p-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center gap-2 ${
+                            singleTargetType === "warehouse" ? "border-blue-600 bg-blue-500/10 text-blue-600 font-bold" : "border-border bg-surface text-text-secondary"
+                          }`}
+                        >
+                          <FiBox size={15} />
+                          <span className="text-xs">Warehouse Self-Stock</span>
+                        </div>
+                      </div>
+
+                      {singleTargetType === "single_epc" && (
+                        <div className="pt-2 border-t border-border/60 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-[10px] font-black uppercase text-text-muted">
+                              Select EPC Contractor:
+                            </label>
+                            <Link to="/epc-buyers" target="_blank" className="text-[10px] font-bold text-primary hover:underline">
+                              + Onboard New EPC
+                            </Link>
+                          </div>
+                          {epcBuyers.length === 0 ? (
+                            <div className="text-[11px] text-text-muted p-2 rounded-xl bg-surface border border-dashed">
+                              No onboarded EPC partners found. You can also select the EPC in Stage 2.
+                            </div>
+                          ) : (
+                            <select
+                              value={selectedSingleEpcId}
+                              onChange={(e) => setSelectedSingleEpcId(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl text-xs font-bold border transition-all"
+                              style={{ background: "var(--color-surface)", borderColor: "var(--color-border)", color: "var(--color-text-primary)" }}
+                            >
+                              <option value="">-- Choose EPC Partner --</option>
+                              {epcBuyers.map((b) => (
+                                <option key={b._id || b.id} value={b._id || b.id}>
+                                  {b.company_name || b.name} {b.gstin ? `(GSTIN: ${b.gstin})` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 2: Target Committed Quota */}
@@ -2280,44 +2426,184 @@ export default function PoOrder() {
 
                 {/* Allocation Matrix */}
                 {allocatingOrder.po_category === "SINGLE_PO" ? (
-                  <div
-                    className="p-5 rounded-2xl border space-y-3.5"
-                    style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
-                  >
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
-                        Franchise Warehouse Allocation Quantity <span className="text-danger">*</span>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2">
+                        Allocate Single PO Quota To <span className="text-danger">*</span>
                       </label>
-                      <p className="text-[11px] text-text-muted mt-0.5">
-                        Minimum requirement: <strong className="text-primary">{minPoQty} kits</strong>.
-                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div
+                          onClick={() => setAllocateSingleTarget("single_epc")}
+                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
+                            allocateSingleTarget === "single_epc"
+                              ? "border-primary bg-primary/5 shadow-xs"
+                              : "border-border hover:border-primary/40 bg-surface"
+                          }`}
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                              allocateSingleTarget === "single_epc" ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                            }`}
+                          >
+                            <FiUserCheck size={16} />
+                          </div>
+                          <div>
+                            <div className="font-black text-xs text-text-primary flex items-center gap-1.5">
+                              Single EPC Partner
+                              {allocateSingleTarget === "single_epc" && <FiCheck className="text-primary" size={13} />}
+                            </div>
+                            <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
+                              Allocate 100% of PO quota to 1 onboarded EPC contractor.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          onClick={() => setAllocateSingleTarget("warehouse")}
+                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${
+                            allocateSingleTarget === "warehouse"
+                              ? "border-blue-600 bg-blue-500/5 shadow-xs"
+                              : "border-border hover:border-blue-400 bg-surface"
+                          }`}
+                        >
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                              allocateSingleTarget === "warehouse" ? "bg-blue-600 text-white" : "bg-blue-500/10 text-blue-600"
+                            }`}
+                          >
+                            <FiBox size={16} />
+                          </div>
+                          <div>
+                            <div className="font-black text-xs text-text-primary flex items-center gap-1.5">
+                              Warehouse Self-Stock
+                              {allocateSingleTarget === "warehouse" && <FiCheck className="text-blue-600" size={13} />}
+                            </div>
+                            <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
+                              Keep in Franchise Hub Inventory directly (No EPC).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setAllocateSingleQty((prev) => Math.max(minPoQty, (parseInt(prev, 10) || 0) - 25))}
-                        className="w-10 h-10 rounded-xl bg-surface hover:bg-border text-text-primary font-black text-base flex items-center justify-center border border-border cursor-pointer transition-colors"
+                    {/* If Single EPC selected: EPC Dropdown & Preview */}
+                    {allocateSingleTarget === "single_epc" && (
+                      <div
+                        className="p-4 rounded-2xl border space-y-3"
+                        style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
                       >
-                        -
-                      </button>
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
+                            Select Onboarded EPC Partner <span className="text-danger">*</span>
+                          </label>
+                          <Link to="/epc-buyers" target="_blank" className="text-[11px] font-bold text-primary hover:underline shrink-0">
+                            + Onboard New EPC
+                          </Link>
+                        </div>
 
-                      <input
-                        type="number"
-                        min={minPoQty}
-                        value={allocateSingleQty || ""}
-                        onChange={(e) => setAllocateSingleQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="flex-1 text-center py-2.5 rounded-xl text-base font-black border text-text-primary focus:border-primary outline-none"
-                        style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
-                      />
+                        {loadingBuyers ? (
+                          <div className="p-4 rounded-xl border border-dashed flex items-center justify-center gap-2 text-xs text-text-muted">
+                            <FiLoader size={16} className="animate-spin text-primary" />
+                            <span>Loading onboarded EPC partners...</span>
+                          </div>
+                        ) : epcBuyers.length === 0 ? (
+                          <div className="p-4 rounded-xl border border-dashed text-center text-xs text-text-muted space-y-2">
+                            <p>No EPC partners registered under your franchise yet.</p>
+                            <Link to="/epc-buyers" className="inline-block px-3 py-1.5 rounded-lg bg-primary text-white font-bold text-xs">
+                              Register EPC Partner First
+                            </Link>
+                          </div>
+                        ) : (
+                          <select
+                            value={allocateSingleEpcId}
+                            onChange={(e) => setAllocateSingleEpcId(e.target.value)}
+                            className="w-full px-3.5 py-3 rounded-xl text-xs font-bold border transition-all cursor-pointer"
+                            style={{
+                              background: "var(--color-surface)",
+                              borderColor: "var(--color-border)",
+                              color: "var(--color-text-primary)",
+                            }}
+                          >
+                            <option value="">-- Choose Onboarded EPC Partner --</option>
+                            {epcBuyers.map((buyer) => {
+                              const bId = (buyer._id || buyer.id)?.toString();
+                              return (
+                                <option key={bId} value={bId}>
+                                  {buyer.company_name || buyer.name} {buyer.gstin ? `(GSTIN: ${buyer.gstin})` : ""} {buyer.state?.name ? `• ${buyer.state.name}` : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        )}
 
-                      <button
-                        type="button"
-                        onClick={() => setAllocateSingleQty((prev) => (parseInt(prev, 10) || 0) + 25)}
-                        className="w-10 h-10 rounded-xl bg-surface hover:bg-border text-text-primary font-black text-base flex items-center justify-center border border-border cursor-pointer transition-colors"
-                      >
-                        +
-                      </button>
+                        {/* Selected EPC Details Preview Card */}
+                        {(() => {
+                          const selectedBuyer = epcBuyers.find(
+                            (b) => (b._id || b.id)?.toString() === allocateSingleEpcId?.toString()
+                          );
+                          if (!selectedBuyer) return null;
+                          return (
+                            <div className="p-3.5 rounded-xl bg-surface border border-border text-xs flex items-center justify-between">
+                              <div>
+                                <div className="font-bold text-text-primary flex items-center gap-1.5">
+                                  <FiUserCheck size={14} className="text-primary" />
+                                  {selectedBuyer.company_name || selectedBuyer.name}
+                                </div>
+                                <div className="text-[11px] text-text-muted mt-0.5">
+                                  Contact: {selectedBuyer.name || selectedBuyer.contact_person || "Partner"} • {selectedBuyer.mobile || selectedBuyer.phone || "No phone"}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="px-2.5 py-1 rounded-md text-[10px] font-black bg-primary/10 text-primary">
+                                  {selectedBuyer.gstin ? `GST: ${selectedBuyer.gstin}` : "Registered EPC"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Quantity Stepper */}
+                    <div
+                      className="p-5 rounded-2xl border space-y-3.5"
+                      style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
+                    >
+                      <div>
+                        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
+                          {allocateSingleTarget === "single_epc" ? "Committed Quantity for EPC Partner" : "Franchise Warehouse Allocation Quantity"} <span className="text-danger">*</span>
+                        </label>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          Minimum requirement: <strong className="text-primary">{minPoQty} kits</strong>.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setAllocateSingleQty((prev) => Math.max(minPoQty, (parseInt(prev, 10) || 0) - 25))}
+                          className="w-10 h-10 rounded-xl bg-surface hover:bg-border text-text-primary font-black text-base flex items-center justify-center border border-border cursor-pointer transition-colors"
+                        >
+                          -
+                        </button>
+
+                        <input
+                          type="number"
+                          min={minPoQty}
+                          value={allocateSingleQty || ""}
+                          onChange={(e) => setAllocateSingleQty(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          className="flex-1 text-center py-2.5 rounded-xl text-base font-black border text-text-primary focus:border-primary outline-none"
+                          style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setAllocateSingleQty((prev) => (parseInt(prev, 10) || 0) + 25)}
+                          className="w-10 h-10 rounded-xl bg-surface hover:bg-border text-text-primary font-black text-base flex items-center justify-center border border-border cursor-pointer transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2456,6 +2742,19 @@ export default function PoOrder() {
                         </span>
                         <span className={satisfied ? "text-emerald-600 font-extrabold" : "text-amber-600 font-extrabold"}>
                           {totalQ} / {allocKit?.min_po_quantity || minPoQty} Kits ({satisfied ? "Limit Satisfied ✓" : "Below Minimum"})
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs font-bold">
+                        <span className="text-text-muted uppercase tracking-wider text-[10px]">
+                          Allocated Destination:
+                        </span>
+                        <span className="text-text-primary font-bold">
+                          {allocatingOrder.po_category === "COMBINE_PO"
+                            ? `${Object.values(allocateAllocations).filter((q) => Number(q) > 0).length} EPC Partners Pooled`
+                            : allocateSingleTarget === "single_epc"
+                              ? (epcBuyers.find((b) => (b._id || b.id)?.toString() === allocateSingleEpcId?.toString())?.company_name || epcBuyers.find((b) => (b._id || b.id)?.toString() === allocateSingleEpcId?.toString())?.name || "Single EPC Partner")
+                              : "Franchise Warehouse Stock"}
                         </span>
                       </div>
 
@@ -2712,6 +3011,23 @@ export default function PoOrder() {
                     </div>
                   )}
 
+                  {/* Single PO: Single EPC Beneficiary Notice */}
+                  {tokenOrder.po_category === "SINGLE_PO" && (tokenOrder.items?.[0]?.epc_allocations || []).length === 1 && (
+                    <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-blue-800 dark:text-blue-300 flex items-center gap-1">
+                          <FiUserCheck size={13} /> Single EPC Beneficiary:
+                        </span>
+                        <div className="font-bold text-text-primary mt-0.5">
+                          {tokenOrder.items[0].epc_allocations[0].company_name || tokenOrder.items[0].epc_allocations[0].buyer_name}
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300">
+                        {tokenOrder.items[0].epc_allocations[0].allocated_quantity} Kits (100% Quota)
+                      </span>
+                    </div>
+                  )}
+
                   {/* Payment Inputs */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -2960,6 +3276,78 @@ export default function PoOrder() {
                     </div>
                   </div>
                 )}
+
+                {/* Linked Drawdown Repeat Orders Table */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-text-primary uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <FiLayers size={13} className="text-primary" /> Repeat Orders (Drawdowns) against this PO
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      {(selectedOrder.linked_repeat_orders || []).length} Drawdown(s) Placed
+                    </span>
+                  </div>
+
+                  {(selectedOrder.linked_repeat_orders || []).length === 0 ? (
+                    <div className="p-3.5 rounded-xl border border-dashed border-border text-center text-text-muted text-[11px]">
+                      No repeat orders have been placed against this PO yet. You can reorder kits anytime using the "+ Reorder" button.
+                    </div>
+                  ) : (
+                    <div className="border border-border rounded-xl overflow-hidden shadow-2xs">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-surface-hover border-b border-border text-[10px] font-black uppercase text-text-muted">
+                          <tr>
+                            <th className="py-2.5 px-3">Order Number</th>
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3 text-center">Kits Drawn</th>
+                            <th className="py-2.5 px-3">Net Payable</th>
+                            <th className="py-2.5 px-3">Bank UTR</th>
+                            <th className="py-2.5 px-3 text-right">Accounts Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {selectedOrder.linked_repeat_orders.map((child, cIdx) => {
+                            const isPaid = ["PAID", "CONFIRMED", "PROCESSING", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(child.status);
+                            const childTotal = (child.net_payable_paise || child.grand_total_paise || 0) / 100;
+
+                            return (
+                              <tr key={cIdx} className="hover:bg-surface-hover/40 transition-colors">
+                                <td className="py-2.5 px-3 font-mono font-bold text-xs text-text-primary">
+                                  {child.order_number || child.po_number}
+                                </td>
+                                <td className="py-2.5 px-3 text-[11px] text-text-muted">
+                                  {new Date(child.created_at || child.createdAt).toLocaleDateString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric"
+                                  })}
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-black text-primary text-xs">
+                                  {child.total_quantity || child.items?.[0]?.quantity || 1} Kits
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-text-primary text-xs">
+                                  ₹{childTotal.toLocaleString("en-IN")}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-[11px] text-text-muted truncate max-w-[120px]">
+                                  {child.payment_reference || child.offline_payment?.utr_number || "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                    isPaid
+                                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                      : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                  }`}>
+                                    {isPaid ? "✓ Verified & Processed" : "⏳ Accounts Verification Pending"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
 
                 {/* Payment & Status Summary */}
                 <div

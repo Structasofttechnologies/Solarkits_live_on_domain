@@ -93,7 +93,7 @@ const list_reseller_plans = async (req, res) => {
         ? populatedKits.map((ck) => ck.name).join(', ')
         : 'All Admin Combo Kits';
 
-      const allowedComboKitIds = rawKitIds;
+      const allowedComboKitIds = populatedKits.map((ck) => String(ck.id));
       const allowedCategoryIds = (r.allowed_category_ids || [])
         .map((c) => (c && c._id ? String(c._id) : String(c)))
         .filter((id) => id && id !== 'null' && id !== 'undefined');

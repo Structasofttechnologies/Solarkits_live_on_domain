@@ -36,21 +36,21 @@ const { logAudit } = require('../utils/audit.service');
 
 // ── Allowed status transitions ────────────────────────────────────────────────
 const ALLOWED_TRANSITIONS = {
-  DRAFT: ['PENDING_ALLOCATION', 'AWAITING_TOKEN_PAYMENT', 'PO_STARTED', 'SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'CANCELLED', 'EXPIRED'],
-  PENDING_ALLOCATION: ['AWAITING_TOKEN_PAYMENT', 'PO_STARTED', 'DRAFT', 'CANCELLED', 'EXPIRED'],
-  AWAITING_TOKEN_PAYMENT: ['PO_STARTED', 'PAID', 'PENDING_APPROVAL', 'APPROVED', 'CANCELLED', 'EXPIRED'],
-  PO_STARTED: ['VALIDATING', 'VALIDATED', 'CONFIRMED', 'AWAITING_PAYMENT', 'PROCESSING', 'CANCELLED'],
+  DRAFT: ['PENDING_ALLOCATION', 'AWAITING_TOKEN_PAYMENT', 'PO_STARTED', 'VALIDATED', 'SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'CANCELLED', 'EXPIRED'],
+  PENDING_ALLOCATION: ['AWAITING_TOKEN_PAYMENT', 'PO_STARTED', 'VALIDATED', 'DRAFT', 'CANCELLED', 'EXPIRED'],
+  AWAITING_TOKEN_PAYMENT: ['PO_STARTED', 'VALIDATED', 'PAID', 'PENDING_APPROVAL', 'APPROVED', 'CANCELLED', 'EXPIRED'],
+  PO_STARTED: ['VALIDATING', 'VALIDATED', 'CONFIRMED', 'AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'COMPLETED', 'CANCELLED'],
   VALIDATING: ['VALIDATED', 'CHANGES_REQUESTED', 'CANCELLED'],
-  VALIDATED: ['CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING', 'CANCELLED'],
-  SUBMITTED: ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED'],
-  PENDING_APPROVAL: ['CHANGES_REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED'],
+  VALIDATED: ['CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING', 'PAID', 'COMPLETED', 'CANCELLED'],
+  SUBMITTED: ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED', 'PAID', 'CONFIRMED', 'CANCELLED'],
+  PENDING_APPROVAL: ['CHANGES_REQUESTED', 'APPROVED', 'REJECTED', 'PAID', 'CONFIRMED', 'CANCELLED'],
   CHANGES_REQUESTED: ['SUBMITTED', 'CANCELLED'],
   APPROVED: ['AWAITING_PAYMENT', 'PO_STARTED', 'VALIDATED', 'CONFIRMED', 'PAID', 'PROCESSING', 'CANCELLED'],
   REJECTED: [],
-  AWAITING_PAYMENT: ['PARTIALLY_PAID', 'PAID', 'PO_STARTED', 'CONFIRMED', 'CANCELLED'],
-  PARTIALLY_PAID: ['PAID', 'PO_STARTED', 'CONFIRMED', 'CANCELLED'],
-  PAID: ['PO_STARTED', 'VALIDATED', 'CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED', 'CANCELLED'],
-  CONFIRMED: ['VALIDATED', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED', 'CANCELLED'],
+  AWAITING_PAYMENT: ['PARTIALLY_PAID', 'PAID', 'PO_STARTED', 'VALIDATED', 'CONFIRMED', 'CANCELLED'],
+  PARTIALLY_PAID: ['PAID', 'PO_STARTED', 'VALIDATED', 'CONFIRMED', 'CANCELLED'],
+  PAID: ['PO_STARTED', 'VALIDATED', 'CONFIRMED', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED', 'COMPLETED', 'CANCELLED'],
+  CONFIRMED: ['VALIDATED', 'STOCK_ALLOCATED', 'PROCESSING', 'VEHICLE_ASSIGNED', 'COMPLETED', 'CANCELLED'],
   STOCK_ALLOCATED: ['PROCESSING', 'VEHICLE_ASSIGNED', 'CANCELLED'],
   PROCESSING: ['VEHICLE_ASSIGNED', 'READY_FOR_DISPATCH', 'PARTIALLY_DISPATCHED', 'DISPATCHED', 'CANCELLED'],
   VEHICLE_ASSIGNED: ['READY_FOR_DISPATCH', 'PROCESSING', 'DISPATCHED', 'CANCELLED'],
@@ -279,10 +279,13 @@ async function createPoDraft({
         throw new Error(`Your plan allows a maximum of ${po_settings.max_line_items} line items per PO.`);
       }
 
-      const validationResults = await validatePoItems(items, plan_id, po_settings);
-      const failures = validationResults.filter((r) => !r.valid);
-      if (failures.length > 0) {
-        throw new Error(failures.map((f) => `Item "${f.item_name}": ${f.reason}`).join('; '));
+      let validationResults = [];
+      if (!parent_po_id) {
+        validationResults = await validatePoItems(items, plan_id, po_settings);
+        const failures = validationResults.filter((r) => !r.valid);
+        if (failures.length > 0) {
+          throw new Error(failures.map((f) => `Item "${f.item_name}": ${f.reason}`).join('; '));
+        }
       }
 
       // Build line items with snapshots
@@ -393,11 +396,20 @@ async function createPoDraft({
     let net_payable_paise = grand_total_paise;
 
     if (!isPoOrder && parent_po_id) {
-      const parentQuery = { _id: parent_po_id, deleted_at: null };
-      if (franchisee_id) parentQuery.franchisee_id = franchisee_id;
-      else if (epc_id) parentQuery.epc_id = epc_id;
-
-      parentPoDoc = await FpoOrder.findOne(parentQuery);
+      if (franchisee_id) {
+        parentPoDoc = await FpoOrder.findOne({ _id: parent_po_id, franchisee_id, deleted_at: null });
+      } else if (epc_id) {
+        parentPoDoc = await FpoOrder.findOne({
+          _id: parent_po_id,
+          deleted_at: null,
+          $or: [
+            { epc_id: epc_id },
+            { 'items.epc_allocations.epc_buyer_id': epc_id },
+          ],
+        });
+      } else {
+        parentPoDoc = await FpoOrder.findOne({ _id: parent_po_id, deleted_at: null });
+      }
 
       if (!parentPoDoc) {
         throw new Error('Linked parent PO order not found or unauthorized.');
@@ -462,7 +474,7 @@ async function createPoDraft({
     const order = await FpoOrder.create({
       po_number,
       idempotency_key: ikey,
-      franchisee_id: franchisee_id || null,
+      franchisee_id: franchisee_id || parentPoDoc?.franchisee_id || null,
       epc_id: epc_id || null,
       customer_type: epc_id ? 'SOLAR_EPC' : 'FRANCHISEE',
       customer_details: custDetails,
@@ -470,7 +482,7 @@ async function createPoDraft({
       creator_name: creator_name || custDetails.name || null,
       creator_code: creator_code || null,
 
-      plan_id: plan_id || null,
+      plan_id: plan_id || parentPoDoc?.plan_id || null,
       plan_snapshot: subscription,
       po_settings_snapshot: po_settings,
       penalty_rule_snapshot: penaltyRuleSnapshot,
@@ -620,21 +632,89 @@ async function createPoDraft({
   }
 
   // ── 6. CONFIRM PAYMENT ───────────────────────────────────────────────────────
-  async function confirmPayment({ po_id, payment_reference, razorpay_payment_id, admin_id, req }) {
-    const updated = await _transitionStatus(po_id, 'PAID', {
-      changed_by: admin_id, actor_type: 'cms_user', note: `Payment confirmed: ${payment_reference || razorpay_payment_id}`,
-      extra_update: {
-        payment_reference: payment_reference || razorpay_payment_id,
-        razorpay_payment_id: razorpay_payment_id || null,
-      },
-    });
+  async function confirmPayment({ po_id, order_id, payment_reference, razorpay_payment_id, admin_id, req }) {
+    const targetId = po_id || order_id;
+    const orderDoc = await FpoOrder.findById(targetId);
+    if (!orderDoc) throw new Error(`PO "${targetId}" not found`);
+
+    const ref = payment_reference || razorpay_payment_id;
+    const isParentTokenPay = (orderDoc.order_type === 'po_order' || orderDoc.order_type === 'bulk_po') &&
+      ['AWAITING_TOKEN_PAYMENT', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'PO_STARTED'].includes(orderDoc.status);
+
+    let updated;
+    if (isParentTokenPay) {
+      // Parent PO Token Payment Verification: validates quota lock & activates repeat ordering
+      const tokenPaidAmt = orderDoc.token_amount_paise || orderDoc.token_paid_paise || 0;
+      updated = await _transitionStatus(targetId, 'VALIDATED', {
+        changed_by: admin_id,
+        actor_type: 'cms_user',
+        note: `Token deposit payment verified by Accounts: ${ref || 'Verified'}`,
+        extra_update: {
+          token_payment_status: 'PAID',
+          token_paid_paise: tokenPaidAmt,
+          token_balance_paise: tokenPaidAmt,
+          payment_reference: ref || null,
+          payment_utr: ref || null,
+          payment_confirmed_at: new Date(),
+        },
+      });
+    } else {
+      // Standard / Loose Kit repeat order payment confirmation
+      updated = await _transitionStatus(targetId, 'PAID', {
+        changed_by: admin_id,
+        actor_type: 'cms_user',
+        note: `Payment confirmed by Accounts: ${ref || 'Verified'}`,
+        extra_update: {
+          payment_reference: ref || null,
+          payment_utr: ref || null,
+          razorpay_payment_id: razorpay_payment_id || null,
+          payment_confirmed_at: new Date(),
+        },
+      });
+
+      // If this is a child repeat order, atomically sync parent PO quota and token escrow
+      if (orderDoc.parent_po_id) {
+        const parentPo = await FpoOrder.findById(orderDoc.parent_po_id);
+        if (parentPo) {
+          const qtyOrdered = orderDoc.items?.reduce((s, i) => s + (Number(i.quantity) || 0), 0) || orderDoc.total_quantity || 1;
+          const tokenAdj = Number(orderDoc.token_adjusted_paise || 0);
+
+          if (!Array.isArray(parentPo.linked_loose_order_ids)) {
+            parentPo.linked_loose_order_ids = [];
+          }
+          if (!parentPo.linked_loose_order_ids.some((id) => id.toString() === orderDoc._id.toString())) {
+            parentPo.linked_loose_order_ids.push(orderDoc._id);
+            parentPo.fulfilled_quantity = (parentPo.fulfilled_quantity || 0) + qtyOrdered;
+            parentPo.remaining_quantity = Math.max(0, (parentPo.total_booked_quantity || 0) - parentPo.fulfilled_quantity);
+            parentPo.token_adjusted_total_paise = (parentPo.token_adjusted_total_paise || 0) + tokenAdj;
+            const totalToken = Number(parentPo.token_paid_paise || parentPo.token_amount_paise || 0);
+            parentPo.token_balance_paise = Math.max(0, totalToken - parentPo.token_adjusted_total_paise);
+          }
+
+          if (parentPo.remaining_quantity === 0) {
+            parentPo.token_payment_status = 'ADJUSTED';
+            parentPo.status = 'COMPLETED';
+            parentPo.settlement_status = 'SETTLED';
+          }
+          await parentPo.save();
+        }
+      }
+    }
 
     // Post commission immediately upon payment confirmation (credits wallet & updates accounts tracking)
-    await postCommission({ fpo_order_id: po_id, actor_id: admin_id, req }).catch((err) => {
+    await postCommission({ fpo_order_id: targetId, actor_id: admin_id, req }).catch((err) => {
       console.error('[franchisee.po.service] commission post error on confirmPayment (non-fatal):', err.message);
     });
 
-    await logAudit({ actor_type: 'cms_user', actor_id: admin_id, action: 'FPO_PAYMENT_CONFIRMED', entity_type: 'fpo_orders', entity_id: po_id, after_snapshot: { status: 'PAID' }, req });
+    await logAudit({
+      actor_type: 'cms_user',
+      actor_id: admin_id,
+      action: 'FPO_PAYMENT_CONFIRMED',
+      entity_type: 'fpo_orders',
+      entity_id: po_id,
+      after_snapshot: { status: updated.status },
+      req,
+    });
     return updated;
   }
 
@@ -1007,6 +1087,14 @@ async function createPoDraft({
 
       const lockDays = Number(po_settings.po_lock_days || po_settings.po_validity_days || 30);
       order.lock_expires_at = new Date(Date.now() + lockDays * 24 * 60 * 60 * 1000);
+
+      if (order.po_category === 'SINGLE_PO') {
+        if (builtItems[0]?.epc_allocations?.length === 1) {
+          order.epc_id = builtItems[0].epc_allocations[0].epc_buyer_id;
+        } else {
+          order.epc_id = null;
+        }
+      }
 
       order.items = builtItems;
       order.subtotal_paise = subtotal_paise;

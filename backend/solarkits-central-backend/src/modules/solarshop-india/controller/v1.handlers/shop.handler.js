@@ -4230,16 +4230,40 @@ const reorder_against_epc_po = async (req, res) => {
   try {
     const accountId = req.account_id || req.user?.account_id || req.user?.id || req.user?._id;
     const { id } = req.params;
-    const {
+    let {
       items,
+      quantity,
+      kit_id,
       destination_type,
       destination_address,
       destination_pincode,
       offline_payment,
     } = req.body;
 
+    const { FpoOrder } = require('../../../admin-panel/models/india_solarshop_db');
+    const parentPo = await FpoOrder.findById(id).lean();
+    if (!parentPo) {
+      return res.status(404).json({ success: false, status: "error", message: "Parent PO not found" });
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ status: "error", message: "Items array is required for reorder" });
+      const parentItem = parentPo.items?.[0] || {};
+      const reorderQty = Number(quantity) || 1;
+      const targetKitId = kit_id || parentItem.kit_id || parentItem.product_id;
+      if (!targetKitId) {
+        return res.status(400).json({ success: false, status: "error", message: "Kit ID or Items array is required for reorder" });
+      }
+
+      items = [{
+        kit_id: targetKitId,
+        product_id: targetKitId,
+        item_name: parentItem.item_name || 'Solar Kit',
+        item_code: parentItem.item_code || null,
+        quantity: reorderQty,
+        unit_price_paise: parentItem.unit_price_paise || 0,
+        gst_rate: parentItem.gst_rate || 13.85,
+        project_type_id: parentItem.project_type_id || null,
+      }];
     }
 
     const { createPoDraft, submitPo } = require('../../../admin-panel/services/franchisee.po.service');
@@ -4252,8 +4276,8 @@ const reorder_against_epc_po = async (req, res) => {
       order_type: 'loose_kit_order',
       parent_po_id: id,
       destination_type: destination_type || 'direct',
-      destination_address: destination_address || null,
-      destination_pincode: destination_pincode || null,
+      destination_address: destination_address || parentPo.destination_address || null,
+      destination_pincode: destination_pincode || parentPo.destination_pincode || null,
       offline_payment: offline_payment || null,
       actor_id: accountId,
       req,
@@ -4269,13 +4293,20 @@ const reorder_against_epc_po = async (req, res) => {
     }
 
     return res.status(201).json({
+      success: true,
       status: "success",
       message: "Linked reorder placed successfully against PO",
-      data: finalOrder,
+      data: {
+        order: finalOrder,
+        token_adjustment: {
+          token_adjusted_inr: Math.round((finalOrder.token_adjusted_paise || 0) / 100),
+          net_payable_inr: Math.round((finalOrder.net_payable_paise || finalOrder.grand_total_paise || 0) / 100),
+        },
+      },
     });
   } catch (error) {
     console.error("reorder_against_epc_po error:", error);
-    return res.status(400).json({ status: "error", message: error.message || "Failed to place reorder" });
+    return res.status(400).json({ success: false, status: "error", message: error.message || "Failed to place reorder" });
   }
 };
 
