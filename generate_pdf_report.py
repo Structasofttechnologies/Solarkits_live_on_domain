@@ -212,7 +212,7 @@ def create_pdf(filename="SolarKits_Project_Development_Status_Report.pdf"):
     story.append(HRFlowable(width="100%", thickness=1, color=NAVY_PRIMARY, spaceBefore=3, spaceAfter=8))
     
     exec_text = """
-    <b>SolarKits v2.0</b> is an enterprise-grade multi-tenant B2B Solar E-Commerce, Channel Distribution, and Operations Ecosystem connecting EPC Contractors, Regional Franchise Partners, BOS Distributors & Dealers, Multi-State Warehouses, Accounts, Logistics Operations, and Central Administrators. Powered by a modern microservices-adjacent architecture utilizing Node.js/Express 5, MongoDB Multi-Database, React 19, and Vite 7, the platform bridges physical solar supply chain fulfillment with automated corporate banking.
+    <b>SolarKits v2.0</b> is an enterprise-grade multi-tenant B2B Solar E-Commerce, Channel Distribution, and Operations Ecosystem connecting B2B Solar EPC Contractors, Regional Franchise Partners, Multi-State Warehouses, Accounts & Finance, Logistics Operations, and Central Administrators. Powered by a modern microservices-adjacent architecture utilizing Node.js/Express 5, MongoDB Multi-Database, React 19, and Vite 7, the platform bridges physical solar supply chain fulfillment with automated corporate banking.
     <br/><br/>
     <b>Hybrid Enterprise Payment Architecture:</b> The commercial infrastructure operates on dual payment rails:
     <br/>
@@ -220,7 +220,7 @@ def create_pdf(filename="SolarKits_Project_Development_Status_Report.pdf"):
     <br/>
     2. <b>Offline Bank Transfer & Payment Receipt Upload Engine:</b> Facilitates high-value manual transfers via NEFT, RTGS, IMPS, or Cheque. Users upload bank transfer slips and log UTR numbers, which are audited by the Accounts team against bank statements before releasing warehouse dispatches or Franchise Earning disbursements.
     <br/><br/>
-    <b>Physical Delivery Logistics:</b> Full 8-stage order lifecycle tracking (Confirmed → Processing → Vehicle Assigned → Ready for Dispatch → Dispatched → In Transit → Destination Reached → Delivered / POD Confirmed) paired with smart fleet auto-recommendation based on vehicle payload (kg), max kit limits, and serviceable geographic districts.
+    <b>2-Stage Kit Activation & Physical Delivery Logistics:</b> Full 2-stage governance pipeline (Stage 1: Warehouse Kit Activation with 3 prerequisite validation gates; Stage 2: District Order Management sequential routing) alongside an 8-stage order lifecycle tracking system (Confirmed → Processing → Vehicle Assigned → Ready for Dispatch → Dispatched → In Transit → Destination Reached → Delivered / POD Confirmed) paired with smart fleet auto-recommendation based on vehicle payload (kg), max kit limits, and serviceable geographic districts.
     """
     story.append(Paragraph(exec_text, styles['Body']))
     story.append(Spacer(1, 10))

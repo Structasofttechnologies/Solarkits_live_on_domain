@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Generates SolarKits_Feature_Traceability_Matrix.xlsx using openpyxl.
-Synchronizes all 98 features, resolved/active bugs, and completion summary.
+Synchronizes all 98 features, resolved/active bugs, and completion summary according to the new development flow (without BOSKIT).
 """
 
 import json
@@ -103,7 +103,7 @@ def create_excel(filename="SolarKits_Feature_Traceability_Matrix.xlsx"):
             cell.border = border_cell
 
     # Column widths
-    col_widths_feat = [8, 18, 25, 30, 32, 18, 50]
+    col_widths_feat = [8, 22, 28, 32, 34, 18, 55]
     for idx, width in enumerate(col_widths_feat, 1):
         ws_feat.column_dimensions[get_column_letter(idx)].width = width
 
@@ -188,11 +188,13 @@ def create_excel(filename="SolarKits_Feature_Traceability_Matrix.xlsx"):
     ws_pend.row_dimensions[2].height = 24
 
     roadmap_items = [
-        ("P0", "Security", "Tighten CORS fallback in index.js:45 for production environments", "Guarantees strict API access control", "Small"),
-        ("P0", "Security", "Enforce Cloudinary private signed delivery URLs for KYC & payment slips", "Data privacy compliance for sensitive records", "Medium"),
-        ("P1", "Admin Panel", "Complete central Admin Dashboard Home.jsx executive overview metrics", "Real-time network KPIs for Super Admin", "Medium"),
-        ("P2", "Documentation", "Publish Swagger / OpenAPI 3.0 API specifications for all 10 modules", "Accelerates developer onboarding & QA audits", "Large"),
-        ("P2", "Testing", "Establish automated integration test suite with Jest / Supertest", "Continuous regression protection for payments", "Large"),
+        ("P0", "Security", "Tighten CORS fallback in index.js:45 for production environments", "Guarantees strict API access control & origin validation", "Small"),
+        ("P0", "Security", "Enforce Cloudinary private signed delivery URLs for KYC & payment slips", "Ensures compliance for sensitive customer documents & slips", "Medium"),
+        ("P1", "Warehouse Logistics", "Build 'Order Inward' tab backend matching logic linking received GRN stock to customer orders", "Completes the critical bridge between supplier procurement & customer dispatch", "High"),
+        ("P1", "Delivery Logistics", "Complete mobile Delivery OTP verification and Proof of Delivery (POD) photo upload UI", "Provides tamper-proof delivery verification for drivers and warehouse staff", "Medium"),
+        ("P1", "Admin Panel", "Complete central Admin Dashboard Home.jsx executive overview metrics", "Delivers real-time network KPIs, revenue, and active orders for Super Admin", "Medium"),
+        ("P2", "Supplier Portal", "Implement supplier self-service Proforma Invoice submission & PO confirmation workflow", "Accelerates supplier procurement lifecycle and removes manual coordination", "Medium"),
+        ("P2", "Testing & QA", "Establish automated integration test suite with Jest / Supertest for ICICI SSE, PO combinations & FIFO stock deduction", "Continuous regression protection for critical commercial & logistics pipelines", "Large")
     ]
     for r_idx, (prio, mod, item, impact, effort) in enumerate(roadmap_items, 3):
         is_even = (r_idx % 2 == 0)
@@ -224,7 +226,7 @@ def create_excel(filename="SolarKits_Feature_Traceability_Matrix.xlsx"):
                 cell.fill = row_fill
             cell.border = border_cell
 
-    col_widths_pend = [12, 18, 35, 40, 15]
+    col_widths_pend = [12, 20, 38, 45, 15]
     for idx, width in enumerate(col_widths_pend, 1):
         ws_pend.column_dimensions[get_column_letter(idx)].width = width
 
@@ -237,7 +239,7 @@ def create_excel(filename="SolarKits_Feature_Traceability_Matrix.xlsx"):
     ws_comp.cell(1, 1, "SolarKits v2.0 - Comparative Module Completion Estimates").font = font_title
     ws_comp.row_dimensions[1].height = 25
 
-    headers_comp = ["Module / Component", "Aug 29 %", "Sep 25 %", "Progress", "Assessment", "Architectural Accomplishments & Notes"]
+    headers_comp = ["Module / Component", "Aug 29 %", "Oct 10 %", "Progress", "Assessment", "Architectural Accomplishments & Notes"]
     for c_idx, h in enumerate(headers_comp, 1):
         cell = ws_comp.cell(2, c_idx, h)
         cell.font = font_header
@@ -282,7 +284,7 @@ def create_excel(filename="SolarKits_Feature_Traceability_Matrix.xlsx"):
                 cell.fill = row_fill
             cell.border = border_cell
 
-    col_widths_comp = [28, 12, 12, 12, 20, 50]
+    col_widths_comp = [32, 12, 12, 12, 20, 55]
     for idx, width in enumerate(col_widths_comp, 1):
         ws_comp.column_dimensions[get_column_letter(idx)].width = width
 

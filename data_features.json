@@ -38,11 +38,11 @@
   {
     "id": "F005",
     "module": "Authentication",
-    "name": "BOSKIT Distributor Auth",
-    "frontend": "boskit-website/LoginPage.jsx",
-    "backend": "/api/boskit/v1/auth/*",
+    "name": "Multi-Role CMS Panel & Scope Authorization",
+    "frontend": "internal-admin-portal/src/portals/cms-auth/Login.jsx",
+    "backend": "/auth-api/login, cms.auth.handler.js, cms_user_scope.schema.js",
     "status": "Fully Connected",
-    "desc": "Multi-tier authentication portal for BOS distributors and local electrical dealers with role-based permission scopes, territory binding, and dealer network association."
+    "desc": "Enterprise role-based access control granting compartmentalized permissions across Super Admin, Accounts, Warehouse, Operations, Developer, and BDE portals with dynamic panel scope resolution."
   },
   {
     "id": "F006",
@@ -470,11 +470,11 @@
   {
     "id": "F053",
     "module": "Solar Store (EPC)",
-    "name": "Solar BOS Kit (Commented Out)",
+    "name": "Dynamic Combo Kit BOM Customizer",
     "frontend": "customer-apps/solar-store/src/Pages/dashboard/SolarBosKit.jsx",
-    "backend": "/api/india/v1/bos-kits",
+    "backend": "/api/india/v1/combo-kits/customize, product.template.handler.js",
     "status": "Fully Connected",
-    "desc": "Specialized catalog for Balance of System electrical accessories (DCDB, ACDB, cables, earthing kits) — backend API active; menu item commented in frontend. Full 1,506-line component for ordering electrical BOS distribution components, ACDB/DCDB boxes, MC4 connectors, and solar cabling."
+    "desc": "Interactive Bill of Materials (BOM) customizer allowing EPC contractors to dynamically configure solar panels, inverters, mounting structures, and electrical balance components with live technical validation."
   },
   {
     "id": "F054",
@@ -505,84 +505,84 @@
   },
   {
     "id": "F057",
-    "module": "BOSKIT",
-    "name": "Distributor Onboarding",
-    "frontend": "boskit-website/DistributorOnboardingPage.jsx",
-    "backend": "/api/boskit/v1/distributor/onboarding/*",
+    "module": "Kit Activation & Order Settings",
+    "name": "Warehouse Kit Activation Engine (ADM_WH_KIT_ACT)",
+    "frontend": "internal-admin-portal/src/portals/admin/pages/solar-shop/warehouse-kit-activations/WarehouseKitConfig.jsx",
+    "backend": "/admin-api/solarshop/warehouse-kit-activations/*, warehouse_kit_activations.handler.js",
     "status": "Fully Connected",
-    "desc": "Multi-step onboarding wizard for BOS channel distributors featuring GST verification, KYC document uploads, and territory allocation."
+    "desc": "Stage 1 Warehouse Kit Activation enforcing 3 mandatory prerequisite validation gates (Cluster SKU Benchmark Pricing, Company Profit Margin, GST Rate Configuration) before allowing any kit to become active in a warehouse."
   },
   {
     "id": "F058",
-    "module": "BOSKIT",
-    "name": "Distributor Plans Management (Admin)",
-    "frontend": "boskit-admin/DistributorPlansAdminPage.jsx (81KB)",
-    "backend": "/admin-api/boskit/v1/plans/*",
+    "module": "Kit Activation & Order Settings",
+    "name": "Bulk Kit Auto-Deactivation Cascade Engine",
+    "frontend": "internal-admin-portal/src/portals/admin/pages/solar-shop/warehouse-kit-activations/WarehouseKitConfig.jsx",
+    "backend": "/admin-api/solarshop/warehouse-kit-activations/auto-deactivate-bulk, warehouse_kit_activations.handler.js",
     "status": "Fully Connected",
-    "desc": "Admin management module to configure distributor subscription tiers, security deposits, territory exclusivity rights, and credit policies."
+    "desc": "Business rule automation engine that cascades deactivations: disabling a Combo Kit in a warehouse automatically disables linked Bulk Kit configurations (autoDeactivateBulkKit) preventing unvalidated wholesale purchases."
   },
   {
     "id": "F059",
-    "module": "BOSKIT",
-    "name": "Distributor Dashboard",
-    "frontend": "boskit-website/distributor/DistributorDashboardPage.jsx",
-    "backend": "GET /api/boskit/v1/distributor/dashboard/stats",
+    "module": "Kit Activation & Order Settings",
+    "name": "District Order Management Scoping (ADM_ORD_MGMT)",
+    "frontend": "internal-admin-portal/src/portals/admin/pages/solar-shop/order-management-settings/OrderManagementSettings.jsx",
+    "backend": "/admin-api/solarshop/order-settings/*, order_settings.handler.js",
     "status": "Fully Connected",
-    "desc": "Operational dashboard for BOS distributors to manage local dealer networks, track bulk purchase orders, and monitor regional territory sales."
+    "desc": "Stage 2 District Fulfillment Configuration supporting Country -> State -> Cluster -> District geographic hierarchy selection with automated Master Warehouse fallback when a district lacks local warehouse facilities."
   },
   {
     "id": "F060",
-    "module": "BOSKIT",
-    "name": "Distributor Procurement Catalogue",
-    "frontend": "boskit-website/distributor/DistributorProcureCataloguePage.jsx",
-    "backend": "GET /api/boskit/v1/distributor/catalogue",
+    "module": "Kit Activation & Order Settings",
+    "name": "Sequential Fulfillment Pipeline Chains",
+    "frontend": "internal-admin-portal/src/portals/admin/pages/solar-shop/order-management-settings/OrderManagementSettings.jsx",
+    "backend": "/admin-api/solarshop/order-settings/save, order_settings.schema.js",
     "status": "Fully Connected",
-    "desc": "Wholesale procurement catalog allowing distributors to order BOS components at master trade rates and configure downstream dealer margins."
+    "desc": "Strict toggle dependency chain enforcement: Combo/Customize Kits (Sub-Warehouse -> Nearest Supplier -> In-Cluster Supplier) and Bulk Kits (Sub-Warehouse -> Master Warehouse -> Nearest Supplier -> In-Cluster Supplier) with automated reverse cascade."
   },
   {
     "id": "F061",
-    "module": "BOSKIT",
-    "name": "Custom BOS Kit Configurator",
-    "frontend": "customer-apps/boskit-website/src/pages/BosKitConfigurator.jsx",
-    "backend": "/api/boskit/v1/configurator",
+    "module": "Payments & Accounts",
+    "name": "Multi-Order Supplier PO Combination Engine",
+    "frontend": "internal-admin-portal/src/portals/accounts/pages/payments/Payments.jsx",
+    "backend": "/account-api/payments/pending-orders, /account-api/supplier-po/combine, getPendingEpcFranchiseOrders",
     "status": "Fully Connected",
-    "desc": "Interactive configurator for designing electrical BOS distribution kits tailored to specific inverter capacities and solar string requirements. Interactive BOS kit configurator calculating string sizing, breaker ratings, surge protection, and enclosure specifications."
+    "desc": "Accounts procurement consolidation engine allowing staff to select multiple pending EPC and Franchise customer orders and combine them into a single consolidated Supplier Purchase Order with auto-calculated BOM cost ratios (Panels ~60%, Inverters ~25%, Others ~15%)."
   },
   {
     "id": "F062",
-    "module": "BOSKIT",
-    "name": "Dealer Registration & Dashboard",
-    "frontend": "boskit-website/dealer/DealerRegisterPage.jsx, DealerDashboardPage.jsx",
-    "backend": "/api/boskit/v1/dealer/*",
+    "module": "Payments & Accounts",
+    "name": "Supplier PO Payment & Tax Invoice Registration",
+    "frontend": "internal-admin-portal/src/portals/accounts/pages/payments/CombinedPaymentModal.jsx",
+    "backend": "/account-api/supplier-po/create-payment, purchase_order.schema.js",
     "status": "Fully Connected",
-    "desc": "Self-service portal for local electrical dealers to register under regional distributors, browse catalogs, place orders, and track shipments."
+    "desc": "Comprehensive supplier procurement payment workflow capturing supplier selection, destination warehouse, NEFT/RTGS/UPI reference, payment receipt upload, Proforma Invoice details, and transitional 'paid / awaiting delivery' status tracking."
   },
   {
     "id": "F063",
-    "module": "BOSKIT",
-    "name": "BOSKIT Admin Overview & Reports",
-    "frontend": "boskit-admin/BoskitOverviewDashboard.jsx, CrossPlatformReportsPage.jsx",
-    "backend": "/admin-api/boskit/v1/stats, /reports/*",
+    "module": "Warehouse & Logistics",
+    "name": "Material Inward & GRN Generation (Inventory Inward)",
+    "frontend": "internal-admin-portal/src/portals/warehouse/pages/material-inward/MaterialInward.jsx (Tab 1)",
+    "backend": "/warehouse-api/material-inward/complete-delivery, inward_log.schema.js",
     "status": "Fully Connected",
-    "desc": "Executive BI dashboard aggregating channel distribution performance, dealer turnover, and inventory movement across regional BOS networks."
+    "desc": "Warehouse inward verification workflow recording supplier Tax Invoice No, GSTIN, and PDF upload, auto-generating Goods Receipt Notes (GRN) with QC discrepancy fields (Accepted Qty, Damaged Qty, Shortage notes) and real-time inventory increment."
   },
   {
     "id": "F064",
-    "module": "BOSKIT",
-    "name": "BOSKIT MOQ, GST, Channel Settings",
-    "frontend": "boskit-admin MoqSettings + GstSettings + ChannelSettings",
-    "backend": "/admin-api/boskit/v1/moq-rules/*, tax-rules/*, channel-settings/*",
-    "status": "Fully Connected",
-    "desc": "Platform settings interface managing BOS minimum order quantities, HSN GST tax rules, and channel discount matrices."
+    "module": "Warehouse & Logistics",
+    "name": "Customer Order Inward Fulfillment Bridge",
+    "frontend": "internal-admin-portal/src/portals/warehouse/pages/material-inward/MaterialInward.jsx (Tab 2)",
+    "backend": "/warehouse-api/order-fulfillment-inward/*, order_inward.handler.js",
+    "status": "Partially Connected",
+    "desc": "Supply chain bridge connecting received supplier GRN stock batches to specific pending customer sales orders, validating component availability before releasing orders to the outbound delivery management queue."
   },
   {
     "id": "F065",
-    "module": "BOSKIT",
-    "name": "FranchisePlansAdminPage",
-    "frontend": "internal-admin-portal/.../boskit/pages/FranchisePlansAdminPage.jsx",
-    "backend": "Re-exports DistributorPlansAdminPage.jsx (1,604 LOC)",
+    "module": "Warehouse & Logistics",
+    "name": "Real-Time FIFO Stock Allocation & Deduction Engine",
+    "frontend": "internal-admin-portal/src/portals/warehouse/pages/delivery-management/DeliveryManagement.jsx",
+    "backend": "/warehouse-api/delivery/fifo-allocate, /warehouse-api/delivery/deduct-stock, warehouse_stock.schema.js",
     "status": "Fully Connected",
-    "desc": "Dedicated admin interface for managing franchise packages, perks, territory exclusivity clauses, and fee structures (currently a placeholder stub). Comprehensive admin management module for franchise & distributor package pricing, validity, renewal rules, and territory exclusivity."
+    "desc": "Automated FIFO stock availability inspector evaluating required vs allocated vs shortage quantities for every component in a solar kit BOM, executing atomic inventory deduction upon order delivery completion."
   },
   {
     "id": "F066",
@@ -695,11 +695,11 @@
   {
     "id": "F078",
     "module": "Notifications",
-    "name": "BOSKIT Notifications",
-    "frontend": "boskit-website notification handler",
-    "backend": "/api/boskit/v1/notification/*",
+    "name": "Delivery & Logistics Milestone Alerts",
+    "frontend": "customer-apps/solarkits-reseller-portal, customer-apps/solar-store",
+    "backend": "/api/delivery/notifications/*, twilio.service.js, nodemailer.service.js",
     "status": "Fully Connected",
-    "desc": "Channel communication system alerting distributors and dealers about order dispatches, price revisions, and stock updates."
+    "desc": "Multi-channel delivery notification engine dispatching automated WhatsApp, SMS, and Email alerts to EPC contractors and Franchisees across key order lifecycle stages (PO Inward, Out for Delivery, Delivered)."
   },
   {
     "id": "F079",
@@ -731,11 +731,11 @@
   {
     "id": "F082",
     "module": "Reports",
-    "name": "BOSKIT Cross-Platform Reports",
-    "frontend": "boskit-admin/CrossPlatformReportsPage.jsx",
-    "backend": "/admin-api/boskit/v1/reports/*",
+    "name": "Warehouse Turnaround & Logistics Analytics",
+    "frontend": "internal-admin-portal/src/portals/warehouse/pages/analytics/WarehouseAnalytics.jsx",
+    "backend": "/warehouse-api/analytics/stock-turn, /admin-api/delivery/tat-metrics",
     "status": "Fully Connected",
-    "desc": "Consolidated reporting engine providing executive visibility across distributor procurement, dealer turnover, and inventory velocity."
+    "desc": "Executive logistics telemetry evaluating warehouse stock turnover rates, supplier delivery lead times, GRN discrepancy ratios, vehicle cargo load utilization, and average dispatch turnaround time (TAT)."
   },
   {
     "id": "F083",
