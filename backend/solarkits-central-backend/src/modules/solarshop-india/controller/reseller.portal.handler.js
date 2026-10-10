@@ -3401,11 +3401,37 @@ const list_my_po_orders = async (req, res) => {
       });
     }
 
-    const orders = await FpoOrder.find({ franchisee_id: resellerId, deleted_at: null })
+    const orders = await FpoOrder.find({
+      franchisee_id: resellerId,
+      parent_po_id: null,
+      deleted_at: null,
+    })
       .populate('plan_id', 'name slug territory_level')
-      .populate('parent_po_id', 'po_number token_amount_paise token_paid_paise total_booked_quantity remaining_quantity')
+      .populate('epc_id', 'name company_name email whatsapp gstin')
       .sort({ created_at: -1 })
       .lean();
+
+    if (orders.length > 0) {
+      const parentIds = orders.map((o) => o._id);
+      const childOrders = await FpoOrder.find({
+        parent_po_id: { $in: parentIds },
+        deleted_at: null,
+      })
+        .populate('epc_id', 'name company_name email whatsapp gstin')
+        .sort({ created_at: -1 })
+        .lean();
+
+      const childMap = new Map();
+      childOrders.forEach((co) => {
+        const pId = co.parent_po_id?.toString();
+        if (!childMap.has(pId)) childMap.set(pId, []);
+        childMap.get(pId).push(co);
+      });
+
+      orders.forEach((o) => {
+        o.linked_repeat_orders = childMap.get(o._id.toString()) || [];
+      });
+    }
 
     poOrdersCache.set(resellerId.toString(), {
       data: orders,

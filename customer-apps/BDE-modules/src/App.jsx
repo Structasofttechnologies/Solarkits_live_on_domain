@@ -18,6 +18,7 @@ import BdeEpcQuotes from './pages/BdeEpcQuotes';
 import BdeCreateEpcQuote from './pages/BdeCreateEpcQuote';
 import BdeEpcQuoteDetail from './pages/BdeEpcQuoteDetail';
 import BdeEpcQuoteFollowupList from './pages/BdeEpcQuoteFollowupList';
+import BdePoOrders from './pages/BdePoOrders';
 
 export default function App() {
   return (
@@ -33,6 +34,8 @@ export default function App() {
               <Route path="/leads" element={<BdeEpcLeads />} />
               <Route path="/epc-onboarding" element={<BdeEpcOnboardingWizard />} />
               <Route path="/epc-management" element={<BdeEpcOnboardingWizard />} />
+              <Route path="/purchase-orders" element={<BdePoOrders />} />
+              <Route path="/po-orders" element={<BdePoOrders />} />
               <Route path="/epc-quotes" element={<BdeEpcQuotes />} />
               <Route path="/epc-quotes/create" element={<BdeCreateEpcQuote />} />
               <Route path="/epc-quotes/:id" element={<BdeEpcQuoteDetail />} />

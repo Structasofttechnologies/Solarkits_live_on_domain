@@ -3871,11 +3871,32 @@ const get_epc_po_allocations = async (req, res) => {
     }
 
     const { FpoOrder } = require("../../../admin-panel/models/india_solarshop_db");
-    
-    // Find all FPO orders where this account is allocated in any item
+
+    // Find all top-level FPO orders where this account is allocated in any item
     const orders = await FpoOrder.find({
-      "items.epc_allocations.epc_buyer_id": accountId
+      "items.epc_allocations.epc_buyer_id": accountId,
+      parent_po_id: null,
+      deleted_at: null,
     }).populate('franchisee_id', 'business_name mobile email contact_person').sort({ created_at: -1 }).lean();
+
+    if (orders.length > 0) {
+      const parentIds = orders.map((o) => o._id);
+      const childOrders = await FpoOrder.find({
+        parent_po_id: { $in: parentIds },
+        deleted_at: null,
+      }).sort({ created_at: -1 }).lean();
+
+      const childMap = new Map();
+      childOrders.forEach((co) => {
+        const pId = co.parent_po_id?.toString();
+        if (!childMap.has(pId)) childMap.set(pId, []);
+        childMap.get(pId).push(co);
+      });
+
+      orders.forEach((o) => {
+        o.linked_repeat_orders = childMap.get(o._id.toString()) || [];
+      });
+    }
 
     // Collect kit IDs to enrich with image, description, capacity
     const kitIds = [];
@@ -4038,12 +4059,34 @@ const list_epc_po_orders = async (req, res) => {
         { epc_id: accountId },
         { "items.epc_allocations.epc_buyer_id": accountId },
       ],
+      parent_po_id: null,
       deleted_at: null,
     })
       .populate('franchisee_id', 'business_name mobile email contact_person')
-      .populate('parent_po_id', 'po_number token_amount_paise token_paid_paise total_booked_quantity remaining_quantity')
       .sort({ created_at: -1 })
       .lean();
+
+    if (orders.length > 0) {
+      const parentIds = orders.map((o) => o._id);
+      const childOrders = await FpoOrder.find({
+        $or: [
+          { parent_po_id: { $in: parentIds } },
+          { epc_id: accountId, parent_po_id: { $ne: null } },
+        ],
+        deleted_at: null,
+      }).sort({ created_at: -1 }).lean();
+
+      const childMap = new Map();
+      childOrders.forEach((co) => {
+        const pId = co.parent_po_id?.toString();
+        if (!childMap.has(pId)) childMap.set(pId, []);
+        childMap.get(pId).push(co);
+      });
+
+      orders.forEach((o) => {
+        o.linked_repeat_orders = childMap.get(o._id.toString()) || [];
+      });
+    }
 
     return res.status(200).json({
       status: "success",

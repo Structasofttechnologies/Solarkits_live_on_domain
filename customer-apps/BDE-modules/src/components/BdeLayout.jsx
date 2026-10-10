@@ -8,6 +8,7 @@ import {
   Store,
   Target,
   ShoppingBag,
+  ShoppingCart,
   Bell,
   User,
   LogOut,
@@ -32,6 +33,7 @@ export default function BdeLayout() {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Purchase Orders (PO)', path: '/purchase-orders', icon: ShoppingCart },
     { name: 'EPC Leads', path: '/epc-leads', icon: Users },
     { name: 'EPC Onboarding', path: '/epc-onboarding', icon: ShieldCheck },
     { name: 'EPC Quotes', path: '/epc-quotes', icon: FileText },

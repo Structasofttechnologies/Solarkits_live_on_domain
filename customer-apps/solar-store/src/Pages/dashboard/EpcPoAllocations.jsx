@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useSelector } from 'react-redux';
 import { motion, AnimatePresence } from 'framer-motion';
 import axiosInstance from '@/utils/axiosInstance';
@@ -29,6 +29,11 @@ import {
   FiEye,
   FiFileText,
   FiTrendingUp,
+  FiLock,
+  FiChevronDown,
+  FiChevronRight,
+  FiGrid,
+  FiList,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -57,11 +62,53 @@ const STATUS_CONFIG = {
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.SUBMITTED;
-  const Icon = cfg.icon;
+  const Icon = cfg.icon || FiClock;
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border border-current/20 ${cfg.bg} ${cfg.text}`}>
-      <Icon size={11} /> {cfg.label}
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border border-current/20 shadow-2xs whitespace-nowrap ${cfg.bg} ${cfg.text}`}>
+      <Icon size={11} className="shrink-0" />
+      <span>{cfg.label}</span>
     </span>
+  );
+}
+
+function PoStageStepper({ stepNumber }) {
+  const steps = [
+    { num: 1, label: "Booking" },
+    { num: 2, label: "Token" },
+    { num: 3, label: "Active" },
+    { num: 4, label: "Fulfilled" },
+  ];
+
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      {steps.map((s, idx) => {
+        const isDone = stepNumber > s.num;
+        const isCurrent = stepNumber === s.num;
+        return (
+          <Fragment key={s.num}>
+            <div
+              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${
+                isDone
+                  ? "bg-emerald-500 text-white shadow-2xs"
+                  : isCurrent
+                  ? "bg-primary text-white ring-2 ring-primary/25 scale-105"
+                  : "bg-surface-hover text-text-muted border border-border"
+              }`}
+              title={`Stage ${s.num}: ${s.label}`}
+            >
+              {isDone ? <FiCheck size={9} /> : s.num}
+            </div>
+            {idx < steps.length - 1 && (
+              <div
+                className={`h-0.5 w-2 rounded-full transition-all ${
+                  stepNumber > s.num ? "bg-emerald-500" : "bg-border"
+                }`}
+              />
+            )}
+          </Fragment>
+        );
+      })}
+    </div>
   );
 }
 
@@ -355,6 +402,8 @@ export default function EpcPoAllocations() {
 
   // Tab State: "my_pos" vs "franchisee_allocations"
   const [activeTab, setActiveTab] = useState("my_pos");
+  const [viewMode, setViewMode] = useState("table"); // 'table' by default for clean enterprise look
+  const [expandedRowId, setExpandedRowId] = useState(null);
 
   // Direct PO Orders State
   const [directOrders, setDirectOrders] = useState([]);
@@ -673,6 +722,7 @@ export default function EpcPoAllocations() {
           payable: res.data.data?.token_adjustment?.net_payable_inr,
         });
         fetchDirectOrders();
+        fetchAllocations();
       } else {
         setReorderError(res.data?.message || "Failed to create repeat order.");
       }
@@ -862,15 +912,38 @@ export default function EpcPoAllocations() {
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "my_pos" && (
         <div className="space-y-4">
+          {/* Action & View Mode Switcher Toolbar */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-bold text-text-secondary">
+              Showing <span className="text-text-primary font-black">{directOrders.length}</span> Purchase Order Quotas
+            </div>
+
+            <div className="flex items-center gap-1 p-1 bg-surface-hover rounded-xl border border-border">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "table" ? "bg-surface text-primary shadow-2xs font-bold" : "text-text-muted hover:text-text-primary"
+                }`}
+                title="Table View (Full Width)"
+              >
+                <FiList size={15} />
+              </button>
+              <button
+                onClick={() => setViewMode("card")}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                  viewMode === "card" ? "bg-surface text-primary shadow-2xs font-bold" : "text-text-muted hover:text-text-primary"
+                }`}
+                title="Card View"
+              >
+                <FiGrid size={15} />
+              </button>
+            </div>
+          </div>
+
           {directLoading && directOrders.length === 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="p-6 rounded-3xl border border-border bg-surface animate-pulse space-y-4">
-                  <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
-                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3" />
-                  <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-2xl" />
-                </div>
-              ))}
+            <div className="p-12 text-center rounded-2xl border bg-surface space-y-3">
+              <FiLoader size={28} className="animate-spin text-primary mx-auto" />
+              <p className="text-xs text-text-muted font-bold">Loading Purchase Orders...</p>
             </div>
           ) : directOrders.length === 0 ? (
             <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface flex flex-col items-center justify-center gap-3">
@@ -882,9 +955,426 @@ export default function EpcPoAllocations() {
                 You do not have any active purchase orders booked directly. Book kits or coordinate with your Franchisee/BDE partner to initialize your quota.
               </p>
             </div>
+          ) : viewMode === "table" ? (
+            <div
+              className="rounded-2xl border shadow-xs bg-surface transition-all overflow-hidden w-full no-scrollbar"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <div className="w-full overflow-hidden no-scrollbar">
+                <table className="w-full text-left text-xs border-collapse table-auto">
+                  <thead>
+                    <tr
+                      className="border-b text-[10px] font-bold uppercase tracking-wider text-text-muted select-none"
+                      style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
+                    >
+                      <th className="py-3 px-2.5 font-bold">PO# & Creator</th>
+                      <th className="py-3 px-2.5 font-bold">Partner / Store</th>
+                      <th className="py-3 px-2.5 font-bold">Configured ComboKit</th>
+                      <th className="py-3 px-2.5 font-bold">Stage & Status</th>
+                      <th className="py-3 px-2.5 font-bold">Quota & Progress</th>
+                      <th className="py-3 px-2.5 font-bold">Token & Escrow</th>
+                      <th className="py-3 px-2.5 font-bold">Rate Lock</th>
+                      <th className="py-3 px-2.5 font-bold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {directOrders.filter((o) => !o.parent_po_id).map((order) => {
+                      const item = order.items?.[0] || {};
+                      const booked = order.total_booked_quantity || order.total_quantity || item.quantity || 0;
+                      const fulfilled = order.fulfilled_quantity || 0;
+                      const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
+                      const progressPct = booked > 0 ? Math.min(100, Math.round((fulfilled / booked) * 100)) : 0;
+
+                      const tokenPaidINR = Math.round((order.token_amount_paise || order.token_paid_paise || 0) / 100);
+                      const tokenAdjustedINR = Math.round((order.token_adjusted_total_paise || 0) / 100);
+                      const tokenBalanceINR = order.token_balance_paise != null
+                        ? Math.round(order.token_balance_paise / 100)
+                        : Math.max(0, tokenPaidINR - tokenAdjustedINR);
+
+                      const expiryDate = order.lock_expires_at || order.expires_at;
+                      const isExpired = order.status === "EXPIRED" || (expiryDate && new Date(expiryDate).getTime() < Date.now());
+                      const daysLeft = expiryDate
+                        ? Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                        : 30;
+
+                      const isBdeCreated = order.created_by_role === "BDE";
+                      const isExpanded = expandedRowId === order._id;
+
+                      const isValidated = ["VALIDATED", "APPROVED", "CONFIRMED", "PROCESSING", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(order.status);
+                      const isPoStarted = order.status === "PO_STARTED";
+                      const isAwaitingToken = order.status === "AWAITING_TOKEN_PAYMENT";
+
+                      let stepNumber = 1;
+                      if (isValidated) stepNumber = 4;
+                      else if (isPoStarted) stepNumber = 3;
+                      else if (isAwaitingToken) stepNumber = 2;
+
+                      const customerName = order.customer_details?.company_name || order.customer_details?.name || "Direct EPC Store";
+                      const customerLocation = [order.customer_details?.district, order.customer_details?.state].filter(Boolean).join(", ") || "India";
+
+                      const canReorder = remaining > 0 && !isExpired && !["CANCELLED", "REJECTED", "EXPIRED"].includes(order.status);
+                      const refundReq = order.refund_request_snapshot;
+                      const hasRefundReq = Boolean(refundReq && refundReq.status);
+                      const canRequestRefund = !hasRefundReq && tokenBalanceINR > 0 && (isExpired || remaining === 0);
+
+                      return (
+                        <Fragment key={order._id}>
+                          <tr className={`transition-colors duration-150 ${isExpanded ? "bg-surface-hover/80" : "hover:bg-surface-hover/50"}`}>
+                            {/* 1. PO# & Creator */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono font-bold text-text-primary text-[11px] tracking-tight bg-surface-hover px-1.5 py-0.5 rounded border border-border select-all whitespace-nowrap">
+                                    {order.po_number}
+                                  </span>
+                                  <button
+                                    onClick={() => handleCopyText(order.po_number, `po-${order._id}`)}
+                                    className="text-text-muted hover:text-text-primary p-0.5 rounded hover:bg-surface-hover transition-colors cursor-pointer"
+                                    title="Copy PO Number"
+                                  >
+                                    {copiedField === `po-${order._id}` ? (
+                                      <FiCheck size={11} className="text-emerald-500" />
+                                    ) : (
+                                      <FiCopy size={11} />
+                                    )}
+                                  </button>
+                                </div>
+                                <div className="text-[10px] text-text-muted">
+                                  {new Date(order.created_at || order.createdAt).toLocaleDateString("en-IN", {
+                                    day: "numeric",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}
+                                </div>
+                                <div>
+                                  <span
+                                    className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${
+                                      isBdeCreated
+                                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                        : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                                    }`}
+                                  >
+                                    {isBdeCreated ? `BDE: ${order.creator_name || "Officer"}` : "Direct EPC"}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 2. Partner / Store */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col max-w-[130px]">
+                                <div className="font-bold text-text-primary text-[11px] truncate leading-tight" title={customerName}>
+                                  {customerName}
+                                </div>
+                                <div className="text-[10px] text-text-muted truncate">
+                                  {customerLocation}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 3. Configured ComboKit */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col gap-0.5 max-w-[140px]">
+                                <div className="font-bold text-text-primary text-[11px] truncate leading-tight" title={item.item_name || "Solar ComboKit"}>
+                                  {item.item_name || "Solar ComboKit"}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {item.unit_price_paise && (
+                                    <span className="font-mono font-bold text-[10px] text-text-secondary">
+                                      ₹{Math.round((item.unit_price_paise || 0) / 100).toLocaleString("en-IN")}
+                                      <span className="text-[9px] text-text-muted font-sans ml-0.5">/kit</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 4. Stage & Status */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col gap-1">
+                                <StatusBadge status={order.status} />
+                                <PoStageStepper stepNumber={stepNumber} />
+                              </div>
+                            </td>
+
+                            {/* 5. Quota & Progress */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col gap-1 min-w-[100px] max-w-[130px]">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="font-bold text-text-primary">{booked} Kits</span>
+                                  <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
+                                    {remaining} Left
+                                  </span>
+                                </div>
+                                <div className="w-full h-1.5 bg-surface-hover rounded-full overflow-hidden border border-border/80">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-blue-500 via-teal-500 to-emerald-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${progressPct}%` }}
+                                  />
+                                </div>
+                                <div className="text-[9px] text-text-muted flex items-center justify-between">
+                                  <span>{fulfilled} Fulfilled</span>
+                                  <span className="font-bold text-text-secondary">{progressPct}%</span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 6. Token Escrow */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col gap-0.5 min-w-[90px]">
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono font-bold text-text-primary text-[11px]">
+                                    ₹{tokenPaidINR.toLocaleString("en-IN")}
+                                  </span>
+                                  {tokenPaidINR > 0 && (
+                                    <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1 rounded border border-emerald-200/60">
+                                      Paid
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-text-muted">
+                                  Bal: <span className="font-mono font-medium text-text-secondary">₹{tokenBalanceINR.toLocaleString("en-IN")}</span>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* 7. Rate Lock */}
+                            <td className="py-3 px-2.5 align-middle">
+                              <div className="flex flex-col min-w-[65px]">
+                                {isExpired ? (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400">
+                                    Expired
+                                  </span>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-1">
+                                      <FiLock size={10} className={daysLeft <= 15 ? "text-amber-500" : "text-text-muted"} />
+                                      <span className={`text-[11px] font-bold ${daysLeft <= 15 ? "text-amber-600 dark:text-amber-400" : "text-text-primary"}`}>
+                                        {daysLeft}d
+                                      </span>
+                                    </div>
+                                    <div className="text-[9px] text-text-muted">Price Lock</div>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* 8. Actions */}
+                            <td className="py-3 px-2.5 align-middle text-right">
+                              <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                                {canReorder && (
+                                  <button
+                                    onClick={() => handleOpenReorderModal(order)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-primary hover:opacity-90 text-white shadow-2xs transition-all cursor-pointer"
+                                  >
+                                    <FiPlus size={11} />
+                                    <span>Reorder</span>
+                                  </button>
+                                )}
+
+                                {canRequestRefund && (
+                                  <button
+                                    onClick={() => handleOpenRefundModal(order)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs transition-all cursor-pointer"
+                                  >
+                                    <span>Refund</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => setSelectedDirectOrder(order)}
+                                  className="p-1 rounded-lg text-text-secondary hover:text-text-primary bg-surface-hover hover:bg-border/60 border border-border transition-all cursor-pointer"
+                                  title="Full PO Breakdown & Settlement"
+                                >
+                                  <FiEye size={12} />
+                                </button>
+
+                                <button
+                                  onClick={() => setExpandedRowId(isExpanded ? null : order._id)}
+                                  className={`p-1 rounded-lg transition-all cursor-pointer border ${
+                                    isExpanded
+                                      ? "bg-surface-hover text-text-primary border-border"
+                                      : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
+                                  }`}
+                                  title="Toggle Details"
+                                >
+                                  <FiChevronDown size={12} className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expandable Breakdown Details */}
+                          {isExpanded && (
+                            <tr className="bg-surface-hover/40 border-b border-border">
+                              <td colSpan={8} className="p-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                  {/* Partner & Customer Details */}
+                                  <div className="p-3.5 rounded-2xl bg-surface border border-border shadow-2xs space-y-2">
+                                    <div className="font-bold text-text-primary uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                                      <FiUser size={13} className="text-primary" /> Partner & Customer Info
+                                    </div>
+                                    <div className="space-y-1 text-[11px]">
+                                      <div className="text-text-muted flex justify-between">
+                                        <span>Name / Entity:</span>
+                                        <strong className="text-text-primary truncate max-w-[150px]">{customerName}</strong>
+                                      </div>
+                                      <div className="text-text-muted flex justify-between">
+                                        <span>Location:</span>
+                                        <span className="text-text-primary">{customerLocation}</span>
+                                      </div>
+                                      <div className="text-text-muted flex justify-between">
+                                        <span>Phone:</span>
+                                        <span className="text-text-primary font-mono">{order.customer_details?.phone || "Direct Registered"}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Token Escrow & Penalty Protection */}
+                                  <div className="p-3.5 rounded-2xl bg-surface border border-border shadow-2xs space-y-2">
+                                    <div className="font-bold text-text-primary uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                                      <FiShield size={13} className="text-emerald-500" /> Token Settlement & Protection
+                                    </div>
+                                    <div className="space-y-1 text-[11px]">
+                                      <div className="text-text-muted flex justify-between">
+                                        <span>Settlement Rule:</span>
+                                        <strong className="text-text-primary font-mono">{order.token_settlement_mode || "PRO_RATA"}</strong>
+                                      </div>
+                                      <div className="text-text-muted flex justify-between">
+                                        <span>Token Adjusted:</span>
+                                        <strong className="text-text-primary font-mono">₹{tokenAdjustedINR.toLocaleString("en-IN")}</strong>
+                                      </div>
+                                      <div className="text-text-muted flex justify-between pt-1 border-t border-border/50">
+                                        <span>Available Balance:</span>
+                                        <strong className="text-emerald-600 dark:text-emerald-400 font-mono">₹{tokenBalanceINR.toLocaleString("en-IN")}</strong>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Validity & Reorders */}
+                                  <div className="p-3.5 rounded-2xl bg-surface border border-border shadow-2xs space-y-2.5">
+                                    <div className="font-bold text-text-primary uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                                      <FiLayers size={13} className="text-blue-500" /> Repeat Orders (Drawdowns)
+                                    </div>
+                                    <div className="space-y-1 text-[11px] text-text-muted">
+                                      <div className="flex justify-between">
+                                        <span>Linked Reorders:</span>
+                                        <strong className="text-text-primary font-bold">{(order.linked_repeat_orders || []).length} Orders</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>Rate Validity:</span>
+                                        <strong className="text-text-primary font-bold">{order.po_settings_snapshot?.po_validity_days || 30} Days Guaranteed</strong>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => setSelectedDirectOrder(order)}
+                                      className="w-full py-2 rounded-xl bg-surface-hover hover:bg-border text-text-primary text-[11px] font-bold border border-border transition-colors cursor-pointer text-center"
+                                    >
+                                      View Full Breakdown & Settlement Logs →
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* ── Dedicated Nested Reorders Table Under PO Card ── */}
+                                <div className="mt-4 p-4 rounded-2xl bg-surface border border-border shadow-2xs space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                                        <FiLayers size={14} />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-bold text-text-primary text-xs flex items-center gap-1.5">
+                                          Drawdowns & Reorders Under PO: <span className="font-mono text-primary">{order.po_number}</span>
+                                        </h4>
+                                        <p className="text-[10px] text-text-muted">
+                                          All loose kit deliveries drawn from this locked quota with pro-rata token escrow deduction.
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {canReorder && (
+                                      <button
+                                        onClick={() => handleOpenReorderModal(order)}
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary hover:opacity-90 text-white shadow-xs transition-all cursor-pointer"
+                                      >
+                                        <FiPlus size={12} />
+                                        <span>+ Place Reorder</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {(order.linked_repeat_orders || []).length === 0 ? (
+                                    <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-dashed border-border text-center text-[11px] text-text-muted">
+                                      No drawdowns placed against this PO yet. Click "+ Place Reorder" to draw kits from the {remaining} remaining quota.
+                                    </div>
+                                  ) : (
+                                    <div className="overflow-x-auto rounded-xl border border-border/80 bg-surface">
+                                      <table className="w-full text-left text-xs border-collapse">
+                                        <thead>
+                                          <tr className="border-b border-border text-[10px] font-bold uppercase tracking-wider text-text-muted bg-surface-hover/80">
+                                            <th className="py-2.5 px-3">Reorder Ref #</th>
+                                            <th className="py-2.5 px-3">Order Date</th>
+                                            <th className="py-2.5 px-3">Kits Drawn</th>
+                                            <th className="py-2.5 px-3">Token Escrow Adjusted</th>
+                                            <th className="py-2.5 px-3">Net Paid</th>
+                                            <th className="py-2.5 px-3">Payment UTR</th>
+                                            <th className="py-2.5 px-3 text-right">Status</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border/60 text-[11px]">
+                                          {order.linked_repeat_orders.map((child, cIdx) => {
+                                            const childQty = child.items?.[0]?.quantity || child.total_quantity || 1;
+                                            const childTokenAdj = Math.round((child.token_adjusted_paise || 0) / 100);
+                                            const childNetPaid = Math.round((child.net_payable_paise || child.grand_total_paise || 0) / 100);
+                                            return (
+                                              <tr key={child._id || cIdx} className="hover:bg-surface-hover/40 transition-colors">
+                                                <td className="py-2 px-3 font-mono font-bold text-text-primary">
+                                                  {child.po_number || `ORD-R${cIdx + 1}`}
+                                                </td>
+                                                <td className="py-2 px-3 text-text-muted">
+                                                  {new Date(child.created_at || child.createdAt).toLocaleDateString("en-IN", {
+                                                    day: "numeric",
+                                                    month: "short",
+                                                    year: "numeric",
+                                                  })}
+                                                </td>
+                                                <td className="py-2 px-3 font-bold text-text-primary">
+                                                  <span className="font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                                    {childQty} Kits
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                                                  {childTokenAdj > 0 ? `-₹${childTokenAdj.toLocaleString("en-IN")}` : "₹0"}
+                                                </td>
+                                                <td className="py-2 px-3 font-mono font-bold text-text-primary">
+                                                  ₹{childNetPaid.toLocaleString("en-IN")}
+                                                </td>
+                                                <td className="py-2 px-3 font-mono text-text-muted text-[10px] select-all">
+                                                  {child.payment_utr || child.offline_payment?.utr_number || "—"}
+                                                </td>
+                                                <td className="py-2 px-3 text-right">
+                                                  <StatusBadge status={child.status} />
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {directOrders.map((order) => (
+              {directOrders.filter((o) => !o.parent_po_id).map((order) => (
                 <EpcPoCardItem
                   key={order._id}
                   order={order}
@@ -949,7 +1439,18 @@ export default function EpcPoAllocations() {
                 const totalAmount = allocatedQty * unitPrice * (1 + gstRate / 100);
                 const tokenPaise = epcAlloc?.token_amount_paise || order.token_amount_paise || 5000000;
                 const tokenRequiredINR = Math.round(tokenPaise / 100);
-                const isPaid = epcAlloc?.payment_status === "VERIFIED" || epcAlloc?.payment_status === "PAID" || order.status === "PO_STARTED" || order.token_payment_status === "PAID";
+                const isPaid =
+                  epcAlloc?.payment_status === "VERIFIED" ||
+                  epcAlloc?.payment_status === "PAID" ||
+                  order.status === "PO_STARTED" ||
+                  order.status === "VALIDATED" ||
+                  order.token_payment_status === "PAID" ||
+                  ["APPROVED", "CONFIRMED", "PROCESSING", "DISPATCHED", "DELIVERED", "COMPLETED"].includes(order.status);
+
+                const booked = order.total_booked_quantity || order.total_quantity || allocatedQty || 0;
+                const fulfilled = order.fulfilled_quantity || 0;
+                const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, booked - fulfilled);
+                const canReorder = isPaid && remaining > 0 && !["CANCELLED", "REJECTED", "EXPIRED"].includes(order.status);
 
                 return (
                   <div
@@ -972,19 +1473,19 @@ export default function EpcPoAllocations() {
                         <AllocationStatusBadge status={epcAlloc?.payment_status} utr={epcAlloc?.payment_utr} poStatus={order.status} />
                       </div>
 
-                      {/* Stage 3 Notice Banner for EPC */}
+                      {/* Stage 3 Notice Banner for EPC (Shown ONLY if Token Deposit NOT Paid) */}
                       {!isPaid && (
                         <div className="mx-4 sm:mx-6 mt-4 p-3.5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 text-xs space-y-1">
                           <div className="flex items-center justify-between font-black text-amber-800 dark:text-amber-300">
                             <span className="flex items-center gap-1.5">
-                              <FiAlertCircle className="text-amber-600 shrink-0" size={15} /> Stage 3: EPC Token Deposit Required to Start PO
+                              <FiAlertCircle className="text-amber-600 shrink-0" size={15} /> Stage 3: EPC One-Time Token Deposit Required
                             </span>
                             <span className="font-mono text-sm text-amber-700 dark:text-amber-300">
                               ₹{tokenRequiredINR.toLocaleString("en-IN")} Due
                             </span>
                           </div>
                           <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                            🔒 <strong>Purchase Order will not commence until the token deposit is paid.</strong> The onboarded EPC Partner must complete their token deposit first to officially start the PO. Click "Pay Token Deposit" below to record payment.
+                            🔒 <strong>Purchase Order will not commence until the one-time token deposit is paid.</strong> Once paid, you can draw down kit reorders seamlessly without repeating token deposit!
                           </p>
                         </div>
                       )}
@@ -1000,6 +1501,10 @@ export default function EpcPoAllocations() {
                               <span className="font-bold text-text-primary dark:text-white">{allocatedQty} Kits</span>
                             </div>
                             <div className="flex justify-between">
+                              <span className="text-text-secondary">Remaining Quota:</span>
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">{remaining} Kits</span>
+                            </div>
+                            <div className="flex justify-between">
                               <span className="text-text-secondary">Unit Price (excl. GST):</span>
                               <span className="font-bold text-text-primary dark:text-white">₹{unitPrice.toLocaleString("en-IN")}</span>
                             </div>
@@ -1012,101 +1517,212 @@ export default function EpcPoAllocations() {
                               <span className="text-[#264baa] dark:text-blue-400">₹{totalAmount.toLocaleString("en-IN")}</span>
                             </div>
                             <div className="flex justify-between pt-1 text-xs">
-                              <span className="text-text-secondary font-bold">Required Token Deposit:</span>
-                              <span className="font-black text-amber-700 dark:text-amber-400">₹{tokenRequiredINR.toLocaleString("en-IN")}</span>
+                              <span className="text-text-secondary font-bold">One-Time Token Deposit:</span>
+                              <span className={`font-black ${isPaid ? "text-emerald-600" : "text-amber-700 dark:text-amber-400"}`}>
+                                ₹{tokenRequiredINR.toLocaleString("en-IN")} {isPaid && "(Paid ✓)"}
+                              </span>
                             </div>
                           </div>
                         </div>
 
-                        {/* ICICI VAN Details */}
+                        {/* ICICI VAN Details & Upload Receipt (Only shown if token is NOT paid) */}
                         <div className="md:col-span-2 space-y-3">
-                          {!isPaid && (
-                            <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 p-4 rounded-xl space-y-3">
+                          {!isPaid ? (
+                            <>
+                              <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 p-4 rounded-xl space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
+                                    ICICI Virtual Escrow Account (Instant Settlement)
+                                  </span>
+                                  <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">
+                                    Auto-Verify in 10s
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+                                  <div className="flex justify-between bg-surface p-2 rounded border border-border">
+                                    <span className="text-text-muted">A/C: {iciciVanDetails?.account_number || escrowBank.account_number}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyText(iciciVanDetails?.account_number || escrowBank.account_number, `acc_${order._id}`)}
+                                      className="text-primary hover:underline text-[10px]"
+                                    >
+                                      {copiedField === `acc_${order._id}` ? "Copied!" : "Copy"}
+                                    </button>
+                                  </div>
+                                  <div className="flex justify-between bg-surface p-2 rounded border border-border">
+                                    <span className="text-text-muted">IFSC: {iciciVanDetails?.ifsc_code || escrowBank.ifsc_code}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || escrowBank.ifsc_code, `ifsc_${order._id}`)}
+                                      className="text-primary hover:underline text-[10px]"
+                                    >
+                                      {copiedField === `ifsc_${order._id}` ? "Copied!" : "Copy"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {activeUploadOrderId === order._id ? (
+                                <div className="space-y-2 bg-surface p-3 rounded-xl border border-border">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-text-primary">Upload Bank Transfer Receipt (UTR)</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveUploadOrderId(null)}
+                                      className="text-text-secondary hover:text-text-primary text-[11px]"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Enter Bank UTR / Reference No."
+                                    value={manualUtr}
+                                    onChange={(e) => setManualUtr(e.target.value)}
+                                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-surface-hover font-mono"
+                                  />
+                                  <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => setReceiptFile(e.target.files[0])}
+                                    className="block w-full text-xs text-text-secondary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-primary/10 file:text-primary file:font-bold"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpload(order._id)}
+                                    disabled={uploading}
+                                    className="w-full bg-primary hover:opacity-90 text-white py-2 px-3 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                                  >
+                                    {uploading ? "Submitting Receipt..." : "Submit Receipt for Accounts Verification"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveUploadOrderId(order._id)}
+                                  className="w-full py-2.5 px-3 rounded-xl bg-surface hover:bg-surface-hover border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <FiUploadCloud className="text-primary" />
+                                  <span>Paid via Traditional Bank Transfer? Upload Receipt Slip / UTR</span>
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            /* When Token is Paid: Show Quota Progress & Reorders Summary */
+                            <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl space-y-2.5">
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
-                                  ICICI Virtual Escrow Account (Instant Settlement)
+                                <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                                  <FiCheckCircle className="text-emerald-600" /> Rate Lock & Quota Active
                                 </span>
-                                <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">
-                                  Auto-Verify in 10s
+                                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                                  Token Deposit Verified ✓
                                 </span>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
-                                <div className="flex justify-between bg-surface p-2 rounded border border-border">
-                                  <span className="text-text-muted">A/C: {iciciVanDetails?.account_number || escrowBank.account_number}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopyText(iciciVanDetails?.account_number || escrowBank.account_number, `acc_${order._id}`)}
-                                    className="text-primary hover:underline text-[10px]"
-                                  >
-                                    {copiedField === `acc_${order._id}` ? "Copied!" : "Copy"}
-                                  </button>
-                                </div>
-                                <div className="flex justify-between bg-surface p-2 rounded border border-border">
-                                  <span className="text-text-muted">IFSC: {iciciVanDetails?.ifsc_code || escrowBank.ifsc_code}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || escrowBank.ifsc_code, `ifsc_${order._id}`)}
-                                    className="text-primary hover:underline text-[10px]"
-                                  >
-                                    {copiedField === `ifsc_${order._id}` ? "Copied!" : "Copy"}
-                                  </button>
-                                </div>
+                              <p className="text-xs text-emerald-800 dark:text-emerald-200">
+                                Your price lock is guaranteed. Draw repeat kit orders anytime using the <strong>"+ Reorder Kits"</strong> button below.
+                              </p>
+                              <div className="flex items-center justify-between text-xs pt-1 border-t border-emerald-500/20 text-emerald-900 dark:text-emerald-300 font-bold">
+                                <span>Fulfilled: {fulfilled} Kits</span>
+                                <span>Remaining: {remaining} Kits</span>
                               </div>
                             </div>
                           )}
-
-                          {/* Upload Slip Option */}
-                          {!isPaid && (
-                            activeUploadOrderId === order._id ? (
-                              <div className="space-y-2 bg-surface p-3 rounded-xl border border-border">
-                                <div className="flex justify-between items-center text-xs">
-                                  <span className="font-bold text-text-primary">Upload Bank Transfer Receipt (UTR)</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setActiveUploadOrderId(null)}
-                                    className="text-text-secondary hover:text-text-primary text-[11px]"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                                <input
-                                  type="text"
-                                  placeholder="Enter Bank UTR / Reference No."
-                                  value={manualUtr}
-                                  onChange={(e) => setManualUtr(e.target.value)}
-                                  className="w-full px-3 py-1.5 text-xs rounded-lg border border-border bg-surface-hover font-mono"
-                                />
-                                <input
-                                  type="file"
-                                  accept="image/*,.pdf"
-                                  onChange={(e) => setReceiptFile(e.target.files[0])}
-                                  className="block w-full text-xs text-text-secondary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-primary/10 file:text-primary file:font-bold"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleUpload(order._id)}
-                                  disabled={uploading}
-                                  className="w-full bg-primary hover:opacity-90 text-white py-2 px-3 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                                >
-                                  {uploading ? "Submitting Receipt..." : "Submit Receipt for Accounts Verification"}
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setActiveUploadOrderId(order._id)}
-                                className="w-full py-2.5 px-3 rounded-xl bg-surface hover:bg-surface-hover border border-border text-xs font-bold text-text-secondary hover:text-text-primary transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                              >
-                                <FiUploadCloud className="text-primary" />
-                                <span>Paid via Traditional Bank Transfer? Upload Receipt Slip / UTR</span>
-                              </button>
-                            )
-                          )}
                         </div>
                       </div>
+
+                      {/* Nested Repeat Orders Placed Under This Allocated PO */}
+                      {isPaid && (
+                        <div className="mx-4 sm:mx-6 mb-4 p-4 rounded-2xl bg-surface border border-border shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+                                <FiLayers size={14} />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-text-primary text-xs flex items-center gap-1.5">
+                                  Reorders & Drawdowns Placed Under PO: <span className="font-mono text-primary">{order.po_number}</span>
+                                </h4>
+                                <p className="text-[10px] text-text-muted">
+                                  All loose kit deliveries drawn against this allocated quota with token adjusted pro-rata.
+                                </p>
+                              </div>
+                            </div>
+                            {canReorder && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReorderModal(order)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary hover:opacity-90 text-white shadow-xs transition-all cursor-pointer"
+                              >
+                                <FiPlus size={12} />
+                                <span>+ Reorder Kits</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {(order.linked_repeat_orders || []).length === 0 ? (
+                            <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-dashed border-border text-center text-[11px] text-text-muted">
+                              No repeat drawdowns placed against this PO yet. Click "+ Reorder Kits" to draw from your {remaining} remaining quota.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-xl border border-border/80 bg-surface">
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="border-b border-border text-[10px] font-bold uppercase tracking-wider text-text-muted bg-surface-hover/80">
+                                    <th className="py-2.5 px-3">Order Ref #</th>
+                                    <th className="py-2.5 px-3">Date</th>
+                                    <th className="py-2.5 px-3">Kits Drawn</th>
+                                    <th className="py-2.5 px-3">Token Adjusted</th>
+                                    <th className="py-2.5 px-3">Net Paid</th>
+                                    <th className="py-2.5 px-3">Payment UTR</th>
+                                    <th className="py-2.5 px-3 text-right">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/60 text-[11px]">
+                                  {order.linked_repeat_orders.map((child, cIdx) => {
+                                    const childQty = child.items?.[0]?.quantity || child.total_quantity || 1;
+                                    const childTokenAdj = Math.round((child.token_adjusted_paise || 0) / 100);
+                                    const childNetPaid = Math.round((child.net_payable_paise || child.grand_total_paise || 0) / 100);
+                                    return (
+                                      <tr key={child._id || cIdx} className="hover:bg-surface-hover/40 transition-colors">
+                                        <td className="py-2 px-3 font-mono font-bold text-text-primary">
+                                          {child.po_number || `ORD-R${cIdx + 1}`}
+                                        </td>
+                                        <td className="py-2 px-3 text-text-muted">
+                                          {new Date(child.created_at || child.createdAt).toLocaleDateString("en-IN", {
+                                            day: "numeric",
+                                            month: "short",
+                                            year: "numeric",
+                                          })}
+                                        </td>
+                                        <td className="py-2 px-3 font-bold text-text-primary">
+                                          <span className="font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                            {childQty} Kits
+                                          </span>
+                                        </td>
+                                        <td className="py-2 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                                          {childTokenAdj > 0 ? `-₹${childTokenAdj.toLocaleString("en-IN")}` : "₹0"}
+                                        </td>
+                                        <td className="py-2 px-3 font-mono font-bold text-text-primary">
+                                          ₹{childNetPaid.toLocaleString("en-IN")}
+                                        </td>
+                                        <td className="py-2 px-3 font-mono text-text-muted text-[10px] select-all">
+                                          {child.payment_utr || child.offline_payment?.utr_number || "—"}
+                                        </td>
+                                        <td className="py-2 px-3 text-right">
+                                          <StatusBadge status={child.status} />
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Card Footer with Franchise Partner Info & Pay Token Button */}
+                    {/* Card Footer with Franchise Partner Info & Pay Token or Reorder Button */}
                     <div className="bg-surface-hover/50 border-t border-border px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-bold text-text-secondary">Franchise Partner:</span>
@@ -1119,7 +1735,7 @@ export default function EpcPoAllocations() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {!isPaid && (
+                        {!isPaid ? (
                           <button
                             type="button"
                             onClick={() => handleOpenTokenModal(order, epcAlloc, allocatedItem)}
@@ -1128,12 +1744,24 @@ export default function EpcPoAllocations() {
                             <FiDollarSign size={15} />
                             <span>💳 Pay Token Deposit (₹{tokenRequiredINR.toLocaleString("en-IN")})</span>
                           </button>
-                        )}
-                        {isPaid && (
-                          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-500/30">
-                            <FiCheckCircle size={14} className="text-emerald-600" />
-                            <span>Token Deposited ✓ (PO Started)</span>
-                          </span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-500/30">
+                              <FiCheckCircle size={13} className="text-emerald-600" />
+                              <span>Token Deposited ✓ (PO Started)</span>
+                            </span>
+
+                            {canReorder && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenReorderModal(order)}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-primary text-white hover:opacity-95 transition-all shadow-sm cursor-pointer transform active:scale-95"
+                              >
+                                <FiPlus size={14} />
+                                <span>⚡ Reorder Kits ({remaining} left)</span>
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

@@ -26,6 +26,7 @@ import {
   RotateCw,
   Building2,
   FileCheck,
+  ShoppingCart,
 } from 'lucide-react';
 
 export default function BdeDashboard() {
@@ -113,10 +114,16 @@ export default function BdeDashboard() {
 
           <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
             <button
-              onClick={() => navigate('/epc-onboarding')}
+              onClick={() => navigate('/purchase-orders')}
               className="px-5 py-2.5 bg-gradient-to-r from-[#F49222] to-amber-400 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black rounded-2xl text-xs transition shadow-lg shadow-amber-400/20 flex items-center gap-2"
             >
-              <ShieldCheck className="w-4 h-4 stroke-[2.5]" /> GST Onboard EPC
+              <ShoppingCart className="w-4 h-4 stroke-[2.5]" /> Bulk PO Orders
+            </button>
+            <button
+              onClick={() => navigate('/epc-onboarding')}
+              className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold rounded-2xl text-xs transition flex items-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4" /> GST Onboard EPC
             </button>
             <button
               onClick={() => navigate('/epc-leads')}
