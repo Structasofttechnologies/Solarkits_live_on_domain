@@ -269,7 +269,7 @@ async function createPoDraft({
     if (hasItems) {
       if (authorizedKitIds.size > 0) {
         for (const item of items) {
-          if (item.kit_id && !authorizedKitIds.has(String(item.kit_id))) {
+          if (item.kit_id && mongoose.Types.ObjectId.isValid(item.kit_id) && !authorizedKitIds.has(String(item.kit_id))) {
             throw new Error(`The selected product "${item.item_name || 'Solar Kit'}" is not assigned for Purchase Orders under your franchise plan.`);
           }
         }
@@ -312,11 +312,15 @@ async function createPoDraft({
           }
         }
 
+        const validKitId = (item.kit_id && mongoose.Types.ObjectId.isValid(item.kit_id)) ? item.kit_id : null;
+        const validProjTypeId = (item.project_type_id && mongoose.Types.ObjectId.isValid(item.project_type_id)) ? item.project_type_id : null;
+        const validProductId = (item.product_id && mongoose.Types.ObjectId.isValid(item.product_id)) ? item.product_id : null;
+
         builtItems.push({
-          project_type_id: item.project_type_id || null,
+          project_type_id: validProjTypeId,
           project_type_name: item.project_type_name || null,
-          kit_id: item.kit_id || null,
-          product_id: item.product_id || null,
+          kit_id: validKitId,
+          product_id: validProductId,
           item_name: item.item_name,
           item_code: item.item_code || null,
           quantity: item.quantity,
@@ -526,7 +530,7 @@ async function createPoDraft({
       status_history: [{
         status: !hasItems ? 'PENDING_ALLOCATION' : (isPoOrder ? (token_payment_status === 'PAID' ? 'PO_STARTED' : 'AWAITING_TOKEN_PAYMENT') : 'DRAFT'),
         changed_by: actor_id,
-        actor_type: actor_id ? (created_by_role === 'ADMIN' ? 'cms_user' : 'reseller') : 'system',
+        actor_type: actor_id ? (created_by_role === 'ADMIN' ? 'cms_user' : (created_by_role === 'SOLAR_EPC' || epc_id ? 'epc_partner' : (created_by_role === 'BDE' ? 'bde' : 'reseller'))) : 'system',
         note: !hasItems ? 'PO Order container created. Awaiting product allocation.' : (isPoOrder && token_payment_status === 'PAID' ? 'PO created and token paid. PO Started.' : 'PO Draft Created'),
         changed_at: new Date()
       }],
@@ -592,16 +596,29 @@ async function createPoDraft({
   }
 
   // ── 3. SUBMIT PO ─────────────────────────────────────────────────────────────
-  async function submitPo({ po_id, franchisee_id, actor_id, req }) {
-    const order = await FpoOrder.findOne({ _id: po_id, franchisee_id, deleted_at: null }).lean();
+  async function submitPo({ po_id, franchisee_id, epc_id, actor_id, req }) {
+    const query = { _id: po_id, deleted_at: null };
+    if (franchisee_id) {
+      query.franchisee_id = franchisee_id;
+    } else if (epc_id) {
+      query.$or = [
+        { epc_id: epc_id },
+        { 'items.epc_allocations.epc_buyer_id': epc_id },
+      ];
+    }
+    const order = await FpoOrder.findOne(query).lean();
     if (!order) throw new Error('PO not found or access denied.');
 
     const target = order.requires_approval ? 'PENDING_APPROVAL' : 'APPROVED';
+    const isEpc = order.customer_type === 'SOLAR_EPC' || order.epc_id || epc_id;
+    const actorRole = isEpc ? 'epc_partner' : (order.created_by_role === 'ADMIN' ? 'cms_user' : 'reseller');
+    const noteText = isEpc ? 'PO submitted by EPC buyer' : 'PO submitted by franchisee';
+
     const updated = await _transitionStatus(po_id, target, {
-      changed_by: actor_id, actor_type: 'reseller', note: 'PO submitted by franchisee',
+      changed_by: actor_id, actor_type: actorRole, note: noteText,
     });
 
-    await logAudit({ actor_type: 'reseller', actor_id, action: 'FPO_SUBMITTED', entity_type: 'fpo_orders', entity_id: po_id, after_snapshot: { status: target }, req });
+    await logAudit({ actor_type: actorRole, actor_id, action: 'FPO_SUBMITTED', entity_type: 'fpo_orders', entity_id: po_id, after_snapshot: { status: target }, req });
     return updated;
   }
 
@@ -1109,7 +1126,7 @@ async function createPoDraft({
       order.status_history.push({
         status: 'AWAITING_TOKEN_PAYMENT',
         changed_by: actor_id,
-        actor_type: franchisee_id ? 'reseller' : 'cms_user',
+        actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'cms_user'),
         note: 'Products and EPC partners allocated. Awaiting token payment.',
         changed_at: new Date(),
       });
@@ -1117,7 +1134,7 @@ async function createPoDraft({
       await order.save();
 
       await logAudit({
-        actor_type: franchisee_id ? 'reseller' : 'cms_user',
+        actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'cms_user'),
         actor_id,
         action: 'FPO_PRODUCTS_ALLOCATED',
         entity_type: 'fpo_orders',
@@ -1193,7 +1210,7 @@ async function createPoDraft({
       order.status_history.push({
         status: 'PO_STARTED',
         changed_by: actor_id,
-        actor_type: franchisee_id ? 'reseller' : 'system',
+        actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'system'),
         note: `Token payment recorded (${utr_number || 'Confirmed'}). PO Started!`,
         changed_at: new Date(),
       });
@@ -1201,7 +1218,7 @@ async function createPoDraft({
       await order.save();
 
       await logAudit({
-        actor_type: franchisee_id ? 'reseller' : 'system',
+        actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'system'),
         actor_id,
         action: 'FPO_TOKEN_PAID_STARTED',
         entity_type: 'fpo_orders',
@@ -1230,7 +1247,7 @@ async function createPoDraft({
       order.status_history.push({
         status: 'VALIDATED',
         changed_by: actor_id,
-        actor_type: franchisee_id ? 'reseller' : 'cms_user',
+        actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'cms_user'),
         note: notes || 'PO Validated. Quota and price lock active.',
         changed_at: new Date(),
       });
@@ -1238,7 +1255,7 @@ async function createPoDraft({
       await order.save();
 
       await logAudit({
-        actor_type: franchisee_id ? 'reseller' : 'cms_user',
+        actor_type: franchisee_id ? 'reseller' : (order.epc_id ? 'epc_partner' : 'cms_user'),
         actor_id,
         action: 'FPO_VALIDATED',
         entity_type: 'fpo_orders',

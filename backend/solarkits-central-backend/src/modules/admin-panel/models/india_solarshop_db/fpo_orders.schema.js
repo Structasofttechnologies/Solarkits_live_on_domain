@@ -55,7 +55,11 @@ const statusHistorySchema = new mongoose.Schema(
   {
     status: { type: String, enum: VALID_STATUSES, required: true },
     changed_by: { type: mongoose.Schema.Types.ObjectId, default: null },
-    actor_type: { type: String, enum: ['cms_user', 'reseller', 'system'], default: 'system' },
+    actor_type: {
+      type: String,
+      enum: ['cms_user', 'reseller', 'epc_partner', 'epc_buyer', 'epc', 'bde', 'admin', 'system'],
+      default: 'system',
+    },
     note: { type: String, default: null, maxlength: 1000 },
     changed_at: { type: Date, default: Date.now },
   },

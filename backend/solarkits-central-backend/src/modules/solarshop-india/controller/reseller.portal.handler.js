@@ -3338,7 +3338,97 @@ const get_my_plan_po_settings = async (req, res) => {
       }).lean();
     }
 
-    const comboKits = foundKits.map((k) => ({
+    // Enrich foundKits with classification taxonomy for Quick Filters
+    let enrichedFoundKits = foundKits;
+    try {
+      const solarKitIds = foundKits.map((k) => k.solar_kit_id).filter(Boolean);
+      const {
+        SolarKit,
+        ProjectCategory,
+        IndustryType,
+        ProjectSubcategory,
+        ProjectSubcategoryType,
+        ProjectType,
+        ProjectRange,
+      } = require('../../admin-panel/models/core_db');
+
+      const [solarDefs, allRanges] = await Promise.all([
+        solarKitIds.length > 0 ? SolarKit.find({ _id: { $in: solarKitIds } }).lean() : [],
+        ProjectRange.find({ deleted_at: null }).lean(),
+      ]);
+
+      const defMap = new Map(solarDefs.map((d) => [d._id.toString(), d]));
+      const catIds = solarDefs.map((d) => d.category_id).filter(Boolean);
+      const subcatIds = solarDefs.map((d) => d.subcategory_id).filter(Boolean);
+      const typeIds = solarDefs.map((d) => d.type_id).filter(Boolean);
+
+      const [categories, subcategories, subcatTypes, projTypes] = await Promise.all([
+        catIds.length > 0 ? ProjectCategory.find({ _id: { $in: catIds } }).lean() : [],
+        subcatIds.length > 0 ? ProjectSubcategory.find({ _id: { $in: subcatIds } }).lean() : [],
+        typeIds.length > 0 ? ProjectSubcategoryType.find({ _id: { $in: typeIds } }).populate('type').populate('subcategory').lean() : [],
+        typeIds.length > 0 ? ProjectType.find({ _id: { $in: typeIds } }).lean() : [],
+      ]);
+
+      const catMap = new Map(categories.map((c) => [c._id.toString(), c]));
+      const indIds = categories.map((c) => c.industry_type_id).filter(Boolean);
+      const industries = indIds.length > 0 ? await IndustryType.find({ _id: { $in: indIds } }).lean() : [];
+      const indMap = new Map(industries.map((i) => [i._id.toString(), i]));
+      const subcatMap = new Map(subcategories.map((s) => [s._id.toString(), s]));
+      const subcatTypeMap = new Map(subcatTypes.map((st) => [st._id.toString(), st]));
+      const projTypeMap = new Map(projTypes.map((p) => [p._id.toString(), p]));
+
+      enrichedFoundKits = foundKits.map((k) => {
+        const def = defMap.get(k.solar_kit_id?.toString());
+        const cat = def ? catMap.get(def.category_id?.toString()) : null;
+        const ind = cat ? indMap.get(cat.industry_type_id?.toString()) : null;
+        const subcatType = def ? subcatTypeMap.get(def.type_id?.toString()) : null;
+        const directSubcat = def ? subcatMap.get(def.subcategory_id?.toString()) : null;
+        const directProjType = def ? projTypeMap.get(def.type_id?.toString()) : null;
+
+        const subcatId = subcatType?.subcategory?._id || directSubcat?._id || null;
+        const subcatName = subcatType?.subcategory?.name || directSubcat?.name || 'Individual Home';
+
+        let projTypeName = 'Rooftop Solar';
+        let projTypeId = null;
+        if (subcatType?.type) {
+          projTypeId = subcatType.type._id;
+          projTypeName = subcatType.type.name;
+          if (subcatType.subcategory?.name) {
+            projTypeName = `${subcatType.subcategory.name} - ${projTypeName}`;
+          }
+        } else if (directProjType) {
+          projTypeId = directProjType._id;
+          projTypeName = directProjType.name;
+        }
+
+        const kitCap = Number(k.capacity || 0);
+        const matchedRange = allRanges.find((r) =>
+          (subcatType && String(r.subcategory_type) === String(subcatType._id)) ||
+          (kitCap >= Number(r.min_value || 0) && kitCap <= Number(r.max_value || 999999))
+        );
+
+        return {
+          ...k,
+          industry_type_id: ind?._id || cat?.industry_type_id || null,
+          industry_type_name: ind?.name || 'Solar PV',
+          category_id: cat?._id || null,
+          category_name: cat?.name || 'Residential Solar',
+          subcategory_id: subcatId,
+          subcategory_name: subcatName,
+          project_type_id: projTypeId,
+          project_type_name: projTypeName,
+          system_type: k.system_type || (k.inverter_mode === 'hybrid' ? 'Hybrid' : (k.inverter_mode === 'offgrid' ? 'Off-Grid' : 'On-Grid')),
+          project_range_id: matchedRange?._id || null,
+          project_range_label: matchedRange ? `${matchedRange.min_value} - ${matchedRange.max_value} kW` : (k.capacity ? `${k.capacity} kW System` : 'Standard Range'),
+          min_kw: matchedRange?.min_value ?? (k.capacity || 0),
+          max_kw: matchedRange?.max_value ?? (k.capacity || 0),
+        };
+      });
+    } catch (enrichErr) {
+      console.warn('[reseller.portal] Warning enriching combo kit taxonomy:', enrichErr.message);
+    }
+
+    const comboKits = enrichedFoundKits.map((k) => ({
       ...k,
       po_setting_id: defSetting?._id || null,
       min_po_quantity: defSetting?.min_po_quantity ?? 1,

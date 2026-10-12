@@ -22,7 +22,7 @@ const { india_solarshop_db: db } = require('../../config/databases');
 // ── Status History Entry ─────────────────────────────────────────────────────
 const statusHistorySchema = new mongoose.Schema({
   status:     { type: String, required: true },
-  actor_type: { type: String, enum: ['reseller', 'epc_buyer', 'admin', 'system'], required: true },
+  actor_type: { type: String, enum: ['reseller', 'epc_buyer', 'epc_partner', 'admin', 'system'], required: true },
   actor_id:   { type: mongoose.Schema.Types.ObjectId, default: null },
   actor_name: { type: String, default: null },
   comment:    { type: String, default: null, trim: true, maxlength: 1000 },
@@ -51,7 +51,7 @@ const schema = new mongoose.Schema({
   // ── Who Raised ───────────────────────────────────────────────────────────
   raised_by_type: {
     type: String,
-    enum: ['reseller', 'epc_buyer'],
+    enum: ['reseller', 'epc_buyer', 'epc_partner'],
     required: true,
   },
   raised_by_id: {

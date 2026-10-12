@@ -9,7 +9,6 @@ import {
   FiXCircle,
   FiCopy,
   FiCheck,
-  FiDollarSign,
   FiShield,
   FiZap,
   FiLayers,
@@ -35,6 +34,7 @@ import {
   FiGrid,
   FiList,
 } from 'react-icons/fi';
+import { FaRupeeSign } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
@@ -44,8 +44,8 @@ const STATUS_CONFIG = {
   CHANGES_REQUESTED: { label: "Changes Requested", bg: "bg-orange-50 dark:bg-orange-900/30", text: "text-orange-600 dark:text-orange-400", icon: FiAlertCircle },
   APPROVED: { label: "Approved", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
   REJECTED: { label: "Rejected", bg: "bg-red-50 dark:bg-red-900/30", text: "text-red-600 dark:text-red-400", icon: FiX },
-  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FiDollarSign },
-  PARTIALLY_PAID: { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", icon: FiDollarSign },
+  AWAITING_PAYMENT: { label: "Awaiting Payment", bg: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-600 dark:text-indigo-400", icon: FaRupeeSign },
+  PARTIALLY_PAID: { label: "Partially Paid", bg: "bg-teal-50 dark:bg-teal-900/30", text: "text-teal-600 dark:text-teal-400", icon: FaRupeeSign },
   PAID: { label: "Paid", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
   CONFIRMED: { label: "Confirmed", bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiCheckCircle },
   PROCESSING: { label: "Processing", bg: "bg-cyan-50 dark:bg-cyan-900/30", text: "text-cyan-600 dark:text-cyan-400", icon: FiRefreshCw },
@@ -55,7 +55,7 @@ const STATUS_CONFIG = {
   EXPIRED: { label: "Expired", bg: "bg-rose-50 dark:bg-rose-950/30", text: "text-rose-600 dark:text-rose-400", icon: FiClock },
   REFUND_REQUESTED: { label: "Refund Requested", bg: "bg-amber-50 dark:bg-amber-950/30", text: "text-amber-600 dark:text-amber-400", icon: FiClock },
   REFUND_APPROVED: { label: "Refund Approved", bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-600 dark:text-blue-400", icon: FiCheckCircle },
-  REFUND_SETTLED: { label: "Refund Settled", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-600 dark:text-emerald-400", icon: FiDollarSign },
+  REFUND_SETTLED: { label: "Refund Settled", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-600 dark:text-emerald-400", icon: FaRupeeSign },
   REFUND_REJECTED: { label: "Refund Rejected", bg: "bg-rose-50 dark:bg-rose-950/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
   CANCELLED: { label: "Cancelled", bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-600 dark:text-rose-400", icon: FiX },
 };
@@ -265,7 +265,7 @@ function EpcPoCardItem({ order, onSelectOrder, onOpenReorder, onOpenRefund }) {
         <div className="p-3 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 space-y-2 text-xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-              <FiDollarSign size={12} /> Token Escrow & Settlement
+              <FaRupeeSign size={11} /> Token Escrow & Settlement
             </span>
             <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-600 text-white">
               {settlementMode === "PRO_RATA" ? "Pro-Rata Settlement" : settlementMode === "FINAL_ORDER" ? "Final Order Settlement" : "Upfront Settlement"}
@@ -377,7 +377,7 @@ function EpcPoCardItem({ order, onSelectOrder, onOpenReorder, onOpenRefund }) {
               onClick={() => onOpenRefund(order)}
               className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-black bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition-all cursor-pointer"
             >
-              <FiDollarSign size={13} />
+              <FaRupeeSign size={12} />
               <span>Request Refund</span>
             </button>
           )}
@@ -658,7 +658,16 @@ export default function EpcPoAllocations() {
     const booked = order.total_booked_quantity || order.total_quantity || order.items?.[0]?.quantity || 1;
     const fulfilled = order.fulfilled_quantity || 0;
     const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(1, booked - fulfilled);
-    setReorderQty(Math.min(1, remaining));
+
+    const it = order.items?.[0] || {};
+    const configuredLoose = (Array.isArray(it.loose_order_quantities) && it.loose_order_quantities.length > 0)
+      ? it.loose_order_quantities
+      : (Array.isArray(order.loose_order_quantities) && order.loose_order_quantities.length > 0)
+        ? order.loose_order_quantities
+        : [5, 10, 15, 20, 25, 30];
+
+    const firstValid = configuredLoose.find((q) => q <= remaining) || Math.min(configuredLoose[0] || 5, remaining);
+    setReorderQty(firstValid || Math.min(1, remaining));
     setReorderUtr("");
     setReorderBank("");
     setReorderDate(new Date().toISOString().slice(0, 10));
@@ -1741,7 +1750,7 @@ export default function EpcPoAllocations() {
                             onClick={() => handleOpenTokenModal(order, epcAlloc, allocatedItem)}
                             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-95 transition-all shadow-md cursor-pointer transform active:scale-95"
                           >
-                            <FiDollarSign size={15} />
+                            <FaRupeeSign size={14} />
                             <span>💳 Pay Token Deposit (₹{tokenRequiredINR.toLocaleString("en-IN")})</span>
                           </button>
                         ) : (
@@ -2056,63 +2065,81 @@ export default function EpcPoAllocations() {
                           </div>
                         </div>
 
-                        {/* Reorder Quantity Input */}
-                        <div className="space-y-1.5">
+                        {/* Configured Loose Order Quantities Selector */}
+                        <div className="space-y-2.5 p-3.5 rounded-2xl bg-surface-hover/50 border border-border">
                           <div className="flex justify-between items-center">
-                            <label className="text-[11px] font-bold text-text-primary">
-                              Select Reorder Quantity (Max: {remaining} kits)
-                            </label>
-                            <span className="text-[10px] text-text-muted">
+                            <div>
+                              <div className="text-[11px] font-black text-text-primary flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
+                                Select Configured Loose Quantity:
+                              </div>
+                              <div className="text-[10px] text-text-muted mt-0.5">
+                                Choose bundle preset configured for this combo kit (Max: {remaining} kits)
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-surface border border-border text-text-muted">
                               Mode: {settlementMode}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setReorderQty((q) => Math.max(1, q - 1))}
-                              disabled={reorderQty <= 1}
-                              className="w-10 h-10 rounded-xl border border-border flex items-center justify-center font-bold text-base hover:bg-surface-hover transition-colors disabled:opacity-40"
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              min="1"
-                              max={remaining}
-                              value={reorderQty}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10) || 1;
-                                setReorderQty(Math.min(remaining, Math.max(1, val)));
-                              }}
-                              className="flex-1 px-4 py-2.5 rounded-xl border text-center font-black text-sm border-border bg-surface text-text-primary outline-none focus:border-primary"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setReorderQty((q) => Math.min(remaining, q + 1))}
-                              disabled={reorderQty >= remaining}
-                              className="w-10 h-10 rounded-xl border border-border flex items-center justify-center font-bold text-base hover:bg-surface-hover transition-colors disabled:opacity-40"
-                            >
-                              +
-                            </button>
+                          {/* Loose Quantity Chips matching Combo Kit Configuration & Reseller Portal */}
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {(() => {
+                              const configuredLoose = (Array.isArray(it.loose_order_quantities) && it.loose_order_quantities.length > 0)
+                                ? it.loose_order_quantities
+                                : (Array.isArray(reorderOrder.loose_order_quantities) && reorderOrder.loose_order_quantities.length > 0)
+                                  ? reorderOrder.loose_order_quantities
+                                  : [5, 10, 15, 20, 25, 30];
+
+                              return (
+                                <>
+                                  {configuredLoose.map((lq) => {
+                                    const isAvailable = lq <= remaining;
+                                    const isSelected = reorderQty === lq;
+                                    return (
+                                      <button
+                                        key={lq}
+                                        type="button"
+                                        disabled={!isAvailable}
+                                        onClick={() => setReorderQty(lq)}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                                          isSelected
+                                            ? "bg-sky-600 text-white border-sky-600 shadow-md scale-105"
+                                            : isAvailable
+                                              ? "bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 border-sky-500/30"
+                                              : "bg-surface text-text-muted/40 border-border/40 cursor-not-allowed opacity-40 line-through"
+                                        }`}
+                                      >
+                                        {lq} KITS
+                                      </button>
+                                    );
+                                  })}
+
+                                  {/* All Remaining Quota Option */}
+                                  {remaining > 0 && !configuredLoose.includes(remaining) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setReorderQty(remaining)}
+                                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                                        reorderQty === remaining
+                                          ? "bg-primary text-white border-primary shadow-md scale-105"
+                                          : "bg-surface hover:bg-surface-hover text-text-primary border-border"
+                                      }`}
+                                    >
+                                      All Remaining ({remaining} KITS)
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
 
-                          {/* Quick selection chips */}
-                          <div className="flex items-center gap-1.5 pt-1">
-                            {[1, 5, 10, remaining].filter((val, idx, arr) => val <= remaining && arr.indexOf(val) === idx).map((val) => (
-                              <button
-                                key={val}
-                                type="button"
-                                onClick={() => setReorderQty(val)}
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                                  reorderQty === val
-                                    ? "bg-primary text-white"
-                                    : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
-                                }`}
-                              >
-                                {val === remaining ? `All Remaining (${val})` : `${val} Kits`}
-                              </button>
-                            ))}
+                          {/* Selected Quantity Indicator */}
+                          <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs">
+                            <span className="text-[11px] text-text-muted">Selected Reorder Quantity:</span>
+                            <span className="font-black text-sm text-sky-600 dark:text-sky-400">
+                              {reorderQty} Kits
+                            </span>
                           </div>
                         </div>
 
@@ -2136,7 +2163,7 @@ export default function EpcPoAllocations() {
                             </div>
                             <div className="flex justify-between font-bold text-emerald-600 dark:text-emerald-400">
                               <span className="flex items-center gap-1">
-                                <FiDollarSign size={12} /> Less: Escrow Token Adjustment ({isClosing ? "Final Order" : settlementMode}):
+                                <FaRupeeSign size={11} /> Less: Escrow Token Adjustment ({isClosing ? "Final Order" : settlementMode}):
                               </span>
                               <span>- ₹{tokenToDeduct.toLocaleString("en-IN")}</span>
                             </div>
@@ -2264,7 +2291,7 @@ export default function EpcPoAllocations() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
-                      <FiDollarSign size={15} />
+                      <FaRupeeSign size={14} />
                     </span>
                     <h2 className="text-base font-black text-text-primary">
                       Request Token Refund: {refundOrder.po_number}
@@ -2527,7 +2554,7 @@ export default function EpcPoAllocations() {
                       Stage 3 of 4
                     </span>
                     <h2 className="text-base font-black text-text-primary flex items-center gap-1.5">
-                      <FiDollarSign className="text-emerald-600" /> Pay EPC Token Deposit
+                      <FaRupeeSign className="text-emerald-600" /> Pay EPC Token Deposit
                     </h2>
                   </div>
                   <p className="text-xs text-text-muted mt-0.5">

@@ -4,7 +4,11 @@ const { india_solarshop_db } = require('../../config/databases');
 const auditItemSchema = new mongoose.Schema(
   {
     action: { type: String, required: true },
-    actor_type: { type: String, enum: ['reseller', 'epc', 'cms_user', 'system'], default: 'system' },
+    actor_type: {
+      type: String,
+      enum: ['reseller', 'epc', 'epc_partner', 'epc_buyer', 'cms_user', 'admin', 'system'],
+      default: 'system',
+    },
     actor_id: { type: mongoose.Schema.Types.ObjectId, default: null },
     actor_name: { type: String, default: null },
     note: { type: String, default: null },

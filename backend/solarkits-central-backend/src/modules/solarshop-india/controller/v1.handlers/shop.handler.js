@@ -3920,8 +3920,15 @@ const get_epc_po_allocations = async (req, res) => {
             item.description = k.description || null;
             item.brand_name = k.brand_name || null;
             item.inverter_mode = k.inverter_mode || null;
+            const validLooseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
+              ? k.loose_order_quantities.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)
+              : [5, 10, 15, 20, 25, 30, 50];
+            item.loose_order_quantities = validLooseQtys;
           }
         });
+        if (o.items?.[0]?.loose_order_quantities) {
+          o.loose_order_quantities = o.items[0].loose_order_quantities;
+        }
       });
     }
 
@@ -4086,6 +4093,40 @@ const list_epc_po_orders = async (req, res) => {
       orders.forEach((o) => {
         o.linked_repeat_orders = childMap.get(o._id.toString()) || [];
       });
+
+      // Collect kit IDs to enrich with image, description, capacity & loose_order_quantities
+      const kitIds = [];
+      orders.forEach(o => {
+        o.items?.forEach(item => {
+          if (item.kit_id) kitIds.push(item.kit_id);
+        });
+      });
+
+      if (kitIds.length > 0) {
+        const kits = await ComboKit.find({ _id: { $in: kitIds } }).lean();
+        const kitMap = new Map();
+        kits.forEach(k => kitMap.set(k._id.toString(), k));
+
+        orders.forEach(o => {
+          o.items?.forEach(item => {
+            if (item.kit_id && kitMap.has(item.kit_id.toString())) {
+              const k = kitMap.get(item.kit_id.toString());
+              item.kit_image = k.kit_image || (k.images && k.images[0]) || null;
+              item.capacity = k.capacity || k.capacity_kw || null;
+              item.description = k.description || null;
+              item.brand_name = k.brand_name || null;
+              item.inverter_mode = k.inverter_mode || null;
+              const validLooseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
+                ? k.loose_order_quantities.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)
+                : [5, 10, 15, 20, 25, 30, 50];
+              item.loose_order_quantities = validLooseQtys;
+            }
+          });
+          if (o.items?.[0]?.loose_order_quantities) {
+            o.loose_order_quantities = o.items[0].loose_order_quantities;
+          }
+        });
+      }
     }
 
     return res.status(200).json({
@@ -4179,6 +4220,7 @@ const create_epc_po_order = async (req, res) => {
     if (auto_submit && finalOrder?._id) {
       finalOrder = await submitPo({
         po_id: finalOrder._id,
+        epc_id: accountId,
         actor_id: accountId,
         req,
       });
@@ -4330,6 +4372,7 @@ const reorder_against_epc_po = async (req, res) => {
     if (finalOrder?._id) {
       finalOrder = await submitPo({
         po_id: finalOrder._id,
+        epc_id: accountId,
         actor_id: accountId,
         req,
       });

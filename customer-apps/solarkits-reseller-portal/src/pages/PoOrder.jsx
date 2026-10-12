@@ -40,6 +40,7 @@ import {
   FiArchive,
   FiZap,
   FiUserCheck,
+  FiPackage,
 } from "react-icons/fi";
 import api from "../services/api";
 
@@ -132,6 +133,13 @@ const DEFAULT_COMBO_KITS = [
     kit_name: "5 kW Premium Bifacial Rooftop Solar Combo Kit",
     capacity_kw: 5,
     system_type: "On-Grid",
+    industry_type_name: "Solar PV",
+    category_name: "Residential Solar",
+    subcategory_name: "Individual Home",
+    project_type_name: "Rooftop Solar",
+    project_range_label: "3 - 10 kW",
+    min_kw: 3,
+    max_kw: 10,
     dealer_price: 367500,
     unit_price: 367500,
     price: 367500,
@@ -151,6 +159,13 @@ const DEFAULT_COMBO_KITS = [
     kit_name: "50 kW Commercial LT On-Grid Rooftop Solution",
     capacity_kw: 50,
     system_type: "On-Grid",
+    industry_type_name: "Solar PV",
+    category_name: "Commercial Solar",
+    subcategory_name: "Commercial LT",
+    project_type_name: "Rooftop Solution",
+    project_range_label: "10 - 50 kW",
+    min_kw: 10,
+    max_kw: 50,
     dealer_price: 3457720,
     unit_price: 3457720,
     price: 3457720,
@@ -170,6 +185,13 @@ const DEFAULT_COMBO_KITS = [
     kit_name: "3 kW Residential Single-Phase On-Grid Solar Kit",
     capacity_kw: 3,
     system_type: "On-Grid",
+    industry_type_name: "Solar PV",
+    category_name: "Residential Solar",
+    subcategory_name: "Individual Home",
+    project_type_name: "Rooftop Solar",
+    project_range_label: "1 - 3 kW",
+    min_kw: 1,
+    max_kw: 3,
     dealer_price: 165000,
     unit_price: 165000,
     price: 165000,
@@ -233,6 +255,16 @@ export default function PoOrder() {
   const [statusFilter, setStatusFilter] = useState("");
   const [categoryTab, setCategoryTab] = useState("ALL"); // "ALL" | "SINGLE_PO" | "COMBINE_PO"
   const [expandedRowId, setExpandedRowId] = useState(null);
+
+  // ── Quick Filters State & Shop Hierarchy (Matches Screenshot 1) ──
+  const [shopHierarchy, setShopHierarchy] = useState([]);
+  const [quickFilters, setQuickFilters] = useState({
+    industryType: "all",
+    category: "all",
+    subCategory: "all",
+    systemType: "all",
+    projectRange: "all",
+  });
 
   // ── Create Order Modal State (Stage 1 with ComboKit & Configured PO Qty) ──
   const [createModal, setCreateModal] = useState(false);
@@ -315,7 +347,7 @@ export default function PoOrder() {
     setTimeout(() => setCopiedField(""), 2000);
   };
 
-  // Available ComboKits Catalog with PO Quantities and Loose Quantities
+  // Available ComboKits Catalog with PO Quantities and Loose Quantities & Taxonomy
   const availableKits = useMemo(() => {
     if (Array.isArray(planData?.combo_kits) && planData.combo_kits.length > 0) {
       return planData.combo_kits.map((k) => {
@@ -333,7 +365,19 @@ export default function PoOrder() {
           name: k.name || k.kit_name || "Solar ComboKit",
           kit_name: k.name || k.kit_name || "Solar ComboKit",
           capacity_kw: k.capacity_kw || k.capacity || 5,
-          system_type: k.system_type || "On-Grid",
+          system_type: k.system_type || (k.inverter_mode === "hybrid" ? "Hybrid" : (k.inverter_mode === "offgrid" ? "Off-Grid" : "On-Grid")),
+          industry_type_name: k.industry_type_name || "Solar PV",
+          industry_type_id: k.industry_type_id,
+          category_name: k.category_name || "Residential Solar",
+          category_id: k.category_id,
+          subcategory_name: k.subcategory_name || "Individual Home",
+          subcategory_id: k.subcategory_id,
+          project_type_name: k.project_type_name || "Rooftop Solar",
+          project_type_id: k.project_type_id,
+          project_range_label: k.project_range_label || (k.capacity_kw ? `${k.capacity_kw} kW System` : "Standard Range"),
+          project_range_id: k.project_range_id,
+          min_kw: k.min_kw ?? (k.capacity_kw || 0),
+          max_kw: k.max_kw ?? (k.capacity_kw || 0),
           dealer_price: price,
           unit_price: price,
           price: price,
@@ -351,10 +395,336 @@ export default function PoOrder() {
     return DEFAULT_COMBO_KITS;
   }, [planData]);
 
-  // Selected Kit in Create Modal
+  // Fetch Shop Hierarchy for Quick Filters
+  const fetchHierarchy = useCallback(async () => {
+    try {
+      const res = await api.get("/india/v1/shop/hierarchy");
+      if (res.data?.success || res.data?.status === "success") {
+        setShopHierarchy(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load shop hierarchy:", err);
+    }
+  }, []);
+
+  // ── Cascading Quick Filter Options derived from shopHierarchy & availableKits ──
+  const industryTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        const name = ind.name;
+        if (name && !seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          list.push({ value: name, label: name, id: ind.id || ind._id });
+        }
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const name = kit.industry_type_name;
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ value: name, label: name, id: kit.industry_type_id });
+      }
+    });
+
+    return [{ value: "all", label: "All Industry Types" }, ...list];
+  }, [shopHierarchy, availableKits]);
+
+  const categoryOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (cat.name && !seen.has(cat.name.toLowerCase())) {
+            seen.add(cat.name.toLowerCase());
+            list.push({ value: cat.name, label: cat.name, id: cat.id || cat._id });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === "all" ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      if (indOk && kit.category_name && !seen.has(kit.category_name.toLowerCase())) {
+        seen.add(kit.category_name.toLowerCase());
+        list.push({ value: kit.category_name, label: kit.category_name, id: kit.category_id });
+      }
+    });
+
+    return [{ value: "all", label: "All Categories" }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === "all" ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id || cat._id) === String(quickFilters.category);
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (sub.name && !seen.has(sub.name.toLowerCase())) {
+                seen.add(sub.name.toLowerCase());
+                list.push({ value: sub.name, label: sub.name, id: sub.id || sub._id });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === "all" ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      const catOk =
+        quickFilters.category === "all" ||
+        kit.category_name?.toLowerCase() === quickFilters.category.toLowerCase();
+      if (indOk && catOk && kit.subcategory_name && !seen.has(kit.subcategory_name.toLowerCase())) {
+        seen.add(kit.subcategory_name.toLowerCase());
+        list.push({ value: kit.subcategory_name, label: kit.subcategory_name, id: kit.subcategory_id });
+      }
+    });
+
+    return [{ value: "all", label: "All Sub-Categories" }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category]);
+
+  const systemTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === "all" ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase();
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              const subOk =
+                quickFilters.subCategory === "all" ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+              if (subOk) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (mt.name && !seen.has(mt.name.toLowerCase())) {
+                    seen.add(mt.name.toLowerCase());
+                    list.push({ value: mt.name, label: mt.name, id: mt.id || mt.type_id });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === "all" ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      const catOk =
+        quickFilters.category === "all" ||
+        kit.category_name?.toLowerCase() === quickFilters.category.toLowerCase();
+      const subOk =
+        quickFilters.subCategory === "all" ||
+        kit.subcategory_name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+      if (indOk && catOk && subOk) {
+        const sys = kit.system_type || "On-Grid";
+        if (sys && !seen.has(sys.toLowerCase())) {
+          seen.add(sys.toLowerCase());
+          list.push({ value: sys, label: sys, id: sys });
+        }
+      }
+    });
+
+    return [{ value: "all", label: "All System Types" }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category, quickFilters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== "all") {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === "all" ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase();
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              const subOk =
+                quickFilters.subCategory === "all" ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+              if (subOk) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  const typeOk =
+                    quickFilters.systemType === "all" ||
+                    mt.name?.toLowerCase() === quickFilters.systemType.toLowerCase() ||
+                    quickFilters.systemType.toLowerCase().includes(mt.name?.toLowerCase());
+                  if (typeOk) {
+                    (mt.ranges || []).forEach((r) => {
+                      const label = r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || 'kW'}`;
+                      if (label && !seen.has(label.toLowerCase())) {
+                        seen.add(label.toLowerCase());
+                        list.push({ value: label, label: label, id: r.id || r._id, min: r.min_value, max: r.max_value });
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const label = kit.project_range_label || (kit.capacity_kw ? `${kit.capacity_kw} kW System` : null);
+      if (label && !seen.has(label.toLowerCase())) {
+        seen.add(label.toLowerCase());
+        list.push({ value: label, label: label, id: kit.project_range_id, min: kit.min_kw, max: kit.max_kw });
+      }
+    });
+
+    return [{ value: "all", label: "All Project Ranges" }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category, quickFilters.subCategory, quickFilters.systemType]);
+
+  const handleClearMainFilters = () => {
+    setQuickFilters({
+      industryType: "all",
+      category: "all",
+      subCategory: "all",
+      systemType: "all",
+      projectRange: "all",
+    });
+  };
+
+  // Filter availableKits by quickFilters (Matching Criteria)
+  const filteredComboKits = useMemo(() => {
+    return availableKits.filter((k) => {
+      if (!k) return false;
+
+      // 1. Industry filter
+      if (quickFilters.industryType !== "all") {
+        const indVal = quickFilters.industryType.toLowerCase();
+        const kInd = (k.industry_type_name || "").toLowerCase();
+        const kIndId = String(k.industry_type_id || "");
+        if (kInd !== indVal && kIndId !== indVal && !kInd.includes(indVal)) {
+          return false;
+        }
+      }
+
+      // 2. Category filter
+      if (quickFilters.category !== "all") {
+        const catVal = quickFilters.category.toLowerCase();
+        const kCat = (k.category_name || "").toLowerCase();
+        const kCatId = String(k.category_id || "");
+        if (kCat !== catVal && kCatId !== catVal && !kCat.includes(catVal)) {
+          return false;
+        }
+      }
+
+      // 3. Sub Category filter
+      if (quickFilters.subCategory !== "all") {
+        const subVal = quickFilters.subCategory.toLowerCase();
+        const kSub = (k.subcategory_name || "").toLowerCase();
+        const kSubId = String(k.subcategory_id || "");
+        if (kSub !== subVal && kSubId !== subVal && !kSub.includes(subVal)) {
+          return false;
+        }
+      }
+
+      // 4. System Type filter
+      if (quickFilters.systemType !== "all") {
+        const sysVal = quickFilters.systemType.toLowerCase();
+        const kSys = (k.system_type || "").toLowerCase();
+        const kProjType = (k.project_type_name || "").toLowerCase();
+        if (kSys !== sysVal && !kSys.includes(sysVal) && !kProjType.includes(sysVal)) {
+          return false;
+        }
+      }
+
+      // 5. Project Range filter
+      if (quickFilters.projectRange !== "all") {
+        const rangeVal = quickFilters.projectRange.toLowerCase();
+        const kRange = (k.project_range_label || "").toLowerCase();
+        if (kRange !== rangeVal && !kRange.includes(rangeVal)) {
+          const matchedOpt = projectRangeOptions.find((o) => o.value === quickFilters.projectRange);
+          if (matchedOpt && matchedOpt.min != null && matchedOpt.max != null) {
+            const cap = Number(k.capacity_kw || 0);
+            if (cap < matchedOpt.min || cap > matchedOpt.max) return false;
+          } else {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    });
+  }, [availableKits, quickFilters, projectRangeOptions]);
+
+  // Selected Kit in Create Modal (prioritizes filtered list)
   const selectedKit = useMemo(() => {
-    return availableKits.find((k) => String(k._id) === String(selectedKitId)) || availableKits[0];
-  }, [availableKits, selectedKitId]);
+    return (
+      filteredComboKits.find((k) => String(k._id) === String(selectedKitId)) ||
+      filteredComboKits[0] ||
+      availableKits.find((k) => String(k._id) === String(selectedKitId)) ||
+      availableKits[0]
+    );
+  }, [filteredComboKits, availableKits, selectedKitId]);
+
+  // Auto-sync selectedKitId if current selection is excluded by filter
+  useEffect(() => {
+    if (filteredComboKits.length > 0) {
+      const match = filteredComboKits.find((k) => String(k._id) === String(selectedKitId));
+      if (!match) {
+        setSelectedKitId(filteredComboKits[0]._id);
+      }
+    }
+  }, [filteredComboKits, selectedKitId]);
 
   // Sync selectedKit and selectedPoQty on kit switch
   useEffect(() => {
@@ -362,11 +732,11 @@ export default function PoOrder() {
       const defaultQty = selectedKit.order_quantities?.[0] || selectedKit.min_po_quantity || 200;
       setSelectedPoQty((prev) => (selectedKit.order_quantities?.includes(prev) ? prev : defaultQty));
     }
-  }, [selectedKit]);
+  }, [selectedKit?._id]);
 
   // ── 1. Orders Fetch ──
   const fetchOrders = useCallback(async (isSilent = false) => {
-    if (!isSilent && orders.length === 0) setOrdersLoading(true);
+    if (!isSilent) setOrdersLoading(true);
     try {
       const res = await api.get("/india/v1/reseller/po/my-orders");
       if (res.data?.status === "success" && Array.isArray(res.data.data)) {
@@ -378,11 +748,11 @@ export default function PoOrder() {
     } finally {
       setOrdersLoading(false);
     }
-  }, [orders.length]);
+  }, []);
 
   // ── 2. Plan Settings Fetch ──
   const fetchPlanSettings = useCallback(async (isSilent = false) => {
-    if (!isSilent && !planData) setPlanLoading(true);
+    if (!isSilent) setPlanLoading(true);
     try {
       const res = await api.get("/india/v1/reseller/po/plan-settings");
       if (res.data?.status === "success" && res.data.data) {
@@ -394,7 +764,7 @@ export default function PoOrder() {
     } finally {
       setPlanLoading(false);
     }
-  }, [planData]);
+  }, []);
 
   // ── 3. Goal Progress Fetch ──
   const fetchGoal = useCallback(async () => {
@@ -413,7 +783,6 @@ export default function PoOrder() {
 
   // ── 4. EPC Buyers Fetch ──
   const fetchBuyers = useCallback(async () => {
-    if (epcBuyers.length > 0) return;
     setLoadingBuyers(true);
     try {
       const res = await api.get("/india/v1/reseller/epc-buyers/list");
@@ -426,7 +795,7 @@ export default function PoOrder() {
     } finally {
       setLoadingBuyers(false);
     }
-  }, [epcBuyers.length]);
+  }, []);
 
   // Unified Refresh
   const fetchData = useCallback(async (isSilent = false) => {
@@ -436,11 +805,12 @@ export default function PoOrder() {
         fetchOrders(isSilent),
         fetchPlanSettings(isSilent),
         fetchGoal(),
+        fetchHierarchy(),
       ]);
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchOrders, fetchPlanSettings, fetchGoal]);
+  }, [fetchOrders, fetchPlanSettings, fetchGoal, fetchHierarchy]);
 
   useEffect(() => {
     fetchData(Boolean(cachedOrders && cachedPlan));
@@ -449,7 +819,7 @@ export default function PoOrder() {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [fetchData, fetchBuyers, cachedOrders, cachedPlan]);
+  }, []); // Run ONLY once on mount
 
   // Calculation for Create Modal
   const kitUnitPrice = selectedKit?.dealer_price || selectedKit?.unit_price || 367500;
@@ -464,6 +834,7 @@ export default function PoOrder() {
   const handleOpenCreateModal = () => {
     setFormError("");
     fetchBuyers();
+    fetchHierarchy();
     setCreateModal(true);
   };
 
@@ -1648,7 +2019,7 @@ export default function PoOrder() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10"
+              className="relative w-full max-w-6xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden z-10"
               style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
             >
               {/* Modal Header */}
@@ -1663,7 +2034,7 @@ export default function PoOrder() {
                     </h2>
                   </div>
                   <p className="text-xs text-text-muted mt-0.5">
-                    Choose an authorized Solar ComboKit and select the configured PO Quota to generate your PO card.
+                    Filter and choose an authorized Solar ComboKit blueprint, then select your configured PO Quota to generate your PO card.
                   </p>
                 </div>
                 <button
@@ -1676,7 +2047,7 @@ export default function PoOrder() {
               </div>
 
               {/* Form Content */}
-              <form onSubmit={handleCreateOrder} className="flex-1 overflow-y-auto p-6 space-y-5">
+              <form onSubmit={handleCreateOrder} className="flex-1 overflow-y-auto p-6 sm:p-7 space-y-6">
                 {formError && (
                   <div className="p-3.5 rounded-xl bg-danger-soft border border-danger/30 text-danger text-xs font-semibold flex items-center gap-2">
                     <FiAlertCircle size={16} className="shrink-0" />
@@ -1684,196 +2055,402 @@ export default function PoOrder() {
                   </div>
                 )}
 
-                {/* ── 1. CHOOSE AUTHORIZED SOLAR COMBOKIT (Screenshot 1 Match) ── */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
-                    1. Choose Authorized Solar ComboKit <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    {availableKits.map((kit) => {
-                      const isSelected = String(selectedKitId) === String(kit._id);
-                      const priceINR = kit.dealer_price || kit.unit_price || 367500;
-                      const tokenINR = Math.round((kit.token_rate_per_kit_paise || 500000) / 100);
+                {/* ── QUICK FILTERS COMPONENT (Matching Screenshot 1) ── */}
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2">
+                      <FiPackage className="text-primary" size={18} />
+                      <h3 className="font-bold text-sm text-text-primary flex items-center gap-2">
+                        Quick Filters
+                        <span className="text-[11px] font-semibold text-text-muted px-2 py-0.5 rounded-full bg-surface border border-border">
+                          {filteredComboKits.length} of {availableKits.length} Kits
+                        </span>
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClearMainFilters}
+                      className="text-xs font-semibold text-primary hover:underline transition cursor-pointer"
+                    >
+                      Clear Main
+                    </button>
+                  </div>
 
-                      return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    {/* 1. Industry Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-text-muted mb-1">
+                        Industry Type
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.industryType}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              industryType: e.target.value,
+                              category: "all",
+                              subCategory: "all",
+                              systemType: "all",
+                              projectRange: "all",
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-surface border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 pr-8 cursor-pointer"
+                        >
+                          {industryTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={14} />
+                      </div>
+                    </div>
+
+                    {/* 2. Category */}
+                    <div>
+                      <label className="block text-xs font-semibold text-text-muted mb-1">
+                        Category
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.category}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              category: e.target.value,
+                              subCategory: "all",
+                              systemType: "all",
+                              projectRange: "all",
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-surface border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 pr-8 cursor-pointer"
+                        >
+                          {categoryOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={14} />
+                      </div>
+                    </div>
+
+                    {/* 3. Sub Category */}
+                    <div>
+                      <label className="block text-xs font-semibold text-text-muted mb-1">
+                        Sub Category
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.subCategory}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              subCategory: e.target.value,
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-surface border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 pr-8 cursor-pointer"
+                        >
+                          {subCategoryOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={14} />
+                      </div>
+                    </div>
+
+                    {/* 4. System Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-text-muted mb-1">
+                        System Type
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.systemType}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              systemType: e.target.value,
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-surface border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 pr-8 cursor-pointer"
+                        >
+                          {systemTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={14} />
+                      </div>
+                    </div>
+
+                    {/* 5. Project Range */}
+                    <div>
+                      <label className="block text-xs font-semibold text-text-muted mb-1">
+                        Project Range
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.projectRange}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              projectRange: e.target.value,
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-surface border border-border rounded-xl text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 pr-8 cursor-pointer"
+                        >
+                          {projectRangeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <FiChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={14} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── 1. CHOOSE AUTHORIZED SOLAR COMBOKIT (Screenshot 2 Match) ── */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
+                      1. Choose Authorized Solar ComboKit <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[11px] font-bold text-text-muted">
+                      {filteredComboKits.length} kits match filter
+                    </span>
+                  </div>
+
+                  {filteredComboKits.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 bg-surface">
+                      <FiAlertCircle size={24} className="text-amber-500" />
+                      <p className="text-xs font-bold text-text-primary">No ComboKits found matching the selected Quick Filters</p>
+                      <p className="text-[11px] text-text-muted">Try resetting or selecting different Industry, Category, or System Type filters.</p>
+                      <button
+                        type="button"
+                        onClick={handleClearMainFilters}
+                        className="mt-2 px-4 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Clear Quick Filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                      {filteredComboKits.map((kit) => {
+                        const isSelected = String(selectedKitId) === String(kit._id);
+                        const priceINR = kit.dealer_price || kit.unit_price || 367500;
+                        const tokenINR = Math.round((kit.token_rate_per_kit_paise || 500000) / 100);
+
+                        return (
+                          <div
+                            key={kit._id}
+                            onClick={() => {
+                              setSelectedKitId(kit._id);
+                              const firstQty = kit.order_quantities?.[0] || kit.min_po_quantity || 200;
+                              setSelectedPoQty(firstQty);
+                            }}
+                            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSelected
+                                ? "border-primary bg-primary/5 shadow-xs"
+                                : "border-border hover:border-primary/40 bg-surface"
+                              }`}
+                          >
+                            <div className="space-y-1 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${isSelected ? "bg-primary text-white" : "border border-border text-transparent"
+                                  }`}>
+                                  <FiCheck size={12} />
+                                </div>
+                                <span className="font-black text-xs text-text-primary">{kit.name}</span>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-500/10 text-blue-600 shrink-0">
+                                  {kit.capacity_kw} kW • {kit.system_type}
+                                </span>
+                                {kit.category_name && (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-surface-hover text-text-muted border border-border/80 shrink-0">
+                                    {kit.category_name}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-text-muted leading-tight pl-7">
+                                {kit.specifications}
+                              </p>
+                            </div>
+
+                            <div className="sm:text-right pl-7 sm:pl-0 shrink-0">
+                              <div className="text-sm font-black text-text-primary">
+                                ₹{priceINR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-text-muted">/kit</span>
+                              </div>
+                              <div className="text-[10px] font-bold text-emerald-600">
+                                Token: ₹{tokenINR.toLocaleString("en-IN")}/kit
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── 2-COLUMN LOWER SECTION (PO Quota, Category & Summary) ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1">
+                  {/* Left Column: PO Quota & Type (7 cols) */}
+                  <div className="lg:col-span-7 space-y-5">
+                    {/* ── 2. CHOOSE CONFIGURED PO QUANTITY FOR SELECTED KIT ── */}
+                    <div
+                      className="p-4 sm:p-5 rounded-2xl border space-y-3"
+                      style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
+                          2. Choose PO Order Quota for {selectedKit?.name} <span className="text-rose-500">*</span>
+                        </label>
+                      </div>
+
+                      {/* Configured PO Qty Options */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
+                          Configured PO Qty Options:
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedKit?.order_quantities?.map((qty) => (
+                            <button
+                              key={qty}
+                              type="button"
+                              onClick={() => setSelectedPoQty(qty)}
+                              className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${selectedPoQty === qty
+                                  ? "bg-amber-500 text-white border-amber-500 shadow-xs scale-105"
+                                  : "bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 border-amber-500/20"
+                                }`}
+                            >
+                              {qty} KITS
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Custom Quota Input */}
+                      <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-3">
+                        <span className="text-[11px] text-text-muted">Or enter custom quota:</span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            value={selectedPoQty || ""}
+                            onChange={(e) => setSelectedPoQty(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                            className="w-28 px-3 py-1.5 rounded-lg text-xs font-black text-center border text-text-primary focus:border-primary outline-none"
+                            style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
+                          />
+                          <span className="text-xs font-bold text-text-muted">Kits</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── 3. SELECT PO CATEGORY ── */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
+                        3. Select Purchase Order Type <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div
-                          key={kit._id}
-                          onClick={() => {
-                            setSelectedKitId(kit._id);
-                            const firstQty = kit.order_quantities?.[0] || kit.min_po_quantity || 200;
-                            setSelectedPoQty(firstQty);
-                          }}
-                          className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSelected
+                          onClick={() => setPoCategory("SINGLE_PO")}
+                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "SINGLE_PO"
                               ? "border-primary bg-primary/5 shadow-xs"
                               : "border-border hover:border-primary/40 bg-surface"
                             }`}
                         >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${isSelected ? "bg-primary text-white" : "border border-border text-transparent"
-                                }`}>
-                                <FiCheck size={12} />
-                              </div>
-                              <span className="font-black text-xs text-text-primary">{kit.name}</span>
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-500/10 text-blue-600 shrink-0">
-                                {kit.capacity_kw} kW • {kit.system_type}
-                              </span>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                            }`}>
+                            <FiUserCheck size={16} />
+                          </div>
+                          <div>
+                            <div className="font-black text-xs text-text-primary flex items-center gap-1">
+                              Single PO
+                              {poCategory === "SINGLE_PO" && <FiCheck className="text-primary" size={13} />}
                             </div>
-                            <p className="text-[11px] text-text-muted leading-tight pl-7">
-                              {kit.specifications}
+                            <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
+                              Dedicated to 1 EPC Partner or Franchise Warehouse stock.
                             </p>
                           </div>
-
-                          <div className="sm:text-right pl-7 sm:pl-0 shrink-0">
-                            <div className="text-sm font-black text-text-primary">
-                              ₹{priceINR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-text-muted">/kit</span>
-                            </div>
-                            <div className="text-[10px] font-bold text-emerald-600">
-                              Token: ₹{tokenINR.toLocaleString("en-IN")}/kit
-                            </div>
-                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
 
-                {/* ── 2. CHOOSE CONFIGURED PO QUANTITY FOR SELECTED KIT (Screenshot 2 Match) ── */}
-                <div
-                  className="p-4 rounded-2xl border space-y-3"
-                  style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
-                      2. Choose PO Order Quota for {selectedKit.name} <span className="text-rose-500">*</span>
-                    </label>
-                  </div>
-
-                  {/* Configured PO Qty Options (e.g. 200, 500, 1000 or 100, 200, 400, 500) */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
-                      Configured PO Qty Options:
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedKit.order_quantities?.map((qty) => (
-                        <button
-                          key={qty}
-                          type="button"
-                          onClick={() => setSelectedPoQty(qty)}
-                          className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${selectedPoQty === qty
-                              ? "bg-amber-500 text-white border-amber-500 shadow-xs scale-105"
-                              : "bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 border-amber-500/20"
+                        <div
+                          onClick={() => setPoCategory("COMBINE_PO")}
+                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "COMBINE_PO"
+                              ? "border-purple-600 bg-purple-500/5 shadow-xs"
+                              : "border-border hover:border-purple-400 bg-surface"
                             }`}
                         >
-                          {qty} KITS
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Custom Quota Input */}
-                  <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-3">
-                    <span className="text-[11px] text-text-muted">Or enter custom quota:</span>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        min={1}
-                        value={selectedPoQty || ""}
-                        onChange={(e) => setSelectedPoQty(Math.max(1, parseInt(e.target.value, 10) || 0))}
-                        className="w-28 px-3 py-1.5 rounded-lg text-xs font-black text-center border text-text-primary focus:border-primary outline-none"
-                        style={{ background: "var(--color-surface)", borderColor: "var(--color-border)" }}
-                      />
-                      <span className="text-xs font-bold text-text-muted">Kits</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── 3. SELECT PO CATEGORY ── */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
-                    3. Select Purchase Order Type <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div
-                      onClick={() => setPoCategory("SINGLE_PO")}
-                      className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "SINGLE_PO"
-                          ? "border-primary bg-primary/5 shadow-xs"
-                          : "border-border hover:border-primary/40 bg-surface"
-                        }`}
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
-                        }`}>
-                        <FiUserCheck size={16} />
-                      </div>
-                      <div>
-                        <div className="font-black text-xs text-text-primary flex items-center gap-1">
-                          Single PO
-                          {poCategory === "SINGLE_PO" && <FiCheck className="text-primary" size={13} />}
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
+                            }`}>
+                            <FiUsers size={16} />
+                          </div>
+                          <div>
+                            <div className="font-black text-xs text-text-primary flex items-center gap-1">
+                              Combine PO (Multi-EPC)
+                              {poCategory === "COMBINE_PO" && <FiCheck className="text-purple-600" size={13} />}
+                            </div>
+                            <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
+                              Pool demand across multiple onboarded EPC contractors.
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
-                          Dedicated to 1 EPC Partner or Franchise Warehouse stock.
-                        </p>
                       </div>
                     </div>
+                  </div>
 
+                  {/* Right Column: Live Order Summary & Guidance (5 cols) */}
+                  <div className="lg:col-span-5 space-y-4 flex flex-col justify-between">
+                    {/* ── 4. LIVE ORDER & TOKEN SUMMARY ── */}
                     <div
-                      onClick={() => setPoCategory("COMBINE_PO")}
-                      className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "COMBINE_PO"
-                          ? "border-purple-600 bg-purple-500/5 shadow-xs"
-                          : "border-border hover:border-purple-400 bg-surface"
-                        }`}
+                      className="p-5 rounded-2xl border space-y-3"
+                      style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
                     >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
-                        }`}>
-                        <FiUsers size={16} />
+                      <div className="font-bold text-xs uppercase tracking-wider text-text-muted pb-1 border-b border-border/50">
+                        Order Value Breakdown
                       </div>
-                      <div>
-                        <div className="font-black text-xs text-text-primary flex items-center gap-1">
-                          Combine PO (Multi-EPC)
-                          {poCategory === "COMBINE_PO" && <FiCheck className="text-purple-600" size={13} />}
-                        </div>
-                        <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
-                          Pool demand across multiple onboarded EPC contractors.
-                        </p>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-muted uppercase tracking-wider text-[10px] font-bold">Selected ComboKit:</span>
+                        <span className="font-bold text-text-primary text-right max-w-[200px] truncate" title={selectedKit?.name}>
+                          {selectedKit?.name}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-muted uppercase tracking-wider text-[10px] font-bold">Capacity & Type:</span>
+                        <span className="font-bold text-text-primary">{selectedKit?.capacity_kw} kW • {selectedKit?.system_type}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-text-muted uppercase tracking-wider text-[10px] font-bold">Committed Quota:</span>
+                        <span className="font-black text-sm text-primary">
+                          {targetQuantity} Kits Total
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs border-t border-border/50 pt-2">
+                        <span className="text-text-muted">Total Value (incl. 12% GST):</span>
+                        <span className="font-black text-base text-text-primary">₹{estimatedGrandTotal.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
+
+                    {/* Workflow Guidance Banner */}
+                    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+                      <FiInfo size={16} className="text-blue-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] leading-relaxed">
+                        Once created, the <strong>PO Card</strong> will appear on your dashboard with this configured product and quota. You can then allocate loose orders to EPC partners and record the token payment.
+                      </p>
+                    </div>
                   </div>
-                </div>
-
-                {/* ── 4. LIVE ORDER & TOKEN SUMMARY ── */}
-                <div
-                  className="p-4 rounded-2xl border space-y-2.5"
-                  style={{ background: "var(--color-surface-hover, #f8fafc)", borderColor: "var(--color-border)" }}
-                >
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-text-muted uppercase tracking-wider text-[10px] font-bold">Selected ComboKit:</span>
-                    <span className="font-bold text-text-primary">{selectedKit.name} ({selectedKit.capacity_kw} kW)</span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-text-muted uppercase tracking-wider text-[10px] font-bold">Total Committed Quota:</span>
-                    <span className="font-black text-sm text-primary">
-                      {targetQuantity} Kits Total
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-xs border-t border-border/50 pt-1.5">
-                    <span className="text-text-muted">Total Order Value (incl. 12% GST):</span>
-                    <span className="font-bold text-text-primary">₹{estimatedGrandTotal.toLocaleString("en-IN")}</span>
-                  </div>
-
-                </div>
-
-                {/* Workflow Guidance Banner */}
-                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-2">
-                  <FiInfo size={15} className="text-blue-600 shrink-0 mt-0.5" />
-                  <p className="text-[11px] leading-relaxed">
-                    Once created, the <strong>PO Card</strong> will appear on your dashboard with this configured product and quota. You can then allocate loose orders to EPC partners and record the token payment.
-                  </p>
                 </div>
 
                 {/* Modal Footer */}
-                <div className="pt-3 border-t border-border flex items-center justify-end gap-3">
+                <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setCreateModal(false)}
