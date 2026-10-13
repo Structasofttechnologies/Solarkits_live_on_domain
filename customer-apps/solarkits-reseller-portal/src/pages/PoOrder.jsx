@@ -99,22 +99,20 @@ function PoStageStepper({ stepNumber }) {
         return (
           <React.Fragment key={s.num}>
             <div
-              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${
-                isDone
-                  ? "bg-emerald-500 text-white shadow-2xs"
-                  : isCurrent
+              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${isDone
+                ? "bg-emerald-500 text-white shadow-2xs"
+                : isCurrent
                   ? "bg-primary text-white ring-2 ring-primary/25 scale-105"
                   : "bg-surface-hover text-text-muted border border-border"
-              }`}
+                }`}
               title={`Stage ${s.num}: ${s.label}`}
             >
               {isDone ? <FiCheck size={9} /> : s.num}
             </div>
             {idx < steps.length - 1 && (
               <div
-                className={`h-0.5 w-2.5 rounded-full transition-all ${
-                  stepNumber > s.num ? "bg-emerald-500" : "bg-border"
-                }`}
+                className={`h-0.5 w-2.5 rounded-full transition-all ${stepNumber > s.num ? "bg-emerald-500" : "bg-border"
+                  }`}
               />
             )}
           </React.Fragment>
@@ -1351,8 +1349,8 @@ export default function PoOrder() {
           <button
             onClick={() => setCategoryTab("ALL")}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "ALL"
-                ? "bg-surface text-primary shadow-xs"
-                : "text-text-muted hover:text-text-primary"
+              ? "bg-surface text-primary shadow-xs"
+              : "text-text-muted hover:text-text-primary"
               }`}
           >
             All Orders ({orders.length})
@@ -1360,8 +1358,8 @@ export default function PoOrder() {
           <button
             onClick={() => setCategoryTab("SINGLE_PO")}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "SINGLE_PO"
-                ? "bg-surface text-primary shadow-xs"
-                : "text-text-muted hover:text-text-primary"
+              ? "bg-surface text-primary shadow-xs"
+              : "text-text-muted hover:text-text-primary"
               }`}
           >
             Single PO ({orders.filter((o) => o.po_category !== "COMBINE_PO").length})
@@ -1369,8 +1367,8 @@ export default function PoOrder() {
           <button
             onClick={() => setCategoryTab("COMBINE_PO")}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "COMBINE_PO"
-                ? "bg-surface text-purple-600 shadow-xs"
-                : "text-text-muted hover:text-text-primary"
+              ? "bg-surface text-purple-600 shadow-xs"
+              : "text-text-muted hover:text-text-primary"
               }`}
           >
             Combine PO ({orders.filter((o) => o.po_category === "COMBINE_PO").length})
@@ -1557,11 +1555,10 @@ export default function PoOrder() {
                             </div>
                             <div>
                               <span
-                                className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${
-                                  isBdeCreated
-                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
-                                    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
-                                }`}
+                                className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${isBdeCreated
+                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                  : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                                  }`}
                               >
                                 {isBdeCreated ? `BDE: ${order.creator_name || "Officer"}` : "Direct"}
                               </span>
@@ -1741,11 +1738,10 @@ export default function PoOrder() {
                             {/* Expand/Collapse Toggle */}
                             <button
                               onClick={() => setExpandedRowId(isExpanded ? null : order._id)}
-                              className={`p-1 rounded-lg transition-all cursor-pointer border ${
-                                isExpanded
-                                  ? "bg-surface-hover text-text-primary border-border"
-                                  : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
-                              }`}
+                              className={`p-1 rounded-lg transition-all cursor-pointer border ${isExpanded
+                                ? "bg-surface-hover text-text-primary border-border"
+                                : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
+                                }`}
                               title="Toggle Details"
                             >
                               <FiChevronDown size={12} className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
@@ -1862,7 +1858,7 @@ export default function PoOrder() {
                                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary hover:opacity-90 text-white shadow-xs transition-all cursor-pointer"
                                   >
                                     <FiPlus size={12} />
-                                    <span>+ Place Reorder</span>
+                                    <span> Place Reorder</span>
                                   </button>
                                 )}
                               </div>
@@ -2256,8 +2252,8 @@ export default function PoOrder() {
                               setSelectedPoQty(firstQty);
                             }}
                             className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSelected
-                                ? "border-primary bg-primary/5 shadow-xs"
-                                : "border-border hover:border-primary/40 bg-surface"
+                              ? "border-primary bg-primary/5 shadow-xs"
+                              : "border-border hover:border-primary/40 bg-surface"
                               }`}
                           >
                             <div className="space-y-1 flex-1">
@@ -2323,8 +2319,8 @@ export default function PoOrder() {
                               type="button"
                               onClick={() => setSelectedPoQty(qty)}
                               className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${selectedPoQty === qty
-                                  ? "bg-amber-500 text-white border-amber-500 shadow-xs scale-105"
-                                  : "bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 border-amber-500/20"
+                                ? "bg-amber-500 text-white border-amber-500 shadow-xs scale-105"
+                                : "bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 border-amber-500/20"
                                 }`}
                             >
                               {qty} KITS
@@ -2359,8 +2355,8 @@ export default function PoOrder() {
                         <div
                           onClick={() => setPoCategory("SINGLE_PO")}
                           className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "SINGLE_PO"
-                              ? "border-primary bg-primary/5 shadow-xs"
-                              : "border-border hover:border-primary/40 bg-surface"
+                            ? "border-primary bg-primary/5 shadow-xs"
+                            : "border-border hover:border-primary/40 bg-surface"
                             }`}
                         >
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
@@ -2381,8 +2377,8 @@ export default function PoOrder() {
                         <div
                           onClick={() => setPoCategory("COMBINE_PO")}
                           className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "COMBINE_PO"
-                              ? "border-purple-600 bg-purple-500/5 shadow-xs"
-                              : "border-border hover:border-purple-400 bg-surface"
+                            ? "border-purple-600 bg-purple-500/5 shadow-xs"
+                            : "border-border hover:border-purple-400 bg-surface"
                             }`}
                         >
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
@@ -2680,8 +2676,8 @@ export default function PoOrder() {
                                           type="button"
                                           onClick={() => handleAllocateLooseChange(bId, lq)}
                                           className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${Number(currentVal) === lq
-                                              ? "bg-primary text-white border-primary shadow-2xs"
-                                              : "bg-surface-hover text-text-secondary border-border hover:border-primary/40"
+                                            ? "bg-primary text-white border-primary shadow-2xs"
+                                            : "bg-surface-hover text-text-secondary border-border hover:border-primary/40"
                                             }`}
                                         >
                                           {lq} K
@@ -3094,8 +3090,8 @@ export default function PoOrder() {
                                 type="button"
                                 onClick={() => setReorderQty(lq)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${reorderQty === lq
-                                    ? "bg-sky-600 text-white border-sky-600 shadow-xs scale-105"
-                                    : "bg-sky-500/10 text-sky-800 hover:bg-sky-500/20 border-sky-500/20"
+                                  ? "bg-sky-600 text-white border-sky-600 shadow-xs scale-105"
+                                  : "bg-sky-500/10 text-sky-800 hover:bg-sky-500/20 border-sky-500/20"
                                   }`}
                               >
                                 {lq} KITS
@@ -3106,8 +3102,8 @@ export default function PoOrder() {
                                 type="button"
                                 onClick={() => setReorderQty(remaining)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${reorderQty === remaining
-                                    ? "bg-primary text-white border-primary shadow-xs scale-105"
-                                    : "bg-surface-hover text-text-secondary border-border"
+                                  ? "bg-primary text-white border-primary shadow-xs scale-105"
+                                  : "bg-surface-hover text-text-secondary border-border"
                                   }`}
                               >
                                 All Remaining ({remaining})

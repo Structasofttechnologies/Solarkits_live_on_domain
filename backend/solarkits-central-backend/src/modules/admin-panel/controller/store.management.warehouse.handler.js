@@ -16,6 +16,29 @@ const {
 } = require('../models/india_solarshop_db');
 const { CompanyWarehouse } = require('../models/company_warehouse_db');
 
+// Helper: Generate Store Setup ID (ST-YYYY-XXXX)
+const generateStoreSetupId = async () => {
+  const currentYear = new Date().getFullYear();
+  const prefix = `ST-${currentYear}-`;
+  const lastSetup = await StoreSetup.findOne({
+    store_setup_id: { $regex: `^${prefix}` },
+  })
+    .sort({ store_setup_id: -1 })
+    .lean();
+
+  let nextNum = 1;
+  if (lastSetup && lastSetup.store_setup_id) {
+    const parts = lastSetup.store_setup_id.split('-');
+    if (parts.length === 3) {
+      const parsed = parseInt(parts[2], 10);
+      if (!isNaN(parsed)) {
+        nextNum = parsed + 1;
+      }
+    }
+  }
+  return `${prefix}${String(nextNum).padStart(4, '0')}`;
+};
+
 // ─── 1. ALLOCATE WAREHOUSE TO STORE ───────────────────────────────────────────
 const allocate_warehouse = async (req, res) => {
   try {
@@ -44,17 +67,64 @@ const allocate_warehouse = async (req, res) => {
     }
 
     let storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
-    if (!storeSetup) {
-      return res.status(404).json({ status: 'error', message: 'Store Setup record not found for this store.' });
+    if (!storeSetup && store.store_setup_id) {
+      storeSetup = await StoreSetup.findById(store.store_setup_id);
     }
 
     const now = new Date();
-    storeSetup.warehouse_id = warehouse._id;
-    storeSetup.warehouse_allocated = true;
-    storeSetup.warehouse_allocation_verified = false; // Reset verification until reviewed
-    storeSetup.warehouse_allocated_at = now;
-    storeSetup.warehouse_allocated_by = actorId;
-    await storeSetup.save();
+
+    if (!storeSetup) {
+      // Auto-create/initialize StoreSetup record if one does not exist for this store
+      const storeSetupId = await generateStoreSetupId();
+      const allowedDays = 30;
+      const completionDate = new Date(now.getTime() + (allowedDays * 24 * 60 * 60 * 1000));
+
+      storeSetup = await StoreSetup.create({
+        store_setup_id: storeSetupId,
+        franchisee_id: store._id,
+        store_type: store.store_category || 'franchisee_store',
+        original_bde_id: store.company_store_bde_id || store.bde_id || null,
+        current_bde_id: store.company_store_bde_id || store.bde_id || null,
+        franchisee_name: store.business_name || store.contact_person || 'Store',
+        gst_number: store.gst_number || null,
+        mobile: store.mobile || 'N/A',
+        email: store.email || 'N/A',
+        country_name: store.address?.country || 'India',
+        state_id: store.address?.state_id || null,
+        district_id: store.address?.district_id || null,
+        store_address: store.address?.line || null,
+        fee_amount: store.fee_payment_amount || 0,
+        setup_start_date: now,
+        allowed_setup_days: allowedDays,
+        original_completion_date: completionDate,
+        status: 'not_started',
+        warehouse_id: warehouse._id,
+        warehouse_allocated: true,
+        warehouse_allocation_verified: false,
+        warehouse_allocated_at: now,
+        warehouse_allocated_by: actorId,
+        payment_verified_by_accounts: store.fee_payment_status === 'verified',
+        created_by: actorId,
+      });
+
+      store.store_setup_id = storeSetup._id;
+      await store.save();
+    } else {
+      storeSetup.warehouse_id = warehouse._id;
+      storeSetup.warehouse_allocated = true;
+      storeSetup.warehouse_allocation_verified = false; // Reset verification until reviewed
+      storeSetup.warehouse_allocated_at = now;
+      storeSetup.warehouse_allocated_by = actorId;
+      if (!storeSetup.franchisee_id) {
+        storeSetup.franchisee_id = store._id;
+      }
+      await storeSetup.save();
+
+      if (!store.store_setup_id) {
+        store.store_setup_id = storeSetup._id;
+        await store.save();
+      }
+    }
 
     // Record audit history
     await StoreStatusHistory.create({
@@ -109,7 +179,10 @@ const verify_warehouse_allocation = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Store not found.' });
     }
 
-    const storeSetup = await StoreSetup.findOne({ franchisee_id: store._id }).populate('warehouse_id');
+    let storeSetup = await StoreSetup.findOne({ franchisee_id: store._id }).populate('warehouse_id');
+    if (!storeSetup && store.store_setup_id) {
+      storeSetup = await StoreSetup.findById(store.store_setup_id).populate('warehouse_id');
+    }
     if (!storeSetup || !storeSetup.warehouse_id || !storeSetup.warehouse_allocated) {
       return res.status(400).json({
         status: 'error',
@@ -119,6 +192,11 @@ const verify_warehouse_allocation = async (req, res) => {
 
     storeSetup.warehouse_allocation_verified = true;
     await storeSetup.save();
+
+    if (!store.store_setup_id) {
+      store.store_setup_id = storeSetup._id;
+      await store.save();
+    }
 
     // Record audit history
     await StoreStatusHistory.create({

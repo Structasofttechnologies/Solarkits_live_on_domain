@@ -405,7 +405,10 @@ const advance_status = async (req, res) => {
     }
 
     const currentStatus = store.reseller_lifecycle_status || 'draft';
-    const storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    let storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    if (!storeSetup && store.store_setup_id) {
+      storeSetup = await StoreSetup.findById(store.store_setup_id);
+    }
 
     // Load Plan to check business rules
     let plan = null;
@@ -558,7 +561,10 @@ const reject_or_hold_store = async (req, res) => {
 
     await store.save();
 
-    const storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    let storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    if (!storeSetup && store.store_setup_id) {
+      storeSetup = await StoreSetup.findById(store.store_setup_id);
+    }
     if (action === 'reject' && storeSetup) {
       storeSetup.status = 'cancelled';
       await storeSetup.save();
@@ -688,9 +694,22 @@ const get_onboarding_queue = async (req, res) => {
       Reseller.countDocuments(query),
     ]);
 
+    // Fallback lookup: find StoreSetup by franchisee_id for rows without store_setup_id
+    const unlinkedStoreIds = rows.filter((r) => !r.store_setup_id).map((r) => r._id);
+    const unlinkedSetupsMap = {};
+    if (unlinkedStoreIds.length > 0) {
+      const foundSetups = await StoreSetup.find({ franchisee_id: { $in: unlinkedStoreIds } })
+        .populate('current_bde_id', 'full_name bde_id mobile_number email name employee_id mobile')
+        .populate('warehouse_id', 'warehouse_code address pincode')
+        .lean();
+      foundSetups.forEach((s) => {
+        unlinkedSetupsMap[String(s.franchisee_id)] = s;
+      });
+    }
+
     const data = rows.map((r) => {
       const plan = r.plan_subscription_id?.plan_id;
-      const setup = r.store_setup_id;
+      const setup = r.store_setup_id || unlinkedSetupsMap[String(r._id)] || null;
       return {
         id: r._id,
         business_name: r.business_name,
@@ -742,7 +761,8 @@ const get_onboarding_queue = async (req, res) => {
           status: setup.status,
           warehouse_allocated: setup.warehouse_allocated,
           warehouse_allocation_verified: setup.warehouse_allocation_verified,
-          warehouse_id: setup.warehouse_id,
+          warehouse_id: setup.warehouse_id?._id || setup.warehouse_id,
+          warehouse_details: setup.warehouse_id,
           payment_verified_by_accounts: setup.payment_verified_by_accounts,
         } : null,
         address: r.address,

@@ -665,7 +665,11 @@ export default function StoreOnboardingQueue() {
                       <button
                         onClick={() => {
                           setSelectedStore(store);
-                          setSelectedWarehouseId(store.store_setup?.warehouse_id || "");
+                          const whId =
+                            typeof store.store_setup?.warehouse_id === "object"
+                              ? store.store_setup?.warehouse_id?._id || store.store_setup?.warehouse_id?.id || ""
+                              : store.store_setup?.warehouse_id || "";
+                          setSelectedWarehouseId(whId);
                           setModalRemarks("");
                           loadWarehouses();
                           setActiveModal("warehouse");
