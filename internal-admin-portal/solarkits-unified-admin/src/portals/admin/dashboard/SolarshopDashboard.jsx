@@ -357,7 +357,7 @@ const menus = [
                     unique_id: "RSL_MGMT"
                 },
                 {
-                    name: "Store Accounts",
+                    name: "Franchisee Accounts",
                     icon: <FiUsers />,
                     path: "/admin-panel/solar-shop/reseller-management/resellers",
                     unique_id: "RSL_MGMT"

@@ -160,6 +160,16 @@ const list_reseller_plans = async (req, res) => {
         min_eligible_quantity:      r.min_eligible_quantity || 0,
         max_commission_paise:       r.max_commission_paise || null,
 
+        // ─── 5. Store Management Fields ────────────────────────────────────────
+        store_category:            r.store_category || 'franchisee_store',
+        franchisee_subtype_id:     r.franchisee_subtype_id || null,
+        commission_enabled:        r.commission_enabled !== undefined ? Boolean(r.commission_enabled) : (r.store_category !== 'company_store'),
+        setup_cost_enabled:        r.setup_cost_enabled !== undefined ? Boolean(r.setup_cost_enabled) : (r.one_time_fee > 0),
+        setup_cost_amount:         r.setup_cost_amount != null ? Number(r.setup_cost_amount) : (r.one_time_fee || 0),
+        epc_onboarding_scope:      r.epc_onboarding_scope || r.territory_level || 'district',
+        bde_assignment_mandatory:  r.bde_assignment_mandatory ?? (r.store_category === 'company_store'),
+        order_type_allocation:     r.order_type_allowed || 'both',
+
         description:               r.description,
         sort_order:                r.sort_order,
         is_active:                 r.is_active,

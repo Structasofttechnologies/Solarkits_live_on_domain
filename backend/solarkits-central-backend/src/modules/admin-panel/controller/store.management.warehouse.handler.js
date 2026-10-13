@@ -59,9 +59,10 @@ const allocate_warehouse = async (req, res) => {
     // Record audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup._id,
-      from_status: store.reseller_lifecycle_status,
-      to_status: store.reseller_lifecycle_status,
+      from_status: store.reseller_lifecycle_status || 'draft',
+      to_status: store.reseller_lifecycle_status || 'draft',
       actor_type: 'warehouse',
       actor_id: actorId,
       remarks: `Warehouse allocated: ${warehouse.warehouse_code} (${warehouse.pincode || 'Pincode N/A'}). ${remarks ? `Remarks: ${remarks.trim()}` : ''}`,
@@ -122,9 +123,10 @@ const verify_warehouse_allocation = async (req, res) => {
     // Record audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup._id,
-      from_status: store.reseller_lifecycle_status,
-      to_status: store.reseller_lifecycle_status,
+      from_status: store.reseller_lifecycle_status || 'draft',
+      to_status: store.reseller_lifecycle_status || 'draft',
       actor_type: 'warehouse',
       actor_id: actorId,
       remarks: `Warehouse allocation verified for warehouse: ${storeSetup.warehouse_id?.warehouse_code || 'Code N/A'}. ${remarks ? `Remarks: ${remarks.trim()}` : ''}`,

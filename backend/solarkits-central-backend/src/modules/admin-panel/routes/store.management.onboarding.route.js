@@ -13,19 +13,19 @@ const check_permissions = require('../middlewares/check.permissions');
 const handler = require('../controller/store.management.onboarding.handler');
 
 const VIEW_PERMISSIONS = [
-  { unique_code: 'STR_MGMT', permissions: ['view'] },
   { unique_code: 'RSL_MGMT', permissions: ['view'] },
+  { unique_code: 'STR_MGMT', permissions: ['view'] },
   { unique_code: 'STR_TYPE_CFG', permissions: ['view'] },
 ];
 
 const ADD_PERMISSIONS = [
-  { unique_code: 'STR_MGMT', permissions: ['add'] },
   { unique_code: 'RSL_MGMT', permissions: ['add'] },
+  { unique_code: 'STR_MGMT', permissions: ['add'] },
 ];
 
 const EDIT_PERMISSIONS = [
-  { unique_code: 'STR_MGMT', permissions: ['edit'] },
   { unique_code: 'RSL_MGMT', permissions: ['edit'] },
+  { unique_code: 'STR_MGMT', permissions: ['edit'] },
 ];
 
 router.post('/create', check_auth, check_permissions(ADD_PERMISSIONS), handler.create_store);
