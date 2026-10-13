@@ -8,7 +8,7 @@
  */
 
 const mongoose = require('mongoose');
-const { ResellerPlan, ResellerPlanSubscription, FranchiseeCommissionRule, WarehouseComboKit: IndiaComboKit } = require('../models/india_solarshop_db');
+const { ResellerPlan, ResellerPlanSubscription, FranchiseeCommissionRule, FranchiseeSubtype, WarehouseComboKit: IndiaComboKit } = require('../models/india_solarshop_db');
 const {
   ProjectType,
   ProjectCategory,
@@ -34,15 +34,19 @@ const slugify = (str) =>
  */
 const list_reseller_plans = async (req, res) => {
   try {
-    const { territory_level, active_only } = req.query;
+    const { territory_level, active_only, store_category } = req.query;
     const query = { deleted_at: null };
 
     if (territory_level && ['district', 'state', 'country'].includes(territory_level)) {
       query.territory_level = territory_level;
     }
+    if (store_category && ['company_store', 'franchisee_store'].includes(store_category)) {
+      query.store_category = store_category;
+    }
     if (active_only === 'true') query.is_active = true;
 
     const rows = await ResellerPlan.find(query)
+      .populate({ path: 'franchisee_subtype_id', model: FranchiseeSubtype, select: 'name slug is_active' })
       .populate({ path: 'allowed_industry_type_ids', model: IndustryType, select: 'name code slug icon cover_image' })
       .populate({ path: 'allowed_project_type_ids', model: ProjectType, select: 'name' })
       .populate({ path: 'allowed_category_ids', model: ProjectCategory, select: 'name' })
@@ -200,6 +204,14 @@ const add_reseller_plan = async (req, res) => {
       order_type_allowed,
       description,
       sort_order,
+      // Store Management fields
+      store_category,
+      franchisee_subtype_id,
+      commission_enabled,
+      setup_cost_enabled,
+      setup_cost_amount,
+      epc_onboarding_scope,
+      bde_assignment_mandatory,
     } = req.body;
 
     if (!name || !name.trim()) {
@@ -218,6 +230,14 @@ const add_reseller_plan = async (req, res) => {
     if (existing) {
       return res.status(409).json({ status: 'error', message: `Plan "${existing.name}" already exists` });
     }
+
+    const parsedStoreCategory = ['company_store', 'franchisee_store'].includes(store_category)
+      ? store_category
+      : 'franchisee_store';
+
+    const parsedCommissionEnabled = commission_enabled !== undefined
+      ? Boolean(commission_enabled)
+      : (parsedStoreCategory === 'company_store' ? false : true);
 
     const doc = await ResellerPlan.create({
       name:                      name.trim(),
@@ -257,34 +277,45 @@ const add_reseller_plan = async (req, res) => {
       min_eligible_quantity:      req.body.min_eligible_quantity != null ? Number(req.body.min_eligible_quantity) : 0,
       max_commission_paise:       req.body.max_commission_paise != null ? Math.round(Number(req.body.max_commission_paise)) : null,
 
+      // 5. Store Management — Store Type Configuration
+      store_category:            parsedStoreCategory,
+      franchisee_subtype_id:     franchisee_subtype_id && mongoose.Types.ObjectId.isValid(franchisee_subtype_id) ? franchisee_subtype_id : null,
+      commission_enabled:        parsedCommissionEnabled,
+      setup_cost_enabled:        setup_cost_enabled !== undefined ? Boolean(setup_cost_enabled) : true,
+      setup_cost_amount:         setup_cost_amount != null ? Math.max(0, Number(setup_cost_amount)) : (one_time_fee != null ? Number(one_time_fee) : 0),
+      epc_onboarding_scope:      ['country', 'state', 'district'].includes(epc_onboarding_scope) ? epc_onboarding_scope : (territory_level || 'district'),
+      bde_assignment_mandatory:  Boolean(bde_assignment_mandatory),
+
       description:               description ? description.trim() : null,
       sort_order:                sort_order != null ? Number(sort_order) : 0,
       created_by:                req.user?.id || null,
       updated_by:                req.user?.id || null,
     });
 
-    // Auto-create/sync corresponding FranchiseeCommissionRule
-    try {
-      await FranchiseeCommissionRule.findOneAndUpdate(
-        { plan_id: doc._id, deleted_at: null },
-        {
-          plan_id:                    doc._id,
-          commission_method:          doc.commission_method,
-          commission_percentage:      doc.commission_method === 'PERCENTAGE' ? doc.default_commission_rate : null,
-          fixed_amount_per_kit_paise: doc.commission_method === 'FIXED_PER_KIT' ? doc.fixed_amount_per_kit_paise : null,
-          min_eligible_quantity:      doc.min_eligible_quantity || 0,
-          max_commission_paise:       doc.max_commission_paise || null,
-          calculation_stage:          'RETURN_PERIOD_COMPLETED',
-          settlement_rule:            'MONTHLY_BATCH',
-          is_active:                  true,
-          effective_from:             new Date(),
-          created_by:                 req.user?.id || null,
-          updated_by:                 req.user?.id || null,
-        },
-        { upsert: true, new: true }
-      );
-    } catch (commSyncErr) {
-      console.warn('[reseller.plans] Auto-sync FranchiseeCommissionRule warning:', commSyncErr.message);
+    // Auto-create/sync corresponding FranchiseeCommissionRule ONLY if commission is enabled
+    if (doc.commission_enabled) {
+      try {
+        await FranchiseeCommissionRule.findOneAndUpdate(
+          { plan_id: doc._id, deleted_at: null },
+          {
+            plan_id:                    doc._id,
+            commission_method:          doc.commission_method,
+            commission_percentage:      doc.commission_method === 'PERCENTAGE' ? doc.default_commission_rate : null,
+            fixed_amount_per_kit_paise: doc.commission_method === 'FIXED_PER_KIT' ? doc.fixed_amount_per_kit_paise : null,
+            min_eligible_quantity:      doc.min_eligible_quantity || 0,
+            max_commission_paise:       doc.max_commission_paise || null,
+            calculation_stage:          'RETURN_PERIOD_COMPLETED',
+            settlement_rule:            'MONTHLY_BATCH',
+            is_active:                  true,
+            effective_from:             new Date(),
+            created_by:                 req.user?.id || null,
+            updated_by:                 req.user?.id || null,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (commSyncErr) {
+        console.warn('[reseller.plans] Auto-sync FranchiseeCommissionRule warning:', commSyncErr.message);
+      }
     }
 
     await logAudit({
@@ -411,11 +442,48 @@ const update_reseller_plan = async (req, res) => {
       updateData.max_commission_paise = fields.max_commission_paise != null ? Math.max(0, Math.round(Number(fields.max_commission_paise))) : null;
     }
 
+    // 5. Store Management — Store Type Configuration
+    if (fields.store_category && ['company_store', 'franchisee_store'].includes(fields.store_category)) {
+      updateData.store_category = fields.store_category;
+    }
+    if (fields.franchisee_subtype_id !== undefined) {
+      updateData.franchisee_subtype_id = fields.franchisee_subtype_id && mongoose.Types.ObjectId.isValid(fields.franchisee_subtype_id)
+        ? new mongoose.Types.ObjectId(fields.franchisee_subtype_id)
+        : null;
+    }
+    if (fields.commission_enabled !== undefined) {
+      updateData.commission_enabled = Boolean(fields.commission_enabled);
+    }
+    if (fields.setup_cost_enabled !== undefined) {
+      updateData.setup_cost_enabled = Boolean(fields.setup_cost_enabled);
+    }
+    if (fields.setup_cost_amount != null) {
+      updateData.setup_cost_amount = Math.max(0, Number(fields.setup_cost_amount));
+    }
+    if (fields.epc_onboarding_scope && ['country', 'state', 'district'].includes(fields.epc_onboarding_scope)) {
+      updateData.epc_onboarding_scope = fields.epc_onboarding_scope;
+    }
+    if (fields.bde_assignment_mandatory !== undefined) {
+      updateData.bde_assignment_mandatory = Boolean(fields.bde_assignment_mandatory);
+    }
+
     if (fields.description !== undefined) updateData.description = fields.description ? fields.description.trim() : null;
     if (fields.sort_order != null) updateData.sort_order = Number(fields.sort_order);
     updateData.updated_by = req.user?.id || null;
 
     const result = await ResellerPlan.findByIdAndUpdate(id, { $set: updateData }, { new: true }).lean();
+
+    // If commission is disabled, deactivate corresponding FranchiseeCommissionRule
+    if (updateData.commission_enabled === false) {
+      try {
+        await FranchiseeCommissionRule.updateMany(
+          { plan_id: id, deleted_at: null },
+          { $set: { is_active: false, updated_by: req.user?.id || null } }
+        );
+      } catch (commErr) {
+        console.warn('[reseller.plans] Deactivate FranchiseeCommissionRule warning:', commErr.message);
+      }
+    }
 
     await logAudit({
       actor_type: 'cms_user',
@@ -520,7 +588,7 @@ const delete_reseller_plan = async (req, res) => {
  */
 const get_plan_config_options = async (req, res) => {
   try {
-    const [projectTypes, categories, subcategories, subcategoryTypes, projectRanges, industryTypes, kitsCore] = await Promise.all([
+    const [projectTypes, categories, subcategories, subcategoryTypes, projectRanges, industryTypes, kitsCore, subtypes] = await Promise.all([
       ProjectType.find({ deleted_at: null }).sort({ name: 1 }).lean(),
       ProjectCategory.find({ deleted_at: null, is_active: { $ne: false } }).sort({ sort_order: 1, name: 1 }).lean(),
       ProjectSubcategory.find({ deleted_at: null, is_active: { $ne: false } }).sort({ name: 1 }).lean(),
@@ -549,6 +617,7 @@ const get_plan_config_options = async (req, res) => {
         })
         .sort({ name: 1 })
         .lean(),
+      FranchiseeSubtype.find({ deleted_at: null, is_active: true }).sort({ sort_order: 1, name: 1 }).lean(),
     ]);
 
     let kitsIndia = [];
@@ -656,6 +725,7 @@ const get_plan_config_options = async (req, res) => {
           label:               `${pr.min_value} - ${pr.max_value} ${pr.unit_id?.symbol || 'kW'}`,
         })),
         combo_kits: comboKits,
+        subtypes: (subtypes || []).map((s) => ({ id: s._id, name: s.name, slug: s.slug })),
       },
     });
   } catch (error) {

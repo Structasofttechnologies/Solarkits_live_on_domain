@@ -175,6 +175,47 @@ function StatusBadge({ isActive }) {
   );
 }
 
+function StoreCategoryBadge({ category, subtype }) {
+  if (category === "company_store") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+        <FiBox size={10} /> Company Store
+      </span>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+        <FiHome size={10} /> Franchisee Store
+      </span>
+      {subtype?.name && (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-surface text-text-muted border border-border">
+          {subtype.name}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CommercialsBadge({ commissionEnabled, setupCostEnabled, setupCostAmount }) {
+  return (
+    <div className="flex flex-col gap-1 items-end">
+      <div className="flex items-center gap-1">
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+          commissionEnabled !== false ? "bg-success-soft text-success border-success/20" : "bg-surface-hover text-text-muted border-border"
+        }`}>
+          {commissionEnabled !== false ? "Comm. ON" : "Comm. OFF"}
+        </span>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+          setupCostEnabled !== false ? "bg-info-soft text-primary border-primary/20" : "bg-surface-hover text-text-muted border-border"
+        }`}>
+          {setupCostEnabled !== false ? `Fee: ₹${Number(setupCostAmount || 0).toLocaleString("en-IN")}` : "Fee: Waived"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * ─────────────────────────────────────────────────────────────────────────────
  * 1. FORM MODAL (Plan Creation & Basic Edit)
@@ -190,13 +231,37 @@ function StatusBadge({ isActive }) {
 function FormModal({ mode, initial, onClose, onSaved }) {
   const dispatch = useDispatch();
 
+  const [subtypes, setSubtypes] = useState([]);
+
+  useEffect(() => {
+    axios
+      .get(`${API_BASE}/store-management/subtypes/list?active_only=true`, { headers: authHeaderObj() })
+      .then((res) => {
+        if (res.data?.status === "success") {
+          setSubtypes(res.data.data || []);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch subtypes for plan form:", err.message);
+      });
+  }, []);
+
   const [form, setForm] = useState({
     name: initial?.name || "",
+    store_category: initial?.store_category || "franchisee_store",
+    franchisee_subtype_id: initial?.franchisee_subtype_id?._id || initial?.franchisee_subtype_id || "",
     territory_level: initial?.territory_level || "district",
     one_time_fee: initial?.one_time_fee ?? 0,
     validity_value: initial?.validity_value ?? 1,
     validity_unit: initial?.validity_unit || "years",
     allowed_territories_count: initial?.allowed_territories_count ?? 1,
+
+    // Store Management Commercial Controls
+    commission_enabled: initial?.commission_enabled ?? (initial?.store_category === "company_store" ? false : true),
+    setup_cost_enabled: initial?.setup_cost_enabled ?? (initial?.store_category === "company_store" ? false : true),
+    setup_cost_amount: initial?.setup_cost_amount ?? (initial?.one_time_fee ?? 0),
+    epc_onboarding_scope: initial?.epc_onboarding_scope || initial?.territory_level || "district",
+    bde_assignment_mandatory: initial?.bde_assignment_mandatory ?? (initial?.store_category === "company_store" ? true : false),
 
     // Warehouse Requirements
     warehouse_required: initial?.warehouse_required ?? false,
@@ -211,6 +276,17 @@ function FormModal({ mode, initial, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
 
+  const handleCategoryChange = (category) => {
+    setForm((prev) => ({
+      ...prev,
+      store_category: category,
+      commission_enabled: category === "company_store" ? false : true,
+      setup_cost_enabled: category === "company_store" ? false : true,
+      bde_assignment_mandatory: category === "company_store" ? true : false,
+      franchisee_subtype_id: category === "company_store" ? "" : prev.franchisee_subtype_id,
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
@@ -222,13 +298,22 @@ function FormModal({ mode, initial, onClose, onSaved }) {
         : `/add?req_for=add&unique_id=${MODULE_UID}`;
 
       const payload = {
-        ...(isEdit && { id: initial.id }),
+        ...(isEdit && { id: initial.id || initial._id }),
         name: form.name.trim(),
+        store_category: form.store_category,
+        franchisee_subtype_id: form.store_category === "franchisee_store" && form.franchisee_subtype_id ? form.franchisee_subtype_id : null,
         territory_level: form.territory_level,
         one_time_fee: Number(form.one_time_fee || 0),
         validity_value: Number(form.validity_value || 1),
         validity_unit: form.validity_unit,
         allowed_territories_count: Number(form.allowed_territories_count || 1),
+
+        // Commercial Controls
+        commission_enabled: Boolean(form.commission_enabled),
+        setup_cost_enabled: Boolean(form.setup_cost_enabled),
+        setup_cost_amount: Number(form.setup_cost_amount || 0),
+        epc_onboarding_scope: form.epc_onboarding_scope,
+        bde_assignment_mandatory: Boolean(form.bde_assignment_mandatory),
 
         // Warehouse Specs
         warehouse_required: Boolean(form.warehouse_required),
@@ -244,7 +329,7 @@ function FormModal({ mode, initial, onClose, onSaved }) {
 
       const res = await apiFetch(isEdit ? "put" : "post", endpoint, payload);
       if (res.data?.status === "success") {
-        dispatch(setAlert({ type: "success", message: `Franchisee plan ${isEdit ? "updated" : "created"} successfully` }));
+        dispatch(setAlert({ type: "success", message: `Store Type ${isEdit ? "updated" : "created"} successfully` }));
         onSaved(res.data.data);
         onClose();
       } else {
@@ -268,10 +353,10 @@ function FormModal({ mode, initial, onClose, onSaved }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-bg/50">
           <div>
             <h3 className="text-lg font-bold text-text-primary">
-              {mode === "edit" ? "Edit Franchisee Plan" : "Create Franchisee Plan"}
+              {mode === "edit" ? "Edit Store Type" : "Create Store Type"}
             </h3>
             <p className="text-xs text-text-muted mt-0.5">
-              Configure territory tier, license fee, warehouse rules, and order fulfillment type
+              Configure store category, commercial permissions, warehouse rules, and order fulfillment
             </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-hover text-text-muted transition-colors">
@@ -280,65 +365,210 @@ function FormModal({ mode, initial, onClose, onSaved }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[75vh] scrollbar-hover">
-          {/* 1. Plan Name */}
+          {/* 1. Store Category & Subtype */}
+          <div className="p-4 bg-bg/60 rounded-2xl border border-border space-y-3.5">
+            <h4 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+              <FiLayers size={14} /> 1. Store Type Classification <span className="text-danger">*</span>
+            </h4>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleCategoryChange("franchisee_store")}
+                className={`flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all ${
+                  form.store_category === "franchisee_store"
+                    ? "border-primary bg-info-soft text-primary shadow-sm"
+                    : "border-border bg-surface text-text-secondary hover:border-primary/40"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs mb-0.5">
+                  <FiHome size={15} /> Franchisee Store
+                </div>
+                <p className="text-[10px] text-text-muted">Independently operated partner store with setup & commission rules</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCategoryChange("company_store")}
+                className={`flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all ${
+                  form.store_category === "company_store"
+                    ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 shadow-sm"
+                    : "border-border bg-surface text-text-secondary hover:border-purple-300"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs mb-0.5">
+                  <FiBox size={15} /> Company Store
+                </div>
+                <p className="text-[10px] text-text-muted">SolarKits-managed branch with dedicated BDE attribution</p>
+              </button>
+            </div>
+
+            {form.store_category === "franchisee_store" && (
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1">
+                  Franchisee Subtype / Category
+                </label>
+                <select
+                  className="w-full px-3.5 py-2 rounded-xl border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  value={form.franchisee_subtype_id}
+                  onChange={(e) => setForm({ ...form, franchisee_subtype_id: e.target.value })}
+                >
+                  <option value="">-- None / Standard Franchisee --</option>
+                  {subtypes.map((st) => (
+                    <option key={st.id || st._id} value={st.id || st._id}>
+                      {st.name} ({st.slug})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Store Type Name */}
           <div>
             <label className="block text-xs font-bold text-text-secondary mb-1">
-              1. Plan Name <span className="text-danger">*</span>
+              2. Store Type Name <span className="text-danger">*</span>
             </label>
             <input
               type="text"
               className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-bg text-text-primary text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-              placeholder="e.g. Gold District Franchisee Partner"
+              placeholder="e.g. Gold District Franchisee Partner or Company Flagship Store"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
             />
           </div>
 
-          {/* 2. Scope Level */}
-          <div>
-            <label className="block text-xs font-bold text-text-secondary mb-1.5">
-              2. Territory Scope Level <span className="text-danger">*</span>
-            </label>
-            <div className="grid grid-cols-3 gap-2.5">
-              {TERRITORY_LEVELS.map((t) => {
-                const Icon = t.icon;
-                const sel = form.territory_level === t.value;
-                return (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, territory_level: t.value })}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-xs font-bold transition-all ${
-                      sel ? "border-primary bg-info-soft text-primary shadow-sm" : "border-border bg-bg text-text-secondary hover:border-primary/40"
-                    }`}
-                  >
-                    <Icon size={18} className={sel ? "text-primary" : "text-text-muted"} />
-                    {t.label}
-                  </button>
-                );
-              })}
+          {/* 3. Scope Level & EPC Onboarding Scope */}
+          <div className="p-4 bg-bg/60 rounded-2xl border border-border space-y-3.5">
+            <h4 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+              <FiMapPin size={14} /> 3. Geographic Scope & EPC Rights
+            </h4>
+
+            <div>
+              <label className="block text-xs font-bold text-text-secondary mb-1.5">
+                Territory Scope Level <span className="text-danger">*</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2.5">
+                {TERRITORY_LEVELS.map((t) => {
+                  const Icon = t.icon;
+                  const sel = form.territory_level === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, territory_level: t.value })}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 text-xs font-bold transition-all ${
+                        sel ? "border-primary bg-info-soft text-primary shadow-sm" : "border-border bg-surface text-text-secondary hover:border-primary/40"
+                      }`}
+                    >
+                      <Icon size={16} className={sel ? "text-primary" : "text-text-muted"} />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1">
+                EPC Onboarding Geographic Scope
+              </label>
+              <select
+                className="w-full px-3.5 py-2 rounded-xl border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                value={form.epc_onboarding_scope}
+                onChange={(e) => setForm({ ...form, epc_onboarding_scope: e.target.value })}
+              >
+                <option value="district">District Level (EPCs in same district only)</option>
+                <option value="state">State Level (EPCs across the entire state)</option>
+                <option value="country">Country Level (EPCs nationwide)</option>
+              </select>
             </div>
           </div>
 
-          {/* 3. Fee & Validity Duration */}
+          {/* 4. Commercial Controls & Fees */}
           <div className="p-4 bg-bg/60 rounded-2xl border border-border space-y-3.5">
             <h4 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
-              <FiDollarSign size={14} /> 3. License Fee & Territory Rights
+              <FiDollarSign size={14} /> 4. Commercial Rules & Setup Fees
             </h4>
 
+            {/* Setup Cost & Commission Toggles */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-2 border-b border-border/60">
+              {/* Commission Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border">
+                <div>
+                  <div className="text-xs font-bold text-text-primary">Commission</div>
+                  <div className="text-[10px] text-text-muted">
+                    {form.commission_enabled ? "Commission payouts enabled" : "Commission disabled"}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.commission_enabled}
+                    onChange={(e) => setForm({ ...form, commission_enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-success relative"></div>
+                </label>
+              </div>
+
+              {/* Setup Cost Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border">
+                <div>
+                  <div className="text-xs font-bold text-text-primary">Setup Cost</div>
+                  <div className="text-[10px] text-text-muted">
+                    {form.setup_cost_enabled ? "Setup fee required" : "Setup fee waived/zero"}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.setup_cost_enabled}
+                    onChange={(e) => setForm({ ...form, setup_cost_enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary relative"></div>
+                </label>
+              </div>
+            </div>
+
+            {/* Company Store BDE Policy */}
+            {form.store_category === "company_store" && (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
+                <div>
+                  <div className="text-xs font-bold text-purple-900 dark:text-purple-300">Mandatory BDE Assignment</div>
+                  <div className="text-[10px] text-text-muted">Require a dedicated BDE to be assigned before store activation</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.bde_assignment_mandatory}
+                    onChange={(e) => setForm({ ...form, bde_assignment_mandatory: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600 relative"></div>
+                </label>
+              </div>
+            )}
+
+            {/* Fee Inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1">
-                  One-Time Franchise Fee (₹)
+                  Setup Fee Amount (₹)
                 </label>
                 <div className="relative">
                   <input
                     type="number"
-                    className="w-full px-3.5 py-2 pl-8 rounded-xl border border-border bg-surface text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                    placeholder="0 for Free/Promo"
-                    value={form.one_time_fee}
-                    onChange={(e) => setForm({ ...form, one_time_fee: e.target.value })}
+                    disabled={!form.setup_cost_enabled}
+                    className="w-full px-3.5 py-2 pl-8 rounded-xl border border-border bg-surface text-text-primary text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50"
+                    placeholder="0 for Free/Waived"
+                    value={form.setup_cost_amount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setForm({ ...form, setup_cost_amount: val, one_time_fee: val });
+                    }}
                     min={0}
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-text-muted">₹</span>
@@ -1352,25 +1582,28 @@ export default function ResellerPlans({ moduleUniqueId }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterLevel, setFilterLevel] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
   const [modal, setModal] = useState(null); // { mode: 'add' | 'edit' | 'settings' | 'delete', data?: plan }
 
   const fetchPlans = useCallback(async () => {
     setLoading(true);
     try {
-      const params = filterLevel !== "all" ? `&territory_level=${filterLevel}` : "";
+      const params = new URLSearchParams();
+      if (filterLevel !== "all") params.append("territory_level", filterLevel);
+      if (filterCategory !== "all") params.append("store_category", filterCategory);
       const res = await axios.get(
-        `${API_BASE}/resellers/plans/list?req_for=view&unique_id=${MODULE_UID}${params}`,
+        `${API_BASE}/resellers/plans/list?req_for=view&unique_id=${MODULE_UID}&${params.toString()}`,
         { headers: authHeaderObj() }
       );
       if (res.data?.status === "success") {
         setPlans(res.data.data);
       }
     } catch {
-      dispatch(setAlert({ type: "error", message: "Failed to load franchisee plans" }));
+      dispatch(setAlert({ type: "error", message: "Failed to load store types" }));
     } finally {
       setLoading(false);
     }
-  }, [dispatch, filterLevel]);
+  }, [dispatch, filterLevel, filterCategory]);
 
   useEffect(() => {
     fetchPlans();
@@ -1410,10 +1643,10 @@ export default function ResellerPlans({ moduleUniqueId }) {
         <div>
           <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
             <FiFileText className="text-primary" size={24} />
-            Franchisee Plans
+            Store Type Settings
           </h1>
           <p className="text-sm text-text-muted mt-1">
-            Configure territory subscription plans, warehouse rules, order fulfillment types, and industry/product scopes
+            Configure store types (Company / Franchisee Store), commercial rules, setup fees, commission, and order allocations
           </p>
         </div>
         <button
@@ -1421,36 +1654,61 @@ export default function ResellerPlans({ moduleUniqueId }) {
           className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary-hover transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 hover:-translate-y-0.5"
         >
           <FiPlus size={16} />
-          Create Plan
+          Create Store Type
         </button>
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
         <div className="relative flex-1 max-w-sm">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
           <input
             type="text"
-            placeholder="Search plans by name or slug..."
+            placeholder="Search store types by name or slug..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
           />
         </div>
-        <div className="flex gap-1 bg-surface border border-border rounded-xl p-1">
-          {["all", "district", "state", "country"].map((lvl) => (
-            <button
-              key={lvl}
-              onClick={() => setFilterLevel(lvl)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
-                filterLevel === lvl
-                  ? "bg-primary text-white shadow-sm"
-                  : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-              }`}
-            >
-              {lvl}
-            </button>
-          ))}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Store Category Filter */}
+          <div className="flex gap-1 bg-surface border border-border rounded-xl p-1">
+            {[
+              { val: "all", label: "All Types" },
+              { val: "franchisee_store", label: "Franchisee Stores" },
+              { val: "company_store", label: "Company Stores" },
+            ].map((cat) => (
+              <button
+                key={cat.val}
+                onClick={() => setFilterCategory(cat.val)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  filterCategory === cat.val
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Territory Scope Filter */}
+          <div className="flex gap-1 bg-surface border border-border rounded-xl p-1">
+            {["all", "district", "state", "country"].map((lvl) => (
+              <button
+                key={lvl}
+                onClick={() => setFilterLevel(lvl)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
+                  filterLevel === lvl
+                    ? "bg-surface-hover text-primary font-bold shadow-sm border border-primary/20"
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                }`}
+              >
+                {lvl}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1459,7 +1717,7 @@ export default function ResellerPlans({ moduleUniqueId }) {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-text-muted gap-3">
             <FiLoader className="animate-spin" size={20} />
-            <span className="text-sm">Loading plans...</span>
+            <span className="text-sm">Loading store types...</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -1467,9 +1725,9 @@ export default function ResellerPlans({ moduleUniqueId }) {
               <FiFileText size={24} className="text-text-muted" />
             </div>
             <p className="text-sm text-text-muted">
-              {search || filterLevel !== "all"
-                ? "No plans match your filters"
-                : "No plans created yet. Click 'Create Plan' to get started."}
+              {search || filterLevel !== "all" || filterCategory !== "all"
+                ? "No store types match your filters"
+                : "No store types created yet. Click 'Create Store Type' to get started."}
             </p>
           </div>
         ) : (
@@ -1477,9 +1735,9 @@ export default function ResellerPlans({ moduleUniqueId }) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg text-text-muted font-semibold text-xs">
-                  <th className="text-left px-5 py-3.5">Plan Name</th>
-                  <th className="text-left px-4 py-3.5">Scope Level</th>
-                  <th className="text-right px-4 py-3.5">Fee & Validity</th>
+                  <th className="text-left px-5 py-3.5">Store Type & Category</th>
+                  <th className="text-left px-4 py-3.5">Scope & EPC Rights</th>
+                  <th className="text-right px-4 py-3.5">Commercial Rules & Fee</th>
                   <th className="text-left px-4 py-3.5">Warehouse Req.</th>
                   <th className="text-left px-4 py-3.5">Order Type</th>
                   <th className="text-left px-4 py-3.5">Assigned Scope & Products</th>
@@ -1497,26 +1755,35 @@ export default function ResellerPlans({ moduleUniqueId }) {
                       exit={{ opacity: 0 }}
                       className="hover:bg-surface-hover/60 transition-colors"
                     >
-                      {/* Plan Name */}
+                      {/* Store Type Name & Category */}
                       <td className="px-5 py-3.5">
                         <div className="font-bold text-text-primary">{plan.name}</div>
                         <div className="text-xs text-text-muted mt-0.5 font-mono">{plan.slug}</div>
+                        <div className="mt-1">
+                          <StoreCategoryBadge
+                            category={plan.store_category}
+                            subtype={plan.franchisee_subtype_id}
+                          />
+                        </div>
                       </td>
 
-                      {/* Scope Level */}
+                      {/* Scope Level & EPC Scope */}
                       <td className="px-4 py-3.5">
                         <TerritoryLevelBadge level={plan.territory_level} />
+                        <div className="text-[10px] text-text-muted font-medium mt-1">
+                          EPC Scope: <strong className="text-text-primary capitalize">{plan.epc_onboarding_scope || plan.territory_level}</strong>
+                        </div>
                       </td>
 
-                      {/* Fee & Validity */}
+                      {/* Commercial Rules & Fee */}
                       <td className="px-4 py-3.5 text-right font-semibold text-text-primary">
-                        <div>
-                          {plan.one_time_fee === 0
-                            ? "Free / Promo"
-                            : `₹${Number(plan.one_time_fee).toLocaleString("en-IN")}`}
-                        </div>
-                        <div className="text-[11px] text-text-muted font-normal">
-                          {plan.validity_value} {plan.validity_unit}
+                        <CommercialsBadge
+                          commissionEnabled={plan.commission_enabled}
+                          setupCostEnabled={plan.setup_cost_enabled}
+                          setupCostAmount={plan.setup_cost_amount ?? plan.one_time_fee}
+                        />
+                        <div className="text-[11px] text-text-muted font-normal mt-1">
+                          Validity: {plan.validity_value} {plan.validity_unit}
                         </div>
                       </td>
 

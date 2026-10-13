@@ -101,6 +101,18 @@ adminRouter.use('/reseller-mgmt/orders', require('./modules/admin-panel/routes/r
 adminRouter.use('/reseller-mgmt/wallet', require('./modules/admin-panel/routes/reseller.wallet.route'));
 adminRouter.use('/reseller-mgmt/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
 adminRouter.use('/resellers/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
+
+// ─── Store Management Module ──────────────────────────────────────────────────
+adminRouter.use('/store-management/subtypes',   require('./modules/admin-panel/routes/franchisee.subtypes.route'));
+adminRouter.use('/reseller-mgmt/subtypes',      require('./modules/admin-panel/routes/franchisee.subtypes.route'));
+adminRouter.use('/store-management/onboarding', require('./modules/admin-panel/routes/store.management.onboarding.route'));
+adminRouter.use('/reseller-mgmt/onboarding',    require('./modules/admin-panel/routes/store.management.onboarding.route'));
+adminRouter.use('/store-management/payments',   require('./modules/admin-panel/routes/store.management.payment.route'));
+adminRouter.use('/reseller-mgmt/payments',      require('./modules/admin-panel/routes/store.management.payment.route'));
+adminRouter.use('/store-management/bde',        require('./modules/admin-panel/routes/store.management.bde.route'));
+adminRouter.use('/reseller-mgmt/bde',           require('./modules/admin-panel/routes/store.management.bde.route'));
+adminRouter.use('/store-management/warehouses', require('./modules/admin-panel/routes/store.management.warehouse.route'));
+adminRouter.use('/reseller-mgmt/warehouses',    require('./modules/admin-panel/routes/store.management.warehouse.route'));
 adminRouter.use('/reseller-mgmt/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/resellers/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/reseller-mgmt', require('./modules/admin-panel/routes/reseller.admin.route'));

@@ -313,6 +313,7 @@ const createStoreSetupForFranchisee = async (resellerId, actorId = null) => {
     setup_start_date: setupStartDate,
     allowed_setup_days: allowedDays,
     original_completion_date: originalCompletionDate,
+    store_type: reseller.store_category || 'franchisee_store',
     status: 'not_started',
     progress_percentage: 0,
     total_activities: settings.master_checklist_activities?.length || 0,

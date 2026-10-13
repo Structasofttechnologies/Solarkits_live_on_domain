@@ -51,6 +51,18 @@ app.use('/reseller-mgmt/wallet',       require('./routes/reseller.wallet.route')
 app.use('/reseller-mgmt',              require('./routes/reseller.admin.route'));
 app.use('/resellers/plans',            require('./routes/reseller.plans.route'));
 
+// ─── Store Management Module ──────────────────────────────────────────────────
+app.use('/store-management/subtypes',   require('./routes/franchisee.subtypes.route'));
+app.use('/reseller-mgmt/subtypes',      require('./routes/franchisee.subtypes.route'));
+app.use('/store-management/onboarding', require('./routes/store.management.onboarding.route'));
+app.use('/reseller-mgmt/onboarding',    require('./routes/store.management.onboarding.route'));
+app.use('/store-management/payments',   require('./routes/store.management.payment.route'));
+app.use('/reseller-mgmt/payments',      require('./routes/store.management.payment.route'));
+app.use('/store-management/bde',        require('./routes/store.management.bde.route'));
+app.use('/reseller-mgmt/bde',           require('./routes/store.management.bde.route'));
+app.use('/store-management/warehouses', require('./routes/store.management.warehouse.route'));
+app.use('/reseller-mgmt/warehouses',    require('./routes/store.management.warehouse.route'));
+
 // ─── Industry Content Management System ──────────────────────────────────────
 app.use('/industry-content',  require('./routes/industry.content.route'));
 app.use('/industry-themes',   require('./routes/industry.theme.route'));

@@ -2,9 +2,17 @@ const mongoose = require('mongoose');
 const { india_solarshop_db } = require('../../config/databases');
 
 /**
- * reseller_plans — Master list of Reseller Plan packages.
+ * reseller_plans — Master list of Reseller Plan / Store Type packages.
  *
- * Defines fees, validity, allowed territory counts, and scope scoping.
+ * Defines fees, validity, allowed territory counts, and scope.
+ *
+ * Store Management additions:
+ *   - store_category: company_store | franchisee_store
+ *   - franchisee_subtype_id: ref to franchisee_subtypes (configurable)
+ *   - commission_enabled / setup_cost_enabled: independent toggles
+ *   - setup_cost_amount: configurable setup fee override
+ *   - epc_onboarding_scope: country | state | district
+ *   - bde_assignment_mandatory: for Company Store BDE policy
  *
  * Collection: reseller_plans
  */
@@ -65,6 +73,34 @@ const schema = new mongoose.Schema({
   min_eligible_quantity:      { type: Number, min: 0, default: 0 },
   max_commission_paise:       { type: Number, min: 0, default: null },
 
+  // ─── 5. Store Management — Store Type Configuration ──────────────────────────
+  store_category: {
+    type: String,
+    enum: ['company_store', 'franchisee_store'],
+    required: true,
+    default: 'franchisee_store',
+  },
+  // Link to configurable franchisee subtype (null = not a franchisee store)
+  franchisee_subtype_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'franchisee_subtypes',
+    default: null,
+  },
+  // Independent commission enable/disable — does not affect setup fee
+  commission_enabled: { type: Boolean, default: true },
+  // Independent setup cost enable/disable — does not affect commission
+  setup_cost_enabled: { type: Boolean, default: true },
+  // Setup cost amount (overrides one_time_fee when set)
+  setup_cost_amount:  { type: Number, min: 0, default: 0 },
+  // EPC onboarding geographic scope for this store type
+  epc_onboarding_scope: {
+    type: String,
+    enum: ['country', 'state', 'district'],
+    default: 'district',
+  },
+  // Whether BDE assignment is mandatory for Company Stores on this plan
+  bde_assignment_mandatory: { type: Boolean, default: false },
+
   description:     { type: String, default: null, trim: true, maxlength: 1000 },
   sort_order:      { type: Number, default: 0 },
   is_active:       { type: Boolean, default: true },
@@ -80,6 +116,7 @@ const schema = new mongoose.Schema({
 
 schema.index({ territory_level: 1, is_active: 1 });
 schema.index({ sort_order: 1 });
+schema.index({ store_category: 1, is_active: 1 });
 
 schema.virtual('id').get(function () { return this._id; });
 
