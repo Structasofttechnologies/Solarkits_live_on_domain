@@ -525,6 +525,9 @@ const get_reseller_me = async (req, res) => {
       is_pin_set:        Boolean(reseller.is_pin_set && reseller.security_pin_hash),
       pin_set_at:        reseller.pin_set_at || null,
       bank_details:      reseller.bank_details || null,
+      plan_name:         subscription?.plan_id?.name || null,
+      plan_id:           subscription?.plan_id?._id || subscription?.plan_id || null,
+      order_type_allowed: subscription?.plan_id?.order_type_allowed === 'both' ? 'po_order' : (subscription?.plan_id?.order_type_allowed || 'po_order'),
       warehouse_capacity: reseller.warehouse_capacity || {
         max_kits: 50,
         max_weight_kg: 10000,
@@ -2601,7 +2604,7 @@ const get_active_plans = async (req, res) => {
           moq_description:          p.moq_description || null,
 
           // ─── 3. Order Type Support ─────────────────────────────────────────────
-          order_type_allowed:       p.order_type_allowed || 'both',
+          order_type_allowed:       p.order_type_allowed === 'both' ? 'po_order' : (p.order_type_allowed || 'po_order'),
 
           description:               p.description,
           is_popular:                p.sort_order === 2 || p.sort_order === 3,

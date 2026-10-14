@@ -34,6 +34,7 @@ import {
   FiCpu,
   FiActivity,
   FiInfo,
+  FiUsers,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -54,25 +55,25 @@ const TERRITORY_LEVELS = [
 
 const ORDER_TYPES = [
   {
-    value: "both",
-    label: "Both (PO & Loose)",
-    description: "Allows both bulk Purchase Orders & on-demand loose kits",
-    icon: FiPackage,
-    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+    value: "loose_order",
+    label: "Loose Order",
+    description: "Direct individual kit / loose components on-demand dispatch",
+    icon: FiTruck,
+    badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400",
+  },
+  {
+    value: "combine_po_order",
+    label: "Combine PO Order",
+    description: "Pool demand across multiple EPC contractors into a combined PO",
+    icon: FiUsers,
+    badgeColor: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400",
   },
   {
     value: "po_order",
-    label: "PO Order Only",
-    description: "Strict Purchase Order fulfillment with scheduled lead-time",
+    label: "PO Order",
+    description: "Strict Purchase Order fulfillment for single EPC or Franchise inventory",
     icon: FiFileText,
-    badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  {
-    value: "loose_order",
-    label: "Loose Order Only",
-    description: "Direct individual kit / loose components on-demand dispatch",
-    icon: FiTruck,
-    badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    badgeColor: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400",
   },
 ];
 
@@ -128,7 +129,8 @@ function WarehouseBadge({ required, count, sqft }) {
 }
 
 function OrderTypeBadge({ orderType }) {
-  const cfg = ORDER_TYPES.find((ot) => ot.value === orderType) || ORDER_TYPES[0];
+  const normalized = orderType === "both" ? "po_order" : (orderType || "po_order");
+  const cfg = ORDER_TYPES.find((ot) => ot.value === normalized) || ORDER_TYPES[2];
   const Icon = cfg.icon;
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${cfg.badgeColor}`}>
@@ -269,7 +271,7 @@ function FormModal({ mode, initial, onClose, onSaved }) {
     warehouse_space_sqft: initial?.warehouse_space_sqft ?? 0,
 
     // Order Fulfillment Type
-    order_type_allowed: initial?.order_type_allowed || "both",
+    order_type_allowed: initial?.order_type_allowed === "both" ? "po_order" : (initial?.order_type_allowed || "po_order"),
 
     description: initial?.description || "",
     sort_order: initial?.sort_order ?? 0,

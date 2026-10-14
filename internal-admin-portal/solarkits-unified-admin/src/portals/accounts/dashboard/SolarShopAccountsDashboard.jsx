@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { FaHome, FaHandshake, FaBolt, FaCoins, FaUserCheck, FaBoxes } from "react-icons/fa";
-import { MdDashboard, MdPayments, MdShoppingCart, MdReceipt } from "react-icons/md";
+import { MdDashboard, MdPayments, MdShoppingCart, MdReceipt, MdOutlineVerifiedUser } from "react-icons/md";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
@@ -9,9 +9,8 @@ import Loader from "../components/Loader";
 
 const SolarShopAccountsHome = lazy(() => import("../pages/solar-shop/SolarShopAccountsHome"));
 const FranchisePlanPurchases = lazy(() => import("../pages/solar-shop/FranchisePlanPurchases"));
-const DirectEpcTransactions = lazy(() => import("../pages/solar-shop/DirectEpcTransactions"));
+const EpcOrdersManagement = lazy(() => import("../pages/solar-shop/EpcOrdersManagement"));
 const FranchiseCommissionTracking = lazy(() => import("../pages/solar-shop/FranchiseCommissionTracking"));
-const OnboardedEpcPurchases = lazy(() => import("../pages/solar-shop/OnboardedEpcPurchases"));
 const FranchiseePoOrdersAccounts = lazy(() => import("../pages/solar-shop/FranchiseePoOrdersAccounts"));
 const LooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/LooseOrders"));
 const Profile = lazy(() => import("../pages/Profile"));
@@ -40,19 +39,14 @@ const solarShopMenus = [
       path: "/account-panel/solar-shop/franchise-plans",
     },
     {
-      name: "Direct EPC Transactions",
+      name: "EPC Orders & Payments",
       icon: <FaBolt />,
-      path: "/account-panel/solar-shop/direct-epc-transactions",
+      path: "/account-panel/solar-shop/epc-orders",
     },
     {
       name: "Franchise Commission Tracking",
       icon: <FaCoins />,
       path: "/account-panel/solar-shop/franchise-commissions",
-    },
-    {
-      name: "Onboarded EPC Purchases",
-      icon: <FaUserCheck />,
-      path: "/account-panel/solar-shop/onboarded-epc-purchases",
     },
   ],
 ];
@@ -147,10 +141,34 @@ export default function SolarShopAccountsDashboard() {
                     }
                   />
                   <Route
+                    path="/epc-orders/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading EPC orders & payments..." />}>
+                        <EpcOrdersManagement />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/direct-epc-transactions/*"
                     element={
-                      <Suspense fallback={<Loader text="Loading direct EPC transactions..." />}>
-                        <DirectEpcTransactions />
+                      <Suspense fallback={<Loader text="Loading EPC orders & payments..." />}>
+                        <EpcOrdersManagement />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/onboarded-epc-purchases/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading EPC orders & payments..." />}>
+                        <EpcOrdersManagement />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/epc-offline-payments/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading EPC orders & payments..." />}>
+                        <EpcOrdersManagement />
                       </Suspense>
                     }
                   />
@@ -159,14 +177,6 @@ export default function SolarShopAccountsDashboard() {
                     element={
                       <Suspense fallback={<Loader text="Loading commission tracking..." />}>
                         <FranchiseCommissionTracking />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/onboarded-epc-purchases/*"
-                    element={
-                      <Suspense fallback={<Loader text="Loading onboarded EPC purchases..." />}>
-                        <OnboardedEpcPurchases />
                       </Suspense>
                     }
                   />

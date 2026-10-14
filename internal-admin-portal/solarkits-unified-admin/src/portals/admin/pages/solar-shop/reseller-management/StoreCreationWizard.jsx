@@ -27,10 +27,10 @@ import { setAlert } from "../../../features/alert.slice";
 const API_BASE = import.meta.env.VITE_API_URL;
 
 const getOrderTypeDisplay = (type) => {
-  if (type === "po_order") return "PO Order Only";
-  if (type === "loose_order") return "Loose Order Only";
-  if (type === "combined_po_orders") return "Combined PO Orders";
-  return "Both (PO & Loose)";
+  if (type === "loose_order") return "Loose Order";
+  if (type === "combine_po_order" || type === "combined_po_orders") return "Combine PO Order";
+  if (type === "po_order") return "PO Order";
+  return "PO Order";
 };
 
 export default function StoreCreationWizard() {

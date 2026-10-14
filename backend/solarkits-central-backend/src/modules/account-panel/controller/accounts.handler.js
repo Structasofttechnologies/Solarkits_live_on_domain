@@ -2393,8 +2393,9 @@ const get_pending_epc_franchise_orders = async (req, res) => {
     const { EpcOrder, FpoOrder, EpcAccount, Reseller } = require('../../admin-panel/models/india_solarshop_db');
 
     // 1. Fetch EPC orders awaiting stock procurement
+    // Orders that are paid/verified and not yet delivered or cancelled qualify for supplier procurement.
     const epcOrders = await EpcOrder.find({
-      order_status: { $in: ['confirmed', 'processing', 'pending'] },
+      order_status: { $nin: ['cancelled', 'delivered'] },
       payment_status: { $in: ['captured', 'pending_verification', 'pending'] },
     })
       .populate('epc_id', 'name email whatsapp gstin company_name gstin_trade_name gstin_legal_name')
@@ -2406,7 +2407,7 @@ const get_pending_epc_franchise_orders = async (req, res) => {
     // CRITICAL: Only paid/confirmed orders (Accounts payment verified) qualify for supplier procurement.
     // Master PO quota containers (order_type === 'po_order') await actual repeat kit orders and are excluded.
     const fpoOrders = await FpoOrder.find({
-      status: { $in: ['PAID', 'CONFIRMED'] },
+      status: { $nin: ['DRAFT', 'SUBMITTED', 'PENDING_PAYMENT', 'PAYMENT_PENDING_VERIFICATION', 'REJECTED', 'CANCELLED', 'DELIVERED', 'COMPLETED'] },
       order_type: { $ne: 'po_order' },
       deleted_at: null,
     })

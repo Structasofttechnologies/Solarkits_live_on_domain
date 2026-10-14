@@ -208,11 +208,25 @@ const schema = new mongoose.Schema(
     destination_pincode: { type: String, default: null },
     offline_payment: {
       payment_method: { type: String, default: null },
-      utr_number: { type: String, default: null },
+      utr_number: { type: String, default: null, trim: true, uppercase: true },
       amount_paid: { type: Number, default: 0 },
       payment_date: { type: Date, default: null },
       sender_bank_name: { type: String, default: null },
       receipt_url: { type: String, default: null },
+      receipt_filename: { type: String, default: null },
+      verification_status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+      verified_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      verified_at: { type: Date, default: null },
+      rejection_reason: { type: String, default: null, trim: true },
+      admin_approval_status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+      admin_approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      admin_approved_at: { type: Date, default: null },
+      admin_remarks: { type: String, default: null, trim: true },
+    },
+    payment_gateway_used: {
+      type: String,
+      enum: ['icici_ecollection', 'offline_utr', null],
+      default: null,
     },
 
     // ── Ownership & Creator Attribution ───────────────────────────────────────

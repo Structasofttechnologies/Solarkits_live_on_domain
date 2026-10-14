@@ -164,11 +164,11 @@ export default function PlansShowcase() {
                     <div className="p-2.5 sm:p-3 rounded-xl bg-purple-50/70 border border-purple-100 text-center">
                       <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Order Type</span>
                       <span className="text-xs sm:text-sm font-black text-purple-700">
-                        {p.order_type_allowed === "po_order"
-                          ? "PO Order Only"
-                          : p.order_type_allowed === "loose_order"
-                          ? "Loose Order Only"
-                          : "PO & Loose Orders"}
+                        {p.order_type_allowed === "loose_order"
+                          ? "Loose Order"
+                          : p.order_type_allowed === "combine_po_order"
+                          ? "Combine PO Order"
+                          : "PO Order"}
                       </span>
                     </div>
                   </div>

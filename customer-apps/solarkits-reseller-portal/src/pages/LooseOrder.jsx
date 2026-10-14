@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiShoppingCart,
@@ -67,6 +67,9 @@ function StatusBadge({ status }) {
 export default function LooseOrder() {
   const [searchParams] = useSearchParams();
   const queryPoId = searchParams.get("po_id");
+
+  const outletContext = useOutletContext?.() || {};
+  const allowedOrderType = outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
 
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
@@ -499,20 +502,43 @@ export default function LooseOrder() {
             >
               <FiRefreshCw size={17} className={loading ? "animate-spin" : ""} />
             </button>
-            <button
-              onClick={() => {
-                setFormError("");
-                setCreateModal(true);
-              }}
-              disabled={!planData?.has_active_plan && !planData?.combo_kits?.length}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FiPlus size={18} />
-              <span>Place Loose Solar Kit Order</span>
-            </button>
+            {allowedOrderType === "loose_order" ? (
+              <button
+                onClick={() => {
+                  setFormError("");
+                  setCreateModal(true);
+                }}
+                disabled={!planData?.has_active_plan && !planData?.combo_kits?.length}
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiPlus size={18} />
+                <span>Place Loose Solar Kit Order</span>
+              </button>
+            ) : (
+              <Link
+                to="/po-order"
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95"
+              >
+                <FiArrowRight size={18} />
+                <span>Go to PO Orders</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
+
+      {/* ── Advisory Banner for Non-Loose Order Stores ───────────────────────── */}
+      {allowedOrderType !== "loose_order" && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <FiAlertCircle size={18} className="text-amber-600 shrink-0" />
+            <span>Your store is configured for <strong>{allowedOrderType === "combine_po_order" ? "Combine PO Orders" : "PO Orders"}</strong>. Direct Loose Order creation is not permitted for your Store Type.</span>
+          </div>
+          <Link to="/po-order" className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-colors shrink-0">
+            Open PO Orders
+          </Link>
+        </div>
+      )}
 
       {/* ── ACTIVE PRICE-LOCKED PO QUOTA BANNER ───────────────────────────────── */}
       {activePos.length > 0 && (

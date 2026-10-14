@@ -442,7 +442,8 @@ async function createEpcOfflineOrder({
       reseller_total_margin_paise: totalResellerMarginPaise,
       platform_total_commission_paise: totalPlatformCommissionPaise,
       order_status: 'pending',
-      payment_method: 'offline_bank_transfer',
+      payment_method: offline_payment_data.payment_method || (offline_payment_data.payment_gateway_used === 'icici_ecollection' ? 'icici_ecollection' : 'offline_bank_transfer'),
+      payment_gateway_used: offline_payment_data.payment_gateway_used || (offline_payment_data.payment_method === 'icici_ecollection' ? 'icici_ecollection' : 'bank_transfer'),
       payment_status: 'pending_verification',
       payment_reference: cleanUtr,
       offline_payment: {
@@ -454,6 +455,7 @@ async function createEpcOfflineOrder({
         sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
         account_holder_name: account_holder_name ? account_holder_name.trim() : null,
         verification_status: 'pending',
+        admin_approval_status: 'pending',
         resubmitted_count: 0,
       },
       is_end_customer_sale: true,

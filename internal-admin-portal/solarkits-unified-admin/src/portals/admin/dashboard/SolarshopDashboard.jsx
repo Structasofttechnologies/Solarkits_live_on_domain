@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock, FiPlusCircle } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock, FiPlusCircle, FiCreditCard } from "react-icons/fi";
 
 // ── Margin & Commission Settings Module ─────────────────────────────────────────
 const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
@@ -38,6 +38,10 @@ const QuoteAnalyticsAdmin = lazy(() => import("../pages/solar-shop/quote-setting
 // ── Know My Margin (KMM) Estimator Module ────────────────────────────────────
 const ProjectBomSettingsAdmin = lazy(() => import("../pages/solar-shop/project-bom-settings/ProjectBomSettings"));
 const EstimatorSettingsAdmin = lazy(() => import("../pages/solar-shop/estimator-settings/EstimatorSettings"));
+
+// ── Region Payment Configuration & Offline Approval Queue ───────────────────
+const RegionPaymentConfig = lazy(() => import("../pages/solar-shop/payment-configuration/RegionPaymentConfig"));
+const OfflineApprovalQueue = lazy(() => import("../pages/solar-shop/payment-configuration/OfflineApprovalQueue"));
 
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
@@ -440,6 +444,27 @@ const menus = [
                     name: "Estimator Settings",
                     icon: <FiSettings />,
                     path: "/admin-panel/solar-shop/estimator-settings",
+                    unique_id: "00000000"
+                },
+            ]
+        },
+        // ── Region Payment Configuration & Offline Approval Queue ───────────
+        {
+            name: "Payment Configuration",
+            icon: <FiCreditCard />,
+            path: "/admin-panel/solar-shop/payment-configuration",
+            unique_id: "00000000",
+            subMenu: [
+                {
+                    name: "Region Payment Settings",
+                    icon: <FiSliders />,
+                    path: "/admin-panel/solar-shop/payment-configuration",
+                    unique_id: "00000000"
+                },
+                {
+                    name: "Offline Approval Queue",
+                    icon: <FiCheckSquare />,
+                    path: "/admin-panel/solar-shop/payment-configuration/offline-approvals",
                     unique_id: "00000000"
                 },
             ]
@@ -1429,6 +1454,39 @@ export default function SolarShopDashboard() {
                                         }
                                     />
 
+                                    {/* ── Region Payment Configuration & Offline Approval Queue ──── */}
+                                    <Route
+                                        path="/payment-configuration"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Configuration..." />}>
+                                                <RegionPaymentConfig />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/payment-configuration"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Configuration..." />}>
+                                                <RegionPaymentConfig />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/payment-configuration/offline-approvals"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Offline Approval Queue..." />}>
+                                                <OfflineApprovalQueue />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/payment-configuration/offline-approvals"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Offline Approval Queue..." />}>
+                                                <OfflineApprovalQueue />
+                                            </Suspense>
+                                        }
+                                    />
 
                                 </Routes>
                             </motion.div>

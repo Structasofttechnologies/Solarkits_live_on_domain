@@ -24,11 +24,16 @@ router.post('/franchise-commissions/:id/status', check_auth, solarshop_handler.u
 // 6. Onboarded EPC Purchases & Analytics
 router.get('/onboarded-epc-purchases', check_auth, solarshop_handler.get_onboarded_epc_purchases);
 
+// 6.1 Unified EPC Orders & Payment Management
+router.get('/epc-orders-unified', check_auth, solarshop_handler.get_unified_epc_orders);
+
 // 7. Transaction Details for Side Drawer / Modal
 router.get('/transaction-details/:type/:id', check_auth, solarshop_handler.get_transaction_details);
 
-// 8. EPC Offline Payment Verification (Approve / Reject) & Logistics
+// 8. Offline Payment Verification Queue (EPC + FPO / Loose Orders) & Logistics
+router.get('/offline-orders', check_auth, solarshop_handler.get_offline_orders_for_verification);
 router.post('/epc-orders/:id/verify-payment', check_auth, solarshop_handler.verify_epc_order_payment);
+router.post('/fpo-orders/:id/verify-payment', check_auth, solarshop_handler.verify_fpo_order_payment);
 router.post('/epc-orders/:id/dispatch', check_auth, solarshop_handler.dispatch_epc_order);
 router.post('/epc-orders/:id/deliver', check_auth, solarshop_handler.deliver_epc_order);
 

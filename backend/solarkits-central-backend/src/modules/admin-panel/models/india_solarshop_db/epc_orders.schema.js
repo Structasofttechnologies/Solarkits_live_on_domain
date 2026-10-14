@@ -87,8 +87,14 @@ const schema = new mongoose.Schema({
   commission_notes: { type: String, default: null },
   payment_method: {
     type: String,
-    enum: ['offline_bank_transfer'],
+    enum: ['offline_bank_transfer', 'icici_ecollection'],
     default: 'offline_bank_transfer',
+  },
+  // Which payment gateway was actually used for this order
+  payment_gateway_used: {
+    type: String,
+    enum: ['icici_ecollection', 'offline_utr', null],
+    default: null,
   },
   payment_status: {
     type: String,
@@ -186,6 +192,11 @@ const schema = new mongoose.Schema({
     rejection_reason:    { type: String, default: null, trim: true },
     resubmitted_count:   { type: Number, default: 0 },
     notes:               { type: String, default: null },
+    // ── Admin Approval (after Accounts verification) ───────────────────────
+    admin_approval_status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    admin_approved_by:     { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    admin_approved_at:     { type: Date, default: null },
+    admin_remarks:         { type: String, default: null, trim: true },
   },
 
   // ── Tax Invoice Details ──────────────────────────────────────────────────

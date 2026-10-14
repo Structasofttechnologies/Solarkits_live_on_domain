@@ -191,5 +191,28 @@ export const getOrderStageDetails = async (orderType, id) => {
   return res.data;
 };
 
+export const getOfflineOrdersForVerification = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/offline-orders${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const verifyFpoOrderPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/fpo-orders/${id}/verify-payment`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getUnifiedEpcOrders = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/epc-orders-unified${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 
 

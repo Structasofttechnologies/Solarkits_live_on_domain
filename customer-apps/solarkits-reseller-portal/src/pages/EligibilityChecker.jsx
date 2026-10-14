@@ -506,11 +506,11 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                       <div>
                         <p className="text-[10px] font-bold uppercase text-slate-400">Order Fulfillment</p>
                         <p className="mt-0.5 text-xs font-black text-purple-700">
-                          {selectedPlan.order_type_allowed === "po_order"
-                            ? "PO Order Only"
-                            : selectedPlan.order_type_allowed === "loose_order"
-                            ? "Loose Order Only"
-                            : "PO & Loose Orders"}
+                          {selectedPlan.order_type_allowed === "loose_order"
+                            ? "Loose Order"
+                            : selectedPlan.order_type_allowed === "combine_po_order"
+                            ? "Combine PO Order"
+                            : "PO Order"}
                         </p>
                       </div>
                     </div>

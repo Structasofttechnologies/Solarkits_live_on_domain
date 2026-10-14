@@ -225,11 +225,11 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                           Order Type
                         </p>
                         <p className="mt-1 text-xs font-black text-purple-700 line-clamp-1">
-                          {plan.order_type_allowed === "po_order"
-                            ? "PO Only"
-                            : plan.order_type_allowed === "loose_order"
-                              ? "Loose Only"
-                              : "Both"}
+                          {plan.order_type_allowed === "loose_order"
+                            ? "Loose Order"
+                            : plan.order_type_allowed === "combine_po_order"
+                              ? "Combine PO"
+                              : "PO Order"}
                         </p>
                       </div>
                     </div>

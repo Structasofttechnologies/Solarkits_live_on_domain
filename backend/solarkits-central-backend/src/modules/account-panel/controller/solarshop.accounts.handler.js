@@ -1912,6 +1912,222 @@ const verify_epc_order_payment = async (req, res) => {
 };
 
 /**
+ * 8.1 Accounts Verification Queue: List Offline Orders (EPC + FPO / Loose)
+ */
+const get_offline_orders_for_verification = async (req, res) => {
+  try {
+    const {
+      status = 'pending', // 'pending' | 'approved' | 'rejected' | 'all'
+      order_type = 'all', // 'all' | 'epc' | 'fpo' | 'loose'
+      page = 1,
+      limit = 20,
+      search,
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const fetchEpc = order_type === 'all' || order_type === 'epc';
+    const fetchFpo = order_type === 'all' || order_type === 'fpo';
+    const fetchLoose = order_type === 'all' || order_type === 'loose';
+
+    let epcOrders = [];
+    let fpoOrders = [];
+
+    // Query EPC Orders
+    if (fetchEpc) {
+      const epcQuery = {
+        'offline_payment.utr_number': { $ne: null },
+      };
+      if (status && status !== 'all') {
+        epcQuery['offline_payment.verification_status'] = status;
+      }
+      if (search && search.trim()) {
+        const sRegex = new RegExp(search.trim(), 'i');
+        epcQuery.$or = [
+          { order_number: sRegex },
+          { 'offline_payment.utr_number': sRegex },
+          { 'customer_details.name': sRegex },
+          { 'customer_details.company_name': sRegex },
+        ];
+      }
+
+      epcOrders = await EpcOrder.find(epcQuery)
+        .populate('epc_id', 'company_name contact_person email phone whatsapp')
+        .populate('offline_payment.verified_by', 'name email')
+        .sort({ created_at: -1 })
+        .lean();
+    }
+
+    // Query FPO / Loose Orders
+    if (fetchFpo || fetchLoose) {
+      const fpoQuery = {
+        'offline_payment.utr_number': { $ne: null },
+      };
+      if (status && status !== 'all') {
+        fpoQuery['offline_payment.verification_status'] = status;
+      }
+      if (fetchFpo && !fetchLoose) {
+        fpoQuery.order_type = 'po_order';
+      } else if (!fetchFpo && fetchLoose) {
+        fpoQuery.order_type = { $in: ['loose_order', 'loose_kit_order'] };
+      }
+
+      if (search && search.trim()) {
+        const sRegex = new RegExp(search.trim(), 'i');
+        fpoQuery.$or = [
+          { po_number: sRegex },
+          { 'offline_payment.utr_number': sRegex },
+          { 'customer_details.name': sRegex },
+          { 'customer_details.company_name': sRegex },
+        ];
+      }
+
+      fpoOrders = await FpoOrder.find(fpoQuery)
+        .populate('franchisee_id', 'business_name full_name phone email mobile')
+        .populate('offline_payment.verified_by', 'name email')
+        .sort({ created_at: -1 })
+        .lean();
+    }
+
+    // Map into unified presentation structure
+    const unifiedOrders = [
+      ...epcOrders.map((o) => ({
+        _id: o._id,
+        id: o._id,
+        order_type: 'epc',
+        order_type_label: 'EPC Order',
+        order_number: o.order_number,
+        customer_name: o.customer_details?.company_name || o.customer_details?.name || o.epc_id?.company_name || 'EPC Customer',
+        customer_phone: o.customer_details?.phone || o.epc_id?.whatsapp || o.epc_id?.phone || '-',
+        customer_email: o.customer_details?.email || o.epc_id?.email || '-',
+        state_name: o.delivery_address?.state_name || o.delivery_address?.state || o.state_name || '-',
+        district_name: o.delivery_address?.district_name || o.delivery_address?.district || o.district_name || '-',
+        total_amount: o.pricing?.total_amount || (o.grand_total_paise ? o.grand_total_paise / 100 : 0) || o.total_amount || 0,
+        amount_paid: o.offline_payment?.amount_paid || 0,
+        utr_number: o.offline_payment?.utr_number || '-',
+        receipt_url: o.offline_payment?.receipt_url || null,
+        payment_date: o.offline_payment?.payment_date || null,
+        sender_bank: o.offline_payment?.sender_bank_name || '-',
+        account_holder: o.offline_payment?.account_holder_name || '-',
+        verification_status: o.offline_payment?.verification_status || 'pending',
+        verified_by: o.offline_payment?.verified_by?.name || null,
+        verified_at: o.offline_payment?.verified_at || null,
+        rejection_reason: o.offline_payment?.rejection_reason || null,
+        admin_approval_status: o.offline_payment?.admin_approval_status || 'pending',
+        submitted_at: o.created_at,
+        created_at: o.created_at,
+        raw_order: o,
+      })),
+      ...fpoOrders.map((o) => ({
+        _id: o._id,
+        id: o._id,
+        order_type: (o.order_type === 'loose_order' || o.order_type === 'loose_kit_order') ? 'loose' : 'fpo',
+        order_type_label: (o.order_type === 'loose_order' || o.order_type === 'loose_kit_order') ? 'Loose Order' : 'Franchisee PO',
+        order_number: o.po_number,
+        customer_name: o.customer_details?.company_name || o.customer_details?.name || o.franchisee_id?.business_name || 'Franchisee Partner',
+        customer_phone: o.customer_details?.phone || o.franchisee_id?.mobile || o.franchisee_id?.phone || '-',
+        customer_email: o.customer_details?.email || o.franchisee_id?.email || '-',
+        state_name: o.destination_address || '-',
+        district_name: o.destination_pincode || '-',
+        total_amount: (o.net_payable_paise ? o.net_payable_paise / 100 : 0) || o.offline_payment?.amount_paid || 0,
+        amount_paid: o.offline_payment?.amount_paid || 0,
+        utr_number: o.offline_payment?.utr_number || '-',
+        receipt_url: o.offline_payment?.receipt_url || null,
+        payment_date: o.offline_payment?.payment_date || null,
+        sender_bank: o.offline_payment?.sender_bank_name || '-',
+        account_holder: '-',
+        verification_status: o.offline_payment?.verification_status || 'pending',
+        verified_by: o.offline_payment?.verified_by?.name || null,
+        verified_at: o.offline_payment?.verified_at || null,
+        rejection_reason: o.offline_payment?.rejection_reason || null,
+        admin_approval_status: o.offline_payment?.admin_approval_status || 'pending',
+        submitted_at: o.created_at,
+        created_at: o.created_at,
+        raw_order: o,
+      })),
+    ];
+
+    unifiedOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    const total = unifiedOrders.length;
+    const paginated = unifiedOrders.slice(skip, skip + limitNum);
+
+    // Compute stats
+    const pendingCount = unifiedOrders.filter((u) => u.verification_status === 'pending').length;
+    const approvedCount = unifiedOrders.filter((u) => u.verification_status === 'approved').length;
+    const rejectedCount = unifiedOrders.filter((u) => u.verification_status === 'rejected').length;
+
+    return res.status(200).json({
+      status: 'success',
+      data: paginated,
+      stats: {
+        total,
+        pending: pendingCount,
+        approved: approvedCount,
+        rejected: rejectedCount,
+      },
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum) || 1,
+      },
+    });
+  } catch (error) {
+    console.error('Error in get_offline_orders_for_verification:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * 8.2 Accounts Department Verify FPO / Loose Order Offline Payment
+ */
+const verify_fpo_order_payment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, rejection_reason, notes } = req.body;
+    const admin_user_id = req.user?.id || req.user?._id;
+
+    if (!['approved', 'rejected'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'Decision must be approved or rejected' });
+    }
+
+    const order = await FpoOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Order record not found' });
+    }
+
+    order.offline_payment = order.offline_payment || {};
+    order.offline_payment.verification_status = decision;
+    order.offline_payment.verified_by = admin_user_id;
+    order.offline_payment.verified_at = new Date();
+
+    if (decision === 'approved') {
+      order.offline_payment.admin_approval_status = 'pending';
+      order.offline_payment.rejection_reason = null;
+    } else {
+      order.offline_payment.rejection_reason = rejection_reason || 'Payment rejected by Accounts department';
+      order.status = 'REJECTED';
+    }
+
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: decision === 'approved'
+        ? `Order #${order.po_number} payment verified by Accounts. Queued for Admin approval.`
+        : `Order #${order.po_number} payment rejected.`,
+      data: order,
+    });
+  } catch (error) {
+    console.error('Error in verify_fpo_order_payment:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
  * 9. Operations / Warehouse Dispatch Entry
  */
 const dispatch_epc_order = async (req, res) => {
@@ -2352,7 +2568,324 @@ const get_order_stage_details = async (req, res) => {
   }
 };
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Unified EPC Orders & Payment Management Handler
+ * Consolidates Direct EPC, Onboarded Franchisee EPC, and Offline Payment Verifications
+ * Supports 10 advanced filters, KPI summaries, and rich kit enrichment.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+function resolveEpcDateRange(datePreset, startDate, endDate) {
+  const now = new Date();
+  if (startDate && endDate) {
+    return {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate)
+    };
+  }
+  if (datePreset === 'today') {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return { $gte: start, $lte: end };
+  }
+  if (datePreset === 'yesterday') {
+    const y = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const start = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 0, 0, 0);
+    const end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+    return { $gte: start, $lte: end };
+  }
+  if (datePreset === 'last_7_days') {
+    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return { $gte: start, $lte: now };
+  }
+  if (datePreset === 'last_30_days') {
+    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { $gte: start, $lte: now };
+  }
+  if (datePreset === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+    return { $gte: start, $lte: now };
+  }
+  return null;
+}
+
+const get_unified_epc_orders = async (req, res) => {
+  try {
+    const {
+      tab = 'all',
+      payment_mode = 'all',
+      verification_status = 'all',
+      admin_approval_status = 'all',
+      channel = 'all',
+      order_status = 'all',
+      payment_status = 'all',
+      partner_id,
+      state_name,
+      date_preset = 'all',
+      start_date,
+      end_date,
+      search,
+      page = 1,
+      limit = 15,
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 15));
+    const skip = (pageNum - 1) * limitNum;
+
+    const andConditions = [];
+
+    // 1. Tab-based quick segment
+    if (tab === 'offline_pending') {
+      andConditions.push({
+        'offline_payment.utr_number': { $ne: null },
+        'offline_payment.verification_status': 'pending',
+      });
+    } else if (tab === 'online') {
+      andConditions.push({
+        $or: [
+          { payment_method: 'icici_ecollection' },
+          { payment_gateway_used: 'icici_ecollection' }
+        ]
+      });
+    } else if (tab === 'direct') {
+      andConditions.push({
+        $or: [{ reseller_id: null }, { routing_source: 'direct_fallback' }]
+      });
+    } else if (tab === 'onboarded') {
+      andConditions.push({
+        reseller_id: { $ne: null },
+        routing_source: { $ne: 'direct_fallback' }
+      });
+    }
+
+    // 2. Payment Mode filter
+    if (payment_mode === 'online') {
+      andConditions.push({
+        $or: [
+          { payment_method: 'icici_ecollection' },
+          { payment_gateway_used: 'icici_ecollection' }
+        ]
+      });
+    } else if (payment_mode === 'offline') {
+      andConditions.push({
+        payment_method: { $ne: 'icici_ecollection' },
+        payment_gateway_used: { $ne: 'icici_ecollection' }
+      });
+    }
+
+    // 3. Accounts Verification Status filter
+    if (verification_status && verification_status !== 'all') {
+      andConditions.push({ 'offline_payment.verification_status': verification_status });
+    }
+
+    // 4. Admin Approval Status filter
+    if (admin_approval_status && admin_approval_status !== 'all') {
+      andConditions.push({ 'offline_payment.admin_approval_status': admin_approval_status });
+    }
+
+    // 5. Channel / Attribution filter
+    if (channel === 'direct') {
+      andConditions.push({
+        $or: [{ reseller_id: null }, { routing_source: 'direct_fallback' }]
+      });
+    } else if (channel === 'onboarded') {
+      andConditions.push({
+        reseller_id: { $ne: null },
+        routing_source: { $ne: 'direct_fallback' }
+      });
+    }
+
+    // 6. Order lifecycle status filter
+    if (order_status && order_status !== 'all') {
+      andConditions.push({ order_status });
+    }
+
+    // 7. Payment status filter
+    if (payment_status && payment_status !== 'all') {
+      if (payment_status === 'paid') {
+        andConditions.push({ payment_status: { $in: ['captured', 'paid', 'success'] } });
+      } else if (payment_status === 'pending') {
+        andConditions.push({ payment_status: { $in: ['pending', 'pending_verification'] } });
+      } else if (payment_status === 'failed') {
+        andConditions.push({ payment_status: { $in: ['failed', 'rejected'] } });
+      } else if (payment_status === 'refunded') {
+        andConditions.push({ payment_status: 'refunded' });
+      }
+    }
+
+    // 8. Partner / Franchisee filter
+    if (partner_id && mongoose.Types.ObjectId.isValid(partner_id)) {
+      andConditions.push({ reseller_id: new mongoose.Types.ObjectId(partner_id) });
+    }
+
+    // 9. State filter
+    if (state_name && state_name !== 'all') {
+      andConditions.push({
+        $or: [
+          { 'delivery_address.state_name': new RegExp(state_name, 'i') },
+          { 'delivery_address.state': new RegExp(state_name, 'i') }
+        ]
+      });
+    }
+
+    // 10. Date filter
+    const dateRange = resolveEpcDateRange(date_preset, start_date, end_date);
+    if (dateRange) {
+      andConditions.push({ created_at: dateRange });
+    }
+
+    // 11. Search query
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      andConditions.push({
+        $or: [
+          { order_number: sRegex },
+          { 'offline_payment.utr_number': sRegex },
+          { payment_reference: sRegex },
+          { 'delivery_address.contact_name': sRegex },
+          { 'delivery_address.contact_phone': sRegex },
+          { 'customer_details.name': sRegex },
+          { 'customer_details.phone': sRegex },
+        ]
+      });
+    }
+
+    const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
+
+    const totalMatching = await EpcOrder.countDocuments(finalQuery);
+
+    const orders = await EpcOrder.find(finalQuery)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .populate('epc_id', 'name company_name email whatsapp phone gstin address pincode district_name state_name')
+      .populate('reseller_id', 'business_name mobile email gst_number contact_person')
+      .populate('offline_payment.verified_by', 'name email')
+      .populate('offline_payment.admin_approved_by', 'name email')
+      .lean();
+
+    const allKitIds = [];
+    const allProductIds = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(i => {
+        if (i.kit_id) allKitIds.push(i.kit_id);
+        if (i.product_id) allProductIds.push(i.product_id);
+      });
+    });
+
+    const { kitLookup, productLookup } = await enrichComboKitDetails(allKitIds, allProductIds);
+
+    const enrichedOrders = orders.map((o) => {
+      const enrichedItems = (o.items || []).map(i => {
+        const kitInfo = i.kit_id ? kitLookup[i.kit_id.toString()] : null;
+        const prodInfo = i.product_id ? productLookup[i.product_id.toString()] : null;
+        return {
+          ...i,
+          item_name: (i.item_name && i.item_name !== 'Solar Kit') ? i.item_name : (kitInfo?.name || prodInfo?.name || i.item_name || 'Solar Kit'),
+          image: kitInfo?.image || prodInfo?.image || i.image || null,
+          capacity: kitInfo?.capacity || i.capacity || null,
+          description: kitInfo?.description || prodInfo?.description || null,
+        };
+      });
+
+      const isDirect = !o.reseller_id || o.routing_source === 'direct_fallback';
+      const grandTotal = (o.grand_total_paise ? o.grand_total_paise / 100 : 0) || o.total_amount || (o.pricing?.total_amount || 0);
+      const commissionAmount = isDirect ? 0 : ((o.reseller_total_margin_paise || 0) / 100);
+      const isOnline = o.payment_method === 'icici_ecollection' || o.payment_gateway_used === 'icici_ecollection';
+
+      return {
+        ...o,
+        items: enrichedItems,
+        is_direct: isDirect,
+        channel_type: isDirect ? 'direct' : 'onboarded',
+        channel_label: isDirect ? 'Direct EPC' : 'Onboarded Franchisee',
+        grand_total: grandTotal,
+        commission_amount: commissionAmount,
+        is_online: isOnline,
+        payment_mode_label: isOnline ? 'Online (ICICI VAN)' : 'Offline Bank Transfer',
+        buyer_name: o.epc_id?.company_name || o.epc_id?.name || o.delivery_address?.contact_name || 'EPC Buyer',
+        buyer_phone: o.epc_id?.whatsapp || o.epc_id?.phone || o.delivery_address?.contact_phone || '-',
+        buyer_state: o.delivery_address?.state_name || o.delivery_address?.state || o.epc_id?.state_name || '-',
+        buyer_district: o.delivery_address?.district_name || o.delivery_address?.district || o.epc_id?.district_name || '-',
+        franchisee_name: isDirect ? null : (o.reseller_id?.business_name || 'Assigned Franchisee'),
+      };
+    });
+
+    // Compute consolidated stats across all EPC orders
+    const allEpcOrders = await EpcOrder.find({}, {
+      grand_total_paise: 1,
+      total_amount: 1,
+      pricing: 1,
+      payment_method: 1,
+      payment_gateway_used: 1,
+      payment_status: 1,
+      reseller_id: 1,
+      routing_source: 1,
+      reseller_total_margin_paise: 1,
+      offline_payment: 1,
+    }).lean();
+
+    let totalVolume = 0;
+    let onlineVolume = 0;
+    let onlineCount = 0;
+    let offlineCount = 0;
+    let offlinePendingCount = 0;
+    let totalCommissions = 0;
+    let directCount = 0;
+    let onboardedCount = 0;
+
+    allEpcOrders.forEach(o => {
+      const amt = (o.grand_total_paise ? o.grand_total_paise / 100 : 0) || o.total_amount || 0;
+      totalVolume += amt;
+
+      const isOnline = o.payment_method === 'icici_ecollection' || o.payment_gateway_used === 'icici_ecollection';
+      if (isOnline) {
+        onlineCount++;
+        onlineVolume += amt;
+      } else {
+        offlineCount++;
+        if (o.offline_payment?.utr_number && o.offline_payment?.verification_status === 'pending') {
+          offlinePendingCount++;
+        }
+      }
+
+      const isDirect = !o.reseller_id || o.routing_source === 'direct_fallback';
+      if (isDirect) {
+        directCount++;
+      } else {
+        onboardedCount++;
+        totalCommissions += ((o.reseller_total_margin_paise || 0) / 100);
+      }
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: enrichedOrders,
+      total: totalMatching,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(totalMatching / limitNum) || 1,
+      stats: {
+        total_volume: Math.round(totalVolume * 100) / 100,
+        total_orders: allEpcOrders.length,
+        online_count: onlineCount,
+        online_volume: Math.round(onlineVolume * 100) / 100,
+        offline_count: offlineCount,
+        offline_pending_count: offlinePendingCount,
+        total_commissions: Math.round(totalCommissions * 100) / 100,
+        direct_count: directCount,
+        onboarded_count: onboardedCount,
+      },
+    });
+  } catch (error) {
+    console.error('Error in get_unified_epc_orders:', error);
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
 module.exports = {
+  get_unified_epc_orders,
   get_dashboard_stats,
   get_recent_transactions,
   get_franchise_plan_purchases,
@@ -2363,6 +2896,8 @@ module.exports = {
   get_onboarded_epc_purchases,
   get_transaction_details,
   verify_epc_order_payment,
+  get_offline_orders_for_verification,
+  verify_fpo_order_payment,
   dispatch_epc_order,
   deliver_epc_order,
   get_epc_po_payments,

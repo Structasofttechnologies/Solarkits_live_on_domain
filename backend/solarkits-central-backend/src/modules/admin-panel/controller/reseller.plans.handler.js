@@ -150,7 +150,7 @@ const list_reseller_plans = async (req, res) => {
         moq_description:          r.moq_description || null,
 
         // ─── 3. Order Type Support ─────────────────────────────────────────────
-        order_type_allowed:       r.order_type_allowed || 'both',
+        order_type_allowed:       r.order_type_allowed === 'both' ? 'po_order' : (r.order_type_allowed || 'po_order'),
 
         // ─── 4. Company Fixed Franchisee Margins & Commissions ──────────────────
         default_dealer_margin:      r.default_dealer_margin ?? 5,
@@ -168,7 +168,7 @@ const list_reseller_plans = async (req, res) => {
         setup_cost_amount:         r.setup_cost_amount != null ? Number(r.setup_cost_amount) : (r.one_time_fee || 0),
         epc_onboarding_scope:      r.epc_onboarding_scope || r.territory_level || 'district',
         bde_assignment_mandatory:  r.bde_assignment_mandatory ?? (r.store_category === 'company_store'),
-        order_type_allocation:     r.order_type_allowed || 'both',
+        order_type_allocation:     r.order_type_allowed === 'both' ? 'po_order' : (r.order_type_allowed || 'po_order'),
 
         description:               r.description,
         sort_order:                r.sort_order,
@@ -277,7 +277,7 @@ const add_reseller_plan = async (req, res) => {
       moq_description:          moq_description ? moq_description.trim() : null,
 
       // 3. Order Type Support
-      order_type_allowed:       ['po_order', 'loose_order', 'both'].includes(order_type_allowed) ? order_type_allowed : 'both',
+      order_type_allowed:       ['loose_order', 'combine_po_order', 'po_order'].includes(order_type_allowed) ? order_type_allowed : 'po_order',
 
       // 4. Fixed Dealer Margin & Commission
       default_dealer_margin:      req.body.default_dealer_margin != null ? Number(req.body.default_dealer_margin) : 5,
@@ -436,8 +436,8 @@ const update_reseller_plan = async (req, res) => {
     if (fields.moq_description !== undefined) updateData.moq_description = fields.moq_description ? fields.moq_description.trim() : null;
 
     // 3. Order Type Support
-    if (fields.order_type_allowed && ['po_order', 'loose_order', 'both'].includes(fields.order_type_allowed)) {
-      updateData.order_type_allowed = fields.order_type_allowed;
+    if (fields.order_type_allowed && ['loose_order', 'combine_po_order', 'po_order', 'both'].includes(fields.order_type_allowed)) {
+      updateData.order_type_allowed = fields.order_type_allowed === 'both' ? 'po_order' : fields.order_type_allowed;
     }
 
     // 4. Fixed Dealer Margin & Commission

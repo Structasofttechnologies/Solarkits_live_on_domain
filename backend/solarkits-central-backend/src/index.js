@@ -167,6 +167,9 @@ adminRouter.use('/warehouse',                    require('./modules/warehouse-pa
 // ─── Admin Notification System & Real-Time Stream ────────────────────────────
 adminRouter.use('/notifications',                require('./modules/admin-panel/routes/admin.notifications.route'));
 
+// ─── Region-wise Payment Gateway Configuration & Order Processing ─────────
+adminRouter.use('/payment-config',                require('./modules/admin-panel/routes/region.payment.config.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/admin-api', adminRouter);

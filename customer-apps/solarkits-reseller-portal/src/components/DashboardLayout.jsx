@@ -191,7 +191,23 @@ export default function DashboardLayout() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const filteredNav = NAV_ITEMS.filter(
+  const allowedOrderType = reseller?.order_type_allowed || reseller?.active_subscription?.plan_id?.order_type_allowed || "po_order";
+
+  const filteredNav = NAV_ITEMS.map((item) => {
+    if (item.name === "My Orders" && item.children) {
+      let filteredChildren = [];
+      if (allowedOrderType === "loose_order") {
+        filteredChildren = [{ name: "Loose Orders", icon: FiTag, path: "/loose-order" }];
+      } else if (allowedOrderType === "combine_po_order") {
+        filteredChildren = [{ name: "Combine PO Orders", icon: FiBox, path: "/po-order" }];
+      } else {
+        // po_order
+        filteredChildren = [{ name: "PO Orders", icon: FiBox, path: "/po-order" }];
+      }
+      return { ...item, children: filteredChildren };
+    }
+    return item;
+  }).filter(
     (item) => !(item.path === "/kyc" && reseller?.kyc_status === "verified")
   );
 
@@ -849,7 +865,7 @@ export default function DashboardLayout() {
 
         {/* Page Body */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto scrollbar-hover min-h-0" style={{ background: "var(--color-bg)" }}>
-          <Outlet context={{ reseller, refreshUser: fetchMe }} />
+          <Outlet context={{ reseller, refreshUser: fetchMe, allowedOrderType }} />
         </main>
       </div>
 

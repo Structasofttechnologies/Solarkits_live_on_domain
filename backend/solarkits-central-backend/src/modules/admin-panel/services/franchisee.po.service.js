@@ -151,11 +151,26 @@ async function createPoDraft({
       reseller_id: franchisee_id,
       status: 'active',
     })
+      .populate('plan_id')
       .sort({ start_date: -1 })
       .lean();
     if (!subscription) throw new Error('No active plan subscription found for this franchisee.');
 
-    plan_id = subscription.plan_id;
+    const activePlan = subscription.plan_id;
+    plan_id = activePlan?._id || subscription.plan_id;
+
+    // Enforce Store Type Order Fulfillment Rules
+    const allowedType = activePlan?.order_type_allowed;
+    if (allowedType === 'loose_order') {
+      throw new Error('Your Store Type only permits Loose Orders. Purchase Orders cannot be placed under this plan.');
+    }
+    if (allowedType === 'combine_po_order' && po_category !== 'COMBINE_PO') {
+      throw new Error('Your Store Type only permits Combine PO Orders. Please select Combine PO (Multi-EPC).');
+    }
+    if (allowedType === 'po_order' && po_category === 'COMBINE_PO') {
+      throw new Error('Your Store Type only permits standard Single PO Orders. Combine PO is not allowed under this plan.');
+    }
+
     custDetails = {
       name: franchisee.contact_person || franchisee.name || custDetails.name,
       company_name: franchisee.business_name || custDetails.company_name,
