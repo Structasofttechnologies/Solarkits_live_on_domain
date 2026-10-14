@@ -68,4 +68,12 @@ const solarshop_handler = require('../controller/solarshop.accounts.handler');
 router.use('/accounts/solar-shop', solarshop_accounts_route);
 router.get('/warehouse/vehicles', check_auth, solarshop_handler.get_warehouse_vehicles);
 
+// New Orders & Bulk Procurement Grouping
+router.get('/accounts/new-orders', check_auth, accounts_handler.get_eligible_new_orders);
+router.get('/accounts/new-orders/filter-options', check_auth, accounts_handler.get_new_orders_filter_options);
+router.get('/accounts/vehicles-master', check_auth, accounts_handler.get_vehicles_master);
+router.post('/accounts/procurement-groups/calculate', check_auth, accounts_handler.calculate_procurement_grouping);
+router.post('/accounts/procurement-groups', check_auth, accounts_handler.create_procurement_group);
+router.get('/accounts/procurement-groups', check_auth, accounts_handler.list_procurement_groups);
+
 module.exports = router;

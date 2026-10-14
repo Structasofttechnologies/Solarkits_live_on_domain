@@ -253,19 +253,30 @@ export default function PoOrder() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  const allowedOrderType = outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
-  const [categoryTab, setCategoryTab] = useState(() => allowedOrderType === "combine_po_order" ? "COMBINE_PO" : "ALL");
+  const rawAllowed = outletContext?.allowedOrderTypes || outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
+  const allowedOrderTypes = Array.isArray(rawAllowed)
+    ? rawAllowed
+    : typeof rawAllowed === "string"
+    ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
+    : ["po_order"];
+
+  const allowsLoose = allowedOrderTypes.includes("loose_order");
+  const allowsCombinePo = allowedOrderTypes.includes("combine_po_order");
+  const allowsPo = allowedOrderTypes.includes("po_order");
+  const allowsAnyPo = allowsPo || allowsCombinePo;
+
+  const [categoryTab, setCategoryTab] = useState(() => (allowsCombinePo && !allowsPo ? "COMBINE_PO" : "ALL"));
   const [expandedRowId, setExpandedRowId] = useState(null);
 
   useEffect(() => {
-    if (allowedOrderType === "combine_po_order") {
+    if (allowsCombinePo && !allowsPo) {
       setCategoryTab((prev) => (prev === "SINGLE_PO" ? "COMBINE_PO" : prev));
       setPoCategory("COMBINE_PO");
-    } else if (allowedOrderType === "po_order") {
+    } else if (allowsPo && !allowsCombinePo) {
       setCategoryTab((prev) => (prev === "COMBINE_PO" ? "SINGLE_PO" : prev));
       setPoCategory("SINGLE_PO");
     }
-  }, [allowedOrderType]);
+  }, [allowsCombinePo, allowsPo]);
 
   // ── Quick Filters State & Shop Hierarchy (Matches Screenshot 1) ──
   const [shopHierarchy, setShopHierarchy] = useState([]);
@@ -843,15 +854,15 @@ export default function PoOrder() {
 
   // ── Open Create PO Modal ──
   const handleOpenCreateModal = () => {
-    if (allowedOrderType === "loose_order") {
+    if (!allowsAnyPo) {
       return;
     }
     setFormError("");
     fetchBuyers();
     fetchHierarchy();
-    if (allowedOrderType === "combine_po_order") {
+    if (allowsCombinePo && !allowsPo) {
       setPoCategory("COMBINE_PO");
-    } else if (allowedOrderType === "po_order") {
+    } else if (allowsPo && !allowsCombinePo) {
       setPoCategory("SINGLE_PO");
     }
     setCreateModal(true);
@@ -1348,7 +1359,7 @@ export default function PoOrder() {
             <FiRefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
           </button>
 
-          {allowedOrderType === "loose_order" ? (
+          {!allowsAnyPo ? (
             <Link
               to="/loose-order"
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black shadow-lg transition-all"
@@ -1362,7 +1373,7 @@ export default function PoOrder() {
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-xs font-black shadow-lg hover:shadow-xl transition-all cursor-pointer transform active:scale-95"
             >
               <FiPlus size={16} />
-              <span>Create {allowedOrderType === "combine_po_order" ? "Combine PO" : "Purchase Order"}</span>
+              <span>Create {allowsCombinePo && !allowsPo ? "Combine PO" : "Purchase Order"}</span>
             </button>
           )}
         </div>
@@ -1373,7 +1384,7 @@ export default function PoOrder() {
       </div>
 
       {/* Advisory Banner for Loose Order Store Types */}
-      {allowedOrderType === "loose_order" && (
+      {!allowsAnyPo && allowsLoose && (
         <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold">
           <div className="flex items-center gap-2">
             <FiAlertCircle size={18} className="text-amber-600 shrink-0" />
@@ -1399,7 +1410,7 @@ export default function PoOrder() {
           >
             All Orders ({orders.length})
           </button>
-          {allowedOrderType !== "combine_po_order" && (
+          {allowsPo && (
             <button
               onClick={() => setCategoryTab("SINGLE_PO")}
               className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "SINGLE_PO"
@@ -1410,7 +1421,7 @@ export default function PoOrder() {
               Single PO ({orders.filter((o) => o.po_category !== "COMBINE_PO").length})
             </button>
           )}
-          {allowedOrderType !== "po_order" && (
+          {allowsCombinePo && (
             <button
               onClick={() => setCategoryTab("COMBINE_PO")}
               className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "COMBINE_PO"
@@ -2400,14 +2411,19 @@ export default function PoOrder() {
                         <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
                           3. Purchase Order Type <span className="text-rose-500">*</span>
                         </label>
-                        {allowedOrderType === "combine_po_order" && (
+                        {allowsCombinePo && !allowsPo && (
                           <span className="text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full border border-purple-200">
                             Locked to Combine PO by Store Type
                           </span>
                         )}
-                        {allowedOrderType === "po_order" && (
+                        {allowsPo && !allowsCombinePo && (
                           <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
                             Locked to Single PO by Store Type
+                          </span>
+                        )}
+                        {allowsPo && allowsCombinePo && (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200">
+                            All PO Types Permitted
                           </span>
                         )}
                       </div>
@@ -2416,32 +2432,32 @@ export default function PoOrder() {
                         {/* Single PO Card */}
                         <div
                           onClick={() => {
-                            if (allowedOrderType !== "combine_po_order") {
+                            if (allowsPo) {
                               setPoCategory("SINGLE_PO");
                             }
                           }}
                           className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${
-                            allowedOrderType === "combine_po_order"
+                            !allowsPo
                               ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
                               : "cursor-pointer " + (poCategory === "SINGLE_PO"
                                 ? "border-primary bg-primary/5 shadow-xs"
                                 : "border-border hover:border-primary/40 bg-surface")
                           }`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" && allowedOrderType !== "combine_po_order" ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" && allowsPo ? "bg-primary text-white" : "bg-primary/10 text-primary"
                             }`}>
                             <FiUserCheck size={16} />
                           </div>
                           <div>
                             <div className="font-black text-xs text-text-primary flex items-center gap-1">
                               Single PO
-                              {poCategory === "SINGLE_PO" && allowedOrderType !== "combine_po_order" && <FiCheck className="text-primary" size={13} />}
+                              {poCategory === "SINGLE_PO" && allowsPo && <FiCheck className="text-primary" size={13} />}
                             </div>
                             <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
                               Dedicated to 1 EPC Partner or Franchise Warehouse stock.
                             </p>
-                            {allowedOrderType === "combine_po_order" && (
-                              <span className="text-[10px] text-rose-500 font-bold block mt-1">Not permitted for Combine PO store</span>
+                            {!allowsPo && (
+                              <span className="text-[10px] text-rose-500 font-bold block mt-1">Not permitted for this store plan</span>
                             )}
                           </div>
                         </div>
@@ -2449,32 +2465,32 @@ export default function PoOrder() {
                         {/* Combine PO Card */}
                         <div
                           onClick={() => {
-                            if (allowedOrderType !== "po_order") {
+                            if (allowsCombinePo) {
                               setPoCategory("COMBINE_PO");
                             }
                           }}
                           className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${
-                            allowedOrderType === "po_order"
+                            !allowsCombinePo
                               ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
                               : "cursor-pointer " + (poCategory === "COMBINE_PO"
                                 ? "border-purple-600 bg-purple-500/5 shadow-xs"
                                 : "border-border hover:border-purple-400 bg-surface")
                           }`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" && allowedOrderType !== "po_order" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" && allowsCombinePo ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
                             }`}>
                             <FiUsers size={16} />
                           </div>
                           <div>
                             <div className="font-black text-xs text-text-primary flex items-center gap-1">
                               Combine PO (Multi-EPC)
-                              {poCategory === "COMBINE_PO" && allowedOrderType !== "po_order" && <FiCheck className="text-purple-600" size={13} />}
+                              {poCategory === "COMBINE_PO" && allowsCombinePo && <FiCheck className="text-purple-600" size={13} />}
                             </div>
                             <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
                               Pool demand across multiple onboarded EPC contractors.
                             </p>
-                            {allowedOrderType === "po_order" && (
-                              <span className="text-[10px] text-rose-500 font-bold block mt-1">Not permitted for Single PO store</span>
+                            {!allowsCombinePo && (
+                              <span className="text-[10px] text-rose-500 font-bold block mt-1">Not permitted for this store plan</span>
                             )}
                           </div>
                         </div>

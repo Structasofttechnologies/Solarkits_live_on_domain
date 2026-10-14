@@ -11,6 +11,21 @@ import {
   FiStar,
 } from "react-icons/fi";
 
+const formatOrderTypes = (ot) => {
+  let types = [];
+  if (Array.isArray(ot)) types = ot;
+  else if (typeof ot === "string") types = ot === "both" ? ["po_order", "loose_order"] : ot.split(",").map((s) => s.trim());
+  else types = ["po_order"];
+
+  const map = {
+    loose_order: "Loose Order",
+    combine_po_order: "Combine PO",
+    po_order: "PO Order",
+  };
+  const labels = types.map((t) => map[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : "PO Order";
+};
+
 export default function PlansShowcase() {
   const navigate = useNavigate();
   const [plans, setPlans] = useState([]);
@@ -164,11 +179,7 @@ export default function PlansShowcase() {
                     <div className="p-2.5 sm:p-3 rounded-xl bg-purple-50/70 border border-purple-100 text-center">
                       <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium block">Order Type</span>
                       <span className="text-xs sm:text-sm font-black text-purple-700">
-                        {p.order_type_allowed === "loose_order"
-                          ? "Loose Order"
-                          : p.order_type_allowed === "combine_po_order"
-                          ? "Combine PO Order"
-                          : "PO Order"}
+                        {formatOrderTypes(p.order_type_allowed)}
                       </span>
                     </div>
                   </div>
@@ -214,7 +225,7 @@ export default function PlansShowcase() {
                       <li className="flex items-center gap-2">
                         <FiCheckCircle className="text-emerald-600 shrink-0" size={15} />
                         <span>
-                          <strong>Order Fulfillment:</strong> {p.order_type_allowed === "po_order" ? "Purchase Order (PO)" : p.order_type_allowed === "loose_order" ? "Loose on-demand dispatch" : "Both Bulk PO & Loose Kit Orders"}
+                          <strong>Order Fulfillment:</strong> {formatOrderTypes(p.order_type_allowed)}
                         </span>
                       </li>
                       <li className="flex items-center gap-2">

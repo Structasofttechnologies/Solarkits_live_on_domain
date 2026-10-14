@@ -9,6 +9,21 @@ import {
 
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_T8B85UkbvoXBOQ";
 
+const formatOrderTypes = (ot) => {
+  let types = [];
+  if (Array.isArray(ot)) types = ot;
+  else if (typeof ot === "string") types = ot === "both" ? ["po_order", "loose_order"] : ot.split(",").map((s) => s.trim());
+  else types = ["po_order"];
+
+  const map = {
+    loose_order: "Loose Order",
+    combine_po_order: "Combine PO Order",
+    po_order: "PO Order",
+  };
+  const labels = types.map((t) => map[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : "PO Order";
+};
+
 // ─── Load Razorpay Script ──────────────────────────────────────────────────────
 function loadRazorpayScript() {
   return new Promise((resolve) => {
@@ -112,7 +127,7 @@ function PlanCard({ plan, onSelect, isActive, activePlanId }) {
             ["Territory Scope", plan.max_states_allowed || "District Level", "text-blue-700"],
             ["MOQ Capacity", `${Number(plan.moq_capacity_kw || 10000).toLocaleString("en-IN")} kW (${plan.moq_kits_count || 1} Kit MOQ)`, "text-amber-600"],
             ["Project Types", plan.project_types_display || "All Types", "text-slate-700"],
-            ["Order Types", plan.order_type_allowed === "loose_order" ? "Loose Order" : plan.order_type_allowed === "combine_po_order" ? "Combine PO Order" : "PO Order", "text-purple-700"],
+            ["Order Types", formatOrderTypes(plan.order_type_allowed), "text-purple-700"],
             ["Warehouse", plan.warehouse_required ? `${plan.warehouse_count || 1} Hub (${Number(plan.warehouse_space_sqft || 0).toLocaleString("en-IN")} sqft)` : "No WH Required", "text-slate-700"],
           ].map(([label, value, color]) => (
             <div key={label} className="flex items-start gap-2 text-slate-700">

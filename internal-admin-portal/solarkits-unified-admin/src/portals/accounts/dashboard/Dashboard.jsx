@@ -21,6 +21,7 @@ const PurchaseOrders = lazy(() => import("../pages/accounts-management/PurchaseO
 const OemPurchaseOrders = lazy(() => import("../pages/accounts-management/OemPurchaseOrders"));
 const BoskitInventory = lazy(() => import("../pages/accounts-management/BoskitInventory"));
 const Payments = lazy(() => import("../pages/accounts-management/Payments"));
+const NewOrdersProcurement = lazy(() => import("../pages/accounts-management/NewOrdersProcurement"));
 
 const menus = [
   [
@@ -29,6 +30,12 @@ const menus = [
       icon: <FaHome />,
       path: "/account-panel/home",
       unique_id: "ACC_HOME"
+    },
+    {
+      name: "New Orders",
+      icon: <FaBoxes />,
+      path: "/account-panel/new-orders",
+      unique_id: "ACC_NEW_ORDERS"
     },
     {
       name: "Supplier Registry",
@@ -83,6 +90,7 @@ const menus = [
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
+  if (menu.unique_id === "ACC_NEW_ORDERS" && (allowedUniqueIds.includes("ACC_NEW_ORDERS") || allowedUniqueIds.includes("ACC_HOME") || allowedUniqueIds.includes("ACC_PO"))) return true;
   if (menu.unique_id === "ACC_OEM_PO" && allowedUniqueIds.includes("ACC_PO")) return true;
   if (menu.unique_id === "ACC_BOSKIT_INV" && (allowedUniqueIds.includes("ACC_PO") || allowedUniqueIds.includes("ACC_INWARD_INV") || allowedUniqueIds.includes("ACC_HOME"))) return true;
   return allowedUniqueIds.includes(menu.unique_id);
@@ -201,6 +209,16 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="ACC_HOME">
                         <Suspense fallback={<Loader text="Loading home..." />}>
                           <Home />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/new-orders/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="ACC_NEW_ORDERS">
+                        <Suspense fallback={<Loader text="Loading New Orders..." />}>
+                          <NewOrdersProcurement />
                         </Suspense>
                       </PermissionGuard>
                     }

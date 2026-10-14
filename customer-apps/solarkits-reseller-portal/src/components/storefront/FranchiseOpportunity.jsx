@@ -2,6 +2,21 @@ import { useEffect, useState } from "react";
 import { FiLoader, FiAlertCircle } from "react-icons/fi";
 import api from "../../services/api";
 
+const formatOrderTypes = (ot) => {
+  let types = [];
+  if (Array.isArray(ot)) types = ot;
+  else if (typeof ot === "string") types = ot === "both" ? ["po_order", "loose_order"] : ot.split(",").map((s) => s.trim());
+  else types = ["po_order"];
+
+  const map = {
+    loose_order: "Loose Order",
+    combine_po_order: "Combine PO",
+    po_order: "PO Order",
+  };
+  const labels = types.map((t) => map[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : "PO Order";
+};
+
 export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseModal }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -225,11 +240,7 @@ export default function FranchiseOpportunity({ onOpenLeadModal, onOpenPurchaseMo
                           Order Type
                         </p>
                         <p className="mt-1 text-xs font-black text-purple-700 line-clamp-1">
-                          {plan.order_type_allowed === "loose_order"
-                            ? "Loose Order"
-                            : plan.order_type_allowed === "combine_po_order"
-                              ? "Combine PO"
-                              : "PO Order"}
+                          {formatOrderTypes(plan.order_type_allowed)}
                         </p>
                       </div>
                     </div>

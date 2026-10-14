@@ -37,6 +37,20 @@ const { assignTerritoryAtomic } = require('../../admin-panel/utils/territory.val
 const { logAudit } = require('../../admin-panel/utils/audit.service');
 const { generate_token } = require('../utils/jsonwebtoken');
 
+const VALID_ORDER_TYPES = ['loose_order', 'combine_po_order', 'po_order'];
+const normalizeOrderTypes = (val) => {
+  if (!val) return ['po_order'];
+  let arr = [];
+  if (Array.isArray(val)) {
+    arr = val;
+  } else if (typeof val === 'string') {
+    if (val === 'both') return ['po_order', 'loose_order'];
+    arr = val.split(',').map((s) => s.trim());
+  }
+  const filtered = arr.filter((t) => VALID_ORDER_TYPES.includes(t));
+  return filtered.length > 0 ? filtered : ['po_order'];
+};
+
 // ─── GST State Code → State Name Map (India, as per GSTIN standard) ───────────
 const GST_STATE_CODE_MAP = {
   '01': 'Jammu & Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab',
@@ -527,7 +541,7 @@ const get_reseller_me = async (req, res) => {
       bank_details:      reseller.bank_details || null,
       plan_name:         subscription?.plan_id?.name || null,
       plan_id:           subscription?.plan_id?._id || subscription?.plan_id || null,
-      order_type_allowed: subscription?.plan_id?.order_type_allowed === 'both' ? 'po_order' : (subscription?.plan_id?.order_type_allowed || 'po_order'),
+      order_type_allowed: normalizeOrderTypes(subscription?.plan_id?.order_type_allowed),
       warehouse_capacity: reseller.warehouse_capacity || {
         max_kits: 50,
         max_weight_kg: 10000,
@@ -2604,7 +2618,7 @@ const get_active_plans = async (req, res) => {
           moq_description:          p.moq_description || null,
 
           // ─── 3. Order Type Support ─────────────────────────────────────────────
-          order_type_allowed:       p.order_type_allowed === 'both' ? 'po_order' : (p.order_type_allowed || 'po_order'),
+          order_type_allowed:       normalizeOrderTypes(p.order_type_allowed),
 
           description:               p.description,
           is_popular:                p.sort_order === 2 || p.sort_order === 3,

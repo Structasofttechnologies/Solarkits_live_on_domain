@@ -27,10 +27,20 @@ import { setAlert } from "../../../features/alert.slice";
 const API_BASE = import.meta.env.VITE_API_URL;
 
 const getOrderTypeDisplay = (type) => {
-  if (type === "loose_order") return "Loose Order";
-  if (type === "combine_po_order" || type === "combined_po_orders") return "Combine PO Order";
-  if (type === "po_order") return "PO Order";
-  return "PO Order";
+  let types = [];
+  if (Array.isArray(type)) types = type;
+  else if (typeof type === "string") types = type === "both" ? ["po_order", "loose_order"] : type.split(",").map((s) => s.trim());
+  else types = ["po_order"];
+
+  const map = {
+    loose_order: "Loose Order",
+    combine_po_order: "Combine PO Order",
+    combined_po_orders: "Combine PO Order",
+    po_order: "PO Order",
+  };
+
+  const labels = types.map((t) => map[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : "PO Order";
 };
 
 export default function StoreCreationWizard() {

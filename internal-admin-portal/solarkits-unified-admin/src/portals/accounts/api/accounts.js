@@ -270,3 +270,51 @@ export const createCombinedSupplierPayment = async (payload) => {
   });
   return res.data;
 };
+
+// ── New Orders & Bulk Procurement Grouping ──────────────────────────────────
+
+export const getEligibleNewOrders = async (params = {}) => {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== ''))
+  ).toString();
+  const url = `${API_URL}/accounts/new-orders${query ? `?${query}` : ''}`;
+  const res = await axios.get(url, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getNewOrdersFilterOptions = async () => {
+  const res = await axios.get(`${API_URL}/accounts/new-orders/filter-options`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getVehiclesMaster = async () => {
+  const res = await axios.get(`${API_URL}/accounts/vehicles-master`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const calculateProcurementGrouping = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement-groups/calculate`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const submitProcurementGroup = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement-groups`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getProcurementGroups = async () => {
+  const res = await axios.get(`${API_URL}/accounts/procurement-groups`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};

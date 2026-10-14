@@ -60,9 +60,8 @@ const schema = new mongoose.Schema({
 
   // ─── 3. Order Type Support ───────────────────────────────────────────────────
   order_type_allowed: {
-    type: String,
-    enum: ['loose_order', 'combine_po_order', 'po_order', 'both'],
-    default: 'po_order',
+    type: [String],
+    default: ['po_order'],
   },
 
   // ─── 4. Company Fixed Franchisee Margins & Commissions ──────────────────────

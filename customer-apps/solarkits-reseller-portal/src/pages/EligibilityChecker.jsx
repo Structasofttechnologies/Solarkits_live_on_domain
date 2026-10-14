@@ -23,6 +23,21 @@ import LeadCaptureModal from "../components/storefront/LeadCaptureModal";
 
 const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
+const formatOrderTypes = (ot) => {
+  let types = [];
+  if (Array.isArray(ot)) types = ot;
+  else if (typeof ot === "string") types = ot === "both" ? ["po_order", "loose_order"] : ot.split(",").map((s) => s.trim());
+  else types = ["po_order"];
+
+  const map = {
+    loose_order: "Loose Order",
+    combine_po_order: "Combine PO",
+    po_order: "PO Order",
+  };
+  const labels = types.map((t) => map[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : "PO Order";
+};
+
 export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadModal }) {
   const states = Object.keys(INDIAN_STATES_DISTRICTS);
   const initialState = states[0] || "Maharashtra";
@@ -506,11 +521,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                       <div>
                         <p className="text-[10px] font-bold uppercase text-slate-400">Order Fulfillment</p>
                         <p className="mt-0.5 text-xs font-black text-purple-700">
-                          {selectedPlan.order_type_allowed === "loose_order"
-                            ? "Loose Order"
-                            : selectedPlan.order_type_allowed === "combine_po_order"
-                            ? "Combine PO Order"
-                            : "PO Order"}
+                          {formatOrderTypes(selectedPlan.order_type_allowed)}
                         </p>
                       </div>
                     </div>
@@ -567,7 +578,7 @@ export default function EligibilityChecker({ onOpenLeadModal: externalOpenLeadMo
                           <FiCheck size={12} strokeWidth={3} />
                         </span>
                         <span>
-                          <strong>Allowed Orders:</strong> {selectedPlan.order_type_allowed === "po_order" ? "Purchase Order (PO)" : selectedPlan.order_type_allowed === "loose_order" ? "Loose Order" : "Both Bulk PO & Loose Kit Orders"}
+                          <strong>Allowed Orders:</strong> {formatOrderTypes(selectedPlan.order_type_allowed)}
                         </span>
                       </li>
                       <li className="flex items-center gap-2.5">

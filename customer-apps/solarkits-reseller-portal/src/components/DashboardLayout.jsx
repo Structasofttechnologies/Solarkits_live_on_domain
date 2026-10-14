@@ -191,18 +191,30 @@ export default function DashboardLayout() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const allowedOrderType = reseller?.order_type_allowed || reseller?.active_subscription?.plan_id?.order_type_allowed || "po_order";
+  const rawAllowed = reseller?.order_type_allowed || reseller?.active_subscription?.plan_id?.order_type_allowed || "po_order";
+  const allowedOrderTypes = Array.isArray(rawAllowed)
+    ? rawAllowed
+    : typeof rawAllowed === "string"
+    ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
+    : ["po_order"];
+
+  const hasLoose = allowedOrderTypes.includes("loose_order");
+  const hasCombinePo = allowedOrderTypes.includes("combine_po_order");
+  const hasSinglePo = allowedOrderTypes.includes("po_order");
+  const hasAnyPo = hasSinglePo || hasCombinePo;
 
   const filteredNav = NAV_ITEMS.map((item) => {
     if (item.name === "My Orders" && item.children) {
       let filteredChildren = [];
-      if (allowedOrderType === "loose_order") {
-        filteredChildren = [{ name: "Loose Orders", icon: FiTag, path: "/loose-order" }];
-      } else if (allowedOrderType === "combine_po_order") {
-        filteredChildren = [{ name: "Combine PO Orders", icon: FiBox, path: "/po-order" }];
-      } else {
-        // po_order
-        filteredChildren = [{ name: "PO Orders", icon: FiBox, path: "/po-order" }];
+      if (hasAnyPo) {
+        const poLabel = hasCombinePo && !hasSinglePo ? "Combine PO Orders" : "PO Orders";
+        filteredChildren.push({ name: poLabel, icon: FiBox, path: "/po-order" });
+      }
+      if (hasLoose) {
+        filteredChildren.push({ name: "Loose Orders", icon: FiTag, path: "/loose-order" });
+      }
+      if (filteredChildren.length === 0) {
+        filteredChildren.push({ name: "PO Orders", icon: FiBox, path: "/po-order" });
       }
       return { ...item, children: filteredChildren };
     }
@@ -865,7 +877,7 @@ export default function DashboardLayout() {
 
         {/* Page Body */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto scrollbar-hover min-h-0" style={{ background: "var(--color-bg)" }}>
-          <Outlet context={{ reseller, refreshUser: fetchMe, allowedOrderType }} />
+          <Outlet context={{ reseller, refreshUser: fetchMe, allowedOrderType: allowedOrderTypes, allowedOrderTypes }} />
         </main>
       </div>
 

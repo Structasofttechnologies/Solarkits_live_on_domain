@@ -69,7 +69,14 @@ export default function LooseOrder() {
   const queryPoId = searchParams.get("po_id");
 
   const outletContext = useOutletContext?.() || {};
-  const allowedOrderType = outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
+  const rawAllowed = outletContext?.allowedOrderTypes || outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
+  const allowedOrderTypes = Array.isArray(rawAllowed)
+    ? rawAllowed
+    : typeof rawAllowed === "string"
+    ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
+    : ["po_order"];
+
+  const allowsLoose = allowedOrderTypes.includes("loose_order");
 
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
@@ -502,7 +509,7 @@ export default function LooseOrder() {
             >
               <FiRefreshCw size={17} className={loading ? "animate-spin" : ""} />
             </button>
-            {allowedOrderType === "loose_order" ? (
+            {allowsLoose ? (
               <button
                 onClick={() => {
                   setFormError("");
@@ -528,11 +535,11 @@ export default function LooseOrder() {
       </div>
 
       {/* ── Advisory Banner for Non-Loose Order Stores ───────────────────────── */}
-      {allowedOrderType !== "loose_order" && (
+      {!allowsLoose && (
         <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold">
           <div className="flex items-center gap-2">
             <FiAlertCircle size={18} className="text-amber-600 shrink-0" />
-            <span>Your store is configured for <strong>{allowedOrderType === "combine_po_order" ? "Combine PO Orders" : "PO Orders"}</strong>. Direct Loose Order creation is not permitted for your Store Type.</span>
+            <span>Your store is configured for Purchase Orders only. Direct Loose Order creation is not permitted for your Store Type.</span>
           </div>
           <Link to="/po-order" className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-colors shrink-0">
             Open PO Orders
