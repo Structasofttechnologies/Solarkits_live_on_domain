@@ -81,6 +81,7 @@ app.use('/company/margin-goals',        require('./routes/company_margin_goals.r
 
 // ─── Region Payment Configuration & Order Processing ─────────────────────────
 app.use('/payment-config',              require('./routes/region.payment.config.route'));
+app.use('/payment-milestones',          require('./routes/product.payment.milestones.route'));
 
 // Force nodemon reload: variant config subdocument ID preservation
 app.listen(port, () =>

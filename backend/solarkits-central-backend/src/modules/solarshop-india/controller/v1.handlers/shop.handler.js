@@ -3252,6 +3252,70 @@ const resubmit_epc_offline_payment = async (req, res) => {
 };
 
 /**
+ * POST Submit EPC Remaining Payment for Milestone 2 (Before Dispatch)
+ */
+const submit_epc_milestone_payment = async (req, res) => {
+  try {
+    const epc_id = req.user?.account_id || req.user?.id;
+    const { id } = req.params;
+
+    let body = req.body || {};
+    let receipt_url = body.receipt_url;
+    let receipt_filename = body.receipt_filename;
+
+    if (req.files && req.files.length > 0) {
+      const uploadedFile = req.files.find(f => f.fieldname === 'payment_receipt' || f.fieldname === 'receipt' || f.fieldname === 'file') || req.files[0];
+      if (uploadedFile) {
+        receipt_url = uploadedFile.path;
+        receipt_filename = uploadedFile.originalname;
+      }
+    }
+
+    const { submitEpcMilestonePayment } = require("../../../admin-panel/services/epc.offline.checkout.service");
+    const updatedOrder = await submitEpcMilestonePayment({
+      order_id: id,
+      epc_id,
+      milestone_number: Number(body.milestone_number || 2),
+      utr_number: body.utr_number,
+      amount_paid: Number(body.amount_paid),
+      payment_date: body.payment_date,
+      receipt_url,
+      receipt_filename,
+      sender_bank_name: body.sender_bank_name,
+      account_holder_name: body.account_holder_name,
+      req,
+    });
+
+    try {
+      const { sendAdminNotification } = require("../../../admin-panel/services/admin.notification.service");
+      sendAdminNotification({
+        title: `Remaining Milestone Payment Uploaded (${updatedOrder.order_number})`,
+        message: `EPC buyer submitted remaining payment proof for order ${updatedOrder.order_number}. Verification pending before dispatch.`,
+        category: 'orders',
+        priority: 'high',
+        action_url: '/account-panel/solar-shop/epc-orders',
+        metadata: { order_id: updatedOrder._id, epc_id }
+      }).catch(err => console.warn('[Order Notification Warning]:', err.message));
+    } catch (notifErr) {}
+
+    return res.status(200).json({
+      success: true,
+      status: "success",
+      message: "Remaining milestone payment submitted successfully! Accounts team is verifying for dispatch clearance.",
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error("submit_epc_milestone_payment error:", error);
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Public checkout resolver for product payment milestones
+ */
+const { resolve_payment_milestones } = require("../../../admin-panel/controller/product.payment.milestones.handler");
+
+/**
  * GET Tax Invoice Data for Approved EPC Order
  */
 const get_epc_order_invoice_data = async (req, res) => {
@@ -4440,6 +4504,8 @@ module.exports = {
   preview_epc_po_penalty,
   request_epc_po_refund,
   reorder_against_epc_po,
+  submit_epc_milestone_payment,
+  resolve_payment_milestones,
 };
 
 

@@ -393,6 +393,65 @@ async function createEpcOfflineOrder({
     if (defaultWh) assignedWarehouseId = defaultWh._id;
   }
 
+  // 3.5 Resolve product payment milestone configuration
+  const ProductPaymentMilestone = require('../models/india_solarshop_db/product_payment_milestones.schema');
+  let firstKitId = null;
+  for (const it of processedItems) {
+    if (it.kit_id && mongoose.Types.ObjectId.isValid(it.kit_id)) {
+      firstKitId = it.kit_id;
+      break;
+    }
+  }
+
+  let milestoneRule = null;
+  if (firstKitId) {
+    milestoneRule = await ProductPaymentMilestone.findOne({ kit_id: firstKitId, is_active: true }).lean().catch(() => null);
+  }
+  if (!milestoneRule) {
+    milestoneRule = await ProductPaymentMilestone.findOne({ is_default: true, is_active: true }).lean().catch(() => null);
+  }
+
+  const grandTotalRupees = Math.round(totals.grand_total_paise / 100);
+  const m1Pct = milestoneRule?.milestones?.[0]?.percentage || 30;
+  const m2Pct = milestoneRule?.milestones?.[1]?.percentage || (100 - m1Pct);
+  const advanceAmountRupees = Math.round((grandTotalRupees * m1Pct) / 100);
+  const remainingAmountRupees = Math.max(0, grandTotalRupees - advanceAmountRupees);
+
+  const initialMilestones = [
+    {
+      milestone_number: 1,
+      title: milestoneRule?.milestones?.[0]?.milestone_name || 'Advance Payment at Order Placement',
+      percentage: m1Pct,
+      amount: advanceAmountRupees,
+      stage: 'order_placement',
+      tat_days: milestoneRule?.milestones?.[0]?.tat_days || 1,
+      payment_status: 'pending_verification',
+      utr_number: cleanUtr,
+      amount_paid: Number(amount_paid) || advanceAmountRupees,
+      payment_date: payment_date ? new Date(payment_date) : new Date(),
+      receipt_url: receipt_url || null,
+      receipt_filename: receipt_filename || null,
+      sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+      account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+    },
+    {
+      milestone_number: 2,
+      title: milestoneRule?.milestones?.[1]?.milestone_name || 'Remaining Payment Before Dispatch',
+      percentage: m2Pct,
+      amount: remainingAmountRupees,
+      stage: 'before_dispatch',
+      tat_days: milestoneRule?.milestones?.[1]?.tat_days || 2,
+      payment_status: 'unpaid',
+      utr_number: null,
+      amount_paid: 0,
+      payment_date: null,
+      receipt_url: null,
+      receipt_filename: null,
+      sender_bank_name: null,
+      account_holder_name: null,
+    },
+  ];
+
   // 4. Create EPC Order in 'pending_verification' status with atomic rollback guard
   let epcOrder = null;
   try {
@@ -446,9 +505,20 @@ async function createEpcOfflineOrder({
       payment_gateway_used: offline_payment_data.payment_gateway_used || (offline_payment_data.payment_method === 'icici_ecollection' ? 'icici_ecollection' : 'bank_transfer'),
       payment_status: 'pending_verification',
       payment_reference: cleanUtr,
+      payment_milestones: {
+        configured_milestone_id: milestoneRule?._id || null,
+        total_order_amount: grandTotalRupees,
+        advance_percentage: m1Pct,
+        advance_amount: advanceAmountRupees,
+        remaining_percentage: m2Pct,
+        remaining_amount: remainingAmountRupees,
+        current_milestone_due: 1,
+        milestone_verification_status: 'awaiting_advance',
+        milestones: initialMilestones,
+      },
       offline_payment: {
         utr_number: cleanUtr,
-        amount_paid: Number(amount_paid) || (totals.grand_total_paise / 100),
+        amount_paid: Number(amount_paid) || advanceAmountRupees,
         payment_date: payment_date ? new Date(payment_date) : new Date(),
         receipt_url: receipt_url || null,
         receipt_filename: receipt_filename || null,
@@ -602,7 +672,7 @@ async function resubmitEpcPaymentProof({
 }
 
 /**
- * 4. Accounts Department Verification: Approve or Reject
+ * 4. Accounts Department Verification: Approve or Reject (Supports Milestone 1 Advance & Milestone 2 Before Dispatch)
  */
 async function reviewEpcOfflinePayment({
   order_id,
@@ -610,6 +680,7 @@ async function reviewEpcOfflinePayment({
   decision, // 'approved' | 'rejected'
   rejection_reason = '',
   notes = '',
+  milestone_number = null,
   req = null,
 }) {
   if (!['approved', 'rejected'].includes(decision)) {
@@ -621,113 +692,311 @@ async function reviewEpcOfflinePayment({
     throw new Error(`EPC Order "${order_id}" not found.`);
   }
 
+  const hasMilestones = Boolean(order.payment_milestones && Array.isArray(order.payment_milestones.milestones) && order.payment_milestones.milestones.length > 0);
+  
+  // Auto-detect target milestone if not explicitly passed
+  let targetMilestoneNum = Number(milestone_number);
+  if (!targetMilestoneNum && hasMilestones) {
+    const m2 = order.payment_milestones.milestones.find(m => m.milestone_number === 2);
+    if (m2 && (m2.payment_status === 'pending_verification' || order.payment_milestones.milestone_verification_status === 'final_payment_pending_verification')) {
+      targetMilestoneNum = 2;
+    } else {
+      targetMilestoneNum = 1;
+    }
+  }
+
   if (decision === 'approved') {
-    order.payment_status = 'captured';
-    order.order_status = 'confirmed';
+    if (hasMilestones && targetMilestoneNum === 1) {
+      // ── VERIFY MILESTONE 1 (30% Advance Payment) ──────────────────────────
+      order.order_status = 'confirmed';
+      order.payment_status = 'pending_verification'; // Advance verified, awaiting Milestone 2 before dispatch
 
-    // Generate Official Tax Invoice Number
-    const invoiceNum = generateInvoiceNumber(order._id);
-    order.invoice = {
-      invoice_number: invoiceNum,
-      invoice_date: new Date(),
-      invoice_url: `/api/india/v1/shop/orders/${order._id}/invoice-pdf`,
-      generated_at: new Date(),
-    };
+      order.offline_payment.verification_status = 'approved';
+      order.offline_payment.verified_by = admin_user_id;
+      order.offline_payment.verified_at = new Date();
+      order.offline_payment.notes = notes || 'Milestone 1 (Advance Payment) verified by Accounts';
 
-    order.offline_payment.verification_status = 'approved';
-    order.offline_payment.verified_by = admin_user_id;
-    order.offline_payment.verified_at = new Date();
-    order.offline_payment.notes = notes || 'Payment verified by Accounts';
-
-    await order.save();
-
-    // Deduct stock permanently (sales_out) in ResellerInventoryLedger ONLY IF fulfilled from franchise stock
-    if (order.reseller_id && order.fulfillment_source === 'franchise_warehouse') {
-      for (const item of order.items) {
-        const currentBalance = await calculateCurrentItemStock(order.reseller_id, item.scope_type, item.product_id, item.kit_id);
-        await ResellerInventoryLedger.create({
-          reseller_id: order.reseller_id,
-          item_type: item.scope_type,
-          product_id: item.product_id || null,
-          kit_id: item.kit_id || null,
-          movement_type: 'sales_out',
-          quantity: -item.quantity,
-          balance_after: Math.max(0, currentBalance),
-          unit_cost_paise: item.unit_price_paise,
-          total_valuation_paise: item.total_price_paise,
-          reference_type: 'epc_order',
-          reference_id: order._id,
-          reason: `Offline Payment Approved: Deducted for Order #${order.order_number}`,
-          actor_id: admin_user_id,
-        });
-      }
-    }
-
-    // Settle Franchise Margin / Commission to Wallet
-    try {
-      if (order.reseller_id && order.reseller_total_margin_paise > 0) {
-        await creditResellerMargin({
-          resellerId: order.reseller_id,
-          orderId: order._id,
-          orderNumber: order.order_number,
-          marginPaise: order.reseller_total_margin_paise,
-        });
+      const m1 = order.payment_milestones.milestones.find(m => m.milestone_number === 1);
+      if (m1) {
+        m1.payment_status = 'verified';
+        m1.verified_by = admin_user_id;
+        m1.verified_at = new Date();
+        m1.notes = notes || 'Advance payment verified';
       }
 
-      if (order.epc_id && order.is_end_customer_sale && order.platform_total_commission_paise > 0) {
-        await creditEpcMargin({
-          epcAccountId: order.epc_id,
-          orderId: order._id,
-          orderNumber: order.order_number,
-          marginPaise: order.platform_total_commission_paise,
-        });
-      }
-    } catch (wErr) {
-      console.error('[epc.offline.checkout] Commission settlement error:', wErr.message);
-    }
+      order.payment_milestones.milestone_verification_status = 'advance_verified';
+      order.payment_milestones.current_milestone_due = 2;
+      order.markModified('payment_milestones');
 
-    await logAudit({
-      actor_type: 'cms_user',
-      actor_id: admin_user_id,
-      action: 'EPC_PAYMENT_ACCOUNTS_APPROVED',
-      entity_type: 'epc_orders',
-      entity_id: order._id,
-      after_snapshot: {
-        order_number: order.order_number,
+      // Generate Advance Proforma Invoice if not present
+      if (!order.invoice?.invoice_number) {
+        const invoiceNum = generateInvoiceNumber(order._id);
+        order.invoice = {
+          invoice_number: `PI-${invoiceNum}`,
+          invoice_date: new Date(),
+          invoice_url: `/api/india/v1/shop/orders/${order._id}/invoice-pdf`,
+          generated_at: new Date(),
+        };
+      }
+
+      await order.save();
+
+      await logAudit({
+        actor_type: 'cms_user',
+        actor_id: admin_user_id,
+        action: 'EPC_ADVANCE_PAYMENT_ACCOUNTS_APPROVED',
+        entity_type: 'epc_orders',
+        entity_id: order._id,
+        after_snapshot: {
+          order_number: order.order_number,
+          milestone_number: 1,
+          milestone_status: 'advance_verified',
+        },
+        req,
+      });
+
+    } else {
+      // ── VERIFY MILESTONE 2 (70% Final Payment Before Dispatch) OR LEGACY ORDER ──
+      order.payment_status = 'captured';
+      
+      // If currently confirmed or processing, staging at gate is ready
+      if (['pending', 'confirmed', 'processing'].includes(order.order_status)) {
+        order.order_status = 'ready_for_dispatch';
+      }
+
+      // Generate Final Official GST Tax Invoice
+      const invoiceNum = generateInvoiceNumber(order._id);
+      order.invoice = {
         invoice_number: invoiceNum,
-        payment_status: 'captured',
-      },
-      req,
-    });
+        invoice_date: new Date(),
+        invoice_url: `/api/india/v1/shop/orders/${order._id}/invoice-pdf`,
+        generated_at: new Date(),
+      };
+
+      order.offline_payment.verification_status = 'approved';
+      order.offline_payment.verified_by = admin_user_id;
+      order.offline_payment.verified_at = new Date();
+      order.offline_payment.notes = notes || 'Final payment verified by Accounts';
+
+      if (hasMilestones) {
+        const m2 = order.payment_milestones.milestones.find(m => m.milestone_number === 2);
+        if (m2) {
+          m2.payment_status = 'verified';
+          m2.verified_by = admin_user_id;
+          m2.verified_at = new Date();
+          m2.notes = notes || 'Remaining payment verified before dispatch';
+        }
+        order.payment_milestones.milestone_verification_status = 'fully_paid';
+        order.markModified('payment_milestones');
+      }
+
+      await order.save();
+
+      // Deduct stock permanently (sales_out) in ResellerInventoryLedger ONLY IF fulfilled from franchise stock
+      if (order.reseller_id && order.fulfillment_source === 'franchise_warehouse') {
+        for (const item of order.items) {
+          const currentBalance = await calculateCurrentItemStock(order.reseller_id, item.scope_type, item.product_id, item.kit_id);
+          await ResellerInventoryLedger.create({
+            reseller_id: order.reseller_id,
+            item_type: item.scope_type,
+            product_id: item.product_id || null,
+            kit_id: item.kit_id || null,
+            movement_type: 'sales_out',
+            quantity: -item.quantity,
+            balance_after: Math.max(0, currentBalance),
+            unit_cost_paise: item.unit_price_paise,
+            total_valuation_paise: item.total_price_paise,
+            reference_type: 'epc_order',
+            reference_id: order._id,
+            reason: `Offline Payment Approved: Deducted for Order #${order.order_number}`,
+            actor_id: admin_user_id,
+          });
+        }
+      }
+
+      // Settle Franchise Margin / Commission to Wallet
+      try {
+        if (order.reseller_id && order.reseller_total_margin_paise > 0) {
+          await creditResellerMargin({
+            resellerId: order.reseller_id,
+            orderId: order._id,
+            orderNumber: order.order_number,
+            marginPaise: order.reseller_total_margin_paise,
+          });
+        }
+
+        if (order.epc_id && order.is_end_customer_sale && order.platform_total_commission_paise > 0) {
+          await creditEpcMargin({
+            epcAccountId: order.epc_id,
+            orderId: order._id,
+            orderNumber: order.order_number,
+            marginPaise: order.platform_total_commission_paise,
+          });
+        }
+      } catch (wErr) {
+        console.error('[epc.offline.checkout] Commission settlement error:', wErr.message);
+      }
+
+      await logAudit({
+        actor_type: 'cms_user',
+        actor_id: admin_user_id,
+        action: 'EPC_PAYMENT_ACCOUNTS_APPROVED',
+        entity_type: 'epc_orders',
+        entity_id: order._id,
+        after_snapshot: {
+          order_number: order.order_number,
+          invoice_number: invoiceNum,
+          payment_status: 'captured',
+          milestone_number: targetMilestoneNum,
+        },
+        req,
+      });
+    }
 
   } else if (decision === 'rejected') {
     if (!rejection_reason || !rejection_reason.trim()) {
       throw new Error('Please provide a specific rejection comment/reason for the EPC buyer.');
     }
 
-    order.payment_status = 'rejected';
-    order.offline_payment.verification_status = 'rejected';
-    order.offline_payment.verified_by = admin_user_id;
-    order.offline_payment.verified_at = new Date();
-    order.offline_payment.rejection_reason = rejection_reason.trim();
-    order.offline_payment.notes = notes || 'Payment rejected by Accounts department';
+    if (hasMilestones && targetMilestoneNum === 2) {
+      // Rejecting Milestone 2 only (Milestone 1 advance remains verified)
+      const m2 = order.payment_milestones.milestones.find(m => m.milestone_number === 2);
+      if (m2) {
+        m2.payment_status = 'rejected';
+        m2.rejection_reason = rejection_reason.trim();
+        m2.verified_by = admin_user_id;
+        m2.verified_at = new Date();
+      }
+      order.payment_milestones.milestone_verification_status = 'awaiting_final_payment';
+      order.markModified('payment_milestones');
+      await order.save();
 
-    await order.save();
+      await logAudit({
+        actor_type: 'cms_user',
+        actor_id: admin_user_id,
+        action: 'EPC_MILESTONE_2_PAYMENT_REJECTED',
+        entity_type: 'epc_orders',
+        entity_id: order._id,
+        after_snapshot: {
+          order_number: order.order_number,
+          rejection_reason: rejection_reason.trim(),
+          milestone_number: 2,
+        },
+        req,
+      });
 
-    await logAudit({
-      actor_type: 'cms_user',
-      actor_id: admin_user_id,
-      action: 'EPC_PAYMENT_ACCOUNTS_REJECTED',
-      entity_type: 'epc_orders',
-      entity_id: order._id,
-      after_snapshot: {
-        order_number: order.order_number,
-        rejection_reason: rejection_reason.trim(),
-        payment_status: 'rejected',
-      },
-      req,
-    });
+    } else {
+      // Rejecting Milestone 1 or standard single payment
+      order.payment_status = 'rejected';
+      order.offline_payment.verification_status = 'rejected';
+      order.offline_payment.verified_by = admin_user_id;
+      order.offline_payment.verified_at = new Date();
+      order.offline_payment.rejection_reason = rejection_reason.trim();
+      order.offline_payment.notes = notes || 'Payment rejected by Accounts department';
+
+      if (hasMilestones && order.payment_milestones.milestones[0]) {
+        order.payment_milestones.milestones[0].payment_status = 'rejected';
+        order.payment_milestones.milestones[0].rejection_reason = rejection_reason.trim();
+        order.payment_milestones.milestone_verification_status = 'rejected';
+        order.markModified('payment_milestones');
+      }
+
+      await order.save();
+
+      await logAudit({
+        actor_type: 'cms_user',
+        actor_id: admin_user_id,
+        action: 'EPC_PAYMENT_ACCOUNTS_REJECTED',
+        entity_type: 'epc_orders',
+        entity_id: order._id,
+        after_snapshot: {
+          order_number: order.order_number,
+          rejection_reason: rejection_reason.trim(),
+          payment_status: 'rejected',
+        },
+        req,
+      });
+    }
   }
+
+  return order;
+}
+
+/**
+ * 4.1 Submit EPC Remaining Payment for Milestone 2 (Before Dispatch)
+ */
+async function submitEpcMilestonePayment({
+  order_id,
+  epc_id,
+  milestone_number = 2,
+  utr_number,
+  amount_paid,
+  payment_date,
+  receipt_url,
+  receipt_filename,
+  sender_bank_name,
+  account_holder_name,
+  req = null,
+}) {
+  const order = await EpcOrder.findOne({ _id: order_id, epc_id });
+  if (!order) {
+    throw new Error('Order record not found or unauthorized access.');
+  }
+
+  const cleanUtr = utr_number ? utr_number.trim().toUpperCase() : null;
+  if (!cleanUtr) {
+    throw new Error('A valid UTR / Transaction Reference Number is required for payment submission.');
+  }
+
+  if (!order.payment_milestones) {
+    order.payment_milestones = { milestones: [] };
+  }
+
+  let m2 = order.payment_milestones.milestones.find(m => m.milestone_number === Number(milestone_number));
+  if (!m2) {
+    const remainingAmount = order.payment_milestones.remaining_amount || Math.round((order.grand_total_paise / 100) * 0.7);
+    m2 = {
+      milestone_number: 2,
+      title: 'Remaining Payment Before Dispatch',
+      percentage: 70,
+      amount: remainingAmount,
+      stage: 'before_dispatch',
+      tat_days: 2,
+      payment_status: 'pending_verification',
+    };
+    order.payment_milestones.milestones.push(m2);
+  }
+
+  m2.payment_status = 'pending_verification';
+  m2.utr_number = cleanUtr;
+  m2.amount_paid = Number(amount_paid) || m2.amount || order.payment_milestones.remaining_amount || 0;
+  m2.payment_date = payment_date ? new Date(payment_date) : new Date();
+  m2.receipt_url = receipt_url || m2.receipt_url;
+  m2.receipt_filename = receipt_filename || m2.receipt_filename;
+  m2.sender_bank_name = sender_bank_name ? sender_bank_name.trim() : m2.sender_bank_name;
+  m2.account_holder_name = account_holder_name ? account_holder_name.trim() : m2.account_holder_name;
+  m2.rejection_reason = null;
+
+  order.payment_milestones.milestone_verification_status = 'final_payment_pending_verification';
+  order.payment_milestones.current_milestone_due = 2;
+  order.markModified('payment_milestones');
+
+  await order.save();
+
+  await logAudit({
+    actor_type: 'epc_buyer',
+    actor_id: epc_id,
+    action: 'EPC_MILESTONE_2_PAYMENT_SUBMITTED',
+    entity_type: 'epc_orders',
+    entity_id: order._id,
+    after_snapshot: {
+      order_number: order.order_number,
+      utr_number: cleanUtr,
+      milestone_number,
+      amount_paid: m2.amount_paid,
+    },
+    req,
+  });
 
   return order;
 }
@@ -1089,4 +1358,5 @@ module.exports = {
   generateInvoiceNumber,
   assignVehicleToOrder,
   updateOrderStage,
+  submitEpcMilestonePayment,
 };

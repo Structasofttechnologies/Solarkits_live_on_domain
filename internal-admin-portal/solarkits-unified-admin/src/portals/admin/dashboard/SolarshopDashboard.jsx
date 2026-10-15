@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaUserShield, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -42,6 +42,7 @@ const EstimatorSettingsAdmin = lazy(() => import("../pages/solar-shop/estimator-
 // ── Region Payment Configuration & Offline Approval Queue ───────────────────
 const RegionPaymentConfig = lazy(() => import("../pages/solar-shop/payment-configuration/RegionPaymentConfig"));
 const OfflineApprovalQueue = lazy(() => import("../pages/solar-shop/payment-configuration/OfflineApprovalQueue"));
+const PaymentMilestoneSettings = lazy(() => import("../pages/solar-shop/payment-configuration/PaymentMilestoneSettings"));
 
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
@@ -49,6 +50,7 @@ const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
 const WarehousePoConfig = lazy(() => import("../pages/solar-shop/po-orders/WarehousePoConfig"));
 const LooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/LooseOrders"));
 const WarehouseLooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/WarehouseLooseOrders"));
+const AdminEpcOrders = lazy(() => import("../pages/solar-shop/epc-orders/AdminEpcOrders"));
 const OrderManagementSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderManagementSettings"));
 const OffersManagement = lazy(() => import("../pages/solar-shop/order-management-settings/OffersManagement"));
 const CheckoutCartSettings = lazy(() => import("../pages/solar-shop/order-management-settings/CheckoutCartSettings"));
@@ -127,6 +129,7 @@ const menus = [
         },
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
         { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
+        { name: "EPC Orders & Approvals", icon: <FaUserShield />, path: "/admin-panel/solar-shop/epc-orders", unique_id: "00000000" },
         {
             name: "Delivery Management",
             icon: <FaTruck />,
@@ -462,6 +465,12 @@ const menus = [
                     unique_id: "00000000"
                 },
                 {
+                    name: "Payment Milestones",
+                    icon: <FaPercent />,
+                    path: "/admin-panel/solar-shop/payment-configuration/milestones",
+                    unique_id: "00000000"
+                },
+                {
                     name: "Offline Approval Queue",
                     icon: <FiCheckSquare />,
                     path: "/admin-panel/solar-shop/payment-configuration/offline-approvals",
@@ -673,6 +682,14 @@ export default function SolarShopDashboard() {
                                         }
                                     />
                                     <Route
+                                        path="/epc-orders"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading EPC Orders & Approvals..." />}>
+                                                <AdminEpcOrders />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
                                         path="/vehicles-drivers"
                                         element={<Navigate to="../delivery-management/fleet" replace />}
                                     />
@@ -744,6 +761,14 @@ export default function SolarShopDashboard() {
                                                     <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
                                                 </Suspense>
                                             </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/epc-orders"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading EPC Orders & Approvals..." />}>
+                                                <AdminEpcOrders />
+                                            </Suspense>
                                         }
                                     />
                                     <Route
@@ -1468,6 +1493,22 @@ export default function SolarShopDashboard() {
                                         element={
                                             <Suspense fallback={<Loader text="Loading Payment Configuration..." />}>
                                                 <RegionPaymentConfig />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/payment-configuration/milestones"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Milestones..." />}>
+                                                <PaymentMilestoneSettings />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/payment-configuration/milestones"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Milestones..." />}>
+                                                <PaymentMilestoneSettings />
                                             </Suspense>
                                         }
                                     />

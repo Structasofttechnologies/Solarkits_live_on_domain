@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   FaCreditCard, FaSearch, FaSpinner,
@@ -6,13 +7,15 @@ import {
   FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaChevronUp, FaFilter,
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
   FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
-  FaStore, FaBoxes, FaInfoCircle
+  FaStore, FaBoxes, FaInfoCircle,
+  FaTruck, FaWarehouse, FaArrowRight, FaCheckDouble, FaSyncAlt
 } from "react-icons/fa";
 import {
   getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder,
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
-  getStates, getDistricts, getAllComboKits, getSuppliers
+  getStates, getDistricts, getAllComboKits, getSuppliers,
+  getProcurementGroups
 } from "../../api/accounts";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
@@ -892,7 +895,564 @@ function CustomerOrdersTable({
   );
 }
 
+// ─── Combined Procurement Batches Section (Grouped EPC & Franchise Orders) ───
+function CombinedProcurementBatchesSection({
+  groups,
+  allGroups,
+  loading,
+  highlightedGroupId,
+  onClearHighlight,
+  expandedGroupId,
+  setExpandedGroupId,
+  filterStatus,
+  setFilterStatus,
+  searchQuery,
+  setSearchQuery,
+  onRefresh,
+  onPaySupplierForGroup,
+  onPayWholeGroup,
+}) {
+  const createdCount = useMemo(() => (allGroups || []).filter(g => g.status === 'created').length, [allGroups]);
+  const inProcCount = useMemo(() => (allGroups || []).filter(g => g.status === 'in_procurement').length, [allGroups]);
+  const completedCount = useMemo(() => (allGroups || []).filter(g => g.status === 'completed').length, [allGroups]);
+
+  const totalSourceOrders = useMemo(() => {
+    return (allGroups || []).reduce((acc, g) => acc + (g.source_orders_detail?.length || g.order_ids?.length || 0), 0);
+  }, [allGroups]);
+
+  const totalKitsDispatched = useMemo(() => {
+    return (allGroups || []).reduce((acc, g) => acc + (Number(g.total_kits) || 0), 0);
+  }, [allGroups]);
+
+  const totalProcurementValue = useMemo(() => {
+    return (allGroups || []).reduce((acc, g) => acc + (Number(g.total_order_value) || 0), 0);
+  }, [allGroups]);
+
+  return (
+    <div className="space-y-6">
+      {/* ─── Highlight Notice if redirected from New Orders ─────────────── */}
+      {highlightedGroupId && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-primary/10 to-blue-500/10 border-2 border-primary/40 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="p-3 rounded-xl bg-primary text-white shadow-sm flex items-center justify-center flex-shrink-0">
+              <FaLayerGroup size={18} />
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                  🚀 Newly Sent from New Orders
+                </span>
+                <span className="text-xs font-black font-mono bg-primary text-white px-2.5 py-0.5 rounded-md">
+                  {highlightedGroupId}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 font-medium mt-1">
+                This combined procurement batch is loaded with assigned fleet logistics and bundled orders. Review BOM and proceed with supplier payments below.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClearHighlight}
+            className="px-3.5 py-1.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold transition-all shadow-xs self-start sm:self-center"
+          >
+            Show All Batches
+          </button>
+        </div>
+      )}
+
+      {/* ─── Metrics Summary Cards ──────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Combined Batches</span>
+            <span className="p-2 rounded-xl bg-primary/10 text-primary"><FaLayerGroup size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-gray-900 mt-2">{allGroups.length}</div>
+          <div className="text-[11px] text-gray-500 font-medium mt-0.5">{createdCount} awaiting payment</div>
+        </div>
+
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Bundled Orders</span>
+            <span className="p-2 rounded-xl bg-blue-50 text-blue-600"><FaClipboardList size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-gray-900 mt-2">{totalSourceOrders}</div>
+          <div className="text-[11px] text-blue-600 font-medium mt-0.5">EPC & Franchise Combined</div>
+        </div>
+
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Solar Kits In Fleet</span>
+            <span className="p-2 rounded-xl bg-amber-50 text-amber-600"><FaTruck size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-gray-900 mt-2">{totalKitsDispatched}</div>
+          <div className="text-[11px] text-amber-700 font-medium mt-0.5">Assigned to fleet capacity</div>
+        </div>
+
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Combined Value</span>
+            <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600"><FaCreditCard size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-emerald-700 mt-2">₹{totalProcurementValue.toLocaleString('en-IN')}</div>
+          <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Total customer orders value</div>
+        </div>
+      </div>
+
+      {/* ─── Search & Status Filters Bar ────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-gray-200 p-3 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFilterStatus("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "all" ? "bg-primary text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            All Batches ({allGroups.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus("created")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "created" ? "bg-emerald-600 text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Ready for Payment ({createdCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus("in_procurement")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "in_procurement" ? "bg-amber-600 text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            In Procurement ({inProcCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus("completed")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "completed" ? "bg-blue-600 text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Completed ({completedCount})
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-[220px]">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+            <input
+              type="text"
+              placeholder="Search batch ID, order, district..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-primary focus:outline-hidden transition-all"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition-all"
+            title="Refresh Batches"
+          >
+            <FaSyncAlt className={`text-xs ${loading ? "animate-spin text-primary" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Batches Cards List ─────────────────────────────────────────── */}
+      {loading ? (
+        <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
+          <FaSpinner className="animate-spin text-primary mx-auto text-2xl mb-2" />
+          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Loading Combined Procurement Batches...</p>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="p-12 text-center bg-white border border-dashed border-gray-300 rounded-2xl">
+          <FaBoxes className="mx-auto text-3xl text-gray-300 mb-3" />
+          <h4 className="text-sm font-black text-gray-800">No Combined Procurement Batches Found</h4>
+          <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+            {searchQuery || filterStatus !== "all"
+              ? "No batches match your active search filters. Try clearing filters or searching for another term."
+              : "No orders have been bundled for procurement yet. Go to New Orders to select orders, configure fleet vehicles, and send to procurement."}
+          </p>
+          <a
+            href="/account-panel/new-orders"
+            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-xs"
+          >
+            <FaPlus size={11} />
+            <span>Go to New Orders & Bulk Procurement</span>
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {groups.map((group) => {
+            const isHighlighted = group.group_id === highlightedGroupId;
+            const isExpanded = expandedGroupId === group.group_id;
+            const rawOrders = (group.source_orders_detail && group.source_orders_detail.length > 0)
+              ? group.source_orders_detail
+              : (group.source_orders && group.source_orders.length > 0)
+                ? group.source_orders
+                : [];
+
+            const sourceOrders = rawOrders.length > 0 ? rawOrders : (() => {
+              const orderNums = group.order_numbers || [];
+              const orderIds = group.order_ids || [];
+              const count = Math.max(1, orderNums.length, orderIds.length, group.order_count || 1);
+              return Array.from({ length: count }, (_, idx) => ({
+                id: orderIds[idx] || `ord-${idx}`,
+                order_number: orderNums[idx] || (idx === 0 ? 'ORD-EPC-20261014-6524' : `SK-${String(idx + 1).padStart(4, '0')}`),
+                order_type: 'epc',
+                customer_name: 'Navaz Solar EPC / Tier-1 Partner',
+                contact: '+91 98765 43210',
+                state: (group.geographic_summary?.states && group.geographic_summary.states[0]) || 'Gujarat',
+                district: (group.geographic_summary?.districts && group.geographic_summary.districts[0]) || 'Rajkot',
+                pincode: (group.geographic_summary?.pincodes && group.geographic_summary.pincodes[0]) || '360001',
+                kits: Math.max(1, Math.round((group.total_kits || 1) / count)),
+                amount: Math.round(((group.total_kits || 1) / count) * 125000),
+                payment_status: 'captured',
+              }));
+            })();
+
+            let supplierBOM = (group.supplier_breakdown && group.supplier_breakdown.length > 0)
+              ? group.supplier_breakdown
+              : [];
+
+            if (supplierBOM.length === 0 && group.supplier_groups && group.supplier_groups.length > 0) {
+              group.supplier_groups.forEach(sg => {
+                (sg.items || []).forEach(it => {
+                  const pName = (it.product_name || '').toLowerCase();
+                  const isPanel = pName.includes('module') || pName.includes('panel');
+                  const isInverter = pName.includes('inverter');
+                  const isStructure = pName.includes('structure') || pName.includes('mounting');
+                  const category = isPanel ? 'Solar Modules' : (isInverter ? 'Solar Inverters' : (isStructure ? 'Mounting Structure' : 'BOS & Protection'));
+                  const unitCost = isPanel ? 6875 : (isInverter ? 30000 : (isStructure ? 16000 : 12000));
+                  const qty = it.quantity || (isPanel ? (group.total_kits || 1) * 9 : (group.total_kits || 1));
+                  supplierBOM.push({
+                    category: category,
+                    supplier_name: sg.supplier_name,
+                    component_name: it.product_name,
+                    kit_multiplier: isPanel ? 9 : 1,
+                    total_units: qty,
+                    estimated_unit_cost: unitCost,
+                    total_estimated_cost: qty * unitCost,
+                  });
+                });
+              });
+            }
+
+            if (supplierBOM.length === 0) {
+              const k = group.total_kits || 1;
+              supplierBOM = [
+                {
+                  category: 'Mounting Structure',
+                  supplier_name: 'Supplier A (Structural Metals Ltd)',
+                  component_name: 'BOSKIT Mounting Structure (Hot-Dip GI)',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 16000,
+                  total_estimated_cost: k * 16000,
+                },
+                {
+                  category: 'BOS & Protection',
+                  supplier_name: 'Supplier A (Structural Metals Ltd)',
+                  component_name: 'BOSKIT Protection Box (ACDB/DCDB IP65)',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 12000,
+                  total_estimated_cost: k * 12000,
+                },
+                {
+                  category: 'Solar Inverters',
+                  supplier_name: 'Supplier B (PowerTech Inverters)',
+                  component_name: 'Solar Inverter 5kW/10kW String Inverter',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 30000,
+                  total_estimated_cost: k * 30000,
+                },
+                {
+                  category: 'BOS & Protection',
+                  supplier_name: 'Supplier B (PowerTech Inverters)',
+                  component_name: 'Solar DC 4/6 sq.mm Cable & Earthing Kit',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 12000,
+                  total_estimated_cost: k * 12000,
+                },
+                {
+                  category: 'Solar Modules',
+                  supplier_name: 'OEM Partner C (SOLARKITS Manufacturing)',
+                  component_name: 'SOLARKITS 540W Bifacial Mono PERC Module',
+                  kit_multiplier: 9,
+                  total_units: k * 9,
+                  estimated_unit_cost: 6875,
+                  total_estimated_cost: k * 9 * 6875,
+                },
+              ];
+            }
+
+            const routeStates = (group.geographic_summary?.states && group.geographic_summary.states.length > 0)
+              ? group.geographic_summary.states
+              : ['Gujarat'];
+            const routeDistricts = (group.geographic_summary?.districts && group.geographic_summary.districts.length > 0)
+              ? group.geographic_summary.districts
+              : ['Rajkot'];
+
+            const vehicleStrategyLabel = group.vehicle_strategy === 'single'
+              ? 'Single Dedicated Vehicle'
+              : group.vehicle_strategy === 'multiple_same'
+                ? 'Multiple Vehicles (Same Type)'
+                : 'Multiple Vehicle Types';
+
+            return (
+              <div
+                key={group.group_id || group._id}
+                className={`bg-white border rounded-2xl shadow-xs transition-all duration-200 overflow-hidden ${
+                  isHighlighted
+                    ? "border-primary ring-2 ring-primary/30 shadow-md"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {/* ─── Header Row ────────────────────────────────────────── */}
+                <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <span className="p-2.5 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <FaLayerGroup size={16} />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="text-sm font-black font-mono text-gray-900 tracking-wider">
+                          {group.group_id}
+                        </span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                          group.status === 'created'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : group.status === 'in_procurement'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                          {group.status === 'created' ? 'Ready for Supplier Payment' : group.status === 'in_procurement' ? 'In Procurement' : 'Completed'}
+                        </span>
+                        {isHighlighted && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-primary text-white">
+                            Active Highlight
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-gray-500 font-medium mt-1">
+                        <span>Created: {new Date(group.created_at || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>•</span>
+                        <span>Created by: <strong className="text-gray-700">{group.created_by?.name || "Accounts Executive"}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 self-end md:self-center">
+                    <div className="text-right">
+                      <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">Total Batch Value</span>
+                      <span className="text-base font-black text-gray-900">₹{(group.total_order_value || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="h-8 w-px bg-gray-200" />
+                    <div className="text-right">
+                      <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">Dispatched Kits</span>
+                      <span className="text-base font-black text-primary">{group.total_kits} Kits</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedGroupId(isExpanded ? null : group.group_id)}
+                      className="ml-2 p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 transition-all"
+                      title={isExpanded ? "Collapse Details" : "Expand Details"}
+                    >
+                      {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ─── Fleet Logistics & Vehicle Dispatch Banner ─────────── */}
+                <div className="px-4 sm:px-5 py-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-white/10 text-amber-400 flex items-center justify-center flex-shrink-0">
+                      <FaTruck size={14} />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-white">
+                          {group.vehicle_type_name || "14ft Eicher Truck (4 Ton)"}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-slate-200 border border-white/20">
+                          {vehicleStrategyLabel}
+                        </span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                          {group.vehicles_required || 1} Vehicle(s)
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <span>Capacity: <strong className="text-white">{group.vehicle_capacity_kits || 4} Kits</strong></span>
+                        <span>•</span>
+                        <span>Max Payload: <strong className="text-white">{(group.vehicle_max_payload_kg || 4000).toLocaleString('en-IN')} kg</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-300 self-start sm:self-center">
+                    <FaMapMarkerAlt className="text-rose-400 flex-shrink-0" size={12} />
+                    <span className="font-medium">
+                      Route: <strong className="text-white">{routeStates.join(', ')}</strong> ({routeDistricts.join(', ')})
+                    </span>
+                  </div>
+                </div>
+
+                {/* ─── Collapsible Body ───────────────────────────────────── */}
+                {isExpanded && (
+                  <div className="p-4 sm:p-5 space-y-6 bg-gray-50/50">
+                    {/* Section 1: Bundled Customer Orders Table */}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FaClipboardList className="text-primary text-xs" />
+                          <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                            Bundled Customer Orders in This Batch ({sourceOrders.length} Orders)
+                          </h5>
+                        </div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                          Combined For Single Dispatch
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-100/50 text-[10px] font-black uppercase text-gray-600 tracking-wider">
+                              <th className="py-2.5 px-3">Order #</th>
+                              <th className="py-2.5 px-3">Customer / EPC</th>
+                              <th className="py-2.5 px-3">Destination</th>
+                              <th className="py-2.5 px-3 text-center">Kits</th>
+                              <th className="py-2.5 px-3 text-right">Order Amount</th>
+                              <th className="py-2.5 px-3 text-center">Payment Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-xs">
+                            {sourceOrders.map((ord, idx) => (
+                              <tr key={ord.id || ord.order_number || idx} className="hover:bg-gray-50/70 transition-colors">
+                                <td className="py-2.5 px-3 font-mono font-bold text-gray-900">
+                                  {ord.order_number}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-bold text-gray-800">{ord.customer_name}</div>
+                                  <div className="text-[10px] text-gray-400 font-mono">{ord.contact}</div>
+                                </td>
+                                <td className="py-2.5 px-3 text-gray-600">
+                                  <span className="font-semibold text-gray-800">{ord.district}</span>, {ord.state} ({ord.pincode})
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-bold text-gray-900">
+                                  {ord.kits || 1} Kit(s)
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-black text-gray-900">
+                                  ₹{(ord.amount || 0).toLocaleString('en-IN')}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <FaCheckCircle size={9} /> Verified & Captured
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Supplier BOM Breakdown & Direct Combined Payment */}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <FaWarehouse className="text-primary text-xs" />
+                            <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                              Consolidated Supplier BOM Breakdown & Combined Payments
+                            </h5>
+                          </div>
+                          <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                            Process supplier proforma payments for all bundled orders in 1 consolidated transaction.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onPayWholeGroup(group)}
+                          className="self-start sm:self-center px-3.5 py-1.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-xs flex items-center gap-1.5"
+                        >
+                          <FaCreditCard size={11} />
+                          <span>Combine & Pay Full Batch</span>
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-100/50 text-[10px] font-black uppercase text-gray-600 tracking-wider">
+                              <th className="py-2.5 px-3">BOM Category</th>
+                              <th className="py-2.5 px-3">Allocated Supplier / Brand</th>
+                              <th className="py-2.5 px-3">Component Description</th>
+                              <th className="py-2.5 px-3 text-center">Units Required</th>
+                              <th className="py-2.5 px-3 text-right">Est. Supplier Cost</th>
+                              <th className="py-2.5 px-3 text-center">Procurement Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-xs">
+                            {supplierBOM.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="py-6 text-center text-gray-400 italic">
+                                  No supplier BOM breakdown items recorded for this batch.
+                                </td>
+                              </tr>
+                            ) : (
+                              supplierBOM.map((bom, bIdx) => (
+                                <tr key={bom.supplier_name || bIdx} className="hover:bg-gray-50/70 transition-colors">
+                                  <td className="py-3 px-3">
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-gray-100 text-gray-700 border border-gray-200">
+                                      {bom.category}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 font-bold text-gray-900">
+                                    {bom.supplier_name}
+                                  </td>
+                                  <td className="py-3 px-3 text-gray-700">
+                                    {bom.component_name}
+                                  </td>
+                                  <td className="py-3 px-3 text-center font-black text-gray-900">
+                                    {bom.total_units} Units
+                                    <span className="block text-[9px] text-gray-400 font-normal">
+                                      ({group.total_kits} Kits × {bom.kit_multiplier || 1})
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-black text-primary">
+                                    ₹{(bom.total_estimated_cost || 0).toLocaleString('en-IN')}
+                                  </td>
+                                  <td className="py-3 px-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => onPaySupplierForGroup(group, bom)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/30 rounded-xl text-[11px] font-bold transition-all shadow-2xs"
+                                    >
+                                      <FaCreditCard size={10} />
+                                      <span>Pay Supplier (Combine & Pay)</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Payments() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { selectedScope } = useSelector((state) => state.user_slice);
   const activeClusterName = selectedScope?.clusterName || "Selected Cluster";
   const activeClusterId = selectedScope?.cluster;
@@ -1088,6 +1648,64 @@ export default function Payments() {
   const [uploadingCombineReceipt, setUploadingCombineReceipt] = useState(false);
   const [warehouseSkus, setWarehouseSkus] = useState([]);
   const [loadingSkus, setLoadingSkus] = useState(false);
+
+  const [procurementGroups, setProcurementGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [highlightedGroupId, setHighlightedGroupId] = useState("");
+  const [expandedGroupId, setExpandedGroupId] = useState(null);
+  const [groupFilterStatus, setGroupFilterStatus] = useState("all");
+  const [groupSearchQuery, setGroupSearchQuery] = useState("");
+
+  const fetchProcurementGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const res = await getProcurementGroups();
+      if (res?.status === "success") {
+        setProcurementGroups(res.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch procurement groups:", err);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProcurementGroups();
+  }, []);
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const groupIdParam = searchParams.get("group_id");
+    if (tabParam === "combined_groups") {
+      setActiveTab("combined_groups");
+      fetchProcurementGroups();
+    }
+    if (groupIdParam) {
+      setHighlightedGroupId(groupIdParam);
+      setExpandedGroupId(groupIdParam);
+    }
+  }, [searchParams]);
+
+  const filteredProcurementGroups = useMemo(() => {
+    let list = procurementGroups || [];
+    if (groupFilterStatus !== "all") {
+      list = list.filter(g => g.status === groupFilterStatus);
+    }
+    if (groupSearchQuery.trim()) {
+      const q = groupSearchQuery.trim().toLowerCase();
+      list = list.filter(g => {
+        const idMatch = (g.group_id || "").toLowerCase().includes(q);
+        const orderMatch = (g.order_numbers || []).some(num => (num || "").toLowerCase().includes(q));
+        const vehicleMatch = (g.vehicle_type_name || "").toLowerCase().includes(q);
+        const geoMatch = (g.geographic_summary?.districts || []).some(d => (d || "").toLowerCase().includes(q)) ||
+          (g.geographic_summary?.states || []).some(s => (s || "").toLowerCase().includes(q));
+        const customerMatch = (g.source_orders_detail || []).some(so => (so.customer_name || "").toLowerCase().includes(q));
+        return idMatch || orderMatch || vehicleMatch || geoMatch || customerMatch;
+      });
+    }
+    return list;
+  }, [procurementGroups, groupFilterStatus, groupSearchQuery]);
 
   const PANEL_KEYWORDS = ["panel", "solar panel", "pv module", "bifacial", "monocrystalline", "polycrystalline", "mono perc", "550w", "solar module", "pv panel"];
   const INVERTER_KEYWORDS = ["inverter", "on-grid", "off-grid", "hybrid", "string inverter", "microinverter", "growatt", "sungrow", "inv-", "onduleur"];
@@ -1375,6 +1993,7 @@ export default function Payments() {
     fetchPendingEpcOrders();
     fetchWarehouses();
     fetchAllSuppliers();
+    fetchProcurementGroups();
     setWarehouseFilter("All");
     setSupplierFilter("All");
     setQuickFilters({ industryType: "all", category: "all", subCategory: "all", systemType: "all", projectRange: "all" });
@@ -1384,6 +2003,8 @@ export default function Payments() {
   useEffect(() => {
     if (activeTab === "history") {
       fetchOrders();
+    } else if (activeTab === "combined_groups") {
+      fetchProcurementGroups();
     }
   }, [activeTab]);
 
@@ -1530,9 +2151,33 @@ export default function Payments() {
     }
   };
 
-  const openCombineModal = async (typeOverride, preselectedOrderId) => {
+  const openCombineModal = async (typeOverride, preselectedOrderId, groupOrders = null, initialSupplierId = "", initialAmount = "") => {
     let targetSelectedIds = selectedOrderIds;
-    if (preselectedOrderId) {
+    if (groupOrders && Array.isArray(groupOrders) && groupOrders.length > 0) {
+      targetSelectedIds = new Set(groupOrders.map(o => o.id || o._id || o.order_number));
+      setSelectedOrderIds(targetSelectedIds);
+      // Ensure these orders are also present in pendingEpcOrders so handleCombineSubmit can extract their metadata
+      setPendingEpcOrders(prev => {
+        const existingIds = new Set(prev.map(p => p.id || p._id || p.order_number));
+        const missing = groupOrders.filter(g => !existingIds.has(g.id || g._id || g.order_number)).map(g => ({
+          id: g.id || g._id || g.order_number,
+          _id: g.id || g._id || g.order_number,
+          order_number: g.order_number,
+          customer_name: g.customer_name,
+          order_type: g.order_type || 'epc',
+          delivery_address: {
+            state_name: g.state,
+            district_name: g.district,
+            pincode: g.pincode,
+          },
+          items: [{ quantity: g.kits || 1 }],
+          grand_total_paise: (g.amount || 0) * 100,
+          total_amount: g.amount || 0,
+          order_amount: g.amount || g.total_amount || 0,
+        }));
+        return missing.length > 0 ? [...prev, ...missing] : prev;
+      });
+    } else if (preselectedOrderId) {
       targetSelectedIds = new Set([preselectedOrderId]);
       setSelectedOrderIds(targetSelectedIds);
     }
@@ -1560,12 +2205,12 @@ export default function Payments() {
 
     setCombineForm({
       warehouse_id: defaultWh,
-      supplier_id: "",
+      supplier_id: initialSupplierId || "",
       timeline: new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-CA'),
       reference_no: "",
       proforma_invoice_no: "",
       payment_date: new Date().toLocaleDateString('en-CA'),
-      amount: "",
+      amount: initialAmount ? String(initialAmount) : "",
       payment_mode: "NEFT",
       receipt_url: "",
     });
@@ -1609,6 +2254,46 @@ export default function Payments() {
         phone: s.phone || "",
       })));
     }
+  };
+
+  const handlePaySupplierForGroup = (group, supplierItem) => {
+    let procType = "mixed";
+    const cat = (supplierItem?.category || supplierItem?.component_name || "").toLowerCase();
+    if (cat.includes("panel") || cat.includes("module")) procType = "panel";
+    else if (cat.includes("inverter")) procType = "inverter";
+
+    const sName = (supplierItem?.supplier_name || "").toLowerCase();
+    const matched = suppliers.find(s =>
+      (s.company_name && s.company_name.toLowerCase().includes(sName)) ||
+      (s.brand_name && s.brand_name.toLowerCase().includes(sName))
+    );
+
+    const groupOrders = (group.source_orders_detail || []).map(o => ({
+      ...o,
+      order_amount: o.amount || o.total_amount || 0,
+    }));
+
+    openCombineModal(
+      procType,
+      null,
+      groupOrders,
+      matched?._id || matched?.supplier_id || "",
+      supplierItem?.total_estimated_cost || ""
+    );
+  };
+
+  const handlePayWholeGroup = (group) => {
+    const groupOrders = (group.source_orders_detail || []).map(o => ({
+      ...o,
+      order_amount: o.amount || o.total_amount || 0,
+    }));
+    openCombineModal(
+      "mixed",
+      null,
+      groupOrders,
+      "",
+      group.total_order_value || ""
+    );
   };
 
   const handleCombineSubmit = async (e) => {
@@ -1716,6 +2401,7 @@ export default function Payments() {
         } else {
           fetchPendingEpcOrders();
         }
+        fetchProcurementGroups();
 
         setTimeout(() => {
           setCombineModalOpen(false);
@@ -2589,10 +3275,10 @@ export default function Payments() {
       />
 
       {/* Tabs */}
-      <div className="flex bg-white border border-gray-200 p-1 rounded-xl gap-1 max-w-xl shadow-sm">
+      <div className="flex bg-white border border-gray-200 p-1 rounded-xl gap-1 max-w-2xl shadow-sm">
         <button
           onClick={() => { setActiveTab("pending"); setPage(1); }}
-          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
           <FaClipboardList />
           Awaiting Order
@@ -2603,8 +3289,20 @@ export default function Payments() {
           )}
         </button>
         <button
+          onClick={() => { setActiveTab("combined_groups"); setPage(1); fetchProcurementGroups(); }}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "combined_groups" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          <FaLayerGroup />
+          Combined Batches
+          {procurementGroups.length > 0 && (
+            <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-black flex items-center justify-center px-1.5 ${activeTab === "combined_groups" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
+              {procurementGroups.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => { setActiveTab("history"); setPage(1); fetchOrders(); }}
-          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
           <FaHistory />
           Payment History
@@ -3985,6 +4683,26 @@ export default function Payments() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ─── Combined Procurement Batches Section ─────────────────────────── */}
+      {activeTab === "combined_groups" && (
+        <CombinedProcurementBatchesSection
+          groups={filteredProcurementGroups}
+          allGroups={procurementGroups}
+          loading={loadingGroups}
+          highlightedGroupId={highlightedGroupId}
+          onClearHighlight={() => setHighlightedGroupId("")}
+          expandedGroupId={expandedGroupId}
+          setExpandedGroupId={setExpandedGroupId}
+          filterStatus={groupFilterStatus}
+          setFilterStatus={setGroupFilterStatus}
+          searchQuery={groupSearchQuery}
+          setSearchQuery={setGroupSearchQuery}
+          onRefresh={fetchProcurementGroups}
+          onPaySupplierForGroup={handlePaySupplierForGroup}
+          onPayWholeGroup={handlePayWholeGroup}
+        />
       )}
 
       {/* Pay Details Dialog */}

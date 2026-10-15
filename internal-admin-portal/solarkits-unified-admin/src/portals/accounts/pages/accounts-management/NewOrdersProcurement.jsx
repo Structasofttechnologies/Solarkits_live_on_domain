@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   FaBoxes, FaShoppingCart, FaSearch, FaFilter, FaTruck, FaWarehouse,
   FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaPaperPlane,
@@ -20,6 +21,7 @@ import Dialog from "../../components/Dialog";
 import Loader from "../../components/Loader";
 
 export default function NewOrdersProcurement() {
+  const navigate = useNavigate();
   const { user } = useSelector((state) => state.user_slice || {});
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -261,6 +263,8 @@ export default function NewOrdersProcurement() {
     try {
       const payload = {
         order_ids: selectedOrderIds,
+        orders_data: selectedOrdersList,
+        supplier_breakdown: dynamicSupplierBOM,
         vehicle_id: selectedVehicleId,
         vehicle_strategy: vehicleStrategy,
         vehicle_count: calculationData?.vehicle_assignment?.vehicle_count || 1,
@@ -269,11 +273,16 @@ export default function NewOrdersProcurement() {
 
       const res = await submitProcurementGroup(payload);
       if (res?.status === "success") {
+        const createdGroupId = res.data?.group_id;
         setSubmittedGroup(res.data);
         setShowConfirmModal(false);
-        showNotification("success", `Procurement Group #${res.data.group_id} successfully created and sent to Procurement!`);
+        showNotification("success", `Procurement Group #${createdGroupId} successfully created and sent to Procurement! Redirecting to Supplier Payments...`);
         // Refresh orders to reflect updated status
         fetchOrders();
+        // Direct seamless handoff to Supplier Payments!
+        setTimeout(() => {
+          navigate(`/account-panel/payments?tab=combined_groups&group_id=${createdGroupId}`);
+        }, 1200);
       }
     } catch (err) {
       console.error("Submission error:", err);
@@ -293,6 +302,36 @@ export default function NewOrdersProcurement() {
   const selectedKitsCount = useMemo(() => {
     return selectedOrdersList.reduce((acc, o) => acc + (o.kits || 1), 0);
   }, [selectedOrdersList]);
+
+  // Dynamic Kit Type Breakdown derived from selected orders
+  const dynamicKitBreakdown = useMemo(() => {
+    if (calculationData?.kit_type_breakdown && calculationData.kit_type_breakdown.length > 0) {
+      return calculationData.kit_type_breakdown;
+    }
+    const map = {};
+    selectedOrdersList.forEach((o) => {
+      const type = o.kit_type || "ComboKit A";
+      map[type] = (map[type] || 0) + (o.kits || 1);
+    });
+    const entries = Object.entries(map).map(([kit_type, quantity]) => ({ kit_type, quantity }));
+    if (entries.length > 0) return entries;
+    return [{ kit_type: "ComboKit A", quantity: selectedKitsCount || 1 }];
+  }, [calculationData, selectedOrdersList, selectedKitsCount]);
+
+  // Dynamic Supplier BOM derived from selected equipment
+  const dynamicSupplierBOM = useMemo(() => {
+    if (calculationData?.supplier_details && calculationData.supplier_details.length > 0) {
+      return calculationData.supplier_details;
+    }
+    const kits = selectedKitsCount > 0 ? selectedKitsCount : 1;
+    return [
+      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Mounting Structure (Hot-Dip GI)", qty: kits, warehouse: "WH-01" },
+      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Protection Box (ACDB/DCDB IP65)", qty: kits, warehouse: "WH-01" },
+      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar Inverter 5kW/10kW String Inverter", qty: kits, warehouse: "WH-02" },
+      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar DC 4/6 sq.mm Cable & Earthing Kit", qty: kits, warehouse: "WH-02" },
+      { supplier_name: "OEM Partner C (SOLARKITS Manufacturing)", product: "SOLARKITS 540W Bifacial Mono PERC Module", qty: kits * 9, warehouse: "WH-03" },
+    ];
+  }, [calculationData, selectedKitsCount]);
 
   // Suggested group ID
   const displayGroupId = submittedGroup?.group_id || `PG-${new Date().getFullYear()}-0001`;
@@ -622,32 +661,10 @@ export default function NewOrdersProcurement() {
                 </div>
               </div>
 
-              {/* Vehicle Selection Strategy */}
-              <div>
-                <label className="block text-[11px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider mb-1.5">
-                  Vehicle Selection Strategy
-                </label>
-                <div className="space-y-1">
-                  {[
-                    { id: "single", label: "One vehicle for the group" },
-                    { id: "multiple_same", label: "Multiple vehicles of same type" },
-                    { id: "multiple_types", label: "Multiple vehicle types" },
-                  ].map((strat) => (
-                    <label
-                      key={strat.id}
-                      className="flex items-center gap-2 cursor-pointer p-1 rounded-lg hover:bg-emerald-100/40 dark:hover:bg-emerald-900/20 text-text-primary text-[11px]"
-                    >
-                      <input
-                        type="radio"
-                        name="vehicle_strategy"
-                        checked={vehicleStrategy === strat.id}
-                        onChange={() => setVehicleStrategy(strat.id)}
-                        className="text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>{strat.label}</span>
-                    </label>
-                  ))}
-                </div>
+              {/* Batch Info Note */}
+              <div className="p-2.5 rounded-xl bg-emerald-100/50 dark:bg-emerald-900/20 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                <FaTruck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Vehicle fleet &amp; multi-truck dispatch strategy are configured in <strong>Step 4</strong> after reviewing orders.</span>
               </div>
 
               {/* Selection Method */}
@@ -891,23 +908,57 @@ export default function NewOrdersProcurement() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Left: Vehicle Options & Capacity Calculation */}
           <div className="lg:col-span-5 space-y-4">
-            {/* Vehicle Options */}
-            <div className="bg-surface border border-orange-200/60 dark:border-orange-900/30 rounded-xl p-3.5">
-              <label className="block text-xs font-black text-orange-900 dark:text-orange-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <FaTruck className="w-3.5 h-3.5 text-orange-600" />
-                Select Fleet Vehicle
-              </label>
-              <select
-                value={selectedVehicleId}
-                onChange={(e) => setSelectedVehicleId(e.target.value)}
-                className="w-full text-xs py-2 px-3 bg-surface border border-border rounded-xl text-text-primary focus:ring-1 focus:ring-orange-500 font-medium"
-              >
-                {vehicles.map((v) => (
-                  <option key={v._id} value={v._id}>
-                    {v.name} — Payload Cap: {(v.max_load_kg || 15000).toLocaleString()} kg
-                  </option>
-                ))}
-              </select>
+            {/* Vehicle Options & Strategy Unified Block */}
+            <div className="bg-surface border border-orange-200/60 dark:border-orange-900/30 rounded-xl p-3.5 space-y-3">
+              <div>
+                <label className="block text-xs font-black text-orange-900 dark:text-orange-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <FaTruck className="w-3.5 h-3.5 text-orange-600" />
+                  Select Fleet Vehicle
+                </label>
+                <select
+                  value={selectedVehicleId}
+                  onChange={(e) => setSelectedVehicleId(e.target.value)}
+                  className="w-full text-xs py-2 px-3 bg-surface border border-border rounded-xl text-text-primary focus:ring-1 focus:ring-orange-500 font-medium"
+                >
+                  {vehicles.map((v) => (
+                    <option key={v._id} value={v._id}>
+                      {v.name} — Payload Cap: {(v.max_load_kg || 15000).toLocaleString()} kg
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Vehicle Selection Strategy (End-to-End after Order Selection) */}
+              <div className="pt-2 border-t border-border/60">
+                <label className="block text-[11px] font-bold text-orange-900 dark:text-orange-300 uppercase tracking-wider mb-1.5">
+                  Vehicle Dispatch Strategy
+                </label>
+                <div className="space-y-1.5">
+                  {[
+                    { id: "single", label: "One vehicle for the group" },
+                    { id: "multiple_same", label: "Multiple vehicles of same type" },
+                    { id: "multiple_types", label: "Multiple vehicle types" },
+                  ].map((strat) => (
+                    <label
+                      key={strat.id}
+                      className={`flex items-center gap-2 cursor-pointer p-1.5 rounded-lg border text-[11px] font-medium transition-all ${
+                        vehicleStrategy === strat.id
+                          ? "bg-orange-50 border-orange-300 text-orange-900 dark:bg-orange-950/40 dark:border-orange-800 dark:text-orange-200 font-bold"
+                          : "border-transparent hover:bg-surface-hover text-text-primary"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="vehicle_strategy_s4"
+                        checked={vehicleStrategy === strat.id}
+                        onChange={() => setVehicleStrategy(strat.id)}
+                        className="text-orange-600 focus:ring-orange-500"
+                      />
+                      <span>{strat.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Capacity Calculation Stats */}
@@ -933,7 +984,7 @@ export default function NewOrdersProcurement() {
               <div className="flex justify-between items-center text-xs">
                 <span className="text-text-secondary">Vehicle Capacity:</span>
                 <span className="font-bold text-text-primary font-mono">
-                  {(calculationData?.vehicle_assignment?.total_capacity_kg || 200000).toLocaleString()} kg
+                  {(calculationData?.vehicle_assignment?.total_capacity_kg || (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)).toLocaleString()} kg
                 </span>
               </div>
 
@@ -941,14 +992,14 @@ export default function NewOrdersProcurement() {
                 <span className="text-text-secondary font-bold">Utilization:</span>
                 <span
                   className={`font-black font-mono text-sm ${
-                    (calculationData?.vehicle_assignment?.utilization_pct || 0) > 100
+                    (calculationData?.vehicle_assignment?.utilization_pct || Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) > 100
                       ? "text-red-600"
-                      : (calculationData?.vehicle_assignment?.utilization_pct || 0) > 85
+                      : (calculationData?.vehicle_assignment?.utilization_pct || Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) > 85
                       ? "text-amber-600"
                       : "text-emerald-600"
                   }`}
                 >
-                  {calculationData?.vehicle_assignment?.utilization_pct || 71}%
+                  {calculationData?.vehicle_assignment?.utilization_pct || Math.min(100, Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) || 0}%
                 </span>
               </div>
 
@@ -963,7 +1014,7 @@ export default function NewOrdersProcurement() {
                       : "bg-emerald-500"
                   }`}
                   style={{
-                    width: `${Math.min(100, calculationData?.vehicle_assignment?.utilization_pct || 71)}%`,
+                    width: `${Math.min(100, calculationData?.vehicle_assignment?.utilization_pct || Math.min(100, Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) || 0)}%`,
                   }}
                 />
               </div>
@@ -984,7 +1035,7 @@ export default function NewOrdersProcurement() {
                     ? `Over-capacity! Loaded weight exceeds selected vehicle limit by ${(calculationData.vehicle_assignment.unallocated_kits || 0)} kits. Consider multiple vehicles.`
                     : calculationData?.vehicle_assignment?.validation_status === "Warning"
                     ? "Warning: Vehicle load is near max capacity (>85%). Ensure secure packaging."
-                    : "Validate vehicle capacity. Ensure selected load is within the limit."}
+                    : "Vehicle capacity validated. Selected equipment load is within permissible limits."}
                 </span>
               </div>
             </div>
@@ -996,7 +1047,7 @@ export default function NewOrdersProcurement() {
             <div className="bg-surface border border-orange-200/60 dark:border-orange-900/30 rounded-xl p-4">
               <h3 className="text-xs font-black text-orange-900 dark:text-orange-300 uppercase tracking-wider mb-2.5 flex items-center justify-between">
                 <span>Kit Type Breakdown</span>
-                <span className="text-[10px] text-text-muted font-normal lowercase">calculated from BOM</span>
+                <span className="text-[10px] text-text-muted font-normal lowercase">calculated dynamically from orders</span>
               </h3>
 
               <div className="overflow-x-auto">
@@ -1008,12 +1059,7 @@ export default function NewOrdersProcurement() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    {(calculationData?.kit_type_breakdown || [
-                      { kit_type: "ComboKit A", quantity: 800 },
-                      { kit_type: "ComboKit B", quantity: 750 },
-                      { kit_type: "ComboKit C", quantity: 650 },
-                      { kit_type: "ComboKit D", quantity: 650 },
-                    ]).map((row, idx) => (
+                    {dynamicKitBreakdown.map((row, idx) => (
                       <tr key={idx} className="hover:bg-surface-hover/40">
                         <td className="py-2 px-3 font-semibold text-text-primary">{row.kit_type}</td>
                         <td className="py-2 px-3 text-right font-bold text-text-primary font-mono">
@@ -1039,7 +1085,7 @@ export default function NewOrdersProcurement() {
                   Vehicle Assignment
                 </span>
                 <span className="text-[11px] font-black text-orange-600 bg-orange-100 dark:bg-orange-950/50 px-2 py-0.5 rounded-lg">
-                  {calculationData?.vehicle_assignment?.vehicle_name || "12MT Truck"}
+                  {vehicles.find(v => v._id === selectedVehicleId)?.name || calculationData?.vehicle_assignment?.vehicle_name || "Assigned Vehicle"}
                 </span>
               </div>
 
@@ -1047,19 +1093,19 @@ export default function NewOrdersProcurement() {
                 <div>
                   <span className="text-[10px] text-text-muted block">Capacity</span>
                   <span className="font-bold text-text-primary font-mono">
-                    {(calculationData?.vehicle_assignment?.single_capacity_kg || 15000).toLocaleString()} kg
+                    {(vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || calculationData?.vehicle_assignment?.single_capacity_kg || 15000).toLocaleString()} kg
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-muted block">Estimated Load</span>
                   <span className="font-bold text-text-primary font-mono">
-                    {(calculationData?.vehicle_assignment?.estimated_load_kg || 10650).toLocaleString()} kg
+                    {(calculationData?.vehicle_assignment?.estimated_load_kg || selectedKitsCount * 50).toLocaleString()} kg
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-muted block">Utilization</span>
                   <span className="font-bold text-emerald-600 font-mono">
-                    {calculationData?.vehicle_assignment?.utilization_pct || 71}%
+                    {calculationData?.vehicle_assignment?.utilization_pct || Math.min(100, Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) || 0}%
                   </span>
                 </div>
               </div>
@@ -1091,25 +1137,25 @@ export default function NewOrdersProcurement() {
           <div className="bg-surface border border-cyan-200/60 dark:border-cyan-900/30 rounded-xl p-3 text-center">
             <span className="text-[11px] font-bold text-text-secondary block">Total Suppliers / Vendors</span>
             <p className="text-xl font-black text-cyan-900 dark:text-cyan-300 mt-0.5">
-              {calculationData?.procurement_summary?.total_suppliers || 3}
+              {new Set(dynamicSupplierBOM.map(s => s.supplier_name)).size}
             </p>
           </div>
           <div className="bg-surface border border-cyan-200/60 dark:border-cyan-900/30 rounded-xl p-3 text-center">
             <span className="text-[11px] font-bold text-text-secondary block">Total Products to Procure</span>
             <p className="text-xl font-black text-cyan-900 dark:text-cyan-300 mt-0.5">
-              {calculationData?.procurement_summary?.total_products || 18}
+              {dynamicSupplierBOM.length}
             </p>
           </div>
           <div className="bg-surface border border-cyan-200/60 dark:border-cyan-900/30 rounded-xl p-3 text-center">
             <span className="text-[11px] font-bold text-text-secondary block">Total Quantity</span>
             <p className="text-xl font-black text-cyan-900 dark:text-cyan-300 mt-0.5 font-mono">
-              {(calculationData?.procurement_summary?.total_quantity || 12450).toLocaleString()}
+              {dynamicSupplierBOM.reduce((sum, it) => sum + (it.qty || 0), 0).toLocaleString()}
             </p>
           </div>
           <div className="bg-surface border border-cyan-200/60 dark:border-cyan-900/30 rounded-xl p-3 text-center">
             <span className="text-[11px] font-bold text-text-secondary block">Procurement Groups</span>
             <p className="text-xl font-black text-cyan-900 dark:text-cyan-300 mt-0.5">
-              {calculationData?.procurement_summary?.procurement_groups || 1}
+              1
             </p>
           </div>
         </div>
@@ -1126,14 +1172,7 @@ export default function NewOrdersProcurement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {(calculationData?.supplier_details || [
-                { supplier_name: "Supplier A", product: "BOSKIT Component A", qty: 5200, warehouse: "WH-01" },
-                { supplier_name: "Supplier A", product: "BOSKIT Component B", qty: 3150, warehouse: "WH-01" },
-                { supplier_name: "Supplier B", product: "BOSKIT Component C", qty: 2800, warehouse: "WH-02" },
-                { supplier_name: "Supplier B", product: "BOSKIT Component D", qty: 1450, warehouse: "WH-02" },
-                { supplier_name: "OEM Partner C", product: "SOLARKITS Module X", qty: 850, warehouse: "WH-03" },
-                { supplier_name: "OEM Partner C", product: "SOLARKITS Module Y", qty: 600, warehouse: "WH-03" },
-              ]).map((item, idx) => (
+              {dynamicSupplierBOM.map((item, idx) => (
                 <tr key={idx} className="hover:bg-cyan-50/40 dark:hover:bg-cyan-950/20">
                   <td className="py-2 px-3 font-bold text-cyan-900 dark:text-cyan-300">
                     {item.supplier_name}
@@ -1142,11 +1181,11 @@ export default function NewOrdersProcurement() {
                     {item.product}
                   </td>
                   <td className="py-2 px-3 text-center font-bold text-text-primary font-mono">
-                    {item.qty.toLocaleString()}
+                    {(item.qty || 0).toLocaleString()}
                   </td>
                   <td className="py-2 px-3 text-text-secondary">
                     <span className="px-2 py-0.5 rounded-md bg-surface-hover text-[11px] font-mono">
-                      {item.warehouse}
+                      {item.warehouse || "WH-01"}
                     </span>
                   </td>
                 </tr>
@@ -1215,7 +1254,7 @@ export default function NewOrdersProcurement() {
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Vehicle Capacity Req:</span>
-              <span className="font-bold text-text-primary">15,000 kg (per vehicle)</span>
+              <span className="font-bold text-text-primary">{(vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000).toLocaleString()} kg</span>
             </div>
           </div>
 
@@ -1224,15 +1263,15 @@ export default function NewOrdersProcurement() {
             <span className="font-bold text-teal-900 dark:text-teal-300 block mb-1">Geography</span>
             <div className="flex justify-between">
               <span className="text-text-muted">States:</span>
-              <span className="font-bold text-text-primary">{calculationData?.geography?.states_count || 5}</span>
+              <span className="font-bold text-text-primary">{new Set(selectedOrdersList.map(o => o.state_name).filter(Boolean)).size || 1}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Districts:</span>
-              <span className="font-bold text-text-primary">{calculationData?.geography?.districts_count || 12}</span>
+              <span className="font-bold text-text-primary">{new Set(selectedOrdersList.map(o => o.district_name).filter(Boolean)).size || 1}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Pincodes:</span>
-              <span className="font-bold text-text-primary">{calculationData?.geography?.pincodes_count || 48}</span>
+              <span className="font-bold text-text-primary">{new Set(selectedOrdersList.map(o => o.pincode).filter(Boolean)).size || 1}</span>
             </div>
           </div>
 
@@ -1359,21 +1398,21 @@ export default function NewOrdersProcurement() {
               <span className="font-bold font-mono">{(calculationData?.total_weight_est_kg || selectedKitsCount * 50).toLocaleString()} kg</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-text-muted">Assigned Vehicle:</span>
-              <span className="font-bold">{calculationData?.vehicle_assignment?.vehicle_name || "12MT Truck"}</span>
+              <span className="text-text-muted">Assigned Fleet Vehicle:</span>
+              <span className="font-bold">{vehicles.find(v => v._id === selectedVehicleId)?.name || calculationData?.vehicle_assignment?.vehicle_name || "Assigned Vehicle"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-text-muted">Supplier / OEM Groups:</span>
-              <span className="font-bold">{calculationData?.procurement_summary?.total_suppliers || 3} Partners</span>
+              <span className="text-text-muted">Supplier / OEM Partners:</span>
+              <span className="font-bold">{new Set(dynamicSupplierBOM.map(s => s.supplier_name)).size} Partners</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Total Products:</span>
-              <span className="font-bold font-mono">{(calculationData?.procurement_summary?.total_quantity || 12450).toLocaleString()} units</span>
+              <span className="font-bold font-mono">{dynamicSupplierBOM.reduce((acc, it) => acc + (it.qty || 0), 0).toLocaleString()} units</span>
             </div>
           </div>
 
           <p className="text-[11px] text-text-muted">
-            Upon submission, linked orders will be assigned to a new unique Procurement Group ID (e.g. <code>PG-2026-XXXX</code>) and their account processing status will transition to <strong>Sent to Procurement</strong>.
+            Upon submission, linked orders will be combined under a unique Procurement Group ID (e.g. <code>PG-2026-XXXX</code>) and you will be routed directly to <strong>Supplier Payments</strong> to process payments.
           </p>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -1390,10 +1429,10 @@ export default function NewOrdersProcurement() {
               disabled={submitting}
               className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {submitting ? <Loader text="Submitting..." /> : (
+              {submitting ? <Loader text="Submitting & Routing..." /> : (
                 <>
                   <FaPaperPlane className="w-3.5 h-3.5" />
-                  Confirm & Submit
+                  Confirm &amp; Send to Supplier Payment
                 </>
               )}
             </button>

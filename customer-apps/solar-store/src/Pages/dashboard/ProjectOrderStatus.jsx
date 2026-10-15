@@ -40,6 +40,17 @@ export default function ProjectOrderStatus() {
   const [resubmitLoading, setResubmitLoading] = useState(false);
   const [resubmitError, setResubmitError] = useState("");
 
+  // ── Milestone 2 Payment Modal State ─────────────────────────────────────────
+  const [milestonePaymentModalOrder, setMilestonePaymentModalOrder] = useState(null);
+  const [milestoneUtr, setMilestoneUtr] = useState("");
+  const [milestoneAmount, setMilestoneAmount] = useState("");
+  const [milestoneDate, setMilestoneDate] = useState(new Date().toISOString().slice(0, 10));
+  const [milestoneBank, setMilestoneBank] = useState("");
+  const [milestoneReceiptFile, setMilestoneReceiptFile] = useState(null);
+  const [milestoneReceiptPreview, setMilestoneReceiptPreview] = useState(null);
+  const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
+  const [milestoneError, setMilestoneError] = useState("");
+
   // Invoice view modal state
   const [viewingInvoice, setViewingInvoice] = useState(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
@@ -247,6 +258,77 @@ export default function ProjectOrderStatus() {
       console.error("Error fetching invoice:", err);
     } finally {
       setInvoiceLoading(false);
+    }
+  };
+
+  // ── Milestone 2 Payment Handlers ──────────────────────────────────────────
+  const handleOpenMilestonePay = (order) => {
+    const remaining = order.payment_milestones?.remaining_amount || Math.round((order.total_amount || 0) * 0.7);
+    setMilestonePaymentModalOrder(order);
+    setMilestoneUtr("");
+    setMilestoneAmount(String(remaining));
+    setMilestoneDate(new Date().toISOString().slice(0, 10));
+    setMilestoneBank("");
+    setMilestoneReceiptFile(null);
+    setMilestoneReceiptPreview(null);
+    setMilestoneError("");
+  };
+
+  const handleMilestoneFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setMilestoneReceiptFile(file);
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setMilestoneReceiptPreview(ev.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        setMilestoneReceiptPreview(null);
+      }
+    }
+  };
+
+  const handleSubmitMilestonePayment = async (e) => {
+    e.preventDefault();
+    if (!milestoneUtr.trim()) {
+      setMilestoneError("Please enter the UTR / Transaction Reference Number.");
+      return;
+    }
+    if (!milestoneReceiptFile) {
+      setMilestoneError("Please upload the payment transfer receipt / screenshot.");
+      return;
+    }
+
+    setMilestoneSubmitting(true);
+    setMilestoneError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("milestone_number", 2);
+      formData.append("utr_number", milestoneUtr.trim().toUpperCase());
+      formData.append("amount_paid", Number(milestoneAmount));
+      formData.append("payment_date", milestoneDate);
+      formData.append("sender_bank_name", milestoneBank);
+      formData.append("payment_receipt", milestoneReceiptFile);
+
+      const targetId = milestonePaymentModalOrder._id || milestonePaymentModalOrder.id;
+      const res = await axiosInstance.post(
+        `/india/v1/shop/orders/${targetId}/milestone-payment`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      if (res.data?.success) {
+        setMilestonePaymentModalOrder(null);
+        fetchOrders();
+      } else {
+        setMilestoneError(res.data?.message || "Failed to submit milestone payment.");
+      }
+    } catch (err) {
+      console.error("Milestone payment submit error:", err);
+      setMilestoneError(err.response?.data?.message || "Error submitting payment. Please try again.");
+    } finally {
+      setMilestoneSubmitting(false);
     }
   };
 
@@ -887,43 +969,115 @@ export default function ProjectOrderStatus() {
                           })()}
                         </div>
 
-                        <div className="space-y-2">
-                          <span className="font-bold text-text-secondary block">Bank Transfer / Payment Proof:</span>
-                          <div className="bg-surface-hover/70 p-4 rounded-2xl border border-border space-y-1.5 font-mono">
-                            <div className="flex justify-between items-center">
-                              <span className="text-text-secondary font-sans">UTR Ref:</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-text-primary dark:text-white">
-                                  {utrStr}
-                                </span>
-                                {utrStr !== "N/A" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopy(utrStr, `utr-${orderId}`)}
-                                    className="p-0.5 text-text-secondary hover:text-primary transition-colors cursor-pointer"
-                                    title="Copy UTR"
-                                  >
-                                    {copiedKey === `utr-${orderId}` ? (
-                                      <span className="text-[10px] font-bold text-emerald-600 font-sans">Copied!</span>
+                        {/* ── Product Payment Milestones Progress ── */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-xs text-text-primary dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                              Payment Milestones Schedule
+                            </span>
+                            <span className="text-[11px] font-bold text-text-muted">
+                              Total: ₹{(order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Milestone 1: Advance */}
+                            {(() => {
+                              const m1 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
+                              const isM1Verified = m1?.payment_status === "verified" ||
+                                order.payment_milestones?.milestone_verification_status === "advance_verified" ||
+                                order.payment_milestones?.milestone_verification_status === "fully_paid" ||
+                                ["confirmed", "processing", "vehicle_assigned", "ready_for_dispatch", "dispatched", "in_transit", "reached_destination", "delivered"].includes(order.order_status || order.status);
+                              const isM1Rejected = order.payment_status === "rejected" || m1?.payment_status === "rejected";
+                              const m1Amount = order.payment_milestones?.advance_amount || order.offline_payment?.amount_paid || Math.round((order.total_amount || 0) * 0.3);
+                              const m1Utr = m1?.utr_number || order.offline_payment?.utr_number || utrStr;
+
+                              return (
+                                <div className={`p-3.5 rounded-2xl border transition-all ${isM1Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM1Rejected ? "bg-red-500/5 border-red-500/30" : "bg-amber-500/5 border-amber-500/30"}`}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                                      Milestone 1 — Advance ({order.payment_milestones?.advance_percentage || 30}%)
+                                    </span>
+                                    <span className="font-black text-sm text-text-primary dark:text-white">
+                                      ₹{Number(m1Amount).toLocaleString("en-IN")}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between mt-1.5 text-xs">
+                                    <span className="text-[11px] text-text-secondary font-mono">UTR: {m1Utr}</span>
+                                    {isM1Verified ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                        <FaCheckCircle size={10} /> Advance Verified
+                                      </span>
+                                    ) : isM1Rejected ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">
+                                        <FaTimesCircle size={10} /> Rejected
+                                      </span>
                                     ) : (
-                                      <FaCopy size={11} />
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700">
+                                        <FaRegClock size={10} /> Accounts Reviewing
+                                      </span>
                                     )}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-text-secondary font-sans">Amount Paid:</span>
-                              <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">
-                                ₹{(order.offline_payment?.amount_paid || order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            {order.offline_payment?.sender_bank_name && (
-                              <div className="flex justify-between items-center text-[11px]">
-                                <span className="text-text-secondary font-sans">Bank:</span>
-                                <span className="text-text-primary font-sans">{order.offline_payment.sender_bank_name}</span>
-                              </div>
-                            )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Milestone 2: Remaining Balance */}
+                            {(() => {
+                              const m2 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
+                              const isM2Verified = m2?.payment_status === "verified" ||
+                                order.payment_milestones?.milestone_verification_status === "fully_paid" ||
+                                order.payment_status === "captured" ||
+                                order.payment_status === "paid";
+                              const isM2Pending = m2?.payment_status === "pending_verification" ||
+                                order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification";
+                              const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * 0.7));
+                              const m2Utr = m2?.utr_number;
+
+                              return (
+                                <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between ${isM2Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM2Pending ? "bg-blue-500/5 border-blue-500/30" : "bg-purple-500/5 border-purple-500/30"}`}>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                        Milestone 2 — Before Dispatch ({order.payment_milestones?.remaining_percentage || 70}%)
+                                      </span>
+                                      <span className="font-black text-sm text-text-primary dark:text-white">
+                                        ₹{Number(m2Amount).toLocaleString("en-IN")}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-text-secondary leading-tight mt-0.5">
+                                      Required before materials are released from warehouse for courier transit.
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 text-xs">
+                                    {isM2Verified ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                        <FaCheckCircle size={10} /> Fully Paid & Cleared
+                                      </span>
+                                    ) : isM2Pending ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                        <FaRegClock size={10} /> Balance UTR Submitted ({m2Utr})
+                                      </span>
+                                    ) : (
+                                      <div className="flex items-center justify-between w-full">
+                                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                          ● Balance Due
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenMilestonePay(order)}
+                                          className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                                        >
+                                          <span>Pay 70% Balance (₹{Number(m2Amount).toLocaleString("en-IN")})</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1487,6 +1641,148 @@ export default function ProjectOrderStatus() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Milestone 2 (Remaining 70%) Payment Submission Modal ────────────────── */}
+      {milestonePaymentModalOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-3xl border border-border shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-border pb-3">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-purple-500/15 text-purple-600 rounded">
+                  Milestone 2 Payment Clearance
+                </span>
+                <h3 className="text-lg font-black text-text-primary dark:text-white mt-1">
+                  Pay Remaining 70% Balance (Before Dispatch)
+                </h3>
+              </div>
+              <button
+                onClick={() => setMilestonePaymentModalOrder(null)}
+                className="text-text-secondary hover:text-text-primary p-1 cursor-pointer"
+              >
+                <FaTimes size={18} />
+              </button>
+            </div>
+
+            {/* Order & Bank Summary */}
+            <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-500/20 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">Order Reference:</span>
+                <span className="font-mono font-black text-primary">
+                  {milestonePaymentModalOrder.order_number || milestonePaymentModalOrder._id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">Milestone 1 Advance Status:</span>
+                <span className="font-bold text-emerald-600">✓ Verified & Confirmed</span>
+              </div>
+              <div className="flex justify-between items-center text-sm font-bold border-t border-purple-500/20 pt-1.5">
+                <span className="text-purple-900 dark:text-purple-200">Remaining Balance Payable:</span>
+                <span className="text-base font-black text-purple-700 dark:text-purple-300">
+                  ₹{Number(milestoneAmount).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Bank Details Card */}
+            <div className="p-3 bg-surface-hover rounded-xl border border-border text-[11px] space-y-1">
+              <div className="font-bold text-text-primary">SolarKits Escrow Bank Account:</div>
+              <div className="flex justify-between text-text-secondary">
+                <span>HDFC Bank • A/C: <strong>50200088991122</strong></span>
+                <span>IFSC: <strong>HDFC0001234</strong></span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitMilestonePayment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  UTR / Transaction Ref No. <span className="text-red-500">*</span>
+                </label>
+                <CustomInput
+                  value={milestoneUtr}
+                  onChange={(e) => setMilestoneUtr(e.target.value.toUpperCase())}
+                  required
+                  placeholder="e.g. HDFC0001928374 or 239847192834"
+                  className="font-mono uppercase font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                    Amount Paid (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="number"
+                    value={milestoneAmount}
+                    onChange={(e) => setMilestoneAmount(e.target.value)}
+                    required
+                    className="font-bold font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                    Payment Date <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="date"
+                    value={milestoneDate}
+                    onChange={(e) => setMilestoneDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  Sender Bank Name
+                </label>
+                <CustomInput
+                  value={milestoneBank}
+                  onChange={(e) => setMilestoneBank(e.target.value)}
+                  placeholder="e.g. State Bank of India"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  Upload Payment Transfer Receipt / Screenshot <span className="text-red-500">*</span>
+                </label>
+                <div className="border-2 border-dashed border-border rounded-xl p-4 text-center cursor-pointer relative bg-surface-hover">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleMilestoneFileChange}
+                    required
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {milestoneReceiptPreview ? (
+                    <img src={milestoneReceiptPreview} alt="Preview" className="max-h-28 mx-auto rounded object-contain" />
+                  ) : (
+                    <p className="text-xs text-text-secondary">
+                      {milestoneReceiptFile ? milestoneReceiptFile.name : "Click to attach payment transfer receipt or bank screenshot"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {milestoneError && (
+                <div className="text-xs text-red-500 font-bold p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  {milestoneError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <Button type="button" variant="secondary" onClick={() => setMilestonePaymentModalOrder(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" loading={milestoneSubmitting}>
+                  Submit 70% Payment for Verification
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -51,6 +51,7 @@ const ResellerPricingRule = require('./reseller_pricing_rules.schema');
 // --- Phase R8: EPC Purchase Flow & Checkout Logs ---
 const EpcOrder = require('./epc_orders.schema');
 const EpcCheckoutLog = require('./epc_checkout_logs.schema');
+const ProductPaymentMilestone = require('./product_payment_milestones.schema');
 
 // --- Phase 7: Commission Engine & Wallet Ledger ---
 const ResellerWallet = require('./reseller_wallets.schema');
@@ -252,4 +253,6 @@ module.exports = {
   KitDeliveryCostRule,
   DeliveryRouteSetting,
   DeliveryOrder,
+  // --- Payment Milestones Module ---
+  ProductPaymentMilestone,
 };

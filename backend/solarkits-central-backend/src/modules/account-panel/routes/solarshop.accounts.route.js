@@ -26,6 +26,11 @@ router.get('/onboarded-epc-purchases', check_auth, solarshop_handler.get_onboard
 
 // 6.1 Unified EPC Orders & Payment Management
 router.get('/epc-orders-unified', check_auth, solarshop_handler.get_unified_epc_orders);
+router.get('/epc-orders/check-duplicate-utr', check_auth, solarshop_handler.check_duplicate_utr);
+router.post('/epc-orders/:id/accounts-verify', check_auth, solarshop_handler.accounts_verify_epc_payment);
+router.post('/epc-orders/:id/admin-approve', check_auth, solarshop_handler.admin_approve_epc_payment);
+router.get('/epc-orders/tat-config', check_auth, solarshop_handler.get_tat_config);
+router.put('/epc-orders/tat-config', check_auth, solarshop_handler.update_tat_config);
 
 // 7. Transaction Details for Side Drawer / Modal
 router.get('/transaction-details/:type/:id', check_auth, solarshop_handler.get_transaction_details);

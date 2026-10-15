@@ -170,6 +170,9 @@ adminRouter.use('/notifications',                require('./modules/admin-panel/
 // ─── Region-wise Payment Gateway Configuration & Order Processing ─────────
 adminRouter.use('/payment-config',                require('./modules/admin-panel/routes/region.payment.config.route'));
 
+// ─── Product-Wise Payment Milestone Configuration & Checkout Resolution ───
+adminRouter.use('/payment-milestones',            require('./modules/admin-panel/routes/product.payment.milestones.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/admin-api', adminRouter);

@@ -99,10 +99,14 @@ export default function EpcOfflinePaymentVerification() {
 
     setSubmitting(true);
     try {
+      const isMilestone2 = order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification" ||
+        order.payment_milestones?.milestones?.[1]?.payment_status === "pending_verification";
+
       const payload = {
         decision,
         rejection_reason: reason.trim(),
         notes: notes.trim(),
+        milestone_number: isMilestone2 ? 2 : 1,
       };
 
       let res;
@@ -391,7 +395,14 @@ export default function EpcOfflinePaymentVerification() {
                       )}
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
-                      ₹{Number(o.amount_paid).toLocaleString("en-IN")}
+                      <div>₹{Number(o.amount_paid).toLocaleString("en-IN")}</div>
+                      {o.payment_milestones && (
+                        <div className="text-[10px] text-amber-600 font-semibold mt-0.5">
+                          {o.payment_milestones.milestone_verification_status === "final_payment_pending_verification"
+                            ? "Milestone 2 (70% Final)"
+                            : `Milestone 1 (${o.payment_milestones.advance_percentage || 30}% Adv)`}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       {o.receipt_url ? (

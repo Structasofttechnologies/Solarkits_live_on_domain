@@ -43,7 +43,9 @@ const {
   create_epc_po_order,
   preview_epc_po_penalty,
   request_epc_po_refund,
-  reorder_against_epc_po
+  reorder_against_epc_po,
+  submit_epc_milestone_payment,
+  resolve_payment_milestones
 } = require("../../controller/v1.handlers/shop.handler");
 
 const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
@@ -98,6 +100,9 @@ router.get("/checkout/warehouse-capacity-check", optional_auth, checkout_warehou
 router.post("/offline-checkout/create", verify_auth, epcReceiptUpload, create_epc_offline_checkout);
 router.post("/offline-checkout/:id/resubmit", verify_auth, epcReceiptUpload, resubmit_epc_offline_payment);
 router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);
+// Product-wise payment milestone routes
+router.get("/payment-milestones/resolve", resolve_payment_milestones);
+router.post("/orders/:id/milestone-payment", verify_auth, epcReceiptUpload, submit_epc_milestone_payment);
 
 // ── EPC PO Allocations from Franchisees ───────────────────────────────────
 router.get("/po-allocations", verify_auth, get_epc_po_allocations);

@@ -312,8 +312,9 @@ export const submitProcurementGroup = async (payload) => {
   return res.data;
 };
 
-export const getProcurementGroups = async () => {
-  const res = await axios.get(`${API_URL}/accounts/procurement-groups`, {
+export const getProcurementGroups = async (params) => {
+  const query = params ? new URLSearchParams(params).toString() : '';
+  const res = await axios.get(`${API_URL}/accounts/procurement-groups${query ? `?${query}` : ''}`, {
     headers: authHeaderObj(),
   });
   return res.data;

@@ -76,6 +76,8 @@ const schema = new mongoose.Schema({
   },
   order_origins: [{ type: String }],
   payment_modes: [{ type: String }],
+  source_orders: [{ type: mongoose.Schema.Types.Mixed }],
+  supplier_breakdown: [{ type: mongoose.Schema.Types.Mixed }],
   exceptions: [{
     type: { type: String, default: 'supplier_mapping' },
     message: { type: String, required: true },
