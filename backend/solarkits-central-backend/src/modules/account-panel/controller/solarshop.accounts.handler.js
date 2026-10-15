@@ -3541,6 +3541,485 @@ const update_tat_config = async (req, res) => {
   }
 };
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Customer Payment & Follow-up Module Handlers
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Specifically for orders where Advance Payment (30%) has been verified,
+ * and Remaining Payment (70% Before Dispatch) is pending collection & follow-up.
+ */
+const get_customer_payment_followups = async (req, res) => {
+  try {
+    const {
+      tab = 'all', // 'all' | 'awaiting_payment' | 'payment_submitted' | 'promised' | 'overdue'
+      search,
+      stage = 'all',
+      follow_up_status = 'all',
+      delay_signal = 'all',
+      page = 1,
+      limit = 15,
+    } = req.query;
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 15));
+    const skip = (pageNum - 1) * limitNum;
+
+    const stageTats = await resolveStageTats();
+
+    // Base Condition: Advance verified and remaining milestone payment is pending!
+    const andConditions = [
+      {
+        $or: [
+          { 'payment_milestones.milestone_verification_status': { $in: ['advance_verified', 'awaiting_final_payment', 'final_payment_pending_verification'] } },
+          {
+            $and: [
+              { $or: [{ 'offline_payment.admin_approval_status': 'approved' }, { is_official_order_generated: true }] },
+              { payment_status: { $nin: ['paid', 'captured'] } }
+            ]
+          }
+        ]
+      },
+      {
+        payment_status: { $nin: ['refunded', 'failed', 'rejected'] }
+      }
+    ];
+
+    // Quick sub-tabs:
+    if (tab === 'awaiting_payment') {
+      andConditions.push({
+        $or: [
+          { 'payment_milestones.milestone_verification_status': { $in: ['advance_verified', 'awaiting_final_payment'] } },
+          { 'payment_milestones.milestone_verification_status': { $exists: false } },
+        ],
+        'follow_up.status': { $ne: 'second_payment_submitted' },
+      });
+    } else if (tab === 'payment_submitted') {
+      andConditions.push({
+        $or: [
+          { 'payment_milestones.milestone_verification_status': 'final_payment_pending_verification' },
+          { 'follow_up.status': 'second_payment_submitted' },
+          { 'payment_milestones.milestones.1.payment_status': 'pending_verification' },
+        ]
+      });
+    } else if (tab === 'promised') {
+      andConditions.push({
+        'follow_up.status': 'promised_to_pay',
+      });
+    }
+
+    // Follow-up status filter:
+    if (follow_up_status && follow_up_status !== 'all') {
+      andConditions.push({ 'follow_up.status': follow_up_status });
+    }
+
+    // Order lifecycle stage filter:
+    if (stage && stage !== 'all') {
+      andConditions.push({ order_status: stage });
+    }
+
+    // Search query (Exact Order number ORD-EPC-..., customer name, phone, UTR):
+    if (search && search.trim()) {
+      const sRegex = new RegExp(search.trim(), 'i');
+      andConditions.push({
+        $or: [
+          { order_number: sRegex },
+          { order_request_id: sRegex },
+          { 'offline_payment.utr_number': sRegex },
+          { 'payment_milestones.milestones.utr_number': sRegex },
+          { 'delivery_address.contact_name': sRegex },
+          { 'delivery_address.contact_phone': sRegex },
+          { 'delivery_address.district_name': sRegex },
+          { 'delivery_address.state_name': sRegex },
+          { 'customer_details.name': sRegex },
+          { 'customer_details.phone': sRegex },
+        ]
+      });
+    }
+
+    const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
+
+    const totalMatching = await EpcOrder.countDocuments(finalQuery);
+
+    const orders = await EpcOrder.find(finalQuery)
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .populate('epc_id', 'name company_name email whatsapp phone gstin address pincode district_name state_name')
+      .populate('reseller_id', 'business_name mobile email gst_number contact_person')
+      .lean();
+
+    const allKitIds = [];
+    const allProductIds = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(i => {
+        if (i.kit_id) allKitIds.push(i.kit_id);
+        if (i.product_id) allProductIds.push(i.product_id);
+      });
+    });
+
+    const { kitLookup, productLookup } = await enrichComboKitDetails(allKitIds, allProductIds);
+
+    const enrichedFollowups = orders.map(o => {
+      const enrichedItems = (o.items || []).map(i => {
+        const kitInfo = i.kit_id ? kitLookup[i.kit_id.toString()] : null;
+        const prodInfo = i.product_id ? productLookup[i.product_id.toString()] : null;
+        return {
+          ...i,
+          item_name: (i.item_name && i.item_name !== 'Solar Kit') ? i.item_name : (kitInfo?.name || prodInfo?.name || i.item_name || 'Solar Kit'),
+          image: kitInfo?.image || prodInfo?.image || i.image || null,
+          capacity: kitInfo?.capacity || i.capacity || null,
+          description: kitInfo?.description || prodInfo?.description || null,
+        };
+      });
+
+      const grandTotal = (o.grand_total_paise ? o.grand_total_paise / 100 : 0) || o.total_amount || (o.pricing?.total_amount || 0);
+      const tracking = computeOrderPaymentTracking(o, stageTats);
+
+      const m1 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
+      const m2 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
+
+      const advanceAmt = o.payment_milestones?.advance_amount || m1?.amount || o.offline_payment?.amount_paid || Math.round(grandTotal * 0.3);
+      const pendingAmt = o.payment_milestones?.remaining_amount || m2?.amount || Math.max(0, grandTotal - advanceAmt);
+
+      const customerName = o.epc_id?.company_name || o.epc_id?.name || o.delivery_address?.contact_name || 'EPC Buyer';
+      const customerPhone = o.epc_id?.whatsapp || o.epc_id?.phone || o.delivery_address?.contact_phone || '-';
+      const customerState = o.delivery_address?.state_name || o.delivery_address?.state || o.epc_id?.state_name || '-';
+      const customerDistrict = o.delivery_address?.district_name || o.delivery_address?.district || o.epc_id?.district_name || '-';
+
+      const isDispatchBlocked = ['ready_for_dispatch', 'processing', 'vehicle_assigned'].includes(o.order_status);
+
+      return {
+        _id: o._id,
+        id: o._id,
+        order_number: o.order_number,
+        order_request_id: o.order_request_id,
+        created_at: o.created_at,
+        order_status: o.order_status,
+        payment_status: o.payment_status,
+        grand_total: grandTotal,
+        total_amount: grandTotal,
+        advance_percentage: o.payment_milestones?.advance_percentage || 30,
+        advance_amount: advanceAmt,
+        advance_utr: m1?.utr_number || o.offline_payment?.utr_number || '-',
+        advance_verified_at: m1?.verified_at || o.offline_payment?.verified_at || o.offline_payment?.admin_approved_at || null,
+        remaining_percentage: o.payment_milestones?.remaining_percentage || 70,
+        remaining_amount: pendingAmt,
+        outstanding_amount: pendingAmt,
+        amount_received: advanceAmt,
+        current_milestone_number: 2,
+        current_milestone_name: m2?.title || 'Milestone 2: 70% Remaining Payment Before Dispatch',
+        milestone_verification_status: o.payment_milestones?.milestone_verification_status || 'advance_verified',
+        milestone_2_submission: m2 ? {
+          payment_status: m2.payment_status,
+          utr_number: m2.utr_number,
+          amount_paid: m2.amount_paid,
+          payment_date: m2.payment_date,
+          receipt_url: m2.receipt_url,
+          sender_bank_name: m2.sender_bank_name,
+        } : null,
+        customer: {
+          id: o.epc_id?._id || o.epc_id?.id,
+          name: customerName,
+          company_name: o.epc_id?.company_name || customerName,
+          phone: customerPhone,
+          whatsapp: o.epc_id?.whatsapp || customerPhone,
+          state: customerState,
+          district: customerDistrict,
+        },
+        items: enrichedItems,
+        days_elapsed: tracking.days_elapsed,
+        payment_tat_days: tracking.payment_tat_days,
+        delay_signal: tracking.delay_signal,
+        is_overdue: tracking.is_overdue,
+        is_dispatch_blocked: isDispatchBlocked,
+        follow_up: {
+          status: o.follow_up?.status || 'pending',
+          last_contacted_at: o.follow_up?.last_contacted_at || null,
+          last_contacted_by: o.follow_up?.last_contacted_by || null,
+          next_follow_up_date: o.follow_up?.next_follow_up_date || null,
+          promised_payment_date: o.follow_up?.promised_payment_date || null,
+          remarks: o.follow_up?.remarks || null,
+          history: o.follow_up?.history || [],
+        },
+        invoice: o.invoice || null,
+      };
+    });
+
+    let filteredFollowups = enrichedFollowups;
+    if (tab === 'overdue') {
+      filteredFollowups = enrichedFollowups.filter(f => f.is_overdue || f.delay_signal === 'red');
+    }
+    if (delay_signal && delay_signal !== 'all') {
+      filteredFollowups = filteredFollowups.filter(f => f.delay_signal === delay_signal);
+    }
+
+    // Consolidated stats
+    const allPendingFollowups = await EpcOrder.find({
+      $or: [
+        { 'payment_milestones.milestone_verification_status': { $in: ['advance_verified', 'awaiting_final_payment', 'final_payment_pending_verification'] } },
+        {
+          $and: [
+            { $or: [{ 'offline_payment.admin_approval_status': 'approved' }, { is_official_order_generated: true }] },
+            { payment_status: { $nin: ['paid', 'captured'] } }
+          ]
+        }
+      ],
+      payment_status: { $nin: ['refunded', 'failed', 'rejected'] }
+    }, {
+      grand_total_paise: 1,
+      total_amount: 1,
+      pricing: 1,
+      payment_milestones: 1,
+      offline_payment: 1,
+      order_status: 1,
+      created_at: 1,
+      updated_at: 1,
+      follow_up: 1,
+    }).lean();
+
+    let totalFollowupOrders = 0;
+    let totalOrderValue = 0;
+    let totalAdvanceCollected = 0;
+    let totalPendingCollection = 0;
+    let overdueCount = 0;
+    let paymentSubmittedCount = 0;
+    let promisedCount = 0;
+
+    allPendingFollowups.forEach(o => {
+      totalFollowupOrders++;
+      const val = (o.grand_total_paise ? o.grand_total_paise / 100 : 0) || o.total_amount || 0;
+      totalOrderValue += val;
+
+      const m1 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
+      const m2 = o.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
+      const adv = o.payment_milestones?.advance_amount || m1?.amount || o.offline_payment?.amount_paid || Math.round(val * 0.3);
+      const pend = o.payment_milestones?.remaining_amount || m2?.amount || Math.max(0, val - adv);
+
+      totalAdvanceCollected += adv;
+      totalPendingCollection += pend;
+
+      const tracking = computeOrderPaymentTracking(o, stageTats);
+      if (tracking.is_overdue || tracking.delay_signal === 'red') {
+        overdueCount++;
+      }
+
+      if (o.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification' || o.follow_up?.status === 'second_payment_submitted' || m2?.payment_status === 'pending_verification') {
+        paymentSubmittedCount++;
+      }
+
+      if (o.follow_up?.status === 'promised_to_pay') {
+        promisedCount++;
+      }
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: filteredFollowups,
+      total: totalMatching,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(totalMatching / limitNum) || 1,
+      stats: {
+        total_orders: totalFollowupOrders,
+        total_order_value: Math.round(totalOrderValue * 100) / 100,
+        advance_collected: Math.round(totalAdvanceCollected * 100) / 100,
+        pending_amount: Math.round(totalPendingCollection * 100) / 100,
+        overdue_count: overdueCount,
+        payment_submitted_count: paymentSubmittedCount,
+        promised_count: promisedCount,
+      }
+    });
+  } catch (err) {
+    console.error('get_customer_payment_followups error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+const log_customer_payment_followup = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      status = 'contacted',
+      contact_mode = 'call',
+      remarks,
+      promised_payment_date,
+      next_follow_up_date,
+    } = req.body;
+
+    const order = await EpcOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'EPC Order not found' });
+    }
+
+    if (!order.follow_up) {
+      order.follow_up = { status: 'pending', history: [] };
+    }
+
+    order.follow_up.status = status;
+    order.follow_up.last_contacted_at = new Date();
+    order.follow_up.last_contacted_by = req.user?.id || req.user?._id || null;
+    order.follow_up.remarks = remarks ? remarks.trim() : order.follow_up.remarks;
+    if (promised_payment_date) {
+      order.follow_up.promised_payment_date = new Date(promised_payment_date);
+    }
+    if (next_follow_up_date) {
+      order.follow_up.next_follow_up_date = new Date(next_follow_up_date);
+    }
+
+    order.follow_up.history.push({
+      contacted_at: new Date(),
+      contacted_by: req.user?.id || req.user?._id || null,
+      contacted_by_name: req.user?.name || req.user?.email || 'Accounts Officer',
+      contact_mode,
+      status,
+      remarks: remarks ? remarks.trim() : '',
+      promised_payment_date: promised_payment_date ? new Date(promised_payment_date) : null,
+    });
+
+    order.markModified('follow_up');
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Customer follow-up note logged successfully',
+      follow_up: order.follow_up,
+    });
+  } catch (err) {
+    console.error('log_customer_payment_followup error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+const record_milestone_two_payment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      utr_number,
+      amount_paid,
+      payment_date,
+      sender_bank_name,
+      receipt_url,
+      receipt_filename,
+      accounts_remarks,
+    } = req.body;
+
+    const cleanUtr = utr_number ? utr_number.trim().toUpperCase() : null;
+    if (!cleanUtr) {
+      return res.status(400).json({ status: 'error', message: 'A valid UTR / Bank Reference Number is required' });
+    }
+
+    const order = await EpcOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'EPC Order not found' });
+    }
+
+    if (!order.payment_milestones) {
+      const grandTotal = (order.grand_total_paise ? order.grand_total_paise / 100 : 0) || order.total_amount || 0;
+      order.payment_milestones = {
+        total_order_amount: grandTotal,
+        advance_percentage: 30,
+        advance_amount: Math.round(grandTotal * 0.3),
+        remaining_percentage: 70,
+        remaining_amount: Math.round(grandTotal * 0.7),
+        current_milestone_due: 2,
+        milestones: [
+          {
+            milestone_number: 1,
+            title: 'Advance Payment (30%)',
+            percentage: 30,
+            amount: Math.round(grandTotal * 0.3),
+            stage: 'order_placement',
+            payment_status: 'verified',
+          },
+          {
+            milestone_number: 2,
+            title: 'Remaining Payment Before Dispatch (70%)',
+            percentage: 70,
+            amount: Math.round(grandTotal * 0.7),
+            stage: 'before_dispatch',
+            payment_status: 'unpaid',
+          }
+        ]
+      };
+    }
+
+    let m2 = order.payment_milestones.milestones.find(m => m.milestone_number === 2);
+    if (!m2) {
+      const remainingAmt = order.payment_milestones.remaining_amount || Math.round(((order.grand_total_paise || 0) / 100) * 0.7);
+      m2 = {
+        milestone_number: 2,
+        title: 'Remaining Payment Before Dispatch',
+        percentage: 70,
+        amount: remainingAmt,
+        stage: 'before_dispatch',
+        payment_status: 'unpaid',
+      };
+      order.payment_milestones.milestones.push(m2);
+    }
+
+    const paidAmt = Number(amount_paid) || m2.amount || order.payment_milestones.remaining_amount || 0;
+    m2.payment_status = 'verified';
+    m2.utr_number = cleanUtr;
+    m2.amount_paid = paidAmt;
+    m2.payment_date = payment_date ? new Date(payment_date) : new Date();
+    m2.receipt_url = receipt_url || m2.receipt_url;
+    m2.receipt_filename = receipt_filename || m2.receipt_filename;
+    m2.sender_bank_name = sender_bank_name ? sender_bank_name.trim() : m2.sender_bank_name;
+    m2.verified_by = req.user?.id || req.user?._id || null;
+    m2.verified_at = new Date();
+    m2.notes = accounts_remarks || 'Milestone 2 (70%) verified by Accounts';
+
+    order.payment_milestones.milestone_verification_status = 'fully_paid';
+    order.payment_milestones.current_milestone_due = 2;
+    order.payment_status = 'captured';
+
+    // Transition order to ready_for_dispatch if confirmed/processing
+    if (['pending', 'confirmed', 'processing'].includes(order.order_status)) {
+      order.order_status = 'ready_for_dispatch';
+    }
+
+    if (!order.follow_up) {
+      order.follow_up = { status: 'completed', history: [] };
+    }
+    order.follow_up.status = 'completed';
+    order.follow_up.remarks = `Milestone 2 (70%) payment of ₹${paidAmt} verified via UTR ${cleanUtr}`;
+    order.follow_up.history.push({
+      contacted_at: new Date(),
+      contacted_by: req.user?.id || req.user?._id || null,
+      contacted_by_name: req.user?.name || req.user?.email || 'Accounts Officer',
+      contact_mode: 'call',
+      status: 'second_payment_submitted',
+      remarks: `Recorded & verified 70% milestone payment. UTR: ${cleanUtr}`,
+    });
+
+    // Generate Final GST Tax Invoice if not generated
+    if (!order.invoice?.invoice_number || order.invoice?.invoice_number.startsWith('PI-')) {
+      const year = new Date().getFullYear();
+      const hexSuffix = String(order._id || Date.now()).slice(-5).toUpperCase();
+      order.invoice = {
+        invoice_number: `INV-SK-${year}-${hexSuffix}`,
+        invoice_date: new Date(),
+        invoice_url: `/api/india/v1/shop/orders/${order._id}/invoice-pdf`,
+        generated_at: new Date(),
+      };
+    }
+
+    order.markModified('payment_milestones');
+    order.markModified('follow_up');
+    order.markModified('invoice');
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Milestone 2 payment recorded and verified successfully. Order unlocked for dispatch!',
+      order,
+    });
+  } catch (err) {
+    console.error('record_milestone_two_payment error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
 module.exports = {
   get_unified_epc_orders,
   check_duplicate_utr,
@@ -3564,6 +4043,10 @@ module.exports = {
   deliver_epc_order,
   get_epc_po_payments,
   verify_epc_po_payment,
+  // Customer Payment & Follow-up Handlers
+  get_customer_payment_followups,
+  log_customer_payment_followup,
+  record_milestone_two_payment,
   // Module 1: 8-Stage Transition Handlers
   stage_processing,
   stage_assign_vehicle,

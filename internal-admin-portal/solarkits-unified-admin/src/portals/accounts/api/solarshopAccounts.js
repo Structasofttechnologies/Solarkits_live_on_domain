@@ -252,5 +252,28 @@ export const updatePaymentTatConfig = async (data) => {
   return res.data;
 };
 
+// ── Customer Payment & Follow-up API Methods ────────────────────────────────
+export const getCustomerPaymentFollowups = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/customer-payment-followups${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const logCustomerPaymentFollowup = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/customer-payment-followups/${id}/log`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const recordMilestoneTwoPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/customer-payment-followups/${id}/record-payment`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 
 

@@ -32,6 +32,11 @@ router.post('/epc-orders/:id/admin-approve', check_auth, solarshop_handler.admin
 router.get('/epc-orders/tat-config', check_auth, solarshop_handler.get_tat_config);
 router.put('/epc-orders/tat-config', check_auth, solarshop_handler.update_tat_config);
 
+// 6.2 Customer Payment & Follow-up Module (Pending Milestones Tracking)
+router.get('/customer-payment-followups', check_auth, solarshop_handler.get_customer_payment_followups);
+router.post('/customer-payment-followups/:id/log', check_auth, solarshop_handler.log_customer_payment_followup);
+router.post('/customer-payment-followups/:id/record-payment', check_auth, solarshop_handler.record_milestone_two_payment);
+
 // 7. Transaction Details for Side Drawer / Modal
 router.get('/transaction-details/:type/:id', check_auth, solarshop_handler.get_transaction_details);
 

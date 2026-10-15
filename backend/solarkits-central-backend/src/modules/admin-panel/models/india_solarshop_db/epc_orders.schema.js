@@ -340,6 +340,29 @@ const schema = new mongoose.Schema({
     dispatch_notes:     { type: String, default: null },
   },
 
+  // ── Customer Payment & Follow-up Tracking ────────────────────────────────
+  follow_up: {
+    status: {
+      type: String,
+      enum: ['pending', 'contacted', 'promised_to_pay', 'details_sent', 'second_payment_submitted', 'completed'],
+      default: 'pending',
+    },
+    last_contacted_at:     { type: Date, default: null },
+    last_contacted_by:     { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    next_follow_up_date:   { type: Date, default: null },
+    promised_payment_date: { type: Date, default: null },
+    remarks:               { type: String, default: null, trim: true },
+    history: [{
+      contacted_at:          { type: Date, default: Date.now },
+      contacted_by:          { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      contacted_by_name:     { type: String, default: null },
+      contact_mode:          { type: String, enum: ['call', 'whatsapp', 'email', 'in_person'], default: 'call' },
+      status:                { type: String, default: 'contacted' },
+      remarks:               { type: String, default: null },
+      promised_payment_date: { type: Date, default: null },
+    }],
+  },
+
   // ── Module 1.3: In-Transit Milestone Updates (Stage 6) ───────────────────
   milestones: [{
     status:      { type: String, required: true }, // e.g. 'Left Pune', 'Entered Nashik'

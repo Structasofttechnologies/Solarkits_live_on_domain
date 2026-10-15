@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { FaHome, FaHandshake, FaBolt, FaCoins, FaUserCheck, FaBoxes } from "react-icons/fa";
-import { MdDashboard, MdPayments, MdShoppingCart, MdReceipt, MdOutlineVerifiedUser } from "react-icons/md";
+import { MdDashboard, MdPayments, MdShoppingCart, MdReceipt, MdOutlineVerifiedUser, MdOutlinePendingActions } from "react-icons/md";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
@@ -10,6 +10,7 @@ import Loader from "../components/Loader";
 const SolarShopAccountsHome = lazy(() => import("../pages/solar-shop/SolarShopAccountsHome"));
 const FranchisePlanPurchases = lazy(() => import("../pages/solar-shop/FranchisePlanPurchases"));
 const EpcOrdersManagement = lazy(() => import("../pages/solar-shop/EpcOrdersManagement"));
+const CustomerPaymentFollowup = lazy(() => import("../pages/solar-shop/CustomerPaymentFollowup"));
 const FranchiseCommissionTracking = lazy(() => import("../pages/solar-shop/FranchiseCommissionTracking"));
 const FranchiseePoOrdersAccounts = lazy(() => import("../pages/solar-shop/FranchiseePoOrdersAccounts"));
 const LooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/LooseOrders"));
@@ -42,6 +43,11 @@ const solarShopMenus = [
       name: "EPC Orders & Payments",
       icon: <FaBolt />,
       path: "/account-panel/solar-shop/epc-orders",
+    },
+    {
+      name: "Customer Payment & Follow-up",
+      icon: <MdOutlinePendingActions />,
+      path: "/account-panel/solar-shop/customer-payment-followup",
     },
     {
       name: "Franchise Commission Tracking",
@@ -145,6 +151,14 @@ export default function SolarShopAccountsDashboard() {
                     element={
                       <Suspense fallback={<Loader text="Loading EPC orders & payments..." />}>
                         <EpcOrdersManagement />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/customer-payment-followup/*"
+                    element={
+                      <Suspense fallback={<Loader text="Loading Customer Payment & Follow-up..." />}>
+                        <CustomerPaymentFollowup />
                       </Suspense>
                     }
                   />

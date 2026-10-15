@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSelector } from "react-redux";
+import { Link } from "react-router-dom";
 import {
   MdSearch,
   MdRefresh,
@@ -478,7 +479,12 @@ export default function EpcOrdersManagement() {
           </div>
           <div className="mt-3 pt-2 border-t border-border/60 flex items-center justify-between text-[11px] text-amber-700 dark:text-amber-400 font-bold">
             <span>Awaiting Milestone / Verification</span>
-            <span>Review Queue →</span>
+            <Link
+              to="/account-panel/solar-shop/customer-payment-followup"
+              className="hover:underline flex items-center gap-1 text-primary"
+            >
+              Follow-up Desk →
+            </Link>
           </div>
         </div>
 
@@ -603,6 +609,18 @@ export default function EpcOrdersManagement() {
               )}
             </button>
           ))}
+
+          <Link
+            to="/account-panel/solar-shop/customer-payment-followup"
+            className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 shadow-sm"
+            title="Open Dedicated Customer Payment & Follow-up Desk (70% Pending)"
+          >
+            <MdOutlinePendingActions className="text-sm" />
+            <span>Customer Payment & Follow-up</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white">
+              70% Pending
+            </span>
+          </Link>
         </div>
 
         {activeFiltersCount > 0 && (
