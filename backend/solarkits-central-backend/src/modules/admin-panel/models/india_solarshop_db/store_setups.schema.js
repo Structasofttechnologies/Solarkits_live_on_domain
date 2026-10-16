@@ -50,6 +50,27 @@ const schema = new mongoose.Schema({
   agreement_date: { type: Date, default: null },
   payment_confirmation_date: { type: Date, default: null },
 
+  // Store Category & Warehouse Allocation
+  store_type: {
+    type: String,
+    enum: ['company_store', 'franchisee_store'],
+    default: 'franchisee_store',
+  },
+  warehouse_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'company_warehouses',
+    default: null,
+  },
+  warehouse_allocated: { type: Boolean, default: false },
+  warehouse_allocation_verified: { type: Boolean, default: false },
+  warehouse_allocated_at: { type: Date, default: null },
+  warehouse_allocated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+
+  // Accounts Payment Verification
+  payment_verified_by_accounts: { type: Boolean, default: false },
+  payment_accounts_verified_at: { type: Date, default: null },
+  payment_accounts_verified_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+
   // Timelines
   setup_start_date: { type: Date, required: true, default: Date.now },
   allowed_setup_days: { type: Number, required: true, default: 30 },
@@ -114,6 +135,8 @@ const schema = new mongoose.Schema({
 });
 
 schema.index({ status: 1 });
+schema.index({ store_type: 1 });
+schema.index({ warehouse_id: 1 });
 schema.index({ state_id: 1, district_id: 1 });
 schema.index({ assigned_employee_id: 1 });
 schema.index({ current_bde_id: 1 });

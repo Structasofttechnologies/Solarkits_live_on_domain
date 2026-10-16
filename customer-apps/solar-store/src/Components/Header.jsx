@@ -21,6 +21,7 @@ import Button from "./Button";
 import IconButton from "./IconButton";
 import DropdownWithSearchInput from "./DropdownWithSearchInput";
 import axios from "axios";
+import { hasPermission, isAdminOrOwner } from "@/utils/permissions";
 
 export default function Header({ isOpen, setIsOpen, isMobile }) {
   const { toggleTheme, isDark } = useTheme();
@@ -119,11 +120,13 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
     }
   };
 
+  const canManageTeam = isAdminOrOwner(user) || hasPermission(user, "can_manage_team");
+
   const menuItems = [
-    { icon: <HiUser />, name: "Profile", action: () => { navigate("/profile"); } },
-    { icon: <HiUserAdd />, name: "Create Users", action: () => { navigate("/users/create"); } },
-    { icon: <MdSettings />, name: "Settings", action: () => { navigate("/settings"); } },
-    { icon: <FaWarehouse />, name: "Add Warehouse", action: () => { navigate("/warehouse/add"); } },
+    { icon: <HiUser />, name: "Profile", action: () => { setShowPopup(false); navigate("/profile"); } },
+    ...(canManageTeam ? [{ icon: <HiUserAdd />, name: "EPC Team & Users", action: () => { setShowPopup(false); navigate("/users/create"); } }] : []),
+    { icon: <MdSettings />, name: "Settings", action: () => { setShowPopup(false); navigate("/settings"); } },
+    { icon: <FaWarehouse />, name: "Add Warehouse", action: () => { setShowPopup(false); navigate("/warehouse/add"); } },
     { icon: <MdLogout />, name: "Logout", action: handleLogout },
   ];
 
@@ -393,7 +396,26 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
                 className="w-9 h-9 rounded-full border-2 border-border group-hover:border-primary/55 transition-all"
               />
               <div className="hidden sm:block">
-                <p className="text-sm font-semibold text-text-primary dark:text-info">{user?.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold text-text-primary dark:text-info">{user?.name}</p>
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                    user?.is_owner !== false && !user?.parent_account_id
+                      ? "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                      : user?.role === "admin"
+                      ? "bg-indigo-500/10 text-indigo-600 border-indigo-500/20"
+                      : user?.role === "account"
+                      ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                      : "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                  }`}>
+                    {user?.is_owner !== false && !user?.parent_account_id
+                      ? "Owner"
+                      : user?.role === "admin"
+                      ? "Co-Admin"
+                      : user?.role === "account"
+                      ? "Finance"
+                      : "Shopper"}
+                  </span>
+                </div>
                 <p className="text-xs text-text-secondary">{user?.email}</p>
                 {user?.reseller?.business_name && (
                   <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">

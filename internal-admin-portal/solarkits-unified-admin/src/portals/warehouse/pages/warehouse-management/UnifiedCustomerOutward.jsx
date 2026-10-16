@@ -6,21 +6,23 @@ import { FaBoxes, FaRoute, FaShippingFast, FaTruckLoading } from 'react-icons/fa
 import DeliveryQueue from '../../../admin/pages/solar-shop/delivery-management/DeliveryQueue';
 import DeliveryTracking from '../../../admin/pages/solar-shop/delivery-management/DeliveryTracking';
 import DeliveryManagement from './DeliveryManagement';
+import OutForDeliveryStation from './OutForDeliveryStation';
+import TrackDeliveryHub from './TrackDeliveryHub';
 
-export default function UnifiedCustomerOutward({ defaultTab = 'queue' }) {
+export default function UnifiedCustomerOutward({ defaultTab = 'dispatch' }) {
   const location = useLocation();
   const navigate = useNavigate();
 
   // Determine active tab based on pathname and search query
   const getInitialTab = () => {
     const path = location.pathname.toLowerCase();
-    if (path.includes('/queue')) return 'queue';
     if (path.includes('/tracking')) return 'tracking';
+    if (path.includes('/queue')) return 'queue';
     if (path.includes('/map') || path.includes('/route-planner')) return 'map';
 
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
-    if (tabParam && ['queue', 'map', 'tracking'].includes(tabParam)) {
+    if (tabParam && ['dispatch', 'tracking', 'queue', 'map'].includes(tabParam)) {
       return tabParam;
     }
     return defaultTab;
@@ -39,7 +41,9 @@ export default function UnifiedCustomerOutward({ defaultTab = 'queue' }) {
       ? '/warehouse-management-panel'
       : '/warehouse';
 
-    if (tabKey === 'queue') {
+    if (tabKey === 'dispatch') {
+      navigate(`${prefix}/delivery-management?tab=dispatch`, { replace: true });
+    } else if (tabKey === 'queue') {
       navigate(`${prefix}/delivery-management/queue`, { replace: true });
     } else if (tabKey === 'map') {
       navigate(`${prefix}/delivery-management?tab=map`, { replace: true });
@@ -50,25 +54,32 @@ export default function UnifiedCustomerOutward({ defaultTab = 'queue' }) {
 
   const tabs = [
     {
+      id: 'dispatch',
+      badge: 'Dispatch Gate',
+      label: 'Out for Delivery',
+      sublabel: 'Vehicle, E-Way & Evidence Check',
+      icon: FaTruckLoading,
+    },
+    {
+      id: 'tracking',
+      badge: 'Dual POD',
+      label: 'Track Delivery & POD',
+      sublabel: 'Live Dispatches, Photo & OTP POD',
+      icon: FaShippingFast,
+    },
+    {
       id: 'queue',
-      badge: 'New FIFO Logic',
+      badge: 'FIFO Queue',
       label: 'FIFO Delivery Queue',
       sublabel: 'Auto-Consolidation & Fleet Match',
       icon: FaBoxes,
     },
     {
       id: 'map',
-      badge: 'Interactive Map',
+      badge: 'Interactive',
       label: 'Map & Route Planner',
       sublabel: 'Waypoints & Load Calculator',
       icon: FaRoute,
-    },
-    {
-      id: 'tracking',
-      badge: '10-Stage POD',
-      label: 'Trip Tracking & POD',
-      sublabel: 'Live Dispatches & Proof of Delivery',
-      icon: FaShippingFast,
     },
   ];
 
@@ -138,6 +149,30 @@ export default function UnifiedCustomerOutward({ defaultTab = 'queue' }) {
       {/* ── Tab Content Views ── */}
       <div className="min-h-[500px]">
         <AnimatePresence mode="wait">
+          {activeTab === 'dispatch' && (
+            <motion.div
+              key="dispatch-tab"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+            >
+              <OutForDeliveryStation onNavigateToTracking={() => handleTabChange('tracking')} />
+            </motion.div>
+          )}
+
+          {activeTab === 'tracking' && (
+            <motion.div
+              key="tracking-tab"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+            >
+              <TrackDeliveryHub />
+            </motion.div>
+          )}
+
           {activeTab === 'queue' && (
             <motion.div
               key="queue-tab"
@@ -159,18 +194,6 @@ export default function UnifiedCustomerOutward({ defaultTab = 'queue' }) {
               transition={{ duration: 0.2 }}
             >
               <DeliveryManagement />
-            </motion.div>
-          )}
-
-          {activeTab === 'tracking' && (
-            <motion.div
-              key="tracking-tab"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.2 }}
-            >
-              <DeliveryTracking />
             </motion.div>
           )}
         </AnimatePresence>

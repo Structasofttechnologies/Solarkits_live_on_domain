@@ -5,6 +5,38 @@ import { motion } from "framer-motion";
 
 const QUICK_LINKS = [
   {
+    label: "Store Onboarding Queue",
+    description: "Manage 8-stage store lifecycle, Accounts fee verification, and operations start",
+    icon: FaStore,
+    path: "/admin-panel/solar-shop/reseller-management/onboarding",
+    color: "text-amber-500",
+    bg: "bg-amber-500/10",
+  },
+  {
+    label: "Onboard New Store",
+    description: "Multi-step wizard to initialize Company and Franchisee Stores",
+    icon: FaAward,
+    path: "/admin-panel/solar-shop/reseller-management/create-store",
+    color: "text-emerald-500",
+    bg: "bg-emerald-500/10",
+  },
+  {
+    label: "Store Type Settings",
+    description: "Store categories, commission toggles, setup fees, and EPC onboarding scopes",
+    icon: FiFileText,
+    path: "/admin-panel/solar-shop/reseller-management/plans",
+    color: "text-warning",
+    bg: "bg-warning-soft",
+  },
+  {
+    label: "Franchisee Subtypes",
+    description: "Configurable franchisee store tiers, badges, and classification categories",
+    icon: FiTag,
+    path: "/admin-panel/solar-shop/reseller-management/subtypes",
+    color: "text-primary",
+    bg: "bg-info-soft",
+  },
+  {
     label: "Franchisee Leads",
     description: "Inbound territory and franchise applications",
     icon: FiInbox,
@@ -21,20 +53,12 @@ const QUICK_LINKS = [
     bg: "bg-warning-soft",
   },
   {
-    label: "Franchisee Accounts",
-    description: "View and manage active franchisees & KYC",
+    label: "Store Accounts",
+    description: "View and manage active store partners & KYC verification",
     icon: FiUsers,
     path: "/admin-panel/solar-shop/reseller-management/resellers",
     color: "text-success",
     bg: "bg-success-soft",
-  },
-  {
-    label: "Franchisee Plans",
-    description: "Plan tiers, subscriptions and pricing",
-    icon: FiFileText,
-    path: "/admin-panel/solar-shop/reseller-management/plans",
-    color: "text-warning",
-    bg: "bg-warning-soft",
   },
   {
     label: "Franchisee Settings",
@@ -79,10 +103,10 @@ export default function ResellerManagementHome() {
       <div>
         <h1 className="text-2xl font-bold text-text-primary flex items-center gap-2">
           <FiUsers className="text-primary" size={24} />
-          Franchisee Management
+          Store Management
         </h1>
         <p className="text-sm text-text-muted mt-1">
-          Manage franchisees, commission structures, territories, and product authorizations
+          Manage Company Stores, Franchisee stores, commercial plan settings, onboarding pipeline, and operations
         </p>
       </div>
 

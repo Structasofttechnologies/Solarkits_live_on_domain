@@ -13,6 +13,7 @@ import Button from "@/Components/Button";
 import Loader from "@/Components/Loader";
 import CustomInput from "@/Components/CustomInput";
 import GstVerificationDialog from "@/Components/GstVerificationDialog";
+import { hasPermission } from "@/utils/permissions";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -339,6 +340,16 @@ export default function CheckOut() {
 
   useEffect(() => {
     if (orderConfirmed) return;
+    if (user && !hasPermission(user, "can_checkout")) {
+      dispatch(
+        setAlert({
+          type: "error",
+          message: "Your sub-user account is not authorized to checkout orders. Please contact your EPC Administrator.",
+        })
+      );
+      navigate("/cart");
+      return;
+    }
     if (cart.length === 0) {
       navigate("/cart");
       return;
@@ -346,7 +357,7 @@ export default function CheckOut() {
     handleReserveStock();
     fetchActiveOffers();
     checkGstStatus();
-  }, [cart, navigate, selectedDistrict, selectedState, orderConfirmed]);
+  }, [cart, navigate, selectedDistrict, selectedState, orderConfirmed, user, dispatch]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -635,6 +646,16 @@ export default function CheckOut() {
         warehouse_name: item.warehouse_name || null,
         fulfillment_source: item.fulfillment_source || null,
       }));
+
+      if (user && !hasPermission(user, "can_checkout")) {
+        dispatch(
+          setAlert({
+            type: "error",
+            message: "Your sub-user account is not authorized to checkout orders. Please contact your EPC Administrator.",
+          })
+        );
+        return;
+      }
 
       if (!deliveryAddress.line || !deliveryAddress.line.trim()) {
         dispatch(setAlert({ type: "error", message: "Please provide Delivery / Installation Site Address." }));

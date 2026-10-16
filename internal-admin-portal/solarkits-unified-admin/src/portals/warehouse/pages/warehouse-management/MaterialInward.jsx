@@ -24,6 +24,7 @@ import Pagination from "../../components/Pagination";
 import CustomFilePicker from "../../components/CustomFilePicker";
 import Dialog from "../../components/Dialog";
 import PageHeader from "../../components/PageHeader";
+import NewOrdersDeliveryManager from "./NewOrdersDeliveryManager";
 
 // ─── Inline Proforma Invoice Modal ────────────────────────────────────────────
 // ─── Inline Proforma Invoice Modal ────────────────────────────────────────────
@@ -409,7 +410,7 @@ export default function MaterialInward() {
   };
 
   const [activeTab, setActiveTab] = useState(() => {
-    return sessionStorage.getItem("inwardActiveTab") || "local";
+    return sessionStorage.getItem("inwardActiveTab") || "new_orders";
   });
 
   const handleTabChange = (tabId) => {
@@ -423,11 +424,12 @@ export default function MaterialInward() {
 
   useEffect(() => {
     if (warehouseMode !== 'sub' && activeTab === 'transfers') {
-      handleTabChange('local');
+      handleTabChange('new_orders');
     }
   }, [warehouseMode, activeTab]);
 
   const tabs = useMemo(() => [
+    { id: "new_orders", label: "New Orders" },
     { id: "local", label: "Inventory Inward" },
     { id: "supplier", label: "Order Inward" },
     ...(warehouseMode === 'sub' ? [{ id: "transfers", label: "Stock Transfers" }] : []),
@@ -1514,21 +1516,22 @@ export default function MaterialInward() {
       />
 
       {/* Premium Tab Navigation */}
-      <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-xl shadow-inner relative overflow-hidden backdrop-blur-md">
+      <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-3xl shadow-inner relative overflow-hidden backdrop-blur-md overflow-x-auto">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex-1 relative py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden
+              className={`flex-1 relative py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap
                 ${isSelected
                   ? "gradient-primary text-white shadow-md shadow-primary/20 scale-[1.02]"
                   : "text-text-secondary hover:bg-surface-hover hover:text-primary"
                 }`}
             >
+              {tab.id === 'new_orders' && <FaBoxes className="text-base text-amber-300" />}
               {tab.id === 'local' && <HiOutlineClipboardList className="text-base" />}
-              {tab.id === 'supplier' && <FaBoxes className="text-base" />}
+              {tab.id === 'supplier' && <HiCube className="text-base" />}
               {tab.id === 'transfers' && <FaExchangeAlt className="text-base" />}
               {tab.id === 'inventory' && <HiCube className="text-base" />}
               {tab.label}
@@ -1553,6 +1556,19 @@ export default function MaterialInward() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="w-full"
         >
+          {activeTab === "new_orders" && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
+              <NewOrdersDeliveryManager
+                onNavigateToOutward={(ord) => {
+                  const prefix = location.pathname.startsWith("/warehouse-management-panel")
+                    ? "/warehouse-management-panel"
+                    : "/warehouse";
+                  navigate(`${prefix}/delivery-management`);
+                }}
+              />
+            </div>
+          )}
+
           {activeTab === "local" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
               <div className="card p-6 space-y-4 w-full max-w-full overflow-hidden">

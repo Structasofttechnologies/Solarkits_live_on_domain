@@ -79,13 +79,18 @@ export default function StorefrontListings() {
   }, [fetchData]);
 
   // Derived commission and margin rates directly from franchise plan
+  const commissionEnabled = plan?.commission_enabled !== false;
   const commissionMethod = plan?.commission_method || "PERCENTAGE";
-  const commissionRatePct = plan?.default_commission_rate ?? plan?.default_dealer_margin ?? 8;
-  const fixedAmountPerKit = (plan?.fixed_amount_per_kit_paise && plan.fixed_amount_per_kit_paise > 0)
+  const commissionRatePct = commissionEnabled ? (plan?.default_commission_rate ?? plan?.default_dealer_margin ?? 8) : 0;
+  const fixedAmountPerKit = (commissionEnabled && plan?.fixed_amount_per_kit_paise && plan.fixed_amount_per_kit_paise > 0)
     ? (plan.fixed_amount_per_kit_paise / 100)
     : 0;
   const isFixedPerKit = commissionMethod === "FIXED_PER_KIT" && fixedAmountPerKit > 0;
-  const commissionLabel = isFixedPerKit ? `₹${fixedAmountPerKit.toLocaleString('en-IN')} / kit` : `${commissionRatePct}%`;
+  const commissionLabel = !commissionEnabled
+    ? "No Commission"
+    : isFixedPerKit
+    ? `₹${fixedAmountPerKit.toLocaleString('en-IN')} / kit`
+    : `${commissionRatePct}%`;
 
   // Filter listings by kit/product type
   const filteredListings = listings.filter((item) => {
@@ -110,7 +115,7 @@ export default function StorefrontListings() {
             </span>
             {plan && (
               <span className="text-xs font-extrabold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                <FiShield size={12} /> {plan.name} ({commissionLabel} Fixed Commission)
+                <FiShield size={12} /> {plan.name} {commissionEnabled ? `(${commissionLabel} Fixed Commission)` : "(Commission Disabled)"}
               </span>
             )}
           </div>
@@ -385,14 +390,21 @@ export default function StorefrontListings() {
                   </div>
 
                   {/* Fixed Margin/Commission from Plan */}
-                  <div className="flex items-center justify-between text-xs py-1">
-                    <span className="text-slate-600 font-bold flex items-center gap-1">
-                      <FiShield className="text-emerald-600" /> Plan Commission ({itemCommissionLabel}):
-                    </span>
-                    <span className="font-extrabold text-emerald-600 font-mono text-sm">
-                      +₹{marginInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
+                  {commissionEnabled ? (
+                    <div className="flex items-center justify-between text-xs py-1">
+                      <span className="text-slate-600 font-bold flex items-center gap-1">
+                        <FiShield className="text-emerald-600" /> Plan Commission ({itemCommissionLabel}):
+                      </span>
+                      <span className="font-extrabold text-emerald-600 font-mono text-sm">
+                        +₹{marginInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-xs py-1 text-slate-500 font-medium">
+                      <span>Direct Fulfillment Model:</span>
+                      <span className="font-semibold text-slate-600">Zero Commission</span>
+                    </div>
+                  )}
 
                   {/* Final EPC Wholesale Selling Price */}
                   <div className="p-3.5 rounded-xl bg-blue-600/10 border border-blue-600/20 flex justify-between items-center">

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { india_solarshop_db } = require('../../config/databases');
 
 /**
- * resellers — Primary entity for Reseller accounts in the Solarkits system.
+ * resellers — Primary entity for Reseller / Store accounts in the Solarkits system.
  *
  * Stores business identity, GST/PAN/Aadhaar (masked/encrypted), territory address,
  * KYC status, plan subscription, agreement status, and activation status.
@@ -11,6 +11,12 @@ const { india_solarshop_db } = require('../../config/databases');
  *   - reseller_lifecycle_status: Full end-to-end pipeline state (separate from kyc_status)
  *   - GST identity fields from Quick eKYC verification
  *   - contact_person for operations team communication
+ *
+ * Store Management additions:
+ *   - store_category: company_store | franchisee_store
+ *   - franchisee_subtype_id: configurable subtype reference
+ *   - company_store_bde_id: direct BDE assignment for Company Stores
+ *   - onboarding_rejection_reason / onboarding_hold_reason
  *
  * Collection: resellers
  */
@@ -45,6 +51,16 @@ const schema = new mongoose.Schema({
     required: true,
     default: 'commission',
   },
+  store_category: {
+    type: String,
+    enum: ['company_store', 'franchisee_store'],
+    default: 'franchisee_store',
+  },
+  franchisee_subtype_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'franchisee_subtypes',
+    default: null,
+  },
   reseller_type_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'reseller_types',
@@ -73,13 +89,15 @@ const schema = new mongoose.Schema({
   // (which only reflects the KYC document review sub-process).
   //
   // Transition map:
-  //   draft → gst_verification_pending → gst_verified → kyc_pending → kyc_submitted →
-  //   kyc_under_review → kyc_verified (or kyc_rejected / kyc_resubmission_required) →
-  //   agreement_pending → territory_pending → active → suspended / expired / terminated
+  //   draft → store_created → gst_verification_pending → gst_verified → kyc_pending → kyc_submitted →
+  //   kyc_under_review → kyc_verified → agreement_pending → agreement_signed →
+  //   fee_payment_pending / payment_pending → payment_verification_pending → payment_verified →
+  //   setup_verification_pending → territory_pending → active → suspended / on_hold / rejected / expired / terminated
   reseller_lifecycle_status: {
     type: String,
     enum: [
       'draft',
+      'store_created',
       'lead_captured',
       'gst_verification_pending',
       'gst_verified',
@@ -88,7 +106,10 @@ const schema = new mongoose.Schema({
       'agreement_pending',
       'agreement_signed',
       'fee_payment_pending',
+      'payment_pending',
       'payment_verification_pending',
+      'payment_verified',
+      'setup_verification_pending',
       'kyc_pending',
       'kyc_submitted',
       'kyc_under_review',
@@ -97,12 +118,29 @@ const schema = new mongoose.Schema({
       'kyc_verified',
       'territory_pending',
       'active',
+      'on_hold',
+      'rejected',
       'suspended',
       'expired',
       'terminated',
     ],
     default: 'draft',
   },
+
+  // ── Store Management: Company Store BDE & Onboarding Meta ───────────────
+  company_store_bde_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'bde_profiles',
+    default: null,
+  },
+  company_store_bde_assigned_at: { type: Date, default: null },
+  company_store_bde_assigned_by: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'cms_users',
+    default: null,
+  },
+  onboarding_rejection_reason: { type: String, default: null, trim: true },
+  onboarding_hold_reason:      { type: String, default: null, trim: true },
 
   // ── Phase R2: GST Identity (populated after Quick eKYC verification) ──────
   gst_legal_name:          { type: String, default: null, trim: true, maxlength: 300 },
@@ -203,6 +241,7 @@ schema.index({ reseller_type_id: 1 });
 
 // Phase R2: Lifecycle status index for activation readiness queries
 schema.index({ reseller_lifecycle_status: 1, activation_status: 1 });
+schema.index({ store_category: 1, activation_status: 1 });
 
 schema.virtual('id').get(function () { return this._id; });
 

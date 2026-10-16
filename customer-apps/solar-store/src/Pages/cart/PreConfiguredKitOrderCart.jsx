@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from"react";
-import axios from"axios";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import {
     FiGrid, FiList, FiSearch, FiX, FiShoppingCart,
     FiDollarSign, FiTag, FiPackage, FiPercent, FiTruck,
-    FiShield,  FiAward, FiStar, FiHome, FiZap,
-    FiTrendingUp, FiPieChart
+    FiShield, FiAward, FiStar, FiHome, FiZap,
+    FiTrendingUp, FiPieChart, FiLock
 } from 'react-icons/fi';
-import { FaGem, FaSolarPanel } from"react-icons/fa";
-import { useSelector } from"react-redux";
+import { FaGem, FaSolarPanel } from "react-icons/fa";
+import { useSelector, useDispatch } from "react-redux";
+import { setAlert } from "@/features/alert.slice";
+import { hasPermission } from "@/utils/permissions";
 import SelectedKitCard from "@/Pages/dashboard/components/SelectedKitCard";
 import KitCard from "@/Pages/dashboard/components/KitCard";
 import Dialog from "@/Components/Dialog";
@@ -16,21 +18,34 @@ import Button from "@/Components/Button";
 import IconButton from "@/Components/IconButton";
 import Dropdown from "@/Components/Dropdown";
 import CustomInput from "@/Components/CustomInput";
-import { useNavigate } from"react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 export default function PreConfiguredKitOrderCart() {
     const navigate = useNavigate();
+    const dispatch = useDispatch();
     const cart = useSelector((state) => state.slice.cart);
     const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
     const selectedState = useSelector((state) => state.slice.selectedState);
+    const { user } = useSelector((state) => state.auth_slice);
     const [selected, setSelected] = useState(null);
     const [activeOffers, setActiveOffers] = useState([]);
+    
+    // Sub-account permissions check
+    const canCheckout = hasPermission(user, 'can_checkout');
     
     // GST State Verification
     const [showGstDialog, setShowGstDialog] = useState(false);
     const [gstStateId, setGstStateId] = useState("");
 
     const handleProceedToCheckout = async () => {
+        if (!canCheckout) {
+            dispatch(setAlert({
+                type: 'error',
+                message: 'Your account does not have permission to checkout orders. Please contact your primary EPC administrator.'
+            }));
+            return;
+        }
+
         const stateId = selectedState?.id || selectedState?._id;
         if (stateId) {
             try {
@@ -862,15 +877,27 @@ export default function PreConfiguredKitOrderCart() {
                                     </div>
                                 </div>
 
-                                <Button
-                                    onClick={handleProceedToCheckout}
-                                    variant="primary"
-                                    size="lg"
-                                    leftIcon={<FiShoppingCart size={20} />}
-                                    className="shadow-lg px-8 py-4 btn-primary"
-                                >
-                                    Proceed to Checkout
-                                </Button>
+                                <div className="flex flex-col items-center sm:items-end gap-1">
+                                    <Button
+                                        onClick={handleProceedToCheckout}
+                                        variant="primary"
+                                        size="lg"
+                                        disabled={!canCheckout}
+                                        leftIcon={canCheckout ? <FiShoppingCart size={20} /> : <FiLock size={20} />}
+                                        className={`shadow-lg px-8 py-4 ${
+                                            canCheckout
+                                                ? "btn-primary"
+                                                : "opacity-60 cursor-not-allowed bg-slate-700 text-slate-300 border-slate-600"
+                                        }`}
+                                    >
+                                        {canCheckout ? "Proceed to Checkout" : "Checkout Restricted"}
+                                    </Button>
+                                    {!canCheckout && (
+                                        <span className="text-[11px] text-amber-500 font-bold">
+                                            Admin authorization required to place orders
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
 

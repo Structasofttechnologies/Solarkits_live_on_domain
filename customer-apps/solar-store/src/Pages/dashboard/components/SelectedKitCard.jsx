@@ -10,6 +10,8 @@ import Button from "@/Components/Button";
 import IconButton from "@/Components/IconButton";
 import Dialog from "@/Components/Dialog";
 import { addToCart, decreaseQty, increaseQty, removeFromCart, setShowAuthDialog } from "@/features/slice";
+import { setAlert } from "@/features/alert.slice";
+import { hasPermission } from "@/utils/permissions";
 import TrialKitOrderModal from "./TrialKitOrderModal";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
@@ -162,7 +164,7 @@ const KitComponentsRow = ({ kit }) => {
 const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, activeOffers = [] }) => {
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.slice.cart);
-  const { isAuthenticated } = useSelector((state) => state.auth_slice);
+  const { isAuthenticated, user } = useSelector((state) => state.auth_slice);
   const selectedDistrict = useSelector((state) => state.slice.selectedDistrict);
   const [selectedVariant, setSelectedVariant] = useState(initialVariantIndex);
   const [selectedOrderQty, setSelectedOrderQty] = useState(null);
@@ -291,6 +293,14 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       return;
     }
 
+    if (user && !hasPermission(user, 'can_add_to_cart')) {
+      dispatch(setAlert({
+        type: 'error',
+        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
+      }));
+      return;
+    }
+
     const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1;
 
     dispatch(addToCart({
@@ -298,7 +308,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       variantIndex: selectedVariant,
       qty: qtyToAdd,
     }));
-  }, [dispatch, kit?.id, selectedVariant, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
+  }, [dispatch, kit?.id, selectedVariant, isAuthenticated, user, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseQty = useCallback(() => {
     if (hasOrderQuantities) {

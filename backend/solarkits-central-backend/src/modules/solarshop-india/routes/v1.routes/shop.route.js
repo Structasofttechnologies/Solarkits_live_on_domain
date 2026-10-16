@@ -81,6 +81,24 @@ router.get("/gst/status", verify_auth, get_gst_status);
 router.post("/gst/generate-otp", verify_auth, gst_generate_otp);
 router.post("/gst/verify-otp", verify_auth, gst_verify_otp);
 
+// ── EPC Profile, Multi-State GST Onboarding, Multi-District Offices & Sub-Users ─
+const epcProfileHandler = require("../../controller/v1.handlers/epc.profile.handler");
+const epcOfficePhotoUpload = upload_any_files('public/uploads/epc_offices', 10);
+
+router.get("/epc/profile", verify_auth, epcProfileHandler.get_epc_profile);
+router.post("/epc/gst/lookup", verify_auth, epcProfileHandler.lookup_gst_details);
+router.post("/epc/onboard-state", verify_auth, epcProfileHandler.onboard_state_gst);
+router.get("/epc/offices", verify_auth, epcProfileHandler.get_epc_offices);
+router.post("/epc/offices", verify_auth, epcOfficePhotoUpload, epcProfileHandler.add_epc_office);
+router.put("/epc/offices/:id", verify_auth, epcOfficePhotoUpload, epcProfileHandler.update_epc_office);
+router.patch("/epc/offices/:id/set-home", verify_auth, epcProfileHandler.set_home_office);
+router.delete("/epc/offices/:id", verify_auth, epcProfileHandler.delete_epc_office);
+
+router.get("/epc/users", verify_auth, epcProfileHandler.get_epc_users);
+router.post("/epc/users", verify_auth, epcProfileHandler.create_epc_user);
+router.put("/epc/users/:id", verify_auth, epcProfileHandler.update_epc_user);
+router.delete("/epc/users/:id", verify_auth, epcProfileHandler.delete_epc_user);
+
 // ── Checkout phone OTP (same proven flow as forgot-password OTP) ──────────────
 router.post("/checkout/send-phone-otp",   verify_auth, checkout_send_phone_otp);
 router.post("/checkout/verify-phone-otp", verify_auth, checkout_verify_phone_otp);

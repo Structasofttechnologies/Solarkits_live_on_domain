@@ -3,6 +3,7 @@ import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../../features/alert.slice";
 import { addToCart, syncCartWithBackend, getAvailableKitData, fetchShopHierarchy } from "../../features/slice";
+import { hasPermission } from "@/utils/permissions";
 import Dropdown from "@/Components/Dropdown";
 import Button from "@/Components/Button";
 import {
@@ -71,6 +72,7 @@ const PRICE_RANGE_OPTIONS = [
 
 export default function SolarBosKit() {
   const dispatch = useDispatch();
+  const user = useSelector((state) => state.auth_slice?.user);
   const selectedDistrict = useSelector((state) => state.slice?.selectedDistrict);
   const rawKits = useSelector((state) => state.slice?.availableKits);
   const shopHierarchy = useSelector((state) => state.slice?.shopHierarchy || []);
@@ -632,6 +634,14 @@ export default function SolarBosKit() {
 
   // Handle Add Pre-configured Kit to Cart
   const handleAddToCart = (kit, qty = 1) => {
+    if (user && !hasPermission(user, 'can_add_to_cart')) {
+      dispatch(setAlert({
+        type: 'error',
+        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
+      }));
+      return;
+    }
+
     const districtId = selectedDistrict?.id || selectedDistrict?._id || "dist_default";
     const districtName = selectedDistrict?.name || "Pan India Supply";
 
@@ -742,6 +752,14 @@ export default function SolarBosKit() {
 
   // Add Custom Package to Cart
   const handleAddCustomPackageToCart = () => {
+    if (user && !hasPermission(user, 'can_add_to_cart')) {
+      dispatch(setAlert({
+        type: 'error',
+        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
+      }));
+      return;
+    }
+
     if (selectedCustomItems.length === 0) {
       dispatch(setAlert({ type: "warning", message: "Please select at least 1 component to add to cart!" }));
       return;

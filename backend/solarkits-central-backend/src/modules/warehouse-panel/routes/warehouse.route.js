@@ -3,6 +3,7 @@ const router = express.Router();
 const warehouse_handler = require('../controller/warehouse.handler');
 const inward_handler = require('../controller/inward.handler');
 const vehicle_handler = require('../controller/vehicle.handler');
+const delivery_order_handler = require('../controller/delivery.order.handler');
 const check_auth = require('../middlewares/check.auth');
 const check_permissions = require('../middlewares/check.permissions');
 const { upload_files } = require('../utils/upload.files');
@@ -53,5 +54,31 @@ router.get('/drivers', check_auth, vehicle_handler.get_drivers);
 router.post('/drivers', check_auth, vehicle_handler.add_driver);
 router.put('/drivers/:id', check_auth, vehicle_handler.update_driver);
 router.delete('/drivers/:id', check_auth, vehicle_handler.delete_driver);
+
+// ─── Delivery Manager Workflow (New Orders, Inward, Out for Delivery, Track Delivery) ───
+router.get('/delivery-orders', check_auth, delivery_order_handler.get_delivery_orders);
+router.get('/delivery-orders/:id', check_auth, delivery_order_handler.get_delivery_order_by_id);
+router.post('/delivery-orders/:id/reserve-inventory', check_auth, delivery_order_handler.reserve_inventory);
+router.post('/delivery-orders/:id/request-procurement', check_auth, delivery_order_handler.request_procurement);
+router.post('/delivery-orders/:id/inward', check_auth, delivery_order_handler.inward_material);
+router.post('/delivery-orders/:id/send-for-delivery', check_auth, delivery_order_handler.send_for_delivery);
+router.post('/delivery-orders/:id/toggle-ungroup', check_auth, delivery_order_handler.toggle_ungroup);
+router.post('/delivery-orders/:id/account-remove-epc', check_auth, delivery_order_handler.account_remove_epc);
+router.post('/delivery-orders/:id/verify-epc-payment', check_auth, delivery_order_handler.verify_epc_payment);
+router.post('/delivery-orders/:id/dispatch-for-delivery', check_auth, delivery_order_handler.dispatch_for_delivery);
+router.post('/delivery-orders/:id/transport-details', check_auth, delivery_order_handler.save_transport_details);
+router.post('/delivery-orders/:id/request-eway-bill', check_auth, delivery_order_handler.request_eway_bill);
+router.post('/delivery-orders/:id/verify-eway-bill', check_auth, delivery_order_handler.verify_eway_bill);
+router.post('/delivery-orders/:id/initiate-dispatch', check_auth, delivery_order_handler.initiate_dispatch);
+router.post('/delivery-orders/:id/send-otp', check_auth, delivery_order_handler.send_customer_otp);
+router.post('/delivery-orders/:id/verify-otp', check_auth, delivery_order_handler.verify_customer_otp);
+router.post('/delivery-orders/:id/complete-manual', check_auth, delivery_order_handler.complete_manual_delivery);
+router.post('/delivery-orders/:id/claim-incoming-shipment', check_auth, delivery_order_handler.claim_incoming_shipment);
+router.post('/delivery-orders/upload-evidence', check_auth, upload_files('public/uploads/delivery_evidence', 20, 'file', 1), (req, res) => {
+  if (req.files && req.files[0]) {
+    return res.status(200).json({ status: "success", url: req.files[0].path });
+  }
+  return res.status(400).json({ status: "error", message: "No file uploaded." });
+});
 
 module.exports = router;

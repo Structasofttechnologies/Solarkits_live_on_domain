@@ -15,6 +15,7 @@ const PurchaseOrder = require('./PurchaseOrder.schema');
 const PoRequest = require('./PoRequest.schema');
 const DeliveryVehicle = require('./DeliveryVehicle.schema');
 const DeliveryDriver = require('./DeliveryDriver.schema');
+const DeliveryOrder = require('./DeliveryOrder.schema');
 
 module.exports = {
   CompanyWarehouse,
@@ -34,4 +35,5 @@ module.exports = {
   PoRequest,
   DeliveryVehicle,
   DeliveryDriver,
+  DeliveryOrder,
 };

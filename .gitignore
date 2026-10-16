@@ -37,3 +37,7 @@ Thumbs.db
 # Scratch and temporary scripts
 scratch/
 **/scratch/
+
+# Private keys and certificates
+*.pem
+*.key

@@ -7,6 +7,9 @@ const ResellerManagementHome = lazy(() => import("./ResellerManagementHome"));
 const ResellerLeads = lazy(() => import("./ResellerLeads"));
 const ResellerTypes = lazy(() => import("./ResellerTypes"));
 const ResellerPlans = lazy(() => import("./ResellerPlans"));
+const FranchiseeSubtypes = lazy(() => import("./FranchiseeSubtypes"));
+const StoreOnboardingQueue = lazy(() => import("./StoreOnboardingQueue"));
+const StoreCreationWizard = lazy(() => import("./StoreCreationWizard"));
 const ResellerList = lazy(() => import("./ResellerList"));
 const ResellerDetail = lazy(() => import("./ResellerDetail"));
 const ResellerTerritories = lazy(() => import("./ResellerTerritories"));
@@ -40,6 +43,70 @@ function ResellerManagement() {
           <PermissionGuard requiredUniqueId="RSL_MGMT">
             <Suspense fallback={<Loader text="Loading Reseller Management..." />}>
               <ResellerManagementHome />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+
+      {/* Onboard New Store Wizard */}
+      <Route
+        path="/create-store"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+              <StoreCreationWizard />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="create-store"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+              <StoreCreationWizard />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="/onboarding/create"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+              <StoreCreationWizard />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="onboarding/create"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+              <StoreCreationWizard />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+
+      {/* Store Onboarding Lifecycle Queue */}
+      <Route
+        path="/onboarding"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Onboarding Queue..." />}>
+              <StoreOnboardingQueue />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+      <Route
+        path="onboarding"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_MGMT">
+            <Suspense fallback={<Loader text="Loading Store Onboarding Queue..." />}>
+              <StoreOnboardingQueue />
             </Suspense>
           </PermissionGuard>
         }
@@ -100,6 +167,18 @@ function ResellerManagement() {
           <PermissionGuard requiredUniqueId="RSL_PLAN">
             <Suspense fallback={<Loader text="Loading Reseller Plans..." />}>
               <ResellerPlans moduleUniqueId="RSL_PLAN" />
+            </Suspense>
+          </PermissionGuard>
+        }
+      />
+
+      {/* Franchisee Subtypes */}
+      <Route
+        path="/subtypes"
+        element={
+          <PermissionGuard requiredUniqueId="RSL_PLAN">
+            <Suspense fallback={<Loader text="Loading Franchisee Subtypes..." />}>
+              <FranchiseeSubtypes />
             </Suspense>
           </PermissionGuard>
         }

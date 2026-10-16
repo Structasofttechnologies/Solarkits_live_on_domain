@@ -18,6 +18,8 @@ import {
 import Button from "@/Components/Button";
 import IconButton from "@/Components/IconButton";
 import TrialKitOrderModal from "./TrialKitOrderModal";
+import { setAlert } from "@/features/alert.slice";
+import { hasPermission } from "@/utils/permissions";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -102,7 +104,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.slice.cart);
   const liveStock = useSelector(selectLiveStock);
-  const { isAuthenticated } = useSelector((state) => state.auth_slice);
+  const { isAuthenticated, user } = useSelector((state) => state.auth_slice);
   const [selectedVariant, setSelectedVariant] = useState(isCart && kit.variantIndex !== undefined ? kit.variantIndex : 0);
   const [trialModalOpen, setTrialModalOpen] = useState(false);
   const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
@@ -275,13 +277,20 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       dispatch(setShowAuthDialog(true));
       return;
     }
+    if (user && !hasPermission(user, 'can_add_to_cart')) {
+      dispatch(setAlert({
+        type: 'error',
+        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
+      }));
+      return;
+    }
     const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1;
     dispatch(addToCart({
       id: kit.id,
       variantIndex: selectedVariant,
       qty: qtyToAdd,
     }));
-  }, [dispatch, kit.id, selectedVariant, isAuthenticated, hasOrderQuantities, selectedOrderQty, orderQuantities]);
+  }, [dispatch, kit.id, selectedVariant, isAuthenticated, user, hasOrderQuantities, selectedOrderQty, orderQuantities]);
 
   const handleDecreaseQty = useCallback((e) => {
     e.stopPropagation();

@@ -30,6 +30,13 @@ const schema = new mongoose.Schema({
   primary_reseller_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'resellers', default: null },
   onboarding_gstin_log_id:  { type: mongoose.Schema.Types.ObjectId, ref: 'gst_verification_logs', default: null },
 
+  // --- Sub-User & Role Management ---
+  role:                     { type: String, enum: ['owner', 'admin', 'account', 'shopper', 'staff', 'engineer', 'manager'], default: 'owner' },
+  permissions:              [{ type: String, default: 'all' }],
+  parent_account_id:        { type: mongoose.Schema.Types.ObjectId, ref: 'epc_accounts', default: null },
+  assigned_districts:       [{ type: mongoose.Schema.Types.ObjectId, ref: 'geolocation_level_2' }],
+  is_active:                { type: Boolean, default: true },
+
   deleted_at: { type: Date, default: null }
 }, { 
   collection: 'epc_accounts', 

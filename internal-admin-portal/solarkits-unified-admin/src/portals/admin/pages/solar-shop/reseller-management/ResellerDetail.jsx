@@ -311,11 +311,23 @@ export default function ResellerDetail() {
             <FiArrowLeft size={20} />
           </button>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold text-text-primary">{reseller.business_name}</h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-info-soft text-primary uppercase border border-primary/20">
                 {reseller.commercial_mode} Mode
               </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border ${
+                reseller.store_category === "company_store"
+                  ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border-purple-200"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200"
+              }`}>
+                {reseller.store_category === "company_store" ? "Company Store" : "Franchisee Store"}
+              </span>
+              {reseller.reseller_lifecycle_status && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200">
+                  {reseller.reseller_lifecycle_status}
+                </span>
+              )}
             </div>
             <p className="text-xs text-text-muted mt-0.5 font-mono">Partner ID: {reseller.id}</p>
           </div>

@@ -18,6 +18,9 @@ const LooseOrderSettings = require('./loose_order_settings.schema');
 
 // --- Phase 1: Reseller Management Masters ---
 const ResellerType = require('./reseller_types.schema');
+const FranchiseeSubtype = require('./franchisee_subtypes.schema');
+const StoreStatusHistory = require('./store_status_history.schema');
+const CompanyStoreBdeAssignment = require('./company_store_bde_assignments.schema');
 
 // --- Phase 2: Reseller Accounts, KYC, Plans & Audit ---
 const Reseller = require('./resellers.schema');
@@ -145,6 +148,9 @@ module.exports = {
   LooseOrderSettings,
   // --- Phase 1: Reseller Management Masters ---
   ResellerType,
+  FranchiseeSubtype,
+  StoreStatusHistory,
+  CompanyStoreBdeAssignment,
   // --- Phase 2: Reseller Accounts, KYC, Plans & Audit ---
   Reseller,
   ResellerKyc,

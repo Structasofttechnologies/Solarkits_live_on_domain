@@ -19,6 +19,8 @@ import EpcCatalogue from "./dashboard/EpcCatalogue";
 import EpcPoAllocations from "./dashboard/EpcPoAllocations";
 import StoreLocatorPage from "./store-locator/StoreLocatorPage";
 import KnowMyMargin from "./know-my-margin/KnowMyMargin";
+import EpcProfile from "./profile/EpcProfile";
+import EpcTeamUsers from "./users/EpcTeamUsers";
 import {
   MdDashboard,
   MdShoppingCart,
@@ -153,6 +155,16 @@ export default function Board() {
             <Route path="/stores" element={<StoreLocatorPage />} />
             <Route path="/checkout" element={<ProtectedRoute><CheckOut /></ProtectedRoute>} />
             <Route path="/track-status" element={<ProtectedRoute><ProjectOrderStatus /></ProtectedRoute>} />
+
+            {/* EPC Profile: Multi-State GST & Home Office Tagging */}
+            <Route path="/profile" element={<ProtectedRoute><EpcProfile /></ProtectedRoute>} />
+            <Route path="/my-profile" element={<ProtectedRoute><EpcProfile /></ProtectedRoute>} />
+
+            {/* EPC Team: Create Users with Activated District Scoping */}
+            <Route path="/users/create" element={<ProtectedRoute><EpcTeamUsers /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute><EpcTeamUsers /></ProtectedRoute>} />
+            <Route path="/create-users" element={<ProtectedRoute><EpcTeamUsers /></ProtectedRoute>} />
+
             <Route path="*" element={<PreconfiguredComboKit />} />
           </Routes>
         </main>

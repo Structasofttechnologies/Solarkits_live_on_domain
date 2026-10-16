@@ -1826,6 +1826,19 @@ const confirm_order = async (req, res) => {
     const customer_id = req.user.account_id;
     const { items, discount_applied } = req.body;
 
+    // Sub-user authorization check for checkout
+    const callerAccount = await EpcAccount.findById(customer_id).lean();
+    if (callerAccount && callerAccount.parent_account_id) {
+      const perms = callerAccount.permissions || [];
+      const hasCheckout = perms.includes('all') || perms.includes('can_checkout');
+      if (!hasCheckout) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account does not have authorization to checkout orders. Please contact your EPC Admin.'
+        });
+      }
+    }
+
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: "No items provided for order confirmation." });
     }
@@ -2081,6 +2094,21 @@ const update_cart = async (req, res) => {
     }
     const { cart } = req.body;
 
+    // Check sub-user permission when adding/updating cart items
+    if (cart && Array.isArray(cart) && cart.length > 0) {
+      const callerAccount = await EpcAccount.findById(account_id).lean();
+      if (callerAccount && callerAccount.parent_account_id) {
+        const perms = callerAccount.permissions || [];
+        const hasCartPermission = perms.includes('all') || perms.includes('can_add_to_cart') || perms.includes('can_checkout');
+        if (!hasCartPermission) {
+          return res.status(403).json({
+            success: false,
+            message: 'Your account is not authorized to add products to the cart. Please contact your EPC Admin.'
+          });
+        }
+      }
+    }
+
     // Early exit: if the cart is empty, skip all stock checks and just clear
     // the persisted cart in the database. No inventory check needed.
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
@@ -2266,6 +2294,19 @@ const create_request_order = async (req, res) => {
   try {
     const customer_id = req.user.account_id;
     const { items, total_amount } = req.body;
+
+    // Sub-user authorization check for checkout / buy
+    const callerAccount = await EpcAccount.findById(customer_id).lean();
+    if (callerAccount && callerAccount.parent_account_id) {
+      const perms = callerAccount.permissions || [];
+      const hasCheckout = perms.includes('all') || perms.includes('can_checkout');
+      if (!hasCheckout) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account does not have authorization to submit orders. Please contact your EPC Admin.'
+        });
+      }
+    }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: "No items provided for the request order." });
@@ -3119,6 +3160,19 @@ const create_epc_offline_checkout = async (req, res) => {
     const epc_id = req.user?.account_id || req.user?.id;
     if (!epc_id) {
       return res.status(401).json({ success: false, message: "Authentication required for checkout." });
+    }
+
+    // Sub-user authorization check for checkout
+    const callerAccount = await EpcAccount.findById(epc_id).lean();
+    if (callerAccount && callerAccount.parent_account_id) {
+      const perms = callerAccount.permissions || [];
+      const hasCheckout = perms.includes('all') || perms.includes('can_checkout');
+      if (!hasCheckout) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account does not have authorization to checkout orders. Please contact your EPC Admin.'
+        });
+      }
     }
 
     // Parse body data (handles both JSON and multipart form data)

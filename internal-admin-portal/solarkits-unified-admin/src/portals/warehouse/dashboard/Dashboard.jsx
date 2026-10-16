@@ -1,6 +1,6 @@
 import { Route, Routes, useLocation, useNavigate, Link, Navigate } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useSelector } from "react-redux";
+import { useSelector, shallowEqual } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 
@@ -10,7 +10,7 @@ import Loader from "../components/Loader";
 import { PermissionGuard } from "../components/PermissionGuard";
 import { selectAllowedUniqueIds } from "../features/modules.slice";
 
-import { FaHome, FaExchangeAlt, FaBoxes, FaTruck, FaSyncAlt, FaTools, FaCheckCircle, FaFileInvoice, FaUser, FaMapMarkerAlt } from "react-icons/fa";
+import { FaHome, FaExchangeAlt, FaBoxes, FaTruck, FaSyncAlt, FaTools, FaCheckCircle, FaFileInvoice, FaUser, FaMapMarkerAlt, FaTruckLoading, FaShippingFast, FaClipboardList } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { FiAlertCircle, FiX, FiArrowRight, FiUsers, FiDollarSign, FiMapPin, FiBarChart2, FiSliders } from "react-icons/fi";
 
@@ -32,6 +32,11 @@ const VehicleDriverManagement = lazy(() => import("../pages/warehouse-management
 const LooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/LooseOrders"));
 const WarehouseLooseOrders = lazy(() => import("../../admin/pages/solar-shop/loose-orders/WarehouseLooseOrders"));
 const Home = lazy(() => import("../pages/dashboard/Home"));
+
+/* ── Delivery Manager Standalone Modules ── */
+const NewOrdersPage = lazy(() => import("../pages/warehouse-management/NewOrdersPage"));
+const OutForDeliveryPage = lazy(() => import("../pages/warehouse-management/OutForDeliveryPage"));
+const TrackDeliveryPage = lazy(() => import("../pages/warehouse-management/TrackDeliveryPage"));
 
 /* ===================== Delivery Management Module Pages ===================== */
 const DeliveryDashboard = lazy(() => import("../../admin/pages/solar-shop/delivery-management/DeliveryDashboard"));
@@ -55,10 +60,28 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
     [{ name: "Dashboard", icon: <FaHome />, path: `${prefix}/home`, unique_id: "00000000" }],
     [
       {
+        name: "New Orders",
+        icon: <FaClipboardList />,
+        path: `${prefix}/new-orders`,
+        unique_id: "WH_DELIVERY_MGMT"
+      },
+      {
         name: "Material Inward",
         icon: <HiCube />,
         path: `${prefix}/material-inward`,
         unique_id: "WH_MAT_INWARD"
+      },
+      {
+        name: "Out for Delivery",
+        icon: <FaTruckLoading />,
+        path: `${prefix}/out-for-delivery`,
+        unique_id: "WH_DELIVERY_MGMT"
+      },
+      {
+        name: "Track Delivery & POD",
+        icon: <FaShippingFast />,
+        path: `${prefix}/track-delivery`,
+        unique_id: "WH_DELIVERY_MGMT"
       },
       {
         name: isInwardSub ? "Sub-Warehouse Outward" : "Master-Warehouse Outward",
@@ -72,30 +95,23 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
             unique_id: "WH_MAT_OUTWARD"
           },
           {
-            name: "Customer Outward (Delivery)",
+            name: "Customer Outward (Delivery Hub)",
             icon: <FaTruck />,
             path: `${prefix}/delivery-management`,
             unique_id: "WH_DELIVERY_MGMT"
           },
           {
-            name: "Delivery Queue",
+            name: "FIFO Delivery Queue",
             icon: <FaBoxes />,
             path: `${prefix}/delivery-management/queue`,
             unique_id: "WH_DELIVERY_MGMT"
           },
           {
-            name: "Trip Tracking & POD",
+            name: "Interactive Map & Routes",
             icon: <FiMapPin />,
             path: `${prefix}/delivery-management/tracking`,
             unique_id: "WH_DELIVERY_MGMT"
           },
-          // {
-          //   name: "Vehicles & Drivers (Fleet)",
-          //   icon: <FaTruck />,
-          //   path: `${prefix}/vehicles-drivers`,
-          //   unique_id: "WH_DELIVERY_MGMT"
-          // }
-
         ]
       },
       {
@@ -188,7 +204,7 @@ export default function Dashboard() {
     return () => window.removeEventListener('warehouseModeChanged', handleModeChanged);
   }, []);
 
-  const allowedUniqueIds = useSelector((state) => selectAllowedUniqueIds(state, location.pathname));
+  const allowedUniqueIds = useSelector((state) => selectAllowedUniqueIds(state, location.pathname), shallowEqual);
 
   const { user } = useSelector((state) => state.user_slice || {});
   const [profileCompletion, setProfileCompletion] = useState(null);
@@ -284,6 +300,9 @@ export default function Dashboard() {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes('/home')) return 'Warehouse Dashboard';
+    if (path.includes('/new-orders')) return 'New Orders (Procurement Fulfillment)';
+    if (path.includes('/out-for-delivery')) return 'Out for Delivery (Dispatch Gate)';
+    if (path.includes('/track-delivery')) return 'Track Delivery & Dual POD';
     if (path.includes('/material-inward')) return 'Material Inward Entry';
     if (path.includes('/material-outward')) return 'Material Outward Dispatch';
     if (path.includes('/inventory-transfer')) return 'Inventory Transfer';
@@ -469,6 +488,38 @@ export default function Dashboard() {
                       </PermissionGuard>
                     }
                   />
+                  {/* ── Delivery Manager Dedicated Modules ── */}
+                  <Route
+                    path="new-orders/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading new orders..." />}>
+                          <NewOrdersPage />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="out-for-delivery/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading out for delivery..." />}>
+                          <OutForDeliveryPage />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="track-delivery/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading delivery tracking..." />}>
+                          <TrackDeliveryPage />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+
                   {/* ── Delivery Management & Fleet Module Routes ── */}
                   <Route
                     path="delivery-management/queue/*"

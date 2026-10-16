@@ -101,6 +101,18 @@ adminRouter.use('/reseller-mgmt/orders', require('./modules/admin-panel/routes/r
 adminRouter.use('/reseller-mgmt/wallet', require('./modules/admin-panel/routes/reseller.wallet.route'));
 adminRouter.use('/reseller-mgmt/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
 adminRouter.use('/resellers/plans', require('./modules/admin-panel/routes/reseller.plans.route'));
+
+// ─── Store Management Module ──────────────────────────────────────────────────
+adminRouter.use('/store-management/subtypes',   require('./modules/admin-panel/routes/franchisee.subtypes.route'));
+adminRouter.use('/reseller-mgmt/subtypes',      require('./modules/admin-panel/routes/franchisee.subtypes.route'));
+adminRouter.use('/store-management/onboarding', require('./modules/admin-panel/routes/store.management.onboarding.route'));
+adminRouter.use('/reseller-mgmt/onboarding',    require('./modules/admin-panel/routes/store.management.onboarding.route'));
+adminRouter.use('/store-management/payments',   require('./modules/admin-panel/routes/store.management.payment.route'));
+adminRouter.use('/reseller-mgmt/payments',      require('./modules/admin-panel/routes/store.management.payment.route'));
+adminRouter.use('/store-management/bde',        require('./modules/admin-panel/routes/store.management.bde.route'));
+adminRouter.use('/reseller-mgmt/bde',           require('./modules/admin-panel/routes/store.management.bde.route'));
+adminRouter.use('/store-management/warehouses', require('./modules/admin-panel/routes/store.management.warehouse.route'));
+adminRouter.use('/reseller-mgmt/warehouses',    require('./modules/admin-panel/routes/store.management.warehouse.route'));
 adminRouter.use('/reseller-mgmt/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/resellers/leads', require('./modules/admin-panel/routes/reseller.leads.route'));
 adminRouter.use('/reseller-mgmt', require('./modules/admin-panel/routes/reseller.admin.route'));
@@ -177,6 +189,7 @@ const warehouseRouter = express.Router();
 warehouseRouter.use('/', require('./modules/warehouse-panel/routes/root.route'));
 warehouseRouter.use('/auth', require('./modules/warehouse-panel/routes/auth.route'));
 warehouseRouter.use('/warehouse', require('./modules/warehouse-panel/routes/warehouse.route'));
+warehouseRouter.use('/', require('./modules/warehouse-panel/routes/warehouse.route'));
 app.use('/warehouse-api', warehouseRouter);
 
 // 6. Account Panel routes
@@ -221,6 +234,26 @@ require('./modules/solarshop-india/utils/scheduler');
 require('./modules/warehouse-panel/utils/scheduler');
 require('./utils/autoSeedAccounts');
 
+// Global Error Handler (catches JSON parse errors, CORS, and unhandled exceptions)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ success: false, message: 'Invalid JSON payload' });
+  }
+  console.error('❌ Server error:', err.message || err);
+  return res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal Server Error'
+  });
+});
+
+// Process-level safety guards
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+});
+
 // Start Express unified server
 const server = app.listen(port, () => {
   console.log(`🚀 Centralized backend server running on ${ipv4}:${port}`);
@@ -230,6 +263,7 @@ server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`❌ Port ${port} is already in use by another running process.`);
     console.error(`💡 Tip: Check task manager or kill previous node instance occupying port ${port}.`);
+    process.exit(1);
   } else {
     console.error(`❌ Server error:`, err);
   }

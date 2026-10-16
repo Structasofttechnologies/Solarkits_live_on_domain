@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import axiosInstance from "@/utils/axiosInstance";
 import { addToCart, syncCartWithBackend } from "@/features/slice";
+import { setAlert } from "@/features/alert.slice";
+import { hasPermission } from "@/utils/permissions";
 import {
   FiSearch,
   FiFilter,
@@ -358,6 +360,14 @@ export default function EpcCatalogue() {
   const searchTimer = useRef(null);
 
   const handleAddToCart = (item, selectedQty) => {
+    if (user && !hasPermission(user, 'can_add_to_cart')) {
+      dispatch(setAlert({
+        type: 'error',
+        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
+      }));
+      return;
+    }
+
     dispatch(addToCart({
       id: item.id || item.listing_id,
       listing_id: item.listing_id || item.id,

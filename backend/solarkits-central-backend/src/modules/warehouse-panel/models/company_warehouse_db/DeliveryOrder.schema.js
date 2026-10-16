@@ -1,0 +1,179 @@
+const mongoose = require('mongoose');
+const { company_warehouse_db: db } = require('../../config/databases');
+
+const schema = new mongoose.Schema({
+  delivery_order_id: { type: String, required: true, unique: true, trim: true },
+  delivery_number:   { type: String, default: '' },
+  order_id:          { type: String, required: true, trim: true },
+  order_number:      { type: String, required: true, trim: true },
+  warehouse_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'company_warehouses', default: null },
+  warehouse_code:    { type: String, default: 'MW-01' },
+  customer_id:       { type: mongoose.Schema.Types.ObjectId, default: null },
+  customer_name:     { type: String, required: true },
+  customer_phone:    { type: String, required: true },
+  customer_email:    { type: String, default: '' },
+  destination: {
+    address:         { type: String, required: true },
+    state:           { type: String, required: true },
+    district:        { type: String, required: true },
+    pincode:         { type: String, required: true },
+    landmark:        { type: String, default: '' }
+  },
+  required_vehicle:   { type: String, default: 'Tata Ace (1.5 Ton)' },
+  order_date:        { type: Date, default: Date.now },
+  items: [{
+    sku:             { type: String, required: true },
+    product_name:    { type: String, required: true },
+    category:        { type: String, default: 'BOS Kit' },
+    ordered_qty:     { type: Number, required: true, min: 1 },
+    received_qty:    { type: Number, default: 0 },
+    pending_qty:     { type: Number, required: true },
+    available_inventory_stock: { type: Number, default: 0 },
+    allocated_stock: { type: Number, default: 0 },
+    rack_location:   { type: String, default: '' },
+    qc_status:       { type: String, default: 'Passed' }
+  }],
+  epcs: [{
+    epc_id:          { type: String, required: true },
+    epc_name:        { type: String, required: true },
+    contact_person:  { type: String, default: '' },
+    phone:           { type: String, default: '' },
+    email:           { type: String, default: '' },
+    destination: {
+      address:       { type: String, default: '' },
+      district:      { type: String, default: '' },
+      state:         { type: String, default: '' },
+      pincode:       { type: String, default: '' }
+    },
+    payment_first_half: {
+      status:        { type: String, enum: ['done', 'pending'], default: 'done' },
+      percentage:    { type: Number, default: 50 },
+      amount:        { type: Number, default: 0 },
+      paid_at:       { type: Date, default: Date.now },
+      verified_by:   { type: String, default: 'Account Manager' }
+    },
+    payment_second_half: {
+      status:        { type: String, enum: ['done', 'pending'], default: 'pending' },
+      percentage:    { type: Number, default: 50 },
+      amount:        { type: Number, default: 0 },
+      paid_at:       { type: Date, default: null },
+      verified_by:   { type: String, default: '' }
+    },
+    items: [{
+      sku:           { type: String, required: true },
+      product_name:  { type: String, required: true },
+      category:      { type: String, default: 'BOS Kit' },
+      ordered_qty:   { type: Number, required: true },
+      received_qty:  { type: Number, default: 0 },
+      pending_qty:   { type: Number, default: 0 },
+      rack_location: { type: String, default: '' }
+    }],
+    is_removed_by_account: { type: Boolean, default: false },
+    removed_at:      { type: Date, default: null },
+    removal_reason:  { type: String, default: '' },
+    dispatch_status: { type: String, default: 'pending' },
+    tracking_consignment_id: { type: String, default: '' }
+  }],
+  is_ungrouped:      { type: Boolean, default: false },
+  sent_for_delivery_at: { type: Date, default: null },
+  sent_for_delivery_by: { type: String, default: '' },
+  inward_history: [{
+    batch_id:        { type: String, default: '' },
+    inwarded_items:  [{
+      sku:          { type: String },
+      product_name: { type: String },
+      qty:          { type: Number }
+    }],
+    inwarded_by_name:{ type: String, default: 'Delivery Manager' },
+    timestamp:       { type: Date, default: Date.now },
+    remarks:         { type: String, default: '' }
+  }],
+  delivery_status: {
+    type: String,
+    enum: [
+      'confirmed_procurement',
+      'new_order',
+      'partially_inwarded',
+      'ready_for_dispatch',
+      'awaiting_eway_bill',
+      'ready_to_initiate',
+      'in_transit',
+      'delivered',
+      'delivery_exception'
+    ],
+    default: 'new_order'
+  },
+  delivery_method: { type: String, enum: ['manual', 'auto'], default: 'manual' },
+  sla_days: { type: Number, default: 2 },
+  incoming_truck_group: {
+    group_id:                 { type: String, default: '' },
+    group_name:               { type: String, default: '' },
+    vehicle_number:           { type: String, default: '' },
+    vehicle_type:             { type: String, default: '' },
+    transporter_name:         { type: String, default: '' },
+    driver_name:              { type: String, default: '' },
+    driver_mobile:            { type: String, default: '' },
+    lr_number:                { type: String, default: '' },
+    total_epc_orders_in_truck:{ type: Number, default: 1 },
+    unloaded_dock:            { type: String, default: 'Receiving Dock #1' },
+    is_claimed:               { type: Boolean, default: false },
+    claimed_at:               { type: Date, default: null },
+    claimed_by_name:          { type: String, default: '' }
+  },
+  transport_details: {
+    vehicle_number:         { type: String, default: '' },
+    vehicle_type:           { type: String, default: '' },
+    transporter_name:       { type: String, default: '' },
+    transporter_id:         { type: String, default: '' },
+    driver_name:            { type: String, default: '' },
+    driver_mobile:          { type: String, default: '' },
+    dispatch_date:          { type: Date, default: null },
+    expected_delivery_date: { type: Date, default: null },
+    docket_number:          { type: String, default: '' },
+    lr_number:              { type: String, default: '' },
+    notes:                  { type: String, default: '' }
+  },
+  eway_bill: {
+    requested:        { type: Boolean, default: false },
+    requested_at:     { type: Date, default: null },
+    requested_by_name:{ type: String, default: '' },
+    status:           { type: String, enum: ['not_requested', 'pending', 'generated', 'rejected'], default: 'not_requested' },
+    eway_bill_number: { type: String, default: '' },
+    valid_until:      { type: Date, default: null },
+    eway_bill_pdf:    { type: String, default: '' },
+    verified_at:      { type: Date, default: null }
+  },
+  dispatch_evidence: {
+    vehicle_rear_photo: { type: String, default: '' },
+    docket_doc:         { type: String, default: '' },
+    dispatched_at:      { type: Date, default: null },
+    dispatched_by_name: { type: String, default: '' }
+  },
+  delivery_completion: {
+    completed_at:        { type: Date, default: null },
+    completed_by_name:   { type: String, default: '' },
+    method:              { type: String, enum: ['manual_photo', 'auto_otp'], default: 'manual_photo' },
+    destination_photo:   { type: String, default: '' },
+    remarks:             { type: String, default: '' },
+    receiver_name:       { type: String, default: '' },
+    otp_code:            { type: String, default: '' },
+    otp_generated_at:    { type: Date, default: null },
+    otp_verified:        { type: Boolean, default: false },
+    failed_otp_attempts: { type: Number, default: 0 }
+  },
+  audit_trail: [{
+    action:             { type: String, required: true },
+    performed_by_name:  { type: String, default: 'Delivery Manager' },
+    timestamp:          { type: Date, default: Date.now },
+    notes:              { type: String, default: '' }
+  }]
+}, {
+  collection: 'delivery_orders',
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+schema.virtual('id').get(function () { return this._id; });
+
+module.exports = db.model('warehouse_delivery_orders', schema, 'delivery_orders');

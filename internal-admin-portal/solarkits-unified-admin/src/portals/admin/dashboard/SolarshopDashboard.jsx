@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock, FiPlusCircle } from "react-icons/fi";
 
 // ── Margin & Commission Settings Module ─────────────────────────────────────────
 const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
@@ -27,6 +27,8 @@ const ServiceTicketsAdmin = lazy(() => import("../pages/solar-shop/service-ticke
 // ── Phase 1: Reseller Management ────────────────────────────────────────────
 const ResellerManagement = lazy(() => import("../pages/solar-shop/reseller-management/ResellerManagement"));
 const ResellerSettings = lazy(() => import("../pages/solar-shop/reseller-management/ResellerSettings"));
+const StoreOnboardingQueue = lazy(() => import("../pages/solar-shop/reseller-management/StoreOnboardingQueue"));
+const StoreCreationWizard = lazy(() => import("../pages/solar-shop/reseller-management/StoreCreationWizard"));
 
 // ── Quote Settings & Analytics Module ─────────────────────────────────────
 const QuoteSettingsAdmin = lazy(() => import("../pages/solar-shop/quote-settings/QuoteSettings"));
@@ -278,13 +280,25 @@ const menus = [
         // ── Service Tickets Module ───────────────────────────────────────────
         { name: "Service Tickets", icon: <FiTool />, path: "/admin-panel/solar-shop/service-tickets", unique_id: "ADM_SKT_MGMT" },
 
-        // ── Phase 1: Franchisee Management ─────────────────────────────
+        // ── Store Management Module (Converted from Franchisee Management) ────────
         {
-            name: "Franchisee Management",
+            name: "Store Management",
             icon: <FiUsers />,
             path: "/admin-panel/solar-shop/reseller-management",
             unique_id: "RSL_MGMT",
             subMenu: [
+                {
+                    name: "Store Onboarding Queue",
+                    icon: <FaStore />,
+                    path: "/admin-panel/solar-shop/reseller-management/onboarding",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Onboard New Store",
+                    icon: <FiPlusCircle />,
+                    path: "/admin-panel/solar-shop/reseller-management/create-store",
+                    unique_id: "RSL_MGMT"
+                },
                 {
                     name: "Franchisee Leads",
                     icon: <FiFileText />,
@@ -292,25 +306,25 @@ const menus = [
                     unique_id: "RSL_MGMT"
                 },
                 {
-                    name: "Franchisee Accounts",
+                    name: "Store Accounts",
                     icon: <FiUsers />,
                     path: "/admin-panel/solar-shop/reseller-management/resellers",
                     unique_id: "RSL_MGMT"
                 },
-                // {
-                //     name: "Franchisee Types",
-                //     icon: <FiTag />,
-                //     path: "/admin-panel/solar-shop/reseller-management/types",
-                //     unique_id: "RSL_TYPES"
-                // },
                 {
-                    name: "Franchisee Plans",
+                    name: "Store Type Settings",
                     icon: <HiCube />,
                     path: "/admin-panel/solar-shop/reseller-management/plans",
                     unique_id: "RSL_PLAN"
                 },
                 {
-                    name: "Franchisee Settings",
+                    name: "Franchisee Subtypes",
+                    icon: <FiLayers />,
+                    path: "/admin-panel/solar-shop/reseller-management/subtypes",
+                    unique_id: "RSL_PLAN"
+                },
+                {
+                    name: "Store Settings",
                     icon: <FiSliders />,
                     path: "/admin-panel/solar-shop/reseller-management/franchise-settings",
                     unique_id: "FPO_SETTINGS"
@@ -984,6 +998,68 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="ADM_WH_KIT_ACT">
                                                 <Suspense fallback={<Loader text="Loading Warehouse Kit Configuration..." />}>
                                                     <WarehouseKitConfig moduleUniqueId="ADM_WH_KIT_ACT" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+
+                                    {/* ── Store Management: Dedicated Wizard & Queue Routes ─── */}
+                                    <Route
+                                        path="/reseller-management/create-store"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+                                                    <StoreCreationWizard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/reseller-management/create-store"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+                                                    <StoreCreationWizard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/reseller-management/onboarding/create"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+                                                    <StoreCreationWizard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/reseller-management/onboarding/create"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Store Onboarding Wizard..." />}>
+                                                    <StoreCreationWizard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/reseller-management/onboarding"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Store Onboarding Queue..." />}>
+                                                    <StoreOnboardingQueue />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/reseller-management/onboarding"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="RSL_MGMT">
+                                                <Suspense fallback={<Loader text="Loading Store Onboarding Queue..." />}>
+                                                    <StoreOnboardingQueue />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }

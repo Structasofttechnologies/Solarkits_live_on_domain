@@ -612,6 +612,14 @@ const login = async (req, res) => {
             }
         }
 
+        const isOwner = !account.parent_account_id;
+        const effectiveRole = isOwner ? 'admin' : (account.role || 'shopper');
+        const effectivePermissions = isOwner
+            ? ['all']
+            : (account.permissions && account.permissions.length > 0
+                ? account.permissions
+                : (account.role === 'admin' ? ['all'] : (account.role === 'account' ? ['can_view_orders', 'can_checkout'] : ['can_view_catalog', 'can_add_to_cart'])));
+
         return res.json({
             success: true,
             message: "Login successful",
@@ -621,7 +629,13 @@ const login = async (req, res) => {
                 id: account._id,
                 name: account.name,
                 email: account.email,
+                whatsapp: account.whatsapp,
                 company_id: account.company_id,
+                role: effectiveRole,
+                permissions: effectivePermissions,
+                is_owner: isOwner,
+                parent_account_id: account.parent_account_id || null,
+                assigned_districts: account.assigned_districts || [],
                 onboarding_source: account.onboarding_source || 'direct',
                 reseller: resellerData,
                 primaryLocation
@@ -1037,6 +1051,14 @@ const get_me = async (req, res) => {
             }
         }
 
+        const isOwner = !user.parent_account_id;
+        const effectiveRole = isOwner ? 'admin' : (user.role || 'shopper');
+        const effectivePermissions = isOwner
+            ? ['all']
+            : (user.permissions && user.permissions.length > 0
+                ? user.permissions
+                : (user.role === 'admin' ? ['all'] : (user.role === 'account' ? ['can_view_orders', 'can_checkout'] : ['can_view_catalog', 'can_add_to_cart'])));
+
         // ✅ SUCCESS
         return res.json({
             success: true,
@@ -1046,6 +1068,11 @@ const get_me = async (req, res) => {
                 email: user.email,
                 whatsapp: user.whatsapp,
                 company_id: user.company_id,
+                role: effectiveRole,
+                permissions: effectivePermissions,
+                is_owner: isOwner,
+                parent_account_id: user.parent_account_id || null,
+                assigned_districts: user.assigned_districts || [],
                 onboarding_source: user.onboarding_source || 'direct',
                 reseller: resellerData,
                 primaryLocation
