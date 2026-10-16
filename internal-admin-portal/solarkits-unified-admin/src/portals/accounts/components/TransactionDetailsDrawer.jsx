@@ -842,6 +842,13 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                     const m2Done = m2.payment_status === 'verified' || pm.milestone_verification_status === 'fully_paid';
                     const m2Submitted = m2.payment_status === 'pending_verification' || pm.milestone_verification_status === 'final_payment_pending_verification' || Boolean(m2.utr_number);
 
+                    const m1Required = pm.advance_amount || m1.amount || (details?.financial_breakdown?.total_amount ? Math.round(details.financial_breakdown.total_amount * 0.3) : 0);
+                    const m1Paid = m1.amount_paid != null ? m1.amount_paid : (details?.offline_payment?.amount_paid != null ? details.offline_payment.amount_paid : null);
+
+                    const m2Pct = pm.remaining_percentage || pm.balance_percentage || m2.percentage || 70;
+                    const m2Required = pm.remaining_amount || pm.balance_amount || m2.amount || (details?.financial_breakdown?.total_amount ? Math.round(details.financial_breakdown.total_amount * 0.7) : 0);
+                    const m2Paid = m2.amount_paid != null ? m2.amount_paid : 0;
+
                     return (
                       <div className="p-4 rounded-xl bg-surface border border-primary/20 space-y-3">
                         <div className="flex items-center justify-between pb-1 border-b border-border/50">
@@ -867,9 +874,21 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                                 {m1Done ? 'Verified' : 'Pending Verification'}
                               </span>
                             </div>
-                            <div className="text-base font-black text-text-primary">
-                              {formatCurrency(pm.advance_amount || (details?.financial_breakdown?.total_amount ? details.financial_breakdown.total_amount * 0.3 : 0))}
+                            <div className="flex items-baseline justify-between gap-1 flex-wrap">
+                              <div className="text-base font-black text-text-primary">
+                                {formatCurrency(m1Required)}
+                              </div>
+                              {m1Paid != null && m1Paid > 0 && m1Paid !== m1Required && (
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                  Paid: {formatCurrency(m1Paid)}
+                                </span>
+                              )}
                             </div>
+                            {m1Paid != null && m1Paid > 0 && m1Paid < m1Required && (
+                              <div className="text-[10px] font-bold text-rose-500">
+                                Shortfall: {formatCurrency(m1Required - m1Paid)}
+                              </div>
+                            )}
                             <div className="text-[10px] text-text-muted">
                               Stage: Advance Payment at Order Placement
                             </div>
@@ -890,7 +909,7 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                           <div className={`p-3 rounded-xl border ${m2Done ? 'bg-emerald-500/5 border-emerald-500/30' : m2Submitted ? 'bg-amber-500/5 border-amber-500/30' : 'bg-surface-hover/50 border-border'} space-y-1.5`}>
                             <div className="flex items-center justify-between">
                               <span className="font-extrabold text-text-primary text-[11px]">
-                                Milestone 2 ({pm.balance_percentage || 70}% Balance)
+                                Milestone 2 ({m2Pct}% Balance)
                               </span>
                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
                                 m2Done ? 'bg-emerald-500/15 text-emerald-600' : m2Submitted ? 'bg-amber-500/15 text-amber-600 animate-pulse' : 'bg-slate-500/10 text-text-muted'
@@ -898,8 +917,15 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                                 {m2Done ? 'Verified' : m2Submitted ? 'Proof Submitted' : 'Awaiting Stage'}
                               </span>
                             </div>
-                            <div className="text-base font-black text-text-primary">
-                              {formatCurrency(pm.balance_amount || (details?.financial_breakdown?.total_amount ? details.financial_breakdown.total_amount * 0.7 : 0))}
+                            <div className="flex items-baseline justify-between gap-1 flex-wrap">
+                              <div className="text-base font-black text-text-primary">
+                                {formatCurrency(m2Required)}
+                              </div>
+                              {m2Paid > 0 && (
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                  Paid: {formatCurrency(m2Paid)}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-text-muted">
                               Stage: Before Dispatch

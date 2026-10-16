@@ -98,13 +98,13 @@ const schema = new mongoose.Schema({
   commission_notes: { type: String, default: null },
   payment_method: {
     type: String,
-    enum: ['offline_bank_transfer', 'icici_ecollection'],
+    enum: ['offline_bank_transfer', 'bank_transfer', 'icici_ecollection'],
     default: 'offline_bank_transfer',
   },
   // Which payment gateway was actually used for this order
   payment_gateway_used: {
     type: String,
-    enum: ['icici_ecollection', 'offline_utr', null],
+    enum: ['icici_ecollection', 'offline_utr', 'bank_transfer', 'offline_bank_transfer', null],
     default: null,
   },
   payment_status: {

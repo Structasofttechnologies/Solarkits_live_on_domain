@@ -225,7 +225,7 @@ const schema = new mongoose.Schema(
     },
     payment_gateway_used: {
       type: String,
-      enum: ['icici_ecollection', 'offline_utr', null],
+      enum: ['icici_ecollection', 'offline_utr', 'bank_transfer', 'offline_bank_transfer', null],
       default: null,
     },
 

@@ -59,7 +59,7 @@ import Button from "../../components/Button";
 export default function EpcOrdersManagement() {
   const { user } = useSelector((state) => state.user_slice || {});
 
-// Fixed Role: Accounts Portal
+  // Fixed Role: Accounts Portal
 
   // ── State: Orders & Statistics ──────────────────────────────────────────
   const [orders, setOrders] = useState([]);
@@ -273,6 +273,7 @@ export default function EpcOrdersManagement() {
 
   // ── Open Accounts Verification Modal ────────────────────────────────────
   const handleOpenAccountsModal = (order) => {
+    const m1Req = order.payment_milestones?.advance_amount || Math.round((order.grand_total || 0) * 0.3);
     const claimedAmt =
       order.offline_payment?.amount_paid ||
       order.payment_milestones?.advance_amount ||
@@ -286,6 +287,7 @@ export default function EpcOrdersManagement() {
     setAccountsModal({
       isOpen: true,
       order,
+      m1_required: m1Req,
       utr_number: utr,
       payment_date: pDate,
       payment_mode: order.offline_payment?.payment_mode || "bank_transfer",
@@ -386,11 +388,10 @@ export default function EpcOrdersManagement() {
           <button
             type="button"
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition ${
-              showFilters || activeFiltersCount > 0
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition ${showFilters || activeFiltersCount > 0
                 ? "bg-primary/10 border-primary text-primary"
                 : "bg-surface border-border text-text-secondary hover:text-text-primary shadow-sm"
-            }`}
+              }`}
           >
             <MdFilterList className="text-sm" />
             <span>Filters</span>
@@ -462,7 +463,7 @@ export default function EpcOrdersManagement() {
         </div>
 
         {/* Pending Payments (Outstanding Amount) */}
-        <div className="bg-surface p-5 rounded-2xl border border-border shadow-sm flex flex-col justify-between hover:border-amber-500/50 transition">
+        {/* <div className="bg-surface p-5 rounded-2xl border border-border shadow-sm flex flex-col justify-between hover:border-amber-500/50 transition">
           <div className="flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-400">
             <span>Pending Payments (Outstanding)</span>
             <span className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
@@ -486,7 +487,7 @@ export default function EpcOrdersManagement() {
               Follow-up Desk →
             </Link>
           </div>
-        </div>
+        </div> */}
 
         {/* Payment Delays (Overdue Orders) */}
         <div
@@ -494,11 +495,10 @@ export default function EpcOrdersManagement() {
             setActiveTab("delays");
             setPage(1);
           }}
-          className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between cursor-pointer transition ${
-            stats.payment_delays > 0
+          className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between cursor-pointer transition ${stats.payment_delays > 0
               ? "bg-rose-500/10 border-rose-500/30 hover:border-rose-500"
               : "bg-surface border-border hover:border-emerald-500"
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between text-xs font-bold">
             <span className="flex items-center gap-1.5 text-rose-700 dark:text-rose-400">
@@ -571,38 +571,36 @@ export default function EpcOrdersManagement() {
                 setActiveTab(tab.key);
                 setPage(1);
               }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                activeTab === tab.key
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${activeTab === tab.key
                   ? tab.highlightColor === "rose"
                     ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
                     : tab.highlightColor === "purple"
-                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                    : tab.highlightColor === "amber"
-                    ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
-                    : "bg-primary text-white shadow-md shadow-primary/30"
+                      ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
+                      : tab.highlightColor === "amber"
+                        ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
+                        : "bg-primary text-white shadow-md shadow-primary/30"
                   : tab.highlight
-                  ? tab.highlightColor === "rose"
-                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25"
-                    : tab.highlightColor === "purple"
-                    ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 hover:bg-purple-500/25"
-                    : "bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25"
-                  : "bg-surface text-text-secondary hover:text-text-primary hover:bg-surface-hover border border-border"
-              }`}
+                    ? tab.highlightColor === "rose"
+                      ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25"
+                      : tab.highlightColor === "purple"
+                        ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 hover:bg-purple-500/25"
+                        : "bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25"
+                    : "bg-surface text-text-secondary hover:text-text-primary hover:bg-surface-hover border border-border"
+                }`}
             >
               <span>{tab.label}</span>
               {tab.count != null && (
                 <span
-                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                    activeTab === tab.key
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${activeTab === tab.key
                       ? "bg-white/20 text-white"
                       : tab.highlight
-                      ? tab.highlightColor === "rose"
-                        ? "bg-rose-600 text-white animate-pulse"
-                        : tab.highlightColor === "purple"
-                        ? "bg-purple-600 text-white"
-                        : "bg-amber-500 text-white animate-pulse"
-                      : "bg-surface-hover text-text-muted"
-                  }`}
+                        ? tab.highlightColor === "rose"
+                          ? "bg-rose-600 text-white animate-pulse"
+                          : tab.highlightColor === "purple"
+                            ? "bg-purple-600 text-white"
+                            : "bg-amber-500 text-white animate-pulse"
+                        : "bg-surface-hover text-text-muted"
+                    }`}
                 >
                   {tab.count}
                 </span>
@@ -931,11 +929,10 @@ export default function EpcOrdersManagement() {
                       {/* 3. Order Origin */}
                       <td className="py-3 px-3">
                         <span
-                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md inline-block ${
-                            isDirect
+                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md inline-block ${isDirect
                               ? "bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20"
                               : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
-                          }`}
+                            }`}
                         >
                           {isDirect ? "Direct EPC" : "Franchisee"}
                         </span>
@@ -975,8 +972,13 @@ export default function EpcOrdersManagement() {
                           {formatCurrency(o.amount_received)}
                         </div>
                         {o.payment_milestones && (
-                          <div className="text-[9px] text-text-muted">
-                            M1: {formatCurrency(o.payment_milestones.advance_amount)}
+                          <div className="text-[9px] text-text-muted space-y-0.5">
+                            <div>M1 Req: {formatCurrency(o.payment_milestones.advance_amount)}</div>
+                            {o.amount_received === 0 && o.offline_payment?.amount_paid > 0 && (
+                              <div className="text-amber-600 dark:text-amber-400 font-bold">
+                                Claimed: {formatCurrency(o.offline_payment.amount_paid)}
+                              </div>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1035,17 +1037,16 @@ export default function EpcOrdersManagement() {
                             {o.current_payment_stage_label || "Accounts Verification"}
                           </span>
                           <div className="text-[10px]">
-                            <span className={`font-bold ${
-                              o.customer_payment_status === "Paid"
+                            <span className={`font-bold ${o.customer_payment_status === "Paid"
                                 ? "text-emerald-600 dark:text-emerald-400"
                                 : o.customer_payment_status === "Partially Paid"
-                                ? "text-amber-600 dark:text-amber-400"
-                                : o.customer_payment_status === "Awaiting Admin Approval"
-                                ? "text-purple-600 dark:text-purple-400"
-                                : o.customer_payment_status === "Payment Failed"
-                                ? "text-rose-600"
-                                : "text-text-muted"
-                            }`}>
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : o.customer_payment_status === "Awaiting Admin Approval"
+                                    ? "text-purple-600 dark:text-purple-400"
+                                    : o.customer_payment_status === "Payment Failed"
+                                      ? "text-rose-600"
+                                      : "text-text-muted"
+                              }`}>
                               {o.customer_payment_status}
                             </span>
                           </div>
@@ -1252,6 +1253,29 @@ export default function EpcOrdersManagement() {
                   {formatCurrency(accountsModal.order.grand_total)}
                 </span>
               </div>
+              {accountsModal.m1_required > 0 && (
+                <div className="flex justify-between items-center bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                  <span className="text-amber-800 dark:text-amber-300 font-bold">
+                    Milestone 1 Advance (30%):
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-amber-900 dark:text-amber-200">
+                      {formatCurrency(accountsModal.m1_required)}
+                    </span>
+                    {Number(accountsModal.amount_paid) !== Number(accountsModal.m1_required) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAccountsModal((prev) => ({ ...prev, amount_paid: accountsModal.m1_required }))
+                        }
+                        className="text-[10px] px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white font-bold transition shadow-xs"
+                      >
+                        Set to M1
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Verification Form Inputs */}
@@ -1441,33 +1465,30 @@ export default function EpcOrdersManagement() {
                   <button
                     type="button"
                     onClick={() => setAccountsModal({ ...accountsModal, decision: "submitted_for_approval" })}
-                    className={`py-2 px-1 text-center rounded-xl font-bold transition text-[11px] ${
-                      accountsModal.decision === "submitted_for_approval"
+                    className={`py-2 px-1 text-center rounded-xl font-bold transition text-[11px] ${accountsModal.decision === "submitted_for_approval"
                         ? "bg-amber-600 text-white shadow-sm"
                         : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
-                    }`}
+                      }`}
                   >
                     Submit for Approval
                   </button>
                   <button
                     type="button"
                     onClick={() => setAccountsModal({ ...accountsModal, decision: "returned" })}
-                    className={`py-2 px-1 text-center rounded-xl font-bold transition text-[11px] ${
-                      accountsModal.decision === "returned"
+                    className={`py-2 px-1 text-center rounded-xl font-bold transition text-[11px] ${accountsModal.decision === "returned"
                         ? "bg-blue-600 text-white shadow-sm"
                         : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
-                    }`}
+                      }`}
                   >
                     Return for Correction
                   </button>
                   <button
                     type="button"
                     onClick={() => setAccountsModal({ ...accountsModal, decision: "rejected" })}
-                    className={`py-2 px-1 text-center rounded-xl font-bold transition text-[11px] ${
-                      accountsModal.decision === "rejected"
+                    className={`py-2 px-1 text-center rounded-xl font-bold transition text-[11px] ${accountsModal.decision === "rejected"
                         ? "bg-rose-600 text-white shadow-sm"
                         : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
-                    }`}
+                      }`}
                   >
                     Reject Payment
                   </button>
@@ -1492,8 +1513,8 @@ export default function EpcOrdersManagement() {
                   accountsModal.decision === "rejected"
                     ? "danger"
                     : accountsModal.decision === "returned"
-                    ? "outline"
-                    : "primary"
+                      ? "outline"
+                      : "primary"
                 }
                 size="sm"
                 onClick={handleSubmitAccountsVerification}
@@ -1503,8 +1524,8 @@ export default function EpcOrdersManagement() {
                 {accountsModal.decision === "submitted_for_approval"
                   ? "Submit for Admin Approval"
                   : accountsModal.decision === "returned"
-                  ? "Return to Customer"
-                  : "Reject Payment Proof"}
+                    ? "Return to Customer"
+                    : "Reject Payment Proof"}
               </Button>
             </div>
           </div>

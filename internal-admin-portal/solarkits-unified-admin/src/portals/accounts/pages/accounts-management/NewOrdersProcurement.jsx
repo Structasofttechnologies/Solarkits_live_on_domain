@@ -6,7 +6,7 @@ import {
   FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaPaperPlane,
   FaRedo, FaLayerGroup, FaMapMarkerAlt, FaFileInvoice, FaBuilding,
   FaArrowRight, FaClock, FaCheck, FaInfoCircle, FaChevronRight,
-  FaShieldAlt, FaExternalLinkAlt, FaTimes
+  FaShieldAlt, FaExternalLinkAlt, FaTimes, FaMagic, FaSlidersH
 } from "react-icons/fa";
 import {
   getEligibleNewOrders,
@@ -19,6 +19,7 @@ import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
 import Dialog from "../../components/Dialog";
 import Loader from "../../components/Loader";
+import CompactMultiSelectDropdown from "../../components/CompactMultiSelectDropdown";
 
 export default function NewOrdersProcurement() {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function NewOrdersProcurement() {
   // State: Filter Options from Backend
   // ───────────────────────────────────────────────────────────────────────────
   const [filterOptions, setFilterOptions] = useState({
+    warehouses: [],
     states: [],
     districts: [],
     kit_types: [],
@@ -43,6 +45,7 @@ export default function NewOrdersProcurement() {
   // ───────────────────────────────────────────────────────────────────────────
   // State: Active Filters
   // ───────────────────────────────────────────────────────────────────────────
+  const [selectedWarehouse, setSelectedWarehouse] = useState("all");
   const [orderMode, setOrderMode] = useState("all"); // 'all' | 'offline' | 'online'
   const [orderOrigin, setOrderOrigin] = useState("all"); // 'all' | 'epc' | 'franchisee' | 'company'
   const [orderCategory, setOrderCategory] = useState("all"); // 'all' | 'govt_tender' | 'industry_kit'
@@ -50,6 +53,21 @@ export default function NewOrdersProcurement() {
   const [projectType, setProjectType] = useState("");
   const [kitType, setKitType] = useState("");
   const [orderStatus, setOrderStatus] = useState("all");
+
+  // Filter Counts for Badges & Numbering
+  const [filterCounts, setFilterCounts] = useState({
+    total: 0,
+    by_mode: { offline: 0, online: 0 },
+    by_origin: { epc: 0, franchisee: 0, company: 0 },
+    by_category: { govt_tender: 0, industry_kit: 0 },
+    by_warehouse: {},
+    by_state: {},
+    by_district: {},
+    by_destination: { all: 0, epc: 0, franchisee: 0, company: 0 },
+    by_industry: {},
+    by_project: {},
+    by_kit: {},
+  });
 
   // Geographical Filters
   const [selectedStates, setSelectedStates] = useState([]);
@@ -78,6 +96,7 @@ export default function NewOrdersProcurement() {
   // ───────────────────────────────────────────────────────────────────────────
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [vehicleSelectionMode, setVehicleSelectionMode] = useState("auto"); // 'auto' | 'manual'
   const [calculationData, setCalculationData] = useState(null);
   const [calculating, setCalculating] = useState(false);
 
@@ -128,6 +147,7 @@ export default function NewOrdersProcurement() {
     setLoadingOrders(true);
     try {
       const params = {
+        warehouse_id: selectedWarehouse,
         order_mode: orderMode,
         order_origin: orderOrigin,
         order_category: orderCategory,
@@ -149,6 +169,9 @@ export default function NewOrdersProcurement() {
         setOrders(list);
         setTotalMatching(res.meta?.total_matching_orders || list.length);
         setTotalMatchingKits(res.meta?.total_matching_kits || list.reduce((a, b) => a + (b.kits || 1), 0));
+        if (res.filter_counts) {
+          setFilterCounts(res.filter_counts);
+        }
 
         // Automatic order-count selection up to limit if 'auto' method is chosen
         if (selectionMethod === "auto") {
@@ -163,7 +186,7 @@ export default function NewOrdersProcurement() {
       setLoadingOrders(false);
     }
   }, [
-    orderMode, orderOrigin, orderCategory, industryType, projectType,
+    selectedWarehouse, orderMode, orderOrigin, orderCategory, industryType, projectType,
     kitType, orderStatus, selectedStates, selectedDistricts, pincodeSearch,
     deliveryDestination, routeGroup, searchTerm, selectionMethod, orderCountLimit
   ]);
@@ -233,6 +256,7 @@ export default function NewOrdersProcurement() {
   };
 
   const handleResetFilters = () => {
+    setSelectedWarehouse("all");
     setOrderMode("all");
     setOrderOrigin("all");
     setOrderCategory("all");
@@ -251,6 +275,43 @@ export default function NewOrdersProcurement() {
   };
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Dynamic State & District Multi-Select Options
+  // ───────────────────────────────────────────────────────────────────────────
+  const stateOptions = useMemo(() => {
+    return (filterOptions.states || []).map((st) => ({
+      value: st.name,
+      label: st.name,
+      count: filterCounts.by_state?.[st.name] || 0,
+    }));
+  }, [filterOptions.states, filterCounts.by_state]);
+
+  const availableDistricts = useMemo(() => {
+    if (!filterOptions.districts || filterOptions.districts.length === 0) return [];
+    if (selectedStates.length === 0) return filterOptions.districts;
+
+    // Match districts belonging to selected states (by state_id or state name)
+    const matchedStateIds = (filterOptions.states || [])
+      .filter((s) => selectedStates.includes(s.name) || selectedStates.includes(s._id))
+      .map((s) => s._id?.toString());
+
+    return filterOptions.districts.filter((d) => {
+      const dStateId = (d.state_id?._id || d.state_id)?.toString();
+      return (
+        matchedStateIds.includes(dStateId) ||
+        selectedStates.some((st) => st.toLowerCase() === (d.name || "").toLowerCase())
+      );
+    });
+  }, [filterOptions.districts, filterOptions.states, selectedStates]);
+
+  const districtOptions = useMemo(() => {
+    return (availableDistricts || []).map((d) => ({
+      value: d.name,
+      label: d.name,
+      count: filterCounts.by_district?.[d.name] || 0,
+    }));
+  }, [availableDistricts, filterCounts.by_district]);
+
+  // ───────────────────────────────────────────────────────────────────────────
   // 5. Send to Procurement Submission
   // ───────────────────────────────────────────────────────────────────────────
   const handleConfirmSendToProcurement = async () => {
@@ -265,10 +326,19 @@ export default function NewOrdersProcurement() {
         order_ids: selectedOrderIds,
         orders_data: selectedOrdersList,
         supplier_breakdown: dynamicSupplierBOM,
-        vehicle_id: selectedVehicleId,
+        vehicle_id: activeVehicleObj?._id || selectedVehicleId,
         vehicle_strategy: vehicleStrategy,
-        vehicle_count: calculationData?.vehicle_assignment?.vehicle_count || 1,
-        calculation_snapshot: calculationData,
+        vehicle_count: vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || calculationData?.vehicle_assignment?.vehicle_count || 1) : 1,
+        calculation_snapshot: {
+          ...calculationData,
+          total_weight_est_kg: calculatedTotalWeight,
+          vehicle_assignment: {
+            ...(calculationData?.vehicle_assignment || {}),
+            vehicle_id: activeVehicleObj?._id || selectedVehicleId,
+            vehicle_name: activeVehicleObj?.name,
+            single_capacity_kg: activeVehicleObj?.max_load_kg || 15000,
+          },
+        },
       };
 
       const res = await submitProcurementGroup(payload);
@@ -302,6 +372,96 @@ export default function NewOrdersProcurement() {
   const selectedKitsCount = useMemo(() => {
     return selectedOrdersList.reduce((acc, o) => acc + (o.kits || 1), 0);
   }, [selectedOrdersList]);
+
+  // Dynamic cargo weight derived from selected orders & combokit specifications
+  const calculatedTotalWeight = useMemo(() => {
+    if (calculationData?.total_weight_est_kg) return calculationData.total_weight_est_kg;
+    if (selectedOrdersList.length === 0) return 0;
+    let wt = 0;
+    selectedOrdersList.forEach((o) => {
+      const kwMatch = (o.kit_type || o.order_number || "").match(/(\d+(?:\.\d+)?)\s*kw/i);
+      const kw = kwMatch ? parseFloat(kwMatch[1]) : 10;
+      const kits = Number(o.kits) || 1;
+      wt += Math.round(kw * 74) * kits;
+    });
+    return wt > 0 ? wt : (selectedKitsCount > 0 ? selectedKitsCount * 740 : 1480);
+  }, [calculationData, selectedOrdersList, selectedKitsCount]);
+
+  // Dynamically evaluate active fleet from Admin Panel DeliveryVehicleMaster
+  const dynamicVehicleSuggestion = useMemo(() => {
+    if (!vehicles || vehicles.length === 0) return null;
+
+    const activeFleet = [...vehicles]
+      .filter((v) => v.status !== "Inactive" && (Number(v.max_load_kg) || 0) > 0)
+      .sort((a, b) => Number(a.max_load_kg) - Number(b.max_load_kg));
+
+    if (activeFleet.length === 0) return null;
+
+    const targetWeight = calculatedTotalWeight > 0 ? calculatedTotalWeight : (selectedKitsCount > 0 ? selectedKitsCount * 740 : 1480);
+
+    // 1. Smallest active vehicle whose max_load_kg >= targetWeight
+    const bestFit = activeFleet.find((v) => Number(v.max_load_kg) >= targetWeight);
+
+    if (bestFit) {
+      const cap = Number(bestFit.max_load_kg);
+      const util = Math.round((targetWeight / cap) * 100);
+      return {
+        vehicle: bestFit,
+        strategy: "single",
+        vehicleCount: 1,
+        isOverCapacity: false,
+        utilization: util,
+        headroom: Math.max(0, cap - targetWeight),
+        reason: `${bestFit.name} (${cap.toLocaleString()} kg payload) provides optimal safe capacity for ${targetWeight.toLocaleString()} kg cargo with ${Math.max(0, cap - targetWeight).toLocaleString()} kg safe headroom (${util}% utilization).`,
+        alternatives: activeFleet
+          .filter((v) => v._id !== bestFit._id)
+          .map((v) => ({
+            vehicle: v,
+            utilization: Math.round((targetWeight / Number(v.max_load_kg)) * 100),
+            isUnderCapacity: Number(v.max_load_kg) < targetWeight,
+          })),
+      };
+    }
+
+    // 2. Over-capacity: Cargo exceeds highest single vehicle in admin master -> recommend multiple of largest
+    const largest = activeFleet[activeFleet.length - 1];
+    const cap = Number(largest.max_load_kg) || 15000;
+    const neededCount = Math.max(1, Math.ceil(targetWeight / cap));
+    const totalCap = cap * neededCount;
+    const util = Math.round((targetWeight / totalCap) * 100);
+
+    return {
+      vehicle: largest,
+      strategy: "multiple_same",
+      vehicleCount: neededCount,
+      isOverCapacity: true,
+      utilization: util,
+      headroom: Math.max(0, totalCap - targetWeight),
+      reason: `Cargo weight (${targetWeight.toLocaleString()} kg) exceeds largest single truck. Recommended: ${neededCount}x ${largest.name} (${totalCap.toLocaleString()} kg total capacity, ${util}% utilization).`,
+      alternatives: activeFleet
+        .filter((v) => v._id !== largest._id)
+        .map((v) => ({
+          vehicle: v,
+          utilization: Math.round((targetWeight / Number(v.max_load_kg)) * 100),
+          isUnderCapacity: Number(v.max_load_kg) < targetWeight,
+        })),
+    };
+  }, [vehicles, calculatedTotalWeight, selectedKitsCount]);
+
+  // Sync auto-suggested vehicle when in 'auto' mode
+  useEffect(() => {
+    if (vehicleSelectionMode === "auto" && dynamicVehicleSuggestion?.vehicle?._id) {
+      setSelectedVehicleId(dynamicVehicleSuggestion.vehicle._id);
+      if (dynamicVehicleSuggestion.strategy) {
+        setVehicleStrategy(dynamicVehicleSuggestion.strategy);
+      }
+    }
+  }, [vehicleSelectionMode, dynamicVehicleSuggestion]);
+
+  // Resolved active vehicle object from dynamic vehicles
+  const activeVehicleObj = useMemo(() => {
+    return vehicles.find((v) => v._id === selectedVehicleId) || dynamicVehicleSuggestion?.vehicle || vehicles[0];
+  }, [vehicles, selectedVehicleId, dynamicVehicleSuggestion]);
 
   // Dynamic Kit Type Breakdown derived from selected orders
   const dynamicKitBreakdown = useMemo(() => {
@@ -439,20 +599,31 @@ export default function NewOrdersProcurement() {
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: "offline", label: "Offline Orders" },
-                    { id: "online", label: "Online Orders" },
+                    { id: "offline", label: "Offline Orders", count: filterCounts.by_mode?.offline || 0 },
+                    { id: "online", label: "Online Orders", count: filterCounts.by_mode?.online || 0 },
                   ].map((t) => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => setOrderMode(orderMode === t.id ? "all" : t.id)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold text-center transition-all cursor-pointer ${
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
                         orderMode === t.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                           : "bg-surface border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 text-text-primary"
                       }`}
                     >
-                      {t.label}
+                      <span>{t.label}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
+                          orderMode === t.id
+                            ? "bg-white/20 text-white"
+                            : t.count > 0
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                            : "bg-surface-hover text-text-muted"
+                        }`}
+                      >
+                        {t.count}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -465,21 +636,32 @@ export default function NewOrdersProcurement() {
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: "epc", label: "Solar EPC" },
-                    { id: "franchisee", label: "Franchisee Store" },
-                    { id: "company", label: "Company Store" },
+                    { id: "epc", label: "Solar EPC", count: filterCounts.by_origin?.epc || 0 },
+                    { id: "franchisee", label: "Franchisee Store", count: filterCounts.by_origin?.franchisee || 0 },
+                    { id: "company", label: "Company Store", count: filterCounts.by_origin?.company || 0 },
                   ].map((o) => (
                     <button
                       key={o.id}
                       type="button"
                       onClick={() => setOrderOrigin(orderOrigin === o.id ? "all" : o.id)}
-                      className={`py-2 px-2 text-[11px] font-semibold rounded-xl border text-center transition-all cursor-pointer ${
+                      className={`py-2 px-2 text-[11px] font-semibold rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
                         orderOrigin === o.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                           : "bg-surface border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 text-text-primary"
                       }`}
                     >
-                      {o.label}
+                      <span className="truncate">{o.label}</span>
+                      <span
+                        className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-black shrink-0 ${
+                          orderOrigin === o.id
+                            ? "bg-white/20 text-white"
+                            : o.count > 0
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                            : "bg-surface-hover text-text-muted"
+                        }`}
+                      >
+                        {o.count}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -492,20 +674,31 @@ export default function NewOrdersProcurement() {
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: "govt_tender", label: "Govt. Tenders Order" },
-                    { id: "industry_kit", label: "Industry Kits" },
+                    { id: "govt_tender", label: "Govt. Tenders Order", count: filterCounts.by_category?.govt_tender || 0 },
+                    { id: "industry_kit", label: "Industry Kits", count: filterCounts.by_category?.industry_kit || 0 },
                   ].map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => setOrderCategory(orderCategory === c.id ? "all" : c.id)}
-                      className={`py-2 px-3 text-xs font-semibold rounded-xl border text-center transition-all cursor-pointer ${
+                      className={`py-2 px-3 text-xs font-semibold rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
                         orderCategory === c.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                           : "bg-surface border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 text-text-primary"
                       }`}
                     >
-                      {c.label}
+                      <span>{c.label}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
+                          orderCategory === c.id
+                            ? "bg-white/20 text-white"
+                            : c.count > 0
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                            : "bg-surface-hover text-text-muted"
+                        }`}
+                      >
+                        {c.count}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -522,7 +715,9 @@ export default function NewOrdersProcurement() {
                   >
                     <option value="">All Industries</option>
                     {filterOptions.industry_types?.map((ind) => (
-                      <option key={ind} value={ind}>{ind}</option>
+                      <option key={ind} value={ind}>
+                        {ind} {filterCounts.by_industry?.[ind] ? `(${filterCounts.by_industry[ind]})` : ""}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -535,7 +730,9 @@ export default function NewOrdersProcurement() {
                   >
                     <option value="">All Projects</option>
                     {filterOptions.project_types?.map((proj) => (
-                      <option key={proj} value={proj}>{proj}</option>
+                      <option key={proj} value={proj}>
+                        {proj} {filterCounts.by_project?.[proj] ? `(${filterCounts.by_project[proj]})` : ""}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -548,7 +745,9 @@ export default function NewOrdersProcurement() {
                   >
                     <option value="">All Kit Types</option>
                     {filterOptions.kit_types?.map((kit) => (
-                      <option key={kit} value={kit}>{kit}</option>
+                      <option key={kit} value={kit}>
+                        {kit} {filterCounts.by_kit?.[kit] ? `(${filterCounts.by_kit[kit]})` : ""}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -569,8 +768,38 @@ export default function NewOrdersProcurement() {
               </h2>
             </div>
             <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40">
-              Geography • Bulk Limit • Strategy
+              Geography • Warehouse • Bulk Limit
             </span>
+          </div>
+
+          {/* Warehouse Selector */}
+          <div className="mb-3.5 pb-3 border-b border-emerald-200/60 dark:border-emerald-900/40">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                <FaWarehouse className="w-3.5 h-3.5 text-emerald-600" />
+                Warehouse Filter (Admin Configured)
+              </label>
+              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                {selectedWarehouse === "all" ? "Viewing All Facilities" : "Filtered by Warehouse"}
+              </span>
+            </div>
+            <select
+              value={selectedWarehouse}
+              onChange={(e) => setSelectedWarehouse(e.target.value)}
+              className="w-full text-xs font-semibold py-2 px-3 bg-surface border border-emerald-300 dark:border-emerald-800 rounded-xl text-text-primary shadow-2xs focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="all">
+                🏢 All Warehouses ({(filterOptions.warehouses || []).length} Facilities — {filterCounts.total || totalMatching} Orders)
+              </option>
+              {(filterOptions.warehouses || []).map((wh) => {
+                const whOrderCount = filterCounts.by_warehouse?.[wh._id] || filterCounts.by_warehouse?.[wh.warehouse_code] || 0;
+                return (
+                  <option key={wh._id} value={wh._id}>
+                    {wh.warehouse_code} — {wh.district_name || wh.state_name || wh.address?.split(",")[0]} ({wh.warehouse_type?.toUpperCase() || "MASTER"}) — [{whOrderCount} Orders]
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -581,33 +810,29 @@ export default function NewOrdersProcurement() {
                 Route / Pincode Filters
               </p>
 
-              <div>
-                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1">State (Multi-select)</label>
-                <select
-                  value={selectedStates[0] || ""}
-                  onChange={(e) => setSelectedStates(e.target.value ? [e.target.value] : [])}
-                  className="w-full text-xs py-1.5 px-2 bg-surface border border-border rounded-lg text-text-primary"
-                >
-                  <option value="">All States (e.g. Gujarat, Maharashtra)</option>
-                  {filterOptions.states?.map((st) => (
-                    <option key={st._id} value={st.name}>{st.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* State (Multi-Select) */}
+              <CompactMultiSelectDropdown
+                label="State (Multi-Select)"
+                values={selectedStates}
+                onChange={setSelectedStates}
+                options={stateOptions}
+                placeholder="All States (e.g. Gujarat, Maharashtra)"
+                searchPlaceholder="Search states..."
+                icon={FaMapMarkerAlt}
+                badgeColor="emerald"
+              />
 
-              <div>
-                <label className="block text-[10px] font-bold text-text-muted uppercase mb-1">District (Multi-select)</label>
-                <select
-                  value={selectedDistricts[0] || ""}
-                  onChange={(e) => setSelectedDistricts(e.target.value ? [e.target.value] : [])}
-                  className="w-full text-xs py-1.5 px-2 bg-surface border border-border rounded-lg text-text-primary"
-                >
-                  <option value="">All Districts (e.g. Rajkot, Ahmedabad)</option>
-                  {filterOptions.districts?.map((d) => (
-                    <option key={d._id} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* District (Multi-Select - Dynamically linked to selected states) */}
+              <CompactMultiSelectDropdown
+                label="District (Multi-Select)"
+                values={selectedDistricts}
+                onChange={setSelectedDistricts}
+                options={districtOptions}
+                placeholder={selectedStates.length > 0 ? "Select districts in selected states" : "All Districts (e.g. Rajkot, Ahmedabad)"}
+                searchPlaceholder="Search districts..."
+                icon={FaMapMarkerAlt}
+                badgeColor="emerald"
+              />
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -627,10 +852,10 @@ export default function NewOrdersProcurement() {
                     onChange={(e) => setDeliveryDestination(e.target.value)}
                     className="w-full text-xs py-1.5 px-2 bg-surface border border-border rounded-lg text-text-primary"
                   >
-                    <option value="all">All Destinations</option>
-                    <option value="epc">EPC Location</option>
-                    <option value="franchisee">Franchisee Store</option>
-                    <option value="company">Company Store</option>
+                    <option value="all">All Destinations ({filterCounts.by_destination?.all || filterCounts.total || 0})</option>
+                    <option value="epc">EPC Location ({filterCounts.by_destination?.epc || 0})</option>
+                    <option value="franchisee">Franchisee Store ({filterCounts.by_destination?.franchisee || 0})</option>
+                    <option value="company">Company Store ({filterCounts.by_destination?.company || 0})</option>
                   </select>
                 </div>
               </div>
@@ -785,6 +1010,7 @@ export default function NewOrdersProcurement() {
                   />
                 </th>
                 <th className="py-2.5 px-3">Order No.</th>
+                <th className="py-2.5 px-3">Warehouse</th>
                 <th className="py-2.5 px-3">Origin</th>
                 <th className="py-2.5 px-3">Customer / Partner</th>
                 <th className="py-2.5 px-3">State / District</th>
@@ -798,13 +1024,13 @@ export default function NewOrdersProcurement() {
             <tbody className="divide-y divide-border/60">
               {loadingOrders ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-text-muted">
+                  <td colSpan={11} className="py-8 text-center text-text-muted">
                     <Loader text="Filtering eligible orders..." />
                   </td>
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-text-muted">
+                  <td colSpan={11} className="py-8 text-center text-text-muted">
                     No eligible orders found matching current filter combination.
                   </td>
                 </tr>
@@ -829,6 +1055,12 @@ export default function NewOrdersProcurement() {
                       </td>
                       <td className="py-2.5 px-3 font-black text-purple-900 dark:text-purple-300">
                         {o.order_number}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 text-[10px] font-bold font-mono">
+                          <FaWarehouse className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                          {o.warehouse_code || "WH-01"}
+                        </span>
                       </td>
                       <td className="py-2.5 px-3">
                         <span
@@ -891,18 +1123,49 @@ export default function NewOrdersProcurement() {
           ROW 3: SECTION 4 (VEHICLE SELECTION & KIT CAPACITY - Orange Theme)
       ───────────────────────────────────────────────────────────────────── */}
       <div className="bg-gradient-to-b from-orange-50/50 to-surface dark:from-orange-950/20 dark:to-surface border border-orange-200/70 dark:border-orange-800/40 rounded-2xl p-5 shadow-xs">
-        <div className="flex items-center justify-between pb-3 mb-4 border-b border-orange-200/60 dark:border-orange-900/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-orange-200/60 dark:border-orange-900/40 gap-3">
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-orange-600 text-white text-xs font-black flex items-center justify-center shadow-xs">
               4
             </span>
-            <h2 className="text-sm font-black uppercase tracking-wider text-orange-900 dark:text-orange-300">
-              Vehicle Selection & Kit Capacity
-            </h2>
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-wider text-orange-900 dark:text-orange-300">
+                Vehicle Selection & Kit Capacity
+              </h2>
+              <p className="text-[10px] text-text-muted font-medium">
+                Dynamic Fleet Master • Live Payload Matching from Admin Panel
+              </p>
+            </div>
           </div>
-          <span className="text-[11px] text-orange-700 dark:text-orange-400 font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40">
-            Real-time Weight & Dispatch Validation
-          </span>
+
+          {/* Mode Switcher Toggle: Auto Suggestion vs Manual Selection */}
+          <div className="flex items-center gap-1.5 p-1 bg-surface border border-orange-300 dark:border-orange-800 rounded-xl shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setVehicleSelectionMode("auto")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                vehicleSelectionMode === "auto"
+                  ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-xs"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+              }`}
+            >
+              <FaMagic className="w-3 h-3 text-amber-200" />
+              <span>Auto Selected (Smart AI)</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setVehicleSelectionMode("manual")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                vehicleSelectionMode === "manual"
+                  ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-xs"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+              }`}
+            >
+              <FaSlidersH className="w-3 h-3" />
+              <span>Manual Selection</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -910,33 +1173,157 @@ export default function NewOrdersProcurement() {
           <div className="lg:col-span-5 space-y-4">
             {/* Vehicle Options & Strategy Unified Block */}
             <div className="bg-surface border border-orange-200/60 dark:border-orange-900/30 rounded-xl p-3.5 space-y-3">
-              <div>
-                <label className="block text-xs font-black text-orange-900 dark:text-orange-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <FaTruck className="w-3.5 h-3.5 text-orange-600" />
-                  Select Fleet Vehicle
-                </label>
-                <select
-                  value={selectedVehicleId}
-                  onChange={(e) => setSelectedVehicleId(e.target.value)}
-                  className="w-full text-xs py-2 px-3 bg-surface border border-border rounded-xl text-text-primary focus:ring-1 focus:ring-orange-500 font-medium"
-                >
-                  {vehicles.map((v) => (
-                    <option key={v._id} value={v._id}>
-                      {v.name} — Payload Cap: {(v.max_load_kg || 15000).toLocaleString()} kg
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {vehicleSelectionMode === "auto" ? (
+                /* Auto Selected Vehicle Highlight Card */
+                <div className="p-3.5 rounded-xl bg-gradient-to-br from-orange-50/70 via-surface to-amber-50/40 dark:from-orange-950/30 dark:via-surface dark:to-amber-950/20 border border-orange-300/80 dark:border-orange-800/60 shadow-xs space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-orange-900 dark:text-orange-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <FaTruck className="w-3.5 h-3.5 text-orange-600" />
+                      Auto-Selected Fleet Vehicle
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1 border border-emerald-300/50">
+                      <FaMagic className="w-2.5 h-2.5 text-emerald-600" />
+                      Dynamic Best Fit
+                    </span>
+                  </div>
+
+                  <div className="flex items-start justify-between gap-2 pt-1 border-t border-orange-200/60 dark:border-orange-900/40">
+                    <div>
+                      <h4 className="text-sm font-black text-text-primary">
+                        {activeVehicleObj?.name || "Auto-matching Vehicle..."}
+                      </h4>
+                      <p className="text-[11px] text-text-secondary font-medium">
+                        {activeVehicleObj?.brand_make} • {activeVehicleObj?.model || "Standard Commercial"} • Code: {activeVehicleObj?.vehicle_code || "VEH-AUTO"}
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 rounded-lg bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200 font-mono text-xs font-black shrink-0">
+                      {(activeVehicleObj?.max_load_kg || 0).toLocaleString()} kg
+                    </span>
+                  </div>
+
+                  {/* 3 Metric Mini Pills */}
+                  <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
+                    <div className="p-1.5 rounded-lg bg-surface border border-border">
+                      <span className="text-[9px] text-text-muted block uppercase font-bold">Payload Cap</span>
+                      <span className="text-[11px] font-bold text-text-primary font-mono">
+                        {(activeVehicleObj?.max_load_kg || 0).toLocaleString()} kg
+                      </span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-surface border border-border">
+                      <span className="text-[9px] text-text-muted block uppercase font-bold">Cargo Weight</span>
+                      <span className="text-[11px] font-bold text-orange-600 font-mono">
+                        {calculatedTotalWeight.toLocaleString()} kg
+                      </span>
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-surface border border-border">
+                      <span className="text-[9px] text-text-muted block uppercase font-bold">Safe Headroom</span>
+                      <span className="text-[11px] font-bold text-emerald-600 font-mono">
+                        {Math.max(0, (activeVehicleObj?.max_load_kg || 0) - calculatedTotalWeight).toLocaleString()} kg
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Reason Note */}
+                  <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-[10.5px] text-emerald-800 dark:text-emerald-300 font-medium flex items-start gap-1.5">
+                    <FaCheckCircle className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      {dynamicVehicleSuggestion?.reason || "Matched dynamically from Admin Panel Fleet Master according to selected order payload."}
+                    </span>
+                  </div>
+
+                  {/* Quick Alternative Chips from Admin Panel */}
+                  {dynamicVehicleSuggestion?.alternatives && dynamicVehicleSuggestion.alternatives.length > 0 && (
+                    <div className="pt-2 border-t border-border/60">
+                      <span className="text-[10px] font-bold text-text-muted block uppercase mb-1">
+                        Alternative Fleet Options (Click to Switch):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {dynamicVehicleSuggestion.alternatives.slice(0, 4).map((alt) => (
+                          <button
+                            key={alt.vehicle._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedVehicleId(alt.vehicle._id);
+                              setVehicleSelectionMode("manual");
+                            }}
+                            className={`px-2 py-1 rounded-md text-[10px] font-semibold border transition-all flex items-center gap-1 cursor-pointer ${
+                              alt.isUnderCapacity
+                                ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
+                                : "bg-surface hover:bg-surface-hover text-text-secondary border-border"
+                            }`}
+                          >
+                            <span>{alt.vehicle.name}</span>
+                            <span className="font-mono text-[9px] font-bold text-text-muted">
+                              ({(alt.vehicle.max_load_kg || 0).toLocaleString()} kg • {alt.utilization}%)
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Manual Selection Mode */
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-orange-900 dark:text-orange-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <FaTruck className="w-3.5 h-3.5 text-orange-600" />
+                      Select Fleet Vehicle (Manual Override)
+                    </label>
+                    <span className="text-[10px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-300">
+                      Manual Mode
+                    </span>
+                  </div>
+
+                  <select
+                    value={selectedVehicleId}
+                    onChange={(e) => setSelectedVehicleId(e.target.value)}
+                    className="w-full text-xs py-2 px-3 bg-surface border border-border rounded-xl text-text-primary focus:ring-1 focus:ring-orange-500 font-medium"
+                  >
+                    {vehicles.map((v) => (
+                      <option key={v._id} value={v._id}>
+                        {v.name} — Payload Cap: {(v.max_load_kg || 15000).toLocaleString()} kg [{v.brand_make || "Fleet"}]
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-[11px] flex items-center justify-between gap-2">
+                    <span className="text-amber-900 dark:text-amber-200">
+                      Recommended fit: <strong>{dynamicVehicleSuggestion?.vehicle?.name}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setVehicleSelectionMode("auto")}
+                      className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] transition-all flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
+                    >
+                      <FaMagic className="w-2.5 h-2.5" />
+                      Revert to Auto
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Vehicle Selection Strategy (End-to-End after Order Selection) */}
               <div className="pt-2 border-t border-border/60">
-                <label className="block text-[11px] font-bold text-orange-900 dark:text-orange-300 uppercase tracking-wider mb-1.5">
-                  Vehicle Dispatch Strategy
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-orange-900 dark:text-orange-300 uppercase tracking-wider">
+                    Vehicle Dispatch Strategy
+                  </label>
+                  {dynamicVehicleSuggestion?.isOverCapacity && (
+                    <span className="text-[9.5px] font-black text-red-600 bg-red-100 dark:bg-red-950/50 px-1.5 py-0.5 rounded-md">
+                      Multiple Trucks Recommended
+                    </span>
+                  )}
+                </div>
                 <div className="space-y-1.5">
                   {[
                     { id: "single", label: "One vehicle for the group" },
-                    { id: "multiple_same", label: "Multiple vehicles of same type" },
+                    {
+                      id: "multiple_same",
+                      label: dynamicVehicleSuggestion?.isOverCapacity
+                        ? `Multiple vehicles of same type (${dynamicVehicleSuggestion.vehicleCount}x ${activeVehicleObj?.name} required)`
+                        : "Multiple vehicles of same type",
+                    },
                     { id: "multiple_types", label: "Multiple vehicle types" },
                   ].map((strat) => (
                     <label
@@ -963,9 +1350,14 @@ export default function NewOrdersProcurement() {
 
             {/* Capacity Calculation Stats */}
             <div className="bg-surface border border-orange-200/60 dark:border-orange-900/30 rounded-xl p-4 space-y-2.5">
-              <h3 className="text-xs font-black text-text-secondary uppercase tracking-wider">
-                Capacity Calculation
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-text-secondary uppercase tracking-wider">
+                  Capacity Calculation
+                </h3>
+                <span className="text-[10px] text-text-muted font-mono">
+                  {vehicleSelectionMode === "auto" ? "⚡ Auto-Optimized" : "🛠️ Manual Override"}
+                </span>
+              </div>
 
               <div className="flex justify-between items-center text-xs">
                 <span className="text-text-secondary">Total Kits:</span>
@@ -977,67 +1369,76 @@ export default function NewOrdersProcurement() {
               <div className="flex justify-between items-center text-xs">
                 <span className="text-text-secondary">Total Weight (Est.):</span>
                 <span className="font-bold text-text-primary font-mono">
-                  {(calculationData?.total_weight_est_kg || selectedKitsCount * 50).toLocaleString()} kg
+                  {calculatedTotalWeight.toLocaleString()} kg
                 </span>
               </div>
 
               <div className="flex justify-between items-center text-xs">
                 <span className="text-text-secondary">Vehicle Capacity:</span>
                 <span className="font-bold text-text-primary font-mono">
-                  {(calculationData?.vehicle_assignment?.total_capacity_kg || (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)).toLocaleString()} kg
+                  {((activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1)).toLocaleString()} kg
                 </span>
               </div>
 
-              <div className="flex justify-between items-center text-xs pt-1 border-t border-border">
-                <span className="text-text-secondary font-bold">Utilization:</span>
-                <span
-                  className={`font-black font-mono text-sm ${
-                    (calculationData?.vehicle_assignment?.utilization_pct || Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) > 100
-                      ? "text-red-600"
-                      : (calculationData?.vehicle_assignment?.utilization_pct || Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) > 85
-                      ? "text-amber-600"
-                      : "text-emerald-600"
-                  }`}
-                >
-                  {calculationData?.vehicle_assignment?.utilization_pct || Math.min(100, Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) || 0}%
-                </span>
-              </div>
+              {/* Dynamic Utilization Calculation */}
+              {(() => {
+                const totalCap = (activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1);
+                const utilPct = totalCap > 0 ? Math.round((calculatedTotalWeight / totalCap) * 100) : 100;
+                return (
+                  <>
+                    <div className="flex justify-between items-center text-xs pt-1 border-t border-border">
+                      <span className="text-text-secondary font-bold">Utilization:</span>
+                      <span
+                        className={`font-black font-mono text-sm ${
+                          utilPct > 100
+                            ? "text-red-600"
+                            : utilPct > 85
+                            ? "text-amber-600"
+                            : "text-emerald-600"
+                        }`}
+                      >
+                        {utilPct}%
+                      </span>
+                    </div>
 
-              {/* Progress Bar */}
-              <div className="w-full bg-border rounded-full h-2.5 overflow-hidden">
-                <div
-                  className={`h-2.5 rounded-full transition-all duration-500 ${
-                    (calculationData?.vehicle_assignment?.utilization_pct || 0) > 100
-                      ? "bg-red-500"
-                      : (calculationData?.vehicle_assignment?.utilization_pct || 0) > 85
-                      ? "bg-amber-500"
-                      : "bg-emerald-500"
-                  }`}
-                  style={{
-                    width: `${Math.min(100, calculationData?.vehicle_assignment?.utilization_pct || Math.min(100, Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) || 0)}%`,
-                  }}
-                />
-              </div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-border rounded-full h-2.5 overflow-hidden">
+                      <div
+                        className={`h-2.5 rounded-full transition-all duration-500 ${
+                          utilPct > 100
+                            ? "bg-red-500"
+                            : utilPct > 85
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, utilPct)}%`,
+                        }}
+                      />
+                    </div>
 
-              {/* Capacity Validation Notice */}
-              <div
-                className={`mt-2 p-2.5 rounded-xl border text-[11px] flex items-start gap-2 ${
-                  calculationData?.vehicle_assignment?.validation_status === "Fail"
-                    ? "bg-red-50 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300"
-                    : calculationData?.vehicle_assignment?.validation_status === "Warning"
-                    ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
-                    : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
-                }`}
-              >
-                <FaInfoCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  {calculationData?.vehicle_assignment?.validation_status === "Fail"
-                    ? `Over-capacity! Loaded weight exceeds selected vehicle limit by ${(calculationData.vehicle_assignment.unallocated_kits || 0)} kits. Consider multiple vehicles.`
-                    : calculationData?.vehicle_assignment?.validation_status === "Warning"
-                    ? "Warning: Vehicle load is near max capacity (>85%). Ensure secure packaging."
-                    : "Vehicle capacity validated. Selected equipment load is within permissible limits."}
-                </span>
-              </div>
+                    {/* Capacity Validation Notice */}
+                    <div
+                      className={`mt-2 p-2.5 rounded-xl border text-[11px] flex items-start gap-2 ${
+                        utilPct > 100
+                          ? "bg-red-50 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300"
+                          : utilPct > 85
+                          ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      }`}
+                    >
+                      <FaInfoCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>
+                        {utilPct > 100
+                          ? `Over-capacity! Total cargo (${calculatedTotalWeight.toLocaleString()} kg) exceeds vehicle payload by ${(calculatedTotalWeight - totalCap).toLocaleString()} kg. Switch to multiple trucks or larger vehicle.`
+                          : utilPct > 85
+                          ? `Warning: Vehicle load is near max capacity (${utilPct}%). Headroom remaining: ${(totalCap - calculatedTotalWeight).toLocaleString()} kg.`
+                          : `Vehicle capacity validated. Cargo (${calculatedTotalWeight.toLocaleString()} kg) is within permissible limits with ${(totalCap - calculatedTotalWeight).toLocaleString()} kg safe headroom.`}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -1084,8 +1485,17 @@ export default function NewOrdersProcurement() {
                 <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">
                   Vehicle Assignment
                 </span>
-                <span className="text-[11px] font-black text-orange-600 bg-orange-100 dark:bg-orange-950/50 px-2 py-0.5 rounded-lg">
-                  {vehicles.find(v => v._id === selectedVehicleId)?.name || calculationData?.vehicle_assignment?.vehicle_name || "Assigned Vehicle"}
+                <span className="text-[11px] font-black text-orange-600 bg-orange-100 dark:bg-orange-950/50 px-2 py-0.5 rounded-lg flex items-center gap-1.5">
+                  {vehicleSelectionMode === "auto" ? (
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
+                      <FaMagic className="w-2.5 h-2.5" /> Auto-Fit:
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
+                      <FaSlidersH className="w-2.5 h-2.5" /> Manual:
+                    </span>
+                  )}
+                  {activeVehicleObj?.name || calculationData?.vehicle_assignment?.vehicle_name || "Assigned Vehicle"}
                 </span>
               </div>
 
@@ -1093,20 +1503,30 @@ export default function NewOrdersProcurement() {
                 <div>
                   <span className="text-[10px] text-text-muted block">Capacity</span>
                   <span className="font-bold text-text-primary font-mono">
-                    {(vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || calculationData?.vehicle_assignment?.single_capacity_kg || 15000).toLocaleString()} kg
+                    {((activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1)).toLocaleString()} kg
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-muted block">Estimated Load</span>
                   <span className="font-bold text-text-primary font-mono">
-                    {(calculationData?.vehicle_assignment?.estimated_load_kg || selectedKitsCount * 50).toLocaleString()} kg
+                    {calculatedTotalWeight.toLocaleString()} kg
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-text-muted block">Utilization</span>
-                  <span className="font-bold text-emerald-600 font-mono">
-                    {calculationData?.vehicle_assignment?.utilization_pct || Math.min(100, Math.round(((selectedKitsCount * 50) / (vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000)) * 100)) || 0}%
-                  </span>
+                  {(() => {
+                    const totalCap = (activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1);
+                    const util = totalCap > 0 ? Math.round((calculatedTotalWeight / totalCap) * 100) : 100;
+                    return (
+                      <span
+                        className={`font-bold font-mono ${
+                          util > 100 ? "text-red-600" : util > 85 ? "text-amber-600" : "text-emerald-600"
+                        }`}
+                      >
+                        {util}%
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1250,11 +1670,13 @@ export default function NewOrdersProcurement() {
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Total Weight (Est.):</span>
-              <span className="font-bold text-text-primary">{(calculationData?.total_weight_est_kg || selectedKitsCount * 50).toLocaleString()} kg</span>
+              <span className="font-bold text-text-primary">{calculatedTotalWeight.toLocaleString()} kg</span>
             </div>
             <div className="flex justify-between">
               <span className="text-text-muted">Vehicle Capacity Req:</span>
-              <span className="font-bold text-text-primary">{(vehicles.find(v => v._id === selectedVehicleId)?.max_load_kg || 15000).toLocaleString()} kg</span>
+              <span className="font-bold text-text-primary">
+                {((activeVehicleObj?.max_load_kg || 15000) * (vehicleStrategy === "multiple_same" ? (dynamicVehicleSuggestion?.vehicleCount || 1) : 1)).toLocaleString()} kg ({activeVehicleObj?.name || "Fleet Vehicle"})
+              </span>
             </div>
           </div>
 

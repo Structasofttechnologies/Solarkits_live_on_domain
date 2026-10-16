@@ -170,6 +170,7 @@ export default function CheckOut() {
               fulfillment_mode: fulfillmentMode,
               cart_items: JSON.stringify(cartItemsParam),
               district_id: selectedDistrict?.id || selectedDistrict?._id,
+              franchisee_id: user?.primary_reseller_id || user?.reseller_id || undefined,
             },
             withCredentials: true,
           }
@@ -579,7 +580,11 @@ export default function CheckOut() {
     }
 
     const totalDeliveryFreight = cart.reduce((sum, item) => sum + (Number(item.delivery_cost) || 0), 0);
-    const finalTotal = Math.max(0, subtotal - appliedDiscountValue) + totalDeliveryFreight;
+    const fallbackRate = Number(checkoutSettings.gst_rate ?? 13.8);
+    const taxableSubtotal = Math.max(0, subtotal - appliedDiscountValue);
+    // Align with backend calculateCheckoutPrice: subtotal + GST
+    const computedGst = Math.round(taxableSubtotal * (fallbackRate / 100));
+    const finalTotal = taxableSubtotal + computedGst + totalDeliveryFreight;
 
     return {
       discountAmount: appliedDiscountValue,
@@ -587,9 +592,11 @@ export default function CheckOut() {
       offerName: activeOfferName,
       offerType: activeOfferType,
       totalDeliveryFreight,
+      computedGst,
+      gstRate: fallbackRate,
       finalTotal,
     };
-  }, [cart, totalKitsQuantity, totalCapacityKW, appliedCoupon, activeOffers, subtotal]);
+  }, [cart, totalKitsQuantity, totalCapacityKW, appliedCoupon, activeOffers, subtotal, checkoutSettings]);
 
   // ── Calculate Milestone Breakdown ──────────────────────────────────────────
   const milestoneBreakdown = useMemo(() => {
@@ -1656,20 +1663,22 @@ export default function CheckOut() {
 
             <div className="space-y-2 text-sm border-b border-border pb-3">
               <div className="flex justify-between text-text-secondary">
-                <span>Items Total (Excl. GST):</span>
+                <span>Items Base Subtotal (Excl. GST):</span>
                 <span className="font-semibold text-text-primary dark:text-white">
-                  ₹{getTaxBreakdown(subtotal).taxable.toLocaleString("en-IN")}
+                  ₹{subtotal.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary">
-                <span>GST ({getTaxBreakdown(subtotal).gstRate}%):</span>
+                <span>GST ({calculatedDiscounts.gstRate}%):</span>
                 <span className="font-semibold text-text-primary dark:text-white">
-                  ₹{getTaxBreakdown(subtotal).gstAmount.toLocaleString("en-IN")}
+                  +₹{(calculatedDiscounts.computedGst || 0).toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary border-t border-border pt-2">
                 <span>Subtotal (Incl. GST):</span>
-                <span className="font-black text-text-primary dark:text-white">₹{subtotal.toLocaleString("en-IN")}</span>
+                <span className="font-black text-text-primary dark:text-white">
+                  ₹{(subtotal + (calculatedDiscounts.computedGst || 0)).toLocaleString("en-IN")}
+                </span>
               </div>
               <div className="flex justify-between text-text-secondary">
                 <span>Total Capacity:</span>

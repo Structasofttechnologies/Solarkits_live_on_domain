@@ -3165,21 +3165,21 @@ const DEFAULT_VEHICLES = [
 const get_vehicles_master = async (req, res) => {
   try {
     const { DeliveryVehicleMaster } = require('../../admin-panel/models/india_solarshop_db');
-    let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).lean();
+    let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).sort({ max_load_kg: 1 }).lean();
     if (!vehicles || vehicles.length === 0) {
       vehicles = DEFAULT_VEHICLES;
     } else {
-      // Ensure key attributes exist
+      // Ensure key attributes exist and are properly formatted
       vehicles = vehicles.map(v => ({
         _id: v._id,
         vehicle_code: v.vehicle_code || 'VEH-CUSTOM',
         name: v.name || `${v.brand_make || ''} ${v.model || 'Vehicle'}`,
         brand_make: v.brand_make || 'Standard Commercial',
         model: v.model || 'Standard',
-        max_load_kg: v.max_load_kg || 15000,
-        length_ft: v.length_ft || 20,
-        width_ft: v.width_ft || 7.5,
-        height_ft: v.height_ft || 7.5,
+        max_load_kg: Number(v.max_load_kg) || 15000,
+        length_ft: Number(v.length_ft) || 20,
+        width_ft: Number(v.width_ft) || 7.5,
+        height_ft: Number(v.height_ft) || 7.5,
         status: v.status || 'Active',
       }));
     }
@@ -3193,12 +3193,32 @@ const get_vehicles_master = async (req, res) => {
 /**
  * 2. Get Dynamic Filter Options for New Orders Dashboard
  */
+/**
+ * 2. Get Dynamic Filter Options for New Orders Dashboard
+ */
 const get_new_orders_filter_options = async (req, res) => {
   try {
-    const [states, districts] = await Promise.all([
+    const [states, districts, dbWarehouses] = await Promise.all([
       GeoLevel1.find({ is_active: { $ne: false } }).sort({ name: 1 }).lean(),
       GeoLevel2.find({ is_active: { $ne: false } }).sort({ name: 1 }).lean(),
+      CompanyWarehouse.find({ deleted_at: null })
+        .populate('level_1', 'name')
+        .populate('level_2', 'name')
+        .sort({ warehouse_code: 1 })
+        .lean(),
     ]);
+
+    const formattedWarehouses = (dbWarehouses || []).map(w => ({
+      _id: w._id ? w._id.toString() : '',
+      warehouse_code: w.warehouse_code || 'WH-UNKNOWN',
+      address: w.address || '',
+      pincode: w.pincode || '',
+      warehouse_type: w.warehouse_type || 'master',
+      state_id: w.level_1?._id ? w.level_1._id.toString() : (w.level_1 ? w.level_1.toString() : null),
+      state_name: w.level_1?.name || null,
+      district_id: w.level_2?._id ? w.level_2._id.toString() : (w.level_2 ? w.level_2.toString() : null),
+      district_name: w.level_2?.name || null,
+    }));
 
     const { DeliveryVehicleMaster } = require('../../admin-panel/models/india_solarshop_db');
     let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).lean();
@@ -3216,8 +3236,9 @@ const get_new_orders_filter_options = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       data: {
+        warehouses: formattedWarehouses,
         states: states.map(s => ({ _id: s._id, name: s.name })),
-        districts: districts.map(d => ({ _id: d._id, name: d.name, state_id: d.level_1_id })),
+        districts: districts.map(d => ({ _id: d._id, name: d.name, state_id: d.level_1_id || d.level_1 })),
         kit_types: kitTypeNames,
         industry_types: [
           'Residential Rooftop',
@@ -3247,6 +3268,13 @@ const get_new_orders_filter_options = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       data: {
+        warehouses: [
+          { _id: '6a7d545ccea1dec404aefe04', warehouse_code: 'WH-IND-GJ-001', address: 'Plot No. 45, GIDC Industrial Estate, Sanand, Ahmedabad', pincode: '382110', warehouse_type: 'master', state_name: 'Gujarat', district_name: 'Ahmedabad' },
+          { _id: '6a7d545dcea1dec404aefe0a', warehouse_code: 'WH-IND-MH-001', address: 'Logistics Park, Bhiwandi Industrial Area, Mumbai', pincode: '421302', warehouse_type: 'master', state_name: 'Maharashtra', district_name: 'Thane' },
+          { _id: '6a7d545dcea1dec404aefe10', warehouse_code: 'WH-IND-DL-001', address: 'Okhla Industrial Area Phase 3, New Delhi', pincode: '110020', warehouse_type: 'sub', state_name: 'Delhi', district_name: 'South Delhi' },
+          { _id: '6a7d545ecea1dec404aefe16', warehouse_code: 'WH-IND-KA-001', address: 'Peenya Industrial Area 2nd Stage, Bengaluru', pincode: '560058', warehouse_type: 'master', state_name: 'Karnataka', district_name: 'Bengaluru' },
+          { _id: '6a7d545ecea1dec404aefe1c', warehouse_code: 'WH-IND-RJ-001', address: 'RIICO Industrial Area, Sitapura, Jaipur', pincode: '302022', warehouse_type: 'sub', state_name: 'Rajasthan', district_name: 'Jaipur' },
+        ],
         states: [{ _id: 'st_guj', name: 'Gujarat' }, { _id: 'st_mah', name: 'Maharashtra' }, { _id: 'st_raj', name: 'Rajasthan' }],
         districts: [{ _id: 'dt_raj', name: 'Rajkot', state_id: 'st_guj' }, { _id: 'dt_ahm', name: 'Ahmedabad', state_id: 'st_guj' }, { _id: 'dt_sur', name: 'Surat', state_id: 'st_guj' }],
         kit_types: ['ComboKit A', 'ComboKit B', 'ComboKit C', 'ComboKit D', 'BOSKIT Standard'],
@@ -3270,6 +3298,7 @@ const get_eligible_new_orders = async (req, res) => {
     const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
 
     const {
+      warehouse_id = 'all',      // single warehouse ID/code or comma-separated or 'all'
       order_mode = 'all',         // 'online' | 'offline' | 'all'
       order_origin = 'all',       // 'epc' | 'franchisee' | 'company' | 'all'
       order_category = 'all',     // 'govt_tender' | 'industry_kit' | 'all'
@@ -3292,16 +3321,24 @@ const get_eligible_new_orders = async (req, res) => {
     }).select('order_ids').lean();
     const groupedOrderIds = new Set(activeGroups.flatMap(g => (g.order_ids || []).map(id => id.toString())));
 
-    // B. Fetch EPC Orders
+    // B. Fetch all active CompanyWarehouses for cross-linking & fallback
+    const allCompanyWarehouses = await CompanyWarehouse.find({ deleted_at: null })
+      .populate('level_1', 'name')
+      .populate('level_2', 'name')
+      .lean();
+    const whMap = Object.fromEntries((allCompanyWarehouses || []).map(w => [w._id.toString(), w]));
+    const defaultWh = allCompanyWarehouses && allCompanyWarehouses.length > 0 ? allCompanyWarehouses[0] : null;
+
+    // C. Fetch EPC Orders
     const epcOrders = await EpcOrder.find({
       order_status: { $nin: ['cancelled', 'delivered'] },
     })
       .populate('epc_id', 'name email whatsapp gstin company_name gstin_trade_name gstin_legal_name')
-      .populate('warehouse_id', 'warehouse_code address')
+      .populate('warehouse_id', 'warehouse_code address level_1 level_2')
       .sort({ created_at: -1 })
       .lean();
 
-    // C. Fetch Franchise Orders (FpoOrder)
+    // D. Fetch Franchise Orders (FpoOrder)
     const fpoOrders = await FpoOrder.find({
       status: { $nin: ['DRAFT', 'SUBMITTED', 'REJECTED', 'CANCELLED', 'DELIVERED', 'COMPLETED'] },
       order_type: { $ne: 'po_order' },
@@ -3312,7 +3349,7 @@ const get_eligible_new_orders = async (req, res) => {
       .sort({ created_at: -1 })
       .lean();
 
-    // D. Batch resolve State and District names for clean display & matching
+    // E. Batch resolve State and District names for clean display & matching
     const allStateIds = [
       ...epcOrders.map(o => o.delivery_address?.state_id?.toString()).filter(Boolean),
       ...fpoOrders.map(o => (o.state_id?._id || o.state_id)?.toString()).filter(Boolean),
@@ -3329,7 +3366,7 @@ const get_eligible_new_orders = async (req, res) => {
     const geoStateMap = Object.fromEntries(geoStates.map(s => [s._id.toString(), s.name]));
     const geoDistMap = Object.fromEntries(geoDistricts.map(d => [d._id.toString(), d.name]));
 
-    // E. Transform EPC Orders into standardized shape
+    // F. Transform EPC Orders into standardized shape
     const standardizedOrders = [];
 
     epcOrders.forEach((o, idx) => {
@@ -3339,6 +3376,13 @@ const get_eligible_new_orders = async (req, res) => {
       const stateName = o.delivery_address?.state_name || (stId ? geoStateMap[stId.toString()] : null) || 'Gujarat';
       const distName = o.delivery_address?.district_name || (distId ? geoDistMap[distId.toString()] : null) || 'Rajkot';
       const pincode = o.delivery_address?.pincode || o.delivery_address?.postal_code || (360001 + (idx % 20)).toString();
+
+      // Warehouse linkage
+      const rawWhId = o.warehouse_id?._id ? o.warehouse_id._id.toString() : (o.warehouse_id ? o.warehouse_id.toString() : null);
+      const whObj = (rawWhId && whMap[rawWhId]) ? whMap[rawWhId] : (o.warehouse_id && typeof o.warehouse_id === 'object' ? o.warehouse_id : defaultWh);
+      const assignedWhId = whObj?._id ? whObj._id.toString() : (rawWhId || 'wh-default');
+      const assignedWhCode = whObj?.warehouse_code || 'WH-IND-GJ-001';
+      const assignedWhName = `${assignedWhCode} — ${whObj?.address ? whObj.address.split(',')[0] : 'Ahmedabad Hub'}`;
 
       // Determine kit count & types
       let kitCount = 0;
@@ -3388,6 +3432,9 @@ const get_eligible_new_orders = async (req, res) => {
         order_mode_code: isOffline ? 'offline' : 'online',
         order_category: isGovtTender ? 'Govt. Tenders Order' : 'Industry Kits',
         order_category_code: isGovtTender ? 'govt_tender' : 'industry_kit',
+        warehouse_id: assignedWhId,
+        warehouse_code: assignedWhCode,
+        warehouse_name: assignedWhName,
         industry_type: industry,
         project_type: project,
         kit_type: primaryKit,
@@ -3410,7 +3457,7 @@ const get_eligible_new_orders = async (req, res) => {
       });
     });
 
-    // F. Transform Franchise Orders into standardized shape
+    // G. Transform Franchise Orders into standardized shape
     fpoOrders.forEach((o, idx) => {
       const idStr = o._id.toString();
       const stId = o.state_id?._id || o.state_id || null;
@@ -3418,6 +3465,14 @@ const get_eligible_new_orders = async (req, res) => {
       const stateName = (stId ? geoStateMap[stId.toString()] : null) || 'Gujarat';
       const distName = (distId ? geoDistMap[distId.toString()] : null) || 'Ahmedabad';
       const pincode = o.pincode || (380001 + (idx % 25)).toString();
+
+      // Warehouse linkage for FPO orders (distribute across warehouses if not explicitly set)
+      const whObj = (allCompanyWarehouses && allCompanyWarehouses.length > 0)
+        ? (allCompanyWarehouses.find(w => (w.level_1?._id || w.level_1)?.toString() === (stId ? stId.toString() : '')) || allCompanyWarehouses[idx % allCompanyWarehouses.length])
+        : defaultWh;
+      const assignedWhId = whObj?._id ? whObj._id.toString() : 'wh-default';
+      const assignedWhCode = whObj?.warehouse_code || 'WH-IND-GJ-001';
+      const assignedWhName = `${assignedWhCode} — ${whObj?.address ? whObj.address.split(',')[0] : 'Ahmedabad Hub'}`;
 
       let kitCount = 0;
       const kitNames = [];
@@ -3449,6 +3504,9 @@ const get_eligible_new_orders = async (req, res) => {
         order_mode_code: isOffline ? 'offline' : 'online',
         order_category: isGovtTender ? 'Govt. Tenders Order' : 'Industry Kits',
         order_category_code: isGovtTender ? 'govt_tender' : 'industry_kit',
+        warehouse_id: assignedWhId,
+        warehouse_code: assignedWhCode,
+        warehouse_name: assignedWhName,
         industry_type: industry,
         project_type: project,
         kit_type: primaryKit,
@@ -3471,47 +3529,88 @@ const get_eligible_new_orders = async (req, res) => {
       });
     });
 
-    // Add Company Store mock representation if real company store orders are missing
-    if (standardizedOrders.filter(o => o.order_origin_code === 'company').length === 0) {
-      const companyMock = [
-        {
-          id: new mongoose.Types.ObjectId().toString(),
-          order_number: 'CS-0001',
-          order_origin: 'Company Store',
-          order_origin_code: 'company',
-          order_mode: 'Online Orders',
-          order_mode_code: 'online',
-          order_category: 'Industry Kits',
-          order_category_code: 'industry_kit',
-          industry_type: 'Industrial Heavy',
-          project_type: 'Industrial Project',
-          kit_type: 'ComboKit B',
-          kits: 45,
-          customer_name: 'SOLARKITS Direct Hub',
-          customer_contact: 'contact@solarkits.in',
-          customer_gstin: '24AAACT1234F1Z8',
-          state_name: 'Gujarat',
-          district_name: 'Rajkot',
-          pincode: '360004',
-          delivery_destination: 'Company Store',
-          route_group: 'RG-GUJ-RAJ',
-          status: 'New',
-          order_amount: 5625000,
-          created_at: new Date(),
-          raw_items: [],
-          is_grouped: false,
-        }
-      ];
-      standardizedOrders.push(...companyMock);
-    }
+    // I. Compute Comprehensive Aggregated Filter Counts for All Badges & Numbering
+    const filter_counts = {
+      total: standardizedOrders.filter(o => !o.is_grouped).length,
+      by_mode: { offline: 0, online: 0 },
+      by_origin: { epc: 0, franchisee: 0, company: 0 },
+      by_category: { govt_tender: 0, industry_kit: 0 },
+      by_warehouse: {},
+      by_state: {},
+      by_district: {},
+      by_destination: { all: standardizedOrders.filter(o => !o.is_grouped).length, epc: 0, franchisee: 0, company: 0 },
+      by_industry: {},
+      by_project: {},
+      by_kit: {},
+    };
 
-    // G. Apply All Multi-Filters
-    const stateFilterArr = states ? states.split(',').map(s => s.trim().toLowerCase()) : [];
-    const distFilterArr = districts ? districts.split(',').map(d => d.trim().toLowerCase()) : [];
-    const pinFilterArr = pincodes ? pincodes.split(',').map(p => p.trim()) : [];
-    const industryFilterArr = industry_type ? industry_type.split(',').map(i => i.trim().toLowerCase()) : [];
+    standardizedOrders.forEach(ord => {
+      if (ord.is_grouped) return; // Exclude already grouped orders from active new orders count
+      // Mode
+      if (ord.order_mode_code) {
+        filter_counts.by_mode[ord.order_mode_code] = (filter_counts.by_mode[ord.order_mode_code] || 0) + 1;
+      }
+      // Origin
+      if (ord.order_origin_code) {
+        filter_counts.by_origin[ord.order_origin_code] = (filter_counts.by_origin[ord.order_origin_code] || 0) + 1;
+      }
+      // Category
+      if (ord.order_category_code) {
+        filter_counts.by_category[ord.order_category_code] = (filter_counts.by_category[ord.order_category_code] || 0) + 1;
+      }
+      // Warehouse
+      if (ord.warehouse_id) {
+        filter_counts.by_warehouse[ord.warehouse_id] = (filter_counts.by_warehouse[ord.warehouse_id] || 0) + 1;
+      }
+      if (ord.warehouse_code) {
+        filter_counts.by_warehouse[ord.warehouse_code] = (filter_counts.by_warehouse[ord.warehouse_code] || 0) + 1;
+      }
+      // State
+      if (ord.state_name) {
+        filter_counts.by_state[ord.state_name] = (filter_counts.by_state[ord.state_name] || 0) + 1;
+      }
+      // District
+      if (ord.district_name) {
+        filter_counts.by_district[ord.district_name] = (filter_counts.by_district[ord.district_name] || 0) + 1;
+      }
+      // Delivery Destination
+      if (ord.delivery_destination) {
+        const destLower = ord.delivery_destination.toLowerCase();
+        if (destLower.includes('epc')) filter_counts.by_destination.epc = (filter_counts.by_destination.epc || 0) + 1;
+        else if (destLower.includes('franchisee')) filter_counts.by_destination.franchisee = (filter_counts.by_destination.franchisee || 0) + 1;
+        else if (destLower.includes('company')) filter_counts.by_destination.company = (filter_counts.by_destination.company || 0) + 1;
+      }
+      // Industry
+      if (ord.industry_type) {
+        filter_counts.by_industry[ord.industry_type] = (filter_counts.by_industry[ord.industry_type] || 0) + 1;
+      }
+      // Project
+      if (ord.project_type) {
+        filter_counts.by_project[ord.project_type] = (filter_counts.by_project[ord.project_type] || 0) + 1;
+      }
+      // Kit Type
+      if (ord.kit_type) {
+        filter_counts.by_kit[ord.kit_type] = (filter_counts.by_kit[ord.kit_type] || 0) + 1;
+      }
+    });
+
+    // J. Apply All Multi-Filters
+    const stateFilterArr = states ? states.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+    const distFilterArr = districts ? districts.split(',').map(d => d.trim().toLowerCase()).filter(Boolean) : [];
+    const pinFilterArr = pincodes ? pincodes.split(',').map(p => p.trim()).filter(Boolean) : [];
+    const industryFilterArr = industry_type ? industry_type.split(',').map(i => i.trim().toLowerCase()).filter(Boolean) : [];
+    const warehouseFilterArr = warehouse_id && warehouse_id !== 'all' ? warehouse_id.split(',').map(w => w.trim().toLowerCase()).filter(Boolean) : [];
 
     const filtered = standardizedOrders.filter(order => {
+      // 0. Warehouse Filter
+      if (warehouseFilterArr.length > 0 && !warehouseFilterArr.includes('all')) {
+        const matchesWarehouse = warehouseFilterArr.some(wh =>
+          (order.warehouse_id && order.warehouse_id.toLowerCase() === wh) ||
+          (order.warehouse_code && order.warehouse_code.toLowerCase() === wh)
+        );
+        if (!matchesWarehouse) return false;
+      }
+
       // 1. Order Mode (Online / Offline)
       if (order_mode !== 'all' && order.order_mode_code !== order_mode.toLowerCase()) return false;
 
@@ -3542,7 +3641,7 @@ const get_eligible_new_orders = async (req, res) => {
         if (order.is_grouped) return false;
       }
 
-      // 8. Geographical Filters
+      // 8. Geographical Filters (Multi-select State & District)
       if (stateFilterArr.length > 0) {
         const matchesState = stateFilterArr.some(st =>
           (order.state_id && order.state_id.toLowerCase() === st) ||
@@ -3582,6 +3681,7 @@ const get_eligible_new_orders = async (req, res) => {
           (order.customer_name || '').toLowerCase().includes(q) ||
           (order.state_name || '').toLowerCase().includes(q) ||
           (order.district_name || '').toLowerCase().includes(q) ||
+          (order.warehouse_code || '').toLowerCase().includes(q) ||
           (order.pincode || '').includes(q);
         if (!matches) return false;
       }
@@ -3606,55 +3706,34 @@ const get_eligible_new_orders = async (req, res) => {
         selected_limit: limit ? Number(limit) : totalMatchingOrders,
         displayed_count: resultOrders.length,
       },
+      filter_counts,
       data: resultOrders,
     });
   } catch (err) {
     console.error('Error in get_eligible_new_orders:', err);
-    // Graceful resilient fallback so accounts dashboard always renders properly
-    const fallbackOrders = Array.from({ length: 30 }, (_, i) => {
-      const isOff = i % 2 === 0;
-      const isGovt = i % 4 === 0;
-      const originType = i % 3 === 0 ? 'Solar EPC' : (i % 3 === 1 ? 'Franchisee Store' : 'Company Store');
-      const originCode = i % 3 === 0 ? 'epc' : (i % 3 === 1 ? 'franchisee' : 'company');
-      const kitCount = 25 + (i * 3);
-      return {
-        id: new mongoose.Types.ObjectId().toString(),
-        order_number: `SK-${String(i + 1).padStart(4, '0')}`,
-        order_origin: originType,
-        order_origin_code: originCode,
-        order_mode: isOff ? 'Offline Orders' : 'Online Orders',
-        order_mode_code: isOff ? 'offline' : 'online',
-        order_category: isGovt ? 'Govt. Tenders Order' : 'Industry Kits',
-        order_category_code: isGovt ? 'govt_tender' : 'industry_kit',
-        industry_type: isGovt ? 'Institutional / Govt' : (i % 2 === 0 ? 'Industrial Heavy' : 'Commercial Rooftop'),
-        project_type: isGovt ? 'Govt Tender / KUSUM' : (i % 2 === 0 ? 'Industrial Project' : 'Rooftop On-Grid'),
-        kit_type: ['ComboKit A', 'ComboKit B', 'ComboKit C', 'ComboKit D'][i % 4],
-        kits: kitCount,
-        customer_name: originCode === 'epc' ? `EPC Solar Partner #${i + 1}` : (originCode === 'franchisee' ? `Franchise Store #${i + 1}` : 'SOLARKITS Direct Hub'),
-        customer_contact: '+91 98765 43210',
-        customer_gstin: '24AAACT1234F1Z8',
-        state_name: 'Gujarat',
-        district_name: i % 2 === 0 ? 'Rajkot' : 'Ahmedabad',
-        pincode: (360001 + i).toString(),
-        delivery_destination: originCode === 'epc' ? 'EPC Location' : (originCode === 'franchisee' ? 'Franchisee Store' : 'Company Store'),
-        route_group: i % 2 === 0 ? 'RG-GUJ-RAJ' : 'RG-GUJ-AHM',
-        status: i % 3 === 0 ? 'New' : (i % 3 === 1 ? 'Ready for Procurement' : 'Pending Account Processing'),
-        order_amount: kitCount * 125000,
-        created_at: new Date(Date.now() - (i * 3600000 * 6)),
-        is_grouped: false,
-      };
-    });
-
-    const queryLimit = req.query?.limit;
-    return res.status(200).json({
-      status: 'success',
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve eligible new orders: ' + err.message,
       meta: {
-        total_matching_orders: fallbackOrders.length,
-        total_matching_kits: fallbackOrders.reduce((a, b) => a + b.kits, 0),
-        selected_limit: queryLimit ? Number(queryLimit) : 100,
-        displayed_count: queryLimit ? fallbackOrders.slice(0, Number(queryLimit)).length : fallbackOrders.length,
+        total_matching_orders: 0,
+        total_matching_kits: 0,
+        selected_limit: 0,
+        displayed_count: 0,
       },
-      data: queryLimit ? fallbackOrders.slice(0, Number(queryLimit)) : fallbackOrders,
+      filter_counts: {
+        total: 0,
+        by_mode: { offline: 0, online: 0 },
+        by_origin: { epc: 0, franchisee: 0, company: 0 },
+        by_category: { govt_tender: 0, industry_kit: 0 },
+        by_warehouse: {},
+        by_state: {},
+        by_district: {},
+        by_destination: { all: 0, epc: 0, franchisee: 0, company: 0 },
+        by_industry: {},
+        by_project: {},
+        by_kit: {},
+      },
+      data: [],
     });
   }
 };
@@ -3670,7 +3749,7 @@ const calculate_procurement_grouping = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'No orders selected for calculation.' });
     }
 
-    const { EpcOrder, FpoOrder, DeliveryVehicleMaster } = require('../../admin-panel/models/india_solarshop_db');
+    const { EpcOrder, FpoOrder, DeliveryVehicleMaster, ComboKitWeightMaster } = require('../../admin-panel/models/india_solarshop_db');
 
     // Fetch the actual selected orders
     const [epcOrders, fpoOrders] = await Promise.all([
@@ -3680,9 +3759,24 @@ const calculate_procurement_grouping = async (req, res) => {
 
     const allOrders = [...epcOrders, ...fpoOrders];
 
-    // Compute Kit Type Breakdown & Total Kits
+    // Dynamic ComboKit Weights from Admin Panel Master
+    let kitWeightsMap = {};
+    try {
+      if (ComboKitWeightMaster) {
+        const weightsList = await ComboKitWeightMaster.find({}).lean();
+        (weightsList || []).forEach(w => {
+          if (w.kit_id) kitWeightsMap[w.kit_id.toString()] = Number(w.total_kit_weight_kg) || 0;
+          if (w.kit_name) kitWeightsMap[w.kit_name.toLowerCase().trim()] = Number(w.total_kit_weight_kg) || 0;
+        });
+      }
+    } catch (e) {
+      console.warn('Could not fetch ComboKitWeightMaster:', e.message);
+    }
+
+    // Compute Kit Type Breakdown, Weights & Total Kits
     const kitBreakdownMap = {};
     let totalKits = 0;
+    let totalWeightEstKg = 0;
     const originsSet = new Set();
     const statesSet = new Set();
     const districtsSet = new Set();
@@ -3694,19 +3788,38 @@ const calculate_procurement_grouping = async (req, res) => {
     allOrders.forEach(o => {
       const items = o.items || [];
       let orderKits = 0;
+      let orderWeight = 0;
+
       if (items.length > 0) {
         items.forEach(it => {
           const qty = Number(it.quantity) || 1;
           const name = it.item_name || 'ComboKit A';
           kitBreakdownMap[name] = (kitBreakdownMap[name] || 0) + qty;
           orderKits += qty;
+
+          const kitIdStr = (it.kit_id?._id || it.kit_id || it._id || '').toString();
+          const cleanName = (it.item_name || '').toLowerCase().trim();
+          let unitWt = kitWeightsMap[kitIdStr] || kitWeightsMap[cleanName];
+
+          if (!unitWt || unitWt <= 0) {
+            const kwMatch = (it.item_name || '').match(/(\d+(?:\.\d+)?)\s*kw/i);
+            const kw = kwMatch ? parseFloat(kwMatch[1]) : (Number(it.capacity_kw) || 10);
+            unitWt = Math.round(kw * 74); // Standard solar weight ~74 kg/kW
+          }
+          orderWeight += unitWt * qty;
         });
       } else {
-        const fallbackName = 'ComboKit A';
-        kitBreakdownMap[fallbackName] = (kitBreakdownMap[fallbackName] || 0) + 1;
-        orderKits = 1;
+        const fallbackName = o.kit_type || '10kW Premium Monocrystalline Solar Kit';
+        kitBreakdownMap[fallbackName] = (kitBreakdownMap[fallbackName] || 0) + (o.kits || 1);
+        orderKits = o.kits || 1;
+
+        const kwMatch = fallbackName.match(/(\d+(?:\.\d+)?)\s*kw/i);
+        const kw = kwMatch ? parseFloat(kwMatch[1]) : 10;
+        orderWeight += Math.round(kw * 74) * orderKits;
       }
+
       totalKits += orderKits;
+      totalWeightEstKg += orderWeight;
 
       // Origins
       if (o.epc_id && !o.franchisee_id) originsSet.add('EPC');
@@ -3726,6 +3839,7 @@ const calculate_procurement_grouping = async (req, res) => {
     });
 
     if (totalKits === 0) totalKits = order_ids.length;
+    if (totalWeightEstKg === 0) totalWeightEstKg = totalKits * 740; // Default 740kg per standard kit
 
     // Ensure balanced breakdown if kitBreakdownMap is small
     const kitTypeBreakdown = Object.entries(kitBreakdownMap).map(([kit_type, quantity]) => ({
@@ -3748,20 +3862,43 @@ const calculate_procurement_grouping = async (req, res) => {
       );
     }
 
-    // Weight Calculation: configured 50kg per kit (avg module + BOS structure)
-    const totalWeightEstKg = totalKits * 50;
-
-    // Vehicle Calculation
-    let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).lean();
+    // Dynamic Vehicle Calculation from Admin Panel DeliveryVehicleMaster
+    let vehicles = await DeliveryVehicleMaster.find({ deleted_at: null }).sort({ max_load_kg: 1 }).lean();
     if (!vehicles || vehicles.length === 0) vehicles = DEFAULT_VEHICLES;
 
-    let selectedVehicle = vehicles.find(v => v._id.toString() === vehicle_id || v.vehicle_code === vehicle_id) ||
-      vehicles.find(v => v.max_load_kg >= 15000) ||
-      vehicles[0];
+    const activeFleet = vehicles
+      .filter(v => v.status !== 'Inactive')
+      .map(v => ({
+        ...v,
+        max_load_kg: Number(v.max_load_kg) || 15000,
+      }))
+      .sort((a, b) => a.max_load_kg - b.max_load_kg);
+
+    const fleetToUse = activeFleet.length > 0 ? activeFleet : vehicles;
+
+    // 1. Dynamic Auto-Suggestion Logic:
+    // Smallest vehicle whose payload capacity safely holds totalWeightEstKg
+    let autoRecommended = fleetToUse.find(v => v.max_load_kg >= totalWeightEstKg);
+    let autoStrategy = 'single';
+    let autoMultiplier = 1;
+
+    if (!autoRecommended) {
+      // Cargo exceeds single largest vehicle capacity -> recommend multiple of largest
+      autoRecommended = fleetToUse[fleetToUse.length - 1];
+      autoStrategy = 'multiple_same';
+      autoMultiplier = Math.max(1, Math.ceil(totalWeightEstKg / autoRecommended.max_load_kg));
+    }
+
+    // 2. Resolve Active Vehicle (Respect user manual selection if provided, else use auto-recommended)
+    let selectedVehicle = fleetToUse.find(v => v._id.toString() === vehicle_id || v.vehicle_code === vehicle_id);
+    if (!selectedVehicle) {
+      selectedVehicle = autoRecommended;
+    }
 
     const singleCapacityKg = selectedVehicle.max_load_kg || 15000;
+    const activeStrategy = vehicle_strategy || (selectedVehicle._id.toString() === autoRecommended._id.toString() ? autoStrategy : 'single');
     let multiplier = Number(vehicle_count) || 1;
-    if (vehicle_strategy === 'multiple_same') {
+    if (activeStrategy === 'multiple_same') {
       multiplier = Math.max(1, Math.ceil(totalWeightEstKg / singleCapacityKg));
     }
     const totalVehicleCapacityKg = singleCapacityKg * multiplier;
@@ -3859,14 +3996,42 @@ const calculate_procurement_grouping = async (req, res) => {
           vehicle_id: selectedVehicle._id,
           vehicle_code: selectedVehicle.vehicle_code,
           vehicle_name: selectedVehicle.name,
+          vehicle_brand: selectedVehicle.brand_make,
           vehicle_model: selectedVehicle.model,
           single_capacity_kg: singleCapacityKg,
           vehicle_count: multiplier,
+          vehicle_strategy: activeStrategy,
           total_capacity_kg: totalVehicleCapacityKg,
           estimated_load_kg: totalWeightEstKg,
           utilization_pct: utilizationPct,
           validation_status: validationStatus,
           unallocated_kits: unallocatedKits,
+          is_auto_recommended: selectedVehicle._id.toString() === autoRecommended._id.toString(),
+        },
+        auto_recommendation: {
+          vehicle_id: autoRecommended._id,
+          vehicle_code: autoRecommended.vehicle_code,
+          vehicle_name: autoRecommended.name,
+          vehicle_brand: autoRecommended.brand_make,
+          vehicle_model: autoRecommended.model,
+          max_load_kg: autoRecommended.max_load_kg,
+          vehicle_strategy: autoStrategy,
+          vehicle_count: autoMultiplier,
+          total_capacity_kg: autoRecommended.max_load_kg * autoMultiplier,
+          estimated_load_kg: totalWeightEstKg,
+          utilization_pct: Math.min(100, Math.round((totalWeightEstKg / (autoRecommended.max_load_kg * autoMultiplier)) * 100)),
+          safe_headroom_kg: Math.max(0, (autoRecommended.max_load_kg * autoMultiplier) - totalWeightEstKg),
+          reason: `${autoRecommended.name} (${autoRecommended.max_load_kg.toLocaleString()} kg) provides optimal safe capacity for ${totalWeightEstKg.toLocaleString()} kg cargo.`,
+          alternatives: fleetToUse
+            .filter(v => v._id.toString() !== autoRecommended._id.toString())
+            .map(v => ({
+              _id: v._id,
+              name: v.name,
+              brand_make: v.brand_make,
+              max_load_kg: v.max_load_kg,
+              utilization_pct: Math.round((totalWeightEstKg / v.max_load_kg) * 100),
+              is_under_capacity: v.max_load_kg < totalWeightEstKg,
+            })),
         },
         procurement_summary: {
           total_suppliers: 3,

@@ -2819,6 +2819,8 @@ const get_orders = async (req, res) => {
           selling_price_cached: totalAmount,
         },
         delivery_address: o.delivery_address || {},
+        payment_milestones: o.payment_milestones || null,
+        milestones: o.milestones || [],
       };
     });
 
@@ -2952,7 +2954,7 @@ const check_warehouse_stock = async (req, res) => {
  */
 const checkout_warehouse_capacity_check = async (req, res) => {
   try {
-    const { fulfillment_mode, cart_items, franchisee_id, warehouse_id } = req.query;
+    const { fulfillment_mode, cart_items, franchisee_id, warehouse_id, district_id } = req.query;
 
     if (!fulfillment_mode) {
       return res.status(400).json({ success: false, message: 'fulfillment_mode is required.' });
@@ -2970,12 +2972,14 @@ const checkout_warehouse_capacity_check = async (req, res) => {
 
     // ── Compute Order Load Metrics ──────────────────────────────────────────
     const order_load_metrics = parsedCartItems.reduce((acc, item) => {
-      const qty = Number(item.quantity || 1);
+      const qty = Number(item.quantity || item.qty || 1);
       acc.total_kits      += qty;
       acc.total_kw        += qty * Number(item.kw_per_kit     || 0);
       acc.total_weight_kg += qty * Number(item.weight_kg_per_kit || 0);
       return acc;
     }, { total_kits: 0, total_kw: 0, total_weight_kg: 0 });
+
+    const epc_id = req.user?.account_id || req.user?._id || req.user?.id;
 
     const { checkWarehouseCapacityForMode } = require('../../../admin-panel/services/epc.offline.checkout.service');
     const result = await checkWarehouseCapacityForMode({
@@ -2983,6 +2987,8 @@ const checkout_warehouse_capacity_check = async (req, res) => {
       order_load_metrics,
       franchisee_id,
       warehouse_id,
+      district_id,
+      epc_id,
     });
 
     return res.status(200).json({
