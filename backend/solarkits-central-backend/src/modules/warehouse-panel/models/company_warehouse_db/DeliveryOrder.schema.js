@@ -31,7 +31,41 @@ const schema = new mongoose.Schema({
     available_inventory_stock: { type: Number, default: 0 },
     allocated_stock: { type: Number, default: 0 },
     rack_location:   { type: String, default: '' },
-    qc_status:       { type: String, default: 'Passed' }
+    qc_status:       { type: String, default: 'Passed' },
+    sourcing_type:   { type: String, enum: ['warehouse_inventory', 'supplier_procurement'], default: 'supplier_procurement' },
+    supply_fulfilment_method: { type: String, enum: ['company_pickup', 'supplier_delivery', 'warehouse_stock'], default: 'supplier_delivery' },
+    supplier_name:   { type: String, default: '' },
+    supplier_id:     { type: String, default: '' },
+    supplier_warehouse: {
+      name:           { type: String, default: '' },
+      address:        { type: String, default: '' },
+      city:           { type: String, default: '' },
+      state:          { type: String, default: '' },
+      pincode:        { type: String, default: '' },
+      contact_person: { type: String, default: '' },
+      phone:          { type: String, default: '' }
+    },
+    pi_reference: {
+      pi_number:      { type: String, default: '' },
+      pi_date:        { type: Date, default: null },
+      pi_value:       { type: Number, default: 0 }
+    },
+    transport_responsibility: { type: String, enum: ['company', 'supplier', 'third_party'], default: 'supplier' },
+    transport_cost:  { type: Number, default: 0 },
+    expected_pickup_date:    { type: Date, default: null },
+    actual_pickup_date:      { type: Date, default: null },
+    expected_dispatch_date:  { type: Date, default: null },
+    actual_dispatch_date:    { type: Date, default: null },
+    expected_inward_date:    { type: Date, default: null },
+    actual_inward_date:      { type: Date, default: null },
+    supplier_dispatch_reference: { type: String, default: '' },
+    supply_status:   {
+      type: String,
+      enum: ['pending', 'ready_for_pickup', 'picked_up', 'dispatched', 'in_transit', 'inward_completed', 'inward_discrepancy'],
+      default: 'pending'
+    },
+    damaged_qty:     { type: Number, default: 0 },
+    missing_qty:     { type: Number, default: 0 }
   }],
   epcs: [{
     epc_id:          { type: String, required: true },
@@ -161,6 +195,34 @@ const schema = new mongoose.Schema({
     otp_verified:        { type: Boolean, default: false },
     failed_otp_attempts: { type: Number, default: 0 }
   },
+  kit_preparation_status: {
+    type: String,
+    enum: ['not_required', 'awaiting_components', 'ready_for_assembly', 'in_assembly', 'kit_ready'],
+    default: 'ready_for_assembly'
+  },
+  kit_assembly_details: {
+    picked_at:           { type: Date, default: null },
+    picked_by:           { type: String, default: '' },
+    assembled_at:        { type: Date, default: null },
+    assembled_by:        { type: String, default: '' },
+    qc_verified:         { type: Boolean, default: false },
+    qc_verified_by:      { type: String, default: '' },
+    packed_and_labeled:  { type: Boolean, default: false },
+    packed_at:           { type: Date, default: null },
+    kit_serial_barcode:  { type: String, default: '' }
+  },
+  discrepancy_details: [{
+    sku:                { type: String },
+    product_name:       { type: String },
+    expected_qty:       { type: Number },
+    received_qty:       { type: Number },
+    damaged_qty:        { type: Number, default: 0 },
+    missing_qty:        { type: Number, default: 0 },
+    remarks:            { type: String, default: '' },
+    reported_at:        { type: Date, default: Date.now },
+    reported_by:        { type: String, default: 'Delivery Manager' },
+    accounts_notified:  { type: Boolean, default: true }
+  }],
   audit_trail: [{
     action:             { type: String, required: true },
     performed_by_name:  { type: String, default: 'Delivery Manager' },

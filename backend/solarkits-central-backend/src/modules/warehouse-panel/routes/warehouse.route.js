@@ -61,6 +61,9 @@ router.get('/delivery-orders/:id', check_auth, delivery_order_handler.get_delive
 router.post('/delivery-orders/:id/reserve-inventory', check_auth, delivery_order_handler.reserve_inventory);
 router.post('/delivery-orders/:id/request-procurement', check_auth, delivery_order_handler.request_procurement);
 router.post('/delivery-orders/:id/inward', check_auth, delivery_order_handler.inward_material);
+router.post('/delivery-orders/:id/inward-discrepancy', check_auth, delivery_order_handler.record_inward_discrepancy);
+router.post('/delivery-orders/:id/supply-status', check_auth, delivery_order_handler.update_supply_status);
+router.post('/delivery-orders/:id/kit-assembly', check_auth, delivery_order_handler.update_kit_assembly);
 router.post('/delivery-orders/:id/send-for-delivery', check_auth, delivery_order_handler.send_for_delivery);
 router.post('/delivery-orders/:id/toggle-ungroup', check_auth, delivery_order_handler.toggle_ungroup);
 router.post('/delivery-orders/:id/account-remove-epc', check_auth, delivery_order_handler.account_remove_epc);

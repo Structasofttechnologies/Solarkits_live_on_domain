@@ -1887,3 +1887,193 @@ exports.dispatch_for_delivery = async (req, res) => {
   }
 };
 
+/**
+ * POST /warehouse-api/delivery-orders/:id/inward-discrepancy
+ * Records damaged / missing quantity during inwarding.
+ * Strictly increments available stock ONLY by physically OK items (received - damaged).
+ * Logs discrepancy record and marks accounts_notified = true.
+ */
+exports.record_inward_discrepancy = async (req, res) => {
+  try {
+    const order = await DeliveryOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Delivery order not found.' });
+    }
+
+    const { sku, received_qty, damaged_qty, missing_qty, remarks } = req.body || {};
+    const item = order.items.find(it => it.sku === sku);
+    if (!item) {
+      return res.status(404).json({ status: 'error', message: `SKU ${sku} not found in this order.` });
+    }
+
+    const recQty = Number(received_qty) || 0;
+    const damQty = Number(damaged_qty) || 0;
+    const misQty = Number(missing_qty) || 0;
+    const okQty = Math.max(0, recQty - damQty);
+
+    item.received_qty = (item.received_qty || 0) + okQty;
+    item.pending_qty = Math.max(0, item.ordered_qty - item.received_qty);
+    item.damaged_qty = (item.damaged_qty || 0) + damQty;
+    item.missing_qty = (item.missing_qty || 0) + misQty;
+
+    if (damQty > 0 || misQty > 0) {
+      item.supply_status = 'inward_discrepancy';
+    } else if (item.pending_qty === 0) {
+      item.supply_status = 'inward_completed';
+    }
+
+    order.discrepancy_details = order.discrepancy_details || [];
+    order.discrepancy_details.push({
+      sku: item.sku,
+      product_name: item.product_name,
+      expected_qty: item.ordered_qty,
+      received_qty: recQty,
+      damaged_qty: damQty,
+      missing_qty: misQty,
+      remarks: remarks || 'Discrepancy logged during physical inward.',
+      reported_at: new Date(),
+      reported_by: req.user?.name || 'Delivery Manager',
+      accounts_notified: true
+    });
+
+    const totalPending = order.items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+    if (damQty > 0 || misQty > 0) {
+      order.kit_preparation_status = 'awaiting_components';
+    } else if (totalPending === 0) {
+      order.kit_preparation_status = 'ready_for_assembly';
+    }
+
+    order.audit_trail.push({
+      action: damQty > 0 || misQty > 0 ? 'Inward Discrepancy Logged (Accounts Notified)' : 'Physical Inward Completed',
+      performed_by_name: req.user?.name || 'Delivery Manager',
+      timestamp: new Date(),
+      notes: `SKU ${item.sku}: Received=${recQty}, Damaged=${damQty}, Missing=${misQty}, Physically OK Added to Stock=${okQty}. ${remarks || ''}`
+    });
+
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: damQty > 0 || misQty > 0
+        ? `Inward discrepancy logged for ${item.sku}. Accounts team notified for debit note/replacement.`
+        : `Inward verified successfully for ${item.sku}. Stock updated.`,
+      data: order
+    });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * POST /warehouse-api/delivery-orders/:id/supply-status
+ * Updates supply status for a specific item (e.g. ready_for_pickup, picked_up, dispatched, in_transit).
+ */
+exports.update_supply_status = async (req, res) => {
+  try {
+    const order = await DeliveryOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Delivery order not found.' });
+    }
+
+    const { sku, status, actual_date, notes } = req.body || {};
+    const item = order.items.find(it => it.sku === sku);
+    if (!item) {
+      return res.status(404).json({ status: 'error', message: `SKU ${sku} not found in this order.` });
+    }
+
+    item.supply_status = status;
+    if (status === 'picked_up' && actual_date) {
+      item.actual_pickup_date = new Date(actual_date);
+    }
+    if (status === 'dispatched' && actual_date) {
+      item.actual_dispatch_date = new Date(actual_date);
+    }
+    if (status === 'inward_completed') {
+      item.actual_inward_date = new Date();
+    }
+
+    order.audit_trail.push({
+      action: `Supply Status Updated for ${item.sku}`,
+      performed_by_name: req.user?.name || 'Delivery Manager',
+      timestamp: new Date(),
+      notes: `Status changed to "${status}". ${notes || ''}`
+    });
+
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Supply status for ${item.sku} updated to ${status}.`,
+      data: order
+    });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+/**
+ * POST /warehouse-api/delivery-orders/:id/kit-assembly
+ * Manages the BOSKIT preparation lifecycle:
+ * - 'picked': Picking of components completed
+ * - 'assembled': Kit assembled and wiring/connectors joined
+ * - 'qc_verified': Quality and completeness verified
+ * - 'packed_and_labeled': Packaged with SolarKits barcode label
+ * - 'mark_kit_ready': Validates 100% completeness and marks kit ready for dispatch
+ */
+exports.update_kit_assembly = async (req, res) => {
+  try {
+    const order = await DeliveryOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'Delivery order not found.' });
+    }
+
+    const { stage, kit_serial_barcode, notes } = req.body || {};
+    order.kit_assembly_details = order.kit_assembly_details || {};
+
+    if (stage === 'picked') {
+      order.kit_assembly_details.picked_at = new Date();
+      order.kit_assembly_details.picked_by = req.user?.name || 'Delivery Manager';
+      order.kit_preparation_status = 'in_assembly';
+    } else if (stage === 'assembled') {
+      order.kit_assembly_details.assembled_at = new Date();
+      order.kit_assembly_details.assembled_by = req.user?.name || 'Delivery Manager';
+      order.kit_preparation_status = 'in_assembly';
+    } else if (stage === 'qc_verified') {
+      order.kit_assembly_details.qc_verified = true;
+      order.kit_assembly_details.qc_verified_by = req.user?.name || 'QC Inspector (Ramesh Shinde)';
+    } else if (stage === 'packed_and_labeled') {
+      order.kit_assembly_details.packed_and_labeled = true;
+      order.kit_assembly_details.packed_at = new Date();
+      order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
+    } else if (stage === 'mark_kit_ready') {
+      const missingItems = order.items.filter(it => (it.pending_qty || 0) > 0);
+      if (missingItems.length > 0) {
+        order.kit_preparation_status = 'awaiting_components';
+        return res.status(400).json({
+          status: 'error',
+          message: `Cannot mark kit ready: ${missingItems.length} component(s) are still pending inward or have shortages.`
+        });
+      }
+      order.kit_preparation_status = 'kit_ready';
+    }
+
+    order.audit_trail.push({
+      action: `BOSKIT Assembly Stage: ${stage}`,
+      performed_by_name: req.user?.name || 'Delivery Manager',
+      timestamp: new Date(),
+      notes: `Kit preparation updated: ${stage}. ${notes || ''}`
+    });
+
+    await order.save();
+
+    return res.status(200).json({
+      status: 'success',
+      message: `BOSKIT preparation updated to stage "${stage}".`,
+      data: order
+    });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
+

@@ -184,4 +184,42 @@ export const dispatchOrderForDelivery = async (id, { vehicle_rear_photo, docket_
   return res.data;
 };
 
+export const recordInwardDiscrepancy = async (id, { sku, received_qty, damaged_qty, missing_qty, remarks, batch_id }) => {
+  const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/inward-discrepancy`, {
+    sku,
+    received_qty,
+    damaged_qty,
+    missing_qty,
+    remarks,
+    batch_id
+  }, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+export const updateSupplyStatus = async (id, { sku, status, actual_date, notes }) => {
+  const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/supply-status`, {
+    sku,
+    status,
+    actual_date,
+    notes
+  }, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+export const updateKitAssembly = async (id, { stage, kit_serial_barcode, notes }) => {
+  const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/kit-assembly`, {
+    stage,
+    kit_serial_barcode,
+    notes
+  }, {
+    headers: authHeaderObj()
+  });
+  return res.data;
+};
+
+
 

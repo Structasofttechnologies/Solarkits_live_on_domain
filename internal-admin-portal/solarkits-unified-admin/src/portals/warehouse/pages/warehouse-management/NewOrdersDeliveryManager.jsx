@@ -10,7 +10,9 @@ import {
   FaBoxes, FaTruck, FaMapMarkerAlt, FaCalendarAlt,
   FaCheckCircle, FaSpinner, FaExchangeAlt, FaHistory,
   FaPhoneAlt, FaEnvelope, FaShieldAlt, FaExternalLinkAlt,
-  FaLayerGroup, FaArrowRight, FaLock
+  FaLayerGroup, FaArrowRight, FaLock, FaWarehouse,
+  FaBuilding, FaTools, FaBarcode, FaExclamationTriangle,
+  FaCheckDouble, FaWrench, FaClipboardCheck
 } from 'react-icons/fa';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '@/features/alert.slice';
@@ -21,7 +23,10 @@ import {
   requestDeliveryOrderProcurement,
   inwardDeliveryOrder,
   claimIncomingShipment,
-  sendOrderForDelivery
+  sendOrderForDelivery,
+  recordInwardDiscrepancy,
+  updateSupplyStatus,
+  updateKitAssembly
 } from '../../api/deliveryOrders';
 
 import Button from '../../components/Button';
@@ -46,11 +51,18 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
   // Filters State
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedQueueTab, setSelectedQueueTab] = useState('all'); // Boss Spec 14 Queue Filters
   const [selectedState, setSelectedState] = useState('all');
   const [selectedDistrict, setSelectedDistrict] = useState('all');
   const [pincodeFilter, setPincodeFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [expandedCards, setExpandedCards] = useState({});
+
+  // BOSKIT Preparation & Assembly Modal State
+  const [assemblyModalOpen, setAssemblyModalOpen] = useState(false);
+  const [selectedOrderForAssembly, setSelectedOrderForAssembly] = useState(null);
+  const [submittingAssembly, setSubmittingAssembly] = useState(false);
+  const [kitBarcodeLabel, setKitBarcodeLabel] = useState('');
 
   // Inward Modal State
   const [inwardModalOpen, setInwardModalOpen] = useState(false);
@@ -77,6 +89,35 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
 
   // Send for Delivery State & Handler
   const [sendingOrderId, setSendingOrderId] = useState(null);
+
+  const handleOpenAssemblyModal = (order) => {
+    setSelectedOrderForAssembly(order);
+    setKitBarcodeLabel(order.kit_assembly_details?.kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`);
+    setAssemblyModalOpen(true);
+  };
+
+  const handleAdvanceAssembly = async (stage) => {
+    if (!selectedOrderForAssembly) return;
+    try {
+      setSubmittingAssembly(true);
+      const res = await updateKitAssembly(selectedOrderForAssembly._id, {
+        stage,
+        kit_serial_barcode: kitBarcodeLabel
+      });
+      if (res.status === 'success') {
+        dispatch(setAlert({ message: res.message, type: 'success' }));
+        setSelectedOrderForAssembly(res.data);
+        fetchOrders();
+      }
+    } catch (err) {
+      dispatch(setAlert({
+        message: err.response?.data?.message || 'Failed to update kit assembly stage.',
+        type: 'error'
+      }));
+    } finally {
+      setSubmittingAssembly(false);
+    }
+  };
 
   const handleSendForDelivery = async (order) => {
     const totalPendingItems = (order.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
@@ -197,14 +238,84 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
     }));
   };
 
+  // Boss Specification: 14 Queue Filter Counts
+  const queueCounts = useMemo(() => {
+    let pickupPending = 0;
+    let supplierDispatchPending = 0;
+    let inTransitSupplier = 0;
+    let pendingInward = 0;
+    let kitPrepRequired = 0;
+    let awaitingComponents = 0;
+    let readyForDispatch = 0;
+    let overdue = 0;
+
+    orders.forEach(ord => {
+      const totalPending = (ord.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+      if ((ord.items || []).some(it => it.supply_fulfilment_method === 'company_pickup' && it.pending_qty > 0)) pickupPending++;
+      if ((ord.items || []).some(it => it.supply_fulfilment_method === 'supplier_delivery' && it.pending_qty > 0 && it.supply_status !== 'in_transit')) supplierDispatchPending++;
+      if ((ord.items || []).some(it => ['picked_up', 'dispatched', 'in_transit'].includes(it.supply_status) && it.pending_qty > 0)) inTransitSupplier++;
+      if (totalPending > 0) pendingInward++;
+      if (totalPending === 0 && ord.kit_preparation_status !== 'kit_ready') kitPrepRequired++;
+      if (ord.kit_preparation_status === 'awaiting_components' || (ord.discrepancy_details && ord.discrepancy_details.length > 0)) awaitingComponents++;
+      if (totalPending === 0 && (ord.kit_preparation_status === 'kit_ready' || ord.delivery_status === 'ready_for_dispatch')) readyForDispatch++;
+      if (ord.sla_days && (Date.now() - new Date(ord.order_date).getTime()) > (ord.sla_days * 24 * 3600 * 1000)) overdue++;
+    });
+
+    return {
+      total: orders.length,
+      pickupPending,
+      supplierDispatchPending,
+      inTransitSupplier,
+      pendingInward,
+      kitPrepRequired,
+      awaitingComponents,
+      readyForDispatch,
+      overdue
+    };
+  }, [orders]);
+
+  // Displayed Orders filtered by Queue Tab
+  const displayedOrders = useMemo(() => {
+    if (selectedQueueTab === 'all') return orders;
+    return orders.filter(ord => {
+      const totalPending = (ord.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+      if (selectedQueueTab === 'pickup_pending') {
+        return (ord.items || []).some(it => it.supply_fulfilment_method === 'company_pickup' && it.pending_qty > 0);
+      }
+      if (selectedQueueTab === 'supplier_dispatch_pending') {
+        return (ord.items || []).some(it => it.supply_fulfilment_method === 'supplier_delivery' && it.pending_qty > 0 && it.supply_status !== 'in_transit');
+      }
+      if (selectedQueueTab === 'in_transit_supplier') {
+        return (ord.items || []).some(it => ['picked_up', 'dispatched', 'in_transit'].includes(it.supply_status) && it.pending_qty > 0);
+      }
+      if (selectedQueueTab === 'pending_inward') {
+        return totalPending > 0;
+      }
+      if (selectedQueueTab === 'kit_prep_required') {
+        return totalPending === 0 && ord.kit_preparation_status !== 'kit_ready';
+      }
+      if (selectedQueueTab === 'awaiting_components') {
+        return ord.kit_preparation_status === 'awaiting_components' || (ord.discrepancy_details && ord.discrepancy_details.length > 0);
+      }
+      if (selectedQueueTab === 'ready_for_dispatch') {
+        return totalPending === 0 && (ord.kit_preparation_status === 'kit_ready' || ord.delivery_status === 'ready_for_dispatch');
+      }
+      if (selectedQueueTab === 'overdue') {
+        return ord.sla_days && (Date.now() - new Date(ord.order_date).getTime()) > (ord.sla_days * 24 * 3600 * 1000);
+      }
+      return true;
+    });
+  }, [orders, selectedQueueTab]);
+
   // Open Material Inward Modal
   const handleOpenInwardModal = (order) => {
     setSelectedOrderForInward(order);
     const initialInputs = {};
     (order.items || []).forEach(it => {
-      // Default inward qty to pending qty for quick 1-click fulfillment, or 0
       initialInputs[it.sku] = {
         qty: it.pending_qty,
+        damaged_qty: 0,
+        missing_qty: 0,
         rack_location: it.rack_location || ''
       };
     });
@@ -214,36 +325,36 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
     setInwardModalOpen(true);
   };
 
-  // Submit Inward Form
+  // Submit Inward Form (Handles Clean Inward & Discrepancy Logging)
   const handleSubmitInward = async (e) => {
     e.preventDefault();
     if (!selectedOrderForInward) return;
 
-    // Build payload and validate client-side first
     const itemsToInward = [];
-    let hasZeroOrLess = true;
+    let hasDiscrepancy = false;
 
     for (const it of (selectedOrderForInward?.items || [])) {
       const input = inwardInputs[it.sku];
       const qty = parseInt(input?.qty) || 0;
-      if (qty > 0) {
-        hasZeroOrLess = false;
-        if (qty > it.pending_qty) {
-          dispatch(setAlert({
-            message: `Inward quantity (${qty}) for "${it.product_name}" exceeds permissible pending quantity (${it.pending_qty})!`,
-            type: 'error'
-          }));
-          return;
-        }
+      const damagedQty = parseInt(input?.damaged_qty) || 0;
+      const missingQty = parseInt(input?.missing_qty) || 0;
+
+      if (damagedQty > 0 || missingQty > 0) {
+        hasDiscrepancy = true;
+      }
+
+      if (qty > 0 || damagedQty > 0 || missingQty > 0) {
         itemsToInward.push({
           sku: it.sku,
           qty,
+          damaged_qty: damagedQty,
+          missing_qty: missingQty,
           rack_location: input?.rack_location || it.rack_location
         });
       }
     }
 
-    if (hasZeroOrLess || itemsToInward.length === 0) {
+    if (itemsToInward.length === 0) {
       dispatch(setAlert({
         message: 'Please enter at least one positive inward quantity.',
         type: 'warning'
@@ -253,19 +364,40 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
 
     try {
       setSubmittingInward(true);
-      const res = await inwardDeliveryOrder(selectedOrderForInward._id, {
-        items: itemsToInward,
-        remarks: inwardRemarks
-      });
-
-      if (res.status === 'success') {
+      if (hasDiscrepancy) {
+        for (const itm of itemsToInward) {
+          if (itm.damaged_qty > 0 || itm.missing_qty > 0) {
+            await recordInwardDiscrepancy(selectedOrderForInward._id, {
+              sku: itm.sku,
+              received_qty: itm.qty,
+              damaged_qty: itm.damaged_qty,
+              missing_qty: itm.missing_qty,
+              remarks: inwardRemarks
+            });
+          } else if (itm.qty > 0) {
+            await inwardDeliveryOrder(selectedOrderForInward._id, {
+              items: [{ sku: itm.sku, qty: itm.qty, rack_location: itm.rack_location }],
+              remarks: inwardRemarks
+            });
+          }
+        }
         dispatch(setAlert({
-          message: res.message,
+          message: 'Inward recorded with discrepancy logging. Accounts team notified for debit note/replacement.',
+          type: 'warning'
+        }));
+      } else {
+        const res = await inwardDeliveryOrder(selectedOrderForInward._id, {
+          items: itemsToInward,
+          remarks: inwardRemarks
+        });
+        dispatch(setAlert({
+          message: res.message || 'Material inward verified & updated!',
           type: 'success'
         }));
-        setInwardModalOpen(false);
-        fetchOrders();
       }
+
+      setInwardModalOpen(false);
+      fetchOrders();
     } catch (err) {
       console.error('Inward error:', err);
       dispatch(setAlert({
@@ -548,6 +680,47 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
         </div>
       </div>
 
+      {/* ── Boss Specification: 14 Queue Filter Tabs Bar ── */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        {[
+          { id: 'all', label: 'All Orders', count: queueCounts.total, icon: FaBoxes },
+          { id: 'pickup_pending', label: 'Pickup Pending', count: queueCounts.pickupPending, icon: FaTruck, color: 'text-cyan-400' },
+          { id: 'supplier_dispatch_pending', label: 'Supplier Dispatch Pending', count: queueCounts.supplierDispatchPending, icon: FaBuilding, color: 'text-amber-400' },
+          { id: 'in_transit_supplier', label: 'In-Transit (Supplier)', count: queueCounts.inTransitSupplier, icon: HiOutlineTruck, color: 'text-blue-400' },
+          { id: 'pending_inward', label: 'Inward Pending', count: queueCounts.pendingInward, icon: HiOutlineClock, color: 'text-orange-400' },
+          { id: 'kit_prep_required', label: 'BOSKIT Assembly Required', count: queueCounts.kitPrepRequired, icon: FaTools, color: 'text-purple-400' },
+          { id: 'awaiting_components', label: 'Awaiting Components / Discrepancy', count: queueCounts.awaitingComponents, icon: FaExclamationTriangle, color: 'text-rose-400' },
+          { id: 'ready_for_dispatch', label: 'Ready for Dispatch', count: queueCounts.readyForDispatch, icon: FaCheckCircle, color: 'text-emerald-400' },
+          { id: 'overdue', label: 'SLA Overdue', count: queueCounts.overdue, icon: HiOutlineExclamation, color: 'text-red-400' },
+        ].map((tab) => {
+          const isActive = selectedQueueTab === tab.id;
+          const TabIcon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedQueueTab(tab.id)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 flex items-center gap-2 border cursor-pointer ${
+                isActive
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-surface hover:bg-surface-hover border-border text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <TabIcon className={`text-xs ${isActive ? 'text-white' : tab.color || 'text-text-muted'}`} />
+              <span>{tab.label}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-black font-mono ${
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-surface-hover border border-border/80 text-text-primary'
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* ── Order Cards List ── */}
       {loading ? (
         <div className="card p-12 text-center text-text-muted space-y-3 bg-surface border border-border rounded-2xl">
@@ -555,17 +728,17 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
           <div className="text-sm font-bold text-text-primary">Loading Delivery Orders...</div>
           <div className="text-xs">Fetching confirmed orders forwarded from Account Manager & Procurement.</div>
         </div>
-      ) : orders.length === 0 ? (
+      ) : displayedOrders.length === 0 ? (
         <div className="card p-12 text-center text-text-muted space-y-3 bg-surface border border-border rounded-2xl">
           <FaBoxes className="text-4xl text-text-muted opacity-30 mx-auto" />
           <div className="text-base font-bold text-text-primary">No Delivery Orders Found</div>
           <div className="text-xs max-w-md mx-auto">
-            No orders match the selected filters. Clear filters or check back when the Account Manager confirms new client orders for procurement.
+            No orders match the selected queue filter ({selectedQueueTab.replace(/_/g, ' ')}). Clear filters or select another category.
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {orders.map((ord) => {
+          {displayedOrders.map((ord) => {
             const isExpanded = !!expandedCards[ord._id];
             const isPartiallyInwarded = ord.delivery_status === 'partially_inwarded';
             const isReadyForDispatch = ord.delivery_status === 'ready_for_dispatch';
@@ -641,6 +814,26 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                         </span>
                       )}
 
+                      {/* BOSKIT Assembly Badge */}
+                      {ord.kit_preparation_status && ord.kit_preparation_status !== 'not_required' && (
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-1 ${
+                          ord.kit_preparation_status === 'kit_ready'
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : ord.kit_preparation_status === 'in_assembly'
+                            ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 animate-pulse'
+                            : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        }`}>
+                          <FaTools className="text-[9px]" /> BOSKIT: {ord.kit_preparation_status.replace(/_/g, ' ')}
+                        </span>
+                      )}
+
+                      {/* Discrepancy Alert Badge */}
+                      {ord.discrepancy_details && ord.discrepancy_details.length > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1 animate-pulse">
+                          <FaExclamationTriangle className="text-[9px]" /> {ord.discrepancy_details.length} Inward Discrepancy
+                        </span>
+                      )}
+
                       {/* Required Vehicle Badge */}
                       {ord.required_vehicle && (
                         <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-surface-hover border border-border text-text-secondary flex items-center gap-1">
@@ -673,6 +866,29 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                     >
                       <HiOutlineClipboardCheck className="text-sm" />
                       <span>{isReadyForDispatch ? 'View / Adjust Inward' : 'Inward Material'}</span>
+                    </button>
+
+                    {/* BOSKIT Assembly Station Button */}
+                    <button
+                      onClick={() => handleOpenAssemblyModal(ord)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 border cursor-pointer ${
+                        ord.kit_preparation_status === 'kit_ready'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                          : ord.kit_preparation_status === 'in_assembly'
+                          ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 hover:bg-purple-500/25 animate-pulse'
+                          : 'bg-surface-hover text-text-primary border-border hover:border-primary/50'
+                      }`}
+                      title="BOSKIT Assembly & Preparation Station"
+                    >
+                      <FaTools className="text-xs text-primary" />
+                      <span>
+                        {ord.kit_preparation_status === 'kit_ready'
+                          ? 'Kit Ready'
+                          : ord.kit_preparation_status === 'in_assembly'
+                          ? 'Assembling Kit'
+                          : 'Assemble BOSKIT'}
+                      </span>
+                      {ord.kit_preparation_status === 'kit_ready' && <FaCheckCircle className="text-xs text-emerald-400" />}
                     </button>
 
                     {/* Send for Delivery Button (Boss Rule: Enabled ONLY when all materials are inwarded) */}
@@ -910,6 +1126,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                           <thead>
                             <tr className="border-b border-border bg-surface-hover/60 text-[10px] font-black uppercase tracking-wider text-text-muted">
                               <th className="p-3">SKU & Product Name</th>
+                              <th className="p-3">Fulfilment Method</th>
                               <th className="p-3">Category</th>
                               <th className="p-3 text-center">Ordered Qty</th>
                               <th className="p-3 text-center">Inwarded Qty</th>
@@ -931,6 +1148,41 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                                     <div className="text-[10px] font-mono text-primary mt-0.5">{it.sku}</div>
                                     {it.rack_location && (
                                       <div className="text-[9px] text-text-muted">Rack: {it.rack_location}</div>
+                                    )}
+                                  </td>
+                                  <td className="p-3">
+                                    {it.supply_fulfilment_method === 'company_pickup' ? (
+                                      <div className="space-y-0.5">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 flex items-center gap-1 w-max">
+                                          <FaTruck className="text-[9px]" /> Company Pickup
+                                        </span>
+                                        <div className="text-[10px] text-text-muted">
+                                          From: <strong className="text-text-primary">{it.supplier_warehouse || it.supplier_name || 'Supplier Hub'}</strong>
+                                        </div>
+                                        {it.supply_status && (
+                                          <div className="text-[9px] font-bold text-cyan-300 uppercase">
+                                            Status: {it.supply_status.replace(/_/g, ' ')}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : it.supply_fulfilment_method === 'supplier_delivery' ? (
+                                      <div className="space-y-0.5">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-max">
+                                          <FaBuilding className="text-[9px]" /> Supplier Delivery
+                                        </span>
+                                        <div className="text-[10px] text-text-muted">
+                                          By: <strong className="text-text-primary">{it.supplier_name || 'OEM Supplier'}</strong>
+                                        </div>
+                                        {it.supplier_dispatch_reference && (
+                                          <div className="text-[9px] font-mono text-amber-300">
+                                            Ref: {it.supplier_dispatch_reference}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center gap-1 w-max">
+                                        <FaWarehouse className="text-[9px]" /> Warehouse Stock
+                                      </span>
                                     )}
                                   </td>
                                   <td className="p-3 text-text-secondary text-[11px]">
@@ -1079,13 +1331,15 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                         <th className="p-3 text-center">Ordered</th>
                         <th className="p-3 text-center">Inwarded</th>
                         <th className="p-3 text-center">Pending</th>
-                        <th className="p-3 text-center w-32">Inward Qty</th>
-                        <th className="p-3 text-center w-36">Rack / Location</th>
+                        <th className="p-3 text-center w-28">Inward (OK)</th>
+                        <th className="p-3 text-center w-24">Damaged</th>
+                        <th className="p-3 text-center w-24">Missing</th>
+                        <th className="p-3 text-center w-32">Rack / Location</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {(selectedOrderForInward?.items || []).map((it) => {
-                        const input = inwardInputs[it.sku] || { qty: 0, rack_location: '' };
+                        const input = inwardInputs[it.sku] || { qty: 0, damaged_qty: 0, missing_qty: 0, rack_location: '' };
                         const isDone = it.pending_qty === 0;
 
                         return (
@@ -1124,11 +1378,51 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                                     }
                                   }));
                                 }}
-                                className={`w-24 text-center py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                                className={`w-20 text-center py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
                                   parseInt(input.qty) > it.pending_qty
                                     ? 'border-danger bg-danger/10 text-danger'
                                     : 'border-border bg-surface-hover text-text-primary focus:border-primary'
                                 }`}
+                              />
+                            </td>
+                            <td className="p-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                max={it.pending_qty}
+                                disabled={isDone}
+                                value={input.damaged_qty || 0}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setInwardInputs(prev => ({
+                                    ...prev,
+                                    [it.sku]: {
+                                      ...prev[it.sku],
+                                      damaged_qty: val === '' ? '' : parseInt(val) || 0
+                                    }
+                                  }));
+                                }}
+                                className="w-18 text-center py-1.5 px-2 rounded-lg text-xs font-bold border border-rose-500/40 bg-rose-500/10 text-rose-400 focus:border-rose-500"
+                              />
+                            </td>
+                            <td className="p-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                max={it.pending_qty}
+                                disabled={isDone}
+                                value={input.missing_qty || 0}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setInwardInputs(prev => ({
+                                    ...prev,
+                                    [it.sku]: {
+                                      ...prev[it.sku],
+                                      missing_qty: val === '' ? '' : parseInt(val) || 0
+                                    }
+                                  }));
+                                }}
+                                className="w-18 text-center py-1.5 px-2 rounded-lg text-xs font-bold border border-amber-500/40 bg-amber-500/10 text-amber-400 focus:border-amber-500"
                               />
                             </td>
                             <td className="p-3 text-center">
@@ -1147,7 +1441,7 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                                     }
                                   }));
                                 }}
-                                className="w-32 py-1.5 px-2 rounded-lg text-xs border border-border bg-surface-hover text-text-primary focus:border-primary"
+                                className="w-28 py-1.5 px-2 rounded-lg text-xs border border-border bg-surface-hover text-text-primary focus:border-primary"
                               />
                             </td>
                           </tr>
@@ -1156,6 +1450,16 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Discrepancy Note banner if any damaged or missing */}
+                {Object.values(inwardInputs).some(inp => (parseInt(inp?.damaged_qty) || 0) > 0 || (parseInt(inp?.missing_qty) || 0) > 0) && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+                    <FaExclamationTriangle className="text-sm shrink-0" />
+                    <span>
+                      <strong>Discrepancy Detected:</strong> Damaged items will be physically isolated in warehouse quarantine. Accounts will be automatically notified to initiate supplier debit notes / insurance claims.
+                    </span>
+                  </div>
+                )}
 
                 {/* Inward Remarks */}
                 <div>
@@ -1372,6 +1676,259 @@ export default function NewOrdersDeliveryManager({ onNavigateToOutward }) {
           </form>
         )}
       </Dialog>
+
+      {/* ── Boss Specification: BOSKIT Preparation & Assembly Station Modal ── */}
+      <Dialog
+        isOpen={assemblyModalOpen}
+        onClose={() => setAssemblyModalOpen(false)}
+        title={`BOSKIT Assembly & Preparation Station: Order #${selectedOrderForAssembly?.order_number || ''}`}
+        size="xl"
+      >
+        {selectedOrderForAssembly && (() => {
+          const ord = selectedOrderForAssembly;
+          const kitStatus = ord.kit_preparation_status || 'not_required';
+          const totalPending = (ord.items || []).reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+          const hasShortage = totalPending > 0;
+          const assemblyDetails = ord.kit_assembly_details || {};
+
+          return (
+            <div className="space-y-5 p-1">
+              {/* Order Context Strip */}
+              <div className="p-3.5 bg-surface-hover rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="font-extrabold text-text-primary text-sm flex items-center gap-2">
+                    <span className="text-primary font-mono">{ord.delivery_order_id}</span>
+                    <span>• {ord.customer_name}</span>
+                  </div>
+                  <div className="text-text-muted mt-0.5">
+                    Kit Status: <strong className="text-text-primary uppercase">{kitStatus.replace(/_/g, ' ')}</strong>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                    kitStatus === 'kit_ready'
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                      : kitStatus === 'in_assembly'
+                      ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 animate-pulse'
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {kitStatus.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Shortage Alert Banner if items pending */}
+              {hasShortage && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs flex items-center gap-2">
+                  <FaExclamationTriangle className="text-sm shrink-0" />
+                  <div>
+                    <strong>Component Shortage Alert:</strong> {totalPending} units are still pending inward from supplier or inventory. Complete inward before marking the BOSKIT ready for dispatch.
+                  </div>
+                </div>
+              )}
+
+              {/* 5-Stage Visual Workflow */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-center text-xs">
+                {[
+                  {
+                    step: '1. Picking',
+                    label: 'Pick Components',
+                    isDone: ['ready_for_assembly', 'in_assembly', 'kit_ready'].includes(kitStatus) && !hasShortage,
+                    isCurrent: kitStatus === 'awaiting_components' || kitStatus === 'ready_for_assembly'
+                  },
+                  {
+                    step: '2. Assembly',
+                    label: 'Assembly Station',
+                    isDone: ['in_assembly', 'kit_ready'].includes(kitStatus) && assemblyDetails.assembly_status === 'completed',
+                    isCurrent: kitStatus === 'in_assembly'
+                  },
+                  {
+                    step: '3. QC Check',
+                    label: 'Quality Inspection',
+                    isDone: assemblyDetails.qc_status === 'passed',
+                    isCurrent: kitStatus === 'in_assembly' && assemblyDetails.qc_status === 'pending'
+                  },
+                  {
+                    step: '4. Packaging',
+                    label: 'Pack & Label Barcode',
+                    isDone: !!assemblyDetails.kit_serial_barcode,
+                    isCurrent: kitStatus === 'in_assembly' && assemblyDetails.qc_status === 'passed'
+                  },
+                  {
+                    step: '5. Kit Ready',
+                    label: 'Dispatch Staging',
+                    isDone: kitStatus === 'kit_ready',
+                    isCurrent: kitStatus === 'kit_ready'
+                  }
+                ].map((st, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-xl border transition-all ${
+                      st.isDone
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : st.isCurrent
+                        ? 'bg-primary/10 border-primary/40 text-primary font-bold'
+                        : 'bg-surface-hover/50 border-border text-text-muted'
+                    }`}
+                  >
+                    <div className="text-[10px] font-black uppercase tracking-wider">{st.step}</div>
+                    <div className="text-xs mt-1 font-semibold">{st.label}</div>
+                    <div className="text-[10px] mt-1">
+                      {st.isDone ? '✓ Completed' : st.isCurrent ? '● Active' : '○ Pending'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* BOM Checklist for this Kit */}
+              <div>
+                <div className="text-xs font-black text-text-primary uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>Kit Components Verification ({(ord.items || []).length} SKUs)</span>
+                  <span className="text-[11px] text-text-muted font-normal">
+                    {hasShortage ? `${totalPending} items awaiting inward` : 'All items verified'}
+                  </span>
+                </div>
+                <div className="border border-border rounded-xl overflow-hidden bg-surface max-h-[220px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-surface-hover border-b border-border text-[10px] font-black uppercase text-text-muted">
+                      <tr>
+                        <th className="p-2.5">Component</th>
+                        <th className="p-2.5">Fulfilment Method</th>
+                        <th className="p-2.5 text-center">Required</th>
+                        <th className="p-2.5 text-center">Inwarded</th>
+                        <th className="p-2.5 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(ord.items || []).map((it) => (
+                        <tr key={it.sku} className="hover:bg-surface-hover/30">
+                          <td className="p-2.5">
+                            <div className="font-bold text-text-primary">{it.product_name}</div>
+                            <div className="text-[10px] font-mono text-primary">{it.sku}</div>
+                          </td>
+                          <td className="p-2.5 text-[11px]">
+                            {it.supply_fulfilment_method === 'company_pickup' ? (
+                              <span className="text-cyan-400 font-semibold">Company Pickup</span>
+                            ) : it.supply_fulfilment_method === 'supplier_delivery' ? (
+                              <span className="text-amber-400 font-semibold">Supplier Delivery</span>
+                            ) : (
+                              <span className="text-purple-400 font-semibold">Warehouse Stock</span>
+                            )}
+                          </td>
+                          <td className="p-2.5 text-center font-bold">{it.ordered_qty}</td>
+                          <td className="p-2.5 text-center font-bold text-success">{it.received_qty}</td>
+                          <td className="p-2.5 text-center">
+                            {it.pending_qty === 0 ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success">
+                                Ready
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400">
+                                {it.pending_qty} Pending
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Kit Barcode Label Generation */}
+              <div className="p-3.5 bg-surface-hover/60 border border-border rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+                    <FaBarcode className="text-primary text-sm" /> SolarKits Barcode & Serial Label
+                  </label>
+                  <span className="text-[10px] text-text-muted">Unique tracking barcode for assembled BOSKIT</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={kitBarcodeLabel}
+                    onChange={(e) => setKitBarcodeLabel(e.target.value)}
+                    placeholder="e.g. SK-KIT-1002-9988"
+                    className="flex-1 p-2 text-xs font-mono font-bold bg-surface border border-border rounded-lg text-text-primary focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setKitBarcodeLabel(`SK-KIT-${ord.order_number}-${Date.now().toString().slice(-4)}`)}
+                    className="px-3 py-2 rounded-lg bg-surface border border-border text-xs font-bold text-text-secondary hover:text-text-primary cursor-pointer"
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons to Advance Assembly Stage */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setAssemblyModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-surface-hover border border-border text-text-secondary cursor-pointer"
+                >
+                  Close
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {kitStatus !== 'in_assembly' && kitStatus !== 'kit_ready' && (
+                    <button
+                      type="button"
+                      disabled={submittingAssembly}
+                      onClick={() => handleAdvanceAssembly('in_assembly')}
+                      className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-purple-600 hover:bg-purple-500 text-white cursor-pointer shadow-sm flex items-center gap-1.5"
+                    >
+                      {submittingAssembly ? <FaSpinner className="animate-spin" /> : <FaTools />}
+                      <span>Move to Assembly Station</span>
+                    </button>
+                  )}
+
+                  {kitStatus === 'in_assembly' && assemblyDetails.qc_status !== 'passed' && (
+                    <button
+                      type="button"
+                      disabled={submittingAssembly}
+                      onClick={() => handleAdvanceAssembly('quality_check')}
+                      className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-teal-600 hover:bg-teal-500 text-white cursor-pointer shadow-sm flex items-center gap-1.5"
+                    >
+                      {submittingAssembly ? <FaSpinner className="animate-spin" /> : <FaClipboardCheck />}
+                      <span>Pass QC Inspection</span>
+                    </button>
+                  )}
+
+                  {kitStatus === 'in_assembly' && assemblyDetails.qc_status === 'passed' && (
+                    <button
+                      type="button"
+                      disabled={submittingAssembly}
+                      onClick={() => handleAdvanceAssembly('packed')}
+                      className="px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-sm flex items-center gap-1.5"
+                    >
+                      {submittingAssembly ? <FaSpinner className="animate-spin" /> : <FaBarcode />}
+                      <span>Print Label & Pack Kit</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={submittingAssembly || hasShortage || kitStatus === 'kit_ready'}
+                    onClick={() => handleAdvanceAssembly('kit_ready')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all ${
+                      hasShortage || kitStatus === 'kit_ready'
+                        ? 'bg-surface-hover text-text-muted border border-border cursor-not-allowed opacity-50'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
+                    }`}
+                    title={hasShortage ? 'Cannot mark kit ready while components are pending inward' : 'Mark BOSKIT Ready for Dispatch'}
+                  >
+                    {submittingAssembly ? <FaSpinner className="animate-spin" /> : <FaCheckDouble />}
+                    <span>{kitStatus === 'kit_ready' ? 'Kit is Ready' : 'Mark BOSKIT Ready'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </Dialog>
     </div>
   );
 }
+
