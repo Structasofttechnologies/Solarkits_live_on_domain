@@ -4172,6 +4172,7 @@ const create_procurement_group = async (req, res) => {
       ...fpoList.map(o => o.order_number),
       ...((orders_data || []).map(o => o.order_number)),
     ].filter(Boolean);
+    orderNumbers = [...new Set(orderNumbers)];
 
     if (orderNumbers.length === 0) {
       orderNumbers = (order_ids || []).map((id, idx) => `ORD-EPC-${year}-${String(seq * 100 + idx + 1)}`);
@@ -4273,15 +4274,17 @@ const create_procurement_group = async (req, res) => {
         unallocated_kits: calc.vehicle_assignment?.unallocated_kits || 0,
       },
       supplier_groups: dynamicBOM.map(b => ({
-        supplier_name: b.supplier_name,
-        is_oem: b.category?.includes('Module') || b.category?.includes('Panel'),
-        warehouse_code: 'WH-01',
-        warehouse_name: 'Central Warehouse',
+        supplier_id: (b.supplier_id && mongoose.Types.ObjectId.isValid(b.supplier_id)) ? b.supplier_id : null,
+        supplier_name: b.supplier_name || 'Standard Tier-1 Supplier',
+        is_oem: b.category?.includes('Module') || b.category?.includes('Panel') || Boolean(b.is_oem),
+        warehouse_id: (b.warehouse_id && mongoose.Types.ObjectId.isValid(b.warehouse_id)) ? b.warehouse_id : null,
+        warehouse_code: b.warehouse_code || b.warehouse || 'WH-01',
+        warehouse_name: b.warehouse_name || 'Central Warehouse',
         items: [{
-          product_name: b.component_name,
-          quantity: b.total_units || totalKits,
-          unit: 'Units',
-          is_mapped: true,
+          product_name: b.component_name || b.product || b.product_name || 'Solar Kit Component',
+          quantity: b.total_units || b.qty || b.quantity || totalKits,
+          unit: b.unit || 'Units',
+          is_mapped: b.is_mapped !== false,
         }],
       })),
       geographic_summary: {
@@ -4313,28 +4316,31 @@ const create_procurement_group = async (req, res) => {
     await newGroup.save();
 
     // 5. Update linked customer orders status
-    await Promise.all([
-      EpcOrder.updateMany(
-        { _id: { $in: order_ids } },
-        {
-          $set: {
-            account_processing_status: 'Sent to Procurement',
-            procurement_group_id: newGroup._id,
-            'procurement_status.overall_status': 'awaiting_supplier_procurement',
-          },
-        }
-      ),
-      FpoOrder.updateMany(
-        { _id: { $in: order_ids } },
-        {
-          $set: {
-            account_processing_status: 'Sent to Procurement',
-            procurement_group_id: newGroup._id,
-            'procurement_status.overall_status': 'awaiting_supplier_procurement',
-          },
-        }
-      ),
-    ]);
+    const validMongoOrderIds = (order_ids || []).filter(id => mongoose.Types.ObjectId.isValid(id));
+    if (validMongoOrderIds.length > 0) {
+      await Promise.all([
+        EpcOrder.updateMany(
+          { _id: { $in: validMongoOrderIds } },
+          {
+            $set: {
+              account_processing_status: 'Sent to Procurement',
+              procurement_group_id: newGroup._id,
+              'procurement_status.overall_status': 'awaiting_supplier_procurement',
+            },
+          }
+        ),
+        FpoOrder.updateMany(
+          { _id: { $in: validMongoOrderIds } },
+          {
+            $set: {
+              account_processing_status: 'Sent to Procurement',
+              procurement_group_id: newGroup._id,
+              'procurement_status.overall_status': 'awaiting_supplier_procurement',
+            },
+          }
+        ),
+      ]);
+    }
 
     return res.status(201).json({
       status: 'success',

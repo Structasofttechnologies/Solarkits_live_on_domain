@@ -238,11 +238,11 @@ async function createEpcOfflineOrder({
       // So: baseExclGst = ourPrice / (1 + gstRate/100)
       // grand_total = subtotal (base) + tax = ourPrice × qty  ✓
       const unitPriceInclGstPaise = Math.round(ourPriceRupees * 100); // what EPC pays per kit
-      const unitBaseExclGstPaise  = Math.round(unitPriceInclGstPaise / (1 + gstRate / 100));
-      const unitTaxPaise          = unitPriceInclGstPaise - unitBaseExclGstPaise;
+      const unitBaseExclGstPaise = Math.round(unitPriceInclGstPaise / (1 + gstRate / 100));
+      const unitTaxPaise = unitPriceInclGstPaise - unitBaseExclGstPaise;
 
       const itemBaseSubtotal = qty * unitBaseExclGstPaise;
-      const itemTax          = qty * unitTaxPaise;
+      const itemTax = qty * unitTaxPaise;
 
       subtotalPaise += itemBaseSubtotal;
       taxTotalPaise += itemTax;
@@ -315,7 +315,7 @@ async function createEpcOfflineOrder({
         const rawDb = mongoose.connection.db;
         if (rawDb && mongoose.Types.ObjectId.isValid(item.kit_id)) {
           const kDoc = await rawDb.collection('pc_combo_kits').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) })
-                    || await rawDb.collection('pc_comobo_kit').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) });
+            || await rawDb.collection('pc_comobo_kit').findOne({ _id: new mongoose.Types.ObjectId(item.kit_id) });
           if (kDoc) {
             if (!itemName || itemName === 'Solar Component') itemName = kDoc.name || kDoc.kit_name || kDoc.title;
             if (!itemImage) itemImage = kDoc.kit_image || kDoc.image;
@@ -452,159 +452,180 @@ async function createEpcOfflineOrder({
     },
   ];
 
-  // 4. Create EPC Order in 'pending_verification' status with atomic rollback guard
+  const resolvedPaymentMethod = offline_payment_data.payment_method || (offline_payment_data.payment_gateway_used === 'icici_ecollection' ? 'icici_ecollection' : 'offline_bank_transfer');
+  const resolvedGatewayUsed = offline_payment_data.payment_gateway_used || (offline_payment_data.payment_method === 'icici_ecollection' ? 'icici_ecollection' : 'bank_transfer');
+  const isOnlineECollection = resolvedPaymentMethod === 'icici_ecollection' || resolvedGatewayUsed === 'icici_ecollection';
+
+  if (isOnlineECollection && initialMilestones[0]) {
+    initialMilestones[0].payment_status = 'verified';
+    initialMilestones[0].verified_at = new Date();
+    initialMilestones[0].notes = 'Online ICICI eCollection advance verified';
+  }
+
+  // 4. Create EPC Order with atomic rollback guard
   let epcOrder = null;
   try {
     epcOrder = await EpcOrder.create({
-      order_number: orderNumber,
-      epc_id,
-      warehouse_id: assignedWarehouseId,
-      reseller_id: targetResellerId || null,
-      routing_source: route.routing_source,
-      fulfillment_source: fulfillmentSource,
-      fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
-      order_load_metrics: (() => {
-        // Always compute server-side from processedItems — never blindly trust frontend values.
-        // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
-        const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-        const serverKw = processedItems.reduce((acc, it) => {
-          let kw = parseFloat(it.capacity || '0') || 0;
-          if (kw === 0) {
-            const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
-            if (match) kw = parseFloat(match[1]) || 0;
-          }
-          return acc + (it.quantity || 0) * kw;
-        }, 0);
-        const serverWeight = processedItems.reduce((acc, it) => {
-          let kw = parseFloat(it.capacity || '0') || 0;
-          if (kw === 0) {
-            const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
-            if (match) kw = parseFloat(match[1]) || 0;
-          }
-          const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
-          return acc + (it.quantity || 0) * unitW;
-        }, 0);
-
-        // Supplement with frontend metrics only when they have richer data (higher kit count)
-        const frontendKits = (order_load_metrics?.total_kits || 0);
-        return {
-          total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
-          total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
-          total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
-        };
-      })(),
-      items: processedItems,
-      subtotal_paise: totals.subtotal_paise,
-      tax_total_paise: totals.tax_total_paise,
-      shipping_fee_paise: totals.shipping_fee_paise || 0,
-      grand_total_paise: totals.grand_total_paise,
-      reseller_total_margin_paise: totalResellerMarginPaise,
-      platform_total_commission_paise: totalPlatformCommissionPaise,
-      order_status: 'pending',
-      payment_method: offline_payment_data.payment_method || (offline_payment_data.payment_gateway_used === 'icici_ecollection' ? 'icici_ecollection' : 'offline_bank_transfer'),
-      payment_gateway_used: offline_payment_data.payment_gateway_used || (offline_payment_data.payment_method === 'icici_ecollection' ? 'icici_ecollection' : 'bank_transfer'),
-      payment_status: 'pending_verification',
-      payment_reference: cleanUtr,
-      payment_milestones: {
-        configured_milestone_id: milestoneRule?._id || null,
-        total_order_amount: grandTotalRupees,
-        advance_percentage: m1Pct,
-        advance_amount: advanceAmountRupees,
-        remaining_percentage: m2Pct,
-        remaining_amount: remainingAmountRupees,
-        current_milestone_due: 1,
-        milestone_verification_status: 'awaiting_advance',
-        milestones: initialMilestones,
-      },
-      offline_payment: {
-        utr_number: cleanUtr,
-        amount_paid: Number(amount_paid) || advanceAmountRupees,
-        payment_date: payment_date ? new Date(payment_date) : new Date(),
-        receipt_url: receipt_url || null,
-        receipt_filename: receipt_filename || null,
-        sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
-        account_holder_name: account_holder_name ? account_holder_name.trim() : null,
-        verification_status: 'pending',
-        admin_approval_status: 'pending',
-        resubmitted_count: 0,
-      },
-      is_end_customer_sale: true,
-      delivery_address: {
-        line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
-        state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
-        state_name: delivery_address.state_name || epc?.state_name || null,
-        district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
-        district_name: delivery_address.district_name || epc?.district_name || null,
-        pincode: delivery_address.pincode || epc?.pincode || null,
-        contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
-        contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
-      },
-      reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
-    });
-
-    // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
-    if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
-      const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
-      try {
-        await Reseller.findByIdAndUpdate(targetResellerId, {
-          $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
-        });
-      } catch (capacityErr) {
-        console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
-      }
-    }
-
-    // 5. Hold stock in inventory ledger ONLY IF fulfilling directly from franchise warehouse stock
-    if (targetResellerId && fulfillmentSource === 'franchise_warehouse') {
-      for (const item of processedItems) {
-        const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
-        if (currentBalance >= item.quantity) {
-          await ResellerInventoryLedger.create({
-            reseller_id: targetResellerId,
-            item_type: item.scope_type,
-            product_id: item.product_id || null,
-            kit_id: item.kit_id || null,
-            movement_type: 'reservation_hold',
-            quantity: -item.quantity,
-            balance_after: Math.max(0, currentBalance - item.quantity),
-            unit_cost_paise: item.unit_price_paise,
-            total_valuation_paise: item.total_price_paise,
-            reference_type: 'epc_order',
-            reference_id: epcOrder._id,
-            reason: `Pending offline UTR verification for order ${orderNumber}`,
-            actor_id: actor_id || epc_id,
-          });
-        }
-      }
-    }
-
-    await logAudit({
-      actor_type: 'epc_buyer',
-      actor_id: epc_id,
-      action: 'EPC_OFFLINE_PAYMENT_SUBMITTED',
-      entity_type: 'epc_orders',
-      entity_id: epcOrder._id,
-      after_snapshot: {
-        order_number: orderNumber,
-        grand_total_paise: totals.grand_total_paise,
-        utr_number: cleanUtr,
-        reseller_id: targetResellerId,
-      },
-      req,
-    });
-  } catch (creationErr) {
-    if (epcOrder?._id) {
-      await EpcOrder.findByIdAndDelete(epcOrder._id).catch(() => {});
-    }
-    throw creationErr;
-  }
-
-  return {
-    order: epcOrder,
-    reseller_id: targetResellerId,
+    order_number: orderNumber,
+    order_request_id: isOnlineECollection ? null : `REQ-EPC-${orderNumber.replace(/^ORD-EPC-/, '')}`,
+    is_official_order_generated: isOnlineECollection ? true : false,
+    epc_id,
+    warehouse_id: assignedWarehouseId,
+    reseller_id: targetResellerId || null,
     routing_source: route.routing_source,
     fulfillment_source: fulfillmentSource,
-  };
+    fulfillment_mode: fulfillment_mode || (targetResellerId ? 'franchisee_warehouse' : 'direct_site'),
+    order_load_metrics: (() => {
+      // Always compute server-side from processedItems — never blindly trust frontend values.
+      // Frontend may send item.quantity (undefined) instead of item.qty, producing wrong totals.
+      const serverKits = processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+      const serverKw = processedItems.reduce((acc, it) => {
+        let kw = parseFloat(it.capacity || '0') || 0;
+        if (kw === 0) {
+          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+          if (match) kw = parseFloat(match[1]) || 0;
+        }
+        return acc + (it.quantity || 0) * kw;
+      }, 0);
+      const serverWeight = processedItems.reduce((acc, it) => {
+        let kw = parseFloat(it.capacity || '0') || 0;
+        if (kw === 0) {
+          const match = `${it.item_name || ''} ${it.description || ''}`.match(/(\d+(?:\.\d+)?)\s*k?w\b/i);
+          if (match) kw = parseFloat(match[1]) || 0;
+        }
+        const unitW = it.unit_weight_kg || (kw > 0 ? Math.round(kw * 75) : 150);
+        return acc + (it.quantity || 0) * unitW;
+      }, 0);
+
+      // Supplement with frontend metrics only when they have richer data (higher kit count)
+      const frontendKits = (order_load_metrics?.total_kits || 0);
+      return {
+        total_kits: serverKits > 0 ? serverKits : (frontendKits || 1),
+        total_kw: serverKw > 0 ? serverKw : (order_load_metrics?.total_kw || serverKits * 5),
+        total_weight_kg: serverWeight > 0 ? serverWeight : (order_load_metrics?.total_weight_kg || serverKits * 150),
+      };
+    })(),
+    items: processedItems,
+    subtotal_paise: totals.subtotal_paise,
+    tax_total_paise: totals.tax_total_paise,
+    shipping_fee_paise: totals.shipping_fee_paise || 0,
+    grand_total_paise: totals.grand_total_paise,
+    reseller_total_margin_paise: totalResellerMarginPaise,
+    platform_total_commission_paise: totalPlatformCommissionPaise,
+    order_status: isOnlineECollection ? 'confirmed' : 'pending',
+    payment_method: resolvedPaymentMethod,
+    payment_gateway_used: resolvedGatewayUsed,
+    payment_status: isOnlineECollection ? (remainingAmountRupees > 0 ? 'pending_verification' : 'captured') : 'pending_verification',
+    payment_reference: cleanUtr,
+    payment_milestones: {
+      configured_milestone_id: milestoneRule?._id || null,
+      total_order_amount: grandTotalRupees,
+      advance_percentage: m1Pct,
+      advance_amount: advanceAmountRupees,
+      remaining_percentage: m2Pct,
+      remaining_amount: remainingAmountRupees,
+      current_milestone_due: isOnlineECollection ? (remainingAmountRupees > 0 ? 2 : 1) : 1,
+      milestone_verification_status: isOnlineECollection ? (remainingAmountRupees > 0 ? 'advance_verified' : 'fully_paid') : 'awaiting_advance',
+      milestones: initialMilestones,
+    },
+    payment_tracking: {
+      customer_payment_status: isOnlineECollection ? (remainingAmountRupees > 0 ? 'Partially Paid' : 'Paid') : 'Verification Pending',
+      current_stage: isOnlineECollection ? (remainingAmountRupees > 0 ? 'production_milestone' : 'final_settlement') : 'accounts_verification',
+      delay_signal: 'green',
+      days_elapsed: 0,
+      total_verified_amount: isOnlineECollection ? (Number(amount_paid) || advanceAmountRupees) : 0,
+      outstanding_amount: isOnlineECollection ? remainingAmountRupees : grandTotalRupees,
+    },
+    offline_payment: {
+      utr_number: cleanUtr,
+      amount_paid: Number(amount_paid) || advanceAmountRupees,
+      payment_date: payment_date ? new Date(payment_date) : new Date(),
+      receipt_url: receipt_url || null,
+      receipt_filename: receipt_filename || null,
+      sender_bank_name: sender_bank_name ? sender_bank_name.trim() : null,
+      account_holder_name: account_holder_name ? account_holder_name.trim() : null,
+      verification_status: isOnlineECollection ? 'approved' : 'pending',
+      admin_approval_status: isOnlineECollection ? 'approved' : 'pending',
+      admin_remarks: isOnlineECollection ? 'Online ICICI eCollection checkout — Admin Approval not required.' : null,
+      resubmitted_count: 0,
+    },
+    is_end_customer_sale: true,
+    delivery_address: {
+      line: delivery_address.line || delivery_address.address_line || delivery_address.address || epc?.address || 'Site delivery address registered with EPC profile',
+      state_id: (delivery_address.state_id && mongoose.Types.ObjectId.isValid(delivery_address.state_id)) ? delivery_address.state_id : (epc?.states?.[0] || null),
+      state_name: delivery_address.state_name || epc?.state_name || null,
+      district_id: (delivery_address.district_id && mongoose.Types.ObjectId.isValid(delivery_address.district_id)) ? delivery_address.district_id : (epc?.districts?.[0] || null),
+      district_name: delivery_address.district_name || epc?.district_name || null,
+      pincode: delivery_address.pincode || epc?.pincode || null,
+      contact_name: delivery_address.contact_name || epc?.name || 'Site Manager',
+      contact_phone: delivery_address.contact_phone || delivery_address.contact_number || epc?.whatsapp || null,
+    },
+    reservation_expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48-hr hold while under accounts review
+  });
+
+  // Double commit prevention: If franchisee warehouse, increment allocated_incoming_kits
+  if (targetResellerId && fulfillment_mode === 'franchisee_warehouse') {
+    const incomingKits = (order_load_metrics?.total_kits) || processedItems.reduce((acc, it) => acc + (it.quantity || 0), 0);
+    try {
+      await Reseller.findByIdAndUpdate(targetResellerId, {
+        $inc: { 'warehouse_capacity.allocated_incoming_kits': incomingKits }
+      });
+    } catch (capacityErr) {
+      console.warn('[createEpcOfflineOrder] Could not increment allocated_incoming_kits on reseller:', capacityErr.message);
+    }
+  }
+
+  // 5. Hold stock in inventory ledger ONLY IF fulfilling directly from franchise warehouse stock
+  if (targetResellerId && fulfillmentSource === 'franchise_warehouse') {
+    for (const item of processedItems) {
+      const currentBalance = await calculateCurrentItemStock(targetResellerId, item.scope_type, item.product_id, item.kit_id);
+      if (currentBalance >= item.quantity) {
+        await ResellerInventoryLedger.create({
+          reseller_id: targetResellerId,
+          item_type: item.scope_type,
+          product_id: item.product_id || null,
+          kit_id: item.kit_id || null,
+          movement_type: 'reservation_hold',
+          quantity: -item.quantity,
+          balance_after: Math.max(0, currentBalance - item.quantity),
+          unit_cost_paise: item.unit_price_paise,
+          total_valuation_paise: item.total_price_paise,
+          reference_type: 'epc_order',
+          reference_id: epcOrder._id,
+          reason: `Pending offline UTR verification for order ${orderNumber}`,
+          actor_id: actor_id || epc_id,
+        });
+      }
+    }
+  }
+
+  await logAudit({
+    actor_type: 'epc_buyer',
+    actor_id: epc_id,
+    action: 'EPC_OFFLINE_PAYMENT_SUBMITTED',
+    entity_type: 'epc_orders',
+    entity_id: epcOrder._id,
+    after_snapshot: {
+      order_number: orderNumber,
+      grand_total_paise: totals.grand_total_paise,
+      utr_number: cleanUtr,
+      reseller_id: targetResellerId,
+    },
+    req,
+  });
+} catch (creationErr) {
+  if (epcOrder?._id) {
+    await EpcOrder.findByIdAndDelete(epcOrder._id).catch(() => { });
+  }
+  throw creationErr;
+}
+
+return {
+  order: epcOrder,
+  reseller_id: targetResellerId,
+  routing_source: route.routing_source,
+  fulfillment_source: fulfillmentSource,
+};
 }
 
 /**
@@ -693,7 +714,7 @@ async function reviewEpcOfflinePayment({
   }
 
   const hasMilestones = Boolean(order.payment_milestones && Array.isArray(order.payment_milestones.milestones) && order.payment_milestones.milestones.length > 0);
-  
+
   // Auto-detect target milestone if not explicitly passed
   let targetMilestoneNum = Number(milestone_number);
   if (!targetMilestoneNum && hasMilestones) {
@@ -758,7 +779,7 @@ async function reviewEpcOfflinePayment({
     } else {
       // ── VERIFY MILESTONE 2 (70% Final Payment Before Dispatch) OR LEGACY ORDER ──
       order.payment_status = 'captured';
-      
+
       // If currently confirmed or processing, staging at gate is ready
       if (['pending', 'confirmed', 'processing'].includes(order.order_status)) {
         order.order_status = 'ready_for_dispatch';
@@ -1171,18 +1192,18 @@ async function checkWarehouseCapacityForMode({ fulfillment_mode, order_load_metr
     }
 
     const cap = reseller.warehouse_capacity || {};
-    const maxKits         = cap.max_kits || 0;
-    const currentStock    = cap.current_stock_kits || 0;
+    const maxKits = cap.max_kits || 0;
+    const currentStock = cap.current_stock_kits || 0;
     const allocatedIncoming = cap.allocated_incoming_kits || 0;
-    const currentLoad     = currentStock + allocatedIncoming;
-    const availableSlots  = Math.max(0, maxKits - currentLoad);
-    const allowed         = maxKits === 0 || availableSlots >= orderKits;
+    const currentLoad = currentStock + allocatedIncoming;
+    const availableSlots = Math.max(0, maxKits - currentLoad);
+    const allowed = maxKits === 0 || availableSlots >= orderKits;
 
     return {
       allowed,
       available_capacity: maxKits === 0 ? 500 : availableSlots,
-      max_capacity:       maxKits === 0 ? 500 : maxKits,
-      current_load:       currentLoad,
+      max_capacity: maxKits === 0 ? 500 : maxKits,
+      current_load: currentLoad,
       warehousing_entity: reseller.business_name || 'Franchisee Warehouse',
       message: allowed
         ? `Sufficient capacity. ${maxKits === 0 ? 'Adequate' : availableSlots} kit slots available.`
@@ -1217,16 +1238,16 @@ async function checkWarehouseCapacityForMode({ fulfillment_mode, order_load_metr
       };
     }
 
-    const maxKits           = warehouse.max_kit_capacity || 0;
-    const allocated         = warehouse.allocated_incoming_capacity || 0;
-    const availableSlots    = Math.max(0, maxKits - allocated);
-    const allowed           = maxKits === 0 || availableSlots >= orderKits;
+    const maxKits = warehouse.max_kit_capacity || 0;
+    const allocated = warehouse.allocated_incoming_capacity || 0;
+    const availableSlots = Math.max(0, maxKits - allocated);
+    const allowed = maxKits === 0 || availableSlots >= orderKits;
 
     return {
       allowed,
       available_capacity: maxKits === 0 ? 1000 : availableSlots,
-      max_capacity:       maxKits === 0 ? 1000 : maxKits,
-      current_load:       allocated,
+      max_capacity: maxKits === 0 ? 1000 : maxKits,
+      current_load: allocated,
       warehousing_entity: warehouse.warehouse_code || 'EPC Warehouse',
       message: allowed
         ? `Sufficient capacity. ${maxKits === 0 ? 'Adequate' : availableSlots} kit slots available.`
@@ -1270,33 +1291,33 @@ async function assignVehicleToOrder({ order_id, vehicle, driver, is_recommended,
 
   order.order_status = 'vehicle_assigned';
   order.assigned_vehicle = {
-    vehicle_id:          vehicle._id || vehicle.id,
-    vehicle_name:        vehicle.name,
-    vehicle_type:        vehicle.vehicle_type || null,
+    vehicle_id: vehicle._id || vehicle.id,
+    vehicle_name: vehicle.name,
+    vehicle_type: vehicle.vehicle_type || null,
     registration_number: vehicle.registration_number,
-    driver_id:           driver?.driver_id    || null,
-    driver_name:         driver?.driver_name  || null,
-    driver_contact:      driver?.driver_contact || null,
-    is_recommended:      is_recommended !== false,
-    override_reason:     is_recommended === false ? (override_reason || null) : null,
-    overridden_by:       is_recommended === false ? admin_user_id : null,
-    overridden_at:       is_recommended === false ? new Date() : null,
-    assigned_by:         admin_user_id,
-    assigned_at:         new Date(),
+    driver_id: driver?.driver_id || null,
+    driver_name: driver?.driver_name || null,
+    driver_contact: driver?.driver_contact || null,
+    is_recommended: is_recommended !== false,
+    override_reason: is_recommended === false ? (override_reason || null) : null,
+    overridden_by: is_recommended === false ? admin_user_id : null,
+    overridden_at: is_recommended === false ? new Date() : null,
+    assigned_by: admin_user_id,
+    assigned_at: new Date(),
   };
 
   await order.save();
 
   await logAudit({
     actor_type: 'cms_user',
-    actor_id:   admin_user_id,
-    action:     'EPC_VEHICLE_ASSIGNED',
-    entity_type:'epc_orders',
-    entity_id:  order._id,
+    actor_id: admin_user_id,
+    action: 'EPC_VEHICLE_ASSIGNED',
+    entity_type: 'epc_orders',
+    entity_id: order._id,
     after_snapshot: {
       order_number: order.order_number,
-      status:       'vehicle_assigned',
-      vehicle:      vehicle.name,
+      status: 'vehicle_assigned',
+      vehicle: vehicle.name,
       registration: vehicle.registration_number,
       is_recommended,
     },
@@ -1337,12 +1358,12 @@ async function assignVehicleToOrder({ order_id, vehicle, driver, is_recommended,
  */
 async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_data, milestone, req }) {
   const STAGE_FLOW = {
-    processing:           ['pending', 'confirmed', 'allocated', 'processing'],
-    ready_for_dispatch:   ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch'],
-    dispatched:           ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched'],
-    in_transit:           ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit'],
-    reached_destination:  ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit', 'reached_destination'],
-    delivered:            ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit', 'reached_destination', 'delivered'],
+    processing: ['pending', 'confirmed', 'allocated', 'processing'],
+    ready_for_dispatch: ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch'],
+    dispatched: ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched'],
+    in_transit: ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit'],
+    reached_destination: ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit', 'reached_destination'],
+    delivered: ['confirmed', 'processing', 'vehicle_assigned', 'ready_for_dispatch', 'dispatched', 'in_transit', 'reached_destination', 'delivered'],
   };
 
   const order = await EpcOrder.findById(order_id);
@@ -1363,13 +1384,13 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
   if (new_status === 'dispatched' && dispatch_data) {
     order.dispatch_tracking = {
       ...order.dispatch_tracking?.toObject?.() || {},
-      courier_name:       dispatch_data.courier_name    || 'Company Fleet Logistics',
-      tracking_number:    dispatch_data.tracking_number || `TRK-${order.order_number}`,
-      tracking_url:       dispatch_data.tracking_url    || null,
-      dispatched_at:      new Date(),
+      courier_name: dispatch_data.courier_name || 'Company Fleet Logistics',
+      tracking_number: dispatch_data.tracking_number || `TRK-${order.order_number}`,
+      tracking_url: dispatch_data.tracking_url || null,
+      dispatched_at: new Date(),
       estimated_delivery: dispatch_data.estimated_delivery || null,
-      dispatched_by:      resolvedAdminId,
-      dispatch_notes:     dispatch_data.dispatch_notes  || null,
+      dispatched_by: resolvedAdminId,
+      dispatch_notes: dispatch_data.dispatch_notes || null,
     };
   }
 
@@ -1378,7 +1399,7 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
     const mDesc = milestone?.description || null;
     order.milestones = order.milestones || [];
     order.milestones.push({
-      status:      mStatus,
+      status: mStatus,
       description: mDesc,
       recorded_by: resolvedAdminId,
       recorded_at: new Date(),
@@ -1405,10 +1426,10 @@ async function updateOrderStage({ order_id, new_status, admin_user_id, dispatch_
   if (resolvedAdminId) {
     await logAudit({
       actor_type: 'cms_user',
-      actor_id:   resolvedAdminId,
-      action:     `EPC_ORDER_${new_status.toUpperCase()}`,
-      entity_type:'epc_orders',
-      entity_id:  order._id,
+      actor_id: resolvedAdminId,
+      action: `EPC_ORDER_${new_status.toUpperCase()}`,
+      entity_type: 'epc_orders',
+      entity_id: order._id,
       after_snapshot: { order_number: order.order_number, status: new_status },
       req,
     }).catch(err => console.warn('Audit log warning in updateOrderStage:', err.message));

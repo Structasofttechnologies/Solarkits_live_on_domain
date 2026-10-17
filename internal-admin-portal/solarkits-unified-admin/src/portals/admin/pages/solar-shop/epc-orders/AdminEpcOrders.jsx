@@ -392,7 +392,7 @@ export default function AdminEpcOrders() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl">
-                Review offline payment verifications submitted by Accounts, verify bank UTR authenticity, approve orders to generate official Order Numbers (ORD-EPC-...), return for correction, and configure Stage TAT rules.
+                Review offline payment verifications submitted by Accounts, verify bank UTR authenticity, approve offline orders to generate official Order Numbers (ORD-EPC-...). <strong className="text-purple-600 dark:text-purple-300">Note:</strong> Online ICICI payments are auto-approved instantly and do not require Admin approval.
               </p>
             </div>
           </div>
@@ -744,8 +744,9 @@ export default function AdminEpcOrders() {
                     o.offline_payment?.payment_receipt_url ||
                     o.payment_receipt_url;
                   const signal = o.delay_signal || "green";
-                  const isOfficial = !!o.is_official_order_generated;
-                  const officialNumber = o.official_order_number || (isOfficial ? o.order_number : null);
+                  const isOnlineOrder = Boolean(o.is_online || o.payment_mode === "online" || o.payment_method === "icici_ecollection" || o.payment_gateway_used === "icici_ecollection");
+                  const isOfficial = !!o.is_official_order_generated || isOnlineOrder;
+                  const officialNumber = o.official_order_number || o.order_number;
 
                   const orderDate = o.created_at || o.createdAt || o.date || o.offline_payment?.payment_date;
 
@@ -793,7 +794,7 @@ export default function AdminEpcOrders() {
                     <tr
                       key={o._id}
                       className={`hover:bg-surface-hover/50 transition ${
-                        admStatus === "pending" && offStatus === "submitted_for_approval"
+                        !isOnlineOrder && admStatus === "pending" && offStatus === "submitted_for_approval"
                           ? "bg-purple-500/5"
                           : ""
                       }`}
@@ -806,8 +807,12 @@ export default function AdminEpcOrders() {
                             <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">
                               {reqId}
                             </span>
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-tight bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                              REQ
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-tight ${
+                              isOnlineOrder
+                                ? "bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30"
+                                : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                            }`}>
+                              {isOnlineOrder ? "ONLINE" : "REQ"}
                             </span>
                           </div>
 
@@ -858,9 +863,10 @@ export default function AdminEpcOrders() {
 
                       {/* 5. Payment Mode */}
                       <td className="py-3 px-3">
-                        {o.payment_mode === "online" ? (
+                        {isOnlineOrder ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-                            Online (ICICI)
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                            Online (ICICI VAN)
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
@@ -868,7 +874,7 @@ export default function AdminEpcOrders() {
                           </span>
                         )}
                         <div className="text-[9px] text-text-muted mt-0.5">
-                          {o.offline_payment?.payment_mode?.toUpperCase() || "NEFT / RTGS"}
+                          {isOnlineOrder ? "ICICI E-COLLECTION" : (o.offline_payment?.payment_mode?.toUpperCase() || "NEFT / RTGS")}
                         </div>
                       </td>
 
@@ -906,7 +912,11 @@ export default function AdminEpcOrders() {
 
                       {/* 7. Accounts Verification */}
                       <td className="py-3 px-3">
-                        {offStatus === "submitted_for_approval" ? (
+                        {isOnlineOrder ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                            <MdCheck size={11} /> Auto-Verified (ICICI)
+                          </span>
+                        ) : offStatus === "submitted_for_approval" ? (
                           <div className="space-y-0.5">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                               <MdCheck size={11} /> Verified by Accounts
@@ -932,7 +942,11 @@ export default function AdminEpcOrders() {
 
                       {/* 8. Admin Status */}
                       <td className="py-3 px-3">
-                        {admStatus === "approved" ? (
+                        {isOnlineOrder ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                            <MdCheckCircle size={11} /> Auto-Approved (ICICI)
+                          </span>
+                        ) : admStatus === "approved" ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                             <MdCheckCircle size={11} /> Approved
                           </span>
@@ -955,7 +969,7 @@ export default function AdminEpcOrders() {
                           {o.days_elapsed || 0} / {o.payment_tat_days || 2}d
                         </div>
                         <div className="text-[9px] text-text-muted">
-                          {o.current_payment_stage_label || "Admin Approval"}
+                          {o.current_payment_stage_label || (isOnlineOrder ? "Final Settlement" : "Admin Approval")}
                         </div>
                       </td>
 
@@ -979,8 +993,8 @@ export default function AdminEpcOrders() {
                       {/* 11. Actions */}
                       <td className="py-3 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          {/* Admin Review & Approval Button */}
-                          {offStatus === "submitted_for_approval" && (
+                          {/* Admin Review & Approval Button - only for offline payments submitted for approval */}
+                          {(!isOnlineOrder && offStatus === "submitted_for_approval") && (
                             <button
                               type="button"
                               onClick={() => handleOpenAdminModal(o)}
@@ -992,14 +1006,14 @@ export default function AdminEpcOrders() {
                             </button>
                           )}
 
-                          {admStatus === "approved" && (
+                          {(isOnlineOrder || admStatus === "approved") && (
                             <button
                               type="button"
                               onClick={() => handleOpenAdminModal(o)}
                               className="px-2 py-1 rounded-xl text-[11px] font-bold bg-surface-hover hover:bg-surface border border-border text-text-secondary transition"
-                              title="View Admin Sign-off Details"
+                              title="View Sign-off Details"
                             >
-                              Approved
+                              {isOnlineOrder ? "Auto-Approved" : "Approved"}
                             </button>
                           )}
 

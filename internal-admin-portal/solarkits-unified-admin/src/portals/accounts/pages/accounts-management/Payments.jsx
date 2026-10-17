@@ -15,8 +15,9 @@ import {
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
   getStates, getDistricts, getAllComboKits, getSuppliers,
-  getProcurementGroups
+  getProcurementGroups, getPurchaseIndents
 } from "../../api/accounts";
+import SupplierPaymentModal from "../../components/procurement/SupplierPaymentModal";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
 import CustomTable from "../../components/CustomTable";
@@ -1461,6 +1462,24 @@ export default function Payments() {
 
   const [activeTab, setActiveTab] = useState("pending");
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [procurementPIs, setProcurementPIs] = useState([]);
+  const [loadingProcurementPIs, setLoadingProcurementPIs] = useState(false);
+  const [selectedPiForPayment, setSelectedPiForPayment] = useState(null);
+  const [isPiPaymentModalOpen, setIsPiPaymentModalOpen] = useState(false);
+
+  const fetchProcurementPIs = async () => {
+    setLoadingProcurementPIs(true);
+    try {
+      const res = await getPurchaseIndents();
+      if (res?.status === "success" && Array.isArray(res.data)) {
+        setProcurementPIs(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to load procurement PIs:", err);
+    } finally {
+      setLoadingProcurementPIs(false);
+    }
+  };
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -1505,6 +1524,7 @@ export default function Payments() {
 
   useEffect(() => {
     fetchHierarchy();
+    fetchProcurementPIs();
   }, []);
 
   const [selectedState, setSelectedState] = useState("all");
@@ -3301,6 +3321,18 @@ export default function Payments() {
           )}
         </button>
         <button
+          onClick={() => { setActiveTab("procurement_indents"); setPage(1); fetchProcurementPIs(); }}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "procurement_indents" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          <FaCreditCard />
+          Procurement Indents (PI)
+          {procurementPIs.length > 0 && (
+            <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-black flex items-center justify-center px-1.5 ${activeTab === "procurement_indents" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
+              {procurementPIs.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => { setActiveTab("history"); setPage(1); fetchOrders(); }}
           className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
@@ -4705,6 +4737,159 @@ export default function Payments() {
         />
       )}
 
+      {/* ─── Procurement Purchase Indents (PI) Section ───────────────────────── */}
+      {activeTab === "procurement_indents" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gradient-to-r from-primary/5 via-blue-500/5 to-primary/5 border border-primary/20 rounded-2xl">
+            <div className="flex items-center gap-3">
+              <span className="p-3 rounded-xl bg-primary text-white shadow-sm flex items-center justify-center">
+                <FaCreditCard size={18} />
+              </span>
+              <div>
+                <h4 className="text-sm font-black text-gray-900">
+                  Procurement Purchase Indents (Suppliers &amp; OEMs Auto-Selected)
+                </h4>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Suppliers &amp; OEM partners were chosen in the Procurement Module. No need to re-select suppliers here. Review advance amounts and process disbursements directly.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/account-panel/procurement"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/95 transition-all shadow-sm shrink-0"
+            >
+              <FaLayerGroup size={12} />
+              <span>Go to Procurement Module</span>
+            </a>
+          </div>
+
+          {loadingProcurementPIs ? (
+            <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
+              <FaSpinner className="animate-spin text-primary mx-auto text-2xl mb-2" />
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Loading Purchase Indents...</p>
+            </div>
+          ) : procurementPIs.length === 0 ? (
+            <div className="p-12 text-center bg-white border border-dashed border-gray-300 rounded-2xl">
+              <FaBoxes className="mx-auto text-3xl text-gray-300 mb-3" />
+              <h4 className="text-sm font-black text-gray-800">No Purchase Indents Found</h4>
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                No Purchase Indents have been created from batches yet. Go to New Orders to batch orders, then open Procurement to select OEM partners/suppliers.
+              </p>
+              <a
+                href="/account-panel/procurement"
+                className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-xs"
+              >
+                <FaArrowRight size={11} />
+                <span>Open Procurement Module</span>
+              </a>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-[10px] font-black uppercase tracking-wider text-gray-600">
+                      <th className="py-3 px-4">PI Number &amp; Date</th>
+                      <th className="py-3 px-4">Batch / Order</th>
+                      <th className="py-3 px-4">Allocated Supplier / Brand</th>
+                      <th className="py-3 px-4 text-center">Items &amp; Qty</th>
+                      <th className="py-3 px-4 text-right">Advance Due</th>
+                      <th className="py-3 px-4 text-right">Total PI Value</th>
+                      <th className="py-3 px-4 text-center">Payment Status</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {procurementPIs.map((pi) => {
+                      const payStatus = pi.payment?.payment_status || "PI Submitted";
+                      const isAdvancePaid = ["Advance Paid", "Paid"].includes(payStatus);
+                      const isApproved = payStatus === "Approved";
+                      const isAwaitingApproval = payStatus === "Awaiting Admin Approval" || payStatus === "Advance Requested";
+
+                      return (
+                        <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <span className="font-black font-mono text-primary text-sm">{pi.pi_number}</span>
+                            <span className="block text-[10px] text-gray-400 mt-0.5">
+                              {pi.created_at ? new Date(pi.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            {pi.order_group_id ? (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-purple-50 text-purple-700 border border-purple-200">
+                                {pi.order_group_id}
+                              </span>
+                            ) : (
+                              <span className="font-mono font-bold text-gray-700 text-xs">
+                                {pi.customer_order_number}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-black text-gray-900">{pi.supplier_name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                pi.is_oem_partner ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                              }`}>
+                                {pi.is_oem_partner ? "OEM Partner (SolarKits Brand)" : "Supplier Partner"}
+                              </span>
+                              {pi.supplier_brand && (
+                                <span className="text-[10px] text-gray-500 font-semibold">{pi.supplier_brand}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="font-bold text-gray-900">
+                              {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
+                            </div>
+                            <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
+                              {(pi.items || []).map(it => it.sku_code).join(", ")}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="font-black text-primary">
+                              ₹{(pi.payment?.advance_amount || 0).toLocaleString("en-IN")}
+                            </div>
+                            <span className="text-[10px] text-gray-400">
+                              ({pi.payment?.advance_percentage || 20}% Advance)
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-bold text-gray-900">
+                            ₹{(pi.total_pi_value || 0).toLocaleString("en-IN")}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
+                              isAdvancePaid ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                              isApproved ? "bg-blue-50 text-blue-700 border-blue-200" :
+                              isAwaitingApproval ? "bg-amber-50 text-amber-700 border-amber-200" :
+                              "bg-gray-100 text-gray-600 border-gray-200"
+                            }`}>
+                              {payStatus}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedPiForPayment(pi);
+                                setIsPiPaymentModalOpen(true);
+                              }}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-sm"
+                            >
+                              {isAdvancePaid ? "View Payment / UTR" : "Process Payment"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Pay Details Dialog */}
       <Dialog
         isOpen={isPayOpen}
@@ -5458,6 +5643,19 @@ export default function Payments() {
         </div>
       )}
 
+      {/* Procurement Supplier Payment Modal (No Supplier Selection Needed) */}
+      <SupplierPaymentModal
+        isOpen={isPiPaymentModalOpen}
+        onClose={() => {
+          setIsPiPaymentModalOpen(false);
+          setSelectedPiForPayment(null);
+        }}
+        purchaseIndent={selectedPiForPayment}
+        onPaymentUpdated={() => {
+          fetchProcurementPIs();
+          fetchOrders();
+        }}
+      />
     </div>
   );
 }

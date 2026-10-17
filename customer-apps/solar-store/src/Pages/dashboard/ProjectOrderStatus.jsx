@@ -1026,12 +1026,13 @@ export default function ProjectOrderStatus() {
                             {/* Milestone 2: Remaining Balance */}
                             {(() => {
                               const m2 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
-                              const isM2Verified = m2?.payment_status === "verified" ||
-                                order.payment_milestones?.milestone_verification_status === "fully_paid" ||
-                                order.payment_status === "captured" ||
-                                order.payment_status === "paid";
+                              const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0 || order.payment_milestones?.advance_amount);
+                              const isM2Verified = hasMilestones
+                                ? (m2?.payment_status === "verified" || order.payment_milestones?.milestone_verification_status === "fully_paid")
+                                : (order.payment_status === "captured" || order.payment_status === "paid");
                               const isM2Pending = m2?.payment_status === "pending_verification" ||
-                                order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification";
+                                order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification" ||
+                                Boolean(m2?.utr_number && !isM2Verified);
                               const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * 0.7));
                               const m2Utr = m2?.utr_number;
 

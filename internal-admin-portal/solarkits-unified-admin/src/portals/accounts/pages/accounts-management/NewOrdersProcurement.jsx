@@ -346,12 +346,12 @@ export default function NewOrdersProcurement() {
         const createdGroupId = res.data?.group_id;
         setSubmittedGroup(res.data);
         setShowConfirmModal(false);
-        showNotification("success", `Procurement Group #${createdGroupId} successfully created and sent to Procurement! Redirecting to Supplier Payments...`);
+        showNotification("success", `Procurement Group #${createdGroupId} successfully marked Batch Ready! Redirecting to Procurement...`);
         // Refresh orders to reflect updated status
         fetchOrders();
-        // Direct seamless handoff to Supplier Payments!
+        // Direct seamless handoff to Procurement Module!
         setTimeout(() => {
-          navigate(`/account-panel/payments?tab=combined_groups&group_id=${createdGroupId}`);
+          navigate(`/account-panel/procurement?group_id=${createdGroupId}`);
         }, 1200);
       }
     } catch (err) {
@@ -481,15 +481,20 @@ export default function NewOrdersProcurement() {
   // Dynamic Supplier BOM derived from selected equipment
   const dynamicSupplierBOM = useMemo(() => {
     if (calculationData?.supplier_details && calculationData.supplier_details.length > 0) {
-      return calculationData.supplier_details;
+      return calculationData.supplier_details.map((s) => ({
+        ...s,
+        component_name: s.product || s.component_name || s.product_name,
+        product_name: s.product || s.product_name || s.component_name,
+        total_units: s.qty || s.total_units || s.quantity,
+      }));
     }
     const kits = selectedKitsCount > 0 ? selectedKitsCount : 1;
     return [
-      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Mounting Structure (Hot-Dip GI)", qty: kits, warehouse: "WH-01" },
-      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Protection Box (ACDB/DCDB IP65)", qty: kits, warehouse: "WH-01" },
-      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar Inverter 5kW/10kW String Inverter", qty: kits, warehouse: "WH-02" },
-      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar DC 4/6 sq.mm Cable & Earthing Kit", qty: kits, warehouse: "WH-02" },
-      { supplier_name: "OEM Partner C (SOLARKITS Manufacturing)", product: "SOLARKITS 540W Bifacial Mono PERC Module", qty: kits * 9, warehouse: "WH-03" },
+      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Mounting Structure (Hot-Dip GI)", component_name: "BOSKIT Mounting Structure (Hot-Dip GI)", product_name: "BOSKIT Mounting Structure (Hot-Dip GI)", qty: kits, total_units: kits, warehouse: "WH-01" },
+      { supplier_name: "Supplier A (Structural Metals Ltd)", product: "BOSKIT Protection Box (ACDB/DCDB IP65)", component_name: "BOSKIT Protection Box (ACDB/DCDB IP65)", product_name: "BOSKIT Protection Box (ACDB/DCDB IP65)", qty: kits, total_units: kits, warehouse: "WH-01" },
+      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar Inverter 5kW/10kW String Inverter", component_name: "Solar Inverter 5kW/10kW String Inverter", product_name: "Solar Inverter 5kW/10kW String Inverter", qty: kits, total_units: kits, warehouse: "WH-02" },
+      { supplier_name: "Supplier B (PowerTech Inverters)", product: "Solar DC 4/6 sq.mm Cable & Earthing Kit", component_name: "Solar DC 4/6 sq.mm Cable & Earthing Kit", product_name: "Solar DC 4/6 sq.mm Cable & Earthing Kit", qty: kits, total_units: kits, warehouse: "WH-02" },
+      { supplier_name: "OEM Partner C (SOLARKITS Manufacturing)", product: "SOLARKITS 540W Bifacial Mono PERC Module", component_name: "SOLARKITS 540W Bifacial Mono PERC Module", product_name: "SOLARKITS 540W Bifacial Mono PERC Module", qty: kits * 9, total_units: kits * 9, warehouse: "WH-03" },
     ];
   }, [calculationData, selectedKitsCount]);
 
@@ -549,11 +554,10 @@ export default function NewOrdersProcurement() {
         {/* Global Alert Notification */}
         {notification && (
           <div
-            className={`mt-4 p-3 rounded-xl border text-xs font-medium flex items-center justify-between animate-in slide-in-from-top-2 ${
-              notification.type === "success"
+            className={`mt-4 p-3 rounded-xl border text-xs font-medium flex items-center justify-between animate-in slide-in-from-top-2 ${notification.type === "success"
                 ? "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700"
                 : "bg-red-50 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300 dark:border-red-700"
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               {notification.type === "success" ? (
@@ -606,21 +610,19 @@ export default function NewOrdersProcurement() {
                       key={t.id}
                       type="button"
                       onClick={() => setOrderMode(orderMode === t.id ? "all" : t.id)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
-                        orderMode === t.id
+                      className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${orderMode === t.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                           : "bg-surface border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 text-text-primary"
-                      }`}
+                        }`}
                     >
                       <span>{t.label}</span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
-                          orderMode === t.id
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${orderMode === t.id
                             ? "bg-white/20 text-white"
                             : t.count > 0
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
-                            : "bg-surface-hover text-text-muted"
-                        }`}
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                              : "bg-surface-hover text-text-muted"
+                          }`}
                       >
                         {t.count}
                       </span>
@@ -644,21 +646,19 @@ export default function NewOrdersProcurement() {
                       key={o.id}
                       type="button"
                       onClick={() => setOrderOrigin(orderOrigin === o.id ? "all" : o.id)}
-                      className={`py-2 px-2 text-[11px] font-semibold rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                        orderOrigin === o.id
+                      className={`py-2 px-2 text-[11px] font-semibold rounded-xl border flex items-center justify-between transition-all cursor-pointer ${orderOrigin === o.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                           : "bg-surface border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 text-text-primary"
-                      }`}
+                        }`}
                     >
                       <span className="truncate">{o.label}</span>
                       <span
-                        className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-black shrink-0 ${
-                          orderOrigin === o.id
+                        className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-black shrink-0 ${orderOrigin === o.id
                             ? "bg-white/20 text-white"
                             : o.count > 0
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
-                            : "bg-surface-hover text-text-muted"
-                        }`}
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                              : "bg-surface-hover text-text-muted"
+                          }`}
                       >
                         {o.count}
                       </span>
@@ -681,21 +681,19 @@ export default function NewOrdersProcurement() {
                       key={c.id}
                       type="button"
                       onClick={() => setOrderCategory(orderCategory === c.id ? "all" : c.id)}
-                      className={`py-2 px-3 text-xs font-semibold rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
-                        orderCategory === c.id
+                      className={`py-2 px-3 text-xs font-semibold rounded-xl border flex items-center justify-between transition-all cursor-pointer ${orderCategory === c.id
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
                           : "bg-surface border-border hover:bg-blue-50/50 dark:hover:bg-blue-950/30 text-text-primary"
-                      }`}
+                        }`}
                     >
                       <span>{c.label}</span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${
-                          orderCategory === c.id
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black tracking-tight ${orderCategory === c.id
                             ? "bg-white/20 text-white"
                             : c.count > 0
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
-                            : "bg-surface-hover text-text-muted"
-                        }`}
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200"
+                              : "bg-surface-hover text-text-muted"
+                          }`}
                       >
                         {c.count}
                       </span>
@@ -874,11 +872,10 @@ export default function NewOrdersProcurement() {
                       key={num}
                       type="button"
                       onClick={() => setOrderCountLimit(num)}
-                      className={`py-1.5 text-xs font-black rounded-lg border text-center transition-all cursor-pointer ${
-                        orderCountLimit === num
+                      className={`py-1.5 text-xs font-black rounded-lg border text-center transition-all cursor-pointer ${orderCountLimit === num
                           ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
                           : "bg-surface border-border hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-text-primary"
-                      }`}
+                        }`}
                     >
                       {num}
                     </button>
@@ -1041,9 +1038,8 @@ export default function NewOrdersProcurement() {
                     <tr
                       key={o.id}
                       onClick={() => handleToggleOrder(o.id)}
-                      className={`hover:bg-purple-50/40 dark:hover:bg-purple-950/20 transition-colors cursor-pointer ${
-                        isChecked ? "bg-purple-50/70 dark:bg-purple-950/30" : ""
-                      }`}
+                      className={`hover:bg-purple-50/40 dark:hover:bg-purple-950/20 transition-colors cursor-pointer ${isChecked ? "bg-purple-50/70 dark:bg-purple-950/30" : ""
+                        }`}
                     >
                       <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
@@ -1064,13 +1060,12 @@ export default function NewOrdersProcurement() {
                       </td>
                       <td className="py-2.5 px-3">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            o.order_origin_code === "epc"
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${o.order_origin_code === "epc"
                               ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
                               : o.order_origin_code === "franchisee"
-                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
-                              : "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
-                          }`}
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
+                                : "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
+                            }`}
                         >
                           {o.order_origin}
                         </span>
@@ -1094,15 +1089,14 @@ export default function NewOrdersProcurement() {
                       </td>
                       <td className="py-2.5 px-3">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            o.status === "New"
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${o.status === "New"
                               ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
                               : o.status === "Ready for Procurement"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                              : o.status === "Sent to Procurement"
-                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                          }`}
+                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                : o.status === "Sent to Procurement"
+                                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                            }`}
                         >
                           {o.status}
                         </span>
@@ -1143,11 +1137,10 @@ export default function NewOrdersProcurement() {
             <button
               type="button"
               onClick={() => setVehicleSelectionMode("auto")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                vehicleSelectionMode === "auto"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${vehicleSelectionMode === "auto"
                   ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-xs"
                   : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-              }`}
+                }`}
             >
               <FaMagic className="w-3 h-3 text-amber-200" />
               <span>Auto Selected (Smart AI)</span>
@@ -1156,11 +1149,10 @@ export default function NewOrdersProcurement() {
             <button
               type="button"
               onClick={() => setVehicleSelectionMode("manual")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                vehicleSelectionMode === "manual"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${vehicleSelectionMode === "manual"
                   ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-xs"
                   : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
-              }`}
+                }`}
             >
               <FaSlidersH className="w-3 h-3" />
               <span>Manual Selection</span>
@@ -1246,11 +1238,10 @@ export default function NewOrdersProcurement() {
                               setSelectedVehicleId(alt.vehicle._id);
                               setVehicleSelectionMode("manual");
                             }}
-                            className={`px-2 py-1 rounded-md text-[10px] font-semibold border transition-all flex items-center gap-1 cursor-pointer ${
-                              alt.isUnderCapacity
+                            className={`px-2 py-1 rounded-md text-[10px] font-semibold border transition-all flex items-center gap-1 cursor-pointer ${alt.isUnderCapacity
                                 ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
                                 : "bg-surface hover:bg-surface-hover text-text-secondary border-border"
-                            }`}
+                              }`}
                           >
                             <span>{alt.vehicle.name}</span>
                             <span className="font-mono text-[9px] font-bold text-text-muted">
@@ -1328,11 +1319,10 @@ export default function NewOrdersProcurement() {
                   ].map((strat) => (
                     <label
                       key={strat.id}
-                      className={`flex items-center gap-2 cursor-pointer p-1.5 rounded-lg border text-[11px] font-medium transition-all ${
-                        vehicleStrategy === strat.id
+                      className={`flex items-center gap-2 cursor-pointer p-1.5 rounded-lg border text-[11px] font-medium transition-all ${vehicleStrategy === strat.id
                           ? "bg-orange-50 border-orange-300 text-orange-900 dark:bg-orange-950/40 dark:border-orange-800 dark:text-orange-200 font-bold"
                           : "border-transparent hover:bg-surface-hover text-text-primary"
-                      }`}
+                        }`}
                     >
                       <input
                         type="radio"
@@ -1389,13 +1379,12 @@ export default function NewOrdersProcurement() {
                     <div className="flex justify-between items-center text-xs pt-1 border-t border-border">
                       <span className="text-text-secondary font-bold">Utilization:</span>
                       <span
-                        className={`font-black font-mono text-sm ${
-                          utilPct > 100
+                        className={`font-black font-mono text-sm ${utilPct > 100
                             ? "text-red-600"
                             : utilPct > 85
-                            ? "text-amber-600"
-                            : "text-emerald-600"
-                        }`}
+                              ? "text-amber-600"
+                              : "text-emerald-600"
+                          }`}
                       >
                         {utilPct}%
                       </span>
@@ -1404,13 +1393,12 @@ export default function NewOrdersProcurement() {
                     {/* Progress Bar */}
                     <div className="w-full bg-border rounded-full h-2.5 overflow-hidden">
                       <div
-                        className={`h-2.5 rounded-full transition-all duration-500 ${
-                          utilPct > 100
+                        className={`h-2.5 rounded-full transition-all duration-500 ${utilPct > 100
                             ? "bg-red-500"
                             : utilPct > 85
-                            ? "bg-amber-500"
-                            : "bg-emerald-500"
-                        }`}
+                              ? "bg-amber-500"
+                              : "bg-emerald-500"
+                          }`}
                         style={{
                           width: `${Math.min(100, utilPct)}%`,
                         }}
@@ -1419,21 +1407,20 @@ export default function NewOrdersProcurement() {
 
                     {/* Capacity Validation Notice */}
                     <div
-                      className={`mt-2 p-2.5 rounded-xl border text-[11px] flex items-start gap-2 ${
-                        utilPct > 100
+                      className={`mt-2 p-2.5 rounded-xl border text-[11px] flex items-start gap-2 ${utilPct > 100
                           ? "bg-red-50 text-red-800 border-red-300 dark:bg-red-950/40 dark:text-red-300"
                           : utilPct > 85
-                          ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
-                          : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      }`}
+                            ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300"
+                            : "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        }`}
                     >
                       <FaInfoCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>
                         {utilPct > 100
                           ? `Over-capacity! Total cargo (${calculatedTotalWeight.toLocaleString()} kg) exceeds vehicle payload by ${(calculatedTotalWeight - totalCap).toLocaleString()} kg. Switch to multiple trucks or larger vehicle.`
                           : utilPct > 85
-                          ? `Warning: Vehicle load is near max capacity (${utilPct}%). Headroom remaining: ${(totalCap - calculatedTotalWeight).toLocaleString()} kg.`
-                          : `Vehicle capacity validated. Cargo (${calculatedTotalWeight.toLocaleString()} kg) is within permissible limits with ${(totalCap - calculatedTotalWeight).toLocaleString()} kg safe headroom.`}
+                            ? `Warning: Vehicle load is near max capacity (${utilPct}%). Headroom remaining: ${(totalCap - calculatedTotalWeight).toLocaleString()} kg.`
+                            : `Vehicle capacity validated. Cargo (${calculatedTotalWeight.toLocaleString()} kg) is within permissible limits with ${(totalCap - calculatedTotalWeight).toLocaleString()} kg safe headroom.`}
                       </span>
                     </div>
                   </>
@@ -1519,9 +1506,8 @@ export default function NewOrdersProcurement() {
                     const util = totalCap > 0 ? Math.round((calculatedTotalWeight / totalCap) * 100) : 100;
                     return (
                       <span
-                        className={`font-bold font-mono ${
-                          util > 100 ? "text-red-600" : util > 85 ? "text-amber-600" : "text-emerald-600"
-                        }`}
+                        className={`font-bold font-mono ${util > 100 ? "text-red-600" : util > 85 ? "text-amber-600" : "text-emerald-600"
+                          }`}
                       >
                         {util}%
                       </span>

@@ -1,7 +1,7 @@
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import Header from "../components/Header"
 import Drawer from "../components/Drawer";
-import { FaHome, FaFileInvoice, FaCreditCard, FaCheckCircle, FaHandshake, FaBoxes } from "react-icons/fa"
+import { FaHome, FaFileInvoice, FaCreditCard, FaCheckCircle, FaHandshake, FaBoxes, FaLayerGroup } from "react-icons/fa"
 import { lazy, Suspense, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { PermissionGuard } from "../components/PermissionGuard";
@@ -22,6 +22,7 @@ const OemPurchaseOrders = lazy(() => import("../pages/accounts-management/OemPur
 const BoskitInventory = lazy(() => import("../pages/accounts-management/BoskitInventory"));
 const Payments = lazy(() => import("../pages/accounts-management/Payments"));
 const NewOrdersProcurement = lazy(() => import("../pages/accounts-management/NewOrdersProcurement"));
+const Procurement = lazy(() => import("../pages/accounts-management/Procurement"));
 
 const menus = [
   [
@@ -36,6 +37,12 @@ const menus = [
       icon: <FaBoxes />,
       path: "/account-panel/new-orders",
       unique_id: "ACC_NEW_ORDERS"
+    },
+    {
+      name: "Procurement",
+      icon: <FaLayerGroup />,
+      path: "/account-panel/procurement",
+      unique_id: "ACC_PROCUREMENT"
     },
     {
       name: "Supplier Registry",
@@ -90,7 +97,7 @@ const menus = [
 
 const isModuleAllowed = (menu, allowedUniqueIds) => {
   if (!menu.unique_id) return false;
-  if (menu.unique_id === "ACC_NEW_ORDERS" && (allowedUniqueIds.includes("ACC_NEW_ORDERS") || allowedUniqueIds.includes("ACC_HOME") || allowedUniqueIds.includes("ACC_PO"))) return true;
+  if ((menu.unique_id === "ACC_NEW_ORDERS" || menu.unique_id === "ACC_PROCUREMENT") && (allowedUniqueIds.includes("ACC_NEW_ORDERS") || allowedUniqueIds.includes("ACC_HOME") || allowedUniqueIds.includes("ACC_PO") || allowedUniqueIds.includes("ACC_PROCUREMENT"))) return true;
   if (menu.unique_id === "ACC_OEM_PO" && allowedUniqueIds.includes("ACC_PO")) return true;
   if (menu.unique_id === "ACC_BOSKIT_INV" && (allowedUniqueIds.includes("ACC_PO") || allowedUniqueIds.includes("ACC_INWARD_INV") || allowedUniqueIds.includes("ACC_HOME"))) return true;
   return allowedUniqueIds.includes(menu.unique_id);
@@ -219,6 +226,16 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="ACC_NEW_ORDERS">
                         <Suspense fallback={<Loader text="Loading New Orders..." />}>
                           <NewOrdersProcurement />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="/procurement/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="ACC_PROCUREMENT">
+                        <Suspense fallback={<Loader text="Loading Procurement..." />}>
+                          <Procurement />
                         </Suspense>
                       </PermissionGuard>
                     }

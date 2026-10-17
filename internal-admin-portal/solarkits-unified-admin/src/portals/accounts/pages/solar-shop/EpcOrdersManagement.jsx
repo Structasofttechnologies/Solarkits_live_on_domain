@@ -874,13 +874,13 @@ export default function EpcOrdersManagement() {
                 </tr>
               ) : (
                 orders.map((o) => {
-                  const isOnline = o.is_online;
+                  const isOnline = Boolean(o.is_online || o.payment_mode === "online" || o.payment_method === "icici_ecollection");
                   const isDirect = o.is_direct;
                   const utr = o.offline_payment?.utr_number || o.payment_reference;
                   const receiptUrl = o.offline_payment?.receipt_url;
                   const offStatus = o.offline_payment?.verification_status || "pending";
                   const admStatus = o.offline_payment?.admin_approval_status || "pending";
-                  const isOfficial = o.is_official_order_generated;
+                  const isOfficial = Boolean(o.is_official_order_generated || isOnline);
                   const signal = o.delay_signal || "green";
 
                   return (
@@ -1087,7 +1087,14 @@ export default function EpcOrdersManagement() {
                       {/* 14. Action (Verify / Approve / History / Receipt) */}
                       <td className="py-3 px-3">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          {/* Accounts Verification Button */}
+                          {/* Online ICICI Auto-Confirmed Pill */}
+                          {isOnline && (
+                            <span className="px-2 py-1 rounded-xl text-[10px] font-bold bg-[#264baa]/15 text-[#264baa] dark:text-blue-300 border border-[#264baa]/30 flex items-center gap-1">
+                              <FaCheck size={10} /> Auto-Confirmed (ICICI)
+                            </span>
+                          )}
+
+                          {/* Accounts Verification Button (Offline only) */}
                           {!isOnline && (offStatus === "pending" || offStatus === "returned") && (
                             <button
                               type="button"
@@ -1100,14 +1107,14 @@ export default function EpcOrdersManagement() {
                             </button>
                           )}
 
-                          {/* Submitted to Admin pill */}
+                          {/* Submitted to Admin pill (Offline only) */}
                           {!isOnline && offStatus === "submitted_for_approval" && (
                             <span className="px-2 py-1 rounded-xl text-[10px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1">
                               <FiClock size={11} /> In Admin Review
                             </span>
                           )}
 
-                          {/* Officially Approved pill */}
+                          {/* Officially Approved pill (Offline only) */}
                           {!isOnline && offStatus === "approved" && (
                             <span className="px-2 py-1 rounded-xl text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                               <FaCheck size={10} /> Approved
@@ -1226,10 +1233,18 @@ export default function EpcOrdersManagement() {
             </div>
 
             {/* Notice */}
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+            <div className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+              accountsModal.order?.is_online || accountsModal.order?.payment_mode === "online" || accountsModal.order?.payment_method === "icici_ecollection"
+                ? "bg-blue-500/10 border border-blue-500/20 text-blue-800 dark:text-blue-300"
+                : "bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300"
+            }`}>
               <FiInfo className="shrink-0 mt-0.5" />
               <span>
-                <strong>Controlled Workflow:</strong> Official Order Number will NOT be generated until Admin approval is completed. Enter and verify payment details below to submit for Admin review.
+                {accountsModal.order?.is_online || accountsModal.order?.payment_mode === "online" || accountsModal.order?.payment_method === "icici_ecollection" ? (
+                  <><strong>Online ICICI Payment:</strong> Admin Approval is <strong>NOT required</strong> for ICICI online payments. Verifying this payment will directly activate and confirm the official order.</>
+                ) : (
+                  <><strong>Controlled Offline Workflow:</strong> Official Order Number will NOT be generated until Admin approval is completed. Enter and verify payment details below to submit for Admin review.</>
+                )}
               </span>
             </div>
 
@@ -1470,7 +1485,7 @@ export default function EpcOrdersManagement() {
                         : "bg-surface-hover text-text-secondary hover:text-text-primary border border-border"
                       }`}
                   >
-                    Submit for Approval
+                    {accountsModal.order?.is_online || accountsModal.order?.payment_mode === "online" || accountsModal.order?.payment_method === "icici_ecollection" ? "Verify & Activate (Direct)" : "Submit for Admin Approval"}
                   </button>
                   <button
                     type="button"

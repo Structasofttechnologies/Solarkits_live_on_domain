@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -115,6 +115,9 @@ export default function DeliveryManagement() {
             zone_name: o.zone_name || 'Unassigned Zone',
             components_checklist: o.components_checklist || [],
             stock_status: o.stock_status || 'in_stock',
+            procurement_group_id: o.procurement_group_id || null,
+            procurement_readiness_status: o.procurement_readiness_status || null,
+            batch_status: o.batch_status || null,
             tracking_status: o.tracking_status || null,
             dispatch_delivery_id: o.dispatch_delivery_id || null,
             dispatch_vehicle: o.dispatch_vehicle || null,
@@ -1198,6 +1201,17 @@ export default function DeliveryManagement() {
                             <div className="flex justify-between items-center">
                               <span className="font-bold text-text-secondary tracking-wider">{o.id}</span>
                               <div className="flex items-center gap-1.5">
+                                {o.procurement_readiness_status && (
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 ${
+                                    o.procurement_readiness_status === 'Ready for Dispatch'
+                                      ? 'bg-success/15 text-success border border-success/30'
+                                      : o.procurement_readiness_status === 'Ready for Kit Preparation'
+                                      ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30'
+                                      : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
+                                  }`}>
+                                    {o.procurement_readiness_status}
+                                  </span>
+                                )}
                                 {hasOutOfStock && (
                                   <span className="bg-danger-soft text-danger text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1">
                                     <FaExclamationTriangle className="animate-pulse" /> Insufficient Stock

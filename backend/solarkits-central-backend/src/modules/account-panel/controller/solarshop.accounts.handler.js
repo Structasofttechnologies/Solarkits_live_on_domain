@@ -2650,8 +2650,11 @@ function computeOrderPaymentTracking(o, stageTats) {
   // Calculate verified amount received
   let amountReceived = 0;
   if (isOnline) {
-    if (payStatus === 'captured' || payStatus === 'paid') {
-      amountReceived = grandTotal;
+    if (payStatus === 'captured' || payStatus === 'paid' || offVer === 'approved' || admApp === 'approved') {
+      amountReceived = o.offline_payment?.amount_paid || grandTotal;
+      if (amountReceived <= 0 && grandTotal > 0) amountReceived = grandTotal;
+    } else if (o.offline_payment?.amount_paid) {
+      amountReceived = o.offline_payment.amount_paid;
     }
   } else {
     if (admApp === 'approved' || payStatus === 'captured' || mStatus === 'fully_paid') {
@@ -2663,18 +2666,21 @@ function computeOrderPaymentTracking(o, stageTats) {
   const outstandingAmount = Math.max(0, grandTotal - amountReceived);
 
   // Customer Payment Status (10 standard statuses)
+  // CRITICAL NOTE: Online ICICI payments NEVER require Admin Approval!
   let customerPaymentStatus = 'Verification Pending';
   if (payStatus === 'refunded') {
     customerPaymentStatus = 'Refunded';
   } else if (payStatus === 'refund_pending') {
     customerPaymentStatus = 'Refund Pending';
-  } else if (payStatus === 'failed' || offVer === 'rejected' || admApp === 'rejected') {
+  } else if (payStatus === 'failed' || offVer === 'rejected' || (!isOnline && admApp === 'rejected')) {
     customerPaymentStatus = 'Payment Failed';
+  } else if (isOnline && (offVer === 'approved' || payStatus === 'captured' || payStatus === 'paid' || admApp === 'approved')) {
+    customerPaymentStatus = (amountReceived >= grandTotal && grandTotal > 0) ? 'Paid' : (amountReceived > 0 ? 'Partially Paid' : 'Paid');
   } else if (amountReceived >= grandTotal && grandTotal > 0) {
     customerPaymentStatus = 'Paid';
   } else if (amountReceived > 0) {
     customerPaymentStatus = 'Partially Paid';
-  } else if (offVer === 'submitted_for_approval' || (offVer === 'approved' && admApp === 'pending')) {
+  } else if (!isOnline && (offVer === 'submitted_for_approval' || (offVer === 'approved' && admApp === 'pending'))) {
     customerPaymentStatus = 'Awaiting Admin Approval';
   } else if (!isOnline && (o.offline_payment?.utr_number || offVer === 'pending')) {
     customerPaymentStatus = 'Verification Pending';
@@ -2691,7 +2697,7 @@ function computeOrderPaymentTracking(o, stageTats) {
   if (customerPaymentStatus === 'Refunded' || customerPaymentStatus === 'Refund Pending') {
     currentStageKey = 'refund_processing';
     stageStartDate = o.refund_requested_at || o.updated_at || o.created_at;
-  } else if (customerPaymentStatus === 'Awaiting Admin Approval') {
+  } else if (!isOnline && customerPaymentStatus === 'Awaiting Admin Approval') {
     currentStageKey = 'admin_approval';
     stageStartDate = o.offline_payment?.verified_at || o.updated_at || o.created_at;
   } else if (customerPaymentStatus === 'Verification Pending') {
@@ -2710,9 +2716,9 @@ function computeOrderPaymentTracking(o, stageTats) {
     }
   } else if (customerPaymentStatus === 'Paid') {
     currentStageKey = 'final_settlement';
-    stageStartDate = o.offline_payment?.admin_approved_at || o.updated_at || o.created_at;
+    stageStartDate = o.offline_payment?.admin_approved_at || o.offline_payment?.verified_at || o.updated_at || o.created_at;
   } else {
-    currentStageKey = 'accounts_verification';
+    currentStageKey = isOnline ? 'final_settlement' : 'accounts_verification';
     stageStartDate = o.created_at;
   }
 
@@ -2734,17 +2740,18 @@ function computeOrderPaymentTracking(o, stageTats) {
   } else if (daysElapsed > configuredTatDays) {
     delaySignal = 'red';
     isOverdue = true;
-  } else if (daysElapsed >= (configuredTatDays - warningDays) || currentStageKey === 'admin_approval' || currentStageKey === 'accounts_verification') {
+  } else if (daysElapsed >= (configuredTatDays - warningDays) || (!isOnline && currentStageKey === 'admin_approval') || currentStageKey === 'accounts_verification') {
     delaySignal = 'orange';
   } else {
     delaySignal = 'green';
   }
 
   // Official order number & pre-approval request ID
+  // Online ICICI payments auto-generate official order upon capture or verification (NO admin approval needed)
   const isOfficialOrderGenerated = Boolean(
     o.is_official_order_generated ||
     admApp === 'approved' ||
-    (isOnline && payStatus === 'captured')
+    (isOnline && (payStatus === 'captured' || payStatus === 'paid' || offVer === 'approved'))
   );
   const orderRequestId = o.order_request_id || `REQ-EPC-${String(o.order_number || o._id).replace(/^ORD-EPC-/, '')}`;
 
@@ -2805,6 +2812,8 @@ const get_unified_epc_orders = async (req, res) => {
       });
     } else if (tab === 'awaiting_admin') {
       andConditions.push({
+        payment_method: { $ne: 'icici_ecollection' },
+        payment_gateway_used: { $ne: 'icici_ecollection' },
         $or: [
           { 'offline_payment.verification_status': 'submitted_for_approval' },
           { 'offline_payment.admin_approval_status': 'pending', 'offline_payment.verification_status': 'approved' }
@@ -2815,7 +2824,9 @@ const get_unified_epc_orders = async (req, res) => {
         $or: [
           { 'offline_payment.admin_approval_status': 'approved' },
           { is_official_order_generated: true },
-          { payment_status: { $in: ['captured', 'paid', 'success'] } }
+          { payment_status: { $in: ['captured', 'paid', 'success'] } },
+          { payment_method: 'icici_ecollection', 'offline_payment.verification_status': 'approved' },
+          { payment_gateway_used: 'icici_ecollection', 'offline_payment.verification_status': 'approved' }
         ]
       });
     } else if (tab === 'rejected') {
@@ -3022,6 +3033,7 @@ const get_unified_epc_orders = async (req, res) => {
         amount: grandTotal,
         commission_amount: commissionAmount,
         is_online: isOnline,
+        payment_mode: isOnline ? 'online' : 'offline',
         payment_mode_label: isOnline ? 'Online (ICICI VAN)' : (o.offline_payment?.payment_mode?.toUpperCase() || 'Bank Transfer (Offline)'),
         buyer_name: customerName,
         buyer_phone: customerPhone,
@@ -3106,7 +3118,7 @@ const get_unified_epc_orders = async (req, res) => {
         }
       }
 
-      if (tracking.customer_payment_status === 'Paid' || tracking.is_official_order_generated) {
+      if (tracking.customer_payment_status === 'Paid' || tracking.is_official_order_generated || (isOnline && (o.offline_payment?.verification_status === 'approved' || o.payment_status === 'captured'))) {
         approvedPaidCount++;
       }
 
@@ -3237,29 +3249,125 @@ const accounts_verify_epc_payment = async (req, res) => {
     if (!order.audit_trail) order.audit_trail = [];
     if (!order.payment_tracking) order.payment_tracking = {};
 
+    const isOnline = order.payment_method === 'icici_ecollection' || order.payment_gateway_used === 'icici_ecollection';
+
     if (decision === 'submitted_for_approval') {
-      order.offline_payment.verification_status = 'submitted_for_approval';
-      order.offline_payment.admin_approval_status = 'pending';
-      order.payment_status = 'pending_verification';
+      if (isOnline) {
+        // Online ICICI payments do NOT require Admin Approval! Directly auto-approve.
+        order.offline_payment.verification_status = 'approved';
+        order.offline_payment.admin_approval_status = 'approved';
+        order.offline_payment.admin_approved_by = userId;
+        order.offline_payment.admin_approved_at = new Date();
+        order.offline_payment.admin_remarks = accounts_remarks || 'Auto-approved online ICICI payment. No admin approval required.';
+        order.is_official_order_generated = true;
 
-      order.payment_tracking.customer_payment_status = 'Awaiting Admin Approval';
-      order.payment_tracking.current_stage = 'admin_approval';
-      order.payment_tracking.stage_entered_at = new Date();
-      order.payment_tracking.delay_signal = 'orange';
+        const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0);
+        const m2 = hasMilestones ? order.payment_milestones.milestones.find(m => m.milestone_number === 2) : null;
+        const isM2Pending = m2 && (m2.payment_status === 'pending_verification' || order.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification');
 
-      order.audit_trail.push({
-        action: 'ACCOUNTS_SUBMITTED_FOR_APPROVAL',
-        performed_by: userId,
-        performer_name: userName,
-        role: 'Accounts',
-        timestamp: new Date(),
-        notes: accounts_remarks || 'Offline payment verified and submitted for Admin approval',
-        details: {
-          utr: order.offline_payment.utr_number,
-          amount: order.offline_payment.amount_paid,
-          mode: order.offline_payment.payment_mode,
-        },
-      });
+        if (hasMilestones && !isM2Pending) {
+          // Auto-approve Milestone 1 (30% advance)
+          order.order_status = 'confirmed';
+          order.payment_status = 'pending_verification';
+
+          const m1 = order.payment_milestones.milestones.find(m => m.milestone_number === 1);
+          if (m1) {
+            m1.payment_status = 'verified';
+            m1.verified_by = userId;
+            m1.verified_at = new Date();
+            m1.notes = accounts_remarks || 'Milestone 1 Advance payment verified (Online ICICI)';
+          }
+          order.payment_milestones.milestone_verification_status = 'advance_verified';
+          order.payment_milestones.current_milestone_due = 2;
+          order.markModified('payment_milestones');
+
+          if (!order.invoice?.invoice_number) {
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const hexSuffix = String(order._id).slice(-4).toUpperCase();
+            order.invoice = {
+              invoice_number: `PI-EPC-${dateStr}-${hexSuffix}`,
+              invoice_date: new Date(),
+              invoice_url: `/api/india/v1/shop/orders/${order._id}/invoice-pdf`,
+              generated_at: new Date(),
+            };
+          }
+
+          order.payment_tracking.customer_payment_status = 'Partially Paid';
+          order.payment_tracking.current_stage = 'production_milestone';
+          order.payment_tracking.stage_entered_at = new Date();
+          order.payment_tracking.delay_signal = 'green';
+          order.payment_tracking.total_verified_amount = order.payment_milestones.advance_amount || order.offline_payment.amount_paid;
+          order.payment_tracking.outstanding_amount = order.payment_milestones.remaining_amount;
+        } else {
+          // Milestone 2 or Full Payment without milestones
+          order.payment_status = 'captured';
+          if (['pending', 'confirmed', 'processing'].includes(order.order_status)) {
+            order.order_status = 'ready_for_dispatch';
+          }
+          if (hasMilestones && m2) {
+            m2.payment_status = 'verified';
+            m2.verified_by = userId;
+            m2.verified_at = new Date();
+            m2.notes = accounts_remarks || 'Milestone 2 Remaining payment verified';
+            order.payment_milestones.milestone_verification_status = 'fully_paid';
+            order.markModified('payment_milestones');
+          }
+
+          const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+          const hexSuffix = String(order._id).slice(-4).toUpperCase();
+          order.invoice = {
+            invoice_number: `INV-SK-${dateStr}-${hexSuffix}`,
+            invoice_date: new Date(),
+            invoice_url: `/api/india/v1/shop/orders/${order._id}/invoice-pdf`,
+            generated_at: new Date(),
+          };
+
+          const totalRupees = (order.grand_total_paise || 0) / 100 || order.total_amount;
+          order.payment_tracking.customer_payment_status = 'Paid';
+          order.payment_tracking.current_stage = 'delivery_milestone';
+          order.payment_tracking.stage_entered_at = new Date();
+          order.payment_tracking.delay_signal = 'green';
+          order.payment_tracking.total_verified_amount = totalRupees;
+          order.payment_tracking.outstanding_amount = 0;
+        }
+
+        order.audit_trail.push({
+          action: 'ACCOUNTS_APPROVED_ONLINE_ICICI',
+          performed_by: userId,
+          performer_name: userName,
+          role: 'Accounts',
+          timestamp: new Date(),
+          notes: accounts_remarks || 'Online ICICI payment verified and auto-approved directly (No Admin Approval Required)',
+          details: {
+            utr: order.offline_payment.utr_number,
+            amount: order.offline_payment.amount_paid,
+            mode: 'online_icici',
+          },
+        });
+      } else {
+        order.offline_payment.verification_status = 'submitted_for_approval';
+        order.offline_payment.admin_approval_status = 'pending';
+        order.payment_status = 'pending_verification';
+
+        order.payment_tracking.customer_payment_status = 'Awaiting Admin Approval';
+        order.payment_tracking.current_stage = 'admin_approval';
+        order.payment_tracking.stage_entered_at = new Date();
+        order.payment_tracking.delay_signal = 'orange';
+
+        order.audit_trail.push({
+          action: 'ACCOUNTS_SUBMITTED_FOR_APPROVAL',
+          performed_by: userId,
+          performer_name: userName,
+          role: 'Accounts',
+          timestamp: new Date(),
+          notes: accounts_remarks || 'Offline payment verified and submitted for Admin approval',
+          details: {
+            utr: order.offline_payment.utr_number,
+            amount: order.offline_payment.amount_paid,
+            mode: order.offline_payment.payment_mode,
+          },
+        });
+      }
     } else if (decision === 'returned') {
       order.offline_payment.verification_status = 'returned';
       order.offline_payment.returned_reason = accounts_remarks || 'Returned for correction or additional proof';
@@ -3297,7 +3405,7 @@ const accounts_verify_epc_payment = async (req, res) => {
     return res.status(200).json({
       status: 'success',
       message: decision === 'submitted_for_approval'
-        ? 'Payment verified and submitted for Admin approval!'
+        ? (isOnline ? 'Online ICICI payment verified and officially activated directly! (No Admin Approval Required)' : 'Offline payment verified and submitted for Admin approval!')
         : `Payment ${decision} successfully.`,
       data: order,
     });

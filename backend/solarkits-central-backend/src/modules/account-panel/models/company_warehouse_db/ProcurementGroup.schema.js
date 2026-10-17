@@ -10,7 +10,7 @@ const schema = new mongoose.Schema({
     uppercase: true,
   },
   order_ids: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.Mixed,
     required: true,
   }],
   order_numbers: [{
@@ -41,7 +41,7 @@ const schema = new mongoose.Schema({
     default: 'single',
   },
   vehicle_details: {
-    vehicle_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+    vehicle_id: { type: mongoose.Schema.Types.Mixed, default: null },
     vehicle_code: { type: String, default: null },
     vehicle_name: { type: String, default: null },
     vehicle_model: { type: String, default: null },
@@ -52,14 +52,14 @@ const schema = new mongoose.Schema({
     unallocated_kits: { type: Number, default: 0 },
   },
   supplier_groups: [{
-    supplier_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+    supplier_id: { type: mongoose.Schema.Types.Mixed, default: null },
     supplier_name: { type: String, required: true },
     is_oem: { type: Boolean, default: false },
-    warehouse_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+    warehouse_id: { type: mongoose.Schema.Types.Mixed, default: null },
     warehouse_code: { type: String, default: null },
     warehouse_name: { type: String, default: null },
     items: [{
-      product_name: { type: String, required: true },
+      product_name: { type: String, default: 'Solar Equipment' },
       sku_code: { type: String, default: null },
       quantity: { type: Number, required: true, default: 1 },
       unit: { type: String, default: 'Units' },
@@ -84,6 +84,26 @@ const schema = new mongoose.Schema({
     severity: { type: String, enum: ['warning', 'critical'], default: 'warning' },
     product_name: { type: String, default: null },
   }],
+  batch_status: {
+    type: String,
+    enum: ['Preparing', 'Batch Ready', 'Procurement In Progress', 'Transferred to Delivery'],
+    default: 'Batch Ready',
+  },
+  procurement_readiness_status: {
+    type: String,
+    enum: [
+      'Procurement In Progress',
+      'Awaiting Warehouse Inward',
+      'Ready for Kit Preparation',
+      'Ready for Dispatch',
+    ],
+    default: 'Procurement In Progress',
+  },
+  delivery_handover: {
+    transferred_at: { type: Date, default: null },
+    transferred_by: { type: mongoose.Schema.Types.Mixed, default: null },
+    delivery_order_id: { type: mongoose.Schema.Types.Mixed, default: null },
+  },
   status: {
     type: String,
     enum: [
@@ -91,15 +111,17 @@ const schema = new mongoose.Schema({
       'Selected for Processing',
       'Group Validation Pending',
       'Ready for Procurement',
+      'Batch Ready',
       'Sent to Procurement',
       'Procurement In Progress',
       'Procurement Completed',
       'Exception / Rework Required',
+      'Transferred to Delivery',
     ],
-    default: 'Sent to Procurement',
+    default: 'Batch Ready',
   },
   created_by: {
-    user_id: { type: mongoose.Schema.Types.ObjectId, default: null },
+    user_id: { type: mongoose.Schema.Types.Mixed, default: null },
     name: { type: String, default: 'Account User' },
     email: { type: String, default: null },
     role: { type: String, default: 'Accounts' },

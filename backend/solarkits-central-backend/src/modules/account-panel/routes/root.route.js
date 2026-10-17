@@ -69,11 +69,27 @@ router.use('/accounts/solar-shop', solarshop_accounts_route);
 router.get('/warehouse/vehicles', check_auth, solarshop_handler.get_warehouse_vehicles);
 
 // New Orders & Bulk Procurement Grouping
+const procurement_handler = require('../controller/procurement.handler');
 router.get('/accounts/new-orders', check_auth, accounts_handler.get_eligible_new_orders);
 router.get('/accounts/new-orders/filter-options', check_auth, accounts_handler.get_new_orders_filter_options);
 router.get('/accounts/vehicles-master', check_auth, accounts_handler.get_vehicles_master);
 router.post('/accounts/procurement-groups/calculate', check_auth, accounts_handler.calculate_procurement_grouping);
 router.post('/accounts/procurement-groups', check_auth, accounts_handler.create_procurement_group);
 router.get('/accounts/procurement-groups', check_auth, accounts_handler.list_procurement_groups);
+
+// Dedicated Procurement Module APIs
+router.get('/accounts/procurement/batch-ready-orders', check_auth, procurement_handler.get_batch_ready_orders);
+router.post('/accounts/procurement/bom-calculate', check_auth, procurement_handler.calculate_procurement_bom);
+router.post('/accounts/procurement/reserve-stock', check_auth, procurement_handler.reserve_inventory_stock);
+router.post('/accounts/procurement/release-stock', check_auth, procurement_handler.release_inventory_stock);
+router.post('/accounts/procurement/purchase-indents', check_auth, procurement_handler.create_purchase_indent);
+router.get('/accounts/procurement/purchase-indents', check_auth, procurement_handler.list_purchase_indents);
+router.post('/accounts/procurement/payments/request', check_auth, procurement_handler.request_supplier_payment);
+router.post('/accounts/procurement/payments/approval', check_auth, procurement_handler.admin_approve_supplier_payment);
+router.post('/accounts/procurement/payments/bank-record', check_auth, procurement_handler.record_bank_payment);
+router.post('/accounts/procurement/fulfilment-method', check_auth, procurement_handler.save_supply_fulfilment);
+router.post('/accounts/procurement/supplier-dispatch', check_auth, procurement_handler.supplier_update_dispatch);
+router.post('/accounts/procurement/inward-verify', check_auth, procurement_handler.warehouse_confirm_inward);
+router.post('/accounts/procurement/handover-delivery', check_auth, procurement_handler.handover_to_delivery_manager);
 
 module.exports = router;
