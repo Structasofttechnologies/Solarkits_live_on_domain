@@ -804,10 +804,27 @@ export default function Procurement() {
 
                         return (
                           <tr key={item.sku_code} className="hover:bg-bg/40 transition-colors">
-                            {/* Product SKU */}
+                            {/* Product SKU & Sub-components */}
                             <td className="py-3 px-3">
                               <span className="font-bold text-text-primary block">{item.product_name}</span>
                               <span className="text-[10px] text-primary font-mono">{item.sku_code}</span>
+
+                              {/* If item has sub_items (e.g. Complete BOS Kit) */}
+                              {item.sub_items && item.sub_items.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {item.sub_items.map((sub, sIdx) => (
+                                    <span
+                                      key={sub.sku_code || sIdx}
+                                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-bg border border-border/80 text-[10px] text-text-muted"
+                                      title={`${sub.product_name} - ${sub.required_quantity} ${sub.unit} @ ₹${(sub.unit_rate || 0).toLocaleString("en-IN")}`}
+                                    >
+                                      <span className="w-1.5 h-1.5 rounded-full bg-primary/70 shrink-0"></span>
+                                      <strong className="text-text-primary font-medium">{sub.product_name}</strong>
+                                      <span className="font-mono text-primary font-bold">({sub.required_quantity} {sub.unit})</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </td>
 
                             {/* Required Qty */}
@@ -943,6 +960,18 @@ export default function Procurement() {
                             <span className="text-[10px] text-text-muted block mt-0.5">
                               Order #{pi.customer_order_number} • Destination: {pi.destination_warehouse_name}
                             </span>
+                            {/* Included Line Items in PI */}
+                            {pi.items && pi.items.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2">
+                                {pi.items.map((it, idx) => (
+                                  <span key={idx} className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-surface border border-border/80 text-text-secondary inline-flex items-center gap-1">
+                                    <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
+                                    <span>{it.product_name}</span>
+                                    <strong className="text-text-primary">({it.quantity} {it.unit || 'Sets'} @ ₹{(it.unit_rate || 0).toLocaleString("en-IN")})</strong>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                           <div className="text-right">

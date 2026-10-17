@@ -173,9 +173,7 @@ exports.calculate_procurement_bom = async (req, res) => {
     // Standard BOM component multipliers per solar kit:
     // Panels: 9 units (550W Bifacial)
     // Inverter: 1 unit (5kW/10kW)
-    // Mounting Structure: 1 set
-    // BOS & Protection: 1 set
-    // Cable & Earthing: 1 set
+    // Complete BOS Kit: 1 set (Mounting Structure, ACDB/DCDB Box, DC Cabling & Earthing)
     const bomDefinitions = [
       {
         sku_code: 'PANEL-550W-BIFACIAL',
@@ -196,31 +194,39 @@ exports.calculate_procurement_bom = async (req, res) => {
         unit: 'Pcs'
       },
       {
-        sku_code: 'BOS-STRUCTURE-GI-HD',
-        product_name: 'GI Hot-Dip Rooftop Mounting Structure Kit',
-        category: 'Mounting Structure',
+        sku_code: 'BOS-KIT-COMPLETE',
+        product_name: 'Complete Balance of System (BOS) Kit',
+        category: 'Balance of System (BOS)',
         component_type: 'bos_kit',
         qty_per_kit: 1,
-        unit_rate: 16000,
-        unit: 'Sets'
-      },
-      {
-        sku_code: 'BOS-ACDB-DCDB-IP65',
-        product_name: 'ACDB & DCDB IP65 Surge Protection Distribution Box',
-        category: 'Protection Box',
-        component_type: 'bos_kit',
-        qty_per_kit: 1,
-        unit_rate: 8500,
-        unit: 'Sets'
-      },
-      {
-        sku_code: 'BOS-CABLE-EARTH-KIT',
-        product_name: 'Solar DC Cable (4/6 sq.mm) & Chemical Earthing Kit',
-        category: 'Cabling & Safety',
-        component_type: 'bos_kit',
-        qty_per_kit: 1,
-        unit_rate: 5500,
-        unit: 'Sets'
+        unit_rate: 30000,
+        unit: 'Sets',
+        sub_items: [
+          {
+            sku_code: 'BOS-STRUCTURE-GI-HD',
+            product_name: 'GI Hot-Dip Rooftop Mounting Structure Kit',
+            category: 'Mounting Structure',
+            qty_per_kit: 1,
+            unit_rate: 16000,
+            unit: 'Sets'
+          },
+          {
+            sku_code: 'BOS-ACDB-DCDB-IP65',
+            product_name: 'ACDB & DCDB IP65 Surge Protection Distribution Box',
+            category: 'Protection Box',
+            qty_per_kit: 1,
+            unit_rate: 8500,
+            unit: 'Sets'
+          },
+          {
+            sku_code: 'BOS-CABLE-EARTH-KIT',
+            product_name: 'Solar DC Cable (4/6 sq.mm) & Chemical Earthing Kit',
+            category: 'Cabling & Safety',
+            qty_per_kit: 1,
+            unit_rate: 5500,
+            unit: 'Sets'
+          }
+        ]
       }
     ];
 
@@ -228,6 +234,16 @@ exports.calculate_procurement_bom = async (req, res) => {
     const bomCalculations = await Promise.all(
       bomDefinitions.map(async (def) => {
         const requiredQuantity = def.qty_per_kit * totalKits;
+        const calculatedSubItems = (def.sub_items || []).map((sub) => ({
+          sku_code: sub.sku_code,
+          product_name: sub.product_name,
+          category: sub.category,
+          qty_per_kit: sub.qty_per_kit,
+          required_quantity: sub.qty_per_kit * totalKits,
+          unit_rate: sub.unit_rate,
+          unit: sub.unit || 'Sets',
+          subtotal: (sub.qty_per_kit * totalKits) * sub.unit_rate
+        }));
 
         // Query available warehouse stock
         let availableStock = 0;
@@ -347,6 +363,7 @@ exports.calculate_procurement_bom = async (req, res) => {
           supplier_quantity: supplierQuantity,
           eligible_partners: eligiblePartners,
           selected_partner: eligiblePartners[0] || null,
+          sub_items: calculatedSubItems,
           destination_warehouse: {
             id: targetWarehouseId,
             name: warehouseDoc?.warehouse_code || 'Central Hub Warehouse',

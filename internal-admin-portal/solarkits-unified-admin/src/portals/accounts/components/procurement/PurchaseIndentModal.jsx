@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   FaFileInvoice, FaBuilding, FaTruck, FaWarehouse, FaTimes,
-  FaCheckCircle, FaCalendarAlt, FaShieldAlt, FaInfoCircle, FaBoxes
+  FaCheckCircle, FaCalendarAlt, FaShieldAlt, FaInfoCircle, FaBoxes, FaListUl
 } from "react-icons/fa";
 import Dialog from "../Dialog";
 import Button from "../Button";
@@ -35,10 +35,42 @@ export default function PurchaseIndentModal({
   const [expectedDispatchDate, setExpectedDispatchDate] = useState("");
   const [expectedInwardDate, setExpectedInwardDate] = useState("");
 
+  // Multi-item support for Complete BOS Kit (all items under 1 PI)
+  const [multiItems, setMultiItems] = useState([]);
+
   useEffect(() => {
     if (bomItem) {
-      setProcureQuantity(bomItem.supplier_quantity || bomItem.required_quantity || 1);
-      setUnitRate(bomItem.unit_rate || (bomItem.component_type === "panel" ? 6875 : bomItem.component_type === "inverter" ? 32000 : 12000));
+      const kitQty = bomItem.supplier_quantity !== undefined && bomItem.supplier_quantity > 0
+        ? bomItem.supplier_quantity
+        : (bomItem.required_quantity || 1);
+
+      setProcureQuantity(kitQty);
+      setUnitRate(bomItem.unit_rate || (bomItem.component_type === "panel" ? 6875 : bomItem.component_type === "inverter" ? 32000 : 30000));
+
+      if (bomItem.sub_items && bomItem.sub_items.length > 0) {
+        setMultiItems(
+          bomItem.sub_items.map((sub) => {
+            const itemQty = (sub.qty_per_kit || 1) * kitQty;
+            const rate = sub.unit_rate || 0;
+            const subtotal = itemQty * rate;
+            const gst = 13.8;
+            const tax = Math.round((subtotal * gst) / 100);
+            return {
+              sku_code: sub.sku_code,
+              product_name: sub.product_name,
+              category: sub.category,
+              quantity: itemQty,
+              unit_rate: rate,
+              unit: sub.unit || "Sets",
+              gst_rate: gst,
+              tax_amount: tax,
+              total_value: subtotal + tax
+            };
+          })
+        );
+      } else {
+        setMultiItems([]);
+      }
       
       const defaultPartner = bomItem.selected_partner || bomItem.eligible_partners?.[0];
       if (defaultPartner) {
@@ -57,14 +89,55 @@ export default function PurchaseIndentModal({
     }
   }, [bomItem]);
 
+  const isMultiItem = multiItems && multiItems.length > 0;
+
+  // Handler when overarching Kit quantity changes
+  const handleKitQuantityChange = (newQty) => {
+    const validQty = Math.max(1, newQty);
+    setProcureQuantity(validQty);
+    if (bomItem?.sub_items && bomItem.sub_items.length > 0) {
+      setMultiItems(prev =>
+        prev.map(item => {
+          const originalSub = bomItem.sub_items.find(s => s.sku_code === item.sku_code);
+          const perKit = originalSub?.qty_per_kit || 1;
+          const updatedQty = perKit * validQty;
+          const subtotal = updatedQty * (Number(item.unit_rate) || 0);
+          const gst = Number(item.gst_rate) || 13.8;
+          const tax = Math.round((subtotal * gst) / 100);
+          return {
+            ...item,
+            quantity: updatedQty,
+            tax_amount: tax,
+            total_value: subtotal + tax
+          };
+        })
+      );
+    }
+  };
+
   const handlePartnerSelect = (partner) => {
     setSupplierName(partner.name);
     setSupplierBrand(partner.brand_name || partner.name);
     setIsOemPartner(Boolean(partner.is_oem));
   };
 
-  const subtotal = procureQuantity * unitRate;
-  const taxAmount = Math.round((subtotal * gstRate) / 100);
+  const subtotal = useMemo(() => {
+    if (isMultiItem) {
+      return multiItems.reduce((acc, it) => acc + (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0), 0);
+    }
+    return procureQuantity * unitRate;
+  }, [isMultiItem, multiItems, procureQuantity, unitRate]);
+
+  const taxAmount = useMemo(() => {
+    if (isMultiItem) {
+      return multiItems.reduce((acc, it) => {
+        const itemSub = (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0);
+        return acc + Math.round((itemSub * (Number(it.gst_rate) || 13.8)) / 100);
+      }, 0);
+    }
+    return Math.round((subtotal * gstRate) / 100);
+  }, [isMultiItem, multiItems, subtotal, gstRate]);
+
   const totalPiValue = subtotal + taxAmount;
   const advanceAmount = Math.round((totalPiValue * advancePercentage) / 100);
   const balanceAmount = totalPiValue - advanceAmount;
@@ -80,6 +153,37 @@ export default function PurchaseIndentModal({
       return;
     }
 
+    const payloadItems = isMultiItem
+      ? multiItems.map(it => {
+          const qty = Number(it.quantity) || 1;
+          const rate = Number(it.unit_rate) || 0;
+          const gst = Number(it.gst_rate) || 13.8;
+          const itemSub = qty * rate;
+          const tax = Math.round((itemSub * gst) / 100);
+          return {
+            sku_id: it.sku_id || null,
+            sku_code: it.sku_code || "BOS-ITEM",
+            product_name: it.product_name,
+            quantity: qty,
+            unit_rate: rate,
+            gst_rate: gst,
+            tax_amount: tax,
+            total_value: itemSub + tax
+          };
+        })
+      : [
+          {
+            sku_id: bomItem?.sku_id || null,
+            sku_code: bomItem?.sku_code || "SKU-SOLAR",
+            product_name: bomItem?.product_name || "Solar Component",
+            quantity: Number(procureQuantity),
+            unit_rate: Number(unitRate),
+            gst_rate: Number(gstRate),
+            tax_amount: taxAmount,
+            total_value: totalPiValue
+          }
+        ];
+
     const payload = {
       customer_order_number: selectedOrder?.order_number || selectedBatch?.order_numbers?.[0] || "ORD-2026-COMBINED",
       customer_order_id: selectedOrder?.id || null,
@@ -90,18 +194,7 @@ export default function PurchaseIndentModal({
       is_oem_partner: isOemPartner,
       destination_warehouse_id: destinationWarehouse?.id || selectedBatch?.supplier_groups?.[0]?.warehouse_id || "670000000000000000000001",
       destination_warehouse_name: destinationWarehouse?.name || "Central Warehouse",
-      items: [
-        {
-          sku_id: bomItem?.sku_id || null,
-          sku_code: bomItem?.sku_code || "SKU-SOLAR",
-          product_name: bomItem?.product_name || "Solar Component",
-          quantity: Number(procureQuantity),
-          unit_rate: Number(unitRate),
-          gst_rate: Number(gstRate),
-          tax_amount: taxAmount,
-          total_value: totalPiValue
-        }
-      ],
+      items: payloadItems,
       fulfilment: {
         method: fulfilmentMethod,
         supplier_warehouse_address: supplierWarehouseAddress || "Supplier Primary Works",
@@ -162,7 +255,7 @@ export default function PurchaseIndentModal({
             <div className="flex items-center gap-2">
               <FaBoxes className="text-primary text-base" />
               <h3 className="text-xs font-black uppercase tracking-wider text-text-primary">
-                Product & Indent Quantity
+                {isMultiItem ? "BOS Kit Components & Indent Quantities" : "Product & Indent Quantity"}
               </h3>
             </div>
             <span className="text-xs font-bold text-text-muted">
@@ -170,44 +263,130 @@ export default function PurchaseIndentModal({
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
-              <label className="text-[11px] font-bold text-text-muted uppercase block mb-1">
-                Product Name
-              </label>
-              <div className="p-2.5 bg-bg border border-border rounded-xl text-xs font-bold text-text-primary">
-                {bomItem?.product_name || "Solar Component"}
+          {isMultiItem ? (
+            <div className="space-y-3">
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-black text-text-primary block">{bomItem?.product_name}</span>
+                  <span className="text-[10px] text-text-muted">
+                    Total Required: <strong>{bomItem?.required_quantity} {bomItem?.unit}</strong> • Supplier Sourcing Qty: <strong>{bomItem?.supplier_quantity} {bomItem?.unit}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-bold text-text-muted uppercase">
+                    Procure Sets:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={procureQuantity}
+                    onChange={(e) => handleKitQuantityChange(parseInt(e.target.value) || 1)}
+                    className="w-20 py-1.5 px-2 text-center bg-bg border border-border rounded-lg text-xs font-bold text-text-primary focus:outline-hidden focus:border-primary shadow-xs"
+                  />
+                  <span className="text-[10px] font-black uppercase px-2 py-1 rounded bg-primary text-white text-[9px]">
+                    Single Unified PI
+                  </span>
+                </div>
+              </div>
+
+              {/* Itemized breakdown table */}
+              <div className="overflow-x-auto border border-border rounded-xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-bg/60 text-[10px] uppercase font-black tracking-wider text-text-muted border-b border-border">
+                    <tr>
+                      <th className="py-2.5 px-3">BOS Component Name</th>
+                      <th className="py-2.5 px-2 text-center">SKU Code</th>
+                      <th className="py-2.5 px-2 text-center">Quantity ({bomItem?.unit || 'Sets'})</th>
+                      <th className="py-2.5 px-2 text-right">Unit Rate (₹)</th>
+                      <th className="py-2.5 px-3 text-right">Subtotal (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {multiItems.map((it, idx) => {
+                      const lineSub = (Number(it.quantity) || 0) * (Number(it.unit_rate) || 0);
+                      return (
+                        <tr key={it.sku_code || idx} className="hover:bg-bg/40 transition-colors">
+                          <td className="py-2.5 px-3 font-bold text-text-primary">
+                            {it.product_name}
+                            <span className="block text-[10px] font-normal text-text-muted">{it.category}</span>
+                          </td>
+                          <td className="py-2.5 px-2 text-center font-mono text-[10px] text-primary">
+                            {it.sku_code}
+                          </td>
+                          <td className="py-2.5 px-2 text-center">
+                            <input
+                              type="number"
+                              min="1"
+                              value={it.quantity}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value) || 1);
+                                setMultiItems(prev => prev.map((p, i) => i === idx ? { ...p, quantity: val } : p));
+                              }}
+                              className="w-16 py-1 px-1.5 text-center bg-bg border border-border rounded-lg text-xs font-bold text-text-primary focus:outline-hidden focus:border-primary"
+                            />
+                          </td>
+                          <td className="py-2.5 px-2 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              value={it.unit_rate}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                setMultiItems(prev => prev.map((p, i) => i === idx ? { ...p, unit_rate: val } : p));
+                              }}
+                              className="w-24 py-1 px-1.5 text-right bg-bg border border-border rounded-lg text-xs font-bold text-text-primary focus:outline-hidden focus:border-primary"
+                            />
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-text-primary font-mono">
+                            ₹{lineSub.toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="md:col-span-2">
+                <label className="text-[11px] font-bold text-text-muted uppercase block mb-1">
+                  Product Name
+                </label>
+                <div className="p-2.5 bg-bg border border-border rounded-xl text-xs font-bold text-text-primary">
+                  {bomItem?.product_name || "Solar Component"}
+                </div>
+              </div>
 
-            <div>
-              <CustomInput
-                label="Indent Qty *"
-                type="number"
-                min="1"
-                required
-                value={procureQuantity}
-                onChange={(e) => setProcureQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              />
-              <span className="text-[10px] text-text-muted block mt-0.5">
-                Total Required: {bomItem?.required_quantity} {bomItem?.unit}
-              </span>
-            </div>
+              <div>
+                <CustomInput
+                  label="Indent Qty *"
+                  type="number"
+                  min="1"
+                  required
+                  value={procureQuantity}
+                  onChange={(e) => setProcureQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                />
+                <span className="text-[10px] text-text-muted block mt-0.5">
+                  Total Required: {bomItem?.required_quantity} {bomItem?.unit}
+                </span>
+              </div>
 
-            <div>
-              <CustomInput
-                label="Unit Rate (₹) *"
-                type="number"
-                min="0"
-                required
-                value={unitRate}
-                onChange={(e) => setUnitRate(Math.max(0, parseFloat(e.target.value) || 0))}
-              />
-              <span className="text-[10px] text-text-muted block mt-0.5">
-                Excl. GST @ {gstRate}%
-              </span>
+              <div>
+                <CustomInput
+                  label="Unit Rate (₹) *"
+                  type="number"
+                  min="0"
+                  required
+                  value={unitRate}
+                  onChange={(e) => setUnitRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                />
+                <span className="text-[10px] text-text-muted block mt-0.5">
+                  Excl. GST @ {gstRate}%
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Supplier / OEM Selection (with Regional Eligibility Rule) */}
