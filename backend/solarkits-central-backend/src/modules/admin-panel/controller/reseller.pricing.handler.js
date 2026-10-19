@@ -194,7 +194,7 @@ const list_reseller_listings = async (req, res) => {
 
     const rows = await ResellerListing.find(filter)
       .populate({ path: 'product_id', model: Product, select: 'name sku_code description image base_price_paise min_margin_paise max_margin_paise specifications' })
-      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code base_price_cached selling_price_cached kit_image description' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'name kit_name kit_code base_price_cached selling_price_cached kit_image description order_quantities loose_order_quantities capacity gst_rate' })
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
       .populate({ path: 'brand_id', model: Brand, select: 'name logo' })
@@ -202,17 +202,38 @@ const list_reseller_listings = async (req, res) => {
       .sort(sortOption)
       .lean();
 
-    // Enrich listings with active plan's product-wise commission and MOQ rules
+    // Enrich listings with active plan's product-wise commission, MOQ rules, and Loose/PO tier pricing
     const {
       ResellerPlanSubscription: SubModel,
       FranchiseeCommissionRule: CommModel,
       FranchiseeMoqRule: MoqModel,
+      CompanyMargin: IndiaCompanyMargin,
     } = require('../models/india_solarshop_db');
+    const { CompanyMargin: CoreCompanyMargin } = require('../models/core_db');
 
-    const activeSub = await SubModel.findOne({
-      reseller_id: resellerId,
-      status: 'active',
-    }).populate('plan_id').sort({ start_date: -1 }).lean();
+    const kitIds = rows
+      .map((r) => (r.kit_id?._id ? r.kit_id._id.toString() : r.kit_id ? r.kit_id.toString() : null))
+      .filter(Boolean);
+
+    const [activeSub, indiaMargins, coreMargins] = await Promise.all([
+      SubModel.findOne({
+        reseller_id: resellerId,
+        status: 'active',
+      }).populate('plan_id').sort({ start_date: -1 }).lean(),
+      kitIds.length > 0
+        ? IndiaCompanyMargin.find({ combo_kit_id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
+        : [],
+      kitIds.length > 0
+        ? CoreCompanyMargin.find({ combo_kit_id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
+        : []
+    ]);
+
+    const marginMap = {};
+    [...(coreMargins || []), ...(indiaMargins || [])].forEach((m) => {
+      if (m.combo_kit_id) {
+        marginMap[m.combo_kit_id.toString()] = m;
+      }
+    });
 
     if (activeSub?.plan_id) {
       const planId = activeSub.plan_id._id || activeSub.plan_id;
@@ -252,6 +273,44 @@ const list_reseller_listings = async (req, res) => {
         }
       });
     }
+
+    // Attach CompanyMargin tier pricing & quantity options to kit items
+    rows.forEach((row) => {
+      const kitId = row.kit_id?._id ? row.kit_id._id.toString() : (row.kit_id ? row.kit_id.toString() : null);
+      if (kitId) {
+        const margin = marginMap[kitId] || null;
+        const rawLooseTiers = Array.isArray(margin?.loose_order_pricing) ? margin.loose_order_pricing : [];
+        const rawPoTiers = Array.isArray(margin?.po_order_pricing) ? margin.po_order_pricing : [];
+
+        // Build list of valid loose order quantities
+        const looseFromPricing = rawLooseTiers.map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+        const looseFromKit = Array.isArray(row.kit_id?.loose_order_quantities)
+          ? row.kit_id.loose_order_quantities.map(Number).filter(n => !isNaN(n) && n > 0)
+          : [];
+        const combinedLooseQtys = [...new Set([...looseFromPricing, ...looseFromKit])].sort((a, b) => a - b);
+        const finalLooseQtys = combinedLooseQtys.length > 0 ? combinedLooseQtys : [5, 10, 15, 20, 25, 30];
+
+        // Build list of valid PO order quantities
+        const poFromPricing = rawPoTiers.map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+        const poFromKit = Array.isArray(row.kit_id?.order_quantities)
+          ? row.kit_id.order_quantities.map(Number).filter(n => !isNaN(n) && n > 0)
+          : [];
+        const combinedPoQtys = [...new Set([...poFromPricing, ...poFromKit])].sort((a, b) => a - b);
+        const finalPoQtys = combinedPoQtys.length > 0 ? combinedPoQtys : [100, 200, 400, 500, 1000];
+
+        row.loose_order_pricing = rawLooseTiers;
+        row.po_order_pricing = rawPoTiers;
+        row.loose_order_quantities = finalLooseQtys;
+        row.order_quantities = finalPoQtys;
+
+        if (row.kit_id && typeof row.kit_id === 'object') {
+          row.kit_id.loose_order_pricing = rawLooseTiers;
+          row.kit_id.po_order_pricing = rawPoTiers;
+          row.kit_id.loose_order_quantities = finalLooseQtys;
+          row.kit_id.order_quantities = finalPoQtys;
+        }
+      }
+    });
 
     return res.json({ status: 'success', data: rows });
   } catch (error) {

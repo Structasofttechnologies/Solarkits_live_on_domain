@@ -232,7 +232,36 @@ async function createEpcOfflineOrder({
 
     for (const item of items) {
       const qty = parseInt(item.quantity, 10) || parseInt(item.qty, 10) || 1;
-      const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 180000);
+      const rawKitId = item.kit_id || item.combo_kit_id || (!item.product_id ? (item.id || item._id) : null);
+      let ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 0);
+
+      // Check tier pricing for kit if available
+      if (rawKitId) {
+        try {
+          const { CompanyMargin: IndiaMargin } = require('../models/india_solarshop_db');
+          const marginDoc = await IndiaMargin.findOne({
+            combo_kit_id: rawKitId,
+            is_active: true,
+            deleted_at: null,
+          }).sort({ updated_at: -1 }).lean();
+          if (marginDoc) {
+            const allTiers = [
+              ...(Array.isArray(marginDoc.loose_order_pricing) ? marginDoc.loose_order_pricing : []),
+              ...(Array.isArray(marginDoc.po_order_pricing) ? marginDoc.po_order_pricing : []),
+            ];
+            const matchedTier = allTiers.find((t) => Number(t.quantity) === Number(qty) && Number(t.price_per_kit) > 0);
+            if (matchedTier) {
+              ourPriceRupees = Number(matchedTier.price_per_kit);
+            }
+          }
+        } catch (tierErr) {
+          console.warn('Error checking tier pricing in direct offline checkout:', tierErr.message);
+        }
+      }
+
+      if (!ourPriceRupees || ourPriceRupees <= 0) {
+        ourPriceRupees = 180000;
+      }
       // ── CRITICAL: ourPrice from the shop API is GST-INCLUSIVE ──
       // standardPrice = base × (1 + margin%) × (1 + gst%) — already incl. GST
       // So: baseExclGst = ourPrice / (1 + gstRate/100)

@@ -796,12 +796,20 @@ const get_combo_kits_by_district = async (req, res) => {
       }
 
       // Get margin
-      const marginDoc = await CompanyMargin.findOne({
+      let marginDoc = await CompanyMargin.findOne({
         warehouse_id: warehouseId,
         combo_kit_id: kit._id,
         is_active: true,
         deleted_at: null
       }).lean();
+
+      if (!marginDoc) {
+        marginDoc = await CompanyMargin.findOne({
+          combo_kit_id: kit._id,
+          is_active: true,
+          deleted_at: null
+        }).sort({ updated_at: -1 }).lean();
+      }
 
       const standardMargin = marginDoc ? (marginDoc.standard_margin || 15) : 15;
       const showcaseMargin = marginDoc ? (marginDoc.showcase_margin || 25) : 25;
@@ -1329,10 +1337,30 @@ const get_combo_kits_by_district = async (req, res) => {
           })
         } : null,
         capacityKW: kit.capacity || 0,
-        orderQuantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
-        order_quantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
-        looseOrderQuantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
-        loose_order_quantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        orderQuantities: (() => {
+          const fromKit = (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [100, 200, 400, 500, 1000];
+        })(),
+        order_quantities: (() => {
+          const fromKit = (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [100, 200, 400, 500, 1000];
+        })(),
+        looseOrderQuantities: (() => {
+          const fromKit = (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [5, 10, 15, 20, 25, 30];
+        })(),
+        loose_order_quantities: (() => {
+          const fromKit = (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [5, 10, 15, 20, 25, 30];
+        })(),
         loose_order_pricing: marginDoc?.loose_order_pricing || [],
         po_order_pricing: marginDoc?.po_order_pricing || [],
         allow_trial_kit: Boolean(kit.allow_trial_kit),

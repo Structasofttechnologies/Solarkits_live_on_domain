@@ -43,6 +43,16 @@ export default function StorefrontListings() {
   const [stockFilter, setStockFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
 
+  // Track active tier per kit: { [itemId]: { type: 'loose' | 'po', qty: number } }
+  const [selectedTiers, setSelectedTiers] = useState({});
+
+  const handleTierSelect = (itemId, type, qty) => {
+    setSelectedTiers((prev) => ({
+      ...prev,
+      [itemId]: { type, qty: Number(qty) },
+    }));
+  };
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -258,11 +268,57 @@ export default function StorefrontListings() {
           </div>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {filteredListings.map((item) => {
             const isKit = item.item_type === "kit" || Boolean(item.kit_id);
             const p = item.product_id;
             const k = item.kit_id;
+
+            // Extract pricing tiers and quantities for kits
+            const loosePricing = Array.isArray(item.loose_order_pricing) ? item.loose_order_pricing : [];
+            const poPricing = Array.isArray(item.po_order_pricing) ? item.po_order_pricing : [];
+
+            const looseQtys = Array.isArray(item.loose_order_quantities) && item.loose_order_quantities.length > 0
+              ? item.loose_order_quantities
+              : [5, 10, 15, 20, 25, 30];
+
+            const poQtys = Array.isArray(item.order_quantities) && item.order_quantities.length > 0
+              ? item.order_quantities
+              : [100, 200, 400, 500, 1000];
+
+            // Current selected tier for this item (default to first loose tier or first PO tier)
+            const currentTierState = selectedTiers[item._id] || (
+              looseQtys.length > 0
+                ? { type: "loose", qty: looseQtys[0] }
+                : { type: "po", qty: poQtys[0] || 200 }
+            );
+
+            const activeQty = isKit ? (currentTierState.qty || 1) : 1;
+            const activeType = currentTierState.type || "loose"; // "loose" | "po"
+
+            // Baseline 1-kit cost in INR
+            const baselineCostInr = item.cost_price_paise
+              ? item.cost_price_paise / 100
+              : (p?.base_price || k?.base_price_cached || 1000);
+
+            // Look up active tier price
+            let tierPerKitPrice = baselineCostInr;
+            let tierSavingsPerKit = 0;
+
+            if (isKit) {
+              const activePricingList = activeType === "loose" ? loosePricing : poPricing;
+              const matched = activePricingList.find(
+                (t) => Number(t.quantity) === Number(activeQty) && Number(t.price_per_kit) > 0
+              );
+              if (matched) {
+                tierPerKitPrice = Number(matched.price_per_kit);
+                tierSavingsPerKit = matched.discount_amount || Math.max(0, baselineCostInr - tierPerKitPrice);
+              }
+            }
+
+            // Cost price in INR for active tier
+            const costInr = isKit ? tierPerKitPrice : baselineCostInr;
+            const totalCostInr = costInr * activeQty;
 
             // Product-specific commission rate from Franchise Settings, fallback to plan rate
             const itemCommissionPct = item.commission_percentage != null
@@ -279,17 +335,19 @@ export default function StorefrontListings() {
               ? `₹${itemFixedAmount.toLocaleString('en-IN')} / kit`
               : `${itemCommissionPct}%`;
 
-            // Cost price in INR
-            const costInr = item.cost_price_paise
-              ? item.cost_price_paise / 100
-              : (p?.base_price || k?.base_price_cached || 1000);
-
             // Fixed Plan Dealer Margin in INR
             const marginInr = isItemFixedPerKit ? itemFixedAmount : ((costInr * itemCommissionPct) / 100);
+            const totalMarginInr = marginInr * activeQty;
+
             const subtotalWithMargin = costInr + marginInr;
-            const taxRate = item.tax_rate_pct || 18;
+            const taxRate = item.tax_rate_pct || (k?.gst_rate ?? 18);
             const taxAmount = (subtotalWithMargin * taxRate) / 100;
             const finalEpcPrice = subtotalWithMargin + taxAmount;
+            const totalEpcPrice = finalEpcPrice * activeQty;
+
+            const savingsPct = baselineCostInr > 0 && tierSavingsPerKit > 0
+              ? ((tierSavingsPerKit / baselineCostInr) * 100).toFixed(1)
+              : 0;
 
             const displayTitle = item.title || p?.name || k?.name || k?.kit_name || (isKit ? "Solar Combo Kit" : "Solar Component");
             const displaySku = p?.sku_code || k?.kit_code || (isKit ? "SKU-KIT" : "SKU-PROD");
@@ -300,7 +358,7 @@ export default function StorefrontListings() {
             return (
               <div
                 key={item._id}
-                className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center"
+                className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
               >
                 {/* Image & Allocation Badges */}
                 <div className="lg:col-span-3 flex flex-col items-center">
@@ -332,8 +390,8 @@ export default function StorefrontListings() {
                   </div>
                 </div>
 
-                {/* Product/Kit Details */}
-                <div className="lg:col-span-5 space-y-3">
+                {/* Product/Kit Details & Tier Selectors */}
+                <div className="lg:col-span-5 space-y-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       {isKit ? (
@@ -376,17 +434,107 @@ export default function StorefrontListings() {
                   <p className="text-xs text-slate-600 font-medium line-clamp-2">
                     {displayDesc}
                   </p>
+
+                  {/* ── LOOSE / PO ORDER QUANTITY TIERS SWITCHER (Kits only) ── */}
+                  {isKit && (
+                    <div className="pt-2 border-t border-slate-100 space-y-2.5">
+                      {/* Tabs: Loose Orders vs PO Orders */}
+                      <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 w-fit">
+                        <button
+                          type="button"
+                          onClick={() => handleTierSelect(item._id, "loose", looseQtys[0] || 5)}
+                          className={`px-3 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            activeType === "loose"
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <FiPackage size={11} />
+                          Loose Orders ({looseQtys.length} Tiers)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleTierSelect(item._id, "po", poQtys[0] || 200)}
+                          className={`px-3 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            activeType === "po"
+                              ? "bg-indigo-700 text-white shadow-xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <FiLayers size={11} />
+                          PO (Purchase Order) ({poQtys.length} Tiers)
+                        </button>
+                      </div>
+
+                      {/* Quantity Pills for Active Type */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                          Select {activeType === "loose" ? "Loose Order Quantity" : "PO Bulk Quantity"}:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(activeType === "loose" ? looseQtys : poQtys).map((q) => {
+                            const isSelected = activeQty === q;
+                            const pricingList = activeType === "loose" ? loosePricing : poPricing;
+                            const tierInfo = pricingList.find((t) => Number(t.quantity) === Number(q));
+                            const hasCustomPrice = Boolean(tierInfo && tierInfo.price_per_kit > 0);
+
+                            return (
+                              <button
+                                key={q}
+                                type="button"
+                                onClick={() => handleTierSelect(item._id, activeType, q)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isSelected
+                                    ? activeType === "loose"
+                                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                      : "bg-indigo-700 text-white border-indigo-700 shadow-sm"
+                                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300"
+                                }`}
+                              >
+                                <span>{q} Kits</span>
+                                {hasCustomPrice && !isSelected && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Custom per-kit tier price set" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Pricing Breakdown (Read-Only Company Configured) */}
+                {/* Pricing Breakdown (Read-Only Company Configured with Active Tier) */}
                 <div className="lg:col-span-4 bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200/80">
+                  {/* Selected Tier Badge */}
+                  {isKit && (
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800">
+                        {activeType === "loose" ? "Loose Order Tier" : "PO Bulk Tier"}: {activeQty} Kits
+                      </span>
+                      {tierSavingsPerKit > 0 && (
+                        <span className="inline-flex items-center text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200">
+                          ↓ ₹{tierSavingsPerKit.toLocaleString('en-IN')}/kit OFF ({savingsPct}%)
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Franchisee Base Price */}
+                  <div className="flex items-center justify-between text-xs py-1">
                     <span className="text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                      <FiTag className="text-slate-400" /> Franchisee Base Price:
+                      <FiTag className="text-slate-400" /> Base Price ({isKit ? `${activeQty} kits` : "1 unit"}):
                     </span>
-                    <span className="font-extrabold text-slate-900 font-mono text-sm">
-                      ₹{costInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+                    <div className="text-right">
+                      <span className="font-extrabold text-slate-900 font-mono text-sm block">
+                        ₹{totalCostInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      {isKit && activeQty > 1 && (
+                        <span className="text-[10px] text-slate-500 font-medium font-mono">
+                          (₹{costInr.toLocaleString('en-IN')}/kit)
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Fixed Margin/Commission from Plan */}
@@ -395,9 +543,16 @@ export default function StorefrontListings() {
                       <span className="text-slate-600 font-bold flex items-center gap-1">
                         <FiShield className="text-emerald-600" /> Plan Commission ({itemCommissionLabel}):
                       </span>
-                      <span className="font-extrabold text-emerald-600 font-mono text-sm">
-                        +₹{marginInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
+                      <div className="text-right">
+                        <span className="font-extrabold text-emerald-600 font-mono text-sm block">
+                          +₹{totalMarginInr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        {isKit && activeQty > 1 && (
+                          <span className="text-[10px] text-emerald-600 font-medium font-mono">
+                            (+₹{marginInr.toLocaleString('en-IN')}/kit)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between text-xs py-1 text-slate-500 font-medium">
@@ -410,12 +565,19 @@ export default function StorefrontListings() {
                   <div className="p-3.5 rounded-xl bg-blue-600/10 border border-blue-600/20 flex justify-between items-center">
                     <div>
                       <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider block">Final EPC Selling Price</span>
-                      <span className="text-[10px] text-slate-500 font-medium">Includes {taxRate}% GST</span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {isKit && activeQty > 1 ? `Total for ${activeQty} Kits (incl. ${taxRate}% GST)` : `Includes ${taxRate}% GST`}
+                      </span>
                     </div>
                     <div className="text-right">
-                      <span className="text-lg font-black text-blue-700 font-mono">
-                        ₹{finalEpcPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="text-lg font-black text-blue-700 font-mono block">
+                        ₹{totalEpcPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
+                      {isKit && activeQty > 1 && (
+                        <span className="text-[10px] font-bold text-blue-600 font-mono">
+                          ₹{finalEpcPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / kit
+                        </span>
+                      )}
                     </div>
                   </div>
 

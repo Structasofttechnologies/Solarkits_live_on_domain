@@ -1661,6 +1661,23 @@ export default function CheckOut() {
               Order Pricing Summary
             </h3>
 
+            {/* Items in this order */}
+            <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1 divide-y divide-border/60 border-b border-border pb-3">
+              {cart.map((item) => (
+                <div key={item.cartItemId || item.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs">
+                  <div className="flex-1 pr-2">
+                    <p className="font-bold text-text-primary dark:text-white truncate">{item.kitName || item.title || "Solar Kit"}</p>
+                    <p className="text-[11px] text-text-muted font-medium">
+                      {item.qty} {item.qty === 1 ? 'kit' : 'kits'} × ₹{Number(item.ourPrice || 0).toLocaleString("en-IN")} / kit
+                    </p>
+                  </div>
+                  <span className="font-black text-text-primary dark:text-white">
+                    ₹{(Number(item.qty || 1) * Number(item.ourPrice || 0)).toLocaleString("en-IN")}
+                  </span>
+                </div>
+              ))}
+            </div>
+
             <div className="space-y-2 text-sm border-b border-border pb-3">
               <div className="flex justify-between text-text-secondary">
                 <span>Items Base Subtotal (Excl. GST):</span>

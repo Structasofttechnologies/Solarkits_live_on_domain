@@ -41,28 +41,36 @@ function StockBadge({ label }) {
 }
 
 /* ─── Price display (Clean Light Mode) ────────────────────────────────────── */
-function PriceCard({ item }) {
-  const priceINR = parseFloat(item.selling_price_inr || 0);
-  const taxINR = parseFloat(item.taxes_and_charges_inr || 0);
-  const baseINR = parseFloat(item.price_before_tax_inr || 0);
+function PriceCard({ item, selectedQty, activeTierPrice }) {
+  const priceINR = activeTierPrice > 0 ? activeTierPrice : parseFloat(item.selling_price_inr || 0);
+  const gstRate = Number(item.gst_rate_pct || 18);
+  const baseINR = priceINR > 0 ? Math.round(priceINR / (1 + (gstRate / 100))) : 0;
+  const taxINR = Math.max(0, priceINR - baseINR);
+  const totalBatchValue = selectedQty > 1 ? (priceINR * selectedQty) : null;
 
   return (
     <div className="mt-4 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3.5 space-y-1.5">
       <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>Price before GST</span>
-        <span className="font-medium text-slate-700">₹{baseINR.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+        <span>Unit Price (excl. GST)</span>
+        <span className="font-medium text-slate-700">₹{baseINR.toLocaleString("en-IN")}</span>
       </div>
       <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>GST ({item.gst_rate_pct || 18}%)</span>
-        <span className="font-medium text-slate-700">+ ₹{taxINR.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+        <span>GST ({gstRate}%)</span>
+        <span className="font-medium text-slate-700">+ ₹{taxINR.toLocaleString("en-IN")}</span>
       </div>
       <div className="h-px bg-slate-200/80 my-1" />
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-900">Total Price</span>
+        <span className="text-xs font-semibold text-slate-900">Total Price / Kit</span>
         <span className="text-lg font-bold text-emerald-600">
-          ₹{priceINR.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          ₹{priceINR.toLocaleString("en-IN")}
         </span>
       </div>
+      {totalBatchValue && (
+        <div className="pt-1 mt-1 border-t border-slate-200 flex items-center justify-between text-xs font-black text-indigo-700">
+          <span>Batch Total ({selectedQty} kits)</span>
+          <span>₹{totalBatchValue.toLocaleString("en-IN")}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -101,22 +109,62 @@ function SpecsAccordion({ specs }) {
 function ProductCard({ item, onAddToCart }) {
   const defaultImg = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
-  // ── Order quantities (e.g. [10, 25, 50]) ─────────────────────────────────
+  // ── Order quantities (Loose vs PO) ─────────────────────────────────
+  const looseOrderQuantities = useMemo(() => {
+    const rawLoose = item?.loose_order_quantities || item?.looseOrderQuantities || [];
+    const fromPricing = (item?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+    return [...new Set([...(Array.isArray(rawLoose) ? rawLoose.map(Number) : []), ...fromPricing])]
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+  }, [item?.loose_order_quantities, item?.looseOrderQuantities, item?.loose_order_pricing]);
+
+  const poOrderQuantities = useMemo(() => {
+    const rawPo = item?.order_quantities || item?.orderQuantities || [];
+    const fromPricing = (item?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+    return [...new Set([...(Array.isArray(rawPo) ? rawPo.map(Number) : []), ...fromPricing])]
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+  }, [item?.order_quantities, item?.orderQuantities, item?.po_order_pricing]);
+
+  const hasLooseQuantities = looseOrderQuantities.length > 0;
+  const hasPoQuantities = poOrderQuantities.length > 0;
+  const [activeTierType, setActiveTierType] = useState(() => (hasLooseQuantities ? "loose" : "po"));
+
+  const currentCategoryQuantities = useMemo(() => {
+    if (activeTierType === "loose") {
+      return hasLooseQuantities ? looseOrderQuantities : poOrderQuantities;
+    }
+    return hasPoQuantities ? poOrderQuantities : looseOrderQuantities;
+  }, [activeTierType, hasLooseQuantities, hasPoQuantities, looseOrderQuantities, poOrderQuantities]);
+
   const orderQuantities = useMemo(() => {
-    const raw = item?.order_quantities || item?.orderQuantities || [];
-    return Array.isArray(raw)
-      ? raw.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
-      : [];
-  }, [item?.order_quantities, item?.orderQuantities]);
+    const all = [...new Set([...looseOrderQuantities, ...poOrderQuantities])].sort((a, b) => a - b);
+    return all.length > 0 ? all : (currentCategoryQuantities.length > 0 ? currentCategoryQuantities : []);
+  }, [looseOrderQuantities, poOrderQuantities, currentCategoryQuantities]);
 
   const hasQtyVariants = orderQuantities.length > 0;
-  const [selectedQty, setSelectedQty] = useState(() => orderQuantities[0] ?? null);
+  const [selectedQty, setSelectedQty] = useState(() => currentCategoryQuantities[0] ?? null);
 
-  // Keep in sync if item changes
   useEffect(() => {
-    if (orderQuantities.length > 0) setSelectedQty(orderQuantities[0]);
-    else setSelectedQty(null);
-  }, [item?.id, orderQuantities.length]);
+    if (currentCategoryQuantities.length > 0) setSelectedQty(currentCategoryQuantities[0]);
+  }, [item?.id, activeTierType, currentCategoryQuantities]);
+
+  // Active Tier Price lookup
+  const activeTierPrice = useMemo(() => {
+    const qty = Number(selectedQty);
+    if (!qty) return null;
+
+    const looseList = Array.isArray(item?.loose_order_pricing) ? item.loose_order_pricing : [];
+    const poList = Array.isArray(item?.po_order_pricing) ? item.po_order_pricing : [];
+
+    const matchedLoose = looseList.find((t) => Number(t.quantity) === qty && Number(t.price_per_kit) > 0);
+    if (matchedLoose) return Number(matchedLoose.price_per_kit);
+
+    const matchedPo = poList.find((t) => Number(t.quantity) === qty && Number(t.price_per_kit) > 0);
+    if (matchedPo) return Number(matchedPo.price_per_kit);
+
+    return null;
+  }, [selectedQty, item?.loose_order_pricing, item?.po_order_pricing]);
 
   return (
     <article
@@ -201,12 +249,38 @@ function ProductCard({ item, onAddToCart }) {
         {/* ── Order Quantity Variation ─────────────────────────────────────── */}
         {hasQtyVariants && (
           <div className="mt-3">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <FiPackage size={11} />
               Order Quantity Options
             </p>
+            {hasLooseQuantities && hasPoQuantities && (
+              <div className="flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-[10px] font-bold mb-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTierType("loose")}
+                  className={`flex-1 py-1 px-1.5 rounded-md transition-all text-center ${
+                    activeTierType === "loose"
+                      ? "bg-white text-indigo-700 shadow-xs font-black"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Loose Orders
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTierType("po")}
+                  className={`flex-1 py-1 px-1.5 rounded-md transition-all text-center ${
+                    activeTierType === "po"
+                      ? "bg-white text-amber-700 shadow-xs font-black"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Bulk PO Orders
+                </button>
+              </div>
+            )}
             <div className="flex flex-wrap gap-1.5">
-              {orderQuantities.map((qty) => (
+              {currentCategoryQuantities.map((qty) => (
                 <button
                   key={qty}
                   onClick={() => setSelectedQty(qty)}
@@ -221,7 +295,8 @@ function ProductCard({ item, onAddToCart }) {
             </div>
             {selectedQty && (
               <p className="text-[10px] text-indigo-600 font-semibold mt-1.5">
-                Selected: <span className="font-black">{selectedQty} kit{selectedQty !== 1 ? "s" : ""}</span> order
+                Selected: <span className="font-black">{selectedQty} kit{selectedQty !== 1 ? "s" : ""}</span>
+                {activeTierPrice ? ` • ₹${activeTierPrice.toLocaleString("en-IN")}/kit` : ""}
               </p>
             )}
           </div>
@@ -242,12 +317,12 @@ function ProductCard({ item, onAddToCart }) {
         )}
 
         {/* Price Card */}
-        <PriceCard item={item} />
+        <PriceCard item={item} selectedQty={selectedQty} activeTierPrice={activeTierPrice} />
 
         {/* Action Button */}
         <button
           disabled={item.availability_label === "out_of_stock"}
-          onClick={() => onAddToCart && onAddToCart(item, selectedQty)}
+          onClick={() => onAddToCart && onAddToCart(item, selectedQty, activeTierPrice)}
           className="mt-4 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-xs hover:shadow-md active:scale-[0.99]"
           aria-label={`Request quote for ${item.title}${selectedQty ? ` - ${selectedQty} kits` : ""}`}
         >
@@ -255,7 +330,7 @@ function ProductCard({ item, onAddToCart }) {
           {item.availability_label === "out_of_stock"
             ? "Out of Stock"
             : hasQtyVariants && selectedQty
-              ? `Add ${selectedQty} Kits to Cart`
+              ? `Add ${selectedQty} Kits to Cart${activeTierPrice ? ` • ₹${(activeTierPrice * selectedQty).toLocaleString("en-IN")}` : ""}`
               : "Request Quote / Add to Cart"}
         </button>
       </div>
@@ -357,23 +432,31 @@ export default function EpcCatalogue() {
 
   const searchTimer = useRef(null);
 
-  const handleAddToCart = (item, selectedQty) => {
+  const handleAddToCart = (item, selectedQty, tierPrice) => {
+    const finalPrice = tierPrice > 0 ? tierPrice : parseFloat(item.selling_price_inr || item.ourPrice || 0);
+    const gstRate = Number(item.gst_rate_pct || 18);
+    const itemTaxable = finalPrice > 0 ? Math.round(finalPrice / (1 + (gstRate / 100))) : 0;
+    const itemTax = Math.max(0, finalPrice - itemTaxable);
+
     dispatch(addToCart({
       id: item.id || item.listing_id,
       listing_id: item.listing_id || item.id,
       title: item.title,
       name: item.title,
       sku_code: item.sku_code,
-      selling_price_inr: item.selling_price_inr,
-      selling_price_paise: item.selling_price_paise,
-      price_before_tax_inr: item.price_before_tax_inr,
-      taxes_and_charges_inr: item.taxes_and_charges_inr,
-      gst_rate_pct: item.gst_rate_pct,
+      selling_price_inr: finalPrice,
+      ourPrice: finalPrice,
+      price_per_kit: finalPrice,
+      price_before_tax_inr: itemTaxable,
+      taxes_and_charges_inr: itemTax,
+      gst_rate_pct: gstRate,
       image_url: item.image_url,
       stock_quantity: item.stock_quantity,
       item_type: item.item_type || 'product',
       is_catalogue_item: true,
       is_custom: true,
+      loose_order_pricing: item.loose_order_pricing || [],
+      po_order_pricing: item.po_order_pricing || [],
       // Pass selected order quantity if kit has quantity variations
       order_quantity: selectedQty || null,
       qty: selectedQty || 1,

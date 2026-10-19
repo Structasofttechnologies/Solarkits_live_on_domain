@@ -200,8 +200,49 @@ async function calculateCheckoutPrice(resellerId, items = []) {
       }
     }
 
-    let unitPricePaise = listing?.selling_price_paise || (item.unit_price_paise ? parseInt(item.unit_price_paise, 10) : 0);
+    let unitPricePaise = 0;
     const platformCommPct = listing?.platform_commission_pct != null ? listing.platform_commission_pct : 5.0;
+
+    // Check if quantity tier pricing applies for combo kit
+    if (isKit && resolvedKitId) {
+      try {
+        const { CompanyMargin: IndiaMargin } = require('../models/india_solarshop_db');
+        const { CompanyMargin: CoreMargin } = require('../models/core_db');
+
+        let marginDoc = await IndiaMargin.findOne({
+          combo_kit_id: resolvedKitId,
+          is_active: true,
+          deleted_at: null,
+        }).sort({ updated_at: -1 }).lean();
+
+        if (!marginDoc) {
+          marginDoc = await CoreMargin.findOne({
+            combo_kit_id: resolvedKitId,
+            is_active: true,
+            deleted_at: null,
+          }).sort({ updated_at: -1 }).lean();
+        }
+
+        if (marginDoc) {
+          const allTiers = [
+            ...(Array.isArray(marginDoc.loose_order_pricing) ? marginDoc.loose_order_pricing : []),
+            ...(Array.isArray(marginDoc.po_order_pricing) ? marginDoc.po_order_pricing : []),
+          ];
+          const matchedTier = allTiers.find((t) => Number(t.quantity) === Number(qty) && Number(t.price_per_kit) > 0);
+          if (matchedTier) {
+            // tier.price_per_kit is GST-inclusive per kit in INR
+            const tierPriceInclGstPaise = Math.round(Number(matchedTier.price_per_kit) * 100);
+            unitPricePaise = Math.round(tierPriceInclGstPaise / (1 + gstRate / 100));
+          }
+        }
+      } catch (tierErr) {
+        console.warn('Error checking tier pricing in calculateCheckoutPrice:', tierErr.message);
+      }
+    }
+
+    if (!unitPricePaise || unitPricePaise <= 0) {
+      unitPricePaise = listing?.selling_price_paise || (item.unit_price_paise ? parseInt(item.unit_price_paise, 10) : 0);
+    }
 
     if (!unitPricePaise || unitPricePaise <= 0) {
       const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || item.price || item.selling_price || 0);
