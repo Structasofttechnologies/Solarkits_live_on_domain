@@ -11,6 +11,16 @@ const schema = new mongoose.Schema({
   showcase_margin: { type: Number, default: 0 },
   po_discounted_margin: { type: Number, default: 0 },
   gst_rate: { type: Number, default: null },
+  loose_order_pricing: [{
+    quantity: { type: Number, required: true },
+    price_per_kit: { type: Number, required: true },
+    discount_amount: { type: Number, default: 0 }
+  }],
+  po_order_pricing: [{
+    quantity: { type: Number, required: true },
+    price_per_kit: { type: Number, required: true },
+    discount_amount: { type: Number, default: 0 }
+  }],
   is_po_active: { type: Boolean, default: true },
   is_active: { type: Boolean, default: true },
   deleted_at: { type: Date, default: null },

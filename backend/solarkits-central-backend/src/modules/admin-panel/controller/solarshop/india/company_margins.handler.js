@@ -139,6 +139,24 @@ const create_company_margin_india = async (req, res) => {
         if (is_po_active !== undefined) {
             update.is_po_active = is_po_active;
         }
+        if (req.body.loose_order_pricing !== undefined) {
+            update.loose_order_pricing = Array.isArray(req.body.loose_order_pricing)
+                ? req.body.loose_order_pricing.map(item => ({
+                    quantity: Number(item.quantity),
+                    price_per_kit: Number(item.price_per_kit),
+                    discount_amount: Number(item.discount_amount || 0)
+                })).filter(item => !isNaN(item.quantity) && item.quantity > 0 && !isNaN(item.price_per_kit) && item.price_per_kit >= 0)
+                : [];
+        }
+        if (req.body.po_order_pricing !== undefined) {
+            update.po_order_pricing = Array.isArray(req.body.po_order_pricing)
+                ? req.body.po_order_pricing.map(item => ({
+                    quantity: Number(item.quantity),
+                    price_per_kit: Number(item.price_per_kit),
+                    discount_amount: Number(item.discount_amount || 0)
+                })).filter(item => !isNaN(item.quantity) && item.quantity > 0 && !isNaN(item.price_per_kit) && item.price_per_kit >= 0)
+                : [];
+        }
 
         // Validate relative values of margins (if they are being updated/set)
         const existingDoc = await CompanyMargin.findOne({ warehouse_id, combo_kit_id, deleted_at: null }).lean();

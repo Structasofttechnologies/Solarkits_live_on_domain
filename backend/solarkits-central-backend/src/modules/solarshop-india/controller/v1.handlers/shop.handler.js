@@ -1290,6 +1290,8 @@ const get_combo_kits_by_district = async (req, res) => {
         order_quantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
         looseOrderQuantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
         loose_order_quantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        loose_order_pricing: marginDoc?.loose_order_pricing || [],
+        po_order_pricing: marginDoc?.po_order_pricing || [],
         allow_trial_kit: Boolean(kit.allow_trial_kit),
         allowTrialKit: Boolean(kit.allow_trial_kit),
         trial_kit_quantity: Number(kit.trial_kit_quantity) || 10,

@@ -277,6 +277,25 @@ export default function LooseOrder() {
       return selectedParentPo.items[0].unit_price_paise / 100;
     }
     if (!selectedKit) return 0;
+
+    // Check separate Loose Order Tier Pricing
+    const loosePricing = selectedKit.loose_order_pricing || selectedKit.looseOrderPricing;
+    if (Array.isArray(loosePricing) && loosePricing.length > 0) {
+      const matchedTier = loosePricing.find(
+        (t) => Number(t.quantity) === Number(totalLooseQuantity)
+      );
+      if (matchedTier && matchedTier.price_per_kit > 0) {
+        return matchedTier.price_per_kit;
+      }
+      // If not an exact match, find highest tier where quantity <= totalLooseQuantity
+      const lowerTiers = loosePricing
+        .filter((t) => Number(t.quantity) <= Number(totalLooseQuantity) && t.price_per_kit > 0)
+        .sort((a, b) => Number(b.quantity) - Number(a.quantity));
+      if (lowerTiers.length > 0) {
+        return lowerTiers[0].price_per_kit;
+      }
+    }
+
     if (selectedKit.dealer_price) return selectedKit.dealer_price;
     if (selectedKit.selling_price_cached) return selectedKit.selling_price_cached;
     if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
@@ -284,7 +303,7 @@ export default function LooseOrder() {
     if (selectedKit.price) return selectedKit.price;
     if (selectedKit.base_price) return selectedKit.base_price;
     return 45000;
-  }, [selectedParentPo, selectedKit]);
+  }, [selectedParentPo, selectedKit, totalLooseQuantity]);
 
   const gstRatePercent = selectedKit?.gst_rate || 12;
   const subtotalINR = totalLooseQuantity * unitPriceINR;

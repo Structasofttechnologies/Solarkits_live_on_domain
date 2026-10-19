@@ -6,9 +6,20 @@ const { recalculateKitPricesForSku } = require('../services/kit_pricing.service'
 
 const get_sku_prices = async (req, res) => {
   try {
-    const { cluster_id } = req.query;
+    let { cluster_id, warehouse_id } = req.query;
+
+    if (!cluster_id && warehouse_id) {
+      const wh = await CompanyWarehouse.findById(warehouse_id).lean();
+      if (wh && wh.level_2) {
+        const district = await GeoLevel2.findById(wh.level_2).lean();
+        if (district && district.cluster) {
+          cluster_id = district.cluster.toString();
+        }
+      }
+    }
+
     if (!cluster_id) {
-      return res.status(400).json({ status: "error", message: "cluster_id is required" });
+      return res.status(400).json({ status: "error", message: "cluster_id or warehouse_id is required" });
     }
 
     // Fetch cluster to determine the country/level_0 - support both ObjectId and cluster name
@@ -141,6 +152,8 @@ const get_sku_prices = async (req, res) => {
       cluster_name: cluster.name,
       currency_code,
       currency_name,
+      price_map: priceMap,
+      price_per_watt_map: pricePerWattMap,
       data
     });
   } catch (err) {

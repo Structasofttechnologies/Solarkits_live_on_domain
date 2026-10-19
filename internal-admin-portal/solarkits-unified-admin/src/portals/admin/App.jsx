@@ -3,7 +3,7 @@ import { Routes, Route } from "react-router-dom"
 import { useDispatch } from "react-redux";
 import { Provider } from "react-redux";
 import store from "./app/store";
-import { ensureValidAccessToken } from "./features/auth.slice.jsx";
+import { ensureValidAccessToken, setAuthToken } from "./features/auth.slice.jsx";
 import './App.css';
 import Alert from "./components/Alert";
 import Loader from "./components/Loader";
@@ -26,7 +26,18 @@ function AdminPortalInner() {
     const id = setInterval(() => {
       dispatch(ensureValidAccessToken());
     }, ms_conversion(import.meta.env.VITE_AUTH_TIMEOUT));
-    return () => clearInterval(id);
+
+    const handleTokenRefreshed = (e) => {
+      if (e.detail) {
+        dispatch(setAuthToken(e.detail));
+      }
+    };
+    window.addEventListener('token_refreshed', handleTokenRefreshed);
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('token_refreshed', handleTokenRefreshed);
+    };
   }, [dispatch]);
 
   return (

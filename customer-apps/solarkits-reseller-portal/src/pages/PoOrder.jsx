@@ -844,9 +844,31 @@ export default function PoOrder() {
   }, []); // Run ONLY once on mount
 
   // Calculation for Create Modal
-  const kitUnitPrice = selectedKit?.dealer_price || selectedKit?.unit_price || 367500;
-  const tokenRatePerKit = Math.round((selectedKit?.token_rate_per_kit_paise || 500000) / 100);
   const targetQuantity = Math.max(1, parseInt(selectedPoQty, 10) || selectedKit?.min_po_quantity || 200);
+
+  // Dynamic Unit Price using PO Order Tier Pricing
+  const kitUnitPrice = useMemo(() => {
+    if (!selectedKit) return 367500;
+    const poPricing = selectedKit.po_order_pricing || selectedKit.poOrderPricing;
+    if (Array.isArray(poPricing) && poPricing.length > 0) {
+      const matchedTier = poPricing.find(
+        (t) => Number(t.quantity) === Number(targetQuantity)
+      );
+      if (matchedTier && matchedTier.price_per_kit > 0) {
+        return matchedTier.price_per_kit;
+      }
+      // If not an exact match, find highest tier where quantity <= targetQuantity
+      const lowerTiers = poPricing
+        .filter((t) => Number(t.quantity) <= Number(targetQuantity) && t.price_per_kit > 0)
+        .sort((a, b) => Number(b.quantity) - Number(a.quantity));
+      if (lowerTiers.length > 0) {
+        return lowerTiers[0].price_per_kit;
+      }
+    }
+    return selectedKit.dealer_price || selectedKit.unit_price || 367500;
+  }, [selectedKit, targetQuantity]);
+
+  const tokenRatePerKit = Math.round((selectedKit?.token_rate_per_kit_paise || 500000) / 100);
   const estimatedSubtotal = targetQuantity * kitUnitPrice;
   const estimatedGst = Math.round((estimatedSubtotal * 12) / 100);
   const estimatedGrandTotal = estimatedSubtotal + estimatedGst;
