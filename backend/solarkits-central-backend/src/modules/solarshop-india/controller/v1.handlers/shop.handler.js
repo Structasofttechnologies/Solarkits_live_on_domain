@@ -1114,6 +1114,7 @@ const get_combo_kits_by_district = async (req, res) => {
             skuCode: skuInfo.sku_code,
             quantity: bc.quantity || 0,
             image: img || null,
+            datasheet: p?.datasheet || null,
             actualType,
             
             // Mapping matching frontend keys exactly
@@ -1230,6 +1231,48 @@ const get_combo_kits_by_district = async (req, res) => {
       const kitBrandDoc = kit.brand_id ? brands.find(b => b._id.toString() === kit.brand_id.toString()) : null;
       const finalBrandName = kitBrandDoc ? kitBrandDoc.brand_name : (firstPanel ? firstPanel.brandName : "");
 
+      // Compile all component datasheets
+      const kitDatasheets = [];
+      const seenDatasheetUrls = new Set();
+
+      // If combokit itself has a datasheet, add it as primary system datasheet
+      if (kit.datasheet) {
+        seenDatasheetUrls.add(kit.datasheet);
+        kitDatasheets.push({
+          id: kit._id.toString(),
+          productName: `${kit.name} — System Datasheet`,
+          brandName: finalBrandName || "SolarKit",
+          skuCode: "SYSTEM-SPEC",
+          componentType: "Combo Kit Complete Datasheet",
+          datasheetUrl: kit.datasheet,
+          hasDatasheet: true,
+          quantity: 1,
+          image: kit.kit_image
+        });
+      }
+
+      baseComponents.forEach(comp => {
+        const item = {
+          id: comp.id,
+          productName: comp.name,
+          brandName: comp.brandName,
+          skuCode: comp.skuCode,
+          componentType: comp.actualType === "panel" ? "Solar Panel" : comp.actualType === "inverter" ? "Inverter" : (comp.technologyType || "Component"),
+          datasheetUrl: comp.datasheet || null,
+          hasDatasheet: !!comp.datasheet,
+          quantity: comp.quantity,
+          image: comp.image
+        };
+        if (comp.datasheet) {
+          if (!seenDatasheetUrls.has(comp.datasheet)) {
+            seenDatasheetUrls.add(comp.datasheet);
+            kitDatasheets.push(item);
+          }
+        } else {
+          kitDatasheets.push(item);
+        }
+      });
+
       const mappedKit = {
         id: kit._id.toString(),
         hasNoAssignedVariants: assignedVariantIds.length === 0,
@@ -1315,6 +1358,7 @@ const get_combo_kits_by_district = async (req, res) => {
           dimensionMM: panelDimension || null,
           warrantyYears: firstPanel.warrantyYears || null,
           panelImage: firstPanel.panelImage,
+          datasheet: firstPanel.datasheet || null,
           attributes: firstPanel.attributes
         } : null,
         inverter: firstInverter ? {
@@ -1326,10 +1370,14 @@ const get_combo_kits_by_district = async (req, res) => {
           warrantyYears: firstInverter.warrantyYears || null,
           features: [],
           inverterImage: firstInverter.inverterImage,
+          datasheet: firstInverter.datasheet || null,
           quantity: firstInverter.quantity,
           attributes: firstInverter.attributes
         } : null,
         includedComponents: baseComponents,
+        datasheet: kit.datasheet || null,
+        datasheets: kitDatasheets,
+        hasDatasheet: !!kit.datasheet || kitDatasheets.some(d => d.hasDatasheet),
         BOSKit: {
           brandName: bosBrandName || "Generic",
           included: bosIncludedList,

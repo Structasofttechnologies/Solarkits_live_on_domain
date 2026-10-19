@@ -23,4 +23,10 @@ router.post('/india/delete-kit', check_auth, check_permissions([{ unique_code: '
 // Kit Status Check Route - Checks if all SKUs have prices and company margins are set
 router.get('/:id/status', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['view'] }, { unique_code: 'ADM_CUSTOMIZE_KITS', permissions: ['view'] }]), handler.get_combo_kit_status);
 
+// Datasheet Management Routes
+router.post('/upload-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }]), upload_to_cloudinary, handler.upload_combokit_datasheet);
+router.post('/remove-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }]), handler.remove_combokit_datasheet);
+router.post('/india/upload-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }]), upload_to_cloudinary, handler.upload_combokit_datasheet);
+router.post('/india/remove-datasheet', check_auth, check_permissions([{ unique_code: 'ADM_COMBO_KITS', permissions: ['edit'] }]), handler.remove_combokit_datasheet);
+
 module.exports = router;

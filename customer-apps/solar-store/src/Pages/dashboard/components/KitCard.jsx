@@ -4,7 +4,7 @@ import {
   FaShoppingCart, FaTag, FaStar, FaGem, FaHome, FaBolt,
   FaInfoCircle, FaTruck, FaPiggyBank, FaAward,
   FaShieldAlt, FaLeaf, FaChevronDown, FaChevronUp,
-  FaCogs, FaSolarPanel
+  FaCogs, FaSolarPanel, FaFilePdf
 } from"react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -18,6 +18,7 @@ import {
 import Button from "@/Components/Button";
 import IconButton from "@/Components/IconButton";
 import TrialKitOrderModal from "./TrialKitOrderModal";
+import DatasheetModal from "@/Components/storefront/DatasheetModal";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -105,8 +106,16 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const { isAuthenticated } = useSelector((state) => state.auth_slice);
   const [selectedVariant, setSelectedVariant] = useState(isCart && kit.variantIndex !== undefined ? kit.variantIndex : 0);
   const [trialModalOpen, setTrialModalOpen] = useState(false);
+  const [showDatasheetModal, setShowDatasheetModal] = useState(false);
   const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
   const trialKitQty = Number(kit?.trial_kit_quantity || 10);
+
+  const hasDatasheets = Boolean(
+    kit?.hasDatasheet ||
+    kit?.datasheets?.some(d => d.hasDatasheet) ||
+    kit?.panel?.datasheet ||
+    kit?.inverter?.datasheet
+  );
 
   useEffect(() => {
     if (isCart) {
@@ -566,6 +575,20 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               <span>{kit.warrantyYears} Years</span>
             </div>
           )}
+          {hasDatasheets && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDatasheetModal(true);
+              }}
+              title="View Manufacturer Datasheets"
+              className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer ml-auto"
+            >
+              <FaFilePdf className="text-[11px]" />
+              <span>Datasheets</span>
+            </button>
+          )}
         </div>
 
         <KitComponentsRow kit={kit} />
@@ -853,10 +876,38 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               <span>Order Trial Kit ({trialKitQty} Kits)</span>
             </button>
           )}
+
+          {/* Download Datasheet Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDatasheetModal(true);
+            }}
+            className={`w-full mt-2 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all duration-200 cursor-pointer group/datasheet hover:scale-[1.01] ${
+              hasDatasheets
+                ? "bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30"
+                : "bg-surface-hover hover:bg-surface-hover/80 text-text-secondary border border-border"
+            }`}
+          >
+            <FaFilePdf className={`${hasDatasheets ? "text-red-500" : "text-text-muted"} group-hover/datasheet:scale-110 transition-transform`} size={13} />
+            <span>{hasDatasheets ? "Download Datasheet (PDF)" : "View Datasheet (PDF)"}</span>
+          </button>
         </div>
 
         {/* Eco footer stats */}
-        <div className="mt-4 flex justify-end items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
+        <div className="mt-4 flex justify-between items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDatasheetModal(true);
+            }}
+            className="flex items-center gap-1.5 text-red-600 hover:text-red-700 dark:text-red-400 cursor-pointer font-black transition-colors"
+          >
+            <FaFilePdf size={12} className="text-red-500" />
+            <span>{hasDatasheets ? "Datasheet Available" : "Technical Specs"}</span>
+          </button>
           <span className="flex items-center gap-1 text-primary dark:text-info">
             <FaLeaf />
             Clean Energy
@@ -1259,6 +1310,23 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                   <span>Order Trial Kit ({trialKitQty} Kits)</span>
                 </button>
               )}
+
+              {/* Download Datasheet Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDatasheetModal(true);
+                }}
+                className={`w-full mt-2 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all duration-200 cursor-pointer group/datasheet hover:scale-[1.01] ${
+                  hasDatasheets
+                    ? "bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30"
+                    : "bg-surface-hover hover:bg-surface-hover/80 text-text-secondary border border-border"
+                }`}
+              >
+                <FaFilePdf className={`${hasDatasheets ? "text-red-500" : "text-text-muted"} group-hover/datasheet:scale-110 transition-transform`} size={13} />
+                <span>{hasDatasheets ? "Download Datasheet (PDF)" : "View Datasheet (PDF)"}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1275,6 +1343,13 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
           kit={kit}
           currentVariant={currentVariant}
           selectedVariantIndex={selectedVariant}
+        />
+      )}
+      {showDatasheetModal && (
+        <DatasheetModal
+          isOpen={showDatasheetModal}
+          onClose={() => setShowDatasheetModal(false)}
+          kit={kit}
         />
       )}
     </>

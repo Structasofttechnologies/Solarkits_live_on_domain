@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { FaImage, FaEdit, FaEye, FaTrash, FaSync, FaChevronRight, FaBox, FaTags } from "react-icons/fa";
+import { FaImage, FaEdit, FaEye, FaTrash, FaSync, FaChevronRight, FaBox, FaTags, FaFilePdf } from "react-icons/fa";
 import IconButton from "@/components/IconButton";
 import Tooltip from "@/components/Tooltip";
 import ConfirmationPopup from "@/components/ConfirmationPopup";
@@ -97,8 +97,18 @@ export default function ProductsTable({
                       <h4 className={`text-sm font-black tracking-tight truncate uppercase leading-tight transition-colors duration-300 ${isSelected ? 'text-primary' : 'text-text-primary'}`}>
                         {product.name}
                       </h4>
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-tighter transition-colors duration-500 ${product.sku_count > 0 ? 'bg-primary/10 border-primary/10 text-primary' : 'bg-surface-hover border-border text-text-muted'}`}>
-                        <FaTags size={8} /> {product.sku_count || 0} Variants
+                      <div className="flex items-center gap-2">
+                        {product.datasheet && (
+                          <div
+                            title="Technical Datasheet Attached"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[8px] font-black uppercase tracking-wider bg-red-500/10 border-red-500/20 text-red-500"
+                          >
+                            <FaFilePdf size={8} /> PDF
+                          </div>
+                        )}
+                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-tighter transition-colors duration-500 ${product.sku_count > 0 ? 'bg-primary/10 border-primary/10 text-primary' : 'bg-surface-hover border-border text-text-muted'}`}>
+                          <FaTags size={8} /> {product.sku_count || 0} Variants
+                        </div>
                       </div>
                     </div>
                     

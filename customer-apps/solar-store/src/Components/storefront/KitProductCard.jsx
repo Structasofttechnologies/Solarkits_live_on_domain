@@ -12,8 +12,10 @@ import {
   FiMapPin,
   FiTruck,
   FiClock,
-  FiSun
+  FiSun,
+  FiFileText
 } from "react-icons/fi";
+import DatasheetModal from "./DatasheetModal";
 import { FaSolarPanel, FaBolt, FaShieldAlt } from "react-icons/fa";
 import {
   addToCart,
@@ -64,6 +66,14 @@ export default function KitProductCard({
   const districtName = selectedDistrict?.name || "Local Warehouse";
 
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
+  const [showDatasheetModal, setShowDatasheetModal] = useState(false);
+
+  const hasDatasheets = Boolean(
+    kit.hasDatasheet ||
+    kit.datasheets?.some(d => d.hasDatasheet) ||
+    kit.panel?.datasheet ||
+    kit.inverter?.datasheet
+  );
 
   const variants = kit.variants || [];
   const currentVariant = variants[selectedVariantIndex] || variants[0] || {};
@@ -133,6 +143,22 @@ export default function KitProductCard({
           <span className="inline-flex items-center text-[9px] sm:text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 sm:px-2 py-0.5 rounded-md border border-border">
             {usageLabel}
           </span>
+
+          {/* Technical Datasheet Pill */}
+          {hasDatasheets && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDatasheetModal(true);
+              }}
+              title="View Manufacturer Datasheets"
+              className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 px-1.5 sm:px-2 py-0.5 rounded-md hover:bg-red-500/20 transition-colors"
+            >
+              <FiFileText size={10} />
+              <span>Datasheets</span>
+            </button>
+          )}
         </div>
 
         {/* Compare Checkbox */}
@@ -349,9 +375,32 @@ export default function KitProductCard({
             >
               Details
             </Button>
+
+            {hasDatasheets && (
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDatasheetModal(true);
+                }}
+                className="px-2.5 rounded-xl font-bold text-text-secondary hover:text-red-600 hover:bg-red-500/10 border border-border/60"
+                title="View Technical Datasheets"
+              >
+                <FiFileText size={15} />
+              </Button>
+            )}
           </div>
         </div>
       </div>
+
+      {showDatasheetModal && (
+        <DatasheetModal
+          isOpen={showDatasheetModal}
+          onClose={() => setShowDatasheetModal(false)}
+          kit={kit}
+        />
+      )}
     </div>
   );
 }

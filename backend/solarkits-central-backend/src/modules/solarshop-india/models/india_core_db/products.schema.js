@@ -6,6 +6,7 @@ const s = new mongoose.Schema({
   description:       { type: String, default: null },
   features:          { type: [String], default: [] },
   image:             { type: String, default: null, maxlength: 500 },
+  datasheet:         { type: String, default: null, maxlength: 500 },
   template_id:       { type: mongoose.Schema.Types.ObjectId, required: true },
   subtype_id:        { type: mongoose.Schema.Types.ObjectId, required: true },
   brand_id:          { type: mongoose.Schema.Types.ObjectId, default: null },

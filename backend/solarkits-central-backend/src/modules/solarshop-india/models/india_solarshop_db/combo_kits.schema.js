@@ -14,6 +14,7 @@ const schema = new mongoose.Schema({
   inverter_tolerance: { type: Number, default: 10 },
   inverter_mode:      { type: String, default: 'single' },
   kit_image:          { type: String, default: null },
+  datasheet:          { type: String, default: null },
   variant_id:         { type: mongoose.Schema.Types.ObjectId, default: null },
   variant_ids:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'combo_kit_variants' }],
   order_quantities:   [{ type: Number }],

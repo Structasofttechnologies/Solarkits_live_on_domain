@@ -1274,6 +1274,112 @@ const get_combo_kit_status = async (req, res) => {
     }
 };
 
+const upload_combokit_datasheet = async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) {
+            return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
+        }
+
+        let uploadedUrl = null;
+        if (req.files && req.files.length > 0) {
+            const datasheetFile = req.files.find(f => f.fieldname === 'datasheet') || req.files[0];
+            if (datasheetFile) {
+                uploadedUrl = datasheetFile.path;
+            }
+        } else if (req.body.datasheet) {
+            uploadedUrl = req.body.datasheet;
+        }
+
+        if (!uploadedUrl) {
+            return res.status(400).json({ status: 'error', message: 'No datasheet file was provided.' });
+        }
+
+        const objId = new mongoose.Types.ObjectId(id);
+        const rawDb = mongoose.connection.db;
+
+        const existingDoc = await rawDb.collection('pc_comobo_kit').findOne({ _id: objId })
+            || await rawDb.collection('pc_combo_kits').findOne({ _id: objId });
+
+        if (!existingDoc) {
+            return res.status(404).json({ status: 'error', message: 'Combo Kit not found.' });
+        }
+
+        const oldDatasheet = existingDoc.datasheet;
+
+        await rawDb.collection('pc_comobo_kit').updateOne(
+            { _id: objId },
+            { $set: { datasheet: uploadedUrl } }
+        );
+        await rawDb.collection('pc_combo_kits').updateOne(
+            { _id: objId },
+            { $set: { datasheet: uploadedUrl } }
+        ).catch(() => {});
+
+        if (oldDatasheet && oldDatasheet !== uploadedUrl) {
+            delete_uploaded_files([{ path: oldDatasheet }]).catch(() => {});
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Datasheet uploaded and attached to combo kit successfully!',
+            data: {
+                id,
+                datasheet: uploadedUrl
+            }
+        });
+    } catch (error) {
+        console.error("Error in upload_combokit_datasheet:", error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Internal Server Error' });
+    }
+};
+
+const remove_combokit_datasheet = async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) {
+            return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
+        }
+
+        const objId = new mongoose.Types.ObjectId(id);
+        const rawDb = mongoose.connection.db;
+
+        const existingDoc = await rawDb.collection('pc_comobo_kit').findOne({ _id: objId })
+            || await rawDb.collection('pc_combo_kits').findOne({ _id: objId });
+
+        if (!existingDoc) {
+            return res.status(404).json({ status: 'error', message: 'Combo Kit not found.' });
+        }
+
+        const oldDatasheet = existingDoc.datasheet;
+
+        await rawDb.collection('pc_comobo_kit').updateOne(
+            { _id: objId },
+            { $set: { datasheet: null } }
+        );
+        await rawDb.collection('pc_combo_kits').updateOne(
+            { _id: objId },
+            { $set: { datasheet: null } }
+        ).catch(() => {});
+
+        if (oldDatasheet) {
+            delete_uploaded_files([{ path: oldDatasheet }]).catch(() => {});
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Datasheet removed from combo kit successfully!',
+            data: {
+                id,
+                datasheet: null
+            }
+        });
+    } catch (error) {
+        console.error("Error in remove_combokit_datasheet:", error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Internal Server Error' });
+    }
+};
+
 module.exports = {
     create_combo_kit,
     get_combo_kits,
@@ -1283,5 +1389,7 @@ module.exports = {
     get_combo_kits_india,
     update_combo_kit_india,
     delete_combo_kit_india,
-    get_combo_kit_status
+    get_combo_kit_status,
+    upload_combokit_datasheet,
+    remove_combokit_datasheet
 };

@@ -11,6 +11,7 @@ const ComboKitVariants = lazy(() => import("./combo-kit-variants/ComboKitVariant
 const BosKitManager = lazy(() => import("./bos-kits/BosKitManager"));
 const PincodeDeliveryCosts = lazy(() => import("./pincode-delivery-costs/PincodeDeliveryCosts"));
 const BestSellerConfiguration = lazy(() => import("./best-seller-configuration/BestSellerConfiguration"));
+const ProductDatasheets = lazy(() => import("./product-datasheets/ProductDatasheets"));
 
 function ComboKitConfigurations() {
     return (
@@ -73,6 +74,13 @@ function ComboKitConfigurations() {
                 <PermissionGuard requiredUniqueId="ADM_COMBO_KITS">
                     <Suspense fallback={<Loader text="Loading Best Seller Configurations..." />}>
                         <BestSellerConfiguration moduleUniqueId="ADM_COMBO_KITS" />
+                    </Suspense>
+                </PermissionGuard>
+            } />
+            <Route path="/product-datasheets" element={
+                <PermissionGuard requiredUniqueId="ADM_COMBO_KITS">
+                    <Suspense fallback={<Loader text="Loading ComboKit Datasheets..." />}>
+                        <ProductDatasheets moduleUniqueId="ADM_COMBO_KITS" />
                     </Suspense>
                 </PermissionGuard>
             } />

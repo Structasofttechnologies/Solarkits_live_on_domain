@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Dialog from "@/components/Dialog";
-import { FaImage, FaCheck, FaTag,  FaStar,  FaSync, FaTags } from "react-icons/fa";
+import { FaImage, FaCheck, FaTag, FaStar, FaSync, FaTags, FaFilePdf, FaExternalLinkAlt } from "react-icons/fa";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 
@@ -97,6 +97,34 @@ export default function ViewProductModal({ isOpen, onClose, product }) {
               {product.description && (
                 <div className="bg-surface-hover/30 p-4 rounded-xl border border-border/40">
                    <p className="text-[11px] font-bold text-text-secondary leading-relaxed uppercase tracking-tighter opacity-80 break-words whitespace-normal">{product.description}</p>
+                </div>
+              )}
+
+              {/* Technical Datasheet Section */}
+              {product.datasheet ? (
+                <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center shrink-0">
+                      <FaFilePdf size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-text-primary uppercase tracking-tight">Technical Datasheet (PDF)</p>
+                      <p className="text-[10px] text-text-secondary font-medium">Manufacturer Specifications Attached</p>
+                    </div>
+                  </div>
+                  <a
+                    href={product.datasheet}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-all"
+                  >
+                    <FaExternalLinkAlt size={10} /> View PDF
+                  </a>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-2.5 bg-surface-hover/30 border border-border/40 rounded-xl text-text-muted text-[10px] font-semibold">
+                  <FaFilePdf className="opacity-40" size={14} />
+                  <span>No Technical Datasheet attached yet.</span>
                 </div>
               )}
 

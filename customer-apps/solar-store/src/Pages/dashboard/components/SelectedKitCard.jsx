@@ -3,7 +3,7 @@ import {
   FaPlus, FaMinus, FaSolarPanel, FaBolt, FaBatteryFull, FaCogs,
   FaLayerGroup, FaBoxOpen, FaRupeeSign, FaCheck, FaShoppingCart, FaPiggyBank,
   FaGem, FaStar, FaHome, FaInfoCircle, FaTruck, FaTag, FaChevronDown, FaChevronUp,
-  FaBalanceScale, FaAward, FaMapMarkerAlt
+  FaBalanceScale, FaAward, FaMapMarkerAlt, FaFilePdf
 } from "react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import Button from "@/Components/Button";
@@ -11,6 +11,7 @@ import IconButton from "@/Components/IconButton";
 import Dialog from "@/Components/Dialog";
 import { addToCart, decreaseQty, increaseQty, removeFromCart, setShowAuthDialog } from "@/features/slice";
 import TrialKitOrderModal from "./TrialKitOrderModal";
+import DatasheetModal from "@/Components/storefront/DatasheetModal";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -187,6 +188,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
 
   const [showVariants, setShowVariants] = useState(false);
   const [showVariantComparison, setShowVariantComparison] = useState(false);
+  const [showDatasheetModal, setShowDatasheetModal] = useState(false);
   const [showBosPopup, setShowBosPopup] = useState(false);
   const [selectedBosComp, setSelectedBosComp] = useState(null);
   const scrollRef = useRef(null);
@@ -802,10 +804,23 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
         {displayKitName}
       </h2>
       {(kit.districtName || selectedDistrict?.name) && (
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-3">
           <span className="bg-primary/10 text-primary border border-primary/20 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1.5">
             <FaMapMarkerAlt size={12} className="text-primary dark:text-info shrink-0" /> District: {kit.districtName || selectedDistrict?.name}
           </span>
+        </div>
+      )}
+
+      {kit?.hasDatasheet && (
+        <div className="flex justify-center mb-5">
+          <button
+            type="button"
+            onClick={() => setShowDatasheetModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 text-xs font-black uppercase tracking-wider transition-all duration-200 shadow-xs cursor-pointer hover:scale-105"
+          >
+            <FaFilePdf size={14} className="text-red-500" />
+            <span>View / Download System Datasheet</span>
+          </button>
         </div>
       )}
 
@@ -1251,6 +1266,34 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                   </ul>
                 </div>
               )}
+              {section.data?.datasheet ? (
+                <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <FaFilePdf className="text-red-500" /> Datasheet Attached
+                  </span>
+                  <a
+                    href={section.data.datasheet}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                  >
+                    <FaFilePdf size={11} /> Download PDF
+                  </a>
+                </div>
+              ) : (
+                <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
+                  <span className="text-[10px] text-text-muted flex items-center gap-1 font-medium">
+                    <FaFilePdf className="text-text-muted" /> Datasheet
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowDatasheetModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface-hover hover:bg-surface-hover/80 text-text-primary text-xs font-bold rounded-lg border border-border transition-all cursor-pointer"
+                  >
+                    <FaFilePdf size={11} className="text-red-500" /> View Datasheet
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1361,6 +1404,14 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
           kit={kit}
           currentVariant={currentVariant}
           selectedVariantIndex={selectedVariant}
+        />
+      )}
+
+      {showDatasheetModal && (
+        <DatasheetModal
+          isOpen={showDatasheetModal}
+          onClose={() => setShowDatasheetModal(false)}
+          kit={kit}
         />
       )}
     </div>

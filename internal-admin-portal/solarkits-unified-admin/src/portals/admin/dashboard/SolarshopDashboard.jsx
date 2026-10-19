@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaUserShield, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaUserShield, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake, FaFilePdf } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -123,6 +123,12 @@ const menus = [
                     name: "Best Seller Configuration",
                     icon: <FaAward />,
                     path: "/admin-panel/solar-shop/combokit-configurations/best-seller",
+                    unique_id: "ADM_COMBO_KITS"
+                },
+                {
+                    name: "Product Datasheets",
+                    icon: <FaFilePdf />,
+                    path: "/admin-panel/solar-shop/combokit-configurations/product-datasheets",
                     unique_id: "ADM_COMBO_KITS"
                 }
             ]
