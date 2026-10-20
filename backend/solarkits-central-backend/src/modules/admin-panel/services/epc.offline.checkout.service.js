@@ -209,6 +209,55 @@ async function createEpcOfflineOrder({
     throw new Error(`UTR "${cleanUtr}" is already submitted for Order #${duplicateUtr.order_number}.`);
   }
 
+  // Validate Trial Kit items & purchase limit per buyer
+  for (const rawItem of items) {
+    const isTrial = Boolean(rawItem.is_trial_kit || rawItem.isTrialKit);
+    if (isTrial) {
+      const rawKitId = rawItem.kit_id || rawItem.combo_kit_id || (!rawItem.product_id ? (rawItem.id || rawItem._id) : null);
+      if (rawKitId && mongoose.Types.ObjectId.isValid(rawKitId)) {
+        const kitObjId = new mongoose.Types.ObjectId(rawKitId);
+        const rawDb = mongoose.connection.db;
+        const kitDoc = (rawDb ? (await rawDb.collection('pc_comobo_kit').findOne({ _id: kitObjId }) || await rawDb.collection('pc_combo_kits').findOne({ _id: kitObjId })) : null);
+
+        if (kitDoc) {
+          if (!kitDoc.allow_trial_kit) {
+            throw new Error(`Trial kit order is not currently enabled for "${kitDoc.name || 'this combo kit'}".`);
+          }
+          const maxLimit = kitDoc.trial_kit_max_orders_per_buyer !== undefined ? Number(kitDoc.trial_kit_max_orders_per_buyer) : 1;
+          if (maxLimit > 0) {
+            const previousTrialCount = await EpcOrder.countDocuments({
+              epc_id: (mongoose.Types.ObjectId.isValid(epc_id) ? new mongoose.Types.ObjectId(epc_id) : epc_id),
+              order_status: { $nin: ['cancelled'] },
+              payment_status: { $nin: ['rejected'] },
+              $or: [
+                {
+                  items: {
+                    $elemMatch: {
+                      kit_id: kitObjId,
+                      $or: [{ is_trial_kit: true }, { item_name: { $regex: /trial/i } }]
+                    }
+                  }
+                },
+                {
+                  items: {
+                    $elemMatch: {
+                      item_name: { $regex: new RegExp(kitDoc.name, 'i') },
+                      $or: [{ is_trial_kit: true }, { item_name: { $regex: /trial/i } }]
+                    }
+                  }
+                }
+              ]
+            });
+
+            if (previousTrialCount >= maxLimit) {
+              throw new Error(`You have reached the maximum trial kit order limit (${maxLimit} order${maxLimit === 1 ? '' : 's'}) for "${kitDoc.name}".`);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Lookup EPC account for address fallback & profiling
   const epc = (epc_id && mongoose.Types.ObjectId.isValid(epc_id))
     ? await EpcAccount.findById(epc_id).lean()
@@ -362,6 +411,14 @@ async function createEpcOfflineOrder({
       if (match) itemCapacity = `${match[1]} kW`;
     }
 
+    const rawMatchingItem = items.find(it => {
+      const rkId = it.kit_id || it.combo_kit_id || (!it.product_id ? (it.id || it._id) : null);
+      return (rkId && item.kit_id && rkId.toString() === item.kit_id.toString()) || (it.product_id && item.product_id && it.product_id.toString() === item.product_id.toString());
+    }) || totals.items.find(ti => ti === item) || {};
+
+    const isTrialItem = Boolean(rawMatchingItem.is_trial_kit || rawMatchingItem.isTrialKit || item.is_trial_kit);
+    const trialQty = rawMatchingItem.trial_kit_quantity || item.trial_kit_quantity || (isTrialItem ? item.quantity : null);
+
     processedItems.push({
       scope_type: isKitItem ? 'kit' : (item.item_type || item.scope_type || 'product'),
       product_id: isKitItem ? null : (item.product_id || null),
@@ -378,6 +435,8 @@ async function createEpcOfflineOrder({
       gst_rate: totals.gst_rate || 13.8,
       tax_paise: item.tax_paise,
       total_price_paise: item.total_price_paise,
+      is_trial_kit: isTrialItem,
+      trial_kit_quantity: trialQty ? Number(trialQty) : null,
     });
   }
 
@@ -498,6 +557,7 @@ async function createEpcOfflineOrder({
     order_number: orderNumber,
     order_request_id: isOnlineECollection ? null : `REQ-EPC-${orderNumber.replace(/^ORD-EPC-/, '')}`,
     is_official_order_generated: isOnlineECollection ? true : false,
+    is_trial_order: Boolean(processedItems.some(it => it.is_trial_kit)),
     epc_id,
     warehouse_id: assignedWarehouseId,
     reseller_id: targetResellerId || null,

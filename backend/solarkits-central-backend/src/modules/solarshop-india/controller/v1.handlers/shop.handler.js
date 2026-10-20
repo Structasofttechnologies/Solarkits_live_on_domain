@@ -572,6 +572,49 @@ const get_combo_kits_by_district = async (req, res) => {
       console.warn('EPC tenant catalog isolation check warning:', isolationErr.message);
     }
 
+    // ── Count prior trial kit orders for current buyer to enforce purchase limits ──
+    const trialCountByKitId = {};
+    try {
+      let buyerId = req.user?.account_id || req.user?.id || req.user?._id;
+      if (!buyerId) {
+        const authHeader = req.headers.authorization;
+        const cookieToken = req.cookies?.access_token;
+        const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : cookieToken;
+        if (token) {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.decode(token);
+          buyerId = decoded?.account_id || decoded?.id || decoded?._id;
+        }
+      }
+
+      if (buyerId && mongoose.Types.ObjectId.isValid(buyerId)) {
+        const { EpcOrder } = require('../../../admin-panel/models/india_solarshop_db');
+        const buyerObjId = new mongoose.Types.ObjectId(buyerId);
+        const buyerTrialOrders = await EpcOrder.find({
+          epc_id: buyerObjId,
+          order_status: { $nin: ['cancelled'] },
+          payment_status: { $nin: ['rejected'] },
+          $or: [
+            { is_trial_order: true },
+            { 'items.is_trial_kit': true },
+            { 'items.item_name': { $regex: /trial/i } }
+          ]
+        }, { 'items.kit_id': 1, 'items.is_trial_kit': 1, 'items.item_name': 1 }).lean();
+
+        (buyerTrialOrders || []).forEach(o => {
+          (o.items || []).forEach(it => {
+            const isTrial = Boolean(it.is_trial_kit || (it.item_name && /trial/i.test(it.item_name)));
+            if (isTrial && it.kit_id) {
+              const kId = it.kit_id.toString();
+              trialCountByKitId[kId] = (trialCountByKitId[kId] || 0) + 1;
+            }
+          });
+        });
+      }
+    } catch (trialCountErr) {
+      console.warn('[get_combo_kits_by_district] Error counting buyer trial orders:', trialCountErr.message);
+    }
+
     // Fetch all solar kits for mapping and manual population
     const solarKits = await SolarKit.find({ deleted_at: null }).lean();
 
@@ -1367,6 +1410,20 @@ const get_combo_kits_by_district = async (req, res) => {
         allowTrialKit: Boolean(kit.allow_trial_kit),
         trial_kit_quantity: Number(kit.trial_kit_quantity) || 10,
         trialKitQuantity: Number(kit.trial_kit_quantity) || 10,
+        trial_kit_max_orders_per_buyer: kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1,
+        trialKitMaxOrdersPerBuyer: kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1,
+        trial_kit_purchased_count: trialCountByKitId[kit._id.toString()] || 0,
+        trialKitPurchasedCount: trialCountByKitId[kit._id.toString()] || 0,
+        trial_kit_limit_reached: (() => {
+          const limit = kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1;
+          const purchased = trialCountByKitId[kit._id.toString()] || 0;
+          return Boolean(limit > 0 && purchased >= limit);
+        })(),
+        trialKitLimitReached: (() => {
+          const limit = kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1;
+          const purchased = trialCountByKitId[kit._id.toString()] || 0;
+          return Boolean(limit > 0 && purchased >= limit);
+        })(),
         description: kit.description || (kit.capacity ? `High quality solar kit of ${kit.capacity}kW capacity.` : ""),
         warrantyYears: (firstPanel && firstPanel.warrantyYears) || (firstInverter && firstInverter.warrantyYears) || null,
         generationEstimateKWhPerYear: kit.capacity ? Math.round(kit.capacity * 1400) : null,

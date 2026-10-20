@@ -109,7 +109,7 @@ export default function ComboKitDetailsModal({
                                         <div className="border-t border-border/50 pt-2 flex items-center justify-between">
                                             <span className="font-semibold text-text-secondary text-[11px]">Trial Kit Order:</span>
                                             <span className="bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-500/25">
-                                                ✓ Enabled ({viewingKit.trial_kit_quantity || 10} Kits)
+                                                ✓ Enabled ({viewingKit.trial_kit_quantity || 10} Kits) • {Number(viewingKit.trial_kit_max_orders_per_buyer ?? 1) === 0 ? "Unlimited" : `Max ${viewingKit.trial_kit_max_orders_per_buyer ?? 1} Order(s)/Buyer`}
                                             </span>
                                         </div>
                                     )}

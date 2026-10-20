@@ -21,6 +21,8 @@ const epcOrderItemSchema = new mongoose.Schema({
   gst_rate:                  { type: Number, default: 13.8 },
   tax_paise:                 { type: Number, required: true, min: 0 },
   total_price_paise:         { type: Number, required: true, min: 0 },
+  is_trial_kit:              { type: Boolean, default: false },
+  trial_kit_quantity:        { type: Number, default: null },
 }, { _id: false });
 
 /**
@@ -42,6 +44,11 @@ const schema = new mongoose.Schema({
     index: true,
   },
   is_official_order_generated: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  is_trial_order: {
     type: Boolean,
     default: false,
     index: true,

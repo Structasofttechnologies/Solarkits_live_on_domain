@@ -170,6 +170,11 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
   const [trialModalOpen, setTrialModalOpen] = useState(false);
   const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
   const trialKitQty = Number(kit?.trial_kit_quantity || 10);
+  const trialLimit = Number(kit?.trial_kit_max_orders_per_buyer ?? kit?.trialKitMaxOrdersPerBuyer ?? 1);
+  const purchasedTrialCount = Number(kit?.trial_kit_purchased_count ?? kit?.trialKitPurchasedCount ?? 0);
+  const isTrialLimitReached = Boolean(kit?.trial_kit_limit_reached ?? kit?.trialKitLimitReached) ||
+    (trialLimit > 0 && purchasedTrialCount >= trialLimit);
+  const canShowTrialButton = hasTrialKit && !isTrialLimitReached && !isCart;
 
   // Loose order quantities (e.g. 5, 10, 15, 20, 25 kits)
   const looseOrderQuantities = useMemo(() => {
@@ -1295,7 +1300,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
             </div>
           )}
 
-          {hasTrialKit && !isCart && (
+          {canShowTrialButton && (
             <button
               type="button"
               onClick={() => setTrialModalOpen(true)}

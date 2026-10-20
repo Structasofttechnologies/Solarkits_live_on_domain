@@ -130,6 +130,7 @@ const create_combo_kit = async (req, res) => {
         const loose_order_quantities = parseJSON(req.body.loose_order_quantities, []);
         const allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
         const trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
+        const trial_kit_max_orders_per_buyer = req.body.trial_kit_max_orders_per_buyer !== undefined ? Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0) : 1;
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -232,6 +233,7 @@ const create_combo_kit = async (req, res) => {
                 loose_order_quantities: (loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
                 allow_trial_kit,
                 trial_kit_quantity,
+                trial_kit_max_orders_per_buyer,
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -527,6 +529,9 @@ const update_combo_kit = async (req, res) => {
         if (req.body.trial_kit_quantity !== undefined) {
             existingKit.trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
         }
+        if (req.body.trial_kit_max_orders_per_buyer !== undefined) {
+            existingKit.trial_kit_max_orders_per_buyer = Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0);
+        }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
         existingKit.inverter_mode = inverter_mode !== undefined ? inverter_mode : existingKit.inverter_mode;
@@ -625,6 +630,7 @@ const create_combo_kit_india = async (req, res) => {
         const loose_order_quantities = parseJSON(req.body.loose_order_quantities, []);
         const allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
         const trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
+        const trial_kit_max_orders_per_buyer = req.body.trial_kit_max_orders_per_buyer !== undefined ? Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0) : 1;
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -728,6 +734,7 @@ const create_combo_kit_india = async (req, res) => {
                 loose_order_quantities: (loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
                 allow_trial_kit,
                 trial_kit_quantity,
+                trial_kit_max_orders_per_buyer,
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -1083,6 +1090,9 @@ const update_combo_kit_india = async (req, res) => {
         if (req.body.trial_kit_quantity !== undefined) {
             existingKit.trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
         }
+        if (req.body.trial_kit_max_orders_per_buyer !== undefined) {
+            existingKit.trial_kit_max_orders_per_buyer = Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0);
+        }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
         existingKit.inverter_mode = inverter_mode !== undefined ? inverter_mode : existingKit.inverter_mode;
@@ -1127,7 +1137,7 @@ const update_combo_kit_india = async (req, res) => {
 
         await existingKit.save();
 
-        if (req.body.order_quantities !== undefined || req.body.loose_order_quantities !== undefined || req.body.allow_trial_kit !== undefined || req.body.trial_kit_quantity !== undefined) {
+        if (req.body.order_quantities !== undefined || req.body.loose_order_quantities !== undefined || req.body.allow_trial_kit !== undefined || req.body.trial_kit_quantity !== undefined || req.body.trial_kit_max_orders_per_buyer !== undefined) {
             try {
                 const otherModel = existingKit.constructor.modelName === 'pc_combo_kits' ? ComboKitIndia : IndiaComboKit;
                 const syncData = {};
@@ -1135,6 +1145,7 @@ const update_combo_kit_india = async (req, res) => {
                 if (req.body.loose_order_quantities !== undefined) syncData.loose_order_quantities = (existingKit.loose_order_quantities || []);
                 if (req.body.allow_trial_kit !== undefined) syncData.allow_trial_kit = existingKit.allow_trial_kit;
                 if (req.body.trial_kit_quantity !== undefined) syncData.trial_kit_quantity = existingKit.trial_kit_quantity;
+                if (req.body.trial_kit_max_orders_per_buyer !== undefined) syncData.trial_kit_max_orders_per_buyer = existingKit.trial_kit_max_orders_per_buyer;
                 await otherModel.updateMany(
                     { name: { $regex: new RegExp(`^${existingKit.name.trim()}$`, 'i') }, deleted_at: null },
                     { $set: syncData }

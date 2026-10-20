@@ -32,6 +32,11 @@ export default function TrialKitOrderModal({
   const defaultTrialQty = Number(kit?.trial_kit_quantity || 10);
   const [trialQty, setTrialQty] = useState(defaultTrialQty);
 
+  const trialLimit = Number(kit?.trial_kit_max_orders_per_buyer ?? kit?.trialKitMaxOrdersPerBuyer ?? 1);
+  const purchasedTrialCount = Number(kit?.trial_kit_purchased_count ?? kit?.trialKitPurchasedCount ?? 0);
+  const isTrialLimitReached = Boolean(kit?.trial_kit_limit_reached ?? kit?.trialKitLimitReached) ||
+    (trialLimit > 0 && purchasedTrialCount >= trialLimit);
+
   // Pincode input & calculation state
   const [pincode, setPincode] = useState(user?.pincode || "");
   const [loading, setLoading] = useState(false);
@@ -131,6 +136,11 @@ export default function TrialKitOrderModal({
   const handleConfirmAddToCart = () => {
     if (!isAuthenticated) {
       dispatch(setShowAuthDialog(true));
+      return;
+    }
+
+    if (isTrialLimitReached) {
+      setErrorMsg(`Maximum trial kit purchase limit (${trialLimit} order(s)) has been reached for this product.`);
       return;
     }
 
@@ -361,7 +371,7 @@ export default function TrialKitOrderModal({
             variant="primary"
             size="lg"
             onClick={handleConfirmAddToCart}
-            disabled={!deliveryData || loading}
+            disabled={!deliveryData || loading || isTrialLimitReached}
             leftIcon={<FaShoppingCart />}
             className="font-black px-6 bg-gradient-to-r from-primary to-primary-end shadow-md hover:shadow-lg transition-all"
           >

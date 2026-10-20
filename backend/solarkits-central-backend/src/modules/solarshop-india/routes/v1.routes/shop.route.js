@@ -59,7 +59,7 @@ const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
 router.get("/hierarchy", get_shop_hierarchy);
 router.get("/industry-types", get_shop_hierarchy);
 router.get("/stores", get_nearby_stores);
-router.get("/combo-kits", get_combo_kits_by_district);
+router.get("/combo-kits", optional_auth, get_combo_kits_by_district);
 router.get("/best-sellers", get_best_seller_kits);
 router.get("/delivery-cost/calculate", calculate_pincode_delivery_cost);
 router.get("/epc-catalogue", verify_auth, get_epc_catalogue);

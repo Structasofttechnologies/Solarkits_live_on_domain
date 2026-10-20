@@ -21,6 +21,7 @@ const schema = new mongoose.Schema({
   loose_order_quantities: [{ type: Number }],
   allow_trial_kit:    { type: Boolean, default: false },
   trial_kit_quantity: { type: Number, default: 10 },
+  trial_kit_max_orders_per_buyer: { type: Number, default: 1 },
   
   base_components: [{
     template_id:      { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_templates', required: true },
