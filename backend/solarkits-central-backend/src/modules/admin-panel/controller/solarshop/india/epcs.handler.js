@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { EpcAccount, EpcSignupRequest } = require("../../../models/india_solarshop_db");
+const { EpcAccount, EpcSignupRequest, EPCLead } = require("../../../models/india_solarshop_db");
 const { EpcCompany } = require("../../../models/india_core_db");
 const { GeoLevel0, GeoLevel1 } = require("../../../models/geolocation_db");
 const { delete_uploaded_files } = require("../../../utils/upload.files");
@@ -164,10 +164,60 @@ const update_epc_request_status = async (req, res) => {
                     reviewed_at: new Date()
                 }
             });
+
+            // ⚡ Sync linked EPCLead if exists
+            const approvalLeadStatus = accountUpdate.primary_reseller_id ? 'Assigned to Franchisee' : 'Onboarded';
+            await EPCLead.updateOne(
+                {
+                    deleted_at: null,
+                    $or: [
+                        { onboarded_epc_account_id: request.account_id },
+                        ...(request.gstin ? [{ gst_number: request.gstin }] : []),
+                    ],
+                },
+                {
+                    $set: {
+                        lead_status: approvalLeadStatus,
+                        assigned_franchisee_id: accountUpdate.primary_reseller_id || undefined,
+                    },
+                    $push: {
+                        history: {
+                            activity_type: 'status_change',
+                            notes: `EPC Account approved by Admin`,
+                            actor_id: reviewerId,
+                            actor_name: req.user?.full_name || 'Admin',
+                            new_status: approvalLeadStatus,
+                        },
+                    },
+                }
+            );
         } else if (resolvedAction === "reject") {
             if (req.files) delete_uploaded_files(req.files);
             await EpcAccount.updateOne({ _id: request.account_id }, { $set: { status: 'rejected' } });
             await EpcSignupRequest.updateOne({ _id: request_id }, { $set: { status: 'rejected' } });
+
+            // ⚡ Sync linked EPCLead to Closed if exists
+            await EPCLead.updateOne(
+                {
+                    deleted_at: null,
+                    $or: [
+                        { onboarded_epc_account_id: request.account_id },
+                        ...(request.gstin ? [{ gst_number: request.gstin }] : []),
+                    ],
+                },
+                {
+                    $set: { lead_status: 'Closed' },
+                    $push: {
+                        history: {
+                            activity_type: 'status_change',
+                            notes: `EPC Registration rejected by Admin`,
+                            actor_id: req.user?.id || null,
+                            actor_name: req.user?.full_name || 'Admin',
+                            new_status: 'Closed',
+                        },
+                    },
+                }
+            );
         } else {
             if (req.files) delete_uploaded_files(req.files);
             return res.status(400).json({ status: "error", message: "Invalid action" });

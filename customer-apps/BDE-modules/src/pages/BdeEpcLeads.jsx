@@ -85,6 +85,7 @@ export default function BdeEpcLeads() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [stageCounts, setStageCounts] = useState({});
+  const [totalAllCount, setTotalAllCount] = useState(0);
   const [territory, setTerritory] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -134,6 +135,7 @@ export default function BdeEpcLeads() {
       if (res.data?.status === 'success') {
         setLeads(res.data.data || []);
         setStageCounts(res.data.stage_counts || {});
+        setTotalAllCount(res.data.total_all_leads || res.data.pagination?.total || 0);
         setTerritory(res.data.territory || null);
         if (res.data.territory?.state_name) {
           setFormData((prev) => ({
@@ -263,8 +265,8 @@ export default function BdeEpcLeads() {
     });
   };
 
-  const totalLeadsCount = leads.length;
-  const onboardedCount = stageCounts['Onboarded'] || 0;
+  const totalLeadsCount = totalAllCount || (stageCounts ? Object.values(stageCounts).reduce((a, b) => a + b, 0) : leads.length);
+  const onboardedCount = (stageCounts['Onboarded'] || 0) + (stageCounts['Assigned to Franchisee'] || 0);
   const assignedCount = stageCounts['Assigned to Franchisee'] || 0;
   const followUpCount = stageCounts['Follow-up'] || 0;
 

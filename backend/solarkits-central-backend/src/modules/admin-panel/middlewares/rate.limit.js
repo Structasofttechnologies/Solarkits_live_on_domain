@@ -20,10 +20,14 @@ const rateLimit = require('express-rate-limit');
 function buildLimiter({ windowMs, max, name }) {
   return rateLimit({
     windowMs,
-    max,
+    max: process.env.NODE_ENV === 'production' ? max : 1000,
+    skip: (req) => {
+      const isLocal = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1' || req.hostname === 'localhost';
+      return isLocal && process.env.NODE_ENV !== 'production';
+    },
     standardHeaders: true,   // Return rate limit info in `RateLimit-*` headers
     legacyHeaders:   false,   // Disable `X-RateLimit-*` legacy headers
-    skipSuccessfulRequests: false,
+    skipSuccessfulRequests: true,
     handler: (req, res) => {
       const retryAfterSec = Math.ceil(windowMs / 1000);
       res.status(429).json({

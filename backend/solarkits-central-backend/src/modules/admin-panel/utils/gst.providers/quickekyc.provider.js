@@ -109,24 +109,27 @@ async function verifyGstinQuickEkyc(cleanGstin) {
     };
   }
 
-  // Construct target URL (ensure /api/v1/corporate/gstin path)
-  let endpointUrl = baseURL;
-  if (!endpointUrl.includes('/api/v1/corporate/gstin')) {
-    endpointUrl = `${endpointUrl.replace(/\/+$/, '')}/api/v1/corporate/gstin`;
+  // BUG FIX #1: Use QUICKEKYC_BASE_URL directly as the final endpoint URL.
+  // The env var QUICKEKYC_BASE_URL should contain the full path to the endpoint
+  // e.g. https://api.quickekyc.com/api/v1/corporate/gstin_sp
+  // If it only contains the base domain (no /api/v1/ path), append the default path.
+  let endpointUrl = baseURL.replace(/\/+$/, '');
+  if (!endpointUrl.includes('/api/v1/')) {
+    endpointUrl = `${endpointUrl}/api/v1/corporate/gstin_sp`;
   }
 
   try {
     const response = await axios.post(
       endpointUrl,
       {
-        key: apiKey,
+        key: apiKey,       // QuickEkyc uses 'key' in the request body for authentication
         id_number: cleanGstin,
         filing_status_get: false,
       },
       {
         headers: {
-          'x-api-key': apiKey,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         timeout,
       }
@@ -136,7 +139,9 @@ async function verifyGstinQuickEkyc(cleanGstin) {
     const dataObj = resData.data || {};
     const statusVal = (dataObj.gstin_status || '').toLowerCase();
     const isSuccess = resData.status === 'success' || resData.status_code === 200 || resData.status === 'SUCCESS';
-    const isValid = isSuccess && (statusVal === 'active' || !statusVal || statusVal.includes('act'));
+    // BUG FIX #3: Removed `|| !statusVal` which was a false-positive — when gstin_status
+    // is missing/empty the GST should NOT automatically be treated as valid.
+    const isValid = isSuccess && (statusVal === 'active' || statusVal.includes('act'));
 
     const legalName = dataObj.legal_name || dataObj.lgnm || dataObj.business_name || null;
     const businessName = dataObj.business_name || dataObj.tradeNam || dataObj.trade_name || legalName;
@@ -151,7 +156,35 @@ async function verifyGstinQuickEkyc(cleanGstin) {
     }
 
     const stateName = dataObj.pradr?.addr?.stcd || stateMeta.state;
-    const districtName = dataObj.pradr?.addr?.dst || stateMeta.district;
+    let districtName = dataObj.pradr?.addr?.dst || dataObj.dst || dataObj.district || dataObj.city || null;
+
+    if (!districtName && (formattedAddress || dataObj.center_jurisdiction || dataObj.state_jurisdiction)) {
+      try {
+        const mongoose = require('mongoose');
+        const GeoLevel1 = mongoose.models.geolocation_level_1 || require('../../../solarshop-india/models/geolocation_db/geo_level_1.schema');
+        const GeoLevel2 = mongoose.models.geolocation_level_2 || require('../../../solarshop-india/models/geolocation_db/geo_level_2.schema');
+        const stateDoc = await GeoLevel1.findOne({ name: new RegExp(`^${(stateName || '').trim()}$`, 'i') });
+        if (stateDoc) {
+          const districts = await GeoLevel2.find({ level_1: stateDoc._id, is_active: true }).lean();
+          const combinedText = `${formattedAddress} ${dataObj.center_jurisdiction || ''} ${dataObj.state_jurisdiction || ''} ${dataObj.jurisdiction || ''}`.toLowerCase();
+          const sorted = [...districts].sort((a, b) => b.name.length - a.name.length);
+          for (const d of sorted) {
+            const dName = d.name.trim().toLowerCase();
+            const reg = new RegExp(`(\\b|,|\\s)${dName}(\\b|,|\\s)`, 'i');
+            if (reg.test(combinedText) || combinedText.includes(dName)) {
+              districtName = d.name;
+              break;
+            }
+          }
+        }
+      } catch (geoMatchErr) {
+        // non-blocking fallback
+      }
+    }
+    if (!districtName) {
+      districtName = stateMeta.district;
+    }
+
     const pincode = dataObj.pradr?.addr?.pncd || (formattedAddress ? (formattedAddress.match(/\b[1-9][0-9]{5}\b/) || [])[0] : null) || stateMeta.pin;
 
     return {
@@ -189,58 +222,44 @@ async function verifyGstinQuickEkyc(cleanGstin) {
   } catch (error) {
     console.error('[QuickEkycProvider] Error during GST verification:', error.message);
 
-    // Dynamic Quick eKYC verification mapping
-    const stateCode = cleanGstin.substring(0, 2);
-    const stateMeta = STATE_CODE_MAP[stateCode] || { state: 'Gujarat', district: 'Ahmedabad', pin: '380001' };
-    const pan = cleanGstin.length >= 12 ? cleanGstin.substring(2, 12) : 'AABCS1234F';
-    const legalName = `SOLARKITS ${stateMeta.state.toUpperCase()} EPC ENTERPRISES`;
-    const tradeName = `URJA GRID SOLUTIONS (${stateMeta.district})`;
-    const fullAddress = `Plot No. 42, Solar Industrial Zone, Near Ring Road, ${stateMeta.district}, ${stateMeta.state} - ${stateMeta.pin}`;
+    // BUG FIX #4 (CRITICAL): Previously this catch block was silently returning is_valid: true
+    // with fake/mock data on ANY error (network failure, bad API key, 4xx/5xx).
+    // This caused ALL GST verifications to appear successful even when the API call failed.
+    // Now we return a proper failure response with the actual error message.
+    const errorMsg = error.response?.data?.message
+      || error.response?.data?.error
+      || error.message
+      || 'QuickEkyc API call failed';
+
+    const httpStatus = error.response?.status;
+    const isAuthError = httpStatus === 401 || httpStatus === 403;
+    const isClientError = httpStatus >= 400 && httpStatus < 500;
 
     return {
-      is_valid: true,
+      is_valid: false,
       gstin: cleanGstin,
       provider: 'quickekyc',
-      legal_name: legalName,
-      trade_name: tradeName,
-      company_name: tradeName,
-      business_name: tradeName,
-      pan_number: pan,
-      business_status: 'Active',
-      gstin_status: 'Active',
-      constitution_of_business: 'Private Limited Company',
-      taxpayer_type: 'Regular',
-      date_of_registration: new Date('2021-04-01'),
-      center_jurisdiction: `Center Jurisdiction ${stateMeta.district}`,
-      state_jurisdiction: `State Jurisdiction ${stateMeta.state}`,
-      nature_bus_activities: ['EPC Solar Installation & Rooftop Contracting', 'Electrical Contracting'],
-      nature_of_core_business_activity_description: 'Solar Rooftop & Ground Mount System Integrator',
-      address: fullAddress,
-      principal_address: fullAddress,
+      legal_name: null,
+      trade_name: null,
+      company_name: null,
+      business_name: null,
+      pan_number: null,
+      business_status: null,
+      gstin_status: null,
       state_name: stateMeta.state,
       district_name: stateMeta.district,
       district: stateMeta.district,
       pincode: stateMeta.pin,
       registration_state: stateMeta.state,
       state_code: stateCode,
-      provider_reference_id: `QK-VERIFIED-${Date.now()}`,
-      normalized_status: 'active',
-      error_message: null,
-      raw_response: {
-        status: 'success',
-        status_code: 200,
-        data: {
-          gstin: cleanGstin,
-          pan_number: pan,
-          business_name: tradeName,
-          legal_name: legalName,
-          gstin_status: 'Active',
-          taxpayer_type: 'Regular',
-          constitution_of_business: 'Private Limited Company',
-          address: fullAddress,
-        },
-        request_id: Math.floor(100000 + Math.random() * 900000),
-      },
+      provider_reference_id: null,
+      normalized_status: 'error',
+      error_message: isAuthError
+        ? `QuickEkyc: ${errorMsg}` // Shows exact message e.g. "Please whitelist ip, your IP is X.X.X.X"
+        : isClientError
+          ? `QuickEkyc API rejected request (${httpStatus}): ${errorMsg}`
+          : `QuickEkyc API unreachable or timed out: ${errorMsg}`,
+      raw_response: error.response?.data || null,
     };
   }
 }

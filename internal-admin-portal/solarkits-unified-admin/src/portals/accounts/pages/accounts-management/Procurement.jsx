@@ -662,24 +662,12 @@ export default function Procurement() {
                   </p>
                 </div>
 
-                {/* Procurement Readiness Validation & Handover Action */}
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold text-text-muted uppercase block">Readiness State</span>
-                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                      {currentReadiness}
-                    </span>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="md"
-                    onClick={handleHandoverToDelivery}
-                  >
-                    <FaTruck className="text-xs mr-1.5" />
-                    Transfer to Delivery Manager
-                  </Button>
+                {/* Procurement Readiness Validation */}
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-text-muted uppercase block">Readiness State</span>
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                    {currentReadiness}
+                  </span>
                 </div>
               </div>
 

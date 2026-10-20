@@ -40,18 +40,40 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
   const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 
-  // Set default location when user data loads if none already selected
+  const isEpcUser = Boolean(user && (user.gstin || user.primaryLocation || user.registeredStates));
+  const epcRegisteredState = user?.primaryLocation?.state || (user?.registeredStates && user.registeredStates[0]) || null;
+  const epcRegisteredDistrict = user?.primaryLocation?.district || (user?.registeredDistricts && user.registeredDistricts[0]) || null;
+
+  // 🔒 Lock EPC contractor location strictly to their registered GSTIN location
   useEffect(() => {
-    if (user && user.primaryLocation && !selectedState && !selectedDistrict) {
+    if (isEpcUser && epcRegisteredState && epcRegisteredDistrict) {
+      const stateMatches = (selectedState?.id || selectedState?._id) === (epcRegisteredState.id || epcRegisteredState._id);
+      const districtMatches = (selectedDistrict?.id || selectedDistrict?._id) === (epcRegisteredDistrict.id || epcRegisteredDistrict._id);
+      if (!stateMatches || !districtMatches) {
+        dispatch(setSelectedLocation({
+          selectedState: epcRegisteredState,
+          selectedDistrict: epcRegisteredDistrict
+        }));
+      }
+    } else if (user && user.primaryLocation && !selectedState && !selectedDistrict) {
       const { state, district } = user.primaryLocation;
       if (state && district) {
         dispatch(setSelectedLocation({ selectedState: state, selectedDistrict: district }));
       }
     }
-  }, [user, selectedState, selectedDistrict, dispatch]);
+  }, [isEpcUser, epcRegisteredState, epcRegisteredDistrict, user, selectedState, selectedDistrict, dispatch]);
 
-  // Fetch states list
+  // Fetch or set states list
   useEffect(() => {
+    // If EPC is logged in, restrict states strictly to their registered GST state
+    if (isEpcUser && epcRegisteredState) {
+      const userStates = (user.registeredStates && user.registeredStates.length > 0)
+        ? user.registeredStates
+        : [epcRegisteredState];
+      setStatesList(userStates);
+      return;
+    }
+
     const fetchStates = async () => {
       try {
         const response = await axios.get(`${apiBase}/india/v1/geo/states`);
@@ -63,17 +85,27 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
       }
     };
     fetchStates();
-  }, [apiBase]);
+  }, [isEpcUser, epcRegisteredState, user?.registeredStates, apiBase]);
 
-  // Fetch districts list when selectedState changes
+  // Fetch or set districts list
   useEffect(() => {
+    // If EPC is logged in, restrict districts strictly to their registered GST district
+    if (isEpcUser && epcRegisteredDistrict) {
+      const userDistricts = (user.registeredDistricts && user.registeredDistricts.length > 0)
+        ? user.registeredDistricts
+        : [epcRegisteredDistrict];
+      setDistrictsList(userDistricts);
+      return;
+    }
+
     const fetchDistricts = async () => {
-      if (!selectedState?.id) {
+      if (!selectedState?.id && !selectedState?._id) {
         setDistrictsList([]);
         return;
       }
       try {
-        const response = await axios.get(`${apiBase}/india/v1/geo/districts?state_id=${selectedState.id}`);
+        const stateId = selectedState.id || selectedState._id;
+        const response = await axios.get(`${apiBase}/india/v1/geo/districts?state_id=${stateId}`);
         if (response.data?.districts) {
           setDistrictsList(response.data.districts);
           if (!selectedDistrict && response.data.districts.length > 0) {
@@ -85,9 +117,13 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
       }
     };
     fetchDistricts();
-  }, [selectedState?.id, apiBase, dispatch]);
+  }, [isEpcUser, epcRegisteredDistrict, user?.registeredDistricts, selectedState?.id, selectedState?._id, apiBase, dispatch, selectedDistrict]);
 
   const handleLocationChange = (newSelectedState, newSelectedDistrict) => {
+    // For registered EPCs, forbid switching away from registered state/district
+    if (isEpcUser) {
+      return;
+    }
     if (cart && cart.length > 0 && selectedState && newSelectedState) {
       const currentId = (selectedState.id || selectedState._id || '').toString();
       const newId = (newSelectedState.id || newSelectedState._id || '').toString();
@@ -151,8 +187,8 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
     );
   }
 
-  const stateOptions = statesList.map(s => ({ text: s.name, value: s.id }));
-  const districtOptions = districtsList.map(d => ({ text: d.name, value: d.id }));
+  const stateOptions = statesList.map(s => ({ text: s.name, value: s.id || s._id }));
+  const districtOptions = districtsList.map(d => ({ text: d.name, value: d.id || d._id }));
 
   return (
     <>
@@ -180,9 +216,10 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
 
           {/* State Dropdown */}
           <DropdownWithSearchInput
-            value={selectedState?.id || ""}
+            value={selectedState?.id || selectedState?._id || ""}
             onChange={(val) => {
-              const found = statesList.find(s => s.id === val);
+              if (isEpcUser) return;
+              const found = statesList.find(s => (s.id || s._id) === val);
               if (found) {
                 handleLocationChange(found, null);
               } else {
@@ -190,6 +227,7 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
               }
             }}
             options={stateOptions}
+            disabled={isEpcUser && stateOptions.length <= 1}
             placeholder="Select State"
             searchPlaceholder="Search State..."
             className="w-40 text-xs text-text-primary dark:text-info !"
@@ -200,9 +238,10 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
 
           {/* District Dropdown */}
           <DropdownWithSearchInput
-            value={selectedDistrict?.id || ""}
+            value={selectedDistrict?.id || selectedDistrict?._id || ""}
             onChange={(val) => {
-              const found = districtsList.find(d => d.id === val);
+              if (isEpcUser) return;
+              const found = districtsList.find(d => (d.id || d._id) === val);
               if (found) {
                 handleLocationChange(selectedState, found);
               } else {
@@ -210,12 +249,21 @@ export default function Header({ isOpen, setIsOpen, isMobile }) {
               }
             }}
             options={districtOptions}
-            disabled={!selectedState}
+            disabled={(isEpcUser && districtOptions.length <= 1) || !selectedState}
             placeholder="Select District"
             searchPlaceholder="Search District..."
             className="w-40 text-xs text-text-primary dark:text-info !"
             forceDown={true}
           />
+
+          {isEpcUser && (
+            <span
+              className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+              title={`Registered GST Location: ${user.gstin ? `GSTIN ${user.gstin}` : 'Verified Contractor'}`}
+            >
+              GST Registered
+            </span>
+          )}
         </div>
 
         {/* Franchisee Partner Badge */}

@@ -9,6 +9,7 @@ import CustomInput from "../Components/CustomInput";
 import IconButton from "../Components/IconButton";
 import { setAlert } from "../features/alert.slice";
 import { setUser } from "../features/auth.slice";
+import { setSelectedLocation } from "../features/slice";
 
 // Configure axios defaults for cookie-based auth
 axios.defaults.withCredentials = true;
@@ -43,13 +44,19 @@ export default function Login() {
   const testCredentials = (() => {
     const defaultAccounts = [
       {
+        role: "Rajkot GST Onboarded EPC (Ravi Harsoda)",
+        email: "ravi.s@sunnovative.com",
+        password: "Password@123",
+        tag: "Gujarat - Rajkot (GST 24AHUPH9736P2ZB)"
+      },
+      {
         role: "Devbhumi Dwarka EPC Partner",
         email: "dwarka.epc@solarkits.com",
         password: "Password@123",
         tag: "Gujarat - Devbhumi Dwarka"
       },
       {
-        role: "Onboard Franchise / EPC Login",
+        role: "Demo EPC Contractor",
         email: "ravi.s@gmail.com",
         password: "Password@123",
         tag: "Franchise / EPC"
@@ -242,6 +249,13 @@ export default function Login() {
 
         dispatch(setUser(user));
 
+        if (user?.primaryLocation?.state && user?.primaryLocation?.district) {
+          dispatch(setSelectedLocation({
+            selectedState: user.primaryLocation.state,
+            selectedDistrict: user.primaryLocation.district
+          }));
+        }
+
         if (rememberMe) {
           localStorage.setItem('user', JSON.stringify(user));
         } else {
@@ -368,6 +382,12 @@ export default function Login() {
           if (refreshToken) sessionStorage.setItem('refresh_token', refreshToken);
         }
         dispatch(setUser(user));
+        if (user?.primaryLocation?.state && user?.primaryLocation?.district) {
+          dispatch(setSelectedLocation({
+            selectedState: user.primaryLocation.state,
+            selectedDistrict: user.primaryLocation.district
+          }));
+        }
         sessionStorage.setItem('user', JSON.stringify(user));
         dispatch(setAlert({ type: "success", message: "Direct Login successful! Welcome back." }));
         navigate("/preconfigured-combo-kit");
