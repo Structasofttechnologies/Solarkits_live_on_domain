@@ -423,3 +423,11 @@ export const handoverToDeliveryManager = async (payload) => {
   return res.data;
 };
 
+export const getProcurementPartners = async () => {
+  const res = await axios.get(`${API_URL}/accounts/procurement/partners`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+

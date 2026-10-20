@@ -27,6 +27,14 @@ const schema = new mongoose.Schema({
   combokit_bulk_panels_limit: { type: Number, default: 30 },
   gst_rate:                   { type: Number, default: 13.8 },
 
+  // ── Stage TATs & Procurement Settings ──────────────────────────────────────
+  payment_stage_tats: { type: mongoose.Schema.Types.Mixed, default: {} },
+  procurement_settings: {
+    production_tat_days:      { type: Number, default: 5 },
+    supply_tat_days:          { type: Number, default: 3 },
+    estimated_transport_cost: { type: Number, default: 0 },
+  },
+
   // ── Phase R1: Territory Exclusivity Policy ──────────────────────────────────
   /**
    * territory_exclusivity_mode:

@@ -346,6 +346,55 @@ async function runTests() {
       "Stored UTR number matches submitted reference",
       data.data?.payment?.actual_payment?.utr_number === testUtr
     );
+    assert(
+      "Advance payment object is persisted separately",
+      data.data?.payment?.advance_payment?.utr_number === testUtr
+    );
+  }
+
+  // ── TEST SUITE 7B: MILESTONE 2 (70% BALANCE) PAYMENT ─────────────────────────
+  console.log("\nSuite 7b: Record Milestone 2 (70% Balance) Bank Payment");
+  {
+    const balanceUtr = `ICICIBAL${Date.now().toString().slice(-6)}`;
+    const { req, res } = createMockReqRes({
+      indent_id: createdPiId,
+      payment_type: "balance",
+      utr_number: balanceUtr,
+      payment_mode: "RTGS",
+      paid_date: new Date(),
+      remarks: "Balance 70% cleared against dispatch readiness"
+    });
+
+    await procurementHandler.record_bank_payment(req, res);
+    const data = res.getResponseData();
+
+    assert(
+      "record_bank_payment registers 70% balance transaction",
+      res.getStatusCode() === 200 && data.status === "success",
+      JSON.stringify(data)
+    );
+
+    assert(
+      "Payment status transitions to 'Paid' upon full settlement",
+      data.data?.payment?.payment_status === "Paid",
+      `Payment status: ${data.data?.payment?.payment_status}`
+    );
+
+    assert(
+      "Balance payment UTR is stored accurately",
+      data.data?.payment?.balance_payment?.utr_number === balanceUtr
+    );
+
+    assert(
+      "Advance UTR is PRESERVED and not overwritten",
+      Boolean(data.data?.payment?.advance_payment?.utr_number),
+      "Advance payment UTR was lost"
+    );
+
+    assert(
+      "Payment history has at least 2 installments (advance + balance)",
+      (data.data?.payment?.payment_history || []).length >= 2
+    );
   }
 
   // ── TEST SUITE 8: FULFILMENT DISPATCH & CARRIER LOGGING ─────────────────────

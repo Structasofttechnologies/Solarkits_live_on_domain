@@ -14,14 +14,16 @@ const {
   FpoOrder,
   ComboKit,
   DeliveryVehicleMaster,
-  DeliveryOrder
+  DeliveryOrder,
+  SolarShopSettings
 } = require('../../admin-panel/models/india_solarshop_db');
 
 const {
   WarehouseKitPartnerMapping,
   Brand,
   Product,
-  ProductSku
+  ProductSku,
+  ProductSkuPrice
 } = require('../../admin-panel/models/core_db');
 
 const Supplier = require('../../supplier-panel/models/supplier.schema');
@@ -119,6 +121,216 @@ exports.get_batch_ready_orders = async (req, res) => {
 };
 
 /**
+ * Helper to dynamically construct BOM definitions from Database & API models:
+ * 1. WarehouseKitPartnerMapping (product_mappings for specific warehouse)
+ * 2. ProcurementGroup (supplier_breakdown & supplier_groups)
+ * 3. ComboKit (pc_comobo_kit / pc_combo_kits base_components & bos_kits)
+ * 4. ProductSku & Brands from core database
+ */
+async function resolveDynamicBomDefinitions({ group, epcOrder, fpoOrder, targetWarehouseId, totalKits }) {
+  // 1. Try to find configured warehouse kit partner mapping
+  let mapping = null;
+  if (targetWarehouseId) {
+    mapping = await WarehouseKitPartnerMapping.findOne({
+      warehouse_id: targetWarehouseId,
+      is_configured: true
+    }).lean();
+  }
+  if (!mapping) {
+    mapping = await WarehouseKitPartnerMapping.findOne({ is_configured: true }).lean();
+  }
+
+  // 2. Try to find the ComboKit
+  let comboKitDoc = null;
+  const targetKitId = mapping?.combo_kit_id || epcOrder?.items?.[0]?.kit_id || fpoOrder?.items?.[0]?.kit_id;
+  if (targetKitId) {
+    comboKitDoc = await ComboKit.findById(targetKitId).lean();
+  }
+  if (!comboKitDoc) {
+    comboKitDoc = await ComboKit.findOne({ deleted_at: null, is_active: true }).lean();
+  }
+
+  const breakdown = group?.supplier_breakdown || [];
+  const groupSuppliers = group?.supplier_groups || [];
+
+  // A. Panel / Solar Modules
+  const panelMapping = mapping?.product_mappings?.find(m => m.component_type === 'panel');
+  const panelBreakdown = breakdown.find(b => {
+    const txt = `${b.category || ''} ${b.product || ''} ${b.component_name || ''} ${b.product_name || ''}`.toLowerCase();
+    return txt.includes('module') || txt.includes('panel');
+  });
+  const panelCombo = comboKitDoc?.base_components?.find(c => c.quantity && c.quantity > 1);
+
+  const panelName = panelBreakdown?.component_name ||
+    panelBreakdown?.product ||
+    panelBreakdown?.product_name ||
+    panelMapping?.product_name ||
+    'Bifacial 550W Mono PERC Solar PV Modules';
+
+  const panelSku = panelMapping?.sku_code ||
+    (panelBreakdown?.sku_code && panelBreakdown.sku_code !== 'null' ? panelBreakdown.sku_code : null) ||
+    'PANEL-550W-BIFACIAL';
+
+  const panelQtyPerKit = panelMapping?.quantity ||
+    panelCombo?.quantity ||
+    panelBreakdown?.kit_multiplier ||
+    (panelBreakdown?.total_units && totalKits ? Math.round(panelBreakdown.total_units / totalKits) : 9) ||
+    9;
+
+  const panelRate = panelBreakdown?.estimated_unit_cost || 6875;
+
+  // B. Inverter
+  const inverterMapping = mapping?.product_mappings?.find(m => m.component_type === 'inverter');
+  const inverterBreakdown = breakdown.find(b => {
+    const txt = `${b.category || ''} ${b.product || ''} ${b.component_name || ''} ${b.product_name || ''}`.toLowerCase();
+    return txt.includes('inverter') || txt.includes('inv');
+  });
+  const inverterCombo = comboKitDoc?.base_components?.find(c => c !== panelCombo);
+
+  const inverterName = inverterBreakdown?.component_name ||
+    inverterBreakdown?.product ||
+    inverterBreakdown?.product_name ||
+    inverterMapping?.product_name ||
+    '5kW / 10kW On-Grid String Solar Inverter';
+
+  const inverterSku = inverterMapping?.sku_code ||
+    (inverterBreakdown?.sku_code && inverterBreakdown.sku_code !== 'null' ? inverterBreakdown.sku_code : null) ||
+    'INV-5KW-ONGRID';
+
+  const inverterQtyPerKit = inverterMapping?.quantity ||
+    inverterCombo?.quantity ||
+    inverterBreakdown?.kit_multiplier ||
+    (inverterBreakdown?.total_units && totalKits ? Math.round(inverterBreakdown.total_units / totalKits) : 1) ||
+    1;
+
+  const inverterRate = inverterBreakdown?.estimated_unit_cost || 32000;
+
+  // C. Balance of System (BOS)
+  const bosBreakdownList = breakdown.filter(b => {
+    const txt = `${b.category || ''} ${b.product || ''} ${b.component_name || ''} ${b.product_name || ''}`.toLowerCase();
+    return !txt.includes('module') && !txt.includes('panel') && !txt.includes('inverter') && !txt.includes('inv-');
+  });
+  const bosMappings = mapping?.product_mappings?.filter(m => m.component_type === 'bos_kit') || [];
+  const bosComboList = comboKitDoc?.bos_kits || [];
+
+  let subItems = [];
+  if (bosBreakdownList.length > 0) {
+    subItems = bosBreakdownList.map((b, idx) => {
+      const name = b.component_name || b.product || b.product_name || `BOS Component ${idx + 1}`;
+      let subSku = 'BOS-ITEM';
+      let subCategory = b.category || 'Balance of System (BOS)';
+
+      const lower = name.toLowerCase();
+      if (lower.includes('struct') || lower.includes('mount') || lower.includes('gi')) {
+        subSku = 'BOS-STRUCTURE-GI-HD';
+        subCategory = 'Mounting Structure';
+      } else if (lower.includes('box') || lower.includes('acdb') || lower.includes('dcdb') || lower.includes('protect')) {
+        subSku = 'BOS-ACDB-DCDB-IP65';
+        subCategory = 'Protection Box';
+      } else if (lower.includes('cable') || lower.includes('earth') || lower.includes('wire')) {
+        subSku = 'BOS-CABLE-EARTH-KIT';
+        subCategory = 'Cabling & Safety';
+      } else {
+        subSku = `BOS-COMP-${idx + 1}`;
+      }
+
+      const qtyPerKit = b.kit_multiplier ||
+        (b.total_units && totalKits ? Math.round(b.total_units / totalKits) : 1) ||
+        1;
+
+      const rate = b.estimated_unit_cost || (subCategory === 'Mounting Structure' ? 16000 : subCategory === 'Protection Box' ? 8500 : 5500);
+
+      return {
+        sku_code: subSku,
+        product_name: name,
+        category: subCategory,
+        qty_per_kit: qtyPerKit,
+        unit_rate: rate,
+        unit: 'Sets'
+      };
+    });
+  } else if (bosMappings.length > 0) {
+    subItems = bosMappings.map((m, idx) => ({
+      sku_code: m.sku_code || `BOS-ITEM-${idx + 1}`,
+      product_name: m.product_name,
+      category: m.subtype_name || m.template_name || 'Balance of System (BOS)',
+      qty_per_kit: m.quantity || 1,
+      unit_rate: idx === 0 ? 16000 : idx === 1 ? 8500 : 5500,
+      unit: 'Sets'
+    }));
+  } else if (bosComboList.length > 0) {
+    subItems = bosComboList.map((bk, idx) => ({
+      sku_code: `BOS-KIT-${idx + 1}`,
+      product_name: bk.name,
+      category: 'Balance of System (BOS)',
+      qty_per_kit: bk.quantity || 1,
+      unit_rate: idx === 0 ? 16000 : 14000,
+      unit: 'Sets'
+    }));
+  } else {
+    subItems = [
+      {
+        sku_code: 'BOS-STRUCTURE-GI-HD',
+        product_name: 'GI Hot-Dip Rooftop Mounting Structure Kit',
+        category: 'Mounting Structure',
+        qty_per_kit: 1,
+        unit_rate: 16000,
+        unit: 'Sets'
+      },
+      {
+        sku_code: 'BOS-ACDB-DCDB-IP65',
+        product_name: 'ACDB & DCDB IP65 Surge Protection Distribution Box',
+        category: 'Protection Box',
+        qty_per_kit: 1,
+        unit_rate: 8500,
+        unit: 'Sets'
+      },
+      {
+        sku_code: 'BOS-CABLE-EARTH-KIT',
+        product_name: 'Solar DC Cable (4/6 sq.mm) & Chemical Earthing Kit',
+        category: 'Cabling & Safety',
+        qty_per_kit: 1,
+        unit_rate: 5500,
+        unit: 'Sets'
+      }
+    ];
+  }
+
+  const totalBosRate = subItems.reduce((acc, it) => acc + (it.unit_rate || 0), 0);
+
+  return [
+    {
+      sku_code: panelSku,
+      product_name: panelName,
+      category: 'Solar Modules',
+      component_type: 'panel',
+      qty_per_kit: panelQtyPerKit,
+      unit_rate: panelRate,
+      unit: 'Pcs'
+    },
+    {
+      sku_code: inverterSku,
+      product_name: inverterName,
+      category: 'Solar Inverters',
+      component_type: 'inverter',
+      qty_per_kit: inverterQtyPerKit,
+      unit_rate: inverterRate,
+      unit: 'Pcs'
+    },
+    {
+      sku_code: 'BOS-KIT-COMPLETE',
+      product_name: 'Complete Balance of System (BOS) Kit',
+      category: 'Balance of System (BOS)',
+      component_type: 'bos_kit',
+      qty_per_kit: 1,
+      unit_rate: totalBosRate || 30000,
+      unit: 'Sets',
+      sub_items: subItems
+    }
+  ];
+}
+
+/**
  * 2. Calculate Product-wise BOM & Warehouse Stock Availability
  * Supplier Quantity = Required Quantity - Valid Reserved Inventory Quantity
  */
@@ -131,9 +343,12 @@ exports.calculate_procurement_bom = async (req, res) => {
     let orderNumbers = [];
     let customerOrderIds = [];
     let kitBreakdown = [];
+    let group = null;
+    let epc = null;
+    let fpo = null;
 
     if (group_id) {
-      const group = await ProcurementGroup.findOne({ group_id: group_id.toUpperCase() }).lean();
+      group = await ProcurementGroup.findOne({ group_id: group_id.toUpperCase() }).lean();
       if (!group) {
         return res.status(404).json({ status: 'error', message: `Procurement Group #${group_id} not found.` });
       }
@@ -146,14 +361,14 @@ exports.calculate_procurement_bom = async (req, res) => {
         targetWarehouseId = group.supplier_groups[0].warehouse_id;
       }
     } else if (order_id) {
-      const epc = await EpcOrder.findById(order_id).lean();
+      epc = await EpcOrder.findById(order_id).lean();
       if (epc) {
         totalKits = (epc.items || []).reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
         orderNumbers = [epc.order_number];
         customerOrderIds = [epc._id];
         targetWarehouseId = targetWarehouseId || epc.warehouse_id;
       } else {
-        const fpo = await FpoOrder.findById(order_id).lean();
+        fpo = await FpoOrder.findById(order_id).lean();
         if (fpo) {
           totalKits = (fpo.items || []).reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
           orderNumbers = [fpo.order_number || fpo.po_number];
@@ -170,79 +385,57 @@ exports.calculate_procurement_bom = async (req, res) => {
 
     const warehouseDoc = targetWarehouseId ? await CompanyWarehouse.findById(targetWarehouseId).lean() : null;
 
-    // Standard BOM component multipliers per solar kit:
-    // Panels: 9 units (550W Bifacial)
-    // Inverter: 1 unit (5kW/10kW)
-    // Complete BOS Kit: 1 set (Mounting Structure, ACDB/DCDB Box, DC Cabling & Earthing)
-    const bomDefinitions = [
-      {
-        sku_code: 'PANEL-550W-BIFACIAL',
-        product_name: 'Bifacial 550W Mono PERC Solar PV Modules',
-        category: 'Solar Modules',
-        component_type: 'panel',
-        qty_per_kit: 9,
-        unit_rate: 6875,
-        unit: 'Pcs'
-      },
-      {
-        sku_code: 'INV-5KW-ONGRID',
-        product_name: '5kW / 10kW On-Grid String Solar Inverter',
-        category: 'Solar Inverters',
-        component_type: 'inverter',
-        qty_per_kit: 1,
-        unit_rate: 32000,
-        unit: 'Pcs'
-      },
-      {
-        sku_code: 'BOS-KIT-COMPLETE',
-        product_name: 'Complete Balance of System (BOS) Kit',
-        category: 'Balance of System (BOS)',
-        component_type: 'bos_kit',
-        qty_per_kit: 1,
-        unit_rate: 30000,
-        unit: 'Sets',
-        sub_items: [
-          {
-            sku_code: 'BOS-STRUCTURE-GI-HD',
-            product_name: 'GI Hot-Dip Rooftop Mounting Structure Kit',
-            category: 'Mounting Structure',
-            qty_per_kit: 1,
-            unit_rate: 16000,
-            unit: 'Sets'
-          },
-          {
-            sku_code: 'BOS-ACDB-DCDB-IP65',
-            product_name: 'ACDB & DCDB IP65 Surge Protection Distribution Box',
-            category: 'Protection Box',
-            qty_per_kit: 1,
-            unit_rate: 8500,
-            unit: 'Sets'
-          },
-          {
-            sku_code: 'BOS-CABLE-EARTH-KIT',
-            product_name: 'Solar DC Cable (4/6 sq.mm) & Chemical Earthing Kit',
-            category: 'Cabling & Safety',
-            qty_per_kit: 1,
-            unit_rate: 5500,
-            unit: 'Sets'
-          }
-        ]
-      }
-    ];
+    // Dynamically resolve BOM definitions from database (WarehouseKitPartnerMapping, ProcurementGroup, ComboKit, Brand)
+    const bomDefinitions = await resolveDynamicBomDefinitions({
+      group,
+      epcOrder: epc,
+      fpoOrder: fpo,
+      targetWarehouseId,
+      totalKits
+    });
+
+    // Query active purchase indents for this group or order to detect already-procured items
+    const piConditions = [];
+    if (group_id) piConditions.push({ order_group_id: group_id.toUpperCase() });
+    if (orderNumbers.length > 0) piConditions.push({ customer_order_number: { $in: orderNumbers } });
+    if (customerOrderIds.length > 0) piConditions.push({ customer_order_id: { $in: customerOrderIds } });
+
+    const activePIs = piConditions.length > 0
+      ? await PurchaseIndent.find({
+          $or: piConditions,
+          pi_status: { $ne: 'Cancelled' }
+        }).lean()
+      : [];
 
     // Query live warehouse stock and existing reservations
     const bomCalculations = await Promise.all(
       bomDefinitions.map(async (def) => {
         const requiredQuantity = def.qty_per_kit * totalKits;
-        const calculatedSubItems = (def.sub_items || []).map((sub) => ({
-          sku_code: sub.sku_code,
-          product_name: sub.product_name,
-          category: sub.category,
-          qty_per_kit: sub.qty_per_kit,
-          required_quantity: sub.qty_per_kit * totalKits,
-          unit_rate: sub.unit_rate,
-          unit: sub.unit || 'Sets',
-          subtotal: (sub.qty_per_kit * totalKits) * sub.unit_rate
+        
+        // Sub-items with existing benchmark prices from Admin database
+        const calculatedSubItems = await Promise.all((def.sub_items || []).map(async (sub) => {
+          let subBenchmark = sub.unit_rate || 0;
+          try {
+            const subPrice = await ProductSkuPrice.findOne({
+              sku_code: { $regex: new RegExp(sub.sku_code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+              price: { $gt: 0 }
+            }).lean();
+            if (subPrice && subPrice.price > 0) {
+              subBenchmark = subPrice.price;
+            }
+          } catch (e) {}
+
+          return {
+            sku_code: sub.sku_code,
+            product_name: sub.product_name,
+            category: sub.category,
+            qty_per_kit: sub.qty_per_kit,
+            required_quantity: sub.qty_per_kit * totalKits,
+            unit_rate: sub.unit_rate,
+            benchmark_cost: subBenchmark || sub.unit_rate,
+            unit: sub.unit || 'Sets',
+            subtotal: (sub.qty_per_kit * totalKits) * sub.unit_rate
+          };
         }));
 
         // Query available warehouse stock
@@ -285,11 +478,69 @@ exports.calculate_procurement_bom = async (req, res) => {
         // Free eligible stock in warehouse = availableStock - (totalReservedStock - orderReservedQuantity)
         const freeWarehouseStock = Math.max(0, availableStock - Math.max(0, totalReservedStock - orderReservedQuantity));
         
-        // Supplier Quantity = Required Quantity - Valid Reserved Inventory Quantity
-        const supplierQuantity = Math.max(0, requiredQuantity - orderReservedQuantity);
+        // Effective warehouse stock applicable to this requirement:
+        // Already reserved for this order + currently free stock in warehouse
+        const totalWarehouseAvailableForOrder = orderReservedQuantity + freeWarehouseStock;
+        const deductedWarehouseStock = Math.min(requiredQuantity, totalWarehouseAvailableForOrder);
 
-        // Lookup eligible suppliers & OEM partners from WarehouseKitPartnerMapping
+        // Supplier Quantity = Required Quantity - Deducted Warehouse Stock (cut automatically)
+        const supplierQuantity = Math.max(0, requiredQuantity - deductedWarehouseStock);
+        const stockFullyAvailable = totalWarehouseAvailableForOrder >= requiredQuantity;
+
+        // Query existing SKU Benchmark Price configured in Admin panel
+        let benchmarkCost = 0;
+        try {
+          if (skuId) {
+            const skuPrice = await ProductSkuPrice.findOne({
+              sku_id: skuId,
+              price: { $gt: 0 }
+            }).lean();
+            if (skuPrice && skuPrice.price > 0) {
+              benchmarkCost = skuPrice.price;
+            }
+          }
+          if (!benchmarkCost && def.sku_code) {
+            const codePrice = await ProductSkuPrice.findOne({
+              sku_code: { $regex: new RegExp(def.sku_code.split('-')[0], 'i') },
+              price: { $gt: 0 }
+            }).lean();
+            if (codePrice && codePrice.price > 0) {
+              benchmarkCost = codePrice.price;
+            }
+          }
+        } catch (e) {
+          console.warn("Could not load ProductSkuPrice:", e.message);
+        }
+        if (!benchmarkCost || benchmarkCost <= 0) {
+          benchmarkCost = def.unit_rate || (def.component_type === 'panel' ? 6875 : def.component_type === 'inverter' ? 32000 : 30000);
+        }
+
+        // Lookup eligible suppliers & OEM partners dynamically
         let eligiblePartners = [];
+
+        // 1. From group's allocated supplier_groups
+        if (group?.supplier_groups && group.supplier_groups.length > 0) {
+          const matchingGroup = group.supplier_groups.find(sg =>
+            (sg.items || []).some(it => {
+              const nameLower = (it.product_name || '').toLowerCase();
+              if (def.component_type === 'panel' && (nameLower.includes('panel') || nameLower.includes('module'))) return true;
+              if (def.component_type === 'inverter' && (nameLower.includes('inverter') || nameLower.includes('inv'))) return true;
+              if (def.component_type === 'bos_kit' && (nameLower.includes('bos') || nameLower.includes('structure') || nameLower.includes('mounting') || nameLower.includes('protection'))) return true;
+              return false;
+            })
+          );
+          if (matchingGroup && matchingGroup.supplier_name) {
+            eligiblePartners.push({
+              id: matchingGroup.supplier_id || `sup_${def.component_type}`,
+              name: matchingGroup.supplier_name,
+              is_oem: Boolean(matchingGroup.is_oem),
+              type: matchingGroup.is_oem ? 'OEM Partner (SOLARKITS Brand)' : 'Supplier Partner (Own Brand)',
+              brand_name: matchingGroup.supplier_name
+            });
+          }
+        }
+
+        // 2. From WarehouseKitPartnerMapping
         if (targetWarehouseId) {
           const mapping = await WarehouseKitPartnerMapping.findOne({
             warehouse_id: targetWarehouseId,
@@ -347,6 +598,29 @@ exports.calculate_procurement_bom = async (req, res) => {
           }
         }
 
+        // Check if a PI has already been generated for this component
+        const matchingPIs = activePIs.filter((pi) => {
+          if (pi.bom_sku_code && pi.bom_sku_code === def.sku_code) return true;
+          if (pi.component_type && pi.component_type === def.component_type) return true;
+
+          const piItems = pi.items || [];
+          return piItems.some((it) => {
+            if (it.parent_sku_code === def.sku_code) return true;
+            if (it.sku_code === def.sku_code) return true;
+            if (def.sub_items && def.sub_items.some((sub) => sub.sku_code === it.sku_code)) return true;
+
+            const itSku = (it.sku_code || '').toLowerCase();
+            const itName = (it.product_name || '').toLowerCase();
+            if (def.component_type === 'panel' && (itSku.includes('panel') || itName.includes('panel') || itName.includes('module'))) return true;
+            if (def.component_type === 'inverter' && (itSku.includes('inv') || itName.includes('inverter'))) return true;
+            if (def.component_type === 'bos_kit' && (itSku.includes('bos') || itName.includes('bos') || itName.includes('mounting') || itName.includes('structure'))) return true;
+            return false;
+          });
+        });
+
+        const hasPI = matchingPIs.length > 0;
+        const piNumbers = matchingPIs.map((p) => p.pi_number);
+
         return {
           sku_code: def.sku_code,
           sku_id: skuId,
@@ -355,12 +629,19 @@ exports.calculate_procurement_bom = async (req, res) => {
           component_type: def.component_type,
           unit: def.unit,
           unit_rate: def.unit_rate,
+          benchmark_cost: benchmarkCost,
           required_quantity: requiredQuantity,
           available_stock: availableStock,
           free_warehouse_stock: freeWarehouseStock,
           total_reserved_stock: totalReservedStock,
           inventory_quantity_selected: orderReservedQuantity,
+          deducted_warehouse_stock: deductedWarehouseStock,
           supplier_quantity: supplierQuantity,
+          stock_fully_available: stockFullyAvailable,
+          has_pi: hasPI,
+          pi_created: hasPI,
+          pi_numbers: piNumbers,
+          pi_count: matchingPIs.length,
           eligible_partners: eligiblePartners,
           selected_partner: eligiblePartners[0] || null,
           sub_items: calculatedSubItems,
@@ -369,14 +650,23 @@ exports.calculate_procurement_bom = async (req, res) => {
             name: warehouseDoc?.warehouse_code || 'Central Hub Warehouse',
             code: warehouseDoc?.warehouse_code || 'WH-01'
           },
-          procurement_status: supplierQuantity === 0
-            ? 'Fully Sourced from Inventory'
-            : orderReservedQuantity > 0
-              ? 'Partially Sourced (Stock + Supplier)'
-              : 'Supplier Procurement Required'
+          procurement_status: hasPI
+            ? 'Purchase Indent Created'
+            : supplierQuantity === 0
+              ? 'Fully Sourced from Inventory'
+              : orderReservedQuantity > 0
+                ? 'Partially Sourced (Stock + Supplier)'
+                : 'Supplier Procurement Required'
         };
       })
     );
+
+    const settingsDoc = await SolarShopSettings.findOne().lean();
+    const procurementSettings = settingsDoc?.procurement_settings || {
+      production_tat_days: 5,
+      supply_tat_days: 3,
+      estimated_transport_cost: 0,
+    };
 
     return res.status(200).json({
       status: 'success',
@@ -384,6 +674,7 @@ exports.calculate_procurement_bom = async (req, res) => {
         group_id,
         order_numbers: orderNumbers,
         total_kits: totalKits,
+        procurement_settings: procurementSettings,
         destination_warehouse: {
           id: targetWarehouseId,
           name: warehouseDoc?.warehouse_code || 'Central Hub Warehouse',
@@ -517,6 +808,8 @@ exports.create_purchase_indent = async (req, res) => {
       customer_order_id,
       customer_order_number,
       order_group_id,
+      bom_sku_code,
+      component_type,
       supplier_id,
       supplier_name,
       supplier_brand,
@@ -557,6 +850,8 @@ exports.create_purchase_indent = async (req, res) => {
         sku_id: it.sku_id || null,
         sku_code: it.sku_code || 'SKU-ITEM',
         product_name: it.product_name || 'Solar Product',
+        parent_sku_code: it.parent_sku_code || bom_sku_code || null,
+        component_type: it.component_type || component_type || null,
         quantity: qty,
         unit_rate: rate,
         gst_rate: gstRate,
@@ -584,11 +879,17 @@ exports.create_purchase_indent = async (req, res) => {
       supply_status: 'Pending'
     };
 
+    const isAboveBenchmark = Boolean(req.body.is_above_benchmark);
+    const benchmarkCost = Number(req.body.benchmark_cost) || 0;
+    const requiresAdminApproval = isAboveBenchmark;
+
     const newPI = new PurchaseIndent({
       pi_number: piNumber,
       customer_order_id: customer_order_id || new mongoose.Types.ObjectId(),
       customer_order_number,
       order_group_id: order_group_id || null,
+      bom_sku_code: bom_sku_code || null,
+      component_type: component_type || null,
       supplier_id: supplier_id && mongoose.Types.ObjectId.isValid(supplier_id) ? supplier_id : new mongoose.Types.ObjectId(),
       supplier_name,
       supplier_brand: supplier_brand || supplier_name,
@@ -598,6 +899,9 @@ exports.create_purchase_indent = async (req, res) => {
       destination_warehouse_name: destination_warehouse_name || 'Central Hub Warehouse',
       items: processedItems,
       total_pi_value: totalPiValue,
+      is_above_benchmark: isAboveBenchmark,
+      benchmark_cost: benchmarkCost,
+      requires_admin_approval: requiresAdminApproval,
       fulfilment: fulfilmentData,
       payment: {
         payment_terms: payment_terms || `${advPct}% Advance, ${balPct}% Before Dispatch`,
@@ -607,18 +911,23 @@ exports.create_purchase_indent = async (req, res) => {
         balance_amount: balanceAmount,
         production_tat_days: Number(production_tat_days) || 5,
         supply_tat_days: Number(supply_tat_days) || 3,
-        payment_status: 'PI Submitted',
-        admin_approval: { status: 'pending' },
+        payment_status: isAboveBenchmark ? 'Awaiting Admin Approval' : 'PI Submitted',
+        admin_approval: { 
+          status: isAboveBenchmark ? 'pending' : 'approved',
+          remarks: isAboveBenchmark ? `Pending Admin Approval: Unit rate exceeds benchmark cost (₹${benchmarkCost})` : 'Auto-approved within benchmark cost'
+        },
         actual_payment: {}
       },
-      pi_status: 'Submitted',
+      pi_status: isAboveBenchmark ? 'Pending Admin Price Approval' : 'Submitted',
       audit_history: [{
-        action: 'PI Created and Submitted',
+        action: isAboveBenchmark ? 'PI Created - Requires Admin Approval (Rate Exceeds Benchmark)' : 'PI Created and Submitted',
         performed_by: req.user?._id || null,
         performer_name: req.user?.name || req.user?.email || 'Accounts Team',
         role: req.user?.role || 'Accounts',
         timestamp: new Date(),
-        remarks: `Generated Purchase Indent #${piNumber} for Order #${customer_order_number}`
+        remarks: isAboveBenchmark 
+          ? `Generated PI #${piNumber} for Order #${customer_order_number}. Flagged for Admin Approval: Entered rate exceeds benchmark limit of ₹${benchmarkCost}.`
+          : `Generated Purchase Indent #${piNumber} for Order #${customer_order_number}`
       }],
       created_by: {
         user_id: req.user?._id || null,
@@ -668,8 +977,16 @@ exports.list_purchase_indents = async (req, res) => {
     const cleanPiStatus = (pi_status && pi_status !== 'all' && pi_status !== 'undefined' && pi_status !== 'null') ? pi_status.trim() : null;
     const cleanPayStatus = (payment_status && payment_status !== 'all' && payment_status !== 'undefined' && payment_status !== 'null') ? payment_status.trim() : null;
 
-    if (cleanOrderNum) filter.customer_order_number = cleanOrderNum;
-    if (cleanGroupId) filter.order_group_id = cleanGroupId;
+    if (cleanGroupId && cleanOrderNum) {
+      filter.$or = [
+        { order_group_id: cleanGroupId },
+        { customer_order_number: cleanOrderNum }
+      ];
+    } else if (cleanGroupId) {
+      filter.order_group_id = cleanGroupId;
+    } else if (cleanOrderNum) {
+      filter.customer_order_number = cleanOrderNum;
+    }
     if (cleanPiStatus) filter.pi_status = cleanPiStatus;
     if (cleanPayStatus) filter['payment.payment_status'] = cleanPayStatus;
 
@@ -757,13 +1074,15 @@ exports.admin_approve_supplier_payment = async (req, res) => {
     const adminUser = req.user?.name || req.user?.email || 'Admin';
 
     if (normalizedAction === 'approve') {
+      pi.pi_status = 'Approved';
+      pi.requires_admin_approval = false;
       pi.payment.payment_status = 'Approved';
       pi.payment.admin_approval.status = 'Approved';
       pi.payment.admin_approval.approved_by = req.user?._id || null;
       pi.payment.admin_approval.approved_at = new Date();
-      pi.payment.admin_approval.remarks = remarks || 'Approved for bank disbursement';
+      pi.payment.admin_approval.remarks = remarks || 'Approved by Admin';
       pi.audit_history.push({
-        action: 'Admin Approved Payment',
+        action: 'Admin Approved Purchase Indent & Payment Rate',
         performed_by: req.user?._id || null,
         performer_name: adminUser,
         role: 'Admin',
@@ -772,6 +1091,7 @@ exports.admin_approve_supplier_payment = async (req, res) => {
       });
     } else {
       const isReturned = normalizedAction === 'return';
+      pi.pi_status = isReturned ? 'Draft' : 'Cancelled';
       pi.payment.payment_status = isReturned ? 'Rejected / Returned' : 'Rejected / Returned';
       pi.payment.admin_approval.status = isReturned ? 'Returned' : 'Rejected';
       pi.payment.admin_approval.remarks = remarks || (isReturned ? 'Returned for rework' : 'Rejected by Admin');
@@ -804,7 +1124,18 @@ exports.admin_approve_supplier_payment = async (req, res) => {
  */
 exports.record_bank_payment = async (req, res) => {
   try {
-    const { pi_id, indent_id, utr_number, paid_amount, payment_mode, payment_date, remarks, receipt_url } = req.body;
+    const {
+      pi_id,
+      indent_id,
+      utr_number,
+      paid_amount,
+      payment_mode,
+      payment_date,
+      remarks,
+      receipt_url,
+      payment_type, // 'advance' | 'balance' | 'full'
+      milestone
+    } = req.body;
     const targetPiId = pi_id || indent_id;
 
     const pi = await PurchaseIndent.findById(targetPiId);
@@ -812,48 +1143,177 @@ exports.record_bank_payment = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Purchase Indent not found.' });
     }
 
-    const amountPaid = paid_amount !== undefined ? Number(paid_amount) : (pi.payment?.advance_amount || pi.total_pi_value);
-
     if (!targetPiId || !utr_number || !payment_mode) {
-      return res.status(400).json({ status: 'error', message: 'pi_id, utr_number, paid_amount, and payment_mode are required.' });
+      return res.status(400).json({ status: 'error', message: 'pi_id, utr_number, and payment_mode are required.' });
     }
 
-    if (!['Approved', 'Payment Processing', 'Advance Paid'].includes(pi.payment.payment_status)) {
+    const allowedPaymentStatuses = [
+      'PI Draft',
+      'PI Submitted',
+      'Payment Initiated',
+      'Awaiting Admin Approval',
+      'Advance Requested',
+      'Balance Requested',
+      'Approved',
+      'Payment Processing',
+      'Advance Paid',
+      'Balance Due',
+      'Partially Paid',
+      'Paid'
+    ];
+    if (pi.payment?.payment_status && !allowedPaymentStatuses.includes(pi.payment.payment_status)) {
       return res.status(400).json({
         status: 'error',
-        message: `Payment cannot be recorded. Current status is '${pi.payment.payment_status}'. Admin approval required first.`
+        message: `Payment cannot be recorded. Current status is '${pi.payment.payment_status}'.`
       });
     }
 
-    pi.payment.actual_payment = {
-      utr_number,
-      paid_amount: amountPaid,
-      payment_date: payment_date ? new Date(payment_date) : new Date(),
-      payment_mode,
-      receipt_url: receipt_url || null
-    };
+    // Determine target milestone:
+    let targetMilestone = (payment_type || milestone || '').toLowerCase();
+    const hasAdvance = Boolean(pi.payment?.advance_payment?.utr_number || pi.payment?.payment_status === 'Advance Paid');
 
-    // Determine if Advance Paid or Fully Paid
-    if (amountPaid >= pi.total_pi_value) {
-      pi.payment.payment_status = 'Paid';
-    } else {
-      pi.payment.payment_status = 'Advance Paid';
+    if (!targetMilestone) {
+      if (hasAdvance) {
+        targetMilestone = 'balance';
+      } else if (Number(paid_amount) >= pi.total_pi_value) {
+        targetMilestone = 'full';
+      } else {
+        targetMilestone = 'advance';
+      }
     }
 
-    pi.audit_history.push({
-      action: `Bank Payment Recorded (${pi.payment.payment_status})`,
-      performed_by: req.user?._id || null,
-      performer_name: req.user?.name || req.user?.email || 'Accounts Team',
-      role: 'Accounts',
-      timestamp: new Date(),
-      remarks: `UTR #${utr_number}, Amount: ₹${amountPaid}`
-    });
+    const defaultAmount = targetMilestone === 'balance'
+      ? (pi.payment?.balance_amount || (pi.total_pi_value - (pi.payment?.advance_amount || 0)))
+      : (pi.payment?.advance_amount || pi.total_pi_value);
+
+    const amountPaid = paid_amount !== undefined && paid_amount !== null && !isNaN(Number(paid_amount))
+      ? Number(paid_amount)
+      : defaultAmount;
+
+    const pDate = payment_date ? new Date(payment_date) : new Date();
+    const userId = req.user?._id || null;
+    const userName = req.user?.name || req.user?.email || 'Accounts Team';
+
+    const paymentRecord = {
+      utr_number: utr_number.trim().toUpperCase(),
+      paid_amount: amountPaid,
+      payment_date: pDate,
+      payment_mode,
+      receipt_url: receipt_url || null,
+      remarks: remarks || `Disbursed ${targetMilestone} payment`,
+      recorded_by: userId,
+      recorded_at: new Date()
+    };
+
+    if (!pi.payment.payment_history) {
+      pi.payment.payment_history = [];
+    }
+
+    if (targetMilestone === 'balance') {
+      // Recording 70% Balance
+      pi.payment.balance_payment = paymentRecord;
+      const prevAdvance = pi.payment?.advance_payment?.paid_amount || pi.payment?.advance_amount || 0;
+      pi.payment.total_paid_amount = prevAdvance + amountPaid;
+      pi.payment.balance_due = Math.max(0, pi.total_pi_value - pi.payment.total_paid_amount);
+
+      if (pi.payment.total_paid_amount >= pi.total_pi_value || pi.payment.balance_due <= 0) {
+        pi.payment.payment_status = 'Paid';
+      } else {
+        pi.payment.payment_status = 'Partially Paid';
+      }
+
+      pi.payment.payment_history.push({
+        milestone: 'balance',
+        ...paymentRecord
+      });
+
+      // Keep actual_payment updated as latest disbursement
+      pi.payment.actual_payment = {
+        utr_number: paymentRecord.utr_number,
+        paid_amount: amountPaid,
+        payment_date: pDate,
+        payment_mode,
+        receipt_url: receipt_url || null
+      };
+
+      pi.audit_history.push({
+        action: `Milestone 2 (70% Balance) Recorded (${pi.payment.payment_status})`,
+        performed_by: userId,
+        performer_name: userName,
+        role: 'Accounts',
+        timestamp: new Date(),
+        remarks: `UTR #${paymentRecord.utr_number}, Balance Amount: ₹${amountPaid.toLocaleString('en-IN')}`
+      });
+    } else if (targetMilestone === 'full') {
+      // 100% Single Payment
+      pi.payment.advance_payment = paymentRecord;
+      pi.payment.balance_payment = paymentRecord;
+      pi.payment.total_paid_amount = amountPaid;
+      pi.payment.balance_due = Math.max(0, pi.total_pi_value - amountPaid);
+      pi.payment.payment_status = 'Paid';
+
+      pi.payment.payment_history.push({
+        milestone: 'full',
+        ...paymentRecord
+      });
+
+      pi.payment.actual_payment = {
+        utr_number: paymentRecord.utr_number,
+        paid_amount: amountPaid,
+        payment_date: pDate,
+        payment_mode,
+        receipt_url: receipt_url || null
+      };
+
+      pi.audit_history.push({
+        action: `Full Payment (100%) Recorded`,
+        performed_by: userId,
+        performer_name: userName,
+        role: 'Accounts',
+        timestamp: new Date(),
+        remarks: `UTR #${paymentRecord.utr_number}, Amount: ₹${amountPaid.toLocaleString('en-IN')}`
+      });
+    } else {
+      // Recording 30% Advance
+      pi.payment.advance_payment = paymentRecord;
+      pi.payment.total_paid_amount = amountPaid;
+      pi.payment.balance_due = Math.max(0, pi.total_pi_value - amountPaid);
+
+      if (amountPaid >= pi.total_pi_value) {
+        pi.payment.payment_status = 'Paid';
+        pi.payment.balance_payment = paymentRecord;
+      } else {
+        pi.payment.payment_status = 'Advance Paid';
+      }
+
+      pi.payment.payment_history.push({
+        milestone: 'advance',
+        ...paymentRecord
+      });
+
+      pi.payment.actual_payment = {
+        utr_number: paymentRecord.utr_number,
+        paid_amount: amountPaid,
+        payment_date: pDate,
+        payment_mode,
+        receipt_url: receipt_url || null
+      };
+
+      pi.audit_history.push({
+        action: `Milestone 1 (30% Advance) Recorded (${pi.payment.payment_status})`,
+        performed_by: userId,
+        performer_name: userName,
+        role: 'Accounts',
+        timestamp: new Date(),
+        remarks: `UTR #${paymentRecord.utr_number}, Advance Amount: ₹${amountPaid.toLocaleString('en-IN')}`
+      });
+    }
 
     await pi.save();
 
     return res.status(200).json({
       status: 'success',
-      message: `Bank payment recorded for PI #${pi.pi_number}. Status: ${pi.payment.payment_status}.`,
+      message: `Bank payment (${targetMilestone}) recorded for PI #${pi.pi_number}. Status: ${pi.payment.payment_status}.`,
       data: pi
     });
   } catch (err) {
@@ -1227,3 +1687,127 @@ exports.handover_to_delivery_manager = async (req, res) => {
     return res.status(500).json({ status: 'error', message: 'Failed to hand over to Delivery Manager.', error: err.message });
   }
 };
+
+/**
+ * 12. Get Sourcing Partners (Suppliers & OEM Partners)
+ * GET /accounts/procurement/partners
+ */
+exports.get_sourcing_partners = async (req, res) => {
+  try {
+    const [oemBrands, supplierBrands, registeredSuppliers, otherBrands] = await Promise.all([
+      Brand.find({ is_oem_partner: true, deleted_at: null })
+        .select('_id brand_name company_name logo is_oem_partner is_supplier')
+        .sort({ brand_name: 1 })
+        .lean(),
+      Brand.find({ is_supplier: true, deleted_at: null })
+        .select('_id brand_name company_name logo is_oem_partner is_supplier')
+        .sort({ brand_name: 1 })
+        .lean(),
+      Supplier.find({ is_deleted: { $ne: true } })
+        .select('_id company_name brand_name gst_number office_location states status')
+        .sort({ company_name: 1 })
+        .lean(),
+      Brand.find({
+        is_oem_partner: { $ne: true },
+        is_supplier: { $ne: true },
+        deleted_at: null
+      })
+        .select('_id brand_name company_name logo is_oem_partner is_supplier')
+        .sort({ brand_name: 1 })
+        .lean()
+    ]);
+
+    // OEM Partners (SOLARKITS Brand)
+    const oemPartners = oemBrands.map((b) => ({
+      id: b._id.toString(),
+      name: b.brand_name || b.company_name,
+      brand_name: 'SOLARKITS',
+      manufacturer_name: b.company_name || b.brand_name,
+      company_name: b.company_name || b.brand_name,
+      is_oem: true,
+      category: 'oem',
+      type: 'OEM Partner (SOLARKITS Brand)',
+      gst_number: null,
+      address: null
+    }));
+
+    // Registered Suppliers & Supplier Brands (Own Brand)
+    const seenSupplierNames = new Set();
+    const suppliers = [];
+
+    // Registered suppliers (with verified GSTIN)
+    registeredSuppliers.forEach((s) => {
+      const name = s.company_name || s.brand_name;
+      if (name && !seenSupplierNames.has(name.toLowerCase())) {
+        seenSupplierNames.add(name.toLowerCase());
+        suppliers.push({
+          id: s._id.toString(),
+          name: name,
+          brand_name: s.brand_name || name,
+          company_name: s.company_name || name,
+          is_oem: false,
+          category: 'supplier',
+          type: 'Supplier Partner (Own Brand)',
+          gst_number: s.gst_number || null,
+          address: s.office_location?.address || (s.states?.[0] ? `${s.states[0]} Hub` : null),
+          status: s.status
+        });
+      }
+    });
+
+    // Supplier brands from Brand collection
+    supplierBrands.forEach((b) => {
+      const name = b.brand_name || b.company_name;
+      if (name && !seenSupplierNames.has(name.toLowerCase())) {
+        seenSupplierNames.add(name.toLowerCase());
+        suppliers.push({
+          id: b._id.toString(),
+          name: name,
+          brand_name: b.brand_name || name,
+          company_name: b.company_name || name,
+          is_oem: false,
+          category: 'supplier',
+          type: 'Supplier Partner (Own Brand)',
+          gst_number: null,
+          address: null
+        });
+      }
+    });
+
+    // Other catalog brands
+    const catalogBrands = otherBrands
+      .filter((b) => {
+        const name = (b.brand_name || b.company_name || '').toLowerCase();
+        return name && !seenSupplierNames.has(name);
+      })
+      .map((b) => ({
+        id: b._id.toString(),
+        name: b.brand_name || b.company_name,
+        brand_name: b.brand_name || b.company_name,
+        company_name: b.company_name || b.brand_name,
+        is_oem: false,
+        category: 'catalog_brand',
+        type: 'Supplier / Catalog Brand',
+        gst_number: null,
+        address: null
+      }));
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        oem_partners: oemPartners,
+        suppliers: suppliers,
+        catalog_brands: catalogBrands,
+        all_partners: [...oemPartners, ...suppliers, ...catalogBrands]
+      }
+    });
+  } catch (err) {
+    console.error('Error in get_sourcing_partners:', err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch sourcing partners.',
+      error: err.message
+    });
+  }
+};
+

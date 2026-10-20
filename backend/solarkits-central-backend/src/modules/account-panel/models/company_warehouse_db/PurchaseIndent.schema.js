@@ -5,6 +5,8 @@ const piItemSchema = new mongoose.Schema({
   sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', default: null },
   sku_code:         { type: String, required: true },
   product_name:     { type: String, required: true },
+  parent_sku_code:  { type: String, default: null, trim: true },
+  component_type:   { type: String, default: null, trim: true },
   quantity:         { type: Number, required: true, min: 1 },
   unit_rate:        { type: Number, required: true, min: 0 },
   gst_rate:         { type: Number, default: 13.8 },
@@ -30,6 +32,16 @@ const schema = new mongoose.Schema({
     trim: true
   },
   order_group_id: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  bom_sku_code: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  component_type: {
     type: String,
     default: null,
     trim: true
@@ -74,6 +86,20 @@ const schema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0
+  },
+
+  // Benchmark Pricing & Admin Approval Flags
+  is_above_benchmark: {
+    type: Boolean,
+    default: false
+  },
+  benchmark_cost: {
+    type: Number,
+    default: 0
+  },
+  requires_admin_approval: {
+    type: Boolean,
+    default: false
   },
 
   // Supply Fulfilment Method (PART 2)
@@ -174,6 +200,14 @@ const schema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    total_paid_amount: {
+      type: Number,
+      default: 0
+    },
+    balance_due: {
+      type: Number,
+      default: 0
+    },
     production_tat_days: {
       type: Number,
       default: 5
@@ -194,6 +228,7 @@ const schema = new mongoose.Schema({
         'Approved',
         'Payment Processing',
         'Advance Paid',
+        'Balance Due',
         'Partially Paid',
         'Paid',
         'Rejected / Returned',
@@ -221,6 +256,37 @@ const schema = new mongoose.Schema({
         default: null
       }
     },
+    advance_payment: {
+      utr_number:   { type: String, default: null, trim: true },
+      paid_amount:  { type: Number, default: 0 },
+      payment_date: { type: Date, default: null },
+      payment_mode: { type: String, default: null },
+      receipt_url:  { type: String, default: null },
+      remarks:      { type: String, default: null },
+      recorded_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      recorded_at:  { type: Date, default: null }
+    },
+    balance_payment: {
+      utr_number:   { type: String, default: null, trim: true },
+      paid_amount:  { type: Number, default: 0 },
+      payment_date: { type: Date, default: null },
+      payment_mode: { type: String, default: null },
+      receipt_url:  { type: String, default: null },
+      remarks:      { type: String, default: null },
+      recorded_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      recorded_at:  { type: Date, default: null }
+    },
+    payment_history: [{
+      milestone:    { type: String, default: 'advance' },
+      utr_number:   { type: String, trim: true },
+      paid_amount:  { type: Number, default: 0 },
+      payment_date: { type: Date, default: Date.now },
+      payment_mode: { type: String, default: 'RTGS' },
+      receipt_url:  { type: String, default: null },
+      remarks:      { type: String, default: null },
+      recorded_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      recorded_at:  { type: Date, default: Date.now }
+    }],
     actual_payment: {
       utr_number:   { type: String, default: null, trim: true },
       paid_amount:  { type: Number, default: 0 },
@@ -235,6 +301,7 @@ const schema = new mongoose.Schema({
     enum: [
       'Draft',
       'Submitted',
+      'Pending Admin Price Approval',
       'Approved',
       'In Production',
       'Ready for Inward',

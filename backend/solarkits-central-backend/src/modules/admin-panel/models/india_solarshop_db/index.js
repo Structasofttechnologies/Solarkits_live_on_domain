@@ -127,6 +127,7 @@ const DeliveryRouteSetting = require('./delivery_route_setting.schema');
 const DeliveryOrder = require('./delivery_order.schema');
 const RegionPaymentConfig = require('./region_payment_configs.schema');
 const AdminNotification = require('./admin_notifications.schema');
+const BenchmarkApprovalConfig = require('./BenchmarkApprovalConfig.schema');
 
 module.exports = {
   RegionPaymentConfig,
@@ -255,4 +256,6 @@ module.exports = {
   DeliveryOrder,
   // --- Payment Milestones Module ---
   ProductPaymentMilestone,
+  // --- Benchmark Price Approval Module ---
+  BenchmarkApprovalConfig,
 };

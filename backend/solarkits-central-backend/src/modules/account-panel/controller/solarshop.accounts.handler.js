@@ -3607,10 +3607,18 @@ const admin_approve_epc_payment = async (req, res) => {
 const get_tat_config = async (req, res) => {
   try {
     const tats = await resolveStageTats();
+    const settings = await SolarShopSettings.findOne().lean();
+    const procurementSettings = settings?.procurement_settings || {
+      production_tat_days: 5,
+      supply_tat_days: 3,
+      estimated_transport_cost: 0,
+    };
+
     return res.status(200).json({
       status: 'success',
       data: tats,
       configs: tats,
+      procurement_settings: procurementSettings,
     });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: err.message });
@@ -3622,27 +3630,36 @@ const get_tat_config = async (req, res) => {
  */
 const update_tat_config = async (req, res) => {
   try {
-    const stage_tats = req.body.stage_tats || req.body.configs || req.body;
-    if (!stage_tats || typeof stage_tats !== 'object' || Array.isArray(stage_tats)) {
-      return res.status(400).json({ status: 'error', message: 'stage_tats object is required' });
-    }
+    const stage_tats = req.body.stage_tats || req.body.configs;
+    const procurement_settings = req.body.procurement_settings;
 
     let settings = await SolarShopSettings.findOne({});
     if (!settings) {
       settings = await SolarShopSettings.create({});
     }
 
-    settings.payment_stage_tats = {
-      ...(settings.payment_stage_tats || DEFAULT_STAGE_TATS),
-      ...stage_tats,
-    };
+    if (stage_tats && typeof stage_tats === 'object' && !Array.isArray(stage_tats)) {
+      settings.payment_stage_tats = {
+        ...(settings.payment_stage_tats || DEFAULT_STAGE_TATS),
+        ...stage_tats,
+      };
+    }
+
+    if (procurement_settings && typeof procurement_settings === 'object') {
+      settings.procurement_settings = {
+        ...(settings.procurement_settings || { production_tat_days: 5, supply_tat_days: 3, estimated_transport_cost: 0 }),
+        ...procurement_settings,
+      };
+    }
+
     await settings.save();
 
     return res.status(200).json({
       status: 'success',
-      message: 'Payment stage TATs updated successfully',
+      message: 'Payment stage TATs & procurement settings updated successfully',
       data: settings.payment_stage_tats,
       configs: settings.payment_stage_tats,
+      procurement_settings: settings.procurement_settings,
     });
   } catch (err) {
     return res.status(500).json({ status: 'error', message: err.message });

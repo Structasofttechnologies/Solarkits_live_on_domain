@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
-  FaBoxes, FaShoppingCart, FaSearch, FaFilter, FaTruck, FaWarehouse,
+  FaBoxes, FaShoppingCart, FaSearch, FaFilter, FaTruck,
   FaCheckCircle, FaExclamationTriangle, FaTimesCircle, FaPaperPlane,
   FaRedo, FaLayerGroup, FaMapMarkerAlt, FaFileInvoice, FaBuilding,
   FaArrowRight, FaClock, FaCheck, FaInfoCircle, FaChevronRight,
   FaShieldAlt, FaExternalLinkAlt, FaTimes, FaExchangeAlt, FaCreditCard,
-  FaPlus, FaLock, FaUnlock, FaEye, FaSyncAlt
+  FaPlus, FaLock, FaUnlock, FaEye, FaEyeSlash, FaSyncAlt
 } from "react-icons/fa";
 
 import {
@@ -80,6 +80,7 @@ export default function Procurement() {
   // BOM & Calculation State
   const [bomData, setBomData] = useState(null);
   const [loadingBom, setLoadingBom] = useState(false);
+  const [showAllBomItems, setShowAllBomItems] = useState(false);
 
   // Purchase Indents State
   const [purchaseIndents, setPurchaseIndents] = useState([]);
@@ -226,6 +227,74 @@ export default function Procurement() {
       fetchPIs();
     }
   }, [selectedBatch, selectedOrder, fetchBom, fetchPIs]);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Helper: Detect whether a PI has been created for a given BOM item
+  // ───────────────────────────────────────────────────────────────────────────
+  const getPiForItem = useCallback((item, piList = purchaseIndents) => {
+    if (!item) return null;
+    if (!Array.isArray(piList) || piList.length === 0) return null;
+
+    return piList.find(pi => {
+      if (pi.pi_status === "Cancelled") return false;
+
+      // 1. Explicit BOM SKU or component_type match
+      if (pi.bom_sku_code && pi.bom_sku_code === item.sku_code) return true;
+      if (pi.component_type && item.component_type && pi.component_type === item.component_type) return true;
+
+      // 2. Line items inspection
+      const piItems = Array.isArray(pi.items) ? pi.items : [];
+      return piItems.some(it => {
+        // Parent SKU recorded on creation
+        if (it.parent_sku_code && it.parent_sku_code === item.sku_code) return true;
+        // Direct SKU match (e.g. PANEL-550W-BIFACIAL, INV-5KW-ONGRID)
+        if (it.sku_code && it.sku_code === item.sku_code) return true;
+
+        // Sub-items match (for Complete BOS Kit where subcomponents are in PI)
+        if (item.sub_items && item.sub_items.length > 0) {
+          if (item.sub_items.some(sub => sub.sku_code === it.sku_code)) return true;
+        }
+
+        // Prefix & keyword match fallback
+        const itSku = (it.sku_code || "").toLowerCase();
+        const itName = (it.product_name || "").toLowerCase();
+        const itemComp = (item.component_type || "").toLowerCase();
+        const itemSku = (item.sku_code || "").toLowerCase();
+
+        if (itemComp === "panel" || itemSku.includes("panel")) {
+          if (itSku.includes("panel") || itName.includes("panel") || itName.includes("module")) return true;
+        }
+        if (itemComp === "inverter" || itemSku.includes("inv")) {
+          if (itSku.includes("inv") || itName.includes("inverter")) return true;
+        }
+        if (itemComp === "bos_kit" || itemSku.includes("bos")) {
+          if (itSku.includes("bos") || itName.includes("bos") || itName.includes("mounting") || itName.includes("structure") || itName.includes("distribution")) return true;
+        }
+
+        return false;
+      });
+    }) || null;
+  }, [purchaseIndents]);
+
+  const isPiCreatedForItem = useCallback((item) => {
+    if (!item) return false;
+    if (item.has_pi || item.pi_created) return true;
+    return Boolean(getPiForItem(item));
+  }, [getPiForItem]);
+
+  const totalBomCount = bomData?.bom_calculations?.length || 0;
+
+  const itemsWithPi = useMemo(() => {
+    if (!bomData?.bom_calculations) return [];
+    return bomData.bom_calculations.filter(item => isPiCreatedForItem(item));
+  }, [bomData, isPiCreatedForItem]);
+
+  const displayedBomItems = useMemo(() => {
+    if (!bomData?.bom_calculations) return [];
+    if (showAllBomItems) return bomData.bom_calculations;
+    // Hide products whose PI has been created
+    return bomData.bom_calculations.filter(item => !isPiCreatedForItem(item));
+  }, [bomData, isPiCreatedForItem, showAllBomItems]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // 4. Action: Reserve Warehouse Stock (Option A)
@@ -755,22 +824,72 @@ export default function Procurement() {
           ───────────────────────────────────────────────────────────────── */}
           {selectedBatch && (
             <div className="bg-surface border border-border rounded-2xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <div className="flex flex-wrap items-center justify-between border-b border-border/60 pb-3 gap-2">
                 <div className="flex items-center gap-2">
                   <FaBoxes className="text-primary text-base" />
                   <h3 className="text-xs font-black uppercase tracking-wider text-text-primary">
                     Product-wise BOM & Procurement Calculation
                   </h3>
+                  {itemsWithPi.length > 0 && !showAllBomItems && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold border border-emerald-500/20 flex items-center gap-1">
+                      <FaCheckCircle className="text-[9px]" />
+                      {itemsWithPi.length} Procured & Hidden
+                    </span>
+                  )}
                 </div>
-                <span className="text-[10px] text-text-muted font-bold font-mono">
-                  Supplier Qty = Required Qty − Reserved Stock
-                </span>
+                <div className="flex items-center gap-3">
+                  {itemsWithPi.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllBomItems(prev => !prev)}
+                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      {showAllBomItems ? (
+                        <>
+                          <FaEyeSlash className="text-[10px]" />
+                          Hide Procured Products
+                        </>
+                      ) : (
+                        <>
+                          <FaEye className="text-[10px]" />
+                          Show All ({totalBomCount})
+                        </>
+                      )}
+                    </button>
+                  )}
+                  <span className="text-[10px] text-text-muted font-bold font-mono">
+                    Supplier Qty = Required Qty − Reserved Stock
+                  </span>
+                </div>
               </div>
 
               {loadingBom ? (
                 <div className="py-8 text-center text-xs text-text-muted">Calculating BOM requirements...</div>
-              ) : !bomData?.bom_calculations ? (
+              ) : !bomData?.bom_calculations || bomData.bom_calculations.length === 0 ? (
                 <div className="py-6 text-center text-xs text-text-muted">No BOM data available.</div>
+              ) : displayedBomItems.length === 0 && totalBomCount > 0 ? (
+                <div className="py-8 px-4 text-center bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto text-xl border border-emerald-500/20">
+                    <FaCheckCircle />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-emerald-700 dark:text-emerald-400">
+                      All Product Purchase Indents (PI) Created
+                    </h4>
+                    <p className="text-xs text-text-muted mt-1 max-w-md mx-auto">
+                      Purchase Indents have been generated for all {totalBomCount} required products in this batch. 
+                      You can manage supplier payment approvals, dispatch tracking, and physical inwarding in Section 2 below.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllBomItems(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-bg border border-border hover:border-primary/50 text-text-primary transition-all cursor-pointer"
+                  >
+                    <FaBoxes className="text-primary text-[11px]" />
+                    Show All {totalBomCount} Products (BOM Reference)
+                  </button>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
@@ -786,15 +905,27 @@ export default function Procurement() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {bomData.bom_calculations.map((item) => {
-                        const canReserve = item.free_warehouse_stock > 0 && item.supplier_quantity > 0;
-                        const needsSupplier = item.supplier_quantity > 0;
+                      {displayedBomItems.map((item) => {
+                        const totalAvailForOrder = (item.inventory_quantity_selected || 0) + (item.free_warehouse_stock || 0);
+                        const isStockFullyAvailable = Boolean(item.stock_fully_available) || totalAvailForOrder >= item.required_quantity;
+                        const isAlreadyFullyClaimed = (item.inventory_quantity_selected || 0) >= item.required_quantity;
+                        const canClaimFromWarehouse = item.free_warehouse_stock > 0 && !isAlreadyFullyClaimed;
+                        const needsSupplier = !isStockFullyAvailable && item.supplier_quantity > 0;
+                        const itemPi = getPiForItem(item);
+                        const hasPi = Boolean(itemPi) || item.has_pi || item.pi_created;
 
                         return (
-                          <tr key={item.sku_code} className="hover:bg-bg/40 transition-colors">
+                          <tr key={item.sku_code} className={`hover:bg-bg/40 transition-colors ${hasPi ? "opacity-75 bg-emerald-500/[0.02]" : ""}`}>
                             {/* Product SKU & Sub-components */}
                             <td className="py-3 px-3">
-                              <span className="font-bold text-text-primary block">{item.product_name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-text-primary block">{item.product_name}</span>
+                                {hasPi && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                    PI Created
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[10px] text-primary font-mono">{item.sku_code}</span>
 
                               {/* If item has sub_items (e.g. Complete BOS Kit) */}
@@ -835,10 +966,25 @@ export default function Procurement() {
 
                             {/* Supplier Procurement Required */}
                             <td className="py-3 px-2 text-center">
-                              {item.supplier_quantity > 0 ? (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/10 text-red-600 border border-red-500/20">
-                                  {item.supplier_quantity} {item.unit}
+                              {hasPi ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                  PI Created
                                 </span>
+                              ) : isStockFullyAvailable ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                  0 (Warehouse Stock)
+                                </span>
+                              ) : item.supplier_quantity > 0 ? (
+                                <div>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/10 text-red-600 border border-red-500/20">
+                                    {item.supplier_quantity} {item.unit}
+                                  </span>
+                                  {item.deducted_warehouse_stock > 0 && (
+                                    <span className="text-[9px] text-emerald-600 font-bold block mt-0.5">
+                                      (-{item.deducted_warehouse_stock} in Wh)
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                                   0 (Fully Sourced)
@@ -856,34 +1002,60 @@ export default function Procurement() {
                               </span>
                             </td>
 
-                            {/* Actions: Option A (Reserve) vs Option B (Purchase Indent) */}
+                            {/* Actions: Claim Stock (Option A) vs Create PI (Option B) */}
                             <td className="py-3 px-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
-                                {/* Option A: Reserve Stock */}
-                                {canReserve && (
+                                {hasPi ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                    <FaCheckCircle className="text-[9px]" />
+                                    {itemPi?.pi_number ? `#${itemPi.pi_number}` : "PI Created"}
+                                  </span>
+                                ) : isAlreadyFullyClaimed ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                    <FaCheckCircle className="text-[9px]" />
+                                    Stock Claimed
+                                  </span>
+                                ) : isStockFullyAvailable ? (
+                                  /* When warehouse stock is available to fulfill 100%, show ONLY Claim Stock button */
                                   <button
                                     type="button"
                                     onClick={() => handleReserveStock(item)}
                                     disabled={reservingSku === item.sku_code}
-                                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1"
-                                    title="Reserve from eligible Warehouse Stock"
+                                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                                    title="Claim full requirement directly from Warehouse Stock"
                                   >
-                                    <FaLock className="text-[9px]" />
-                                    {reservingSku === item.sku_code ? "..." : "Reserve Stock"}
+                                    <FaBoxes className="text-[9px]" />
+                                    {reservingSku === item.sku_code ? "Claiming..." : "Claim Stock"}
                                   </button>
-                                )}
+                                ) : (
+                                  <>
+                                    {/* Partial Stock Available in Warehouse */}
+                                    {canClaimFromWarehouse && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleReserveStock(item)}
+                                        disabled={reservingSku === item.sku_code}
+                                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-1"
+                                        title={`Claim ${item.free_warehouse_stock} available pieces from warehouse stock`}
+                                      >
+                                        <FaBoxes className="text-[9px]" />
+                                        {reservingSku === item.sku_code ? "..." : `Claim Stock (${item.free_warehouse_stock} ${item.unit})`}
+                                      </button>
+                                    )}
 
-                                {/* Option B: Create PI */}
-                                {needsSupplier && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenPiModal(item)}
-                                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-primary text-white hover:bg-primary/90 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
-                                    title="Generate Supplier Purchase Indent"
-                                  >
-                                    <FaFileInvoice className="text-[9px]" />
-                                    Create PI
-                                  </button>
+                                    {/* Remaining Supplier Quantity to Procure */}
+                                    {needsSupplier && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenPiModal(item)}
+                                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-primary text-white hover:bg-primary/90 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                                        title="Generate Supplier Purchase Indent for remaining quantity"
+                                      >
+                                        <FaFileInvoice className="text-[9px]" />
+                                        Create PI {item.supplier_quantity > 0 ? `(${item.supplier_quantity} ${item.unit})` : ""}
+                                      </button>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </td>
@@ -906,7 +1078,7 @@ export default function Procurement() {
                 <div className="flex items-center gap-2">
                   <FaFileInvoice className="text-primary text-base" />
                   <h3 className="text-xs font-black uppercase tracking-wider text-text-primary">
-                    Supplier Purchase Indents & Payment Lifecycle
+                    Supplier Purchase Indents
                   </h3>
                 </div>
                 <span className="text-[10px] text-text-muted font-bold font-mono">
@@ -944,6 +1116,12 @@ export default function Procurement() {
                                   OEM (SOLARKITS)
                                 </span>
                               )}
+                              {pi.is_above_benchmark && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20 inline-flex items-center gap-1">
+                                  <FaShieldAlt className="text-[8px]" />
+                                  Exceeds Benchmark (Admin Approval Required)
+                                </span>
+                              )}
                             </div>
                             <span className="text-[10px] text-text-muted block mt-0.5">
                               Order #{pi.customer_order_number} • Destination: {pi.destination_warehouse_name}
@@ -966,46 +1144,12 @@ export default function Procurement() {
                             <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 block">
                               ₹{(pi.total_pi_value || 0).toLocaleString("en-IN")}
                             </span>
-                            <span className="text-[10px] text-text-muted font-bold">
-                              Advance ({payment.advance_percentage || 30}%): ₹{(payment.advance_amount || 0).toLocaleString("en-IN")}
+                            <span className="text-[10px] text-text-muted font-bold block">
+                              Adv ({payment.advance_percentage || 30}%): ₹{(payment.advance_amount || 0).toLocaleString("en-IN")}
                             </span>
-                          </div>
-                        </div>
-
-                        {/* Mid Line: Status Badges for Payment & Fulfilment */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          {/* Payment State */}
-                          <div className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border/60">
-                            <div className="flex items-center gap-2">
-                              <FaCreditCard className="text-primary text-xs" />
-                              <span className="text-[11px] font-bold text-text-muted">Payment:</span>
-                              <span className="font-bold text-text-primary">{payment.payment_status || "PI Submitted"}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenPaymentModal(pi)}
-                              className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
-                            >
-                              Payment Card →
-                            </button>
-                          </div>
-
-                          {/* Fulfilment State */}
-                          <div className="flex items-center justify-between p-2 rounded-lg bg-surface border border-border/60">
-                            <div className="flex items-center gap-2">
-                              <FaTruck className="text-primary text-xs" />
-                              <span className="text-[11px] font-bold text-text-muted">Fulfilment:</span>
-                              <span className="font-bold text-text-primary">
-                                {fulfilment.method} ({fulfilment.supply_status || "Pending"})
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenFulfilmentModal(pi)}
-                              className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
-                            >
-                              Fulfilment Details →
-                            </button>
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">
+                              Bal ({payment.balance_percentage || 70}%): ₹{(payment.balance_amount || ((pi.total_pi_value || 0) - (payment.advance_amount || 0))).toLocaleString("en-IN")}
+                            </span>
                           </div>
                         </div>
 
@@ -1021,18 +1165,13 @@ export default function Procurement() {
                           </span>
 
                           <div className="flex items-center gap-2">
-                            {!isInwarded ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenInwardModal(pi)}
-                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                              >
-                                <FaWarehouse className="text-xs" />
-                                Physical Inward & GRN
-                              </button>
-                            ) : (
+                            {isInwarded ? (
                               <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[10px]">
                                 <FaCheckCircle /> Inward Completed
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-text-muted font-medium">
+                                Inward: Awaiting Warehouse
                               </span>
                             )}
                           </div>
@@ -1061,6 +1200,7 @@ export default function Procurement() {
         selectedBatch={selectedBatch}
         bomItem={activeBomItemForPI}
         destinationWarehouse={bomData?.destination_warehouse}
+        procurementSettings={bomData?.procurement_settings}
         onSubmit={handleCreatePiSubmit}
       />
 

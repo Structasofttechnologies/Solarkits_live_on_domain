@@ -79,6 +79,7 @@ router.get('/accounts/procurement-groups', check_auth, accounts_handler.list_pro
 
 // Dedicated Procurement Module APIs
 router.get('/accounts/procurement/batch-ready-orders', check_auth, procurement_handler.get_batch_ready_orders);
+router.get('/accounts/procurement/partners', check_auth, procurement_handler.get_sourcing_partners);
 router.post('/accounts/procurement/bom-calculate', check_auth, procurement_handler.calculate_procurement_bom);
 router.post('/accounts/procurement/reserve-stock', check_auth, procurement_handler.reserve_inventory_stock);
 router.post('/accounts/procurement/release-stock', check_auth, procurement_handler.release_inventory_stock);

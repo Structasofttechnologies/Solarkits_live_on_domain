@@ -99,6 +99,11 @@ export default function AdminEpcOrders() {
     loading: false,
     saving: false,
     configs: {},
+    procurement_settings: {
+      production_tat_days: 5,
+      supply_tat_days: 3,
+      estimated_transport_cost: 0,
+    },
   });
 
   // ── Side Drawer / Preview Modals ───────────────────────────────────────
@@ -289,7 +294,17 @@ export default function AdminEpcOrders() {
 
   // ── Admin TAT Configuration Modal Handlers ─────────────────────────────
   const handleOpenTatModal = async () => {
-    setTatModal({ isOpen: true, loading: true, saving: false, configs: {} });
+    setTatModal({
+      isOpen: true,
+      loading: true,
+      saving: false,
+      configs: {},
+      procurement_settings: {
+        production_tat_days: 5,
+        supply_tat_days: 3,
+        estimated_transport_cost: 0,
+      },
+    });
     try {
       const res = await getAdminPaymentTatConfig();
       if (res?.status === "success") {
@@ -297,6 +312,11 @@ export default function AdminEpcOrders() {
           ...prev,
           loading: false,
           configs: res.configs || res.data || {},
+          procurement_settings: res.procurement_settings || {
+            production_tat_days: 5,
+            supply_tat_days: 3,
+            estimated_transport_cost: 0,
+          },
         }));
       }
     } catch (err) {
@@ -312,10 +332,11 @@ export default function AdminEpcOrders() {
       const payload = {
         stage_tats: tatModal.configs,
         configs: tatModal.configs,
+        procurement_settings: tatModal.procurement_settings,
       };
       const res = await updateAdminPaymentTatConfig(payload);
       if (res?.status === "success") {
-        showAlert("success", "Stage TAT configurations updated successfully!");
+        showAlert("success", "Stage TAT & Procurement configurations updated successfully!");
         setTatModal((prev) => ({ ...prev, isOpen: false, saving: false }));
         fetchOrders();
       }
@@ -1371,76 +1392,170 @@ export default function AdminEpcOrders() {
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 p-1 text-xs">
+            <div className="flex-1 overflow-y-auto space-y-4 p-1 text-xs">
               {tatModal.loading ? (
                 <div className="py-8 text-center text-text-muted">
                   <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   <p>Loading TAT configurations...</p>
                 </div>
               ) : (
-                Object.entries(tatModal.configs).map(([key, cfg]) => (
-                  <div
-                    key={key}
-                    className="p-3.5 rounded-2xl bg-surface border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex-1">
-                      <div className="font-bold text-text-primary dark:text-white text-xs">
-                        {cfg.stage_name || key.replace(/_/g, " ").toUpperCase()}
+                <>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted px-1">
+                    Stage-wise Payment Delay TATs
+                  </div>
+                  {Object.entries(tatModal.configs).map(([key, cfg]) => (
+                    <div
+                      key={key}
+                      className="p-3.5 rounded-2xl bg-surface border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex-1">
+                        <div className="font-bold text-text-primary dark:text-white text-xs">
+                          {cfg.stage_name || key.replace(/_/g, " ").toUpperCase()}
+                        </div>
+                        <div className="text-[10px] text-text-muted mt-0.5">
+                          Key: <span className="font-mono">{key}</span>
+                        </div>
                       </div>
-                      <div className="text-[10px] text-text-muted mt-0.5">
-                        Key: <span className="font-mono">{key}</span>
+
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-secondary mb-1">
+                            Configured TAT (Days)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={30}
+                            value={cfg.tat_days || 2}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) || 1;
+                              setTatModal((prev) => ({
+                                ...prev,
+                                configs: {
+                                  ...prev.configs,
+                                  [key]: { ...cfg, tat_days: val },
+                                },
+                              }));
+                            }}
+                            className="w-20 p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-secondary mb-1">
+                            Warning Threshold (Days)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={15}
+                            value={cfg.warning_threshold_days || 1}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) || 1;
+                              setTatModal((prev) => ({
+                                ...prev,
+                                configs: {
+                                  ...prev.configs,
+                                  [key]: { ...cfg, warning_threshold_days: val },
+                                },
+                              }));
+                            }}
+                            className="w-20 p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
+                          />
+                        </div>
                       </div>
                     </div>
+                  ))}
 
-                    <div className="flex items-center gap-4">
+                  {/* ── Procurement Logistics & Purchase Indent Defaults ── */}
+                  <div className="pt-3 border-t border-border">
+                    <div className="flex items-center justify-between mb-2 px-1">
                       <div>
-                        <label className="block text-[10px] font-bold text-text-secondary mb-1">
-                          Configured TAT (Days)
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={cfg.tat_days || 2}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 1;
-                            setTatModal((prev) => ({
-                              ...prev,
-                              configs: {
-                                ...prev.configs,
-                                [key]: { ...cfg, tat_days: val },
-                              },
-                            }));
-                          }}
-                          className="w-20 p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
-                        />
+                        <div className="text-xs font-black text-text-primary dark:text-white uppercase tracking-wider">
+                          Procurement & Purchase Indent Defaults
+                        </div>
+                        <p className="text-[10px] text-text-muted">
+                          Configures locked default parameters for Accounts PI creation
+                        </p>
                       </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        Admin Controlled
+                      </span>
+                    </div>
 
-                      <div>
-                        <label className="block text-[10px] font-bold text-text-secondary mb-1">
-                          Warning Threshold (Days)
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={15}
-                          value={cfg.warning_threshold_days || 1}
-                          onChange={(e) => {
-                            const val = Number(e.target.value) || 1;
-                            setTatModal((prev) => ({
-                              ...prev,
-                              configs: {
-                                ...prev.configs,
-                                [key]: { ...cfg, warning_threshold_days: val },
-                              },
-                            }));
-                          }}
-                          className="w-20 p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
-                        />
+                    <div className="p-3.5 rounded-2xl bg-surface border border-border shadow-sm space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-secondary mb-1">
+                            Production TAT (Days)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={90}
+                            value={tatModal.procurement_settings?.production_tat_days ?? 5}
+                            onChange={(e) => {
+                              const val = Math.max(0, Number(e.target.value) || 0);
+                              setTatModal((prev) => ({
+                                ...prev,
+                                procurement_settings: {
+                                  ...(prev.procurement_settings || {}),
+                                  production_tat_days: val,
+                                },
+                              }));
+                            }}
+                            className="w-full p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-secondary mb-1">
+                            Supply / Transit TAT (Days)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={90}
+                            value={tatModal.procurement_settings?.supply_tat_days ?? 3}
+                            onChange={(e) => {
+                              const val = Math.max(0, Number(e.target.value) || 0);
+                              setTatModal((prev) => ({
+                                ...prev,
+                                procurement_settings: {
+                                  ...(prev.procurement_settings || {}),
+                                  supply_tat_days: val,
+                                },
+                              }));
+                            }}
+                            className="w-full p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-secondary mb-1">
+                            Estimated Transport Cost (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={tatModal.procurement_settings?.estimated_transport_cost ?? 0}
+                            onChange={(e) => {
+                              const val = Math.max(0, Number(e.target.value) || 0);
+                              setTatModal((prev) => ({
+                                ...prev,
+                                procurement_settings: {
+                                  ...(prev.procurement_settings || {}),
+                                  estimated_transport_cost: val,
+                                },
+                              }));
+                            }}
+                            className="w-full p-2 bg-surface-hover border border-border rounded-xl text-center font-bold text-xs outline-none focus:ring-2 focus:ring-purple-600/20"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))
+                </>
               )}
             </div>
 

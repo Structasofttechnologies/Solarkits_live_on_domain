@@ -1108,7 +1108,7 @@ export default function ComboKitFormDrawer({
                                 </div>
 
                                 {/* Quick Presets */}
-                                <div className="flex flex-wrap gap-2">
+                                {/* <div className="flex flex-wrap gap-2">
                                     {[5, 10, 15, 20, 25, 50].map((preset) => (
                                         <button
                                             key={preset}
@@ -1122,7 +1122,7 @@ export default function ComboKitFormDrawer({
                                             {preset} Kits {preset === 10 ? "(Recommended)" : ""}
                                         </button>
                                     ))}
-                                </div>
+                                </div> */}
 
                                 {/* Custom Trial Qty Input */}
                                 <div className="flex items-center gap-2">
@@ -1158,7 +1158,7 @@ export default function ComboKitFormDrawer({
                                     </div>
 
                                     {/* Quick Presets for Limit */}
-                                    <div className="flex flex-wrap gap-2">
+                                    {/* <div className="flex flex-wrap gap-2">
                                         {[
                                             { label: "1 Time Only (Recommended)", value: 1 },
                                             { label: "2 Times", value: 2 },
@@ -1178,7 +1178,7 @@ export default function ComboKitFormDrawer({
                                                 {preset.label}
                                             </button>
                                         ))}
-                                    </div>
+                                    </div> */}
 
                                     {/* Custom Limit Input */}
                                     <div className="flex items-center gap-2">

@@ -1466,6 +1466,8 @@ export default function Payments() {
   const [loadingProcurementPIs, setLoadingProcurementPIs] = useState(false);
   const [selectedPiForPayment, setSelectedPiForPayment] = useState(null);
   const [isPiPaymentModalOpen, setIsPiPaymentModalOpen] = useState(false);
+  const [piPaymentMilestone, setPiPaymentMilestone] = useState(null);
+  const [piSubFilter, setPiSubFilter] = useState("all");
 
   const fetchProcurementPIs = async () => {
     setLoadingProcurementPIs(true);
@@ -2863,12 +2865,14 @@ export default function Payments() {
     selectedComboKit !== "all";
 
   const hasActiveProcurementFilters =
-    procurementTypeFilter !== "all" ||
-    procurementOrderFilter !== "all" ||
-    orderDateFrom !== "" ||
-    orderDateTo !== "" ||
-    procurementSupplierFilter !== "all" ||
-    paymentStatusFilter !== "all";
+    activeTab !== "procurement_indents" && (
+      procurementTypeFilter !== "all" ||
+      procurementOrderFilter !== "all" ||
+      orderDateFrom !== "" ||
+      orderDateTo !== "" ||
+      procurementSupplierFilter !== "all" ||
+      paymentStatusFilter !== "all"
+    );
 
   const hasActiveMasterFilters =
     hasActiveQuickFilters ||
@@ -2891,12 +2895,12 @@ export default function Payments() {
     selectedEpcId !== "all",
     selectedFranchiseId !== "all",
     searchQuery.trim() !== "",
-    procurementTypeFilter !== "all",
-    procurementOrderFilter !== "all",
-    orderDateFrom !== "",
-    orderDateTo !== "",
-    procurementSupplierFilter !== "all",
-    paymentStatusFilter !== "all",
+    activeTab !== "procurement_indents" && procurementTypeFilter !== "all",
+    activeTab !== "procurement_indents" && procurementOrderFilter !== "all",
+    activeTab !== "procurement_indents" && orderDateFrom !== "",
+    activeTab !== "procurement_indents" && orderDateTo !== "",
+    activeTab !== "procurement_indents" && procurementSupplierFilter !== "all",
+    activeTab !== "procurement_indents" && paymentStatusFilter !== "all",
   ].filter(Boolean).length;
 
   const clearQuickFilters = () =>
@@ -3884,181 +3888,183 @@ export default function Payments() {
           </div>
         </div>
 
-        {/* Row 3: Supplier Procurement Filters */}
-        <div className="pt-2 border-t border-gray-200">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-gray-100 text-gray-700">
-                <FaShoppingCart size={11} />
-              </span>
-              <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                3. Supplier Procurement Filters (Panel / Inverter)
-              </span>
-              {hasActiveProcurementFilters && (
-                <span className="px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-black tracking-wider shadow-sm">
-                  ACTIVE
+        {/* Row 3: Supplier Procurement Filters (Panel / Inverter) - Excluded on Procurement Indents (PI) tab */}
+        {activeTab !== "procurement_indents" && (
+          <div className="pt-2 border-t border-gray-200">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-gray-100 text-gray-700">
+                  <FaShoppingCart size={11} />
                 </span>
+                <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                  3. Supplier Procurement Filters (Panel / Inverter)
+                </span>
+                {hasActiveProcurementFilters && (
+                  <span className="px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-black tracking-wider shadow-sm">
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+              {hasActiveProcurementFilters && (
+                <button
+                  type="button"
+                  onClick={clearProcurementFilters}
+                  className="text-[11px] font-black text-gray-600 hover:text-red-600 bg-white hover:bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-300 cursor-pointer transition-all shadow-sm"
+                >
+                  Clear Procurement
+                </button>
               )}
             </div>
-            {hasActiveProcurementFilters && (
-              <button
-                type="button"
-                onClick={clearProcurementFilters}
-                className="text-[11px] font-black text-gray-600 hover:text-red-600 bg-white hover:bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-300 cursor-pointer transition-all shadow-sm"
-              >
-                Clear Procurement
-              </button>
-            )}
-          </div>
 
-          {/* Procurement Type Toggle */}
-          <div className="mb-3">
-            <label className="block text-[10px] font-black text-gray-700 mb-1.5 uppercase tracking-wider">
-              Procurement Type
-            </label>
-            <div className="inline-flex bg-gray-100 border border-gray-300 rounded-xl p-0.5 gap-1">
-              <button
-                type="button"
-                onClick={() => { setProcurementTypeFilter("all"); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all cursor-pointer ${procurementTypeFilter === "all"
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                All Types
-              </button>
-              <button
-                type="button"
-                onClick={() => { setProcurementTypeFilter("panel"); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "panel"
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                <span>☀️</span> Panel
-              </button>
-              <button
-                type="button"
-                onClick={() => { setProcurementTypeFilter("inverter"); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "inverter"
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                <span>⚡</span> Inverter
-              </button>
-            </div>
-          </div>
-
-          {/* 4 more filters: Order, Date From, Date To, Supplier */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {/* Order */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order</label>
-              <div className="relative">
-                <select
-                  value={procurementOrderFilter}
-                  onChange={(e) => { setProcurementOrderFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+            {/* Procurement Type Toggle */}
+            <div className="mb-3">
+              <label className="block text-[10px] font-black text-gray-700 mb-1.5 uppercase tracking-wider">
+                Procurement Type
+              </label>
+              <div className="inline-flex bg-gray-100 border border-gray-300 rounded-xl p-0.5 gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setProcurementTypeFilter("all"); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all cursor-pointer ${procurementTypeFilter === "all"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-200"
+                    }`}
                 >
-                  <option value="all" className="text-gray-900 bg-white font-bold">All Orders</option>
-                  {allOrdersForDropdown.map((ord) => (
-                    <option key={ord.id} value={ord.id} className="text-gray-900 bg-white font-bold">
-                      {ord.label}
-                    </option>
-                  ))}
-                </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
+                  All Types
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setProcurementTypeFilter("panel"); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "panel"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-200"
+                    }`}
+                >
+                  <span>☀️</span> Panel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setProcurementTypeFilter("inverter"); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "inverter"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-200"
+                    }`}
+                >
+                  <span>⚡</span> Inverter
+                </button>
               </div>
             </div>
 
-            {/* Order Date From */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: From</label>
-              <input
-                type="date"
-                value={orderDateFrom}
-                onChange={(e) => { setOrderDateFrom(e.target.value); setPage(1); }}
-                className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
-              />
-            </div>
-
-            {/* Order Date To */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: To</label>
-              <input
-                type="date"
-                value={orderDateTo}
-                min={orderDateFrom || undefined}
-                onChange={(e) => { setOrderDateTo(e.target.value); setPage(1); }}
-                className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
-              />
-            </div>
-
-            {/* Procurement Supplier */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Supplier</label>
-              <div className="relative">
-                <select
-                  value={procurementSupplierFilter}
-                  onChange={(e) => { setProcurementSupplierFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
-                >
-                  <option value="all" className="text-gray-900 bg-white font-bold">All Suppliers</option>
-                  {uniqueSuppliers.map((sup) => (
-                    <option key={sup._id || sup.id} value={sup._id || sup.id} className="text-gray-900 bg-white font-bold">
-                      {sup.company_name || sup.name}
-                    </option>
-                  ))}
-                </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
-              </div>
-            </div>
-          </div>
-
-          {/* Procurement summary stats */}
-          {procurementTypeFilter !== "all" && (
-            <div className="mt-3 p-3.5 rounded-2xl border border-gray-300 bg-gray-50 flex items-center justify-between gap-4 flex-wrap text-xs shadow-sm transition-all">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="px-3.5 py-1.5 rounded-xl text-white font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-sm bg-gray-900">
-                  <span>{procurementTypeFilter === "panel" ? "☀️" : "⚡"}</span>
-                  <span>{procurementTypeFilter === "panel" ? "Panel Procurement" : "Inverter Procurement"} — Filtered View</span>
-                </span>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
-                    <span className="text-gray-900 font-black text-sm mr-1.5">{filteredPOList.length}</span>
-                    <span className="text-gray-600 font-bold">supplier PO{filteredPOList.length !== 1 ? "s" : ""} match</span>
-                  </span>
-
-                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
-                    <span className="text-gray-500 mr-1.5 font-bold">Total Value:</span>
-                    <span className="text-gray-900 font-black text-sm">
-                      ₹{filteredPOList.reduce((acc, po) =>
-                        acc + (po.items || []).reduce((s, it) => s + (Number(it.qty || it.quantity || 0) * Number(it.order_price || it.price || 0)), 0), 0
-                      ).toLocaleString("en-IN")}
-                    </span>
-                  </span>
-
-                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
-                    <span className="text-gray-500 mr-1.5 font-bold">Suppliers:</span>
-                    <span className="font-black text-sm text-gray-900">
-                      {new Set(filteredPOList.map(po => po.supplier_id?._id || po.supplier_id?.id || po.supplier_id)).size}
-                    </span>
-                  </span>
+            {/* 4 more filters: Order, Date From, Date To, Supplier */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {/* Order */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order</label>
+                <div className="relative">
+                  <select
+                    value={procurementOrderFilter}
+                    onChange={(e) => { setProcurementOrderFilter(e.target.value); setPage(1); }}
+                    className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                  >
+                    <option value="all" className="text-gray-900 bg-white font-bold">All Orders</option>
+                    {allOrdersForDropdown.map((ord) => (
+                      <option key={ord.id} value={ord.id} className="text-gray-900 bg-white font-bold">
+                        {ord.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={clearProcurementFilters}
-                className="text-xs font-black text-gray-700 hover:text-red-600 cursor-pointer bg-white hover:bg-gray-100 px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm ml-auto transition-all"
-              >
-                Reset Filter ✕
-              </button>
+              {/* Order Date From */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: From</label>
+                <input
+                  type="date"
+                  value={orderDateFrom}
+                  onChange={(e) => { setOrderDateFrom(e.target.value); setPage(1); }}
+                  className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                />
+              </div>
+
+              {/* Order Date To */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: To</label>
+                <input
+                  type="date"
+                  value={orderDateTo}
+                  min={orderDateFrom || undefined}
+                  onChange={(e) => { setOrderDateTo(e.target.value); setPage(1); }}
+                  className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                />
+              </div>
+
+              {/* Procurement Supplier */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Supplier</label>
+                <div className="relative">
+                  <select
+                    value={procurementSupplierFilter}
+                    onChange={(e) => { setProcurementSupplierFilter(e.target.value); setPage(1); }}
+                    className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                  >
+                    <option value="all" className="text-gray-900 bg-white font-bold">All Suppliers</option>
+                    {uniqueSuppliers.map((sup) => (
+                      <option key={sup._id || sup.id} value={sup._id || sup.id} className="text-gray-900 bg-white font-bold">
+                        {sup.company_name || sup.name}
+                      </option>
+                    ))}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Procurement summary stats */}
+            {procurementTypeFilter !== "all" && (
+              <div className="mt-3 p-3.5 rounded-2xl border border-gray-300 bg-gray-50 flex items-center justify-between gap-4 flex-wrap text-xs shadow-sm transition-all">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="px-3.5 py-1.5 rounded-xl text-white font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-sm bg-gray-900">
+                    <span>{procurementTypeFilter === "panel" ? "☀️" : "⚡"}</span>
+                    <span>{procurementTypeFilter === "panel" ? "Panel Procurement" : "Inverter Procurement"} — Filtered View</span>
+                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                      <span className="text-gray-900 font-black text-sm mr-1.5">{filteredPOList.length}</span>
+                      <span className="text-gray-600 font-bold">supplier PO{filteredPOList.length !== 1 ? "s" : ""} match</span>
+                    </span>
+
+                    <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                      <span className="text-gray-500 mr-1.5 font-bold">Total Value:</span>
+                      <span className="text-gray-900 font-black text-sm">
+                        ₹{filteredPOList.reduce((acc, po) =>
+                          acc + (po.items || []).reduce((s, it) => s + (Number(it.qty || it.quantity || 0) * Number(it.order_price || it.price || 0)), 0), 0
+                        ).toLocaleString("en-IN")}
+                      </span>
+                    </span>
+
+                    <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                      <span className="text-gray-500 mr-1.5 font-bold">Suppliers:</span>
+                      <span className="font-black text-sm text-gray-900">
+                        {new Set(filteredPOList.map(po => po.supplier_id?._id || po.supplier_id?.id || po.supplier_id)).size}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={clearProcurementFilters}
+                  className="text-xs font-black text-gray-700 hover:text-red-600 cursor-pointer bg-white hover:bg-gray-100 px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm ml-auto transition-all"
+                >
+                  Reset Filter ✕
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Row 4: Active Filters Chips */}
         {hasActiveMasterFilters && (
@@ -4225,7 +4231,7 @@ export default function Payments() {
                 </span>
               )}
 
-              {procurementTypeFilter !== "all" && (
+              {activeTab !== "procurement_indents" && procurementTypeFilter !== "all" && (
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-extrabold border shadow-sm ${procurementTypeFilter === "panel"
                   ? "bg-amber-100 text-amber-900 border-amber-300"
                   : "bg-teal-100 text-teal-900 border-teal-300"
@@ -4242,7 +4248,7 @@ export default function Payments() {
                 </span>
               )}
 
-              {procurementOrderFilter !== "all" && (() => {
+              {activeTab !== "procurement_indents" && procurementOrderFilter !== "all" && (() => {
                 const matchedOrder = pendingEpcOrders.find(o => String(o.id || o._id) === String(procurementOrderFilter))
                   || purchaseOrders.find(po => String(po._id || po.id) === String(procurementOrderFilter));
                 const label = matchedOrder?.order_number || matchedOrder?.po_number || procurementOrderFilter;
@@ -4261,7 +4267,7 @@ export default function Payments() {
                 );
               })()}
 
-              {(orderDateFrom || orderDateTo) && (
+              {activeTab !== "procurement_indents" && (orderDateFrom || orderDateTo) && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-semibold border border-gray-300">
                   <span>📅</span>
                   <span>
@@ -4279,7 +4285,7 @@ export default function Payments() {
                 </span>
               )}
 
-              {procurementSupplierFilter !== "all" && (() => {
+              {activeTab !== "procurement_indents" && procurementSupplierFilter !== "all" && (() => {
                 const sup = uniqueSuppliers.find(s => String(s._id || s.id) === String(procurementSupplierFilter));
                 return (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-100 text-orange-800 text-[11px] font-semibold border border-orange-200">
@@ -4763,6 +4769,77 @@ export default function Payments() {
             </a>
           </div>
 
+          {/* Sub-Filter Tabs for Purchase Indents */}
+          {procurementPIs.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 bg-white border border-gray-200 p-2.5 rounded-2xl shadow-xs">
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("all")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "all" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span>All Purchase Indents</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "all" ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                }`}>
+                  {procurementPIs.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("awaiting_advance")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "awaiting_advance" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span>Awaiting 30% Advance</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "awaiting_advance" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
+                }`}>
+                  {procurementPIs.filter(pi => !Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(pi.payment?.payment_status))).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("balance_due")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "balance_due" ? "bg-amber-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span>30% Paid (70% Balance Due)</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "balance_due" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-700"
+                }`}>
+                  {procurementPIs.filter(pi => {
+                    const payStatus = pi.payment?.payment_status || "";
+                    const hasAdv = Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+                    const isFull = Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+                    return hasAdv && !isFull;
+                  }).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("fully_paid")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "fully_paid" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span>Fully Paid (100%)</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "fully_paid" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
+                }`}>
+                  {procurementPIs.filter(pi => Boolean(pi.payment?.balance_payment?.utr_number || pi.payment?.payment_status === "Paid")).length}
+                </span>
+              </button>
+            </div>
+          )}
+
           {loadingProcurementPIs ? (
             <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
               <FaSpinner className="animate-spin text-primary mx-auto text-2xl mb-2" />
@@ -4793,95 +4870,210 @@ export default function Payments() {
                       <th className="py-3 px-4">Batch / Order</th>
                       <th className="py-3 px-4">Allocated Supplier / Brand</th>
                       <th className="py-3 px-4 text-center">Items &amp; Qty</th>
-                      <th className="py-3 px-4 text-right">Advance Due</th>
+                      <th className="py-3 px-4 text-right">30% Advance</th>
+                      <th className="py-3 px-4 text-right">70% Balance</th>
                       <th className="py-3 px-4 text-right">Total PI Value</th>
                       <th className="py-3 px-4 text-center">Payment Status</th>
                       <th className="py-3 px-4 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {procurementPIs.map((pi) => {
-                      const payStatus = pi.payment?.payment_status || "PI Submitted";
-                      const isAdvancePaid = ["Advance Paid", "Paid"].includes(payStatus);
-                      const isApproved = payStatus === "Approved";
-                      const isAwaitingApproval = payStatus === "Awaiting Admin Approval" || payStatus === "Advance Requested";
+                    {procurementPIs
+                      .filter(pi => {
+                        if (piSubFilter === "awaiting_advance") {
+                          const payStatus = pi.payment?.payment_status || "PI Submitted";
+                          return !Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+                        }
+                        if (piSubFilter === "balance_due") {
+                          const payStatus = pi.payment?.payment_status || "PI Submitted";
+                          const hasAdv = Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+                          const isFull = Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+                          return hasAdv && !isFull;
+                        }
+                        if (piSubFilter === "fully_paid") {
+                          const payStatus = pi.payment?.payment_status || "PI Submitted";
+                          return Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+                        }
+                        return true;
+                      })
+                      .map((pi) => {
+                        const payStatus = pi.payment?.payment_status || "PI Submitted";
+                        const totalVal = pi.total_pi_value || 0;
+                        const advPct = pi.payment?.advance_percentage || 30;
+                        const balPct = pi.payment?.balance_percentage || 70;
+                        const advAmount = pi.payment?.advance_amount || Math.round((totalVal * advPct) / 100);
+                        const balAmount = pi.payment?.balance_amount || (totalVal - advAmount);
 
-                      return (
-                        <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
-                          <td className="py-3.5 px-4">
-                            <span className="font-black font-mono text-primary text-sm">{pi.pi_number}</span>
-                            <span className="block text-[10px] text-gray-400 mt-0.5">
-                              {pi.created_at ? new Date(pi.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {pi.order_group_id ? (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-purple-50 text-purple-700 border border-purple-200">
-                                {pi.order_group_id}
+                        const advUtr = pi.payment?.advance_payment?.utr_number || (["Advance Paid", "Paid"].includes(payStatus) ? pi.payment?.actual_payment?.utr_number : null);
+                        const balUtr = pi.payment?.balance_payment?.utr_number;
+
+                        const isAdvancePaid = Boolean(advUtr || ["Advance Paid", "Paid"].includes(payStatus));
+                        const isFullyPaid = payStatus === "Paid" || Boolean(balUtr && isAdvancePaid);
+                        const isBalanceDue = isAdvancePaid && !isFullyPaid;
+
+                        const isApproved = payStatus === "Approved";
+                        const isAwaitingApproval = payStatus === "Awaiting Admin Approval" || payStatus === "Advance Requested";
+
+                        return (
+                          <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <span className="font-black font-mono text-primary text-sm">{pi.pi_number}</span>
+                              <span className="block text-[10px] text-gray-400 mt-0.5">
+                                {pi.created_at ? new Date(pi.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                               </span>
-                            ) : (
-                              <span className="font-mono font-bold text-gray-700 text-xs">
-                                {pi.customer_order_number}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-black text-gray-900">{pi.supplier_name}</div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                                pi.is_oem_partner ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
-                              }`}>
-                                {pi.is_oem_partner ? "OEM Partner (SolarKits Brand)" : "Supplier Partner"}
-                              </span>
-                              {pi.supplier_brand && (
-                                <span className="text-[10px] text-gray-500 font-semibold">{pi.supplier_brand}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {pi.order_group_id ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-purple-50 text-purple-700 border border-purple-200">
+                                  {pi.order_group_id}
+                                </span>
+                              ) : (
+                                <span className="font-mono font-bold text-gray-700 text-xs">
+                                  {pi.customer_order_number}
+                                </span>
                               )}
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="font-bold text-gray-900">
-                              {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
-                            </div>
-                            <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
-                              {(pi.items || []).map(it => it.sku_code).join(", ")}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="font-black text-primary">
-                              ₹{(pi.payment?.advance_amount || 0).toLocaleString("en-IN")}
-                            </div>
-                            <span className="text-[10px] text-gray-400">
-                              ({pi.payment?.advance_percentage || 20}% Advance)
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-gray-900">
-                            ₹{(pi.total_pi_value || 0).toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
-                              isAdvancePaid ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                              isApproved ? "bg-blue-50 text-blue-700 border-blue-200" :
-                              isAwaitingApproval ? "bg-amber-50 text-amber-700 border-amber-200" :
-                              "bg-gray-100 text-gray-600 border-gray-200"
-                            }`}>
-                              {payStatus}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedPiForPayment(pi);
-                                setIsPiPaymentModalOpen(true);
-                              }}
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-sm"
-                            >
-                              {isAdvancePaid ? "View Payment / UTR" : "Process Payment"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-black text-gray-900">{pi.supplier_name}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                  pi.is_oem_partner ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                                }`}>
+                                  {pi.is_oem_partner ? "OEM Partner (SolarKits Brand)" : "Supplier Partner"}
+                                </span>
+                                {pi.supplier_brand && (
+                                  <span className="text-[10px] text-gray-500 font-semibold">{pi.supplier_brand}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="font-bold text-gray-900">
+                                {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
+                              </div>
+                              <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
+                                {(pi.items || []).map(it => it.sku_code).join(", ")}
+                              </span>
+                            </td>
+
+                            {/* 30% Advance */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="font-black text-gray-900">
+                                ₹{advAmount.toLocaleString("en-IN")}
+                              </div>
+                              <div className="mt-0.5">
+                                {isAdvancePaid ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                                    ✅ Paid {advUtr ? `(${advUtr.slice(-5)})` : ""}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
+                                    ⏳ Due ({advPct}%)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* 70% Balance */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="font-black text-gray-900">
+                                ₹{balAmount.toLocaleString("en-IN")}
+                              </div>
+                              <div className="mt-0.5">
+                                {isFullyPaid ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                                    ✅ Paid {balUtr ? `(${balUtr.slice(-5)})` : ""}
+                                  </span>
+                                ) : isBalanceDue ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.2 rounded">
+                                    ⏳ Due (Ready)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400">
+                                    Locked (Wait 30%)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Total PI Value */}
+                            <td className="py-3.5 px-4 text-right font-black text-primary text-sm">
+                              ₹{totalVal.toLocaleString("en-IN")}
+                            </td>
+
+                            {/* Payment Status */}
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border inline-flex items-center gap-1 ${
+                                isFullyPaid ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                isBalanceDue ? "bg-amber-50 text-amber-700 border-amber-300 font-extrabold" :
+                                isApproved ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                isAwaitingApproval ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                "bg-gray-100 text-gray-600 border-gray-200"
+                              }`}>
+                                {isFullyPaid ? "Fully Paid (100%)" :
+                                 isBalanceDue ? "70% Balance Due" :
+                                 payStatus}
+                              </span>
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              {isFullyPaid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPiForPayment(pi);
+                                    setPiPaymentMilestone("overview");
+                                    setIsPiPaymentModalOpen(true);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xs cursor-pointer"
+                                >
+                                  View Payments
+                                </button>
+                              ) : isBalanceDue ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPiForPayment(pi);
+                                      setPiPaymentMilestone("balance");
+                                      setIsPiPaymentModalOpen(true);
+                                    }}
+                                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                    title="Disburse remaining 70% balance to supplier"
+                                  >
+                                    <span>Pay 70% Balance</span>
+                                    <FaArrowRight size={9} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPiForPayment(pi);
+                                      setPiPaymentMilestone("overview");
+                                      setIsPiPaymentModalOpen(true);
+                                    }}
+                                    className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-300 cursor-pointer"
+                                    title="View 30% Advance UTR"
+                                  >
+                                    UTR
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPiForPayment(pi);
+                                    setPiPaymentMilestone("advance");
+                                    setIsPiPaymentModalOpen(true);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
+                                >
+                                  Pay 30% Advance
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -5649,8 +5841,10 @@ export default function Payments() {
         onClose={() => {
           setIsPiPaymentModalOpen(false);
           setSelectedPiForPayment(null);
+          setPiPaymentMilestone(null);
         }}
         purchaseIndent={selectedPiForPayment}
+        targetMilestone={piPaymentMilestone}
         onPaymentUpdated={() => {
           fetchProcurementPIs();
           fetchOrders();
