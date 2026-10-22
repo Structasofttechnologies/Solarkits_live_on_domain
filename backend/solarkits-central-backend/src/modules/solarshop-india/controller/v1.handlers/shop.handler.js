@@ -487,16 +487,21 @@ const get_combo_kits_by_district = async (req, res) => {
     // If Direct EPC or unauthenticated public store visitor: show ALL active company combo kits.
     try {
       let epcAccount = null;
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.split(' ')[1];
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.decode(token);
-        const accountId = decoded?.account_id || decoded?._id || decoded?.id;
-        if (accountId && mongoose.Types.ObjectId.isValid(accountId)) {
-          const { EpcAccount } = require('../../../admin-panel/models/india_solarshop_db');
-          epcAccount = await EpcAccount.findOne({ _id: accountId, deleted_at: null }).lean();
+      let accountId = req.user?.account_id || req.user?._id || req.user?.id;
+      if (!accountId) {
+        const authHeader = req.headers.authorization;
+        const cookieToken = req.cookies?.access_token;
+        const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : cookieToken;
+        if (token) {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.decode(token);
+          accountId = decoded?.account_id || decoded?._id || decoded?.id;
         }
+      }
+
+      if (accountId && mongoose.Types.ObjectId.isValid(accountId)) {
+        const { EpcAccount } = require('../../../admin-panel/models/india_solarshop_db');
+        epcAccount = await EpcAccount.findOne({ _id: accountId, deleted_at: null }).lean();
       }
 
       if (epcAccount) {
@@ -550,6 +555,10 @@ const get_combo_kits_by_district = async (req, res) => {
 
           // Filter kits strictly to only those authorized / listed by this Franchise Partner
           kits = kits.filter(k => authorizedKitIds.has(k._id.toString()));
+
+          if (kits.length === 0) {
+            return res.status(200).json({ success: true, source: "db", data: [] });
+          }
         }
         // If resellerId is null (Direct EPC): No filtering applied, full company catalog is shown!
       }
@@ -1539,28 +1548,10 @@ const get_best_seller_kits = async (req, res) => {
       }
     }
 
-    // Filter kits marked as best seller
+    // Filter kits marked as best seller (explicitly configured and active)
     let bestSellers = resolvedKits
       .filter(k => k.is_best_seller)
       .sort((a, b) => (a.best_seller_priority || 999) - (b.best_seller_priority || 999));
-
-    // If none are tagged for this specific location, fallback gracefully to top kits from catalog
-    if (bestSellers.length === 0 && resolvedKits.length > 0) {
-      bestSellers = resolvedKits.slice(0, 4).map((k, idx) => ({
-        ...k,
-        is_best_seller: true,
-        best_seller_badge: idx === 0 ? "Top Rated" : "Our Best Seller",
-        best_seller_priority: idx + 1,
-        best_seller_info: {
-          badge_text: idx === 0 ? "Top Rated" : "Our Best Seller",
-          priority: idx + 1,
-          state_name: locationMeta.state_name,
-          district_name: locationMeta.district_name,
-          is_fallback: true
-        }
-      }));
-      locationMeta.is_fallback = true;
-    }
 
     return res.status(200).json({
       success: true,
@@ -2880,12 +2871,14 @@ const get_orders = async (req, res) => {
       const isDispatched = o.order_status === 'dispatched' || hasDispatchInfo;
       const isDelivered = o.order_status === 'delivered';
 
+      const isOnline = o.payment_method === 'icici_ecollection' || o.payment_gateway_used === 'icici_ecollection';
+
       // Status translation for EPC buyer view
       let displayStatus = 'pending';
       if (o.order_status === 'cancelled') displayStatus = 'cancelled';
       else if (isDelivered) displayStatus = 'delivered';
       else if (isDispatched) displayStatus = 'dispatched';
-      else if (o.payment_status === 'captured' || o.order_status === 'confirmed') displayStatus = 'confirmed';
+      else if (isOnline || o.payment_status === 'captured' || o.order_status === 'confirmed' || o.offline_payment?.verification_status === 'approved') displayStatus = 'confirmed';
       else if (o.payment_status === 'rejected') displayStatus = 'rejected';
       else if (o.payment_status === 'pending_verification') displayStatus = 'pending_verification';
 
@@ -3409,6 +3402,8 @@ const submit_epc_milestone_payment = async (req, res) => {
       receipt_filename,
       sender_bank_name: body.sender_bank_name,
       account_holder_name: body.account_holder_name,
+      payment_method: body.payment_method,
+      payment_gateway_used: body.payment_gateway_used,
       req,
     });
 

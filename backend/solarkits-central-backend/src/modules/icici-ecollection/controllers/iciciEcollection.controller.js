@@ -285,7 +285,7 @@ async function handleMisPosting(req, res) {
         await EpcOrder.findByIdAndUpdate(pendingOrder._id, {
           payment_method: 'icici_ecollection',
           payment_gateway_used: 'icici_ecollection',
-          payment_status: 'pending_verification',
+          payment_status: 'captured',
           order_status: 'confirmed',
           is_official_order_generated: true,
           'offline_payment.utr_number': UTR,

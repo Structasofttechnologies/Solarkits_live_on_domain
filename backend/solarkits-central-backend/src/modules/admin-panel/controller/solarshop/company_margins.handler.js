@@ -132,7 +132,10 @@ const save_warehouse_margin = async (req, res) => {
                 ? req.body.loose_order_pricing.map(item => ({
                     quantity: Number(item.quantity),
                     price_per_kit: Number(item.price_per_kit),
-                    discount_amount: Number(item.discount_amount || 0)
+                    discount_amount: Number(item.discount_amount || 0),
+                    margin_amount: Number(item.margin_amount || 0),
+                    margin_percent: Number(item.margin_percent || 0),
+                    base_price: Number(item.base_price || 0)
                 })).filter(item => !isNaN(item.quantity) && item.quantity > 0 && !isNaN(item.price_per_kit) && item.price_per_kit >= 0)
                 : [];
         }
@@ -141,7 +144,10 @@ const save_warehouse_margin = async (req, res) => {
                 ? req.body.po_order_pricing.map(item => ({
                     quantity: Number(item.quantity),
                     price_per_kit: Number(item.price_per_kit),
-                    discount_amount: Number(item.discount_amount || 0)
+                    discount_amount: Number(item.discount_amount || 0),
+                    margin_amount: Number(item.margin_amount || 0),
+                    margin_percent: Number(item.margin_percent || 0),
+                    base_price: Number(item.base_price || 0)
                 })).filter(item => !isNaN(item.quantity) && item.quantity > 0 && !isNaN(item.price_per_kit) && item.price_per_kit >= 0)
                 : [];
         }

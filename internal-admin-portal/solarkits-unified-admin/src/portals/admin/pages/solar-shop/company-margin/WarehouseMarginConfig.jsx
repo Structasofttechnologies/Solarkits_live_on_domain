@@ -909,6 +909,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
               ...prev,
               [kitId]: {
                 ...(prev[kitId] || {}),
+                gst_rate: savedData.gst_rate !== undefined ? savedData.gst_rate : prev[kitId]?.gst_rate,
                 loose_order_pricing: savedData.loose_order_pricing,
                 po_order_pricing: savedData.po_order_pricing
               }

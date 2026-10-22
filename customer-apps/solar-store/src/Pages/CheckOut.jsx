@@ -812,11 +812,16 @@ export default function CheckOut() {
         setOrderConfirmed(true);
         setErrorMsg("");
         setLoading(false);
-        dispatch(clearCart());
+        const isOnlineOrder = selectedPaymentMethod === "online" || 
+          orderData.payment_method === "icici_ecollection" || 
+          orderData.payment_gateway_used === "icici_ecollection";
+
         dispatch(
           setAlert({
             type: "success",
-            message: "Order submitted! Your payment receipt is being verified by Accounts.",
+            message: isOnlineOrder
+              ? "Payment verified instantly via ICICI! Your order is confirmed."
+              : "Order submitted! Your payment receipt is being verified by Accounts.",
           })
         );
       } else {
@@ -835,8 +840,14 @@ export default function CheckOut() {
     }
   };
 
-  // ── Success State: Order Submitted for Accounts Verification (Render First) ──────────────
+  // ── Success State: Order Submitted (Render First) ──────────────
   if (orderConfirmed && confirmedOrderData) {
+    const isOnlineSuccess = confirmedOrderData.payment_method === "icici_ecollection" ||
+      confirmedOrderData.payment_gateway_used === "icici_ecollection" ||
+      selectedPaymentMethod === "online" ||
+      confirmedOrderData.payment_status === "captured" ||
+      confirmedOrderData.offline_payment?.verification_status === "approved";
+
     return (
       <div className="max-w-xl mx-auto my-10 bg-surface p-8 rounded-3xl border border-border shadow-2xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
         <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner border border-emerald-500/20">
@@ -849,7 +860,15 @@ export default function CheckOut() {
           </span>
           <h2 className="text-3xl font-black text-text-primary dark:text-white">Order Confirmed!</h2>
           <p className="text-sm text-text-secondary mt-1.5 max-w-md mx-auto">
-            Aapka Order Confirm Ho Gaya Hai! Your payment receipt & UTR reference have been forwarded to our <strong>Accounts Department</strong> for authorization.
+            {isOnlineSuccess ? (
+              <>
+                Aapka Order Confirm Ho Gaya Hai! Your payment has been <strong>instantly verified</strong> via ICICI Bank e-Collection. Materials are moving to warehouse assembly.
+              </>
+            ) : (
+              <>
+                Aapka Order Confirm Ho Gaya Hai! Your payment receipt & UTR reference have been forwarded to our <strong>Accounts Department</strong> for authorization.
+              </>
+            )}
           </p>
         </div>
 
@@ -880,9 +899,15 @@ export default function CheckOut() {
           )}
           <div className="flex justify-between items-center">
             <span className="text-text-secondary">Verification Status:</span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
-              <FiClock size={12} /> Pending Accounts Verification
-            </span>
+            {isOnlineSuccess ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                <FiCheckCircle size={12} /> Auto-Verified (ICICI Instant)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <FiClock size={12} /> Pending Accounts Verification
+              </span>
+            )}
           </div>
           <div className="flex justify-between items-center">
             <span className="text-text-secondary">Warehouse Stock:</span>

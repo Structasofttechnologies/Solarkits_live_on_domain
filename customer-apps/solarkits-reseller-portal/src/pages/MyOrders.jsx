@@ -128,9 +128,15 @@ export default function MyOrders() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filteredOrders.map((o) => {
+                  const isIcici = o.payment_method === "icici_ecollection" || 
+                    o.payment_gateway_used === "icici_ecollection" ||
+                    o.payment_info?.payment_method === "icici_ecollection" ||
+                    o.payment_info?.payment_gateway_used === "icici_ecollection" ||
+                    Boolean(o.payment_info?.admin_remarks?.toLowerCase().includes("icici"));
+
                   const pStatus = o.payment_info?.payment_status;
-                  const isPending = pStatus === "pending_verification";
-                  const isApproved = pStatus === "captured";
+                  const isApproved = isIcici || pStatus === "captured" || o.order_status === "confirmed" || o.payment_info?.verification_status === "approved";
+                  const isPending = !isIcici && !isApproved && pStatus === "pending_verification";
                   const isDispatched = o.order_status === "dispatched";
                   const isDelivered = o.order_status === "delivered";
                   const isRejected = pStatus === "rejected";

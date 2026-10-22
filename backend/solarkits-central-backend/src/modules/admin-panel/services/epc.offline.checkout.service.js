@@ -604,7 +604,7 @@ async function createEpcOfflineOrder({
     order_status: isOnlineECollection ? 'confirmed' : 'pending',
     payment_method: resolvedPaymentMethod,
     payment_gateway_used: resolvedGatewayUsed,
-    payment_status: isOnlineECollection ? (remainingAmountRupees > 0 ? 'pending_verification' : 'captured') : 'pending_verification',
+    payment_status: isOnlineECollection ? 'captured' : 'pending_verification',
     payment_reference: cleanUtr,
     payment_milestones: {
       configured_milestone_id: milestoneRule?._id || null,
@@ -1046,6 +1046,8 @@ async function submitEpcMilestonePayment({
   receipt_filename,
   sender_bank_name,
   account_holder_name,
+  payment_method = null,
+  payment_gateway_used = null,
   req = null,
 }) {
   const order = await EpcOrder.findOne({ _id: order_id, epc_id });
@@ -1077,7 +1079,26 @@ async function submitEpcMilestonePayment({
     order.payment_milestones.milestones.push(m2);
   }
 
-  m2.payment_status = 'pending_verification';
+  const isOnlinePayment = Boolean(
+    payment_method === 'icici_ecollection' ||
+    payment_gateway_used === 'icici_ecollection' ||
+    (req && req.body && (req.body.payment_method === 'icici_ecollection' || req.body.payment_gateway_used === 'icici_ecollection')) ||
+    order.is_online ||
+    order.payment_method === 'icici_ecollection' ||
+    order.payment_gateway_used === 'icici_ecollection'
+  );
+
+  if (isOnlinePayment) {
+    m2.payment_status = 'verified';
+    m2.verified_at = new Date();
+    m2.notes = 'Online ICICI eCollection Milestone 2 cleared';
+    order.payment_milestones.milestone_verification_status = 'fully_paid';
+    order.payment_status = 'captured';
+  } else {
+    m2.payment_status = 'pending_verification';
+    order.payment_milestones.milestone_verification_status = 'final_payment_pending_verification';
+  }
+
   m2.utr_number = cleanUtr;
   m2.amount_paid = Number(amount_paid) || m2.amount || order.payment_milestones.remaining_amount || 0;
   m2.payment_date = payment_date ? new Date(payment_date) : new Date();
@@ -1087,7 +1108,6 @@ async function submitEpcMilestonePayment({
   m2.account_holder_name = account_holder_name ? account_holder_name.trim() : m2.account_holder_name;
   m2.rejection_reason = null;
 
-  order.payment_milestones.milestone_verification_status = 'final_payment_pending_verification';
   order.payment_milestones.current_milestone_due = 2;
   order.markModified('payment_milestones');
 

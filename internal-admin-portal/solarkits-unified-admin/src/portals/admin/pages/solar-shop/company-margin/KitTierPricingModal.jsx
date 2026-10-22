@@ -17,8 +17,6 @@ import {
 } from "react-icons/fa";
 import Dialog from "@/components/Dialog";
 import Button from "@/components/Button";
-import IconButton from "@/components/IconButton";
-import CustomInput from "@/components/CustomInput";
 import { setAlert } from "@/features/alert.slice";
 import { authHeaderObj } from "@/app/authHeader";
 import { computeKitFinancials } from "./KitProductPriceBreakdown";
@@ -27,9 +25,16 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 /**
  * KitTierPricingModal
- * Allows admin to configure separate per-kit pricing for:
+ * Allows admin to configure separate per-kit Company Margin in Rupees (₹) for:
  * 1. Loose Orders (small/mid quantity tiers, e.g. 5, 10, 15, 20 kits)
- * 2. PO (Purchase Order) Orders (bulk quantity tiers, e.g. 200, 500, 1000 kits)
+ * 2. PO (Purchase Order) Orders (bulk quantity tiers, e.g. 45, 75, 105 kits)
+ * 
+ * Flow:
+ * - Kit Base Price (without GST & company margin) is derived from SKU BOM cost.
+ * - Common Kit GST Rate (%) is set at the Kit level (applies to all tiers, no per-row GST input).
+ * - Admin enters Company Margin (₹) for each tier.
+ * - Side-by-side displays Margin % (without GST): (Margin ₹ / Base Price) * 100.
+ * - Final Per-Kit Price (Incl. GST) = (Base Price + Margin ₹) + Common Kit GST.
  */
 export default function KitTierPricingModal({
   isOpen,
@@ -46,8 +51,11 @@ export default function KitTierPricingModal({
   const [activeTab, setActiveTab] = useState("loose"); // 'loose' | 'po'
   const [saving, setSaving] = useState(false);
 
+  // Common Kit GST Rate (%) - common across all PO and Loose tiers
+  const [commonGstRate, setCommonGstRate] = useState(13.8);
+
   // Separate states for Loose and PO tiers
-  // Each tier: { quantity: Number, price_per_kit: Number | string, is_preset: boolean }
+  // Each tier: { quantity: Number, margin_amount: Number | string, is_preset: boolean }
   const [looseTiers, setLooseTiers] = useState([]);
   const [poTiers, setPoTiers] = useState([]);
 
@@ -60,6 +68,11 @@ export default function KitTierPricingModal({
     return computeKitFinancials(kit, skuPrices, initialMargins);
   }, [kit, skuPrices, initialMargins]);
 
+  // Kit Base Price (Component cost without GST & without margin)
+  const baseCost = useMemo(() => {
+    return Math.round(kitFinancials?.totalBaseCost || 0);
+  }, [kitFinancials]);
+
   // Baseline reference selling price per kit (including GST if set)
   const baselineKitPrice = useMemo(() => {
     if (!kitFinancials) return 0;
@@ -69,12 +82,49 @@ export default function KitTierPricingModal({
     return 0;
   }, [kitFinancials]);
 
-  // Initialize or synchronize tiers when modal opens or kit changes
+  // Initialize common GST Rate and tiers when modal opens or kit changes
   useEffect(() => {
     if (!isOpen || !kit) return;
 
-    // 1. Prepare Loose Tiers
-    // Fetch preset quantities from kit.loose_order_quantities
+    // 1. Resolve Common Kit GST Rate
+    const rawGst =
+      initialMargins.gst_rate !== undefined &&
+      initialMargins.gst_rate !== null &&
+      initialMargins.gst_rate !== ""
+        ? Number(initialMargins.gst_rate)
+        : kitFinancials?.gstRatePct > 0
+        ? Number(kitFinancials.gstRatePct)
+        : 13.8;
+    setCommonGstRate(isNaN(rawGst) ? 13.8 : rawGst);
+
+    const kitBase = Math.round(kitFinancials?.totalBaseCost || 0);
+    const gstRateNum = isNaN(rawGst) ? 13.8 : rawGst;
+    const gstMultiplier = 1 + gstRateNum / 100;
+
+    // Helper to extract or derive margin in rupees
+    const resolveMargin = (entry) => {
+      if (
+        entry.margin_amount !== undefined &&
+        entry.margin_amount !== null &&
+        entry.margin_amount !== "" &&
+        !isNaN(Number(entry.margin_amount))
+      ) {
+        return Number(entry.margin_amount);
+      }
+      // If legacy entry has price_per_kit (which includes GST):
+      if (
+        entry.price_per_kit !== undefined &&
+        entry.price_per_kit !== "" &&
+        Number(entry.price_per_kit) > 0 &&
+        kitBase > 0
+      ) {
+        const priceExclGst = Number(entry.price_per_kit) / gstMultiplier;
+        return Math.max(0, Math.round(priceExclGst - kitBase));
+      }
+      return "";
+    };
+
+    // 2. Prepare Loose Tiers
     const rawLoosePresets = Array.isArray(kit.loose_order_quantities)
       ? kit.loose_order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0)
       : [];
@@ -85,24 +135,24 @@ export default function KitTierPricingModal({
 
     const looseMap = new Map();
 
-    // First populate from saved pricing
+    // Populate from saved pricing
     existingLoosePricing.forEach((entry) => {
       const q = Number(entry.quantity);
       if (q > 0) {
         looseMap.set(q, {
           quantity: q,
-          price_per_kit: entry.price_per_kit !== undefined ? entry.price_per_kit : "",
+          margin_amount: resolveMargin(entry),
           is_preset: rawLoosePresets.includes(q)
         });
       }
     });
 
-    // Next, make sure all preset quantities are present in the list
+    // Make sure all preset quantities are present
     rawLoosePresets.forEach((q) => {
       if (!looseMap.has(q)) {
         looseMap.set(q, {
           quantity: q,
-          price_per_kit: "",
+          margin_amount: "",
           is_preset: true
         });
       }
@@ -111,8 +161,7 @@ export default function KitTierPricingModal({
     const sortedLoose = Array.from(looseMap.values()).sort((a, b) => a.quantity - b.quantity);
     setLooseTiers(sortedLoose);
 
-    // 2. Prepare PO Tiers
-    // Fetch preset quantities from kit.order_quantities
+    // 3. Prepare PO Tiers
     const rawPoPresets = Array.isArray(kit.order_quantities)
       ? kit.order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0)
       : [];
@@ -129,7 +178,7 @@ export default function KitTierPricingModal({
       if (q > 0) {
         poMap.set(q, {
           quantity: q,
-          price_per_kit: entry.price_per_kit !== undefined ? entry.price_per_kit : "",
+          margin_amount: resolveMargin(entry),
           is_preset: rawPoPresets.includes(q)
         });
       }
@@ -140,7 +189,7 @@ export default function KitTierPricingModal({
       if (!poMap.has(q)) {
         poMap.set(q, {
           quantity: q,
-          price_per_kit: "",
+          margin_amount: "",
           is_preset: true
         });
       }
@@ -148,19 +197,19 @@ export default function KitTierPricingModal({
 
     const sortedPo = Array.from(poMap.values()).sort((a, b) => a.quantity - b.quantity);
     setPoTiers(sortedPo);
-  }, [isOpen, kit, initialMargins]);
+  }, [isOpen, kit, initialMargins, kitFinancials]);
 
-  // Update Loose Tier price handler
-  const handleLoosePriceChange = (quantity, value) => {
+  // Update Margin in Rupees for Loose Tier
+  const handleLooseMarginChange = (quantity, value) => {
     setLooseTiers((prev) =>
-      prev.map((t) => (t.quantity === quantity ? { ...t, price_per_kit: value } : t))
+      prev.map((t) => (t.quantity === quantity ? { ...t, margin_amount: value } : t))
     );
   };
 
-  // Update PO Tier price handler
-  const handlePoPriceChange = (quantity, value) => {
+  // Update Margin in Rupees for PO Tier
+  const handlePoMarginChange = (quantity, value) => {
     setPoTiers((prev) =>
-      prev.map((t) => (t.quantity === quantity ? { ...t, price_per_kit: value } : t))
+      prev.map((t) => (t.quantity === quantity ? { ...t, margin_amount: value } : t))
     );
   };
 
@@ -186,7 +235,7 @@ export default function KitTierPricingModal({
       return;
     }
     setLooseTiers((prev) =>
-      [...prev, { quantity: qty, price_per_kit: "", is_preset: false }].sort(
+      [...prev, { quantity: qty, margin_amount: "", is_preset: false }].sort(
         (a, b) => a.quantity - b.quantity
       )
     );
@@ -206,56 +255,91 @@ export default function KitTierPricingModal({
       return;
     }
     setPoTiers((prev) =>
-      [...prev, { quantity: qty, price_per_kit: "", is_preset: false }].sort(
+      [...prev, { quantity: qty, margin_amount: "", is_preset: false }].sort(
         (a, b) => a.quantity - b.quantity
       )
     );
     setCustomPoQty("");
   };
 
-  // Quick helper: Prefill all empty tiers with baseline price
-  const handlePrefillBaseline = (type) => {
-    if (baselineKitPrice <= 0) {
-      dispatch(setAlert({ type: "warning", message: "Baseline price is not configured for this kit yet." }));
+  // Quick helper: Prefill all empty tiers with standard margin
+  const handlePrefillDefaultMargin = (type) => {
+    const defaultMargin =
+      kitFinancials?.standardMarginAmt > 0
+        ? Math.round(kitFinancials.standardMarginAmt)
+        : baseCost > 0
+        ? Math.round(baseCost * 0.1) // Default 10%
+        : 0;
+
+    if (defaultMargin <= 0) {
+      dispatch(
+        setAlert({
+          type: "warning",
+          message: "Standard margin is not configured for this kit yet."
+        })
+      );
       return;
     }
+
     if (type === "loose") {
       setLooseTiers((prev) =>
         prev.map((t) => ({
           ...t,
-          price_per_kit:
-            t.price_per_kit === "" || t.price_per_kit === undefined
-              ? baselineKitPrice
-              : t.price_per_kit
+          margin_amount:
+            t.margin_amount === "" || t.margin_amount === undefined
+              ? defaultMargin
+              : t.margin_amount
         }))
       );
     } else {
       setPoTiers((prev) =>
         prev.map((t) => ({
           ...t,
-          price_per_kit:
-            t.price_per_kit === "" || t.price_per_kit === undefined
-              ? baselineKitPrice
-              : t.price_per_kit
+          margin_amount:
+            t.margin_amount === "" || t.margin_amount === undefined
+              ? defaultMargin
+              : t.margin_amount
         }))
       );
     }
-    dispatch(setAlert({ type: "info", message: "Filled empty tiers with baseline 1-kit price" }));
+    dispatch(
+      setAlert({
+        type: "info",
+        message: `Filled empty tiers with default margin ₹${defaultMargin.toLocaleString("en-IN")}`
+      })
+    );
   };
 
   // Save Pricing Tiers to Backend
   const handleSaveTiers = async () => {
     if (!warehouse || !countryObj || !kit) return;
 
+    const gstRateNum = Number(commonGstRate) || 0;
+    const gstMultiplier = 1 + gstRateNum / 100;
+
     // Filter and sanitize loose order pricing
     const formattedLoosePricing = looseTiers
-      .filter((t) => t.price_per_kit !== "" && t.price_per_kit !== null && !isNaN(Number(t.price_per_kit)))
+      .filter(
+        (t) =>
+          t.margin_amount !== "" &&
+          t.margin_amount !== null &&
+          !isNaN(Number(t.margin_amount))
+      )
       .map((t) => {
-        const unitPrice = Number(t.price_per_kit);
-        const discountAmt = baselineKitPrice > 0 ? Math.max(0, baselineKitPrice - unitPrice) : 0;
+        const marginAmt = Number(t.margin_amount);
+        const priceWithoutGst = baseCost + marginAmt;
+        const finalPerKit = Math.round(priceWithoutGst * gstMultiplier);
+        const marginPct =
+          baseCost > 0 ? Number(((marginAmt / baseCost) * 100).toFixed(2)) : 0;
+        const discountAmt =
+          baselineKitPrice > 0 ? Math.max(0, baselineKitPrice - finalPerKit) : 0;
+
         return {
           quantity: Number(t.quantity),
-          price_per_kit: unitPrice,
+          margin_amount: marginAmt,
+          margin_percent: marginPct,
+          base_price: baseCost,
+          price_per_kit: finalPerKit,
           discount_amount: discountAmt
         };
       })
@@ -263,13 +347,27 @@ export default function KitTierPricingModal({
 
     // Filter and sanitize PO order pricing
     const formattedPoPricing = poTiers
-      .filter((t) => t.price_per_kit !== "" && t.price_per_kit !== null && !isNaN(Number(t.price_per_kit)))
+      .filter(
+        (t) =>
+          t.margin_amount !== "" &&
+          t.margin_amount !== null &&
+          !isNaN(Number(t.margin_amount))
+      )
       .map((t) => {
-        const unitPrice = Number(t.price_per_kit);
-        const discountAmt = baselineKitPrice > 0 ? Math.max(0, baselineKitPrice - unitPrice) : 0;
+        const marginAmt = Number(t.margin_amount);
+        const priceWithoutGst = baseCost + marginAmt;
+        const finalPerKit = Math.round(priceWithoutGst * gstMultiplier);
+        const marginPct =
+          baseCost > 0 ? Number(((marginAmt / baseCost) * 100).toFixed(2)) : 0;
+        const discountAmt =
+          baselineKitPrice > 0 ? Math.max(0, baselineKitPrice - finalPerKit) : 0;
+
         return {
           quantity: Number(t.quantity),
-          price_per_kit: unitPrice,
+          margin_amount: marginAmt,
+          margin_percent: marginPct,
+          base_price: baseCost,
+          price_per_kit: finalPerKit,
           discount_amount: discountAmt
         };
       })
@@ -286,10 +384,17 @@ export default function KitTierPricingModal({
         cluster_id: warehouse.cluster_id || warehouse.cluster,
         warehouse_id: warehouse.id || warehouse._id,
         combo_kit_id: kit.id || kit._id,
-        showcase_margin: initialMargins.showcase_margin !== undefined ? Number(initialMargins.showcase_margin) : 0,
-        standard_margin: initialMargins.standard_margin !== undefined ? Number(initialMargins.standard_margin) : 0,
-        po_discounted_margin: initialMargins.po_margin !== undefined ? Number(initialMargins.po_margin) : 0,
-        gst_rate: initialMargins.gst_rate !== undefined && initialMargins.gst_rate !== "" ? Number(initialMargins.gst_rate) : null,
+        showcase_margin:
+          initialMargins.showcase_margin !== undefined
+            ? Number(initialMargins.showcase_margin)
+            : 0,
+        standard_margin:
+          initialMargins.standard_margin !== undefined
+            ? Number(initialMargins.standard_margin)
+            : 0,
+        po_discounted_margin:
+          initialMargins.po_margin !== undefined ? Number(initialMargins.po_margin) : 0,
+        gst_rate: !isNaN(gstRateNum) && gstRateNum > 0 ? gstRateNum : null,
         loose_order_pricing: formattedLoosePricing,
         po_order_pricing: formattedPoPricing
       };
@@ -309,6 +414,7 @@ export default function KitTierPricingModal({
         );
         if (onSaved) {
           onSaved({
+            gst_rate: !isNaN(gstRateNum) && gstRateNum > 0 ? gstRateNum : null,
             loose_order_pricing: formattedLoosePricing,
             po_order_pricing: formattedPoPricing
           });
@@ -331,6 +437,8 @@ export default function KitTierPricingModal({
   if (!isOpen || !kit) return null;
 
   const activeTiers = activeTab === "loose" ? looseTiers : poTiers;
+  const gstRateNum = Number(commonGstRate) || 0;
+  const gstMultiplier = 1 + gstRateNum / 100;
 
   return (
     <Dialog
@@ -359,28 +467,58 @@ export default function KitTierPricingModal({
             </p>
           </div>
 
-          {/* Reference Price Metrics */}
-          <div className="flex items-center gap-3 bg-surface p-3 rounded-xl border border-border/80 shrink-0">
+          {/* Reference Price Metrics Bar */}
+          <div className="flex items-center flex-wrap gap-3 bg-surface p-3 rounded-xl border border-border/80 shrink-0">
+            {/* 1. Kit Base Cost (Excl. GST & Margin) */}
             <div>
               <span className="block text-[9px] uppercase font-black tracking-wider text-text-muted">
                 Kit Base Cost
               </span>
-              <span className="text-xs font-mono font-black text-text-secondary">
-                ₹{Number(kitFinancials?.totalBaseCost || 0).toLocaleString("en-IN")}
-              </span>
-            </div>
-            <div className="h-7 w-px bg-border"></div>
-            <div>
-              <span className="block text-[9px] uppercase font-black tracking-wider text-primary">
-                1-Kit Baseline Price
-              </span>
-              <span className="text-sm font-mono font-black text-primary">
-                {baselineKitPrice > 0 ? `₹${Number(baselineKitPrice).toLocaleString("en-IN")}` : "₹0"}
+              <span className="text-xs font-mono font-black text-text-primary">
+                ₹{baseCost.toLocaleString("en-IN")}
               </span>
               <span className="text-[8px] font-bold text-text-muted block">
-                {baselineKitPrice > 0
-                  ? (kitFinancials?.gstRatePct > 0 ? `Incl. ${kitFinancials.gstRatePct}% GST` : "Excl. GST")
-                  : "Price Not Configured"}
+                Without GST & Margin
+              </span>
+            </div>
+
+            <div className="h-7 w-px bg-border hidden sm:block"></div>
+
+            {/* 2. Common Kit GST Rate (Kit-level setting) */}
+            <div>
+              <span className="block text-[9px] uppercase font-black tracking-wider text-amber-700 dark:text-amber-400">
+                Common Kit GST
+              </span>
+              <div className="flex items-center gap-1 mt-0.5">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={commonGstRate}
+                  onChange={(e) => setCommonGstRate(e.target.value)}
+                  className="w-16 px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded font-mono font-black text-xs text-amber-800 dark:text-amber-200 outline-none focus:border-amber-500"
+                  title="Common GST rate applied to all PO and Loose order tiers for this kit"
+                />
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400">%</span>
+              </div>
+              <span className="text-[8px] font-bold text-amber-600/80 block">
+                Applies to all tiers
+              </span>
+            </div>
+
+            <div className="h-7 w-px bg-border hidden sm:block"></div>
+
+            {/* 3. Baseline Ref */}
+            <div>
+              <span className="block text-[9px] uppercase font-black tracking-wider text-primary">
+                1-Kit Baseline Ref
+              </span>
+              <span className="text-xs font-mono font-black text-primary">
+                {baselineKitPrice > 0 ? `₹${baselineKitPrice.toLocaleString("en-IN")}` : "₹0"}
+              </span>
+              <span className="text-[8px] font-bold text-text-muted block">
+                Standard Selling Price
               </span>
             </div>
           </div>
@@ -431,7 +569,7 @@ export default function KitTierPricingModal({
 
         {/* Description Banner */}
         <div
-          className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-medium gap-3 ${
+          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between text-xs font-medium gap-3 ${
             activeTab === "loose"
               ? "bg-sky-500/10 border-sky-500/20 text-sky-900 dark:text-sky-200"
               : "bg-amber-500/10 border-amber-500/20 text-amber-900 dark:text-amber-200"
@@ -440,25 +578,17 @@ export default function KitTierPricingModal({
           <div className="flex items-center gap-2.5">
             <FaInfoCircle className="shrink-0 text-sm opacity-80" />
             <span>
-              {activeTab === "loose" ? (
-                <>
-                  Set custom per-kit prices for <strong>Loose Orders</strong> (e.g. 5 kits, 10 kits, 15 kits). Quantities are fetched from the Combo Kit configuration.
-                </>
-              ) : (
-                <>
-                  Set custom per-kit prices for <strong>PO Orders</strong> (e.g. 200 kits, 500 kits, 1000 kits). Quantities are fetched from the Combo Kit configuration.
-                </>
-              )}
+              Har tier me <strong>Company Margin in Rupees (₹)</strong> set karein. Kit Base Price (₹{baseCost.toLocaleString("en-IN")}) bina GST & margin ke hai. Side me without-GST margin % dikhega aur Common {gstRateNum}% GST final price me shamil hoga.
             </span>
           </div>
 
-          {baselineKitPrice > 0 && (
+          {baseCost > 0 && (
             <button
               type="button"
-              onClick={() => handlePrefillBaseline(activeTab)}
-              className="text-[11px] font-bold underline hover:opacity-80 shrink-0 cursor-pointer"
+              onClick={() => handlePrefillDefaultMargin(activeTab)}
+              className="text-[11px] font-bold underline hover:opacity-80 shrink-0 cursor-pointer text-left"
             >
-              Prefill Baseline Price (₹{Number(baselineKitPrice).toLocaleString("en-IN")})
+              Prefill Default Margin
             </button>
           )}
         </div>
@@ -469,17 +599,19 @@ export default function KitTierPricingModal({
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-surface-hover/70 text-text-muted font-black uppercase tracking-wider text-[10px] border-b border-border">
-                  <th className="px-4 py-3 w-[22%]">Order Quantity</th>
-                  <th className="px-4 py-3 w-[28%]">Per-Kit Price (₹)</th>
-                  <th className="px-4 py-3 w-[22%]">Savings vs Baseline</th>
-                  <th className="px-4 py-3 w-[22%] text-right">Total Order Value (₹)</th>
-                  <th className="px-4 py-3 w-[6%] text-center">Action</th>
+                  <th className="px-4 py-3 w-[18%]">Order Quantity</th>
+                  <th className="px-4 py-3 w-[16%]">Kit Base Price (₹)</th>
+                  <th className="px-4 py-3 w-[22%]">Company Margin (₹)</th>
+                  <th className="px-4 py-3 w-[14%]">Margin %</th>
+                  <th className="px-4 py-3 w-[15%]">Per-Kit Price (₹)</th>
+                  <th className="px-4 py-3 w-[10%] text-right">Total Order Value (₹)</th>
+                  <th className="px-4 py-3 w-[5%] text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {activeTiers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-text-muted">
+                    <td colSpan={7} className="px-6 py-8 text-center text-text-muted">
                       <div className="flex flex-col items-center gap-2">
                         <FaTags className="text-3xl opacity-30 text-text-muted" />
                         <p className="font-bold text-xs text-text-secondary">
@@ -493,24 +625,27 @@ export default function KitTierPricingModal({
                   </tr>
                 ) : (
                   activeTiers.map((tier) => {
-                    const priceNum = Number(tier.price_per_kit);
-                    const hasValidPrice =
-                      tier.price_per_kit !== "" &&
-                      tier.price_per_kit !== null &&
-                      !isNaN(priceNum) &&
-                      priceNum >= 0;
+                    const marginNum = Number(tier.margin_amount);
+                    const hasValidMargin =
+                      tier.margin_amount !== "" &&
+                      tier.margin_amount !== null &&
+                      !isNaN(marginNum) &&
+                      marginNum >= 0;
 
-                    const totalOrderAmt = hasValidPrice ? tier.quantity * priceNum : 0;
-                    const diff = hasValidPrice && baselineKitPrice > 0 ? baselineKitPrice - priceNum : 0;
-                    const discountPercent =
-                      hasValidPrice && baselineKitPrice > 0 ? (diff / baselineKitPrice) * 100 : 0;
+                    const priceWithoutGst = hasValidMargin ? baseCost + marginNum : 0;
+                    const finalPerKit = hasValidMargin
+                      ? Math.round(priceWithoutGst * gstMultiplier)
+                      : 0;
+                    const totalOrderAmt = hasValidMargin ? tier.quantity * finalPerKit : 0;
+                    const marginPercent =
+                      hasValidMargin && baseCost > 0 ? (marginNum / baseCost) * 100 : 0;
 
                     return (
                       <tr
                         key={tier.quantity}
                         className="hover:bg-surface-hover/40 transition-colors duration-150"
                       >
-                        {/* Quantity Badge */}
+                        {/* 1. Order Quantity Badge */}
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <span
@@ -533,7 +668,19 @@ export default function KitTierPricingModal({
                           </div>
                         </td>
 
-                        {/* Price Per Kit Input */}
+                        {/* 2. Kit Base Price (Excl. GST & Margin) */}
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-col">
+                            <span className="font-mono font-black text-xs text-text-secondary">
+                              ₹{baseCost.toLocaleString("en-IN")}
+                            </span>
+                            <span className="text-[8px] font-bold text-text-muted">
+                              Excl. GST & Margin
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* 3. Company Margin (₹) Editable Input */}
                         <td className="px-4 py-3.5">
                           <div className="relative max-w-xs">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-xs text-text-muted">
@@ -543,69 +690,72 @@ export default function KitTierPricingModal({
                               type="number"
                               min="0"
                               step="1"
-                              placeholder={baselineKitPrice > 0 ? `e.g. ${baselineKitPrice}` : "Enter per-kit price"}
-                              value={tier.price_per_kit}
+                              placeholder="Enter Margin in ₹"
+                              value={tier.margin_amount}
                               onChange={(e) =>
                                 activeTab === "loose"
-                                  ? handleLoosePriceChange(tier.quantity, e.target.value)
-                                  : handlePoPriceChange(tier.quantity, e.target.value)
+                                  ? handleLooseMarginChange(tier.quantity, e.target.value)
+                                  : handlePoMarginChange(tier.quantity, e.target.value)
                               }
                               className="w-full pl-7 pr-3 py-2 bg-surface rounded-xl border border-border text-xs font-mono font-black text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all shadow-2xs"
                             />
                           </div>
                         </td>
 
-                        {/* Savings / Discount Badge */}
+                        {/* 4. Margin % (Without GST) */}
                         <td className="px-4 py-3.5">
-                          {hasValidPrice ? (
-                            baselineKitPrice > 0 ? (
-                              diff > 0 ? (
-                                <div className="flex flex-col">
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 w-fit">
-                                    <FaArrowDown size={9} /> ₹{diff.toLocaleString("en-IN")}/kit OFF
-                                  </span>
-                                  <span className="text-[10px] text-emerald-600/80 font-bold mt-0.5">
-                                    {discountPercent.toFixed(1)}% discount
-                                  </span>
-                                </div>
-                              ) : diff < 0 ? (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 w-fit">
-                                  <FaArrowUp size={9} /> +₹{Math.abs(diff).toLocaleString("en-IN")}/kit higher
-                                </span>
-                              ) : (
-                                <span className="text-[11px] font-bold text-text-muted">
-                                  Standard Base Price
-                                </span>
-                              )
-                            ) : (
-                              <span className="text-[10px] text-text-muted italic">
-                                Baseline not set
-                              </span>
-                            )
+                          {hasValidMargin ? (
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg border w-fit font-mono ${
+                                marginPercent > 0
+                                  ? "text-emerald-700 bg-emerald-500/10 border-emerald-500/25 dark:text-emerald-300"
+                                  : marginPercent === 0
+                                  ? "text-text-muted bg-surface-hover border-border"
+                                  : "text-rose-600 bg-rose-500/10 border-rose-500/25"
+                              }`}
+                              title="Margin percentage on Kit Base Cost (Without GST)"
+                            >
+                              <FaPercent size={8} />
+                              {marginPercent > 0 ? `+${marginPercent.toFixed(2)}%` : `${marginPercent.toFixed(2)}%`}
+                            </span>
                           ) : (
                             <span className="text-[11px] font-bold text-text-muted italic">
-                              Price not set
+                              0.00%
                             </span>
                           )}
                         </td>
 
-                        {/* Total Order Amount */}
-                        <td className="px-4 py-3.5 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="font-mono font-black text-xs text-text-primary">
-                              {hasValidPrice
-                                ? `₹${totalOrderAmt.toLocaleString("en-IN")}`
-                                : "—"}
+                        {/* 5. Per-Kit Final Price (Incl. GST) */}
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-col">
+                            <span className="font-mono font-black text-xs text-primary">
+                              {hasValidMargin ? `₹${finalPerKit.toLocaleString("en-IN")}` : "—"}
                             </span>
-                            {hasValidPrice && (
-                              <span className="text-[9px] text-text-muted font-bold mt-0.5">
-                                {tier.quantity} × ₹{priceNum.toLocaleString("en-IN")}
+                            {hasValidMargin && (
+                              <span className="text-[8px] text-text-muted font-bold mt-0.5">
+                                Base + Margin + {gstRateNum}% GST
                               </span>
                             )}
                           </div>
                         </td>
 
-                        {/* Delete action */}
+                        {/* 6. Total Order Value (₹) */}
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="font-mono font-black text-xs text-text-primary">
+                              {hasValidMargin
+                                ? `₹${totalOrderAmt.toLocaleString("en-IN")}`
+                                : "—"}
+                            </span>
+                            {hasValidMargin && (
+                              <span className="text-[9px] text-text-muted font-bold mt-0.5">
+                                {tier.quantity} × ₹{finalPerKit.toLocaleString("en-IN")}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* 7. Action */}
                         <td className="px-4 py-3.5 text-center">
                           <button
                             type="button"
@@ -668,7 +818,7 @@ export default function KitTierPricingModal({
           <div className="flex items-center gap-2 text-xs text-text-muted font-bold">
             <FaCheckCircle className="text-success" />
             <span>
-              Total configured: <strong>{looseTiers.filter((t) => t.price_per_kit !== "").length} Loose</strong> & <strong>{poTiers.filter((t) => t.price_per_kit !== "").length} PO</strong> pricing tiers
+              Total configured: <strong>{looseTiers.filter((t) => t.margin_amount !== "").length} Loose</strong> & <strong>{poTiers.filter((t) => t.margin_amount !== "").length} PO</strong> pricing tiers
             </span>
           </div>
 
