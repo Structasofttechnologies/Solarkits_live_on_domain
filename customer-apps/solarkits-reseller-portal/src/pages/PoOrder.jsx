@@ -122,88 +122,6 @@ function PoStageStepper({ stepNumber }) {
   );
 }
 
-// ── DEFAULT COMBO KITS (Matching Exactly with Configured Admin Solar Shop Catalog) ──
-const DEFAULT_COMBO_KITS = [
-  {
-    _id: "kit-01",
-    id: "kit-01",
-    name: "5 kW Premium Bifacial Rooftop Solar Combo Kit",
-    kit_name: "5 kW Premium Bifacial Rooftop Solar Combo Kit",
-    capacity_kw: 5,
-    system_type: "On-Grid",
-    industry_type_name: "Solar PV",
-    category_name: "Residential Solar",
-    subcategory_name: "Individual Home",
-    project_type_name: "Rooftop Solar",
-    project_range_label: "3 - 10 kW",
-    min_kw: 3,
-    max_kw: 10,
-    dealer_price: 367500,
-    unit_price: 367500,
-    price: 367500,
-    base_price_paise: 36750000,
-    token_rate_per_kit_paise: 500000, // ₹5,000 / kit
-    trial_kit_quantity: 10,
-    is_trial_allowed: true,
-    order_quantities: [200, 500, 1000],
-    loose_order_quantities: [5, 10, 15, 20, 25, 30],
-    min_po_quantity: 200,
-    specifications: "High performance 5 kW Bifacial solar kit featuring top-tier string inverter and heavy-duty GI mounting structure.",
-  },
-  {
-    _id: "kit-02",
-    id: "kit-02",
-    name: "50 kW Commercial LT On-Grid Rooftop Solution",
-    kit_name: "50 kW Commercial LT On-Grid Rooftop Solution",
-    capacity_kw: 50,
-    system_type: "On-Grid",
-    industry_type_name: "Solar PV",
-    category_name: "Commercial Solar",
-    subcategory_name: "Commercial LT",
-    project_type_name: "Rooftop Solution",
-    project_range_label: "10 - 50 kW",
-    min_kw: 10,
-    max_kw: 50,
-    dealer_price: 3457720,
-    unit_price: 3457720,
-    price: 3457720,
-    base_price_paise: 345772000,
-    token_rate_per_kit_paise: 500000, // ₹5,000 / kit
-    trial_kit_quantity: 5,
-    is_trial_allowed: true,
-    order_quantities: [100, 200, 400, 500],
-    loose_order_quantities: [5, 10, 15, 20, 25],
-    min_po_quantity: 100,
-    specifications: "Commercial 50 kW rooftop solar blueprint with high wattage bifacial panels and heavy-duty 3-phase LT ACDB.",
-  },
-  {
-    _id: "kit-03",
-    id: "kit-03",
-    name: "3 kW Residential Single-Phase On-Grid Solar Kit",
-    kit_name: "3 kW Residential Single-Phase On-Grid Solar Kit",
-    capacity_kw: 3,
-    system_type: "On-Grid",
-    industry_type_name: "Solar PV",
-    category_name: "Residential Solar",
-    subcategory_name: "Individual Home",
-    project_type_name: "Rooftop Solar",
-    project_range_label: "1 - 3 kW",
-    min_kw: 1,
-    max_kw: 3,
-    dealer_price: 165000,
-    unit_price: 165000,
-    price: 165000,
-    base_price_paise: 16500000,
-    token_rate_per_kit_paise: 500000,
-    trial_kit_quantity: 10,
-    is_trial_allowed: true,
-    order_quantities: [50, 100, 200],
-    loose_order_quantities: [5, 10, 15, 20],
-    min_po_quantity: 50,
-    specifications: "Standard Indian Home Rooftop On-Grid Solar Package with DCR TopCon Modules and 3.3kW Grid Inverter.",
-  },
-];
-
 // SessionStorage Caching Helpers
 const CACHE_KEYS = {
   ORDERS: "solarkits_fpo_orders_v2",
@@ -257,8 +175,8 @@ export default function PoOrder() {
   const allowedOrderTypes = Array.isArray(rawAllowed)
     ? rawAllowed
     : typeof rawAllowed === "string"
-    ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
-    : ["po_order"];
+      ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
+      : ["po_order"];
 
   const allowsLoose = allowedOrderTypes.includes("loose_order");
   const allowsCombinePo = allowedOrderTypes.includes("combine_po_order");
@@ -290,7 +208,7 @@ export default function PoOrder() {
 
   // ── Create Order Modal State (Stage 1 with ComboKit & Configured PO Qty) ──
   const [createModal, setCreateModal] = useState(false);
-  const [selectedKitId, setSelectedKitId] = useState("kit-01");
+  const [selectedKitId, setSelectedKitId] = useState("");
   const [selectedPoQty, setSelectedPoQty] = useState(200);
   const [poCategory, setPoCategory] = useState("SINGLE_PO"); // "SINGLE_PO" | "COMBINE_PO"
   const [submitting, setSubmitting] = useState(false);
@@ -414,7 +332,7 @@ export default function PoOrder() {
         };
       });
     }
-    return DEFAULT_COMBO_KITS;
+    return [];
   }, [planData]);
 
   // Fetch Shop Hierarchy for Quick Filters
@@ -2458,13 +2376,12 @@ export default function PoOrder() {
                               setPoCategory("SINGLE_PO");
                             }
                           }}
-                          className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${
-                            !allowsPo
-                              ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
-                              : "cursor-pointer " + (poCategory === "SINGLE_PO"
-                                ? "border-primary bg-primary/5 shadow-xs"
-                                : "border-border hover:border-primary/40 bg-surface")
-                          }`}
+                          className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${!allowsPo
+                            ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
+                            : "cursor-pointer " + (poCategory === "SINGLE_PO"
+                              ? "border-primary bg-primary/5 shadow-xs"
+                              : "border-border hover:border-primary/40 bg-surface")
+                            }`}
                         >
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" && allowsPo ? "bg-primary text-white" : "bg-primary/10 text-primary"
                             }`}>
@@ -2491,13 +2408,12 @@ export default function PoOrder() {
                               setPoCategory("COMBINE_PO");
                             }
                           }}
-                          className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${
-                            !allowsCombinePo
-                              ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
-                              : "cursor-pointer " + (poCategory === "COMBINE_PO"
-                                ? "border-purple-600 bg-purple-500/5 shadow-xs"
-                                : "border-border hover:border-purple-400 bg-surface")
-                          }`}
+                          className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${!allowsCombinePo
+                            ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
+                            : "cursor-pointer " + (poCategory === "COMBINE_PO"
+                              ? "border-purple-600 bg-purple-500/5 shadow-xs"
+                              : "border-border hover:border-purple-400 bg-surface")
+                            }`}
                         >
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" && allowsCombinePo ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
                             }`}>

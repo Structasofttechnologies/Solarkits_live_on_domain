@@ -323,7 +323,7 @@ export default function StorefrontListings() {
             // Product-specific commission rate from Franchise Settings, fallback to plan rate
             const itemCommissionPct = item.commission_percentage != null
               ? item.commission_percentage
-              : (commissionRatePct != null ? commissionRatePct : 2);
+              : (commissionRatePct != null ? commissionRatePct : 0);
 
             const isItemFixedPerKit = (item.commission_method === "FIXED_PER_KIT" && item.fixed_amount_per_kit_paise > 0)
               || isFixedPerKit;

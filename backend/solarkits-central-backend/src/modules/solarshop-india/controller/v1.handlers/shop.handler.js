@@ -421,8 +421,8 @@ const get_combo_kits_by_district = async (req, res) => {
 
     let warehouseIds = warehouses.map(w => w._id);
 
-    // Fetch warehouse kit activations for resolved warehouses (or all active if no district specified)
-    let activations = await WarehouseKitActivation.find({
+    // Fetch warehouse kit activations for resolved warehouses
+    const activations = await WarehouseKitActivation.find({
       warehouse_id: { $in: warehouseIds },
       is_combokit_active: true,
       is_active: true,
@@ -430,42 +430,29 @@ const get_combo_kits_by_district = async (req, res) => {
     }).lean();
 
     if (!activations || activations.length === 0) {
-      activations = await WarehouseKitActivation.find({
-        is_combokit_active: true,
-        is_active: true,
-        deleted_at: null
-      }).lean();
-      const allActiveWarehouses = await CompanyWarehouse.find({ is_active: true, deleted_at: null }).select('_id').lean();
-      warehouseIds = allActiveWarehouses.map(w => w._id);
+      return res.status(200).json({ success: true, source: "db", data: [] });
     }
 
     const CoreComboKit = require("../../models/india_core_db/combo_kits.schema");
     const IndiaComboKit = require("../../models/india_solarshop_db/combo_kits.schema");
 
     // Build set of kit IDs
-    let kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
-
-    // Fetch combo kits from both collections
-    let kits = [];
-    if (kitIds.length > 0) {
-      const [k1, k2] = await Promise.all([
-        IndiaComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => []),
-        CoreComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
-      ]);
-      const map = new Map();
-      [...(k1 || []), ...(k2 || [])].forEach(k => map.set(k._id.toString(), k));
-      kits = Array.from(map.values());
+    const kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
+    if (kitIds.length === 0) {
+      return res.status(200).json({ success: true, source: "db", data: [] });
     }
 
-    // If still no kits found via activations, fetch all active combo kits in the system
-    if (!kits || kits.length === 0) {
-      const [all1, all2] = await Promise.all([
-        IndiaComboKit.find({ is_active: true, deleted_at: null }).lean().catch(() => []),
-        CoreComboKit.find({ is_active: true, deleted_at: null }).lean().catch(() => [])
-      ]);
-      const map = new Map();
-      [...(all1 || []), ...(all2 || [])].forEach(k => map.set(k._id.toString(), k));
-      kits = Array.from(map.values());
+    // Fetch combo kits from both collections
+    const [k1, k2] = await Promise.all([
+      IndiaComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => []),
+      CoreComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
+    ]);
+    const map = new Map();
+    [...(k1 || []), ...(k2 || [])].forEach(k => map.set(k._id.toString(), k));
+    let kits = Array.from(map.values());
+
+    if (kits.length === 0) {
+      return res.status(200).json({ success: true, source: "db", data: [] });
     }
 
     // Safety check: ensure every kit has valid order_quantities and loose_order_quantities
@@ -562,9 +549,7 @@ const get_combo_kits_by_district = async (req, res) => {
           });
 
           // Filter kits strictly to only those authorized / listed by this Franchise Partner
-          if (authorizedKitIds.size > 0) {
-            kits = kits.filter(k => authorizedKitIds.has(k._id.toString()));
-          }
+          kits = kits.filter(k => authorizedKitIds.has(k._id.toString()));
         }
         // If resellerId is null (Direct EPC): No filtering applied, full company catalog is shown!
       }

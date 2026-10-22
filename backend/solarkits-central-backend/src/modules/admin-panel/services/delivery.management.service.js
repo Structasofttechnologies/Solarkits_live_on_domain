@@ -1224,14 +1224,30 @@ const createDeliveryTrip = async (payload, adminUser = null) => {
     // Admin Override Record
     is_overridden: Boolean(override_details?.is_overridden),
     override_details: override_details || {},
-    status: 'vehicle_assigned',
+    delivery_approval: {
+      status: (vendorCost > sumSeparateBenchmark && !override_details?.is_overridden) ? 'pending' : (override_details?.is_overridden ? 'approved' : 'none'),
+      requested_by: adminUser?._id || adminUser?.id || null,
+      requested_at: new Date(),
+      benchmark_amount: sumSeparateBenchmark,
+      actual_amount: vendorCost,
+      variance_amount: Math.max(0, vendorCost - sumSeparateBenchmark),
+      variance_percentage: sumSeparateBenchmark > 0 ? Number(((Math.max(0, vendorCost - sumSeparateBenchmark) / sumSeparateBenchmark) * 100).toFixed(2)) : 0,
+      ...(override_details?.is_overridden ? {
+        approved_by: adminUser?._id || adminUser?.id || null,
+        approved_at: new Date(),
+        approval_remarks: override_details?.reason || 'Created with pre-approved override',
+      } : {}),
+    },
+    status: (vendorCost > sumSeparateBenchmark && !override_details?.is_overridden) ? 'pending_approval' : 'vehicle_assigned',
     pickup_scheduled_at,
     expected_delivery_date,
     created_by: adminUser?._id || adminUser?.id || null,
     status_history: [{
-      status: 'vehicle_assigned',
+      status: (vendorCost > sumSeparateBenchmark && !override_details?.is_overridden) ? 'pending_approval' : 'vehicle_assigned',
       changed_by: adminUser?._id || null,
-      note: `Delivery Order ${deliveryNumber} created with ${vehicles_allocated.length} vehicle(s) and ${processedStops.length} stop(s).`,
+      note: (vendorCost > sumSeparateBenchmark && !override_details?.is_overridden)
+        ? `Delivery Order ${deliveryNumber} placed on approval hold due to rate variance of ₹${vendorCost - sumSeparateBenchmark} over benchmark.`
+        : `Delivery Order ${deliveryNumber} created with ${vehicles_allocated.length} vehicle(s) and ${processedStops.length} stop(s).`,
       changed_at: new Date(),
     }],
   });
@@ -1285,6 +1301,19 @@ const createDeliveryTrip = async (payload, adminUser = null) => {
 const updateTripStatus = async (deliveryId, newStatus, payload = {}, adminUser = null) => {
   const delivery = await DeliveryOrder.findById(deliveryId);
   if (!delivery) throw new Error('Delivery order not found.');
+
+  // Rule 5: Dispatch blocking if delivery cost approval is pending, rejected, or returned
+  if (['loading', 'dispatched'].includes(newStatus)) {
+    if (delivery.delivery_approval?.status === 'pending' || delivery.status === 'pending_approval') {
+      throw new Error('Cannot dispatch or load delivery trip: Freight charge exceeds benchmark and delivery cost approval is currently pending.');
+    }
+    if (delivery.delivery_approval?.status === 'rejected' || delivery.status === 'cost_rejected') {
+      throw new Error('Cannot dispatch or load delivery trip: Freight charge approval was rejected.');
+    }
+    if (delivery.delivery_approval?.status === 'returned' || delivery.status === 'cost_returned') {
+      throw new Error('Cannot dispatch or load delivery trip: Freight charge was returned for revision.');
+    }
+  }
 
   delivery.status = newStatus;
   delivery.status_history.push({
@@ -1529,6 +1558,139 @@ const getWarehouseDashboardAnalytics = async (warehouseId = null) => {
   };
 };
 
+/**
+ * 14. DELIVERY COST APPROVAL QUEUE & ADMIN DECISION
+ */
+const getDeliveryApprovalQueue = async (queryParams = {}) => {
+  const { status, search, page = 1, limit = 20 } = queryParams;
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const filter = {};
+  if (status && status !== 'all') {
+    filter['delivery_approval.status'] = status;
+  } else {
+    filter.$or = [
+      { 'delivery_approval.status': { $in: ['pending', 'approved', 'rejected', 'returned'] } },
+      { status: { $in: ['pending_approval', 'cost_approved', 'cost_rejected', 'cost_returned'] } },
+    ];
+  }
+
+  if (search) {
+    const regex = new RegExp(search, 'i');
+    filter.$or = [
+      { delivery_number: regex },
+      { 'vehicles_allocated.registration_number': regex },
+      { 'vehicles_allocated.driver_name': regex },
+    ];
+  }
+
+  const [records, total] = await Promise.all([
+    DeliveryOrder.find(filter)
+      .populate({ path: 'warehouse_id', model: CompanyWarehouse, select: 'warehouse_code address pincode' })
+      .populate('service_provider_id', 'name mobile_number')
+      .populate('delivery_approval.approved_by', 'first_name last_name email')
+      .populate('delivery_approval.requested_by', 'first_name last_name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
+    DeliveryOrder.countDocuments(filter),
+  ]);
+
+  const now = new Date();
+  const enriched = records.map(item => {
+    const reqTime = item.delivery_approval?.requested_at || item.createdAt;
+    const hoursWaiting = reqTime ? Math.round((now - new Date(reqTime)) / (1000 * 60 * 60)) : 0;
+    const isOverdue = hoursWaiting > 24 && item.delivery_approval?.status === 'pending';
+    return {
+      ...item,
+      hours_waiting: hoursWaiting,
+      is_overdue: isOverdue,
+    };
+  });
+
+  return {
+    records: enriched,
+    total,
+    page: Number(page),
+    pages: Math.ceil(total / Number(limit)),
+  };
+};
+
+const adminApproveDeliveryCost = async (deliveryOrderId, { decision, remarks, adminUser }) => {
+  const delivery = await DeliveryOrder.findById(deliveryOrderId);
+  if (!delivery) throw new Error('Delivery Order not found.');
+
+  if (delivery.delivery_approval?.status !== 'pending' && delivery.status !== 'pending_approval') {
+    throw new Error(`Delivery Order is not in pending approval state (Current: ${delivery.delivery_approval?.status || delivery.status}).`);
+  }
+
+  const adminId = adminUser?._id || adminUser?.id || null;
+  const now = new Date();
+
+  if (decision === 'approve') {
+    delivery.delivery_approval.status = 'approved';
+    delivery.delivery_approval.approved_by = adminId;
+    delivery.delivery_approval.approved_at = now;
+    delivery.delivery_approval.approval_remarks = remarks || 'Cost approved by Admin.';
+    delivery.status = 'cost_approved';
+
+    delivery.status_history.push({
+      status: 'cost_approved',
+      changed_by: adminId,
+      note: `Delivery cost approved by Admin. Remarks: ${remarks || 'None'}`,
+      changed_at: now,
+    });
+  } else if (decision === 'reject') {
+    delivery.delivery_approval.status = 'rejected';
+    delivery.delivery_approval.rejection_reason = remarks || 'Cost rejected by Admin.';
+    delivery.delivery_approval.approved_by = adminId;
+    delivery.delivery_approval.approved_at = now;
+    delivery.status = 'cost_rejected';
+
+    // Release vehicles back to Available
+    for (const v of delivery.vehicles_allocated || []) {
+      await DeliveryVehicleFleet.findByIdAndUpdate(v.vehicle_id, {
+        current_status: 'Available',
+        current_delivery_id: null,
+      });
+    }
+
+    delivery.status_history.push({
+      status: 'cost_rejected',
+      changed_by: adminId,
+      note: `Delivery cost rejected by Admin. Reason: ${remarks}`,
+      changed_at: now,
+    });
+  } else if (decision === 'return') {
+    delivery.delivery_approval.status = 'returned';
+    delivery.delivery_approval.return_reason = remarks || 'Returned for re-negotiation by Admin.';
+    delivery.delivery_approval.approved_by = adminId;
+    delivery.delivery_approval.approved_at = now;
+    delivery.status = 'cost_returned';
+
+    // Release vehicles back to Available
+    for (const v of delivery.vehicles_allocated || []) {
+      await DeliveryVehicleFleet.findByIdAndUpdate(v.vehicle_id, {
+        current_status: 'Available',
+        current_delivery_id: null,
+      });
+    }
+
+    delivery.status_history.push({
+      status: 'cost_returned',
+      changed_by: adminId,
+      note: `Delivery cost returned by Admin for renegotiation. Reason: ${remarks}`,
+      changed_at: now,
+    });
+  } else {
+    throw new Error('Invalid decision. Must be approve, reject, or return.');
+  }
+
+  await delivery.save();
+  return delivery;
+};
+
 module.exports = {
   getKitWeight,
   calculateOrderCargo,
@@ -1543,4 +1705,6 @@ module.exports = {
   updateStopPod,
   getSanitizedTracking,
   getWarehouseDashboardAnalytics,
+  getDeliveryApprovalQueue,
+  adminApproveDeliveryCost,
 };

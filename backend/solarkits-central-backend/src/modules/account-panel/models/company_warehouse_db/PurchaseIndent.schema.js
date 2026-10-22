@@ -2,16 +2,16 @@ const mongoose = require('mongoose');
 const { company_warehouse_db: db } = require('../../config/databases');
 
 const piItemSchema = new mongoose.Schema({
-  sku_id:           { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', default: null },
-  sku_code:         { type: String, required: true },
-  product_name:     { type: String, required: true },
-  parent_sku_code:  { type: String, default: null, trim: true },
-  component_type:   { type: String, default: null, trim: true },
-  quantity:         { type: Number, required: true, min: 1 },
-  unit_rate:        { type: Number, required: true, min: 0 },
-  gst_rate:         { type: Number, default: 13.8 },
-  tax_amount:       { type: Number, default: 0 },
-  total_value:      { type: Number, required: true, min: 0 }
+  sku_id: { type: mongoose.Schema.Types.ObjectId, ref: 'pc_product_skus', default: null },
+  sku_code: { type: String, required: true },
+  product_name: { type: String, required: true },
+  parent_sku_code: { type: String, default: null, trim: true },
+  component_type: { type: String, default: null, trim: true },
+  quantity: { type: Number, required: true, min: 1 },
+  unit_rate: { type: Number, required: true, min: 0 },
+  gst_rate: { type: Number, default: 13.8 },
+  tax_amount: { type: Number, default: 0 },
+  total_value: { type: Number, required: true, min: 0 }
 }, { _id: true });
 
 const schema = new mongoose.Schema({
@@ -100,6 +100,23 @@ const schema = new mongoose.Schema({
   requires_admin_approval: {
     type: Boolean,
     default: false
+  },
+
+  // Stage 1: PO Approval Independent Tracking
+  po_approval: {
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'returned', 'rejected', 'Draft', 'Submitted', 'Approved', 'Returned', 'Rejected'],
+      default: 'pending',
+      index: true
+    },
+    approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    approved_by_name: { type: String, default: null },
+    approved_at: { type: Date, default: null },
+    rejection_reason: { type: String, default: null },
+    return_reason: { type: String, default: null },
+    remarks: { type: String, default: null },
+    submitted_at: { type: Date, default: Date.now }
   },
 
   // Supply Fulfilment Method (PART 2)
@@ -256,43 +273,76 @@ const schema = new mongoose.Schema({
         default: null
       }
     },
+    // Stage 2: Supplier First Payment (Advance) Approval
+    advance_approval: {
+      status: {
+        type: String,
+        enum: ['pending', 'approved', 'returned', 'rejected', 'Awaiting Admin Approval', 'Approved', 'Returned', 'Rejected', null],
+        default: null,
+        index: true
+      },
+      requested_at: { type: Date, default: null },
+      requested_amount: { type: Number, default: 0 },
+      approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      approved_by_name: { type: String, default: null },
+      approved_at: { type: Date, default: null },
+      rejection_reason: { type: String, default: null },
+      remarks: { type: String, default: null }
+    },
+    // Stage 3: Supplier Second Payment (Balance) Approval
+    balance_approval: {
+      status: {
+        type: String,
+        enum: ['pending', 'approved', 'returned', 'rejected', 'Awaiting Admin Approval', 'Approved', 'Returned', 'Rejected', null],
+        default: null,
+        index: true
+      },
+      requested_at: { type: Date, default: null },
+      requested_amount: { type: Number, default: 0 },
+      approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      approved_by_name: { type: String, default: null },
+      approved_at: { type: Date, default: null },
+      rejection_reason: { type: String, default: null },
+      return_reason: { type: String, default: null },
+      remarks: { type: String, default: null }
+    },
     advance_payment: {
-      utr_number:   { type: String, default: null, trim: true },
-      paid_amount:  { type: Number, default: 0 },
+      utr_number: { type: String, default: null, trim: true },
+      paid_amount: { type: Number, default: 0 },
       payment_date: { type: Date, default: null },
       payment_mode: { type: String, default: null },
-      receipt_url:  { type: String, default: null },
-      remarks:      { type: String, default: null },
-      recorded_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-      recorded_at:  { type: Date, default: null }
+      receipt_url: { type: String, default: null },
+      remarks: { type: String, default: null },
+      recorded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      recorded_at: { type: Date, default: null }
     },
     balance_payment: {
-      utr_number:   { type: String, default: null, trim: true },
-      paid_amount:  { type: Number, default: 0 },
+      utr_number: { type: String, default: null, trim: true },
+      paid_amount: { type: Number, default: 0 },
       payment_date: { type: Date, default: null },
       payment_mode: { type: String, default: null },
-      receipt_url:  { type: String, default: null },
-      remarks:      { type: String, default: null },
-      recorded_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-      recorded_at:  { type: Date, default: null }
+      receipt_url: { type: String, default: null },
+      remarks: { type: String, default: null },
+      recorded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      recorded_at: { type: Date, default: null }
     },
     payment_history: [{
-      milestone:    { type: String, default: 'advance' },
-      utr_number:   { type: String, trim: true },
-      paid_amount:  { type: Number, default: 0 },
+      milestone: { type: String, default: 'advance' },
+      utr_number: { type: String, trim: true },
+      paid_amount: { type: Number, default: 0 },
       payment_date: { type: Date, default: Date.now },
       payment_mode: { type: String, default: 'RTGS' },
-      receipt_url:  { type: String, default: null },
-      remarks:      { type: String, default: null },
-      recorded_by:  { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-      recorded_at:  { type: Date, default: Date.now }
+      receipt_url: { type: String, default: null },
+      remarks: { type: String, default: null },
+      recorded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      recorded_at: { type: Date, default: Date.now }
     }],
     actual_payment: {
-      utr_number:   { type: String, default: null, trim: true },
-      paid_amount:  { type: Number, default: 0 },
+      utr_number: { type: String, default: null, trim: true },
+      paid_amount: { type: Number, default: 0 },
       payment_date: { type: Date, default: null },
       payment_mode: { type: String, default: null },
-      receipt_url:  { type: String, default: null }
+      receipt_url: { type: String, default: null }
     }
   },
 
@@ -312,19 +362,19 @@ const schema = new mongoose.Schema({
   },
 
   audit_history: [{
-    action:         { type: String, required: true },
-    performed_by:   { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    action: { type: String, required: true },
+    performed_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
     performer_name: { type: String, default: 'System' },
-    role:           { type: String, default: 'Accounts' },
-    timestamp:      { type: Date, default: Date.now },
-    remarks:        { type: String, default: null }
+    role: { type: String, default: 'Accounts' },
+    timestamp: { type: Date, default: Date.now },
+    remarks: { type: String, default: null }
   }],
 
   created_by: {
     user_id: { type: mongoose.Schema.Types.ObjectId, default: null },
-    name:    { type: String, default: 'Account User' },
-    email:   { type: String, default: null },
-    role:    { type: String, default: 'Accounts' }
+    name: { type: String, default: 'Account User' },
+    email: { type: String, default: null },
+    role: { type: String, default: 'Accounts' }
   }
 }, {
   collection: 'purchase_indents',

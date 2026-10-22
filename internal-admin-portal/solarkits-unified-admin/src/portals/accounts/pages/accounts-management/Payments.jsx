@@ -8,14 +8,14 @@ import {
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
   FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
   FaStore, FaBoxes, FaInfoCircle,
-  FaTruck, FaWarehouse, FaArrowRight, FaCheckDouble, FaSyncAlt
+  FaTruck, FaWarehouse, FaArrowRight, FaCheckDouble, FaSyncAlt, FaClock, FaPaperPlane
 } from "react-icons/fa";
 import {
   getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder,
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
   getStates, getDistricts, getAllComboKits, getSuppliers,
-  getProcurementGroups, getPurchaseIndents
+  getProcurementGroups, getPurchaseIndents, requestSupplierPayment
 } from "../../api/accounts";
 import SupplierPaymentModal from "../../components/procurement/SupplierPaymentModal";
 import PageHeader from "../../components/PageHeader";
@@ -1482,6 +1482,32 @@ export default function Payments() {
       setLoadingProcurementPIs(false);
     }
   };
+
+  const [requestingPaymentPiId, setRequestingPaymentPiId] = useState(null);
+
+  const handleRaisePaymentRequest = async (pi, milestone = "advance") => {
+    const piId = pi._id || pi.pi_number;
+    setRequestingPaymentPiId(piId);
+    try {
+      const res = await requestSupplierPayment({
+        pi_id: pi._id,
+        payment_type: milestone,
+        remarks: `Requested ${milestone === "balance" ? "70% balance" : "30% advance"} payment approval from Accounts`
+      });
+      if (res?.status === "success") {
+        alert(`✅ ${res.message || "Payment approval request submitted to Admin successfully."}`);
+        fetchProcurementPIs();
+      } else {
+        alert(res?.message || "Failed to submit payment request.");
+      }
+    } catch (err) {
+      console.error("Payment request error:", err);
+      alert(err.response?.data?.message || "Failed to submit payment request to Admin.");
+    } finally {
+      setRequestingPaymentPiId(null);
+    }
+  };
+
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -4911,8 +4937,18 @@ export default function Payments() {
                         const isFullyPaid = payStatus === "Paid" || Boolean(balUtr && isAdvancePaid);
                         const isBalanceDue = isAdvancePaid && !isFullyPaid;
 
-                        const isApproved = payStatus === "Approved";
-                        const isAwaitingApproval = payStatus === "Awaiting Admin Approval" || payStatus === "Advance Requested";
+                        const advApproval = pi.payment?.advance_approval || {};
+                        const balApproval = pi.payment?.balance_approval || {};
+
+                        const isAdvApproved = advApproval.status === "approved";
+                        const isAdvRequested = advApproval.status === "pending" || payStatus === "Advance Requested";
+                        const isAdvRejected = advApproval.status === "rejected";
+
+                        const isBalApproved = balApproval.status === "approved";
+                        const isBalRequested = balApproval.status === "pending" || payStatus === "Balance Requested";
+                        const isBalRejected = balApproval.status === "rejected";
+
+                        const isBusyThisPi = requestingPaymentPiId === (pi._id || pi.pi_number);
 
                         return (
                           <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
@@ -4962,12 +4998,20 @@ export default function Payments() {
                               </div>
                               <div className="mt-0.5">
                                 {isAdvancePaid ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
                                     ✅ Paid {advUtr ? `(${advUtr.slice(-5)})` : ""}
                                   </span>
+                                ) : isAdvApproved ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                    Approved ({advPct}%)
+                                  </span>
+                                ) : isAdvRequested ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                                    ⏳ Adv Approval Pending
+                                  </span>
                                 ) : (
-                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
-                                    ⏳ Due ({advPct}%)
+                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                    Due ({advPct}%)
                                   </span>
                                 )}
                               </div>
@@ -4980,13 +5024,23 @@ export default function Payments() {
                               </div>
                               <div className="mt-0.5">
                                 {isFullyPaid ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
                                     ✅ Paid {balUtr ? `(${balUtr.slice(-5)})` : ""}
                                   </span>
                                 ) : isBalanceDue ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.2 rounded">
-                                    ⏳ Due (Ready)
-                                  </span>
+                                  isBalApproved ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                      Approved ({balPct}%)
+                                    </span>
+                                  ) : isBalRequested ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                                      ⏳ Bal Approval Pending
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                      ⏳ Due (Ready)
+                                    </span>
+                                  )
                                 ) : (
                                   <span className="text-[10px] text-gray-400">
                                     Locked (Wait 30%)
@@ -5004,14 +5058,26 @@ export default function Payments() {
                             <td className="py-3.5 px-4 text-center">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border inline-flex items-center gap-1 ${
                                 isFullyPaid ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
-                                isBalanceDue ? "bg-amber-50 text-amber-700 border-amber-300 font-extrabold" :
-                                isApproved ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                isAwaitingApproval ? "bg-amber-50 text-amber-700 border-amber-200" :
-                                "bg-gray-100 text-gray-600 border-gray-200"
+                                isBalanceDue ? (
+                                  isBalApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                  isBalRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                  "bg-amber-50 text-amber-800 border-amber-300 font-extrabold"
+                                ) : (
+                                  isAdvApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                  isAdvRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                  "bg-gray-100 text-gray-700 border-gray-300"
+                                )
                               }`}>
                                 {isFullyPaid ? "Fully Paid (100%)" :
-                                 isBalanceDue ? "70% Balance Due" :
-                                 payStatus}
+                                 isBalanceDue ? (
+                                   isBalApproved ? "70% Balance Approved" :
+                                   isBalRequested ? "70% Bal Awaiting Approval" :
+                                   "70% Balance Due"
+                                 ) : (
+                                   isAdvApproved ? "30% Advance Approved" :
+                                   isAdvRequested ? "30% Adv Awaiting Approval" :
+                                   "30% Advance Due"
+                                 )}
                               </span>
                             </td>
 
@@ -5031,19 +5097,50 @@ export default function Payments() {
                                 </button>
                               ) : isBalanceDue ? (
                                 <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedPiForPayment(pi);
-                                      setPiPaymentMilestone("balance");
-                                      setIsPiPaymentModalOpen(true);
-                                    }}
-                                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                    title="Disburse remaining 70% balance to supplier"
-                                  >
-                                    <span>Pay 70% Balance</span>
-                                    <FaArrowRight size={9} />
-                                  </button>
+                                  {isBalApproved ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("balance");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shadow-amber-200"
+                                      title="Disburse remaining 70% balance to supplier"
+                                    >
+                                      <span>Pay 70% Balance</span>
+                                      <FaArrowRight size={9} />
+                                    </button>
+                                  ) : isBalRequested ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("overview");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                      title="Admin 70% Balance Approval is Pending"
+                                    >
+                                      <FaClock size={10} className="text-amber-600 animate-pulse" />
+                                      <span>Bal Awaiting Approval</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={isBusyThisPi}
+                                      onClick={() => handleRaisePaymentRequest(pi, "balance")}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                      title="Raise 70% Balance Payment Approval Request to Admin"
+                                    >
+                                      {isBusyThisPi ? (
+                                        <FaSpinner className="animate-spin text-xs" />
+                                      ) : (
+                                        <FaPaperPlane className="text-[10px]" />
+                                      )}
+                                      <span>Request 70% Balance</span>
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -5052,23 +5149,56 @@ export default function Payments() {
                                       setIsPiPaymentModalOpen(true);
                                     }}
                                     className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-300 cursor-pointer"
-                                    title="View 30% Advance UTR"
+                                    title="View Advance UTR & History"
                                   >
                                     UTR
                                   </button>
                                 </div>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedPiForPayment(pi);
-                                    setPiPaymentMilestone("advance");
-                                    setIsPiPaymentModalOpen(true);
-                                  }}
-                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
-                                >
-                                  Pay 30% Advance
-                                </button>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {isAdvApproved ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("advance");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
+                                    >
+                                      Pay 30% Advance
+                                    </button>
+                                  ) : isAdvRequested ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("overview");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                      title="Admin 30% Advance Approval is Pending"
+                                    >
+                                      <FaClock size={10} className="text-amber-600 animate-pulse" />
+                                      <span>Adv Awaiting Approval</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={isBusyThisPi}
+                                      onClick={() => handleRaisePaymentRequest(pi, "advance")}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                      title="Raise 30% Advance Payment Approval Request to Admin"
+                                    >
+                                      {isBusyThisPi ? (
+                                        <FaSpinner className="animate-spin text-xs" />
+                                      ) : (
+                                        <FaPaperPlane className="text-[10px]" />
+                                      )}
+                                      <span>Request 30% Advance</span>
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </td>
                           </tr>

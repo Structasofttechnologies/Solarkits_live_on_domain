@@ -15,6 +15,7 @@ async function syncResellerListingsForReseller(resellerId) {
       FranchiseePlanPoSetting,
       ResellerProductAuthorization,
       ResellerListing,
+      FranchiseeCommissionRule,
     } = require('../models/india_solarshop_db');
     const { SolarKit, WarehouseComboKit } = require('../models/core_db');
 
@@ -28,7 +29,16 @@ async function syncResellerListingsForReseller(resellerId) {
     const authorizedKitIds = new Set();
 
     if (activePlan) {
-      // Check PO Settings
+      // Check commission rules for this plan: only kits with explicit commission configured can be listed
+      const commRules = await FranchiseeCommissionRule.find({
+        plan_id: activePlan._id,
+        is_active: true,
+        deleted_at: null,
+        combo_kit_id: { $ne: null },
+      }).lean();
+      const kitsWithCommission = new Set(commRules.map((r) => r.combo_kit_id.toString()));
+
+      // Check PO Settings & Plan allowed kits
       const PlanPoModel = FranchiseePlanPOSetting || FranchiseePlanPoSetting;
       const poSetting = PlanPoModel ? await PlanPoModel.findOne({
         plan_id: activePlan._id,
@@ -39,31 +49,15 @@ async function syncResellerListingsForReseller(resellerId) {
       const planKitIds = (activePlan.allowed_combo_kit_ids || []).map(String);
       const combined = [...poKitIds, ...planKitIds];
 
-      if (combined.length > 0) {
-        combined.forEach((id) => authorizedKitIds.add(id));
-      } else {
-        // Fall back to category/subcategory/project type matching for plan
-        const planCatIds = (activePlan.allowed_category_ids || []).map(String);
-        const planSubcatIds = (activePlan.allowed_subcategory_ids || []).map(String);
-        const planProjectTypeIds = (activePlan.allowed_project_type_ids || []).map(String);
-
-        let comboKitQuery = { is_active: { $ne: false }, deleted_at: null };
-        if (planCatIds.length > 0 || planSubcatIds.length > 0 || planProjectTypeIds.length > 0) {
-          const defQuery = { deleted_at: null };
-          if (planCatIds.length > 0) defQuery.category_id = { $in: planCatIds };
-          if (planSubcatIds.length > 0) defQuery.subcategory_id = { $in: planSubcatIds };
-          if (planProjectTypeIds.length > 0) defQuery.type_id = { $in: planProjectTypeIds };
-
-          const matchingDefs = await SolarKit.find(defQuery).select('_id').lean();
-          const defIds = matchingDefs.map((d) => d._id);
-          comboKitQuery.solar_kit_id = { $in: defIds };
+      // A kit is eligible under the plan ONLY if its commission has been explicitly configured
+      combined.forEach((id) => {
+        if (kitsWithCommission.has(id)) {
+          authorizedKitIds.add(id);
         }
-        const kits = await WarehouseComboKit.find(comboKitQuery).select('_id').lean();
-        kits.forEach((k) => authorizedKitIds.add(String(k._id)));
-      }
+      });
     }
 
-    // 2. Fetch explicit admin rules
+    // 2. Fetch explicit admin rules (admin overrides can authorize specific kits directly)
     const adminRules = await ResellerProductAuthorization.find({
       reseller_id: resellerId,
       status: 'active',
@@ -77,25 +71,30 @@ async function syncResellerListingsForReseller(resellerId) {
         } else {
           authorizedKitIds.add(kId);
         }
-      } else if (r.scope_type === 'category' || r.category_id || r.scope_type === 'all') {
-        if (r.is_authorized !== false) {
-          let catKitsQuery = { is_active: { $ne: false }, deleted_at: null };
-          if (r.category_id) {
-            const cId = r.category_id._id || r.category_id;
-            const matchingDefs = await SolarKit.find({ category_id: cId, deleted_at: null }).select('_id').lean();
-            const defIds = matchingDefs.map((d) => d._id);
-            catKitsQuery.$or = [
-              { category_id: cId },
-              { solar_kit_id: { $in: defIds } },
-            ];
-          }
-          const catKits = await WarehouseComboKit.find(catKitsQuery).select('_id').lean();
-          catKits.forEach((k) => authorizedKitIds.add(String(k._id)));
-        }
       }
     }
 
-    // 3. For each authorized kit, ensure ResellerListing exists
+    // 3. Clean up: Delete any existing kit listings that are NOT in authorizedKitIds
+    const parsedResellerId = mongoose.Types.ObjectId.isValid(resellerId)
+      ? new mongoose.Types.ObjectId(resellerId)
+      : resellerId;
+
+    if (authorizedKitIds.size === 0) {
+      await ResellerListing.deleteMany({
+        reseller_id: parsedResellerId,
+        kit_id: { $ne: null },
+      });
+    } else {
+      await ResellerListing.deleteMany({
+        reseller_id: parsedResellerId,
+        kit_id: {
+          $ne: null,
+          $nin: Array.from(authorizedKitIds).map((id) => new mongoose.Types.ObjectId(id)),
+        },
+      });
+    }
+
+    // 4. For each authorized kit, ensure ResellerListing exists
     for (const kitId of authorizedKitIds) {
       if (!mongoose.Types.ObjectId.isValid(kitId)) continue;
       const existing = await ResellerListing.findOne({ reseller_id: resellerId, kit_id: kitId });
@@ -258,7 +257,7 @@ const list_reseller_listings = async (req, res) => {
 
       rows.forEach((row) => {
         const kitId = row.kit_id?._id ? row.kit_id._id.toString() : (row.kit_id ? row.kit_id.toString() : null);
-        const comm = (kitId && commMap[kitId]) || defaultComm;
+        const comm = kitId && commMap[kitId] ? commMap[kitId] : null;
         const moqR = (kitId && moqMap[kitId]) || defaultMoq;
 
         if (comm) {

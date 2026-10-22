@@ -173,6 +173,9 @@ adminRouter.use('/payment-config',                require('./modules/admin-panel
 // ─── Product-Wise Payment Milestone Configuration & Checkout Resolution ───
 adminRouter.use('/payment-milestones',            require('./modules/admin-panel/routes/product.payment.milestones.route'));
 
+// ─── Centralized Order & Stage Approval Workflow Engine ───────────────────────
+adminRouter.use('/order-approvals',               require('./modules/admin-panel/routes/order.approval.route'));
+
 app.use('/admin-api', adminRouter);
 app.use('/api', adminRouter);
 app.use('/api/admin-api', adminRouter);

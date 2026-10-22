@@ -35,6 +35,22 @@ const schema = new mongoose.Schema({
     estimated_transport_cost: { type: Number, default: 0 },
   },
 
+  // ── Centralized Order & Operational Stage Approval Workflow Settings ────────
+  approval_workflow_config: {
+    require_order_approval:            { type: Boolean, default: true },
+    require_po_approval:               { type: Boolean, default: true },
+    require_advance_payment_approval:  { type: Boolean, default: true },
+    require_balance_payment_approval:  { type: Boolean, default: true },
+    require_delivery_charge_approval:  { type: Boolean, default: true },
+    stage_tat_hours: {
+      order:          { type: Number, default: 24 },
+      po:             { type: Number, default: 24 },
+      first_payment:  { type: Number, default: 24 },
+      second_payment: { type: Number, default: 24 },
+      delivery:       { type: Number, default: 12 },
+    }
+  },
+
   // ── Phase R1: Territory Exclusivity Policy ──────────────────────────────────
   /**
    * territory_exclusivity_mode:

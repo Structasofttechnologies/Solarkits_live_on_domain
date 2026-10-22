@@ -6,7 +6,7 @@ import {
 import Dialog from "../Dialog";
 import Button from "../Button";
 import CustomInput from "../CustomInput";
-import { recordBankPayment } from "../../api/accounts";
+import { recordBankPayment, requestSupplierPayment } from "../../api/accounts";
 
 export default function SupplierPaymentModal({
   isOpen,
@@ -14,6 +14,7 @@ export default function SupplierPaymentModal({
   purchaseIndent,
   userRole = "Accounts",
   targetMilestone: initialMilestoneProp = null,
+  onRequestPayment,
   onRecordBankPayment,
   onPaymentUpdated,
   loading: externalLoading
@@ -40,6 +41,27 @@ export default function SupplierPaymentModal({
 
   const isFullyPaid = paymentStatus === "Paid" || (isAdvancePaid && isBalancePaid);
 
+  // Strict Milestone Approval verification (Requires explicit milestone approval)
+  const isAdvanceApproved = Boolean(
+    payment.advance_approval?.status === "approved" ||
+    isAdvancePaid
+  );
+
+  const isBalanceApproved = Boolean(
+    payment.balance_approval?.status === "approved" ||
+    paymentStatus === "Paid"
+  );
+
+  const isAdvanceRequested = Boolean(
+    payment.advance_approval?.status === "pending" ||
+    paymentStatus === "Advance Requested"
+  );
+
+  const isBalanceRequested = Boolean(
+    payment.balance_approval?.status === "pending" ||
+    paymentStatus === "Balance Requested"
+  );
+
   // Remaining balance due
   const balanceDue = isFullyPaid ? 0 : (payment.balance_due !== undefined && payment.balance_due !== null ? payment.balance_due : balanceAmount);
 
@@ -47,10 +69,14 @@ export default function SupplierPaymentModal({
   const defaultMilestone = initialMilestoneProp || (isAdvancePaid && !isFullyPaid ? "balance" : "advance");
   const [selectedMilestone, setSelectedMilestone] = useState(defaultMilestone);
 
+  const isCurrentMilestoneApproved = selectedMilestone === "balance" ? isBalanceApproved : isAdvanceApproved;
+  const isCurrentMilestoneRequested = selectedMilestone === "balance" ? isBalanceRequested : isAdvanceRequested;
+
   // Active tab: "record" vs "overview"
   const defaultTab = isFullyPaid ? "overview" : "record";
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
   const [copiedUtr, setCopiedUtr] = useState("");
 
   // Bank record form states
@@ -135,6 +161,35 @@ export default function SupplierPaymentModal({
       alert(err.response?.data?.message || "Failed to record bank payment.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSendPaymentRequest = async () => {
+    setIsRequesting(true);
+    try {
+      if (onRequestPayment) {
+        await onRequestPayment({
+          pi_id: purchaseIndent._id,
+          payment_type: selectedMilestone,
+          remarks: `Payment request for ${selectedMilestone} submitted from Supplier Payment Modal`
+        });
+      } else {
+        const res = await requestSupplierPayment({
+          pi_id: purchaseIndent._id,
+          payment_type: selectedMilestone,
+          remarks: `Payment request for ${selectedMilestone} submitted from Supplier Payment Modal`
+        });
+        if (res?.status === "success") {
+          alert(`✅ ${res.message || "Payment request submitted to Admin for approval."}`);
+          if (onPaymentUpdated) onPaymentUpdated(res.data);
+          onClose();
+        }
+      }
+    } catch (err) {
+      console.error("Error submitting payment request:", err);
+      alert(err.response?.data?.message || "Failed to submit payment request to Admin.");
+    } finally {
+      setIsRequesting(false);
     }
   };
 
@@ -319,6 +374,57 @@ export default function SupplierPaymentModal({
         {/* TAB 1: RECORD BANK PAYMENT (ADVANCE OR BALANCE) */}
         {activeTab === "record" && (
           <form onSubmit={handleBankRecordSubmit} className="space-y-4">
+            {/* Approval Workflow State Banner */}
+            {!isCurrentMilestoneApproved ? (
+              isCurrentMilestoneRequested ? (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <FaClock className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 animate-pulse" />
+                    <div>
+                      <strong className="block font-bold">Admin Stage Authorization Pending</strong>
+                      <span>
+                        Payment request for {selectedMilestone === "balance" ? `${balPct}% Balance` : `${advPct}% Advance`} has been submitted to Admin. Bank UTR can be recorded only after approval is granted.
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">
+                    ⏳ In Approval Queue
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-900 dark:text-blue-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <FaClock className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                    <div>
+                      <strong className="block font-bold">Action Required: Raise Payment Request</strong>
+                      <span>
+                        Direct payment is prohibited. Accounts must raise a {selectedMilestone === "balance" ? `${balPct}% Balance` : `${advPct}% Advance`} payment request for Admin authorization first.
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isRequesting}
+                    onClick={handleSendPaymentRequest}
+                    className="px-4 py-2 rounded-xl text-xs font-black bg-primary hover:bg-primary/90 text-white shadow-xs cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    {isRequesting ? <FaSpinner className="animate-spin text-xs" /> : <FaArrowRight size={10} />}
+                    <span>{isRequesting ? "Submitting..." : `Raise ${selectedMilestone === "balance" ? `${balPct}% Balance` : `${advPct}% Advance`} Request`}</span>
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2.5">
+                <FaCheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <div>
+                  <strong className="block font-bold">Admin Approved &amp; Authorized</strong>
+                  <span>
+                    Admin has approved this {selectedMilestone === "balance" ? `${balPct}% Balance` : `${advPct}% Advance`} payment. Please execute disbursement and record the bank UTR below.
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className={`p-3.5 rounded-xl border text-xs text-text-primary flex items-start gap-3 ${
               selectedMilestone === "balance"
                 ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
@@ -349,6 +455,7 @@ export default function SupplierPaymentModal({
               <CustomInput
                 label={`Bank UTR Number / Reference (${selectedMilestone.toUpperCase()}) *`}
                 required
+                disabled={!isCurrentMilestoneApproved}
                 value={utrNumber}
                 onChange={(e) => setUtrNumber(e.target.value)}
                 placeholder="e.g. ICICR20261014000123"
@@ -357,6 +464,7 @@ export default function SupplierPaymentModal({
                 label={`Amount Paid (₹) * [${selectedMilestone === "balance" ? `${balPct}% Balance Due` : `${advPct}% Advance`}]`}
                 type="number"
                 required
+                disabled={!isCurrentMilestoneApproved}
                 min="1"
                 value={paidAmount}
                 onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
@@ -367,8 +475,9 @@ export default function SupplierPaymentModal({
                 </label>
                 <select
                   value={paymentMode}
+                  disabled={!isCurrentMilestoneApproved}
                   onChange={(e) => setPaymentMode(e.target.value)}
-                  className="w-full p-2.5 bg-bg border border-border rounded-xl text-xs font-bold text-text-primary outline-none focus:border-primary"
+                  className="w-full p-2.5 bg-bg border border-border rounded-xl text-xs font-bold text-text-primary outline-none focus:border-primary disabled:opacity-50"
                 >
                   <option value="RTGS">RTGS</option>
                   <option value="NEFT">NEFT</option>
@@ -381,6 +490,7 @@ export default function SupplierPaymentModal({
                 label="Payment Date *"
                 type="date"
                 required
+                disabled={!isCurrentMilestoneApproved}
                 value={paymentDate}
                 onChange={(e) => setPaymentDate(e.target.value)}
               />
@@ -388,6 +498,7 @@ export default function SupplierPaymentModal({
 
             <CustomInput
               label="Accounts Payment Remarks (Optional)"
+              disabled={!isCurrentMilestoneApproved}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               placeholder={`e.g. ${selectedMilestone === "balance" ? "Final 70% balance disbursed against dispatch notice" : "30% Advance disbursed as per quote"}`}
@@ -400,7 +511,7 @@ export default function SupplierPaymentModal({
               <Button
                 type="submit"
                 variant="primary"
-                disabled={isBusy}
+                disabled={isBusy || !isCurrentMilestoneApproved}
                 className={selectedMilestone === "balance" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
               >
                 {isBusy ? (
@@ -408,6 +519,8 @@ export default function SupplierPaymentModal({
                     <FaSpinner className="animate-spin text-xs" />
                     Recording...
                   </span>
+                ) : !isCurrentMilestoneApproved ? (
+                  "Awaiting Admin Approval"
                 ) : (
                   `Record ${selectedMilestone === "balance" ? `${balPct}% Balance` : `${advPct}% Advance`} Payment`
                 )}

@@ -76,6 +76,7 @@ const AdminSupplierSettings = lazy(() => import("../pages/solar-shop/order-manag
 const KitDisplayChecklist = lazy(() => import("../pages/solar-shop/order-management-settings/KitDisplayChecklist"));
 const OrderOverdueSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderOverdueSettings"));
 const OrderJourneyDashboard = lazy(() => import("../pages/solar-shop/order-management-settings/OrderJourneyDashboard"));
+const AdminOrderApprovalDashboard = lazy(() => import("../pages/solar-shop/order-approvals/AdminOrderApprovalDashboard"));
 
 
 
@@ -136,6 +137,7 @@ const menus = [
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
         { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
         { name: "EPC Orders & Approvals", icon: <FaUserShield />, path: "/admin-panel/solar-shop/epc-orders", unique_id: "00000000" },
+        { name: "Order & Stage Approvals", icon: <FiCheckSquare />, path: "/admin-panel/solar-shop/order-approvals", unique_id: "ADM_ORDER_APPROVALS" },
         {
             name: "Delivery Management",
             icon: <FaTruck />,
@@ -696,6 +698,16 @@ export default function SolarShopDashboard() {
                                         }
                                     />
                                     <Route
+                                        path="/order-approvals"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_APPROVALS">
+                                                <Suspense fallback={<Loader text="Loading Order & Stage Approvals..." />}>
+                                                    <AdminOrderApprovalDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
                                         path="/vehicles-drivers"
                                         element={<Navigate to="../delivery-management/fleet" replace />}
                                     />
@@ -775,6 +787,16 @@ export default function SolarShopDashboard() {
                                             <Suspense fallback={<Loader text="Loading EPC Orders & Approvals..." />}>
                                                 <AdminEpcOrders />
                                             </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-approvals"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_APPROVALS">
+                                                <Suspense fallback={<Loader text="Loading Order & Stage Approvals..." />}>
+                                                    <AdminOrderApprovalDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
                                         }
                                     />
                                     <Route

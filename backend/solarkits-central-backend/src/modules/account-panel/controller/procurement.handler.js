@@ -902,6 +902,16 @@ exports.create_purchase_indent = async (req, res) => {
       is_above_benchmark: isAboveBenchmark,
       benchmark_cost: benchmarkCost,
       requires_admin_approval: requiresAdminApproval,
+      po_approval: {
+        status: isAboveBenchmark ? 'pending' : (requiresAdminApproval ? 'pending' : 'approved'),
+        approved_by: isAboveBenchmark ? null : (req.user?._id || null),
+        approved_by_name: isAboveBenchmark ? null : (req.user?.name || req.user?.email || 'System'),
+        approved_at: isAboveBenchmark ? null : new Date(),
+        submitted_at: new Date(),
+        remarks: isAboveBenchmark 
+          ? `Pending Admin PO Approval: Unit rate exceeds benchmark cost (₹${benchmarkCost})`
+          : 'Auto-approved within standard benchmark cost'
+      },
       fulfilment: fulfilmentData,
       payment: {
         payment_terms: payment_terms || `${advPct}% Advance, ${balPct}% Before Dispatch`,
@@ -1022,7 +1032,28 @@ exports.request_supplier_payment = async (req, res) => {
       return res.status(404).json({ status: 'error', message: 'Purchase Indent not found.' });
     }
 
+    // Rule 2 & Section 3.1: Only an approved PO can proceed to its configured supplier payment workflow
+    const isPoApproved = pi.po_approval?.status === 'approved' || pi.po_approval?.status === 'Approved' || (!pi.requires_admin_approval && pi.pi_status === 'Approved');
+    if (!isPoApproved) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Payment request cannot be initiated. Purchase Order #${pi.pi_number} is pending Admin PO approval.`
+      });
+    }
+
     const isAdvance = payment_type === 'advance';
+
+    if (!isAdvance) {
+      // Rule check: 1st payment must be recorded before 2nd payment request
+      const hasAdvancePaid = Boolean(pi.payment?.advance_payment?.utr_number || ['Advance Paid', 'Paid'].includes(pi.payment?.payment_status));
+      if (!hasAdvancePaid) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Second payment request cannot be submitted until First (Advance) payment has been recorded with bank UTR.'
+        });
+      }
+    }
+
     pi.payment.payment_status = isAdvance ? 'Advance Requested' : 'Balance Requested';
     pi.payment.admin_approval = {
       status: 'Awaiting Admin Approval',
@@ -1030,20 +1061,37 @@ exports.request_supplier_payment = async (req, res) => {
       remarks: remarks || `Payment requested for ${payment_type}`
     };
 
+    if (isAdvance) {
+      pi.payment.advance_approval = {
+        status: 'pending',
+        requested_at: new Date(),
+        requested_amount: pi.payment?.advance_amount || Math.round((pi.total_pi_value * (pi.payment?.advance_percentage || 30)) / 100),
+        remarks: remarks || 'Advance payment requested by Accounts'
+      };
+    } else {
+      const remainingBal = Math.max(0, pi.total_pi_value - (pi.payment?.total_paid_amount || pi.payment?.advance_payment?.paid_amount || 0));
+      pi.payment.balance_approval = {
+        status: 'pending',
+        requested_at: new Date(),
+        requested_amount: pi.payment?.balance_amount || remainingBal,
+        remarks: remarks || 'Balance payment requested by Accounts'
+      };
+    }
+
     pi.audit_history.push({
-      action: `Requested ${isAdvance ? 'Advance' : 'Balance'} Payment`,
+      action: `Requested ${isAdvance ? 'Advance (First)' : 'Balance (Second)'} Payment`,
       performed_by: req.user?._id || null,
       performer_name: req.user?.name || req.user?.email || 'Accounts Team',
       role: 'Accounts',
       timestamp: new Date(),
-      remarks: remarks || 'Payment request submitted for Admin approval'
+      remarks: remarks || `Payment request for ${payment_type} submitted for Admin approval`
     });
 
     await pi.save();
 
     return res.status(200).json({
       status: 'success',
-      message: `Payment request for PI #${pi.pi_number} submitted to Admin for approval.`,
+      message: `Payment request for PI #${pi.pi_number} (${isAdvance ? 'First Payment' : 'Second Payment'}) submitted to Admin for approval.`,
       data: pi
     });
   } catch (err) {
@@ -1053,12 +1101,12 @@ exports.request_supplier_payment = async (req, res) => {
 };
 
 /**
- * 8. Admin Payment Approval / Rejection (Admin Login)
+ * 8. Admin Payment & PO Approval / Rejection / Return (Admin Login)
  * Separate from actual payment completion!
  */
 exports.admin_approve_supplier_payment = async (req, res) => {
   try {
-    const { pi_id, indent_id, action, remarks } = req.body; // action: 'approve' | 'reject' | 'return'
+    const { pi_id, indent_id, action, stage, remarks } = req.body; // action: 'approve' | 'reject' | 'return'
     const targetPiId = pi_id || indent_id;
     const normalizedAction = (action || '').toLowerCase();
 
@@ -1072,44 +1120,165 @@ exports.admin_approve_supplier_payment = async (req, res) => {
     }
 
     const adminUser = req.user?.name || req.user?.email || 'Admin';
+    const adminId = req.user?._id || null;
 
-    if (normalizedAction === 'approve') {
-      pi.pi_status = 'Approved';
-      pi.requires_admin_approval = false;
-      pi.payment.payment_status = 'Approved';
-      pi.payment.admin_approval.status = 'Approved';
-      pi.payment.admin_approval.approved_by = req.user?._id || null;
-      pi.payment.admin_approval.approved_at = new Date();
-      pi.payment.admin_approval.remarks = remarks || 'Approved by Admin';
-      pi.audit_history.push({
-        action: 'Admin Approved Purchase Indent & Payment Rate',
-        performed_by: req.user?._id || null,
-        performer_name: adminUser,
-        role: 'Admin',
-        timestamp: new Date(),
-        remarks: remarks || 'Approved by Admin'
-      });
-    } else {
-      const isReturned = normalizedAction === 'return';
-      pi.pi_status = isReturned ? 'Draft' : 'Cancelled';
-      pi.payment.payment_status = isReturned ? 'Rejected / Returned' : 'Rejected / Returned';
-      pi.payment.admin_approval.status = isReturned ? 'Returned' : 'Rejected';
-      pi.payment.admin_approval.remarks = remarks || (isReturned ? 'Returned for rework' : 'Rejected by Admin');
-      pi.audit_history.push({
-        action: isReturned ? 'Admin Returned Payment Request' : 'Admin Rejected Payment Request',
-        performed_by: req.user?._id || null,
-        performer_name: adminUser,
-        role: 'Admin',
-        timestamp: new Date(),
-        remarks: remarks || 'Actioned by Admin'
-      });
+    // Detect target stage: 'po' | 'first_payment' | 'second_payment'
+    const targetStage = stage || (
+      pi.po_approval?.status === 'pending' || pi.requires_admin_approval
+        ? 'po'
+        : pi.payment?.payment_status === 'Balance Requested'
+        ? 'second_payment'
+        : 'first_payment'
+    );
+
+    if (targetStage === 'po') {
+      // ── Stage 1: PO Approval ──────────────────────────────────────────────
+      if (normalizedAction === 'approve') {
+        pi.po_approval.status = 'approved';
+        pi.po_approval.approved_by = adminId;
+        pi.po_approval.approved_by_name = adminUser;
+        pi.po_approval.approved_at = new Date();
+        pi.po_approval.remarks = remarks || 'PO approved by Admin';
+        pi.pi_status = 'Approved';
+        pi.requires_admin_approval = false;
+
+        pi.audit_history.push({
+          action: 'Admin Approved Purchase Order (PO)',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'PO approved by Admin. Eligible for supplier payment workflow.'
+        });
+      } else if (normalizedAction === 'return') {
+        pi.po_approval.status = 'returned';
+        pi.po_approval.return_reason = remarks || 'PO returned for correction';
+        pi.pi_status = 'Draft';
+
+        pi.audit_history.push({
+          action: 'Admin Returned Purchase Order (PO) for Correction',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'PO returned to Procurement / Accounts for correction'
+        });
+      } else {
+        pi.po_approval.status = 'rejected';
+        pi.po_approval.rejection_reason = remarks || 'PO rejected by Admin';
+        pi.pi_status = 'Cancelled';
+
+        pi.audit_history.push({
+          action: 'Admin Rejected Purchase Order (PO)',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'PO rejected by Admin'
+        });
+      }
+    } else if (targetStage === 'first_payment' || targetStage === 'advance') {
+      // ── Stage 2: Supplier First Payment Approval ──────────────────────────
+      if (normalizedAction === 'approve') {
+        pi.payment.payment_status = 'Approved';
+        pi.payment.admin_approval.status = 'Approved';
+        pi.payment.admin_approval.approved_by = adminId;
+        pi.payment.admin_approval.approved_at = new Date();
+        pi.payment.admin_approval.remarks = remarks || 'Supplier First Payment Approved by Admin';
+
+        if (!pi.payment.advance_approval) pi.payment.advance_approval = {};
+        pi.payment.advance_approval.status = 'approved';
+        pi.payment.advance_approval.approved_by = adminId;
+        pi.payment.advance_approval.approved_by_name = adminUser;
+        pi.payment.advance_approval.approved_at = new Date();
+        pi.payment.advance_approval.remarks = remarks || 'Approved by Admin';
+
+        pi.audit_history.push({
+          action: 'Admin Approved Supplier First Payment (Advance)',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'First Payment approved by Admin. Awaiting Accounts disbursement.'
+        });
+      } else {
+        pi.payment.payment_status = 'Rejected / Returned';
+        pi.payment.admin_approval.status = 'Rejected';
+        if (!pi.payment.advance_approval) pi.payment.advance_approval = {};
+        pi.payment.advance_approval.status = 'rejected';
+        pi.payment.advance_approval.rejection_reason = remarks || 'First payment rejected by Admin';
+
+        pi.audit_history.push({
+          action: 'Admin Rejected Supplier First Payment',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'First payment rejected by Admin'
+        });
+      }
+    } else if (targetStage === 'second_payment' || targetStage === 'balance') {
+      // ── Stage 3: Supplier Second Payment Approval ─────────────────────────
+      if (normalizedAction === 'approve') {
+        pi.payment.payment_status = 'Approved';
+        pi.payment.admin_approval.status = 'Approved';
+        pi.payment.admin_approval.approved_by = adminId;
+        pi.payment.admin_approval.approved_at = new Date();
+        pi.payment.admin_approval.remarks = remarks || 'Supplier Second Payment Approved by Admin';
+
+        if (!pi.payment.balance_approval) pi.payment.balance_approval = {};
+        pi.payment.balance_approval.status = 'approved';
+        pi.payment.balance_approval.approved_by = adminId;
+        pi.payment.balance_approval.approved_by_name = adminUser;
+        pi.payment.balance_approval.approved_at = new Date();
+        pi.payment.balance_approval.remarks = remarks || 'Approved by Admin';
+
+        pi.audit_history.push({
+          action: 'Admin Approved Supplier Second Payment (Balance)',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'Second Payment approved by Admin. Awaiting Accounts disbursement.'
+        });
+      } else if (normalizedAction === 'return') {
+        pi.payment.payment_status = 'Rejected / Returned';
+        pi.payment.admin_approval.status = 'Returned';
+        if (!pi.payment.balance_approval) pi.payment.balance_approval = {};
+        pi.payment.balance_approval.status = 'returned';
+        pi.payment.balance_approval.return_reason = remarks || 'Returned for correction';
+
+        pi.audit_history.push({
+          action: 'Admin Returned Supplier Second Payment Request',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'Returned by Admin to Accounts for correction'
+        });
+      } else {
+        pi.payment.payment_status = 'Rejected / Returned';
+        pi.payment.admin_approval.status = 'Rejected';
+        if (!pi.payment.balance_approval) pi.payment.balance_approval = {};
+        pi.payment.balance_approval.status = 'rejected';
+        pi.payment.balance_approval.rejection_reason = remarks || 'Second payment rejected by Admin';
+
+        pi.audit_history.push({
+          action: 'Admin Rejected Supplier Second Payment',
+          performed_by: adminId,
+          performer_name: adminUser,
+          role: 'Admin',
+          timestamp: new Date(),
+          remarks: remarks || 'Second payment rejected by Admin'
+        });
+      }
     }
 
     await pi.save();
 
     return res.status(200).json({
       status: 'success',
-      message: `Payment request #${pi.pi_number} successfully ${normalizedAction}d by Admin.`,
+      message: `Stage "${targetStage}" on PI #${pi.pi_number} successfully ${normalizedAction}d by Admin.`,
       data: pi
     });
   } catch (err) {
@@ -1120,7 +1289,7 @@ exports.admin_approve_supplier_payment = async (req, res) => {
 
 /**
  * 9. Record Actual Bank Payment
- * Actual payment completion after Admin approval
+ * Actual payment completion after Admin approval (Separation of duties: Admin approves, Accounts pays)
  */
 exports.record_bank_payment = async (req, res) => {
   try {
@@ -1147,27 +1316,6 @@ exports.record_bank_payment = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'pi_id, utr_number, and payment_mode are required.' });
     }
 
-    const allowedPaymentStatuses = [
-      'PI Draft',
-      'PI Submitted',
-      'Payment Initiated',
-      'Awaiting Admin Approval',
-      'Advance Requested',
-      'Balance Requested',
-      'Approved',
-      'Payment Processing',
-      'Advance Paid',
-      'Balance Due',
-      'Partially Paid',
-      'Paid'
-    ];
-    if (pi.payment?.payment_status && !allowedPaymentStatuses.includes(pi.payment.payment_status)) {
-      return res.status(400).json({
-        status: 'error',
-        message: `Payment cannot be recorded. Current status is '${pi.payment.payment_status}'.`
-      });
-    }
-
     // Determine target milestone:
     let targetMilestone = (payment_type || milestone || '').toLowerCase();
     const hasAdvance = Boolean(pi.payment?.advance_payment?.utr_number || pi.payment?.payment_status === 'Advance Paid');
@@ -1182,6 +1330,25 @@ exports.record_bank_payment = async (req, res) => {
       }
     }
 
+    // Rule 3: Strict Milestone-Specific Admin Approval requirement
+    if (targetMilestone === 'balance') {
+      const isBalApproved = pi.payment?.balance_approval?.status === 'approved';
+      if (!isBalApproved && pi.payment?.payment_status !== 'Paid') {
+        return res.status(400).json({
+          status: 'error',
+          message: `Cannot record Balance payment. 70% Balance payment has status '${pi.payment?.balance_approval?.status || 'not requested'}' and requires prior Admin Approval in the Order Approval Dashboard.`
+        });
+      }
+    } else if (targetMilestone === 'advance') {
+      const isAdvApproved = pi.payment?.advance_approval?.status === 'approved';
+      if (!isAdvApproved && !['Advance Paid', 'Paid'].includes(pi.payment?.payment_status)) {
+        return res.status(400).json({
+          status: 'error',
+          message: `Cannot record Advance payment. 30% Advance payment has status '${pi.payment?.advance_approval?.status || 'not requested'}' and requires prior Admin Approval in the Order Approval Dashboard.`
+        });
+      }
+    }
+
     const defaultAmount = targetMilestone === 'balance'
       ? (pi.payment?.balance_amount || (pi.total_pi_value - (pi.payment?.advance_amount || 0)))
       : (pi.payment?.advance_amount || pi.total_pi_value);
@@ -1189,6 +1356,17 @@ exports.record_bank_payment = async (req, res) => {
     const amountPaid = paid_amount !== undefined && paid_amount !== null && !isNaN(Number(paid_amount))
       ? Number(paid_amount)
       : defaultAmount;
+
+    // Rule 4: Prevent supplier payments exceeding approved PO balance
+    const currentPaid = pi.payment?.total_paid_amount || (pi.payment?.advance_payment?.paid_amount || 0);
+    const maxPayable = Math.max(0, pi.total_pi_value - (targetMilestone === 'balance' ? currentPaid : 0));
+
+    if (amountPaid > maxPayable) {
+      return res.status(400).json({
+        status: 'error',
+        message: `Disbursement of ₹${amountPaid.toLocaleString('en-IN')} exceeds approved remaining PO balance of ₹${maxPayable.toLocaleString('en-IN')}. Overpayment is prohibited.`
+      });
+    }
 
     const pDate = payment_date ? new Date(payment_date) : new Date();
     const userId = req.user?._id || null;
@@ -1285,6 +1463,17 @@ exports.record_bank_payment = async (req, res) => {
       } else {
         pi.payment.payment_status = 'Advance Paid';
       }
+
+      // Reset admin_approval & balance_approval so balance requires its own request and approval
+      if (pi.payment.admin_approval) {
+        pi.payment.admin_approval.status = 'pending';
+        pi.payment.admin_approval.remarks = 'Advance paid. Balance payment requires Accounts request.';
+      }
+      pi.payment.balance_approval = {
+        status: null,
+        requested_at: null,
+        requested_amount: pi.payment.balance_due
+      };
 
       pi.payment.payment_history.push({
         milestone: 'advance',

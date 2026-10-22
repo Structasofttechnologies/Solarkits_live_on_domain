@@ -81,184 +81,11 @@ const ESCROW_BANK = {
   upi_id: 'solarkits.token@icici',
 };
 
-// ── DEFAULT COMBO KITS (Fallback Catalog) ──
-const DEFAULT_COMBO_KITS = [
-  {
-    _id: 'kit-01',
-    name: '3kW Residential On-Grid Solar ComboKit',
-    capacity_kw: 3,
-    system_type: 'On-Grid',
-    base_price_paise: 16500000, // ₹1,65,000
-    token_rate_per_kit_paise: 500000, // ₹5,000 / kit
-    min_po_quantity: 25,
-    specifications: '3kW Tier-1 TopCon DCR Panels + 3.3kW Grid Inverter + BOS Structure',
-  },
-  {
-    _id: 'kit-02',
-    name: '5kW Commercial Dual-MPPT Solar ComboKit',
-    capacity_kw: 5,
-    system_type: 'On-Grid',
-    base_price_paise: 24500000, // ₹2,45,000
-    token_rate_per_kit_paise: 500000, // ₹5,000 / kit
-    min_po_quantity: 25,
-    specifications: '5kW Mono Perc Panels + 5kW Three-Phase Inverter + Heavy Galvanized BOS',
-  },
-  {
-    _id: 'kit-03',
-    name: '10kW Industrial Mega Solar ComboKit',
-    capacity_kw: 10,
-    system_type: 'On-Grid',
-    base_price_paise: 48000000, // ₹4,80,000
-    token_rate_per_kit_paise: 1000000, // ₹10,000 / kit
-    min_po_quantity: 10,
-    specifications: '10kW High-Efficiency Bifacial Array + 10kW Smart Inverter + Lightning Protection',
-  },
-];
+// ── COMBO KITS CATALOG (Dynamic from API) ──
+const DEFAULT_COMBO_KITS = [];
 
-// ── INITIAL PRE-SEEDED ORDERS (Realistic 4-Stage Lifecycle) ──
+// ── STORAGE KEY ──
 const SEED_STORAGE_KEY = 'solarkits_bde_po_orders_v1';
-
-const INITIAL_SEED_ORDERS = [
-  {
-    _id: 'bde-po-101',
-    po_number: 'PO-2026-BDE-001',
-    order_type: 'po_order',
-    po_category: 'SINGLE_PO',
-    status: 'VALIDATED',
-    created_by_role: 'BDE',
-    creator_name: 'Navaz Khan',
-    creator_code: 'BDE-WEST-04',
-    created_at: new Date(Date.now() - 6 * 24 * 3600 * 1000).toISOString(),
-    lock_expires_at: new Date(Date.now() + 24 * 24 * 3600 * 1000).toISOString(),
-    customer_details: {
-      franchisee_id: 'FR-GJ-SUR-01',
-      company_name: 'Surat Solar Superstore & Service Hub',
-      district: 'Surat',
-      state: 'Gujarat',
-      phone: '+91 98250 11223',
-    },
-    target_committed_quantity: 100,
-    total_booked_quantity: 100,
-    fulfilled_quantity: 35,
-    remaining_quantity: 65,
-    token_amount_paise: 50000000, // ₹5,00,000 (100 * ₹5,000)
-    token_paid_paise: 50000000,
-    token_payment_status: 'PAID',
-    token_balance_paise: 32500000,
-    token_adjusted_total_paise: 17500000,
-    token_settlement_mode: 'PRO_RATA',
-    utr_number: 'ICICI-UTR-99882211',
-    sender_bank_name: 'HDFC Bank',
-    payment_date: '2026-10-04',
-    items: [
-      {
-        kit_id: 'kit-01',
-        item_name: '3kW Residential On-Grid Solar ComboKit',
-        quantity: 100,
-        unit_price_paise: 16500000,
-        token_rate_paise: 500000,
-        subtotal_paise: 1650000000,
-        epc_allocations: [
-          {
-            epc_buyer_id: 'epc-01',
-            company_name: 'Apex Solar Solutions Gujarat',
-            buyer_name: 'Ramesh Patel',
-            allocated_quantity: 100,
-            payment_status: 'PAID',
-          },
-        ],
-      },
-    ],
-    po_settings_snapshot: { po_validity_days: 30, po_lock_days: 30 },
-  },
-  {
-    _id: 'bde-po-102',
-    po_number: 'PO-2026-BDE-002',
-    order_type: 'po_order',
-    po_category: 'COMBINE_PO',
-    status: 'AWAITING_TOKEN_PAYMENT',
-    created_by_role: 'BDE',
-    creator_name: 'Navaz Khan',
-    creator_code: 'BDE-WEST-04',
-    created_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
-    lock_expires_at: new Date(Date.now() + 28 * 24 * 3600 * 1000).toISOString(),
-    customer_details: {
-      franchisee_id: 'FR-GJ-AHM-02',
-      company_name: 'Ahmedabad Renewable Power Store',
-      district: 'Ahmedabad',
-      state: 'Gujarat',
-      phone: '+91 97120 44556',
-    },
-    target_committed_quantity: 150,
-    total_booked_quantity: 150,
-    fulfilled_quantity: 0,
-    remaining_quantity: 150,
-    token_amount_paise: 75000000, // ₹7,50,000
-    token_paid_paise: 0,
-    token_payment_status: 'PENDING',
-    token_balance_paise: 0,
-    token_adjusted_total_paise: 0,
-    token_settlement_mode: 'PRO_RATA',
-    items: [
-      {
-        kit_id: 'kit-02',
-        item_name: '5kW Commercial Dual-MPPT Solar ComboKit',
-        quantity: 150,
-        unit_price_paise: 24500000,
-        token_rate_paise: 500000,
-        subtotal_paise: 3675000000,
-        epc_allocations: [
-          {
-            epc_buyer_id: 'epc-02',
-            company_name: 'SunPower EPC Infra',
-            buyer_name: 'Vikram Joshi',
-            allocated_quantity: 90,
-            payment_status: 'PENDING',
-          },
-          {
-            epc_buyer_id: 'epc-03',
-            company_name: 'GreenGrid EPC Contractors',
-            buyer_name: 'Anil Desai',
-            allocated_quantity: 60,
-            payment_status: 'PENDING',
-          },
-        ],
-      },
-    ],
-    po_settings_snapshot: { po_validity_days: 30, po_lock_days: 30 },
-  },
-  {
-    _id: 'bde-po-103',
-    po_number: 'PO-2026-BDE-003',
-    order_type: 'po_order',
-    po_category: 'SINGLE_PO',
-    status: 'PENDING_ALLOCATION',
-    created_by_role: 'BDE',
-    creator_name: 'Navaz Khan',
-    creator_code: 'BDE-WEST-04',
-    created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
-    lock_expires_at: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
-    customer_details: {
-      franchisee_id: 'FR-GJ-VAD-03',
-      company_name: 'Vadodara SunEnergy Store',
-      district: 'Vadodara',
-      state: 'Gujarat',
-      phone: '+91 99090 77889',
-    },
-    target_committed_quantity: 50,
-    total_booked_quantity: 50,
-    fulfilled_quantity: 0,
-    remaining_quantity: 50,
-    token_amount_paise: 25000000,
-    token_paid_paise: 0,
-    token_payment_status: 'PENDING',
-    token_balance_paise: 0,
-    token_adjusted_total_paise: 0,
-    token_settlement_mode: 'PRO_RATA',
-    items: [],
-    po_settings_snapshot: { po_validity_days: 30, po_lock_days: 30 },
-  },
-];
 
 export default function BdePoOrders() {
   const location = useLocation();
@@ -275,7 +102,7 @@ export default function BdePoOrders() {
     } catch (e) {
       console.warn('Failed to parse saved POs:', e);
     }
-    return INITIAL_SEED_ORDERS;
+    return [];
   });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -504,11 +331,11 @@ export default function BdePoOrders() {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // ── RESET TO SAMPLE DATA ──
+  // ── CLEAR PO ORDERS ──
   const handleResetData = () => {
-    if (window.confirm('Reset all PO orders back to default sample state?')) {
-      setOrders(INITIAL_SEED_ORDERS);
-      localStorage.setItem(SEED_STORAGE_KEY, JSON.stringify(INITIAL_SEED_ORDERS));
+    if (window.confirm('Clear all local PO orders?')) {
+      setOrders([]);
+      localStorage.removeItem(SEED_STORAGE_KEY);
     }
   };
 
@@ -1133,9 +960,9 @@ export default function BdePoOrders() {
           <button
             onClick={handleResetData}
             className="px-2.5 py-1.5 rounded-xl border border-dashed border-slate-300 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
-            title="Reset to sample PO orders"
+            title="Clear local PO orders"
           >
-            Reset Demo
+            Clear Orders
           </button>
         </div>
       </div>

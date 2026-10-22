@@ -1080,3 +1080,44 @@ exports.get_warehouses_list = async (req, res) => {
     return res.status(500).json({ status: 'error', message: err.message });
   }
 };
+
+// ─── 15. DELIVERY COST APPROVAL QUEUE & ADMIN ACTIONS ─────────────────────────
+exports.get_delivery_approval_queue = async (req, res) => {
+  try {
+    const result = await deliveryService.getDeliveryApprovalQueue(req.query);
+    return res.status(200).json({ status: 'success', data: result });
+  } catch (err) {
+    console.error('get_delivery_approval_queue error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.submit_delivery_approval_decision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, remarks } = req.body;
+
+    if (!decision || !['approve', 'reject', 'return'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'Valid decision (approve, reject, return) is required.' });
+    }
+    if ((decision === 'reject' || decision === 'return') && (!remarks || !remarks.trim())) {
+      return res.status(400).json({ status: 'error', message: 'Remarks are mandatory when rejecting or returning an approval.' });
+    }
+
+    const updated = await deliveryService.adminApproveDeliveryCost(id, {
+      decision,
+      remarks,
+      adminUser: req.user,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: updated,
+      message: `Delivery cost ${decision}d successfully.`,
+    });
+  } catch (err) {
+    console.error('submit_delivery_approval_decision error:', err);
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+};
+

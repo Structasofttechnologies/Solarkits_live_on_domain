@@ -9,6 +9,10 @@ const { india_solarshop_db: db } = require('../../config/databases');
  */
 const DELIVERY_STATUSES = [
   'delivery_created',
+  'pending_approval',
+  'cost_approved',
+  'cost_rejected',
+  'cost_returned',
   'vehicle_assigned',
   'pickup_scheduled',
   'loading',
@@ -280,6 +284,30 @@ const schema = new mongoose.Schema({
     overridden_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
     override_reason: { type: String, default: null },
     overridden_at: { type: Date, default: null },
+  },
+
+  // ─── STAGE 4: DELIVERY CHARGE APPROVAL INDEPENDENT TRACKING ───────────────
+  delivery_approval: {
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'returned', 'not_required'],
+      default: 'not_required',
+      index: true,
+    },
+    requested_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    requested_by_name: { type: String, default: null },
+    requested_at: { type: Date, default: null },
+    approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    approved_by_name: { type: String, default: null },
+    approved_at: { type: Date, default: null },
+    rejection_reason: { type: String, default: null },
+    return_reason: { type: String, default: null },
+    remarks: { type: String, default: null },
+    quotation_doc_url: { type: String, default: null },
+    benchmark_cost: { type: Number, default: 0 },
+    proposed_cost: { type: Number, default: 0 },
+    variance_amount: { type: Number, default: 0 },
+    variance_pct: { type: Number, default: 0 },
   },
 
   // ─── 10-STEP LIFECYCLE STATUS JOURNEY ─────────────────────────────────────
