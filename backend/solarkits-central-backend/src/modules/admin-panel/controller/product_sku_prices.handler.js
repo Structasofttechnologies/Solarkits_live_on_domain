@@ -148,6 +148,8 @@ const get_sku_prices = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
+      country_id: country?._id,
+      state_id: state?._id,
       cluster_id: cluster._id,
       cluster_name: cluster.name,
       currency_code,
@@ -170,17 +172,17 @@ const set_sku_prices = async (req, res) => {
   try {
     const { country_id, state_id, cluster_id, prices } = req.body;
 
-    if (!country_id || !state_id || !cluster_id) {
+    if (!cluster_id) {
       return res.status(400).json({
         status: "error",
-        message: "Missing required fields: country_id, state_id, cluster_id are all required"
+        message: "cluster_id is required"
       });
     }
 
-    if (!Array.isArray(prices)) {
+    if (!Array.isArray(prices) || prices.length === 0) {
       return res.status(400).json({
         status: "error",
-        message: "prices must be an array of { sku_id, price }"
+        message: "prices must be a non-empty array of { sku_id, price }"
       });
     }
 
@@ -192,13 +194,43 @@ const set_sku_prices = async (req, res) => {
     if (!cluster) {
       cluster = await Cluster.findOne({ name: cluster_id, deleted_at: null }).lean();
     }
-    const resolvedClusterId = cluster ? cluster._id : cluster_id;
+    if (!cluster) {
+      return res.status(404).json({ status: "error", message: "Cluster not found" });
+    }
+    const resolvedClusterId = cluster._id;
 
-    // Resolve country's currency details
-    const country = await GeoLevel0.findById(country_id).lean();
+    // Resolve state (level_1) from cluster, or fallback to state_id
+    let state = null;
+    if (cluster.level_1) {
+      state = await GeoLevel1.findById(cluster.level_1).lean();
+    }
+    if (!state && state_id) {
+      if (mongoose.Types.ObjectId.isValid(state_id) && String(new mongoose.Types.ObjectId(state_id)) === String(state_id)) {
+        state = await GeoLevel1.findById(state_id).lean();
+      }
+      if (!state) {
+        state = await GeoLevel1.findOne({ name: state_id, deleted_at: null }).lean();
+      }
+    }
+    const resolvedStateId = state ? state._id : (cluster.level_1 || state_id);
+
+    // Resolve country's currency details from state, or fallback to country_id
+    let country = null;
+    if (state && state.level_0) {
+      country = await GeoLevel0.findById(state.level_0).lean();
+    }
+    if (!country && country_id) {
+      if (mongoose.Types.ObjectId.isValid(country_id) && String(new mongoose.Types.ObjectId(country_id)) === String(country_id)) {
+        country = await GeoLevel0.findById(country_id).lean();
+      }
+      if (!country) {
+        country = await GeoLevel0.findOne({ name: country_id, is_active: true, deleted_at: null }).lean();
+      }
+    }
     if (!country) {
       return res.status(404).json({ status: "error", message: "Country not found" });
     }
+    const resolvedCountryId = country._id;
     const currency_code = country.currency_code || 'USD';
 
     // Perform upserts for each price entry
@@ -254,12 +286,15 @@ const set_sku_prices = async (req, res) => {
         { sku_id: item.sku_id, cluster_id: resolvedClusterId },
         {
           $set: {
-            country_id,
-            state_id,
+            country_id: resolvedCountryId,
+            state_id: resolvedStateId,
             cluster_id: resolvedClusterId,
             price: isNaN(finalPrice) ? 0 : finalPrice,
             price_per_watt: isNaN(price_per_watt) ? 0 : price_per_watt,
             currency_code
+          },
+          $unset: {
+            warehouse_id: 1
           }
         },
         { upsert: true, new: true }

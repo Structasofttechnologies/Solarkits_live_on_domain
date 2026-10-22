@@ -28,7 +28,7 @@ const {
   StoreSetupChecklist,
   StoreSetupDelay,
 } = require('../../admin-panel/models/india_solarshop_db');
-const { WarehouseComboKit } = require('../../admin-panel/models/core_db');
+const { WarehouseComboKit, WarehouseKitActivation } = require('../../admin-panel/models/core_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { verifyGstin } = require('../../admin-panel/utils/gst.adapter');
 const { performGstVerification } = require('../../admin-panel/services/gst.verification.service');
@@ -3314,8 +3314,7 @@ const get_my_plan_po_settings = async (req, res) => {
     const validExplicitIds = Array.from(explicitKitIds).filter((id) => mongoose.Types.ObjectId.isValid(id));
     if (validExplicitIds.length > 0) {
       kitOrConditions.push({ _id: { $in: validExplicitIds } });
-    }
-    if (matchedSolarKitIds.length > 0) {
+    } else if (matchedSolarKitIds.length > 0) {
       kitOrConditions.push({ solar_kit_id: { $in: matchedSolarKitIds } });
     }
 
@@ -3326,6 +3325,60 @@ const get_my_plan_po_settings = async (req, res) => {
         deleted_at: null,
         $or: kitOrConditions,
       }).lean();
+    }
+
+    // Strict Rule: Warehouse Kit Activation check
+    // Kits MUST be actively activated in warehouse (is_combokit_active: true, is_active: true, deleted_at: null)
+    // and must have a configured non-zero price (selling_price_cached > 0 or base_price_cached > 0).
+    // Kits not active in warehouse or lacking pricing configuration MUST NOT appear.
+    if (foundKits.length > 0) {
+      const foundKitIds = foundKits.map((k) => k._id);
+      const resellerDoc = await Reseller.findById(resellerId).select('warehouse_id assigned_warehouse_id').lean();
+      const targetWarehouseId = resellerDoc?.assigned_warehouse_id || resellerDoc?.warehouse_id;
+
+      const activationQuery = {
+        combo_kit_id: { $in: foundKitIds },
+        is_combokit_active: true,
+        is_active: { $ne: false },
+        deleted_at: null,
+      };
+      if (targetWarehouseId) {
+        activationQuery.warehouse_id = targetWarehouseId;
+      }
+
+      const activeActivations = await WarehouseKitActivation.find(activationQuery).lean();
+      const activationMap = new Map();
+      activeActivations.forEach((act) => {
+        const kId = String(act.combo_kit_id);
+        const cur = activationMap.get(kId);
+        // Prioritize activation with configured pricing
+        if (!cur || (Number(act.selling_price_cached || 0) > 0 && Number(cur.selling_price_cached || 0) <= 0)) {
+          activationMap.set(kId, act);
+        }
+      });
+
+      // Filter: only kits actively activated in warehouse with configured pricing
+      foundKits = foundKits
+        .filter((k) => {
+          const act = activationMap.get(String(k._id));
+          if (!act) return false; // Kit is NOT active in warehouse
+          const effPrice = Number(act.selling_price_cached || k.selling_price_cached || act.base_price_cached || k.base_price_cached || 0);
+          return effPrice > 0; // Pricing must be configured
+        })
+        .map((k) => {
+          const act = activationMap.get(String(k._id));
+          const effPrice = Number(act?.selling_price_cached || k.selling_price_cached || act?.base_price_cached || k.base_price_cached || 0);
+          return {
+            ...k,
+            base_price_cached: Number(act?.base_price_cached || k.base_price_cached || effPrice),
+            selling_price_cached: effPrice,
+            dealer_price: effPrice,
+            unit_price: effPrice,
+            price: effPrice,
+            warehouse_activation_id: act?._id || null,
+            warehouse_id: act?.warehouse_id || targetWarehouseId || null,
+          };
+        });
     }
 
     // Enrich foundKits with classification taxonomy for Quick Filters
@@ -3418,6 +3471,17 @@ const get_my_plan_po_settings = async (req, res) => {
       console.warn('[reseller.portal] Warning enriching combo kit taxonomy:', enrichErr.message);
     }
 
+    // Determine token rate per kit from PO setting without fake demo fallbacks
+    const tokenBookingEnabled = defSetting?.token_booking_enabled === true;
+    let resolvedTokenRatePaise = 0;
+    if (tokenBookingEnabled) {
+      if (defSetting?.token_rate_per_kit_paise != null && Number(defSetting.token_rate_per_kit_paise) > 0) {
+        resolvedTokenRatePaise = Number(defSetting.token_rate_per_kit_paise);
+      } else if (defSetting?.token_type === 'FIXED_AMOUNT' && defSetting?.token_value != null && Number(defSetting.token_value) > 0) {
+        resolvedTokenRatePaise = Number(defSetting.token_value) * 100;
+      }
+    }
+
     const comboKits = enrichedFoundKits.map((k) => ({
       ...k,
       po_setting_id: defSetting?._id || null,
@@ -3425,9 +3489,10 @@ const get_my_plan_po_settings = async (req, res) => {
       max_po_quantity: defSetting?.max_po_quantity ?? null,
       po_validity_days: defSetting?.po_validity_days ?? 30,
       po_lock_days: defSetting?.po_lock_days ?? 30,
-      token_booking_enabled: defSetting?.token_booking_enabled !== false,
+      token_booking_enabled: tokenBookingEnabled && resolvedTokenRatePaise > 0,
       token_type: defSetting?.token_type || 'FIXED_AMOUNT',
-      token_value: defSetting?.token_value ?? 50000,
+      token_value: defSetting?.token_value ?? 0,
+      token_rate_per_kit_paise: resolvedTokenRatePaise,
     }));
 
     // Deduplicate combo kits

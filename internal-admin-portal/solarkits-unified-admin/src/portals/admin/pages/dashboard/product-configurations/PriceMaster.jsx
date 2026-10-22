@@ -421,6 +421,12 @@ export default function PriceMaster({ moduleUniqueId }) {
           if (res.data.currency_name) {
             setCurrencyName(res.data.currency_name);
           }
+          if (res.data.country_id && !selectedCountry) {
+            setSelectedCountry(res.data.country_id.toString());
+          }
+          if (res.data.state_id && !selectedState) {
+            setSelectedState(res.data.state_id.toString());
+          }
           isDeepLinkingRef.current = false;
         }
       } catch (error) {
@@ -473,6 +479,11 @@ export default function PriceMaster({ moduleUniqueId }) {
   const handleSaveSinglePrice = async () => {
     if (!priceModalSku) return;
 
+    if (!selectedCluster) {
+      dispatch(setAlert({ type: "error", message: "Please select a cluster before saving price." }));
+      return;
+    }
+
     setSavingSinglePrice(true);
     try {
       const payload = {
@@ -520,7 +531,7 @@ export default function PriceMaster({ moduleUniqueId }) {
       dispatch(
         setAlert({
           type: "error",
-          message: error.response?.data?.message || "Failed to save price."
+          message: error.response?.data?.message || error.response?.data?.error || "Failed to save price."
         })
       );
     } finally {

@@ -302,7 +302,7 @@ export default function LooseOrder() {
     if (selectedKit.unit_price) return selectedKit.unit_price;
     if (selectedKit.price) return selectedKit.price;
     if (selectedKit.base_price) return selectedKit.base_price;
-    return 45000;
+    return 0;
   }, [selectedParentPo, selectedKit, totalLooseQuantity]);
 
   const gstRatePercent = selectedKit?.gst_rate || 12;
@@ -1008,48 +1008,56 @@ export default function LooseOrder() {
                   Step 1: Select Solar Combo Kit
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {(planData?.combo_kits || []).map((kit) => {
-                    const kitId = kit._id || kit.id;
-                    const isSelected = selectedKitId?.toString() === kitId?.toString();
-                    const kitPrice =
-                      selectedParentPo?.items?.[0]?.unit_price_paise
-                        ? selectedParentPo.items[0].unit_price_paise / 100
-                        : kit.dealer_price || kit.selling_price_cached || kit.base_price_cached || 45000;
+                  {(planData?.combo_kits || []).length === 0 ? (
+                    <div className="col-span-full p-6 text-center rounded-2xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 bg-surface">
+                      <FiAlertCircle size={22} className="text-amber-500" />
+                      <p className="text-xs font-bold text-text-primary">No Combo Kits Available</p>
+                      <p className="text-[11px] text-text-muted">Kits must be active in warehouse with pricing configured to appear for loose orders.</p>
+                    </div>
+                  ) : (
+                    (planData?.combo_kits || []).map((kit) => {
+                      const kitId = kit._id || kit.id;
+                      const isSelected = selectedKitId?.toString() === kitId?.toString();
+                      const kitPrice =
+                        selectedParentPo?.items?.[0]?.unit_price_paise
+                          ? selectedParentPo.items[0].unit_price_paise / 100
+                          : (kit.dealer_price || kit.selling_price_cached || kit.base_price_cached || 0);
 
-                    return (
-                      <div
-                        key={kitId}
-                        onClick={() => setSelectedKitId(kitId)}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? "bg-primary/10 border-primary shadow-sm"
-                            : "bg-surface hover:bg-surface-hover border-border"
-                        }`}
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-primary uppercase font-mono">
-                              {kit.capacityKW ? `${kit.capacityKW} kW Kit` : "Solar Combo"}
-                            </span>
-                            {isSelected && <FiCheck className="text-primary font-black" />}
+                      return (
+                        <div
+                          key={kitId}
+                          onClick={() => setSelectedKitId(kitId)}
+                          className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? "bg-primary/10 border-primary shadow-sm"
+                              : "bg-surface hover:bg-surface-hover border-border"
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-primary uppercase font-mono">
+                                {kit.capacityKW ? `${kit.capacityKW} kW Kit` : (kit.capacity ? `${kit.capacity} kW Kit` : "Solar Combo")}
+                              </span>
+                              {isSelected && <FiCheck className="text-primary font-black" />}
+                            </div>
+                            <h5 className="font-extrabold text-text-primary text-xs leading-tight">
+                              {kit.name || kit.kit_name || "Solar Kit Package"}
+                            </h5>
+                            <p className="text-[11px] text-text-muted">
+                              {kit.brandName || "Tier-1 Components"} • {kit.phase || "Single"} Phase
+                            </p>
                           </div>
-                          <h5 className="font-extrabold text-text-primary text-xs leading-tight">
-                            {kit.name || kit.kit_name || "Solar Kit Package"}
-                          </h5>
-                          <p className="text-[11px] text-text-muted">
-                            {kit.brandName || "Tier-1 Components"} • {kit.phase || "Single"} Phase
-                          </p>
-                        </div>
 
-                        <div className="pt-2 mt-2 border-t border-border flex justify-between items-baseline">
-                          <span className="text-[10px] text-text-muted">Unit Rate</span>
-                          <span className="font-black text-text-primary text-sm">
-                            ₹{kitPrice.toLocaleString("en-IN")}
-                          </span>
+                          <div className="pt-2 mt-2 border-t border-border flex justify-between items-baseline">
+                            <span className="text-[10px] text-text-muted">Unit Rate</span>
+                            <span className="font-black text-text-primary text-sm">
+                              {kitPrice > 0 ? `₹${kitPrice.toLocaleString("en-IN")}` : "Price Pending"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
 

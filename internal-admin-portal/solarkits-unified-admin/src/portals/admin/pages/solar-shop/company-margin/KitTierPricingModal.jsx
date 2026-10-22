@@ -62,11 +62,11 @@ export default function KitTierPricingModal({
 
   // Baseline reference selling price per kit (including GST if set)
   const baselineKitPrice = useMemo(() => {
-    if (!kitFinancials) return 45000;
+    if (!kitFinancials) return 0;
     if (kitFinancials.totalWithGst > 0) return Math.round(kitFinancials.totalWithGst);
     if (kitFinancials.standardSellingPrice > 0) return Math.round(kitFinancials.standardSellingPrice);
     if (kitFinancials.totalBaseCost > 0) return Math.round(kitFinancials.totalBaseCost);
-    return 45000;
+    return 0;
   }, [kitFinancials]);
 
   // Initialize or synchronize tiers when modal opens or kit changes
@@ -215,6 +215,10 @@ export default function KitTierPricingModal({
 
   // Quick helper: Prefill all empty tiers with baseline price
   const handlePrefillBaseline = (type) => {
+    if (baselineKitPrice <= 0) {
+      dispatch(setAlert({ type: "warning", message: "Baseline price is not configured for this kit yet." }));
+      return;
+    }
     if (type === "loose") {
       setLooseTiers((prev) =>
         prev.map((t) => ({
@@ -248,7 +252,7 @@ export default function KitTierPricingModal({
       .filter((t) => t.price_per_kit !== "" && t.price_per_kit !== null && !isNaN(Number(t.price_per_kit)))
       .map((t) => {
         const unitPrice = Number(t.price_per_kit);
-        const discountAmt = Math.max(0, baselineKitPrice - unitPrice);
+        const discountAmt = baselineKitPrice > 0 ? Math.max(0, baselineKitPrice - unitPrice) : 0;
         return {
           quantity: Number(t.quantity),
           price_per_kit: unitPrice,
@@ -262,7 +266,7 @@ export default function KitTierPricingModal({
       .filter((t) => t.price_per_kit !== "" && t.price_per_kit !== null && !isNaN(Number(t.price_per_kit)))
       .map((t) => {
         const unitPrice = Number(t.price_per_kit);
-        const discountAmt = Math.max(0, baselineKitPrice - unitPrice);
+        const discountAmt = baselineKitPrice > 0 ? Math.max(0, baselineKitPrice - unitPrice) : 0;
         return {
           quantity: Number(t.quantity),
           price_per_kit: unitPrice,
@@ -362,7 +366,7 @@ export default function KitTierPricingModal({
                 Kit Base Cost
               </span>
               <span className="text-xs font-mono font-black text-text-secondary">
-                ₹{Number(kitFinancials.totalBaseCost).toLocaleString("en-IN")}
+                ₹{Number(kitFinancials?.totalBaseCost || 0).toLocaleString("en-IN")}
               </span>
             </div>
             <div className="h-7 w-px bg-border"></div>
@@ -371,10 +375,12 @@ export default function KitTierPricingModal({
                 1-Kit Baseline Price
               </span>
               <span className="text-sm font-mono font-black text-primary">
-                ₹{Number(baselineKitPrice).toLocaleString("en-IN")}
+                {baselineKitPrice > 0 ? `₹${Number(baselineKitPrice).toLocaleString("en-IN")}` : "₹0"}
               </span>
               <span className="text-[8px] font-bold text-text-muted block">
-                {kitFinancials.gstRatePct > 0 ? `Incl. ${kitFinancials.gstRatePct}% GST` : "Excl. GST"}
+                {baselineKitPrice > 0
+                  ? (kitFinancials?.gstRatePct > 0 ? `Incl. ${kitFinancials.gstRatePct}% GST` : "Excl. GST")
+                  : "Price Not Configured"}
               </span>
             </div>
           </div>
@@ -446,13 +452,15 @@ export default function KitTierPricingModal({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => handlePrefillBaseline(activeTab)}
-            className="text-[11px] font-bold underline hover:opacity-80 shrink-0 cursor-pointer"
-          >
-            Prefill Baseline Price (₹{Number(baselineKitPrice).toLocaleString("en-IN")})
-          </button>
+          {baselineKitPrice > 0 && (
+            <button
+              type="button"
+              onClick={() => handlePrefillBaseline(activeTab)}
+              className="text-[11px] font-bold underline hover:opacity-80 shrink-0 cursor-pointer"
+            >
+              Prefill Baseline Price (₹{Number(baselineKitPrice).toLocaleString("en-IN")})
+            </button>
+          )}
         </div>
 
         {/* Pricing Tiers Table */}
@@ -493,7 +501,7 @@ export default function KitTierPricingModal({
                       priceNum >= 0;
 
                     const totalOrderAmt = hasValidPrice ? tier.quantity * priceNum : 0;
-                    const diff = hasValidPrice ? baselineKitPrice - priceNum : 0;
+                    const diff = hasValidPrice && baselineKitPrice > 0 ? baselineKitPrice - priceNum : 0;
                     const discountPercent =
                       hasValidPrice && baselineKitPrice > 0 ? (diff / baselineKitPrice) * 100 : 0;
 
@@ -535,7 +543,7 @@ export default function KitTierPricingModal({
                               type="number"
                               min="0"
                               step="1"
-                              placeholder={`e.g. ${baselineKitPrice}`}
+                              placeholder={baselineKitPrice > 0 ? `e.g. ${baselineKitPrice}` : "Enter per-kit price"}
                               value={tier.price_per_kit}
                               onChange={(e) =>
                                 activeTab === "loose"
@@ -550,22 +558,28 @@ export default function KitTierPricingModal({
                         {/* Savings / Discount Badge */}
                         <td className="px-4 py-3.5">
                           {hasValidPrice ? (
-                            diff > 0 ? (
-                              <div className="flex flex-col">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 w-fit">
-                                  <FaArrowDown size={9} /> ₹{diff.toLocaleString("en-IN")}/kit OFF
+                            baselineKitPrice > 0 ? (
+                              diff > 0 ? (
+                                <div className="flex flex-col">
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20 w-fit">
+                                    <FaArrowDown size={9} /> ₹{diff.toLocaleString("en-IN")}/kit OFF
+                                  </span>
+                                  <span className="text-[10px] text-emerald-600/80 font-bold mt-0.5">
+                                    {discountPercent.toFixed(1)}% discount
+                                  </span>
+                                </div>
+                              ) : diff < 0 ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 w-fit">
+                                  <FaArrowUp size={9} /> +₹{Math.abs(diff).toLocaleString("en-IN")}/kit higher
                                 </span>
-                                <span className="text-[10px] text-emerald-600/80 font-bold mt-0.5">
-                                  {discountPercent.toFixed(1)}% discount
+                              ) : (
+                                <span className="text-[11px] font-bold text-text-muted">
+                                  Standard Base Price
                                 </span>
-                              </div>
-                            ) : diff < 0 ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20 w-fit">
-                                <FaArrowUp size={9} /> +₹{Math.abs(diff).toLocaleString("en-IN")}/kit higher
-                              </span>
+                              )
                             ) : (
-                              <span className="text-[11px] font-bold text-text-muted">
-                                Standard Base Price
+                              <span className="text-[10px] text-text-muted italic">
+                                Baseline not set
                               </span>
                             )
                           ) : (

@@ -745,7 +745,7 @@ exports.get_eligible_kits = async (req, res) => {
         (kitCap >= Number(r.min_value || 0) && kitCap <= Number(r.max_value || 999999))
       );
 
-      const rawPrice = k.selling_price_cached || k.base_price_cached || (k.capacity ? Math.round(k.capacity * 45000) : 350000);
+      const rawPrice = k.selling_price_cached || k.base_price_cached || 0;
       const pricePaise = Math.round(rawPrice * 100);
 
       return {

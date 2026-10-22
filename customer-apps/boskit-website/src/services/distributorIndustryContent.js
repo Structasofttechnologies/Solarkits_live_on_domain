@@ -21,15 +21,17 @@ export const getDistributorIndustryTheme = (industry_type_id) =>
 export const getDistributorRelatedProducts = (industry_type_id, page = 1, limit = 10) =>
   api.get('/distributor/industry/related-products', { params: { industry_type_id, page, limit } });
 
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+const ADMIN_API_BASE = import.meta.env.VITE_ADMIN_API_URL || `${BACKEND_BASE}/admin-api`;
+
 export const trackContentEvent = (payload) => {
   try {
-    const base = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:4000/admin-api';
     const data = JSON.stringify(payload);
     if (navigator.sendBeacon) {
       const blob = new Blob([data], { type: 'application/json' });
-      navigator.sendBeacon(`${base}/industry-content/analytics/track`, blob);
+      navigator.sendBeacon(`${ADMIN_API_BASE}/industry-content/analytics/track`, blob);
     } else {
-      api.post(`${base}/industry-content/analytics/track`, payload).catch(() => {});
+      api.post(`${ADMIN_API_BASE}/industry-content/analytics/track`, payload).catch(() => {});
     }
   } catch (_) {}
 };

@@ -297,8 +297,8 @@ export default function BdePoOrders() {
             name: k.name || k.kit_name || 'Solar ComboKit',
             capacity_kw: k.capacity_kw || 3,
             system_type: k.system_type || 'On-Grid',
-            base_price_paise: k.price_paise || k.base_price_paise || 16500000,
-            token_rate_per_kit_paise: 500000,
+            base_price_paise: k.price_paise || k.base_price_paise || (k.selling_price_cached ? k.selling_price_cached * 100 : 0),
+            token_rate_per_kit_paise: k.token_rate_per_kit_paise || 0,
             min_po_quantity: k.min_po_quantity || 25,
             specifications: k.description || 'Tier-1 Approved Components',
           }));
@@ -429,7 +429,7 @@ export default function BdePoOrders() {
       };
 
       const newPoNumber = `PO-${new Date().getFullYear()}-BDE-${String(orders.length + 1).padStart(3, '0')}`;
-      const tokenPerKitPaise = 500000; // ₹5,000 / kit
+      const tokenPerKitPaise = selectedKitObj?.token_rate_per_kit_paise || 0;
       const totalTokenPaise = singlePoQty * tokenPerKitPaise;
 
       const newOrder = {
@@ -558,7 +558,7 @@ export default function BdePoOrders() {
 
     setAllocateSubmitting(true);
     setTimeout(() => {
-      const tokenRate = kitObj.token_rate_per_kit_paise || 500000;
+      const tokenRate = kitObj?.token_rate_per_kit_paise || 0;
       const totalTokenPaise = totalCommitted * tokenRate;
 
       const updatedOrder = {
@@ -1619,7 +1619,7 @@ export default function BdePoOrders() {
               {(() => {
                 const kitObj = comboKits.find((k) => k._id === allocateKitId) || comboKits[0];
                 const totalCommitted = allocatingOrder.target_committed_quantity || 100;
-                const tokenPerKitINR = Math.round((kitObj.token_rate_per_kit_paise || 500000) / 100);
+                const tokenPerKitINR = kitObj?.token_rate_per_kit_paise ? Math.round(kitObj.token_rate_per_kit_paise / 100) : 0;
                 const totalTokenINR = totalCommitted * tokenPerKitINR;
                 const totalOrderValINR = Math.round((totalCommitted * kitObj.base_price_paise) / 100);
 

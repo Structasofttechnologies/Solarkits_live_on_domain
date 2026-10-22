@@ -297,7 +297,7 @@ export default function PoOrder() {
         const looseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
           ? k.loose_order_quantities.map(Number).filter((n) => n > 0).sort((a, b) => a - b)
           : [5, 10, 15, 20, 25, 30];
-        const price = k.dealer_price || k.selling_price_cached || k.unit_price || k.price || 367500;
+        const price = k.dealer_price || k.selling_price_cached || k.unit_price || k.price || 0;
 
         return {
           _id: (k._id || k.id)?.toString(),
@@ -322,7 +322,7 @@ export default function PoOrder() {
           unit_price: price,
           price: price,
           base_price_paise: Math.round(price * 100),
-          token_rate_per_kit_paise: k.token_rate_per_kit_paise || 500000,
+          token_rate_per_kit_paise: k.token_rate_per_kit_paise || 0,
           trial_kit_quantity: k.trial_kit_quantity || 10,
           is_trial_allowed: k.is_trial_allowed !== false,
           order_quantities: orderQtys,
@@ -766,7 +766,7 @@ export default function PoOrder() {
 
   // Dynamic Unit Price using PO Order Tier Pricing
   const kitUnitPrice = useMemo(() => {
-    if (!selectedKit) return 367500;
+    if (!selectedKit) return 0;
     const poPricing = selectedKit.po_order_pricing || selectedKit.poOrderPricing;
     if (Array.isArray(poPricing) && poPricing.length > 0) {
       const matchedTier = poPricing.find(
@@ -783,10 +783,10 @@ export default function PoOrder() {
         return lowerTiers[0].price_per_kit;
       }
     }
-    return selectedKit.dealer_price || selectedKit.unit_price || 367500;
+    return selectedKit.dealer_price || selectedKit.unit_price || selectedKit.selling_price_cached || 0;
   }, [selectedKit, targetQuantity]);
 
-  const tokenRatePerKit = Math.round((selectedKit?.token_rate_per_kit_paise || 500000) / 100);
+  const tokenRatePerKit = selectedKit?.token_rate_per_kit_paise ? Math.round(selectedKit.token_rate_per_kit_paise / 100) : 0;
   const estimatedSubtotal = targetQuantity * kitUnitPrice;
   const estimatedGst = Math.round((estimatedSubtotal * 12) / 100);
   const estimatedGrandTotal = estimatedSubtotal + estimatedGst;
@@ -826,7 +826,7 @@ export default function PoOrder() {
         item_name: selectedKit.name || selectedKit.kit_name,
         quantity: targetQuantity,
         unit_price_paise: selectedKit.base_price_paise || Math.round(kitUnitPrice * 100),
-        token_rate_paise: selectedKit.token_rate_per_kit_paise || 500000,
+        token_rate_paise: selectedKit.token_rate_per_kit_paise || 0,
         total_price_paise: targetQuantity * (selectedKit.base_price_paise || Math.round(kitUnitPrice * 100)),
         subtotal_paise: targetQuantity * (selectedKit.base_price_paise || Math.round(kitUnitPrice * 100)),
         gst_rate: 12,
@@ -935,7 +935,7 @@ export default function PoOrder() {
             buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
             gstin: buyer?.gstin || null,
             allocated_quantity: allocQ,
-            token_amount_paise: allocQ * (kitObj.token_rate_per_kit_paise || 500000),
+            token_amount_paise: allocQ * (kitObj.token_rate_per_kit_paise || 0),
             payment_status: "PENDING",
           };
         });
@@ -953,7 +953,7 @@ export default function PoOrder() {
             buyer_name: buyer?.name || buyer?.company_name || "EPC Partner",
             gstin: buyer?.gstin || null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 500000),
+            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 0),
             payment_status: "PENDING",
           },
         ];
@@ -965,7 +965,7 @@ export default function PoOrder() {
             buyer_name: "Warehouse Stock",
             gstin: null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 500000),
+            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 0),
             payment_status: "PENDING",
           },
         ];
@@ -978,7 +978,7 @@ export default function PoOrder() {
       quantity: totalCommitted,
       unit_price_paise: kitObj.base_price_paise,
       gst_rate: 12,
-      token_rate_paise: kitObj.token_rate_per_kit_paise || 500000,
+      token_rate_paise: kitObj.token_rate_per_kit_paise || 0,
       epc_allocations: epcList,
     };
 
@@ -2239,8 +2239,8 @@ export default function PoOrder() {
                     <div className="grid grid-cols-1 gap-2.5 max-h-72 overflow-y-auto pr-1">
                       {filteredComboKits.map((kit) => {
                         const isSelected = String(selectedKitId) === String(kit._id);
-                        const priceINR = kit.dealer_price || kit.unit_price || 367500;
-                        const tokenINR = Math.round((kit.token_rate_per_kit_paise || 500000) / 100);
+                        const priceINR = kit.dealer_price || kit.unit_price || kit.selling_price_cached || 0;
+                        const tokenINR = kit.token_rate_per_kit_paise ? Math.round(kit.token_rate_per_kit_paise / 100) : 0;
 
                         return (
                           <div
@@ -2278,11 +2278,21 @@ export default function PoOrder() {
 
                             <div className="sm:text-right pl-7 sm:pl-0 shrink-0">
                               <div className="text-sm font-black text-text-primary">
-                                ₹{priceINR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-text-muted">/kit</span>
+                                {priceINR > 0 ? (
+                                  <>₹{priceINR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-text-muted">/kit</span></>
+                                ) : (
+                                  <span className="text-xs text-amber-600 font-semibold">Price Pending</span>
+                                )}
                               </div>
-                              <div className="text-[10px] font-bold text-emerald-600">
-                                Token: ₹{tokenINR.toLocaleString("en-IN")}/kit
-                              </div>
+                              {tokenINR > 0 ? (
+                                <div className="text-[10px] font-bold text-emerald-600">
+                                  Token: ₹{tokenINR.toLocaleString("en-IN")}/kit
+                                </div>
+                              ) : (
+                                <div className="text-[10px] font-medium text-text-muted">
+                                  Token: Not Configured
+                                </div>
+                              )}
                             </div>
                           </div>
                         );

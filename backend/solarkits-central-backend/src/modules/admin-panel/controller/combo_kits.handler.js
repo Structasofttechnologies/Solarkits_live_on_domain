@@ -610,7 +610,16 @@ const delete_combo_kit = async (req, res) => {
                     { $set: { deleted_at: kit.deleted_at } }
                 );
             }
-        } catch (e) {}
+            const { WarehouseKitActivation } = require('../models/core_db');
+            const { KitDeliveryCostRule, ComboKitWeightMaster } = require('../models/india_solarshop_db');
+            await Promise.allSettled([
+                WarehouseKitActivation.updateMany({ combo_kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false, is_combokit_active: false } }),
+                KitDeliveryCostRule.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false } }),
+                ComboKitWeightMaster.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at } }),
+            ]);
+        } catch (e) {
+            console.warn('[delete_combo_kit] Cascade delete warning:', e.message);
+        }
 
         res.status(200).json({ status: 'success', message: 'Combo Kit deleted successfully.' });
     } catch (error) {
@@ -1189,7 +1198,16 @@ const delete_combo_kit_india = async (req, res) => {
                     { $set: { deleted_at: kit.deleted_at } }
                 );
             }
-        } catch (e) {}
+            const { WarehouseKitActivation } = require('../models/core_db');
+            const { KitDeliveryCostRule, ComboKitWeightMaster } = require('../models/india_solarshop_db');
+            await Promise.allSettled([
+                WarehouseKitActivation.updateMany({ combo_kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false, is_combokit_active: false } }),
+                KitDeliveryCostRule.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false } }),
+                ComboKitWeightMaster.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at } }),
+            ]);
+        } catch (e) {
+            console.warn('[delete_combo_kit_india] Cascade delete warning:', e.message);
+        }
 
         res.status(200).json({ status: 'success', message: 'Combo Kit deleted successfully.' });
     } catch (error) {
