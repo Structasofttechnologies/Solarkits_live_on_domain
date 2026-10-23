@@ -3134,7 +3134,6 @@ export default function MaterialInward() {
         log={selectedInwardLog}
         activeSkus={activeSkus}
       />
-<<<<<<< HEAD
 
       {/* ── Order-Specific Material Inward Modal (Account Manager Forwarded Inward List) ── */}
       <Dialog
