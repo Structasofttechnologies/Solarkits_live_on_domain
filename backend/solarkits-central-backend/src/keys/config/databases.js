@@ -62,7 +62,18 @@ if (!MONGODB_URI) {
     serverSelectionTimeoutMS: 15000,
     socketTimeoutMS: 45000,
   })
-    .then(() => console.log('✅ Connected to Single Unified MongoDB Database'))
+    .then(() => {
+      console.log('✅ Connected to Single Unified MongoDB Database');
+      // Automatically clean up legacy non-sparse sku_id_1_warehouse_id_1 index if present
+      mongoose.connection.collection('pc_product_sku_prices').indexes().then(indexes => {
+        const legacyIdx = indexes.find(i => i.name === 'sku_id_1_warehouse_id_1' && !i.partialFilterExpression);
+        if (legacyIdx) {
+          mongoose.connection.collection('pc_product_sku_prices').dropIndex('sku_id_1_warehouse_id_1')
+            .then(() => console.log('✅ Dropped legacy non-sparse sku_id_1_warehouse_id_1 index from pc_product_sku_prices'))
+            .catch(e => console.warn('Could not drop legacy index:', e.message));
+        }
+      }).catch(() => {});
+    })
     .catch((error) => console.error('❌ MongoDB Connection Error:', error));
 }
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FaHome, FaUserCheck, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake } from "react-icons/fa";
+import { FaHome, FaUserCheck, FaUserShield, FaLayerGroup, FaFileInvoiceDollar, FaCoins, FaToggleOn, FaWallet, FaBoxes, FaStore, FaPercent, FaTruck, FaAward, FaHandshake, FaFilePdf } from "react-icons/fa";
 import { HiCube } from "react-icons/hi";
 import { useSelector, useDispatch } from "react-redux";
 import { setAlert } from "../features/alert.slice";
@@ -13,7 +13,7 @@ import Loader from "../components/Loader";
 import axios from "axios";
 import { authHeaderObj } from "@/app/authHeader";
 const ComboKitConfigurations = lazy(() => import("../pages/solar-shop/combokit-configurations/ComboKitConfigurations"));
-import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock, FiPlusCircle } from "react-icons/fi";
+import { FiSliders, FiUsers, FiTag, FiSettings, FiMapPin, FiPackage, FiFileText, FiDollarSign, FiTarget, FiBarChart2, FiLayers, FiTool, FiShield, FiCheckSquare, FiClock, FiPlusCircle, FiCreditCard } from "react-icons/fi";
 
 // ── Margin & Commission Settings Module ─────────────────────────────────────────
 const MarginCommissionHome = lazy(() => import("../pages/solar-shop/company-margin/MarginCommissionHome"));
@@ -39,12 +39,18 @@ const QuoteAnalyticsAdmin = lazy(() => import("../pages/solar-shop/quote-setting
 const ProjectBomSettingsAdmin = lazy(() => import("../pages/solar-shop/project-bom-settings/ProjectBomSettings"));
 const EstimatorSettingsAdmin = lazy(() => import("../pages/solar-shop/estimator-settings/EstimatorSettings"));
 
+// ── Region Payment Configuration & Offline Approval Queue ───────────────────
+const RegionPaymentConfig = lazy(() => import("../pages/solar-shop/payment-configuration/RegionPaymentConfig"));
+const OfflineApprovalQueue = lazy(() => import("../pages/solar-shop/payment-configuration/OfflineApprovalQueue"));
+const PaymentMilestoneSettings = lazy(() => import("../pages/solar-shop/payment-configuration/PaymentMilestoneSettings"));
+
 const Home = lazy(() => import("../pages/solar-shop/Home"));
 const ApproveNewEPC = lazy(() => import("../pages/solar-shop/approve-new-epc/ApproveNewEPC"));
 const PoOrders = lazy(() => import("../pages/solar-shop/po-orders/PoOrders"));
 const WarehousePoConfig = lazy(() => import("../pages/solar-shop/po-orders/WarehousePoConfig"));
 const LooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/LooseOrders"));
 const WarehouseLooseOrders = lazy(() => import("../pages/solar-shop/loose-orders/WarehouseLooseOrders"));
+const AdminEpcOrders = lazy(() => import("../pages/solar-shop/epc-orders/AdminEpcOrders"));
 const OrderManagementSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderManagementSettings"));
 const OffersManagement = lazy(() => import("../pages/solar-shop/order-management-settings/OffersManagement"));
 const CheckoutCartSettings = lazy(() => import("../pages/solar-shop/order-management-settings/CheckoutCartSettings"));
@@ -70,6 +76,7 @@ const AdminSupplierSettings = lazy(() => import("../pages/solar-shop/order-manag
 const KitDisplayChecklist = lazy(() => import("../pages/solar-shop/order-management-settings/KitDisplayChecklist"));
 const OrderOverdueSettings = lazy(() => import("../pages/solar-shop/order-management-settings/OrderOverdueSettings"));
 const OrderJourneyDashboard = lazy(() => import("../pages/solar-shop/order-management-settings/OrderJourneyDashboard"));
+const AdminOrderApprovalDashboard = lazy(() => import("../pages/solar-shop/order-approvals/AdminOrderApprovalDashboard"));
 
 
 
@@ -118,11 +125,19 @@ const menus = [
                     icon: <FaAward />,
                     path: "/admin-panel/solar-shop/combokit-configurations/best-seller",
                     unique_id: "ADM_COMBO_KITS"
+                },
+                {
+                    name: "Product Datasheets",
+                    icon: <FaFilePdf />,
+                    path: "/admin-panel/solar-shop/combokit-configurations/product-datasheets",
+                    unique_id: "ADM_COMBO_KITS"
                 }
             ]
         },
         { name: "PO Orders", icon: <FaFileInvoiceDollar />, path: "/admin-panel/solar-shop/po-orders", unique_id: "00000000" },
         { name: "Loose Orders", icon: <FaBoxes />, path: "/admin-panel/solar-shop/loose-orders", unique_id: "00000000" },
+        { name: "EPC Orders & Approvals", icon: <FaUserShield />, path: "/admin-panel/solar-shop/epc-orders", unique_id: "00000000" },
+        { name: "Order & Stage Approvals", icon: <FiCheckSquare />, path: "/admin-panel/solar-shop/order-approvals", unique_id: "ADM_ORDER_APPROVALS" },
         {
             name: "Delivery Management",
             icon: <FaTruck />,
@@ -282,41 +297,12 @@ const menus = [
 
         // ── Store Management Module (Converted from Franchisee Management) ────────
         {
-            name: "Store Management",
+            name: "Franchisee Management",
             icon: <FiUsers />,
             path: "/admin-panel/solar-shop/reseller-management",
             unique_id: "RSL_MGMT",
             subMenu: [
-                {
-                    name: "Store Onboarding Queue",
-                    icon: <FaStore />,
-                    path: "/admin-panel/solar-shop/reseller-management/onboarding",
-                    unique_id: "RSL_MGMT"
-                },
-                {
-                    name: "Onboard New Store",
-                    icon: <FiPlusCircle />,
-                    path: "/admin-panel/solar-shop/reseller-management/create-store",
-                    unique_id: "RSL_MGMT"
-                },
-                {
-                    name: "Franchisee Leads",
-                    icon: <FiFileText />,
-                    path: "/admin-panel/solar-shop/reseller-management/leads",
-                    unique_id: "RSL_MGMT"
-                },
-                {
-                    name: "Store Accounts",
-                    icon: <FiUsers />,
-                    path: "/admin-panel/solar-shop/reseller-management/resellers",
-                    unique_id: "RSL_MGMT"
-                },
-                {
-                    name: "Store Type Settings",
-                    icon: <HiCube />,
-                    path: "/admin-panel/solar-shop/reseller-management/plans",
-                    unique_id: "RSL_PLAN"
-                },
+                // ── Section 1: Master Configurations (Foundation Rules) ──
                 {
                     name: "Franchisee Subtypes",
                     icon: <FiLayers />,
@@ -324,34 +310,10 @@ const menus = [
                     unique_id: "RSL_PLAN"
                 },
                 {
-                    name: "Store Settings",
-                    icon: <FiSliders />,
-                    path: "/admin-panel/solar-shop/reseller-management/franchise-settings",
-                    unique_id: "FPO_SETTINGS"
-                },
-                {
-                    name: "Performance Tracker",
-                    icon: <FiBarChart2 />,
-                    path: "/admin-panel/solar-shop/reseller-management/fpo/performance",
-                    unique_id: "FPO_ANALYTICS"
-                },
-                {
-                    name: "Commission Settings",
-                    icon: <FiDollarSign />,
-                    path: "/admin-panel/solar-shop/reseller-management/commission-settings",
-                    unique_id: "FPO_COMM"
-                },
-                {
-                    name: "Commission Ledger",
-                    icon: <FiFileText />,
-                    path: "/admin-panel/solar-shop/reseller-management/commission-ledger",
-                    unique_id: "FPO_COMM"
-                },
-                {
-                    name: "Store Setup & Operations",
-                    icon: <FaStore />,
-                    path: "/admin-panel/solar-shop/reseller-management/store-setup",
-                    unique_id: "RSL_MGMT"
+                    name: "Store Type Settings",
+                    icon: <HiCube />,
+                    path: "/admin-panel/solar-shop/reseller-management/plans",
+                    unique_id: "RSL_PLAN"
                 },
                 {
                     name: "Territories",
@@ -366,6 +328,58 @@ const menus = [
                     unique_id: "RSL_PROD_AUTH"
                 },
                 {
+                    name: "Commission Settings",
+                    icon: <FiDollarSign />,
+                    path: "/admin-panel/solar-shop/reseller-management/commission-settings",
+                    unique_id: "FPO_COMM"
+                },
+                {
+                    name: "Franchisee Settings",
+                    icon: <FiSliders />,
+                    path: "/admin-panel/solar-shop/reseller-management/franchise-settings",
+                    unique_id: "FPO_SETTINGS"
+                },
+                {
+                    name: "Agreement Settings",
+                    icon: <FiFileText />,
+                    path: "/admin-panel/solar-shop/reseller-management/settings",
+                    unique_id: "RSL_SETTINGS"
+                },
+
+                // ── Section 2: Onboarding & Partner Pipeline ─────────────
+                {
+                    name: "Franchisee Leads",
+                    icon: <FiFileText />,
+                    path: "/admin-panel/solar-shop/reseller-management/leads",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Onboard New Store",
+                    icon: <FiPlusCircle />,
+                    path: "/admin-panel/solar-shop/reseller-management/create-store",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Store Onboarding Queue",
+                    icon: <FaStore />,
+                    path: "/admin-panel/solar-shop/reseller-management/onboarding",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Store Setup & Operations",
+                    icon: <FaStore />,
+                    path: "/admin-panel/solar-shop/reseller-management/store-setup",
+                    unique_id: "RSL_MGMT"
+                },
+                {
+                    name: "Franchisee Accounts",
+                    icon: <FiUsers />,
+                    path: "/admin-panel/solar-shop/reseller-management/resellers",
+                    unique_id: "RSL_MGMT"
+                },
+
+                // ── Section 3: Live Operations, Sales & Financials ────────
+                {
                     name: "Franchisee EPC Buyers",
                     icon: <FaUserCheck />,
                     path: "/admin-panel/solar-shop/reseller-management/epc-buyers",
@@ -378,16 +392,22 @@ const menus = [
                     unique_id: "RSL_MGMT"
                 },
                 {
+                    name: "Performance Tracker",
+                    icon: <FiBarChart2 />,
+                    path: "/admin-panel/solar-shop/reseller-management/fpo/performance",
+                    unique_id: "FPO_ANALYTICS"
+                },
+                {
+                    name: "Commission Ledger",
+                    icon: <FiFileText />,
+                    path: "/admin-panel/solar-shop/reseller-management/commission-ledger",
+                    unique_id: "FPO_COMM"
+                },
+                {
                     name: "Earnings & Settlement",
                     icon: <FaWallet />,
                     path: "/admin-panel/solar-shop/reseller-management/wallet",
                     unique_id: "RSL_WALLET"
-                },
-                {
-                    name: "Agreement Settings",
-                    icon: <FiFileText />,
-                    path: "/admin-panel/solar-shop/reseller-management/settings",
-                    unique_id: "RSL_SETTINGS"
                 },
             ]
         },
@@ -435,6 +455,33 @@ const menus = [
                     name: "Estimator Settings",
                     icon: <FiSettings />,
                     path: "/admin-panel/solar-shop/estimator-settings",
+                    unique_id: "00000000"
+                },
+            ]
+        },
+        // ── Region Payment Configuration & Offline Approval Queue ───────────
+        {
+            name: "Payment Configuration",
+            icon: <FiCreditCard />,
+            path: "/admin-panel/solar-shop/payment-configuration",
+            unique_id: "00000000",
+            subMenu: [
+                {
+                    name: "Region Payment Settings",
+                    icon: <FiSliders />,
+                    path: "/admin-panel/solar-shop/payment-configuration",
+                    unique_id: "00000000"
+                },
+                {
+                    name: "Payment Milestones",
+                    icon: <FaPercent />,
+                    path: "/admin-panel/solar-shop/payment-configuration/milestones",
+                    unique_id: "00000000"
+                },
+                {
+                    name: "Offline Approval Queue",
+                    icon: <FiCheckSquare />,
+                    path: "/admin-panel/solar-shop/payment-configuration/offline-approvals",
                     unique_id: "00000000"
                 },
             ]
@@ -643,6 +690,24 @@ export default function SolarShopDashboard() {
                                         }
                                     />
                                     <Route
+                                        path="/epc-orders"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading EPC Orders & Approvals..." />}>
+                                                <AdminEpcOrders />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/order-approvals"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_APPROVALS">
+                                                <Suspense fallback={<Loader text="Loading Order & Stage Approvals..." />}>
+                                                    <AdminOrderApprovalDashboard />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
                                         path="/vehicles-drivers"
                                         element={<Navigate to="../delivery-management/fleet" replace />}
                                     />
@@ -712,6 +777,24 @@ export default function SolarShopDashboard() {
                                             <PermissionGuard requiredUniqueId="00000000">
                                                 <Suspense fallback={<Loader text="Loading Loose Orders..." />}>
                                                     <LooseOrders moduleUniqueId="ADM_PO_ORDERS" />
+                                                </Suspense>
+                                            </PermissionGuard>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/epc-orders"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading EPC Orders & Approvals..." />}>
+                                                <AdminEpcOrders />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/order-approvals"
+                                        element={
+                                            <PermissionGuard requiredUniqueId="ADM_ORDER_APPROVALS">
+                                                <Suspense fallback={<Loader text="Loading Order & Stage Approvals..." />}>
+                                                    <AdminOrderApprovalDashboard />
                                                 </Suspense>
                                             </PermissionGuard>
                                         }
@@ -1424,6 +1507,55 @@ export default function SolarShopDashboard() {
                                         }
                                     />
 
+                                    {/* ── Region Payment Configuration & Offline Approval Queue ──── */}
+                                    <Route
+                                        path="/payment-configuration"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Configuration..." />}>
+                                                <RegionPaymentConfig />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/payment-configuration"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Configuration..." />}>
+                                                <RegionPaymentConfig />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/payment-configuration/milestones"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Milestones..." />}>
+                                                <PaymentMilestoneSettings />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/payment-configuration/milestones"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Payment Milestones..." />}>
+                                                <PaymentMilestoneSettings />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/payment-configuration/offline-approvals"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Offline Approval Queue..." />}>
+                                                <OfflineApprovalQueue />
+                                            </Suspense>
+                                        }
+                                    />
+                                    <Route
+                                        path="/:countryName/payment-configuration/offline-approvals"
+                                        element={
+                                            <Suspense fallback={<Loader text="Loading Offline Approval Queue..." />}>
+                                                <OfflineApprovalQueue />
+                                            </Suspense>
+                                        }
+                                    />
 
                                 </Routes>
                             </motion.div>

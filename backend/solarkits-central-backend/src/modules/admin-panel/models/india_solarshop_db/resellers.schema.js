@@ -139,6 +139,11 @@ const schema = new mongoose.Schema({
     ref: 'cms_users',
     default: null,
   },
+  bde_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'bde_profiles',
+    default: null,
+  },
   onboarding_rejection_reason: { type: String, default: null, trim: true },
   onboarding_hold_reason:      { type: String, default: null, trim: true },
 

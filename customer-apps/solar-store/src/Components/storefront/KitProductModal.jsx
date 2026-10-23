@@ -17,9 +17,11 @@ import {
   FiAward,
   FiChevronDown,
   FiChevronUp,
-  FiArrowRight
+  FiArrowRight,
+  FiDownload,
+  FiExternalLink
 } from "react-icons/fi";
-import { FaSolarPanel, FaBolt, FaShieldAlt, FaWarehouse, FaLeaf } from "react-icons/fa";
+import { FaSolarPanel, FaBolt, FaShieldAlt, FaWarehouse, FaLeaf, FaBoxOpen } from "react-icons/fa";
 import { addToCart, setShowAuthDialog, selectLiveStock } from "@/features/slice";
 import Button from "../Button";
 import IconButton from "../IconButton";
@@ -170,6 +172,64 @@ export default function KitProductModal({
       icon: FiCheck,
       warranty: "Certified Electrical Protection"
     });
+    return list;
+  }, [kit]);
+
+  // Extract manufacturer datasheets for Tab 5
+  const modalDatasheetList = useMemo(() => {
+    if (kit.datasheets && Array.isArray(kit.datasheets) && kit.datasheets.length > 0) {
+      return kit.datasheets.map(d => ({
+        id: d.id,
+        name: d.productName,
+        brand: d.brandName,
+        type: d.componentType,
+        datasheetUrl: d.datasheetUrl,
+        specSummary: d.skuCode ? `Model / SKU: ${d.skuCode}` : "Manufacturer Component",
+        icon: d.componentType?.toLowerCase().includes("panel") ? FaSolarPanel : d.componentType?.toLowerCase().includes("inverter") ? FaBolt : FaBoxOpen
+      }));
+    }
+
+    const list = [];
+    if (kit.panel) {
+      list.push({
+        id: "panel",
+        name: `${kit.panel.brandName || "Tier-1"} ${kit.panel.wattPerPanel || 550}W Solar Panel`,
+        brand: kit.panel.brandName || "Tier-1",
+        type: "Solar Panel",
+        datasheetUrl: kit.panel.datasheet || null,
+        specSummary: `${kit.panel.technologyType || "Mono PERC / TopCon"} • ${kit.panel.wattPerPanel || 550}W`,
+        icon: FaSolarPanel
+      });
+    }
+    if (kit.inverter) {
+      list.push({
+        id: "inverter",
+        name: `${kit.inverter.brandName || "Solar"} ${kit.inverter.capacityKW || kit.capacityKW}kW Inverter`,
+        brand: kit.inverter.brandName || "Tier-1",
+        type: "Solar Inverter",
+        datasheetUrl: kit.inverter.datasheet || null,
+        specSummary: `${kit.inverter.type || "On-Grid String"} (${kit.inverter.phase || "Single"} Phase)`,
+        icon: FaBolt
+      });
+    }
+    if (kit.includedComponents && Array.isArray(kit.includedComponents)) {
+      kit.includedComponents.forEach((comp, idx) => {
+        if (!comp) return;
+        const isPanel = comp.actualType === "panel" || comp.name?.toLowerCase().includes("panel");
+        const isInverter = comp.actualType === "inverter" || comp.name?.toLowerCase().includes("inverter");
+        if ((isPanel && kit.panel) || (isInverter && kit.inverter)) return;
+
+        list.push({
+          id: comp.id || idx,
+          name: comp.name || "Balance of System Component",
+          brand: comp.brandName || "Standard",
+          type: comp.actualType === "panel" ? "Solar Panel" : comp.actualType === "inverter" ? "Inverter" : (comp.technologyType || "BOS Equipment"),
+          datasheetUrl: comp.datasheet || null,
+          specSummary: comp.skuCode ? `SKU: ${comp.skuCode}` : "Hardware & Protection",
+          icon: isPanel ? FaSolarPanel : isInverter ? FaBolt : FaBoxOpen
+        });
+      });
+    }
     return list;
   }, [kit]);
 
@@ -449,6 +509,7 @@ export default function KitProductModal({
                 { id: "specs", label: "Technical Specifications", icon: FiFileText },
                 { id: "generation", label: "Estimated Generation & Impact", icon: FaLeaf },
                 { id: "faqs", label: "FAQs & Warranty", icon: FiHelpCircle },
+                { id: "datasheets", label: "Technical Datasheets", icon: FiDownload },
               ].map((tab) => {
                 const Icon = tab.icon;
                 return (
@@ -592,6 +653,91 @@ export default function KitProductModal({
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Tab 5: Technical Datasheets */}
+            {activeTab === "datasheets" && (
+              <div className="py-4 space-y-4 animate-in fade-in duration-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-border">
+                  <p className="text-xs text-text-secondary">
+                    Official manufacturer technical specifications, performance curves, and compliance documentation.
+                  </p>
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 shrink-0">
+                    MNRE / ALMM Approved
+                  </span>
+                </div>
+
+                <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-surface">
+                  {modalDatasheetList.length === 0 ? (
+                    <div className="py-10 text-center space-y-2">
+                      <FiFileText size={28} className="mx-auto text-text-muted opacity-40" />
+                      <p className="text-xs text-text-muted">
+                        Datasheets for this custom configuration are available on request during order processing.
+                      </p>
+                    </div>
+                  ) : (
+                    modalDatasheetList.map((item, idx) => {
+                      const CompIcon = item.icon || FiFileText;
+                      return (
+                        <div key={item.id || idx} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                          <div className="flex items-start gap-3.5">
+                            <div className="w-10 h-10 rounded-xl bg-primary-soft text-primary flex items-center justify-center shrink-0 mt-0.5">
+                              <CompIcon size={18} />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-text-secondary border border-border">
+                                  {item.type}
+                                </span>
+                                {item.brand && (
+                                  <span className="text-[10px] font-bold text-text-primary">
+                                    {item.brand}
+                                  </span>
+                                )}
+                              </div>
+                              <h5 className="text-xs sm:text-sm font-bold text-text-primary">
+                                {item.name}
+                              </h5>
+                              <p className="text-[11px] text-text-secondary">
+                                {item.specSummary || "Manufacturer Certified Specification Sheet"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            {item.datasheetUrl ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(item.datasheetUrl, "_blank")}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-surface hover:bg-slate-100 dark:hover:bg-slate-800 text-text-primary text-xs font-bold transition-all cursor-pointer shadow-xs"
+                                  title="View PDF in browser tab"
+                                >
+                                  <FiExternalLink size={13} /> View
+                                </button>
+                                <a
+                                  href={item.datasheetUrl}
+                                  download={`${item.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_Datasheet.pdf`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-hover text-white text-xs font-bold transition-all shadow-xs"
+                                  title="Download PDF"
+                                >
+                                  <FiDownload size={13} /> Download
+                                </a>
+                              </>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-text-muted text-[11px] font-medium border border-border">
+                                On Request
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
           </div>

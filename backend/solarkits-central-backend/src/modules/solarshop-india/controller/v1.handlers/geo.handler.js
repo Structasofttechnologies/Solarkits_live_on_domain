@@ -3,6 +3,8 @@ const GeoLevel0 = require("../../models/geolocation_db/geo_level_0.schema");
 const GeoLevel1 = require("../../models/geolocation_db/geo_level_1.schema");
 const GeoLevel2 = require("../../models/geolocation_db/geo_level_2.schema");
 const CompanyWarehouse = require("../../models/india_core_db/company_warehouses.schema");
+const EpcAccount = require("../../models/india_solarshop_db/epc_accounts.schema");
+const EpcAccountLocation = require("../../models/india_solarshop_db/epc_account_locations.schema");
 
 const get_states = async (req, res) => {
     try {
@@ -16,6 +18,26 @@ const get_states = async (req, res) => {
 
         if (india) {
             query.level_0 = india._id;
+        }
+
+        // 🔒 If authenticated EPC user, restrict strictly to their registered state(s)
+        const epcId = req.user?.account_id || req.user?.id;
+        if (epcId && mongoose.Types.ObjectId.isValid(epcId)) {
+            const epc = await EpcAccount.findById(epcId).lean();
+            if (epc) {
+                let allowedStateIds = (epc.states && epc.states.length > 0) ? [...epc.states] : [];
+                if (allowedStateIds.length === 0) {
+                    const epcLoc = await EpcAccountLocation.findOne({ account_id: epcId, is_primary: true, deleted_at: null }).lean();
+                    if (epcLoc?.state_id) allowedStateIds.push(epcLoc.state_id);
+                }
+                if (allowedStateIds.length === 0 && epc.state_name) {
+                    const matchedState = await GeoLevel1.findOne({ name: new RegExp(`^${epc.state_name.trim()}$`, 'i') }).lean();
+                    if (matchedState) allowedStateIds.push(matchedState._id);
+                }
+                if (allowedStateIds.length > 0) {
+                    query._id = { $in: allowedStateIds };
+                }
+            }
         }
 
         const states = await GeoLevel1.find(query).sort({ name: 1 }).select('_id name is_active');
@@ -60,6 +82,29 @@ const get_districts_by_state = async (req, res) => {
                 query.level_1 = stateDoc._id;
             } else {
                 return res.status(200).json({ districts: [] });
+            }
+        }
+
+        // 🔒 If authenticated EPC user, restrict strictly to their registered district(s)
+        const epcId = req.user?.account_id || req.user?.id;
+        if (epcId && mongoose.Types.ObjectId.isValid(epcId)) {
+            const epc = await EpcAccount.findById(epcId).lean();
+            if (epc) {
+                let allowedDistrictIds = (epc.districts && epc.districts.length > 0) ? [...epc.districts] : [];
+                if (allowedDistrictIds.length === 0) {
+                    const epcLoc = await EpcAccountLocation.findOne({ account_id: epcId, is_primary: true, deleted_at: null }).lean();
+                    if (epcLoc?.district_id) allowedDistrictIds.push(epcLoc.district_id);
+                }
+                if (allowedDistrictIds.length === 0 && epc.district_name && query.level_1) {
+                    const matchedDistrict = await GeoLevel2.findOne({
+                        level_1: query.level_1,
+                        name: new RegExp(`^${epc.district_name.trim()}$`, 'i')
+                    }).lean();
+                    if (matchedDistrict) allowedDistrictIds.push(matchedDistrict._id);
+                }
+                if (allowedDistrictIds.length > 0) {
+                    query._id = { $in: allowedDistrictIds };
+                }
             }
         }
 

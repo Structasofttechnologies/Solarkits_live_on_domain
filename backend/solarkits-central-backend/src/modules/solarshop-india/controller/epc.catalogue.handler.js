@@ -13,7 +13,7 @@
  */
 
 const mongoose = require('mongoose');
-const { ResellerListing, EpcAccount, EpcResellerRelationship, Reseller } = require('../../admin-panel/models/india_solarshop_db');
+const { ResellerListing, EpcAccount, EpcResellerRelationship, Reseller, WarehouseComboKit, CompanyMargin } = require('../../admin-panel/models/india_solarshop_db');
 const { Product, ProjectCategory, ProjectSubcategory, Brand, IndustryType } = require('../../admin-panel/models/core_db');
 
 /**
@@ -236,6 +236,7 @@ const get_epc_catalogue = async (req, res) => {
     // 6. Query listings
     const listings = await ResellerListing.find(filter)
       .populate({ path: 'product_id', model: Product, select: 'name sku_code description image specifications features' })
+      .populate({ path: 'kit_id', model: WarehouseComboKit, select: 'kitName description kitImage order_quantities loose_order_quantities' })
       .populate({ path: 'category_id', model: ProjectCategory, select: 'name' })
       .populate({ path: 'subcategory_id', model: ProjectSubcategory, select: 'name' })
       .populate({ path: 'brand_id', model: Brand, select: 'name logo' })
@@ -243,9 +244,32 @@ const get_epc_catalogue = async (req, res) => {
       .sort(sortOption)
       .lean();
 
+    // Fetch company margins for kits in listings
+    const kitIds = listings.filter(l => l.kit_id).map(l => (l.kit_id._id || l.kit_id).toString());
+    const marginMap = {};
+    if (kitIds.length > 0) {
+      const margins = await CompanyMargin.find({ combo_kit_id: { $in: kitIds } }).lean();
+      margins.forEach((m) => {
+        if (m.combo_kit_id) {
+          marginMap[m.combo_kit_id.toString()] = m;
+        }
+      });
+    }
+
     // 7. SANITIZE — DO NOT EXPOSE cost_price, reseller_margin, base_price, company_margin
     const sanitizedCatalogue = listings.map((item) => {
       const p = item.product_id;
+      const k = item.kit_id;
+      const kitMargin = k ? marginMap[(k._id || k).toString()] : null;
+
+      const rawLooseQtys = Array.isArray(k?.loose_order_quantities) ? k.loose_order_quantities : [];
+      const rawPoQtys = Array.isArray(k?.order_quantities) ? k.order_quantities : [];
+      const marginLooseQtys = (kitMargin?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+      const marginPoQtys = (kitMargin?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+
+      const combinedLooseQtys = [...new Set([...rawLooseQtys, ...marginLooseQtys])].sort((a, b) => a - b);
+      const combinedPoQtys = [...new Set([...rawPoQtys, ...marginPoQtys])].sort((a, b) => a - b);
+
       const sellingPricePaise = item.selling_price_paise || 0;
       const taxesPaise = item.taxes_and_charges_paise || 0;
       const gstRate = item.tax_rate_pct || 18;
@@ -258,14 +282,29 @@ const get_epc_catalogue = async (req, res) => {
         listing_id: item._id,
         item_type: item.item_type || 'product',
         product_id: p?._id || item.product_id,
+        kit_id: k?._id || item.kit_id,
 
         // Identifiers
-        title: item.title || p?.name || 'Solar Product',
+        title: item.title || k?.kitName || p?.name || 'Solar Product',
         sku_code: p?.sku_code || null,
-        description: item.description || p?.description || '',
+        description: item.description || k?.description || p?.description || '',
         features: p?.features || [],
-        image_url: item.image_url || p?.image || null,
+        image_url: item.image_url || k?.kitImage || p?.image || null,
         specifications: item.specifications || p?.specifications || {},
+
+        // Order quantities and tier pricing
+        order_quantities: combinedPoQtys,
+        loose_order_quantities: combinedLooseQtys,
+        loose_order_pricing: (kitMargin?.loose_order_pricing || []).map(t => ({
+          quantity: Number(t.quantity),
+          price_per_kit: Number(t.price_per_kit),
+          discount_amount: Number(t.discount_amount || 0),
+        })),
+        po_order_pricing: (kitMargin?.po_order_pricing || []).map(t => ({
+          quantity: Number(t.quantity),
+          price_per_kit: Number(t.price_per_kit),
+          discount_amount: Number(t.discount_amount || 0),
+        })),
 
         // Classification
         category: item.category_id ? { id: item.category_id._id, name: item.category_id.name } : null,

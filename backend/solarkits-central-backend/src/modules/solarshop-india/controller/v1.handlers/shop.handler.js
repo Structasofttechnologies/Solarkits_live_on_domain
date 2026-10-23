@@ -421,8 +421,8 @@ const get_combo_kits_by_district = async (req, res) => {
 
     let warehouseIds = warehouses.map(w => w._id);
 
-    // Fetch warehouse kit activations for resolved warehouses (or all active if no district specified)
-    let activations = await WarehouseKitActivation.find({
+    // Fetch warehouse kit activations for resolved warehouses
+    const activations = await WarehouseKitActivation.find({
       warehouse_id: { $in: warehouseIds },
       is_combokit_active: true,
       is_active: true,
@@ -430,42 +430,29 @@ const get_combo_kits_by_district = async (req, res) => {
     }).lean();
 
     if (!activations || activations.length === 0) {
-      activations = await WarehouseKitActivation.find({
-        is_combokit_active: true,
-        is_active: true,
-        deleted_at: null
-      }).lean();
-      const allActiveWarehouses = await CompanyWarehouse.find({ is_active: true, deleted_at: null }).select('_id').lean();
-      warehouseIds = allActiveWarehouses.map(w => w._id);
+      return res.status(200).json({ success: true, source: "db", data: [] });
     }
 
     const CoreComboKit = require("../../models/india_core_db/combo_kits.schema");
     const IndiaComboKit = require("../../models/india_solarshop_db/combo_kits.schema");
 
     // Build set of kit IDs
-    let kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
-
-    // Fetch combo kits from both collections
-    let kits = [];
-    if (kitIds.length > 0) {
-      const [k1, k2] = await Promise.all([
-        IndiaComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => []),
-        CoreComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
-      ]);
-      const map = new Map();
-      [...(k1 || []), ...(k2 || [])].forEach(k => map.set(k._id.toString(), k));
-      kits = Array.from(map.values());
+    const kitIds = activations.map(a => a.combo_kit_id).filter(Boolean);
+    if (kitIds.length === 0) {
+      return res.status(200).json({ success: true, source: "db", data: [] });
     }
 
-    // If still no kits found via activations, fetch all active combo kits in the system
-    if (!kits || kits.length === 0) {
-      const [all1, all2] = await Promise.all([
-        IndiaComboKit.find({ is_active: true, deleted_at: null }).lean().catch(() => []),
-        CoreComboKit.find({ is_active: true, deleted_at: null }).lean().catch(() => [])
-      ]);
-      const map = new Map();
-      [...(all1 || []), ...(all2 || [])].forEach(k => map.set(k._id.toString(), k));
-      kits = Array.from(map.values());
+    // Fetch combo kits from both collections
+    const [k1, k2] = await Promise.all([
+      IndiaComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => []),
+      CoreComboKit.find({ _id: { $in: kitIds }, is_active: true, deleted_at: null }).lean().catch(() => [])
+    ]);
+    const map = new Map();
+    [...(k1 || []), ...(k2 || [])].forEach(k => map.set(k._id.toString(), k));
+    let kits = Array.from(map.values());
+
+    if (kits.length === 0) {
+      return res.status(200).json({ success: true, source: "db", data: [] });
     }
 
     // Safety check: ensure every kit has valid order_quantities and loose_order_quantities
@@ -500,16 +487,21 @@ const get_combo_kits_by_district = async (req, res) => {
     // If Direct EPC or unauthenticated public store visitor: show ALL active company combo kits.
     try {
       let epcAccount = null;
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.split(' ')[1];
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.decode(token);
-        const accountId = decoded?.account_id || decoded?._id || decoded?.id;
-        if (accountId && mongoose.Types.ObjectId.isValid(accountId)) {
-          const { EpcAccount } = require('../../../admin-panel/models/india_solarshop_db');
-          epcAccount = await EpcAccount.findOne({ _id: accountId, deleted_at: null }).lean();
+      let accountId = req.user?.account_id || req.user?._id || req.user?.id;
+      if (!accountId) {
+        const authHeader = req.headers.authorization;
+        const cookieToken = req.cookies?.access_token;
+        const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : cookieToken;
+        if (token) {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.decode(token);
+          accountId = decoded?.account_id || decoded?._id || decoded?.id;
         }
+      }
+
+      if (accountId && mongoose.Types.ObjectId.isValid(accountId)) {
+        const { EpcAccount } = require('../../../admin-panel/models/india_solarshop_db');
+        epcAccount = await EpcAccount.findOne({ _id: accountId, deleted_at: null }).lean();
       }
 
       if (epcAccount) {
@@ -562,14 +554,59 @@ const get_combo_kits_by_district = async (req, res) => {
           });
 
           // Filter kits strictly to only those authorized / listed by this Franchise Partner
-          if (authorizedKitIds.size > 0) {
-            kits = kits.filter(k => authorizedKitIds.has(k._id.toString()));
+          kits = kits.filter(k => authorizedKitIds.has(k._id.toString()));
+
+          if (kits.length === 0) {
+            return res.status(200).json({ success: true, source: "db", data: [] });
           }
         }
         // If resellerId is null (Direct EPC): No filtering applied, full company catalog is shown!
       }
     } catch (isolationErr) {
       console.warn('EPC tenant catalog isolation check warning:', isolationErr.message);
+    }
+
+    // ── Count prior trial kit orders for current buyer to enforce purchase limits ──
+    const trialCountByKitId = {};
+    try {
+      let buyerId = req.user?.account_id || req.user?.id || req.user?._id;
+      if (!buyerId) {
+        const authHeader = req.headers.authorization;
+        const cookieToken = req.cookies?.access_token;
+        const token = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.split(' ')[1] : cookieToken;
+        if (token) {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.decode(token);
+          buyerId = decoded?.account_id || decoded?.id || decoded?._id;
+        }
+      }
+
+      if (buyerId && mongoose.Types.ObjectId.isValid(buyerId)) {
+        const { EpcOrder } = require('../../../admin-panel/models/india_solarshop_db');
+        const buyerObjId = new mongoose.Types.ObjectId(buyerId);
+        const buyerTrialOrders = await EpcOrder.find({
+          epc_id: buyerObjId,
+          order_status: { $nin: ['cancelled'] },
+          payment_status: { $nin: ['rejected'] },
+          $or: [
+            { is_trial_order: true },
+            { 'items.is_trial_kit': true },
+            { 'items.item_name': { $regex: /trial/i } }
+          ]
+        }, { 'items.kit_id': 1, 'items.is_trial_kit': 1, 'items.item_name': 1 }).lean();
+
+        (buyerTrialOrders || []).forEach(o => {
+          (o.items || []).forEach(it => {
+            const isTrial = Boolean(it.is_trial_kit || (it.item_name && /trial/i.test(it.item_name)));
+            if (isTrial && it.kit_id) {
+              const kId = it.kit_id.toString();
+              trialCountByKitId[kId] = (trialCountByKitId[kId] || 0) + 1;
+            }
+          });
+        });
+      }
+    } catch (trialCountErr) {
+      console.warn('[get_combo_kits_by_district] Error counting buyer trial orders:', trialCountErr.message);
     }
 
     // Fetch all solar kits for mapping and manual population
@@ -796,12 +833,20 @@ const get_combo_kits_by_district = async (req, res) => {
       }
 
       // Get margin
-      const marginDoc = await CompanyMargin.findOne({
+      let marginDoc = await CompanyMargin.findOne({
         warehouse_id: warehouseId,
         combo_kit_id: kit._id,
         is_active: true,
         deleted_at: null
       }).lean();
+
+      if (!marginDoc) {
+        marginDoc = await CompanyMargin.findOne({
+          combo_kit_id: kit._id,
+          is_active: true,
+          deleted_at: null
+        }).sort({ updated_at: -1 }).lean();
+      }
 
       const standardMargin = marginDoc ? (marginDoc.standard_margin || 15) : 15;
       const showcaseMargin = marginDoc ? (marginDoc.showcase_margin || 25) : 25;
@@ -1114,6 +1159,7 @@ const get_combo_kits_by_district = async (req, res) => {
             skuCode: skuInfo.sku_code,
             quantity: bc.quantity || 0,
             image: img || null,
+            datasheet: p?.datasheet || null,
             actualType,
             
             // Mapping matching frontend keys exactly
@@ -1230,6 +1276,48 @@ const get_combo_kits_by_district = async (req, res) => {
       const kitBrandDoc = kit.brand_id ? brands.find(b => b._id.toString() === kit.brand_id.toString()) : null;
       const finalBrandName = kitBrandDoc ? kitBrandDoc.brand_name : (firstPanel ? firstPanel.brandName : "");
 
+      // Compile all component datasheets
+      const kitDatasheets = [];
+      const seenDatasheetUrls = new Set();
+
+      // If combokit itself has a datasheet, add it as primary system datasheet
+      if (kit.datasheet) {
+        seenDatasheetUrls.add(kit.datasheet);
+        kitDatasheets.push({
+          id: kit._id.toString(),
+          productName: `${kit.name} — System Datasheet`,
+          brandName: finalBrandName || "SolarKit",
+          skuCode: "SYSTEM-SPEC",
+          componentType: "Combo Kit Complete Datasheet",
+          datasheetUrl: kit.datasheet,
+          hasDatasheet: true,
+          quantity: 1,
+          image: kit.kit_image
+        });
+      }
+
+      baseComponents.forEach(comp => {
+        const item = {
+          id: comp.id,
+          productName: comp.name,
+          brandName: comp.brandName,
+          skuCode: comp.skuCode,
+          componentType: comp.actualType === "panel" ? "Solar Panel" : comp.actualType === "inverter" ? "Inverter" : (comp.technologyType || "Component"),
+          datasheetUrl: comp.datasheet || null,
+          hasDatasheet: !!comp.datasheet,
+          quantity: comp.quantity,
+          image: comp.image
+        };
+        if (comp.datasheet) {
+          if (!seenDatasheetUrls.has(comp.datasheet)) {
+            seenDatasheetUrls.add(comp.datasheet);
+            kitDatasheets.push(item);
+          }
+        } else {
+          kitDatasheets.push(item);
+        }
+      });
+
       const mappedKit = {
         id: kit._id.toString(),
         hasNoAssignedVariants: assignedVariantIds.length === 0,
@@ -1286,14 +1374,50 @@ const get_combo_kits_by_district = async (req, res) => {
           })
         } : null,
         capacityKW: kit.capacity || 0,
-        orderQuantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
-        order_quantities: (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
-        looseOrderQuantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
-        loose_order_quantities: (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
+        orderQuantities: (() => {
+          const fromKit = (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [100, 200, 400, 500, 1000];
+        })(),
+        order_quantities: (() => {
+          const fromKit = (kit.order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [100, 200, 400, 500, 1000];
+        })(),
+        looseOrderQuantities: (() => {
+          const fromKit = (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [5, 10, 15, 20, 25, 30];
+        })(),
+        loose_order_quantities: (() => {
+          const fromKit = (kit.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0);
+          const fromPricing = (marginDoc?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+          const combined = [...new Set([...fromKit, ...fromPricing])].sort((a, b) => a - b);
+          return combined.length > 0 ? combined : [5, 10, 15, 20, 25, 30];
+        })(),
+        loose_order_pricing: marginDoc?.loose_order_pricing || [],
+        po_order_pricing: marginDoc?.po_order_pricing || [],
         allow_trial_kit: Boolean(kit.allow_trial_kit),
         allowTrialKit: Boolean(kit.allow_trial_kit),
         trial_kit_quantity: Number(kit.trial_kit_quantity) || 10,
         trialKitQuantity: Number(kit.trial_kit_quantity) || 10,
+        trial_kit_max_orders_per_buyer: kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1,
+        trialKitMaxOrdersPerBuyer: kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1,
+        trial_kit_purchased_count: trialCountByKitId[kit._id.toString()] || 0,
+        trialKitPurchasedCount: trialCountByKitId[kit._id.toString()] || 0,
+        trial_kit_limit_reached: (() => {
+          const limit = kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1;
+          const purchased = trialCountByKitId[kit._id.toString()] || 0;
+          return Boolean(limit > 0 && purchased >= limit);
+        })(),
+        trialKitLimitReached: (() => {
+          const limit = kit.trial_kit_max_orders_per_buyer !== undefined ? Number(kit.trial_kit_max_orders_per_buyer) : 1;
+          const purchased = trialCountByKitId[kit._id.toString()] || 0;
+          return Boolean(limit > 0 && purchased >= limit);
+        })(),
         description: kit.description || (kit.capacity ? `High quality solar kit of ${kit.capacity}kW capacity.` : ""),
         warrantyYears: (firstPanel && firstPanel.warrantyYears) || (firstInverter && firstInverter.warrantyYears) || null,
         generationEstimateKWhPerYear: kit.capacity ? Math.round(kit.capacity * 1400) : null,
@@ -1313,6 +1437,7 @@ const get_combo_kits_by_district = async (req, res) => {
           dimensionMM: panelDimension || null,
           warrantyYears: firstPanel.warrantyYears || null,
           panelImage: firstPanel.panelImage,
+          datasheet: firstPanel.datasheet || null,
           attributes: firstPanel.attributes
         } : null,
         inverter: firstInverter ? {
@@ -1324,10 +1449,14 @@ const get_combo_kits_by_district = async (req, res) => {
           warrantyYears: firstInverter.warrantyYears || null,
           features: [],
           inverterImage: firstInverter.inverterImage,
+          datasheet: firstInverter.datasheet || null,
           quantity: firstInverter.quantity,
           attributes: firstInverter.attributes
         } : null,
         includedComponents: baseComponents,
+        datasheet: kit.datasheet || null,
+        datasheets: kitDatasheets,
+        hasDatasheet: !!kit.datasheet || kitDatasheets.some(d => d.hasDatasheet),
         BOSKit: {
           brandName: bosBrandName || "Generic",
           included: bosIncludedList,
@@ -1419,28 +1548,10 @@ const get_best_seller_kits = async (req, res) => {
       }
     }
 
-    // Filter kits marked as best seller
+    // Filter kits marked as best seller (explicitly configured and active)
     let bestSellers = resolvedKits
       .filter(k => k.is_best_seller)
       .sort((a, b) => (a.best_seller_priority || 999) - (b.best_seller_priority || 999));
-
-    // If none are tagged for this specific location, fallback gracefully to top kits from catalog
-    if (bestSellers.length === 0 && resolvedKits.length > 0) {
-      bestSellers = resolvedKits.slice(0, 4).map((k, idx) => ({
-        ...k,
-        is_best_seller: true,
-        best_seller_badge: idx === 0 ? "Top Rated" : "Our Best Seller",
-        best_seller_priority: idx + 1,
-        best_seller_info: {
-          badge_text: idx === 0 ? "Top Rated" : "Our Best Seller",
-          priority: idx + 1,
-          state_name: locationMeta.state_name,
-          district_name: locationMeta.district_name,
-          is_fallback: true
-        }
-      }));
-      locationMeta.is_fallback = true;
-    }
 
     return res.status(200).json({
       success: true,
@@ -2801,12 +2912,14 @@ const get_orders = async (req, res) => {
       const isDispatched = o.order_status === 'dispatched' || hasDispatchInfo;
       const isDelivered = o.order_status === 'delivered';
 
+      const isOnline = o.payment_method === 'icici_ecollection' || o.payment_gateway_used === 'icici_ecollection';
+
       // Status translation for EPC buyer view
       let displayStatus = 'pending';
       if (o.order_status === 'cancelled') displayStatus = 'cancelled';
       else if (isDelivered) displayStatus = 'delivered';
       else if (isDispatched) displayStatus = 'dispatched';
-      else if (o.payment_status === 'captured' || o.order_status === 'confirmed') displayStatus = 'confirmed';
+      else if (isOnline || o.payment_status === 'captured' || o.order_status === 'confirmed' || o.offline_payment?.verification_status === 'approved') displayStatus = 'confirmed';
       else if (o.payment_status === 'rejected') displayStatus = 'rejected';
       else if (o.payment_status === 'pending_verification') displayStatus = 'pending_verification';
 
@@ -2860,6 +2973,8 @@ const get_orders = async (req, res) => {
           selling_price_cached: totalAmount,
         },
         delivery_address: o.delivery_address || {},
+        payment_milestones: o.payment_milestones || null,
+        milestones: o.milestones || [],
       };
     });
 
@@ -2993,7 +3108,7 @@ const check_warehouse_stock = async (req, res) => {
  */
 const checkout_warehouse_capacity_check = async (req, res) => {
   try {
-    const { fulfillment_mode, cart_items, franchisee_id, warehouse_id } = req.query;
+    const { fulfillment_mode, cart_items, franchisee_id, warehouse_id, district_id } = req.query;
 
     if (!fulfillment_mode) {
       return res.status(400).json({ success: false, message: 'fulfillment_mode is required.' });
@@ -3011,12 +3126,14 @@ const checkout_warehouse_capacity_check = async (req, res) => {
 
     // ── Compute Order Load Metrics ──────────────────────────────────────────
     const order_load_metrics = parsedCartItems.reduce((acc, item) => {
-      const qty = Number(item.quantity || 1);
+      const qty = Number(item.quantity || item.qty || 1);
       acc.total_kits      += qty;
       acc.total_kw        += qty * Number(item.kw_per_kit     || 0);
       acc.total_weight_kg += qty * Number(item.weight_kg_per_kit || 0);
       return acc;
     }, { total_kits: 0, total_kw: 0, total_weight_kg: 0 });
+
+    const epc_id = req.user?.account_id || req.user?._id || req.user?.id;
 
     const { checkWarehouseCapacityForMode } = require('../../../admin-panel/services/epc.offline.checkout.service');
     const result = await checkWarehouseCapacityForMode({
@@ -3024,6 +3141,8 @@ const checkout_warehouse_capacity_check = async (req, res) => {
       order_load_metrics,
       franchisee_id,
       warehouse_id,
+      district_id,
+      epc_id,
     });
 
     return res.status(200).json({
@@ -3304,6 +3423,72 @@ const resubmit_epc_offline_payment = async (req, res) => {
     return res.status(400).json({ success: false, message: error.message });
   }
 };
+
+/**
+ * POST Submit EPC Remaining Payment for Milestone 2 (Before Dispatch)
+ */
+const submit_epc_milestone_payment = async (req, res) => {
+  try {
+    const epc_id = req.user?.account_id || req.user?.id;
+    const { id } = req.params;
+
+    let body = req.body || {};
+    let receipt_url = body.receipt_url;
+    let receipt_filename = body.receipt_filename;
+
+    if (req.files && req.files.length > 0) {
+      const uploadedFile = req.files.find(f => f.fieldname === 'payment_receipt' || f.fieldname === 'receipt' || f.fieldname === 'file') || req.files[0];
+      if (uploadedFile) {
+        receipt_url = uploadedFile.path;
+        receipt_filename = uploadedFile.originalname;
+      }
+    }
+
+    const { submitEpcMilestonePayment } = require("../../../admin-panel/services/epc.offline.checkout.service");
+    const updatedOrder = await submitEpcMilestonePayment({
+      order_id: id,
+      epc_id,
+      milestone_number: Number(body.milestone_number || 2),
+      utr_number: body.utr_number,
+      amount_paid: Number(body.amount_paid),
+      payment_date: body.payment_date,
+      receipt_url,
+      receipt_filename,
+      sender_bank_name: body.sender_bank_name,
+      account_holder_name: body.account_holder_name,
+      payment_method: body.payment_method,
+      payment_gateway_used: body.payment_gateway_used,
+      req,
+    });
+
+    try {
+      const { sendAdminNotification } = require("../../../admin-panel/services/admin.notification.service");
+      sendAdminNotification({
+        title: `Remaining Milestone Payment Uploaded (${updatedOrder.order_number})`,
+        message: `EPC buyer submitted remaining payment proof for order ${updatedOrder.order_number}. Verification pending before dispatch.`,
+        category: 'orders',
+        priority: 'high',
+        action_url: '/account-panel/solar-shop/epc-orders',
+        metadata: { order_id: updatedOrder._id, epc_id }
+      }).catch(err => console.warn('[Order Notification Warning]:', err.message));
+    } catch (notifErr) {}
+
+    return res.status(200).json({
+      success: true,
+      status: "success",
+      message: "Remaining milestone payment submitted successfully! Accounts team is verifying for dispatch clearance.",
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error("submit_epc_milestone_payment error:", error);
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Public checkout resolver for product payment milestones
+ */
+const { resolve_payment_milestones } = require("../../../admin-panel/controller/product.payment.milestones.handler");
 
 /**
  * GET Tax Invoice Data for Approved EPC Order
@@ -4494,6 +4679,8 @@ module.exports = {
   preview_epc_po_penalty,
   request_epc_po_refund,
   reorder_against_epc_po,
+  submit_epc_milestone_payment,
+  resolve_payment_milestones,
 };
 
 

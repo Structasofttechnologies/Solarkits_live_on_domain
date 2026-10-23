@@ -15,6 +15,7 @@ import {
     FaChevronRight,
     FaChevronDown,
     FaInfoCircle,
+    FaUserShield,
 } from "react-icons/fa";
 import SkuSpecsLink from "./SkuSpecsLink";
 import PopupDataLoader from "@/components/PopupDataLoader";
@@ -800,7 +801,7 @@ export default function ComboKitFormDrawer({
                                     PO Order Quantity Options (Kits)
                                 </h3>
                                 <p className="text-[10px] text-text-muted mt-0.5">
-                                    Define kit batch sizes for Purchase Orders (PO Orders). Store &amp; Reseller PO modal (/po-order) mein yahi quantities dikhenge.
+                                    Define kit batch sizes for Purchase Orders (PO Orders). These exact quantities will be displayed in the Store &amp; Reseller PO modal (/po-order).
                                 </p>
                             </div>
                         </div>
@@ -921,7 +922,7 @@ export default function ComboKitFormDrawer({
                             ) : (
                                 <div className="p-4 rounded-xl border border-dashed border-border bg-surface-hover/5 text-center">
                                     <p className="text-[11px] text-text-muted italic">
-                                        No PO quantity options set — store/PO modal mein standard +/- counter dikhega
+                                        No PO quantity options set — standard +/- counter will be displayed in store/PO modal
                                     </p>
                                 </div>
                             )}
@@ -939,7 +940,7 @@ export default function ComboKitFormDrawer({
                                     Loose Order Quantity Options (Kits)
                                 </h3>
                                 <p className="text-[10px] text-text-muted mt-0.5">
-                                    Define flexible quantities for Loose Orders. Reseller Loose Order portal (/loose-order) Step 2 mein yahi variations dikhenge.
+                                    Define flexible quantities for Loose Orders. These variations will be displayed in the Reseller Loose Order portal (/loose-order) Step 2.
                                 </p>
                             </div>
                         </div>
@@ -1107,22 +1108,21 @@ export default function ComboKitFormDrawer({
                                 </div>
 
                                 {/* Quick Presets */}
-                                <div className="flex flex-wrap gap-2">
+                                {/* <div className="flex flex-wrap gap-2">
                                     {[5, 10, 15, 20, 25, 50].map((preset) => (
                                         <button
                                             key={preset}
                                             type="button"
                                             onClick={() => handleFormChange("trial_kit_quantity", preset)}
-                                            className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
-                                                Number(formData.trial_kit_quantity || 10) === preset
-                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                                                    : "bg-surface border-border text-text-secondary hover:border-emerald-500/30 hover:text-emerald-600"
-                                            }`}
+                                            className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border transition-all cursor-pointer ${Number(formData.trial_kit_quantity || 10) === preset
+                                                ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                                                : "bg-surface border-border text-text-secondary hover:border-emerald-500/30 hover:text-emerald-600"
+                                                }`}
                                         >
                                             {preset} Kits {preset === 10 ? "(Recommended)" : ""}
                                         </button>
                                     ))}
-                                </div>
+                                </div> */}
 
                                 {/* Custom Trial Qty Input */}
                                 <div className="flex items-center gap-2">
@@ -1140,10 +1140,67 @@ export default function ComboKitFormDrawer({
                                     </span>
                                 </div>
 
+                                {/* Buyer Purchase Limit Configuration */}
+                                <div className="pt-3 border-t border-border/60 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-wider text-text-secondary flex items-center gap-1.5">
+                                                <FaUserShield className="text-amber-600 dark:text-amber-400" size={12} />
+                                                Buyer Purchase Limit (How Many Times Buyer Can Buy)
+                                            </label>
+                                            <p className="text-[10px] text-text-muted mt-0.5">
+                                                Maximum number of times an EPC / Buyer can order this trial kit. Once the limit is reached, the trial button will automatically be hidden from the store for that buyer.
+                                            </p>
+                                        </div>
+                                        <span className="text-[10px] font-extrabold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                                            {Number(formData.trial_kit_max_orders_per_buyer ?? 1) === 0 ? "Unlimited" : `${formData.trial_kit_max_orders_per_buyer ?? 1} Time(s) Per Buyer`}
+                                        </span>
+                                    </div>
+
+                                    {/* Quick Presets for Limit */}
+                                    {/* <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { label: "1 Time Only (Recommended)", value: 1 },
+                                            { label: "2 Times", value: 2 },
+                                            { label: "3 Times", value: 3 },
+                                            { label: "5 Times", value: 5 },
+                                            { label: "Unlimited", value: 0 },
+                                        ].map((preset) => (
+                                            <button
+                                                key={preset.value}
+                                                type="button"
+                                                onClick={() => handleFormChange("trial_kit_max_orders_per_buyer", preset.value)}
+                                                className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider border transition-all cursor-pointer ${Number(formData.trial_kit_max_orders_per_buyer ?? 1) === preset.value
+                                                    ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                                                    : "bg-surface border-border text-text-secondary hover:border-amber-500/30 hover:text-amber-600"
+                                                    }`}
+                                            >
+                                                {preset.label}
+                                            </button>
+                                        ))}
+                                    </div> */}
+
+                                    {/* Custom Limit Input */}
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="999"
+                                            value={formData.trial_kit_max_orders_per_buyer ?? 1}
+                                            onChange={(e) => handleFormChange("trial_kit_max_orders_per_buyer", Math.max(0, parseInt(e.target.value) || 0))}
+                                            className="w-32 h-10 px-3 bg-surface border-2 border-border focus:border-amber-500 rounded-xl text-xs font-bold text-text-primary outline-none transition-colors"
+                                            placeholder="1"
+                                        />
+                                        <span className="text-xs text-text-muted font-semibold">
+                                            Max trial orders allowed per buyer (0 = Unlimited)
+                                        </span>
+                                    </div>
+                                </div>
+
                                 <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl flex items-start gap-2 text-emerald-700">
                                     <FaInfoCircle className="mt-0.5 flex-shrink-0" size={13} />
                                     <p className="text-[11px] leading-relaxed">
-                                        EPC store me is product par <strong>"Order Trial Kit ({formData.trial_kit_quantity || 10} Kits)"</strong> button dikhega. EPC pincode dalega aur admin me configured <strong>Pincode Wise Delivery Cost</strong> calculate hoke transparent breakdown ke sath Add to Cart hoga.
+                                        An <strong>"Order Trial Kit ({formData.trial_kit_quantity || 10} Kits)"</strong> button will be displayed on this product in the EPC store. Each buyer can order this product's trial kit a maximum of <strong>{Number(formData.trial_kit_max_orders_per_buyer ?? 1) === 0 ? "unlimited times" : `${formData.trial_kit_max_orders_per_buyer ?? 1} time${Number(formData.trial_kit_max_orders_per_buyer ?? 1) === 1 ? "" : "s"}`}</strong>. Once the limit is reached, this button will be <strong>automatically hidden</strong> for that buyer.
                                     </p>
                                 </div>
                             </div>

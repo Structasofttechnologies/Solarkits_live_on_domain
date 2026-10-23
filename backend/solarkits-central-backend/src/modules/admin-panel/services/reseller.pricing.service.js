@@ -200,13 +200,59 @@ async function calculateCheckoutPrice(resellerId, items = []) {
       }
     }
 
+    let unitPricePaise = 0;
+    const platformCommPct = listing?.platform_commission_pct != null ? listing.platform_commission_pct : 5.0;
+
+    // Check if quantity tier pricing applies for combo kit
+    if (isKit && resolvedKitId) {
+      try {
+        const { CompanyMargin: IndiaMargin } = require('../models/india_solarshop_db');
+        const { CompanyMargin: CoreMargin } = require('../models/core_db');
+
+        let marginDoc = await IndiaMargin.findOne({
+          combo_kit_id: resolvedKitId,
+          is_active: true,
+          deleted_at: null,
+        }).sort({ updated_at: -1 }).lean();
+
+        if (!marginDoc) {
+          marginDoc = await CoreMargin.findOne({
+            combo_kit_id: resolvedKitId,
+            is_active: true,
+            deleted_at: null,
+          }).sort({ updated_at: -1 }).lean();
+        }
+
+        if (marginDoc) {
+          const allTiers = [
+            ...(Array.isArray(marginDoc.loose_order_pricing) ? marginDoc.loose_order_pricing : []),
+            ...(Array.isArray(marginDoc.po_order_pricing) ? marginDoc.po_order_pricing : []),
+          ];
+          const matchedTier = allTiers.find((t) => Number(t.quantity) === Number(qty) && Number(t.price_per_kit) > 0);
+          if (matchedTier) {
+            // tier.price_per_kit is GST-inclusive per kit in INR
+            const tierPriceInclGstPaise = Math.round(Number(matchedTier.price_per_kit) * 100);
+            unitPricePaise = Math.round(tierPriceInclGstPaise / (1 + gstRate / 100));
+          }
+        }
+      } catch (tierErr) {
+        console.warn('Error checking tier pricing in calculateCheckoutPrice:', tierErr.message);
+      }
+    }
+
     if (!unitPricePaise || unitPricePaise <= 0) {
-      const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || 0);
+      unitPricePaise = listing?.selling_price_paise || (item.unit_price_paise ? parseInt(item.unit_price_paise, 10) : 0);
+    }
+
+    if (!unitPricePaise || unitPricePaise <= 0) {
+      const ourPriceRupees = parseFloat(item.ourPrice || item.unit_price_inr || item.price || item.selling_price || 0);
       if (ourPriceRupees > 0) {
-        unitPricePaise = Math.round(ourPriceRupees * 100);
+        const unitPriceInclGstPaise = Math.round(ourPriceRupees * 100);
+        unitPricePaise = Math.round(unitPriceInclGstPaise / (1 + gstRate / 100));
       } else if (resolvedKitId) {
         const kitDoc = await WarehouseComboKit.findById(resolvedKitId).lean();
-        unitPricePaise = Math.round((kitDoc?.selling_price_cached || kitDoc?.base_price || 180000) * 100);
+        const rawKitPrice = kitDoc?.selling_price_cached || kitDoc?.base_price || 180000;
+        unitPricePaise = Math.round(rawKitPrice * 100);
       } else {
         unitPricePaise = 18000000;
       }
@@ -229,6 +275,8 @@ async function calculateCheckoutPrice(resellerId, items = []) {
       description: resolvedDesc || null,
       quantity: qty,
       unit_price_paise: unitPricePaise,
+      unit_price_incl_gst_paise: Math.round(unitPricePaise * (1 + gstRate / 100)),
+      cost_price_paise: listing?.cost_price_paise || Math.round(unitPricePaise * 0.85),
       tax_paise: itemTax,
       total_price_paise: itemSubtotal + itemTax,
       platform_commission_pct: platformCommPct,

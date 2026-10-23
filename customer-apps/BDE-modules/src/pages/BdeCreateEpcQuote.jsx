@@ -215,7 +215,7 @@ export default function BdeCreateEpcQuote() {
   useEffect(() => {
     if (!selectedKit) return;
 
-    const baseUnitPaise = selectedKit.price_paise || (selectedKit.capacity ? selectedKit.capacity * 4500000 : 35000000);
+    const baseUnitPaise = selectedKit.price_paise || selectedKit.mrp_paise || (selectedKit.selling_price_cached ? selectedKit.selling_price_cached * 100 : 0);
     const subtotalPaise = baseUnitPaise * quantity;
 
     let warrantyPaise = 0;
@@ -1181,7 +1181,7 @@ export default function BdeCreateEpcQuote() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredKits.map((kit) => {
                   const isSel = selectedKit?._id === kit._id;
-                  const pricePaise = kit.price_paise || (kit.capacity ? kit.capacity * 4500000 : 35000000);
+                  const pricePaise = kit.price_paise || kit.mrp_paise || (kit.selling_price_cached ? kit.selling_price_cached * 100 : 0);
 
                   return (
                     <div

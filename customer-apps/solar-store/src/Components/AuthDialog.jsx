@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import Dialog from "./Dialog";
 import Button from "./Button";
-import { setShowAuthDialog, fetchCart } from "@/features/slice";
+import { setShowAuthDialog, fetchCart, setSelectedLocation } from "@/features/slice";
 import { setUser } from "@/features/auth.slice";
 import { setAlert } from "@/features/alert.slice";
 import { 
@@ -108,6 +108,12 @@ export default function AuthDialog() {
         }
 
         dispatch(setUser(loggedUser));
+        if (loggedUser?.primaryLocation?.state && loggedUser?.primaryLocation?.district) {
+          dispatch(setSelectedLocation({
+            selectedState: loggedUser.primaryLocation.state,
+            selectedDistrict: loggedUser.primaryLocation.district
+          }));
+        }
         dispatch(fetchCart());
         dispatch(
           setAlert({

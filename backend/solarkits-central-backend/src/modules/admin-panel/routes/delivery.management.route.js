@@ -81,4 +81,9 @@ router.get('/analytics/dashboard', check_auth, handler.get_dashboard_analytics);
 // ─── 14. Company Warehouses List ──────────────────────────────────────────────
 router.get('/warehouses', check_auth, handler.get_warehouses_list);
 
+// ─── 15. Delivery Cost Approval Queue ─────────────────────────────────────────
+router.get('/approval-queue', check_auth, handler.get_delivery_approval_queue);
+router.post('/approval-queue/:id/decision', check_auth, handler.submit_delivery_approval_decision);
+
 module.exports = router;
+

@@ -231,7 +231,16 @@ const get_related_products = async (req, res) => {
     }).lean();
 
     if (!access_map) {
-      return res.status(403).json({ status: 'error', message: 'You are not authorized to access this industry' });
+      // Verify the industry type exists and is active for resellers
+      const ind = await IndustryType.findOne({
+        _id: industry_type_id,
+        is_active: true,
+        deleted_at: null,
+        $or: [{ for_resellers: true }, { for_resellers: { $exists: false } }],
+      });
+      if (!ind) {
+        return res.status(403).json({ status: 'error', message: 'You are not authorized to access this industry' });
+      }
     }
 
     const skip = (Number(page) - 1) * Number(limit);

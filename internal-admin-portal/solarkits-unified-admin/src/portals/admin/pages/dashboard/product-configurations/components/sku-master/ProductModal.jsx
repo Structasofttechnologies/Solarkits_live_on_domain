@@ -10,7 +10,7 @@ import DropdownWithSearchInput from "@/components/DropdownWithSearchInput";
 import MultiSelectDropdownWithSearchInput from "@/components/MultiSelectDropdownWithSearchInput";
 import CustomFilePicker from "@/components/CustomFilePicker";
 import PopupDataLoader from "@/components/PopupDataLoader";
-import { FaArrowLeft, FaArrowRight, FaPlus, FaTimes, FaCheck, FaImage,  FaMicrochip, FaStore, FaExclamationTriangle, FaTags, FaSync} from "react-icons/fa";
+import { FaArrowLeft, FaArrowRight, FaPlus, FaTimes, FaCheck, FaImage, FaMicrochip, FaStore, FaExclamationTriangle, FaTags, FaSync, FaFilePdf, FaExternalLinkAlt } from "react-icons/fa";
 import { authHeaderObj } from "@/app/authHeader";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -32,6 +32,7 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
   // Step 2: Product Identity
   const [productForm, setProductForm] = useState({
     name: "", description: "", features: [], product_image: null, product_image_preview: null,
+    product_datasheet: null, product_datasheet_preview: null, remove_datasheet: false
   });
   const [skuConfig, setSkuConfig] = useState({
     template_len: 3,
@@ -206,6 +207,9 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
       features: Array.isArray(editingProduct.features) ? editingProduct.features : (editingProduct.features ? JSON.parse(editingProduct.features) : []),
       product_image: null,
       product_image_preview: editingProduct.image || null,
+      product_datasheet: null,
+      product_datasheet_preview: editingProduct.datasheet || null,
+      remove_datasheet: false,
     });
     setSkuConfig({
       template_len: editingProduct.sku_config?.template_len ?? 3,
@@ -227,7 +231,10 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
     setStep2Error("");
     setStep3Errors({});
     setFeatureInput("");
-    setProductForm({ name: "", description: "", features: [], product_image: null, product_image_preview: null });
+    setProductForm({
+      name: "", description: "", features: [], product_image: null, product_image_preview: null,
+      product_datasheet: null, product_datasheet_preview: null, remove_datasheet: false
+    });
     setSkuConfig({
       template_len: 3,
       brand_len: 5,
@@ -409,6 +416,8 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
     formData.append("sku_config", JSON.stringify(skuConfig));
 
     if (productForm.product_image) formData.append("product_image", productForm.product_image);
+    if (productForm.product_datasheet) formData.append("product_datasheet", productForm.product_datasheet);
+    if (productForm.remove_datasheet) formData.append("remove_datasheet", "true");
     if (isEditMode) formData.append("product_id", editingProduct.id);
 
     const attrsPayload = [];
@@ -557,22 +566,69 @@ export default function ProductModal({ moduleUniqueId, isOpen, onClose, editingP
 
           {activeStep === 2 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in duration-300">
-                <div className="space-y-3">
-                  <h4 className="text-[11px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2"><FaImage className="text-primary" /> Product Imagery</h4>
-                  <CustomFilePicker
-                    name="product_image"
-                    accept="image/*"
-                    onChange={e => {
-                      const file = e.target.files[0];
-                      if (file) setProductForm(p => ({ ...p, product_image: file, product_image_preview: URL.createObjectURL(file) }));
-                    }}
-                    files={productForm.product_image ? [productForm.product_image] : (productForm.product_image_preview ? [{ name: "Current Product Image" }] : [])}
-                  />
-                  {productForm.product_image_preview && (
-                    <div className="mt-2 aspect-video bg-surface-hover rounded-xl border border-border overflow-hidden">
-                       <img src={productForm.product_image_preview} className="w-full h-full object-contain" alt="Preview" />
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <h4 className="text-[11px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2"><FaImage className="text-primary" /> Product Imagery</h4>
+                    <CustomFilePicker
+                      name="product_image"
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files[0];
+                        if (file) setProductForm(p => ({ ...p, product_image: file, product_image_preview: URL.createObjectURL(file) }));
+                      }}
+                      files={productForm.product_image ? [productForm.product_image] : (productForm.product_image_preview ? [{ name: "Current Product Image" }] : [])}
+                    />
+                    {productForm.product_image_preview && (
+                      <div className="mt-2 aspect-video bg-surface-hover rounded-xl border border-border overflow-hidden">
+                         <img src={productForm.product_image_preview} className="w-full h-full object-contain" alt="Preview" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Technical Datasheet (PDF) */}
+                  <div className="space-y-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[11px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+                        <FaFilePdf className="text-red-500" /> Technical Datasheet (PDF)
+                      </h4>
+                      {productForm.product_datasheet_preview && !productForm.remove_datasheet && (
+                        <a
+                          href={productForm.product_datasheet_preview}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-black text-primary hover:underline uppercase tracking-wider flex items-center gap-1"
+                        >
+                          <FaExternalLinkAlt size={9} /> View Current PDF
+                        </a>
+                      )}
                     </div>
-                  )}
+                    <CustomFilePicker
+                      name="product_datasheet"
+                      accept=".pdf,application/pdf"
+                      onChange={e => {
+                        const file = e.target.files[0];
+                        if (file) setProductForm(p => ({ ...p, product_datasheet: file, remove_datasheet: false }));
+                      }}
+                      files={productForm.product_datasheet ? [productForm.product_datasheet] : (productForm.product_datasheet_preview && !productForm.remove_datasheet ? [{ name: "Current Datasheet PDF" }] : [])}
+                    />
+                    {(productForm.product_datasheet || (productForm.product_datasheet_preview && !productForm.remove_datasheet)) && (
+                      <div className="flex items-center justify-between p-2.5 bg-surface-hover/50 rounded-xl border border-border text-xs">
+                        <div className="flex items-center gap-2 text-text-primary font-medium truncate">
+                          <FaFilePdf className="text-red-500 shrink-0" size={15} />
+                          <span className="truncate text-[11px] font-semibold">
+                            {productForm.product_datasheet ? productForm.product_datasheet.name : "Manufacturer Datasheet Attached"}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setProductForm(p => ({ ...p, product_datasheet: null, remove_datasheet: true, product_datasheet_preview: null }))}
+                          className="text-[10px] font-bold text-danger hover:underline ml-2 shrink-0 cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-6">

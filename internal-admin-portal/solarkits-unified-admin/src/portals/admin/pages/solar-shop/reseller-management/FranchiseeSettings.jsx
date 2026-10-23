@@ -37,6 +37,7 @@ import {
   FiInfo,
   FiTarget,
   FiTrendingUp,
+  FiUsers,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -70,25 +71,39 @@ function TerritoryLevelBadge({ level }) {
 }
 
 function OrderTypeBadge({ orderType }) {
-  const type = orderType || "both";
-  if (type === "po_order") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-        <FiFileText size={10} /> PO Only
-      </span>
-    );
+  let types = [];
+  if (Array.isArray(orderType)) {
+    types = orderType;
+  } else if (typeof orderType === "string") {
+    if (orderType === "both") types = ["po_order", "loose_order"];
+    else types = orderType.split(",").map((s) => s.trim());
+  } else {
+    types = ["po_order"];
   }
-  if (type === "loose_order") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-        <FiTruck size={10} /> Loose Only
-      </span>
-    );
-  }
+
+  const CONFIG = {
+    loose_order: { label: "Loose Order", icon: FiTruck, color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    combine_po_order: { label: "Combine PO", icon: FiUsers, color: "bg-purple-50 text-purple-700 border-purple-200" },
+    po_order: { label: "PO Order", icon: FiFileText, color: "bg-amber-50 text-amber-700 border-amber-200" },
+  };
+
+  const matched = types.map((t) => CONFIG[t]).filter(Boolean);
+  if (matched.length === 0) matched.push(CONFIG.po_order);
+
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-      <FiPackage size={10} /> Both (PO + Loose)
-    </span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {matched.map((cfg, i) => {
+        const Icon = cfg.icon;
+        return (
+          <span
+            key={i}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${cfg.color}`}
+          >
+            <Icon size={10} /> {cfg.label}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 

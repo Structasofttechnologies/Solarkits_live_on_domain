@@ -666,16 +666,23 @@ exports.get_eligible_kits = async (req, res) => {
 
     // Build kit query
     const kitFilter = { is_active: { $ne: false }, deleted_at: null };
-    if (allowedKitIds && allowedKitIds.size > 0) {
+    if (resellerId && mongoose.Types.ObjectId.isValid(resellerId)) {
+      if (!allowedKitIds || allowedKitIds.size === 0) {
+        return res.status(200).json({
+          status: 'success',
+          data: {
+            kits: [],
+            total: 0,
+            pagination: { total: 0, page: 1, limit: 100, pages: 1 }
+          }
+        });
+      }
+      kitFilter._id = { $in: Array.from(allowedKitIds).map(id => new mongoose.Types.ObjectId(id)) };
+    } else if (allowedKitIds && allowedKitIds.size > 0) {
       kitFilter._id = { $in: Array.from(allowedKitIds).map(id => new mongoose.Types.ObjectId(id)) };
     }
 
     let rawKits = await WarehouseComboKit.find(kitFilter).lean();
-
-    // Fallback: if no kits match strict plan restrictions, fallback to all active kits so view is never empty
-    if (!rawKits || rawKits.length === 0) {
-      rawKits = await WarehouseComboKit.find({ is_active: { $ne: false }, deleted_at: null }).lean();
-    }
 
     // Batch enrich with Industry Type, Project Type, Brand, Subcategory, Project Range, and Price
     const solarKitIds = rawKits.map(k => k.solar_kit_id).filter(Boolean);
@@ -738,7 +745,7 @@ exports.get_eligible_kits = async (req, res) => {
         (kitCap >= Number(r.min_value || 0) && kitCap <= Number(r.max_value || 999999))
       );
 
-      const rawPrice = k.selling_price_cached || k.base_price_cached || (k.capacity ? Math.round(k.capacity * 45000) : 350000);
+      const rawPrice = k.selling_price_cached || k.base_price_cached || 0;
       const pricePaise = Math.round(rawPrice * 100);
 
       return {

@@ -1094,7 +1094,7 @@ const get_order_inward_fulfillment = async (req, res) => {
   try {
     const { warehouse_id } = req.query;
     const { EpcOrder, FpoOrder } = require('../../admin-panel/models/india_solarshop_db');
-    const { PurchaseOrder } = require('../models/company_warehouse_db');
+    const { PurchaseOrder, PurchaseIndent } = require('../models/company_warehouse_db');
 
     const epcQuery = {
       order_status: { $in: ['confirmed', 'processing', 'ready_for_dispatch', 'pending'] }
@@ -1109,7 +1109,7 @@ const get_order_inward_fulfillment = async (req, res) => {
       fpoQuery.warehouse_id = warehouse_id;
     }
 
-    const [epcOrders, fpoOrders, existingPOs] = await Promise.all([
+    const [epcOrders, fpoOrders, existingPOs, existingPIs] = await Promise.all([
       EpcOrder.find(epcQuery)
         .populate('epc_id', 'name email whatsapp company_name')
         .populate('warehouse_id', 'warehouse_code address')
@@ -1123,7 +1123,8 @@ const get_order_inward_fulfillment = async (req, res) => {
         .lean(),
       PurchaseOrder.find({
         status: { $in: ['paid', 'delivered'] }
-      }).select('po_number procurement_type status source_orders').lean()
+      }).select('po_number procurement_type status source_orders').lean(),
+      PurchaseIndent ? PurchaseIndent.find({}).sort({ created_at: -1 }).lean() : []
     ]);
 
     const poMap = new Map();
@@ -1143,21 +1144,75 @@ const get_order_inward_fulfillment = async (req, res) => {
       }
     }
 
+    const piMap = new Map();
+    for (const pi of (existingPIs || [])) {
+      const idKey = (pi.customer_order_id || '').toString();
+      const numKey = (pi.customer_order_number || '').toString();
+      if (idKey) {
+        if (!piMap.has(idKey)) piMap.set(idKey, []);
+        piMap.get(idKey).push(pi);
+      }
+      if (numKey && numKey !== idKey) {
+        if (!piMap.has(numKey)) piMap.set(numKey, []);
+        piMap.get(numKey).push(pi);
+      }
+    }
+
     const mapOrder = (o, orderType) => {
       const idStr = o._id.toString();
+      const orderNo = (o.order_number || o.po_number || '').toString();
       const ref = poMap.get(idStr) || {};
+      const orderPIs = piMap.get(idStr) || piMap.get(orderNo) || [];
 
       const panelProc = o.procurement_status?.panel || {};
       const inverterProc = o.procurement_status?.inverter || {};
 
-      const isPanelInwarded = panelProc.status === 'inwarded' || ref.panel?.po_status === 'delivered';
-      const isPanelPaid = panelProc.status === 'paid_awaiting_inward' || isPanelInwarded || !!ref.panel;
+      let isPanelInwarded = panelProc.status === 'inwarded' || ref.panel?.po_status === 'delivered';
+      let isPanelPaid = panelProc.status === 'paid_awaiting_inward' || isPanelInwarded || !!ref.panel;
 
-      const isInverterInwarded = inverterProc.status === 'inwarded' || ref.inverter?.po_status === 'delivered';
-      const isInverterPaid = inverterProc.status === 'paid_awaiting_inward' || isInverterInwarded || !!ref.inverter;
+      let isInverterInwarded = inverterProc.status === 'inwarded' || ref.inverter?.po_status === 'delivered';
+      let isInverterPaid = inverterProc.status === 'paid_awaiting_inward' || isInverterInwarded || !!ref.inverter;
+
+      let panelPoNumber = panelProc.po_number || ref.panel?.po_number || null;
+      let inverterPoNumber = inverterProc.po_number || ref.inverter?.po_number || null;
+      let panelGrnNo = panelProc.inward_grn_no || null;
+      let inverterGrnNo = inverterProc.inward_grn_no || null;
+
+      // Check if order has Purchase Indents from the new Procurement Module
+      if (orderPIs.length > 0) {
+        for (const pi of orderPIs) {
+          const piNumber = pi.pi_number;
+          const isInward = pi.fulfilment?.supply_status === 'Inward Completed';
+          const isPaid = ['Paid', 'Advance Paid'].includes(pi.payment?.payment_status);
+          const grn = pi.audit_history?.find(a => a.action === 'INWARD_VERIFIED')?.grn_number || null;
+
+          const hasSolar = (pi.items || []).some(it => (it.category || '').toLowerCase().includes('solar') || (it.sku_code || '').toLowerCase().includes('panel'));
+          const hasInverter = (pi.items || []).some(it => (it.category || '').toLowerCase().includes('inverter') || (it.sku_code || '').toLowerCase().includes('inv'));
+
+          if (hasSolar || (!hasSolar && !hasInverter)) {
+            panelPoNumber = piNumber;
+            if (isInward) isPanelInwarded = true;
+            if (isPaid || isInward) isPanelPaid = true;
+            if (grn) panelGrnNo = grn;
+          }
+          if (hasInverter) {
+            inverterPoNumber = piNumber;
+            if (isInward) isInverterInwarded = true;
+            if (isPaid || isInward) isInverterPaid = true;
+            if (grn) inverterGrnNo = grn;
+          }
+        }
+      }
 
       const isBothInwarded = isPanelInwarded && isInverterInwarded;
       const isBothPaid = isPanelPaid && isInverterPaid;
+
+      let overallReadiness = 'awaiting_supplier_payment';
+      if (isBothInwarded) {
+        overallReadiness = 'ready_for_dispatch';
+      } else if (isBothPaid) {
+        overallReadiness = 'awaiting_inward';
+      }
 
       return {
         id: o._id,
@@ -1171,15 +1226,16 @@ const get_order_inward_fulfillment = async (req, res) => {
         destination: o.delivery_address?.district_name || o.destination_address || 'Direct Site',
         order_status: o.order_status || o.status,
         panel_status: isPanelInwarded ? 'inwarded' : (isPanelPaid ? 'paid_awaiting_inward' : 'pending_payment'),
-        panel_po_number: panelProc.po_number || ref.panel?.po_number || null,
-        panel_grn_no: panelProc.inward_grn_no || null,
+        panel_po_number: panelPoNumber,
+        panel_grn_no: panelGrnNo,
         panel_inward_at: panelProc.inward_at || null,
         inverter_status: isInverterInwarded ? 'inwarded' : (isInverterPaid ? 'paid_awaiting_inward' : 'pending_payment'),
-        inverter_po_number: inverterProc.po_number || ref.inverter?.po_number || null,
-        inverter_grn_no: inverterProc.inward_grn_no || null,
+        inverter_po_number: inverterPoNumber,
+        inverter_grn_no: inverterGrnNo,
         inverter_inward_at: inverterProc.inward_at || null,
-        overall_readiness: isBothInwarded ? 'ready_for_dispatch' : (isBothPaid ? 'awaiting_inward' : 'awaiting_supplier_payment'),
+        overall_readiness: overallReadiness,
         created_at: o.created_at || o.createdAt,
+        purchase_indents: orderPIs
       };
     };
 

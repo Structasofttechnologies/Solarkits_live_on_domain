@@ -137,4 +137,16 @@ schema.virtual('id').get(function () {
   return this._id;
 });
 
+schema.virtual('name').get(function () {
+  return this.full_name;
+});
+
+schema.virtual('employee_id').get(function () {
+  return this.bde_id;
+});
+
+schema.virtual('mobile').get(function () {
+  return this.mobile_number;
+});
+
 module.exports = india_solarshop_db.model('bde_profiles', schema);

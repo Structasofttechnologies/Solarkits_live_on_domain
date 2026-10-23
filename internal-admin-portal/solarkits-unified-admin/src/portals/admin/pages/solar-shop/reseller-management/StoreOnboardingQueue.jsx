@@ -129,10 +129,16 @@ export default function StoreOnboardingQueue() {
   // Load BDE list for assignment modal
   const loadBdes = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/store-management/bde/list`, {
-        headers: authHeaderObj(),
-      });
-      if (res.data?.data) setBdeList(res.data.data);
+      const res = await axios
+        .get(`${API_BASE}/store-management/bde/list?unique_id=RSL_MGMT&req_for=view`, {
+          headers: authHeaderObj(),
+        })
+        .catch(() =>
+          axios.get(`${API_BASE}/bde/list?unique_id=RSL_MGMT&req_for=view&limit=100`, {
+            headers: authHeaderObj(),
+          })
+        );
+      if (res?.data?.data) setBdeList(res.data.data);
     } catch (err) {
       console.error("Failed to load BDEs:", err);
     }
@@ -598,7 +604,7 @@ export default function StoreOnboardingQueue() {
                         </span>
                         <span className="text-slate-400">•</span>
                         <span>
-                          BDE: <strong className="text-slate-700 dark:text-slate-200">{store.bde?.name || "Unassigned"}</strong>
+                          BDE: <strong className="text-slate-700 dark:text-slate-200">{store.bde?.name || store.bde?.full_name || "Unassigned"}</strong>
                         </span>
                         <span className="text-slate-400">•</span>
                         <span>
@@ -659,7 +665,11 @@ export default function StoreOnboardingQueue() {
                       <button
                         onClick={() => {
                           setSelectedStore(store);
-                          setSelectedWarehouseId(store.store_setup?.warehouse_id || "");
+                          const whId =
+                            typeof store.store_setup?.warehouse_id === "object"
+                              ? store.store_setup?.warehouse_id?._id || store.store_setup?.warehouse_id?.id || ""
+                              : store.store_setup?.warehouse_id || "";
+                          setSelectedWarehouseId(whId);
                           setModalRemarks("");
                           loadWarehouses();
                           setActiveModal("warehouse");
@@ -924,7 +934,7 @@ export default function StoreOnboardingQueue() {
                     <option value="">-- Select Active BDE --</option>
                     {bdeList.map((b) => (
                       <option key={b.id || b._id} value={b.id || b._id}>
-                        {b.name} ({b.employee_id || "No ID"}) — {b.mobile}
+                        {b.name || b.full_name} ({b.employee_id || b.bde_id || "No ID"}) — {b.mobile || b.mobile_number || b.email}
                       </option>
                     ))}
                   </select>

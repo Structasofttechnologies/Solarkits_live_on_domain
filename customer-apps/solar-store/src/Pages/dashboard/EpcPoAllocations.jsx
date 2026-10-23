@@ -87,22 +87,20 @@ function PoStageStepper({ stepNumber }) {
         return (
           <Fragment key={s.num}>
             <div
-              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${
-                isDone
-                  ? "bg-emerald-500 text-white shadow-2xs"
-                  : isCurrent
+              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${isDone
+                ? "bg-emerald-500 text-white shadow-2xs"
+                : isCurrent
                   ? "bg-primary text-white ring-2 ring-primary/25 scale-105"
                   : "bg-surface-hover text-text-muted border border-border"
-              }`}
+                }`}
               title={`Stage ${s.num}: ${s.label}`}
             >
               {isDone ? <FiCheck size={9} /> : s.num}
             </div>
             {idx < steps.length - 1 && (
               <div
-                className={`h-0.5 w-2 rounded-full transition-all ${
-                  stepNumber > s.num ? "bg-emerald-500" : "bg-border"
-                }`}
+                className={`h-0.5 w-2 rounded-full transition-all ${stepNumber > s.num ? "bg-emerald-500" : "bg-border"
+                  }`}
               />
             )}
           </Fragment>
@@ -167,11 +165,10 @@ function EpcPoCardItem({ order, onSelectOrder, onOpenReorder, onOpenRefund }) {
               {order.po_number}
             </span>
             <span
-              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black border ${
-                isBdeCreated
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
-                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
-              }`}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black border ${isBdeCreated
+                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                }`}
             >
               {isBdeCreated ? <FiUsers size={11} /> : <FiShield size={11} />}
               {creatorDisplay}
@@ -891,11 +888,10 @@ export default function EpcPoAllocations() {
       <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-surface border border-border shadow-2xs overflow-x-auto">
         <button
           onClick={() => setActiveTab("my_pos")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "my_pos"
-              ? "bg-primary text-white shadow-sm"
-              : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${activeTab === "my_pos"
+            ? "bg-primary text-white shadow-sm"
+            : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
+            }`}
         >
           <FiBox size={14} />
           <span>My Purchase Orders & Quotas</span>
@@ -904,11 +900,10 @@ export default function EpcPoAllocations() {
 
         <button
           onClick={() => setActiveTab("franchisee_allocations")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "franchisee_allocations"
-              ? "bg-primary text-white shadow-sm"
-              : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${activeTab === "franchisee_allocations"
+            ? "bg-primary text-white shadow-sm"
+            : "text-text-muted hover:text-text-primary hover:bg-surface-hover"
+            }`}
         >
           <FiUsers size={14} />
           <span>Franchise Partner Pooled Allocations</span>
@@ -930,18 +925,16 @@ export default function EpcPoAllocations() {
             <div className="flex items-center gap-1 p-1 bg-surface-hover rounded-xl border border-border">
               <button
                 onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === "table" ? "bg-surface text-primary shadow-2xs font-bold" : "text-text-muted hover:text-text-primary"
-                }`}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "table" ? "bg-surface text-primary shadow-2xs font-bold" : "text-text-muted hover:text-text-primary"
+                  }`}
                 title="Table View (Full Width)"
               >
                 <FiList size={15} />
               </button>
               <button
                 onClick={() => setViewMode("card")}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                  viewMode === "card" ? "bg-surface text-primary shadow-2xs font-bold" : "text-text-muted hover:text-text-primary"
-                }`}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${viewMode === "card" ? "bg-surface text-primary shadow-2xs font-bold" : "text-text-muted hover:text-text-primary"
+                  }`}
                 title="Card View"
               >
                 <FiGrid size={15} />
@@ -1057,11 +1050,10 @@ export default function EpcPoAllocations() {
                                 </div>
                                 <div>
                                   <span
-                                    className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${
-                                      isBdeCreated
-                                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
-                                        : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
-                                    }`}
+                                    className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${isBdeCreated
+                                      ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                      : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                                      }`}
                                   >
                                     {isBdeCreated ? `BDE: ${order.creator_name || "Officer"}` : "Direct EPC"}
                                   </span>
@@ -1200,11 +1192,10 @@ export default function EpcPoAllocations() {
 
                                 <button
                                   onClick={() => setExpandedRowId(isExpanded ? null : order._id)}
-                                  className={`p-1 rounded-lg transition-all cursor-pointer border ${
-                                    isExpanded
-                                      ? "bg-surface-hover text-text-primary border-border"
-                                      : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
-                                  }`}
+                                  className={`p-1 rounded-lg transition-all cursor-pointer border ${isExpanded
+                                    ? "bg-surface-hover text-text-primary border-border"
+                                    : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
+                                    }`}
                                   title="Toggle Details"
                                 >
                                   <FiChevronDown size={12} className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
@@ -1306,14 +1297,14 @@ export default function EpcPoAllocations() {
                                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary hover:opacity-90 text-white shadow-xs transition-all cursor-pointer"
                                       >
                                         <FiPlus size={12} />
-                                        <span>+ Place Reorder</span>
+                                        <span> Place Reorder</span>
                                       </button>
                                     )}
                                   </div>
 
                                   {(order.linked_repeat_orders || []).length === 0 ? (
                                     <div className="p-3.5 rounded-xl bg-surface-hover/60 border border-dashed border-border text-center text-[11px] text-text-muted">
-                                      No drawdowns placed against this PO yet. Click "+ Place Reorder" to draw kits from the {remaining} remaining quota.
+                                      No drawdowns placed against this PO yet. Click "  Place Reorder" to draw kits from the {remaining} remaining quota.
                                     </div>
                                   ) : (
                                     <div className="overflow-x-auto rounded-xl border border-border/80 bg-surface">
@@ -1425,8 +1416,8 @@ export default function EpcPoAllocations() {
                 order.items?.forEach((item) => {
                   const match = item.epc_allocations?.find(
                     (a) => a.epc_buyer_id?.toString() === user?._id?.toString() ||
-                           a.epc_buyer_id?.toString() === user?.id?.toString() ||
-                           a.epc_buyer_id?.toString() === user?.account_id?.toString()
+                      a.epc_buyer_id?.toString() === user?.id?.toString() ||
+                      a.epc_buyer_id?.toString() === user?.account_id?.toString()
                   );
                   if (match) {
                     epcAlloc = match;
@@ -2102,13 +2093,12 @@ export default function EpcPoAllocations() {
                                         type="button"
                                         disabled={!isAvailable}
                                         onClick={() => setReorderQty(lq)}
-                                        className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${
-                                          isSelected
-                                            ? "bg-sky-600 text-white border-sky-600 shadow-md scale-105"
-                                            : isAvailable
-                                              ? "bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 border-sky-500/30"
-                                              : "bg-surface text-text-muted/40 border-border/40 cursor-not-allowed opacity-40 line-through"
-                                        }`}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${isSelected
+                                          ? "bg-sky-600 text-white border-sky-600 shadow-md scale-105"
+                                          : isAvailable
+                                            ? "bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 border-sky-500/30"
+                                            : "bg-surface text-text-muted/40 border-border/40 cursor-not-allowed opacity-40 line-through"
+                                          }`}
                                       >
                                         {lq} KITS
                                       </button>
@@ -2120,11 +2110,10 @@ export default function EpcPoAllocations() {
                                     <button
                                       type="button"
                                       onClick={() => setReorderQty(remaining)}
-                                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${
-                                        reorderQty === remaining
-                                          ? "bg-primary text-white border-primary shadow-md scale-105"
-                                          : "bg-surface hover:bg-surface-hover text-text-primary border-border"
-                                      }`}
+                                      className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border ${reorderQty === remaining
+                                        ? "bg-primary text-white border-primary shadow-md scale-105"
+                                        : "bg-surface hover:bg-surface-hover text-text-primary border-border"
+                                        }`}
                                     >
                                       All Remaining ({remaining} KITS)
                                     </button>

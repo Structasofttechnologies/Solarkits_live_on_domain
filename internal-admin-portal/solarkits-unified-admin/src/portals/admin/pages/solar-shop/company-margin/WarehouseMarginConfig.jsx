@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import ReactCountryFlag from "react-country-flag";
+import { motion } from "framer-motion";
 import {
   FaArrowLeft,
   FaWarehouse,
@@ -10,7 +11,14 @@ import {
   FaSlidersH,
   FaPercent,
   FaLayerGroup,
-  FaEdit
+  FaEdit,
+  FaChevronDown,
+  FaReceipt,
+  FaTags,
+  FaBoxOpen,
+  FaIndustry,
+  FaCheckCircle,
+  FaExclamationTriangle
 } from "react-icons/fa";
 import { setAlert } from "@/features/alert.slice";
 import Button from "@/components/Button";
@@ -20,6 +28,8 @@ import CustomTable from "@/components/CustomTable";
 import Dialog from "@/components/Dialog";
 import IconButton from "@/components/IconButton";
 import { authHeaderObj } from "@/app/authHeader";
+import KitProductPriceBreakdown, { computeKitFinancials } from "./KitProductPriceBreakdown";
+import KitTierPricingModal from "./KitTierPricingModal";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -47,6 +57,11 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
   const [customizeKits, setCustomizeKits] = useState([]);
   const [marginsInput, setMarginsInput] = useState({});
 
+  // SKU Benchmark Prices & Interactive States
+  const [skuPrices, setSkuPrices] = useState({});
+  const [expandedKitIds, setExpandedKitIds] = useState(new Set());
+  const [viewingBreakdownKit, setViewingBreakdownKit] = useState(null);
+
   // Dialog State
   const [dialogState, setDialogState] = useState({
     isOpen: false,
@@ -55,6 +70,51 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
     standard_margin: "",
     gst_rate: ""
   });
+
+  // Loose & PO Tier Pricing Modal State
+  const [tierModalState, setTierModalState] = useState({
+    isOpen: false,
+    kit: null
+  });
+
+  // Toggle row expansion
+  const toggleExpandKit = (kitId) => {
+    setExpandedKitIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kitId)) next.delete(kitId);
+      else next.add(kitId);
+      return next;
+    });
+  };
+
+  // Fetch SKU benchmark prices for this warehouse cluster
+  const fetchSkuPrices = async (whId, clusterId) => {
+    try {
+      const clusterParam = clusterId ? `cluster_id=${clusterId}` : `warehouse_id=${whId}`;
+      const res = await axios.get(
+        `${API_URL}/product-sku-prices?${clusterParam}&unique_id=${moduleUniqueId}&req_for=view`,
+        { headers: authHeaderObj() }
+      );
+      const priceMap = res.data?.price_map || {};
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        res.data.data.forEach((item) => {
+          if (item.id) {
+            const key = item.id.toString();
+            if (!priceMap[key]) {
+              priceMap[key] = {
+                price: item.price || 0,
+                price_per_watt: item.price_per_watt || 0,
+                currency_code: item.currency_code || "INR"
+              };
+            }
+          }
+        });
+      }
+      setSkuPrices(priceMap);
+    } catch (e) {
+      console.error("Error fetching SKU prices:", e);
+    }
+  };
 
   // 1. Fetch specific warehouse margin lists to synchronize input map
   const fetchMargins = async (isIndia) => {
@@ -72,7 +132,9 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
             showcase_margin: m.showcase_margin !== undefined ? m.showcase_margin : 0,
             standard_margin: m.standard_margin !== undefined ? m.standard_margin : 0,
             po_margin: m.po_discounted_margin !== undefined ? m.po_discounted_margin : 0,
-            gst_rate: m.gst_rate !== undefined ? m.gst_rate : ""
+            gst_rate: m.gst_rate !== undefined ? m.gst_rate : "",
+            loose_order_pricing: Array.isArray(m.loose_order_pricing) ? m.loose_order_pricing : [],
+            po_order_pricing: Array.isArray(m.po_order_pricing) ? m.po_order_pricing : []
           };
         }
       });
@@ -125,10 +187,17 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
 
         // Fetch saved margins map
         await fetchMargins(isIndia);
+
+        // Fetch SKU benchmark prices for this warehouse cluster
+        await fetchSkuPrices(wh.id, wh.cluster_id || wh.cluster);
       }
     } catch (error) {
       console.error("Error loading margin configuration data:", error);
-      dispatch(setAlert({ type: "error", message: "Failed to load warehouse margins data" }));
+      if (error?.response?.status === 401) {
+        dispatch(setAlert({ type: "error", message: "Session expired or unauthorized. Please log in again." }));
+      } else {
+        dispatch(setAlert({ type: "error", message: "Failed to load warehouse margins data" }));
+      }
     } finally {
       setLoading(false);
     }
@@ -256,92 +325,259 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
     {
       key: "name",
       accessor: "name",
-      label: "Kit Name",
-      render: (val) => (
-        <span className="font-black text-xs text-text-primary uppercase tracking-wide">
-          {val || "N/A"}
-        </span>
-      )
+      label: "Kit Name & Components",
+      width: "28%"
     },
     {
       key: "blueprint",
       accessor: "solar_kit_id",
       label: "Solar Kit Blueprint",
-      render: (val) => (
-        <span className="font-bold text-xs text-text-secondary uppercase">
-          {val?.name || "N/A"}
-        </span>
-      )
+      width: "16%"
     },
     {
       key: "capacity",
       accessor: "capacity",
       label: "Capacity",
-      render: (val) => (
-        <span className="font-semibold text-xs text-text-secondary">
-          {val || 0} kW
-        </span>
-      )
+      width: "8%"
+    },
+    {
+      key: "base_cost",
+      accessor: "id",
+      label: "Kit Base Cost",
+      align: "right",
+      width: "12%"
     },
     {
       key: "showcase_margin",
       accessor: "id",
       label: "Display Margin",
-      render: (val, row) => {
-        const entry = marginsInput[row.id] || { showcase_margin: 0, standard_margin: 0, po_margin: 0, gst_rate: "" };
-        return (
-          <span className="font-bold text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-lg border border-primary/20">
-            {Number(entry.showcase_margin).toFixed(2)}%
-          </span>
-        );
-      }
+      width: "10%"
     },
     {
       key: "standard_margin",
       accessor: "id",
       label: "Standard Sales Margin",
-      render: (val, row) => {
-        const entry = marginsInput[row.id] || { showcase_margin: 0, standard_margin: 0, po_margin: 0, gst_rate: "" };
-        return (
-          <span className="font-bold text-xs text-text-secondary bg-surface-hover px-2.5 py-1 rounded-lg border border-border/40">
-            {Number(entry.standard_margin).toFixed(2)}%
-          </span>
-        );
-      }
+      width: "10%"
     },
     {
       key: "gst_rate",
       accessor: "id",
       label: "GST Rate",
-      render: (val, row) => {
-        const entry = marginsInput[row.id] || { showcase_margin: 0, standard_margin: 0, po_margin: 0, gst_rate: "" };
-        const gstValue = entry.gst_rate;
-        const hasGst = gstValue !== undefined && gstValue !== null && gstValue !== "";
-
-        return (
-          <span className={`font-bold text-xs px-2.5 py-1 rounded-lg border ${hasGst ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"}`}>
-            {hasGst ? `${Number(gstValue).toFixed(2)}%` : "Not set"}
-          </span>
-        );
-      }
+      width: "8%"
+    },
+    {
+      key: "final_price",
+      accessor: "id",
+      label: "Final Kit Price",
+      align: "right",
+      width: "12%"
     },
     {
       key: "actions",
       accessor: "id",
       label: "Actions",
       align: "right",
-      render: (val, row) => (
-        <IconButton
-          onClick={() => handleOpenEditDialog(row)}
-          variant="primary"
-          size="sm"
-          tooltip="Configure Margins"
-        >
-          <FaEdit />
-        </IconButton>
-      )
+      width: "10%"
     }
   ];
+
+  // Render row with expand accordion support
+  const renderKitRow = (row, index) => {
+    const kitId = row.id || row._id;
+    const isExpanded = expandedKitIds.has(kitId);
+    const entry = marginsInput[kitId] || { showcase_margin: 0, standard_margin: 0, po_margin: 0, gst_rate: "" };
+    const financials = computeKitFinancials(row, skuPrices, entry);
+    const gstValue = entry.gst_rate;
+    const hasGst = gstValue !== undefined && gstValue !== null && gstValue !== "";
+    const totalProductsCount = (row.base_components?.length || 0) + (row.bos_kits?.length || 0);
+    const loosePricing = Array.isArray(entry.loose_order_pricing) ? entry.loose_order_pricing : [];
+    const poPricing = Array.isArray(entry.po_order_pricing) ? entry.po_order_pricing : [];
+    const hasTiers = loosePricing.length > 0 || poPricing.length > 0;
+
+    return (
+      <React.Fragment key={kitId || index}>
+        <motion.tr
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, delay: index * 0.03 }}
+          className={`group transition-colors duration-200 border-b border-border/60 ${
+            isExpanded ? "bg-primary/[0.04]" : "hover:bg-primary/[0.02]"
+          }`}
+        >
+          {/* Kit Name & Expand toggle */}
+          <td className="px-5 py-4">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => toggleExpandKit(kitId)}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                  isExpanded
+                    ? "bg-primary text-white shadow-xs rotate-180"
+                    : "bg-surface-hover hover:bg-primary/10 text-text-muted hover:text-primary border border-border/80"
+                }`}
+                title={isExpanded ? "Collapse product price list" : "Expand product price list"}
+              >
+                <FaChevronDown size={11} />
+              </button>
+              <div>
+                <span className="font-black text-xs text-text-primary uppercase tracking-wide block leading-snug">
+                  {row.name || "N/A"}
+                </span>
+                <div className="flex items-center flex-wrap gap-2 mt-1">
+                  <span className="text-[10px] text-text-muted font-bold">
+                    {totalProductsCount} configured products
+                  </span>
+                  <span className="text-text-muted text-[10px]">•</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleExpandKit(kitId)}
+                    className="text-[10px] text-primary font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    {isExpanded ? "Hide Price List ▲" : "View Price List ▼"}
+                  </button>
+                  <span className="text-text-muted text-[10px]">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setTierModalState({ isOpen: true, kit: row })}
+                    className={`text-[10px] font-bold hover:underline cursor-pointer flex items-center gap-1 px-1.5 py-0.5 rounded transition-all ${
+                      hasTiers
+                        ? "bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20"
+                        : "text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                    }`}
+                    title="Configure Separate Pricing for Loose & PO Orders"
+                  >
+                    <FaTags size={10} className="text-amber-600" />
+                    {hasTiers ? (
+                      <span>
+                        Tiers: <strong className="text-sky-700">{loosePricing.length} Loose</strong> | <strong className="text-amber-700">{poPricing.length} PO</strong>
+                      </span>
+                    ) : (
+                      <span>Set Loose & PO Pricing</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </td>
+
+          {/* Blueprint */}
+          <td className="px-5 py-4">
+            <span className="font-bold text-xs text-text-secondary uppercase">
+              {row.solar_kit_id?.name || "N/A"}
+            </span>
+          </td>
+
+          {/* Capacity */}
+          <td className="px-5 py-4">
+            <span className="font-bold text-xs text-text-secondary bg-surface-hover px-2.5 py-1 rounded-lg border border-border/50">
+              {row.capacity || 0} kW
+            </span>
+          </td>
+
+          {/* Kit Base Hardware Cost */}
+          <td className="px-5 py-4 text-right">
+            <div className="flex flex-col items-end">
+              <span className="font-mono font-black text-xs text-text-primary">
+                ₹{Number(financials.totalBaseCost).toLocaleString("en-IN")}
+              </span>
+              <span
+                className={`text-[9px] font-bold px-1.5 py-0.5 rounded mt-0.5 border ${
+                  financials.allPriced
+                    ? "bg-success/10 text-success border-success/20"
+                    : "bg-warning/10 text-warning border-warning/20"
+                }`}
+              >
+                {financials.allPriced ? "All Priced ✓" : `${financials.pricedCount}/${financials.totalCount} Priced`}
+              </span>
+            </div>
+          </td>
+
+          {/* Display Margin */}
+          <td className="px-5 py-4">
+            <span className="font-bold text-xs bg-primary/10 text-primary px-2.5 py-1 rounded-lg border border-primary/20">
+              {Number(entry.showcase_margin).toFixed(2)}%
+            </span>
+          </td>
+
+          {/* Standard Sales Margin */}
+          <td className="px-5 py-4">
+            <span className="font-bold text-xs text-text-secondary bg-surface-hover px-2.5 py-1 rounded-lg border border-border/40">
+              {Number(entry.standard_margin).toFixed(2)}%
+            </span>
+          </td>
+
+          {/* GST Rate */}
+          <td className="px-5 py-4">
+            <span
+              className={`font-bold text-xs px-2.5 py-1 rounded-lg border ${
+                hasGst ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"
+              }`}
+            >
+              {hasGst ? `${Number(gstValue).toFixed(2)}%` : "Not set"}
+            </span>
+          </td>
+
+          {/* Final Kit Price */}
+          <td className="px-5 py-4 text-right">
+            <div className="flex flex-col items-end">
+              <span className="font-mono font-black text-xs text-primary">
+                ₹{Number(financials.totalWithGst).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </span>
+              <span className="text-[9px] text-text-muted font-bold mt-0.5">
+                {hasGst ? `Incl. ${Number(gstValue).toFixed(1)}% GST` : "Excl. GST"}
+              </span>
+            </div>
+          </td>
+
+          {/* Actions */}
+          <td className="px-5 py-4 text-right">
+            <div className="flex items-center justify-end gap-1.5">
+              <IconButton
+                onClick={() => setViewingBreakdownKit(row)}
+                variant="secondary"
+                size="sm"
+                tooltip="View Product Price List"
+              >
+                <FaReceipt size={13} />
+              </IconButton>
+              <IconButton
+                onClick={() => setTierModalState({ isOpen: true, kit: row })}
+                variant="secondary"
+                size="sm"
+                tooltip="Configure Loose & PO Pricing Tiers"
+                className="text-amber-600 hover:text-amber-700 hover:bg-amber-500/15 border-amber-500/25"
+              >
+                <FaTags size={13} />
+              </IconButton>
+              <IconButton
+                onClick={() => handleOpenEditDialog(row)}
+                variant="primary"
+                size="sm"
+                tooltip="Configure Margins"
+              >
+                <FaEdit size={13} />
+              </IconButton>
+            </div>
+          </td>
+        </motion.tr>
+
+        {/* Expandable Product Price Breakdown Table */}
+        {isExpanded && (
+          <tr className="bg-surface-hover/20 border-b-2 border-primary/20">
+            <td colSpan={9} className="p-4 sm:p-5">
+              <KitProductPriceBreakdown
+                kit={row}
+                skuPrices={skuPrices}
+                margins={entry}
+                currencySymbol="₹"
+                onConfigureTiers={(targetKit) => setTierModalState({ isOpen: true, kit: targetKit })}
+              />
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  };
 
   return (
     <div className="space-y-6 pb-24 animate-in fade-in duration-500">
@@ -451,6 +687,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
                   headers={tableHeaders}
                   data={comboKits}
                   loading={loading}
+                  renderRow={renderKitRow}
                   emptyMessage="No configured combo kits found for this country context."
                 />
               </div>
@@ -468,6 +705,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
                   headers={tableHeaders}
                   data={customizeKits}
                   loading={loading}
+                  renderRow={renderKitRow}
                   emptyMessage="No configured custom/customize kits found for this country context."
                 />
               </div>
@@ -481,7 +719,7 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
         isOpen={dialogState.isOpen}
         onClose={() => setDialogState((prev) => ({ ...prev, isOpen: false }))}
         title="Configure Kit Margins"
-        size="md"
+        size="xl"
       >
         {dialogState.kit && (
           <form onSubmit={handleSaveMargin} className="space-y-6 pt-2">
@@ -498,29 +736,32 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
               </div>
             </div>
 
-            {/* Display Margin */}
-            <CustomInput
-              label="Display Margin (%) *"
-              type="number"
-              min="0"
-              step="0.01"
-              value={dialogState.showcase_margin}
-              onChange={(e) => setDialogState((prev) => ({ ...prev, showcase_margin: e.target.value }))}
-              placeholder="0.00"
-              prefix={<FaPercent className="text-text-muted text-[10px]" />}
-            />
+            {/* Margins Inputs Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Display Margin */}
+              <CustomInput
+                label="Display Margin (%) *"
+                type="number"
+                min="0"
+                step="0.01"
+                value={dialogState.showcase_margin}
+                onChange={(e) => setDialogState((prev) => ({ ...prev, showcase_margin: e.target.value }))}
+                placeholder="0.00"
+                prefix={<FaPercent className="text-text-muted text-[10px]" />}
+              />
 
-            {/* Standard Sales Margin */}
-            <CustomInput
-              label="Standard Sales Margin (%) *"
-              type="number"
-              min="0"
-              step="0.01"
-              value={dialogState.standard_margin}
-              onChange={(e) => setDialogState((prev) => ({ ...prev, standard_margin: e.target.value }))}
-              placeholder="0.00"
-              prefix={<FaPercent className="text-text-muted text-[10px]" />}
-            />
+              {/* Standard Sales Margin */}
+              <CustomInput
+                label="Standard Sales Margin (%) *"
+                type="number"
+                min="0"
+                step="0.01"
+                value={dialogState.standard_margin}
+                onChange={(e) => setDialogState((prev) => ({ ...prev, standard_margin: e.target.value }))}
+                placeholder="0.00"
+                prefix={<FaPercent className="text-text-muted text-[10px]" />}
+              />
+            </div>
 
             {/* GST Rate */}
             <div className="space-y-1.5">
@@ -555,6 +796,21 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
               </div>
             </div>
 
+            {/* Live Pricing Breakdown Preview */}
+            <div className="pt-2">
+              <KitProductPriceBreakdown
+                kit={dialogState.kit}
+                skuPrices={skuPrices}
+                margins={{
+                  showcase_margin: dialogState.showcase_margin,
+                  standard_margin: dialogState.standard_margin,
+                  gst_rate: dialogState.gst_rate
+                }}
+                currencySymbol="₹"
+                showTitle={false}
+              />
+            </div>
+
             <div className="flex gap-3 pt-6 border-t border-border">
               <Button
                 type="button"
@@ -576,6 +832,93 @@ export default function WarehouseMarginConfig({ moduleUniqueId }) {
           </form>
         )}
       </Dialog>
+
+      {/* Full Kit Product Price List & Breakdown Modal */}
+      <Dialog
+        isOpen={!!viewingBreakdownKit}
+        onClose={() => setViewingBreakdownKit(null)}
+        title="Kit Product Pricing Breakdown"
+        size="xl"
+      >
+        {viewingBreakdownKit && (
+          <div className="space-y-4 pt-1">
+            <KitProductPriceBreakdown
+              kit={viewingBreakdownKit}
+              skuPrices={skuPrices}
+              margins={marginsInput[viewingBreakdownKit.id] || {}}
+              currencySymbol="₹"
+              showTitle={true}
+              onConfigureTiers={(targetKit) => {
+                setViewingBreakdownKit(null);
+                setTierModalState({ isOpen: true, kit: targetKit });
+              }}
+            />
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const targetKit = viewingBreakdownKit;
+                    setViewingBreakdownKit(null);
+                    handleOpenEditDialog(targetKit);
+                  }}
+                  className="rounded-xl flex items-center gap-2 text-xs font-black uppercase tracking-wider w-full sm:w-auto"
+                >
+                  <FaEdit size={12} />
+                  Configure Margins
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const targetKit = viewingBreakdownKit;
+                    setViewingBreakdownKit(null);
+                    setTierModalState({ isOpen: true, kit: targetKit });
+                  }}
+                  className="rounded-xl flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300 w-full sm:w-auto"
+                >
+                  <FaTags size={12} />
+                  Configure Tier Pricing
+                </Button>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => setViewingBreakdownKit(null)}
+                className="rounded-xl text-xs font-bold w-full sm:w-auto"
+              >
+                Close Price List
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+
+      {/* Loose & PO Order Tier Pricing Modal */}
+      <KitTierPricingModal
+        isOpen={tierModalState.isOpen}
+        onClose={() => setTierModalState({ isOpen: false, kit: null })}
+        kit={tierModalState.kit}
+        warehouse={warehouse}
+        countryObj={countryObj}
+        moduleUniqueId={moduleUniqueId}
+        initialMargins={tierModalState.kit ? (marginsInput[tierModalState.kit.id || tierModalState.kit._id] || {}) : {}}
+        skuPrices={skuPrices}
+        onSaved={async (savedData) => {
+          const kitId = tierModalState.kit?.id || tierModalState.kit?._id;
+          if (kitId) {
+            setMarginsInput((prev) => ({
+              ...prev,
+              [kitId]: {
+                ...(prev[kitId] || {}),
+                gst_rate: savedData.gst_rate !== undefined ? savedData.gst_rate : prev[kitId]?.gst_rate,
+                loose_order_pricing: savedData.loose_order_pricing,
+                po_order_pricing: savedData.po_order_pricing
+              }
+            }));
+          }
+          const isIndia = countryObj?.iso2?.toLowerCase() === "in";
+          await fetchMargins(isIndia);
+        }}
+      />
     </div>
   );
 }

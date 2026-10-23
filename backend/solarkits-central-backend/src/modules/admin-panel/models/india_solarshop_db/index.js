@@ -51,6 +51,7 @@ const ResellerPricingRule = require('./reseller_pricing_rules.schema');
 // --- Phase R8: EPC Purchase Flow & Checkout Logs ---
 const EpcOrder = require('./epc_orders.schema');
 const EpcCheckoutLog = require('./epc_checkout_logs.schema');
+const ProductPaymentMilestone = require('./product_payment_milestones.schema');
 
 // --- Phase 7: Commission Engine & Wallet Ledger ---
 const ResellerWallet = require('./reseller_wallets.schema');
@@ -65,68 +66,71 @@ const RazorpayWebhookLog = require('./razorpay_webhook_logs.schema');
 // --- Phase FPO: Franchisee PO Ordering, Commission, Goal & Performance System ---
 const FranchiseeCommissionRule = require('./franchisee_commission_rules.schema');
 const FranchiseeVariationCommission = require('./franchisee_variation_commissions.schema');
-const FranchiseePlanPoSetting  = require('./franchisee_plan_po_settings.schema');
-const FranchiseeMoqRule        = require('./franchisee_moq_rules.schema');
-const FranchiseeKitTarget      = require('./franchisee_kit_targets.schema');
+const FranchiseePlanPoSetting = require('./franchisee_plan_po_settings.schema');
+const FranchiseeMoqRule = require('./franchisee_moq_rules.schema');
+const FranchiseeKitTarget = require('./franchisee_kit_targets.schema');
 const FranchiseeTargetProgress = require('./franchisee_target_progress.schema');
-const FpoOrder                 = require('./fpo_orders.schema');
-const FpoCommissionLedger      = require('./fpo_commission_ledgers.schema');
-const PoRefundRequest          = require('./po_refund_requests.schema');
-const FranchiseeAlert          = require('./franchisee_alerts.schema');
-const FranchiseeAlertConfig    = require('./franchisee_alert_configs.schema');
+const FpoOrder = require('./fpo_orders.schema');
+const FpoCommissionLedger = require('./fpo_commission_ledgers.schema');
+const PoRefundRequest = require('./po_refund_requests.schema');
+const FranchiseeAlert = require('./franchisee_alerts.schema');
+const FranchiseeAlertConfig = require('./franchisee_alert_configs.schema');
 
 // --- Phase BDE: SolarKits BDE Management, KYC, Territory & Goal System ---
-const BDEProfile               = require('./bde_profiles.schema');
-const BDEKYC                   = require('./bde_kyc.schema');
-const BDETerritoryAssignment   = require('./bde_territory_assignments.schema');
-const BDEPlanAssignment        = require('./bde_plan_assignments.schema');
-const BDEGoal                  = require('./bde_goals.schema');
-const BDEActivityLog           = require('./bde_activity_logs.schema');
-const BDENotification          = require('./bde_notifications.schema');
+const BDEProfile = require('./bde_profiles.schema');
+const BDEKYC = require('./bde_kyc.schema');
+const BDETerritoryAssignment = require('./bde_territory_assignments.schema');
+const BDEPlanAssignment = require('./bde_plan_assignments.schema');
+const BDEGoal = require('./bde_goals.schema');
+const BDEActivityLog = require('./bde_activity_logs.schema');
+const BDENotification = require('./bde_notifications.schema');
 
 // --- Step 2: BDE Leads, Activities & Territory Exceptions ---
-const BDELead                  = require('./bde_leads.schema');
-const BDELeadActivity          = require('./bde_lead_activities.schema');
-const BDEFollowUp              = require('./bde_follow_ups.schema');
-const BDEReassignmentHistory   = require('./bde_reassignment_histories.schema');
+const BDELead = require('./bde_leads.schema');
+const BDELeadActivity = require('./bde_lead_activities.schema');
+const BDEFollowUp = require('./bde_follow_ups.schema');
+const BDEReassignmentHistory = require('./bde_reassignment_histories.schema');
 const TerritoryExceptionRequest = require('./territory_exception_requests.schema');
 
 // --- Step 3: Franchisee Store Setup, Operations & Expansion Planning ---
-const StoreSetup               = require('./store_setups.schema');
-const StoreSetupSetting        = require('./store_setup_settings.schema');
-const StoreSetupChecklist      = require('./store_setup_checklists.schema');
-const StoreSetupDelay          = require('./store_setup_delays.schema');
-const StoreSetupVerification   = require('./store_setup_verifications.schema');
-const ExpansionPlan            = require('./expansion_plans.schema');
+const StoreSetup = require('./store_setups.schema');
+const StoreSetupSetting = require('./store_setup_settings.schema');
+const StoreSetupChecklist = require('./store_setup_checklists.schema');
+const StoreSetupDelay = require('./store_setup_delays.schema');
+const StoreSetupVerification = require('./store_setup_verifications.schema');
+const ExpansionPlan = require('./expansion_plans.schema');
 
 // --- BDE EPC Management ---
-const EPCLead                  = require('./epc_leads.schema');
+const EPCLead = require('./epc_leads.schema');
 
 // --- Phase Q: EPC Quotation & Follow-up Module ---
-const EpcQuote                 = require('./epc_quotes.schema');
-const EpcQuoteFollowup         = require('./epc_quote_followups.schema');
-const EpcQuoteActivity         = require('./epc_quote_activities.schema');
-const QuoteSettings            = require('./quote_settings.schema');
-const QuoteWarrantyOption      = require('./quote_warranty_options.schema');
+const EpcQuote = require('./epc_quotes.schema');
+const EpcQuoteFollowup = require('./epc_quote_followups.schema');
+const EpcQuoteActivity = require('./epc_quote_activities.schema');
+const QuoteSettings = require('./quote_settings.schema');
+const QuoteWarrantyOption = require('./quote_warranty_options.schema');
 
 // --- Phase KMM: Know My Margin Module ---
-const ProjectBomItem           = require('./project_bom_items.schema');
-const BomRateHistory           = require('./bom_rate_history.schema');
-const EpcMarginEstimate        = require('./epc_margin_estimates.schema');
-const EstimatorSettings        = require('./estimator_settings.schema');
+const ProjectBomItem = require('./project_bom_items.schema');
+const BomRateHistory = require('./bom_rate_history.schema');
+const EpcMarginEstimate = require('./epc_margin_estimates.schema');
+const EstimatorSettings = require('./estimator_settings.schema');
 
 // --- Delivery Management & Route Consolidation Module ---
-const DeliveryVehicleMaster    = require('./vehicle_master.schema');
-const DeliveryServiceProvider  = require('./delivery_service_provider.schema');
-const DeliveryVehicleFleet     = require('./delivery_vehicle_fleet.schema');
-const ComboKitWeightMaster     = require('./combokit_weight_master.schema');
-const DeliveryCostBenchmark    = require('./delivery_cost_benchmark.schema');
-const KitDeliveryCostRule      = require('./kit_delivery_cost_rule.schema');
-const DeliveryRouteSetting     = require('./delivery_route_setting.schema');
-const DeliveryOrder            = require('./delivery_order.schema');
-const AdminNotification        = require('./admin_notifications.schema');
+const DeliveryVehicleMaster = require('./vehicle_master.schema');
+const DeliveryServiceProvider = require('./delivery_service_provider.schema');
+const DeliveryVehicleFleet = require('./delivery_vehicle_fleet.schema');
+const ComboKitWeightMaster = require('./combokit_weight_master.schema');
+const DeliveryCostBenchmark = require('./delivery_cost_benchmark.schema');
+const KitDeliveryCostRule = require('./kit_delivery_cost_rule.schema');
+const DeliveryRouteSetting = require('./delivery_route_setting.schema');
+const DeliveryOrder = require('./delivery_order.schema');
+const RegionPaymentConfig = require('./region_payment_configs.schema');
+const AdminNotification = require('./admin_notifications.schema');
+const BenchmarkApprovalConfig = require('./BenchmarkApprovalConfig.schema');
 
 module.exports = {
+  RegionPaymentConfig,
   AdminNotification,
   EpcAccount,
   EpcSignupRequest,
@@ -250,4 +254,8 @@ module.exports = {
   KitDeliveryCostRule,
   DeliveryRouteSetting,
   DeliveryOrder,
+  // --- Payment Milestones Module ---
+  ProductPaymentMilestone,
+  // --- Benchmark Price Approval Module ---
+  BenchmarkApprovalConfig,
 };

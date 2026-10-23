@@ -64,7 +64,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
     order_quantities: [], // e.g. [10, 25, 50, 100] — allowed order kit quantities
     loose_order_quantities: [], // e.g. [5, 10, 15, 20, 25, 30, 50] — allowed loose order kit quantities
     allow_trial_kit: false,
-    trial_kit_quantity: 10
+    trial_kit_quantity: 10,
+    trial_kit_max_orders_per_buyer: 1
   });
 
   const [kitImageFile, setKitImageFile] = useState(null);
@@ -1342,7 +1343,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
           order_quantities: [],
           loose_order_quantities: [],
           allow_trial_kit: false,
-          trial_kit_quantity: 10
+          trial_kit_quantity: 10,
+          trial_kit_max_orders_per_buyer: 1
         });
       } finally {
         setLoadingDrawerData(false);
@@ -1366,7 +1368,8 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         order_quantities: [],
         loose_order_quantities: [],
         allow_trial_kit: false,
-        trial_kit_quantity: 10
+        trial_kit_quantity: 10,
+        trial_kit_max_orders_per_buyer: 1
       });
       setLoadingDrawerData(false);
     }
@@ -1514,6 +1517,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
         loose_order_quantities: Array.isArray(row.loose_order_quantities) ? row.loose_order_quantities.map(Number).filter(n => !isNaN(n) && n > 0) : [],
         allow_trial_kit: Boolean(row.allow_trial_kit),
         trial_kit_quantity: Number(row.trial_kit_quantity) || 10,
+        trial_kit_max_orders_per_buyer: row.trial_kit_max_orders_per_buyer !== undefined ? Number(row.trial_kit_max_orders_per_buyer) : 1,
         capacity: row.capacity || 0,
         inverter_tolerance: row.inverter_tolerance || 10,
         inverter_mode: row.inverter_mode || (hasMultiInverter ? "multi" : "single"),
@@ -1586,6 +1590,7 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       payload.append("loose_order_quantities", JSON.stringify((formData.loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)));
       payload.append("allow_trial_kit", formData.allow_trial_kit ? "true" : "false");
       payload.append("trial_kit_quantity", formData.trial_kit_quantity || 10);
+      payload.append("trial_kit_max_orders_per_buyer", formData.trial_kit_max_orders_per_buyer !== undefined ? formData.trial_kit_max_orders_per_buyer : 1);
 
       const cleanBaseComponents = (formData.base_components || []).map(bc => ({
         template_id: bc.template_id?._id || bc.template_id?.id || bc.template_id,
@@ -1948,13 +1953,14 @@ export default function ComboKits({ moduleUniqueId = "ADM_COMBO_KITS" }) {
       render: (val, row) => {
         const isTrialAllowed = Boolean(val || row.allow_trial_kit);
         const trialQty = row.trial_kit_quantity || 10;
+        const trialLimit = row.trial_kit_max_orders_per_buyer !== undefined ? Number(row.trial_kit_max_orders_per_buyer) : 1;
         const qtys = Array.isArray(row.order_quantities) ? row.order_quantities.filter(n => n > 0).sort((a, b) => a - b) : [];
         const looseQtys = Array.isArray(row.loose_order_quantities) ? row.loose_order_quantities.filter(n => n > 0).sort((a, b) => a - b) : [];
         return (
           <div className="space-y-1.5 max-w-64">
             {isTrialAllowed ? (
               <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-500/25 shadow-2xs">
-                ✓ Trial: {trialQty} Kits
+                ✓ Trial: {trialQty} Kits <span className="opacity-75 font-semibold text-[9px]">({trialLimit === 0 ? "Unlimited" : `Limit: ${trialLimit}x/Buyer`})</span>
               </span>
             ) : (
               <span className="inline-block text-[10px] text-text-muted font-bold opacity-60">Trial Disabled</span>

@@ -4,7 +4,7 @@ import {
   FaShoppingCart, FaTag, FaStar, FaGem, FaHome, FaBolt,
   FaInfoCircle, FaTruck, FaPiggyBank, FaAward,
   FaShieldAlt, FaLeaf, FaChevronDown, FaChevronUp,
-  FaCogs, FaSolarPanel
+  FaCogs, FaSolarPanel, FaFilePdf
 } from"react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -16,10 +16,11 @@ import {
   selectLiveStock,
 } from "@/features/slice";
 import Button from "@/Components/Button";
-import IconButton from "@/Components/IconButton";
-import TrialKitOrderModal from "./TrialKitOrderModal";
 import { setAlert } from "@/features/alert.slice";
 import { hasPermission } from "@/utils/permissions";
+import IconButton from "@/Components/IconButton";
+import TrialKitOrderModal from "./TrialKitOrderModal";
+import DatasheetModal from "@/Components/storefront/DatasheetModal";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -107,8 +108,21 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const { isAuthenticated, user } = useSelector((state) => state.auth_slice);
   const [selectedVariant, setSelectedVariant] = useState(isCart && kit.variantIndex !== undefined ? kit.variantIndex : 0);
   const [trialModalOpen, setTrialModalOpen] = useState(false);
+  const [showDatasheetModal, setShowDatasheetModal] = useState(false);
   const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
   const trialKitQty = Number(kit?.trial_kit_quantity || 10);
+  const trialLimit = Number(kit?.trial_kit_max_orders_per_buyer ?? kit?.trialKitMaxOrdersPerBuyer ?? 1);
+  const purchasedTrialCount = Number(kit?.trial_kit_purchased_count ?? kit?.trialKitPurchasedCount ?? 0);
+  const isTrialLimitReached = Boolean(kit?.trial_kit_limit_reached ?? kit?.trialKitLimitReached) ||
+    (trialLimit > 0 && purchasedTrialCount >= trialLimit);
+  const canShowTrialButton = hasTrialKit && !isTrialLimitReached && !isCart;
+
+  const hasDatasheets = Boolean(
+    kit?.hasDatasheet ||
+    kit?.datasheets?.some(d => d.hasDatasheet) ||
+    kit?.panel?.datasheet ||
+    kit?.inverter?.datasheet
+  );
 
   useEffect(() => {
     if (isCart) {
@@ -130,20 +144,52 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
   const [showVariants, setShowVariants] = useState(false);
   const [showPerksTooltip, setShowPerksTooltip] = useState(false);
 
-  // Order quantities from kit configuration
-  const orderQuantities = useMemo(() => {
-    const rawQtys = kit?.orderQuantities || kit?.order_quantities || [];
-    return Array.isArray(rawQtys) ? rawQtys.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b) : [];
-  }, [kit?.orderQuantities, kit?.order_quantities]);
+  // Loose Order quantities (e.g. 5, 10, 15, 20, 25 kits)
+  const looseOrderQuantities = useMemo(() => {
+    const rawLoose = kit?.looseOrderQuantities || kit?.loose_order_quantities || [];
+    const fromPricing = (kit?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+    const combined = [...new Set([...(Array.isArray(rawLoose) ? rawLoose.map(Number) : []), ...fromPricing])]
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    return combined;
+  }, [kit?.looseOrderQuantities, kit?.loose_order_quantities, kit?.loose_order_pricing]);
 
-  const hasOrderQuantities = orderQuantities.length > 0;
+  // PO (Purchase Order) bulk quantities (e.g. 100, 200, 400, 500 kits)
+  const poOrderQuantities = useMemo(() => {
+    const rawPo = kit?.orderQuantities || kit?.order_quantities || [];
+    const fromPricing = (kit?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+    const combined = [...new Set([...(Array.isArray(rawPo) ? rawPo.map(Number) : []), ...fromPricing])]
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    return combined;
+  }, [kit?.orderQuantities, kit?.order_quantities, kit?.po_order_pricing]);
+
+  const hasLooseQuantities = looseOrderQuantities.length > 0;
+  const hasPoQuantities = poOrderQuantities.length > 0;
+  const hasOrderQuantities = hasLooseQuantities || hasPoQuantities;
+
+  // Active pricing category tab: 'loose' | 'po'
+  const [activeTierType, setActiveTierType] = useState(() => (hasLooseQuantities ? "loose" : "po"));
   const [selectedOrderQty, setSelectedOrderQty] = useState(null);
 
-  useEffect(() => {
-    if (hasOrderQuantities) {
-      setSelectedOrderQty(orderQuantities[0]);
+  // Active quantities array for the selected tab
+  const currentCategoryQuantities = useMemo(() => {
+    if (activeTierType === "loose") {
+      return hasLooseQuantities ? looseOrderQuantities : poOrderQuantities;
     }
-  }, [kit?.id, hasOrderQuantities]);
+    return hasPoQuantities ? poOrderQuantities : looseOrderQuantities;
+  }, [activeTierType, hasLooseQuantities, hasPoQuantities, looseOrderQuantities, poOrderQuantities]);
+
+  const orderQuantities = useMemo(() => {
+    const all = [...new Set([...looseOrderQuantities, ...poOrderQuantities])].sort((a, b) => a - b);
+    return all.length > 0 ? all : (currentCategoryQuantities.length > 0 ? currentCategoryQuantities : [10, 25]);
+  }, [looseOrderQuantities, poOrderQuantities, currentCategoryQuantities]);
+
+  useEffect(() => {
+    if (currentCategoryQuantities.length > 0) {
+      setSelectedOrderQty(currentCategoryQuantities[0]);
+    }
+  }, [kit?.id, activeTierType, currentCategoryQuantities]);
 
   useEffect(() => {
     if (!showPerksTooltip) return;
@@ -271,26 +317,83 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     }
   }, [handleSelect]);
 
+  // Look up quantity tier pricing for current selection
+  const activeTierPricing = useMemo(() => {
+    const qty = Number(selectedOrderQty);
+    if (!qty) return null;
+
+    const looseList = Array.isArray(kit?.loose_order_pricing) ? kit.loose_order_pricing : [];
+    const poList = Array.isArray(kit?.po_order_pricing) ? kit.po_order_pricing : [];
+
+    const matchedLoose = looseList.find((t) => Number(t.quantity) === qty && Number(t.price_per_kit) > 0);
+    if (matchedLoose) {
+      return {
+        type: "loose",
+        quantity: qty,
+        price_per_kit: Number(matchedLoose.price_per_kit),
+        discount_amount: Number(matchedLoose.discount_amount || 0),
+      };
+    }
+
+    const matchedPo = poList.find((t) => Number(t.quantity) === qty && Number(t.price_per_kit) > 0);
+    if (matchedPo) {
+      return {
+        type: "po",
+        quantity: qty,
+        price_per_kit: Number(matchedPo.price_per_kit),
+        discount_amount: Number(matchedPo.discount_amount || 0),
+      };
+    }
+
+    return null;
+  }, [selectedOrderQty, kit?.loose_order_pricing, kit?.po_order_pricing]);
+
+  // Memoize formatted prices (dynamically reflects selected tier pricing)
+  const formattedPrices = useMemo(() => {
+    const baselineOurPrice = Number(currentVariant?.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
+    const ourPriceNum = activeTierPricing?.price_per_kit > 0
+      ? activeTierPricing.price_per_kit
+      : baselineOurPrice;
+
+    const baseMarketPrice = Number(currentVariant?.marketPrice || kit?.marketPrice || (baselineOurPrice > 0 ? Math.round(baselineOurPrice * 1.15) : 0));
+    const marketPriceNum = (activeTierPricing?.discount_amount > 0)
+      ? (ourPriceNum + activeTierPricing.discount_amount)
+      : baseMarketPrice;
+
+    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
+    const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
+      ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
+      : 0;
+
+    const orderQtyNum = Number(selectedOrderQty) || 1;
+    const totalOrderValue = ourPriceNum * orderQtyNum;
+
+    return {
+      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
+      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0",
+      rawOurPrice: ourPriceNum,
+      rawMarketPrice: marketPriceNum,
+      totalOrderValue: totalOrderValue > 0 ? totalOrderValue.toLocaleString("en-IN") : "0",
+      rawTotalOrderValue: totalOrderValue,
+      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0",
+      gstRate: !isNaN(gstRate) ? gstRate : 13.8,
+    };
+  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, currentVariant?.gstRate, kit, activeTierPricing, selectedOrderQty]);
+
   const handleAddToCart = useCallback((e) => {
     e.stopPropagation();
     if (!isAuthenticated) {
       dispatch(setShowAuthDialog(true));
       return;
     }
-    if (user && !hasPermission(user, 'can_add_to_cart')) {
-      dispatch(setAlert({
-        type: 'error',
-        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
-      }));
-      return;
-    }
-    const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1;
+    const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || currentCategoryQuantities[0] || 1) : 1;
     dispatch(addToCart({
       id: kit.id,
       variantIndex: selectedVariant,
       qty: qtyToAdd,
+      price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
     }));
-  }, [dispatch, kit.id, selectedVariant, isAuthenticated, user, hasOrderQuantities, selectedOrderQty, orderQuantities]);
+  }, [dispatch, kit.id, selectedVariant, isAuthenticated, user, hasOrderQuantities, selectedOrderQty, currentCategoryQuantities, activeTierPricing, formattedPrices?.rawOurPrice]);
 
   const handleDecreaseQty = useCallback((e) => {
     e.stopPropagation();
@@ -329,23 +432,6 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     setShowVariants(false);
   }, []);
 
-  // Memoize formatted prices
-  const formattedPrices = useMemo(() => {
-    const ourPriceNum = Number(currentVariant?.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
-    const marketPriceNum = Number(currentVariant?.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
-    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
-    const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
-      ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
-      : 0;
-
-    return {
-      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
-      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0",
-      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0",
-      gstRate: !isNaN(gstRate) ? gstRate : 13.8
-    };
-  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, currentVariant?.gstRate, kit]);
-
   // Dynamic capacity & display values
   const displayCapacity = useMemo(() => {
     if (kit?.capacityKW !== undefined && kit.capacityKW !== null && kit.capacityKW !== "") {
@@ -380,19 +466,20 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     return kit?.kitName || kit?.title || kit?.name || "Solar Module";
   }, [kit?.kitName, kit?.title, kit?.name]);
 
-  // Use backend-computed discount percent (showcase price vs our price)
-  // Falls back to frontend calculation if field is missing (backwards compat)
+  // Use dynamic discount percent (tier price vs market price)
   const discountPercentage = useMemo(() => {
+    const ourP = formattedPrices.rawOurPrice;
+    const mktP = formattedPrices.rawMarketPrice;
+    if (mktP > ourP && mktP > 0) {
+      return Math.round(((mktP - ourP) / mktP) * 100);
+    }
     if (currentVariant?.discountPercent !== undefined) return currentVariant.discountPercent;
-    const mkt = Number(currentVariant?.marketPrice || kit?.marketPrice || 0);
-    const our = Number(currentVariant?.ourPrice || kit?.ourPrice || 0);
-    if (!mkt || !our || mkt <= our) return 0;
-    return Math.round(((mkt - our) / mkt) * 100);
-  }, [currentVariant?.discountPercent, currentVariant?.marketPrice, currentVariant?.ourPrice, kit]);
+    return 0;
+  }, [formattedPrices.rawOurPrice, formattedPrices.rawMarketPrice, currentVariant?.discountPercent]);
 
   // Cart calculations for total and savings
   const cartCalculations = useMemo(() => {
-    if (!cartItem || !currentVariant) {
+    if (!cartItem) {
       return {
         totalSavings: 0,
         totalAmount: 0,
@@ -403,9 +490,11 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     }
 
     const quantity = cartItem.qty;
-    const totalMarketPrice = quantity * currentVariant.marketPrice;
-    const totalOurPrice = quantity * currentVariant.ourPrice;
-    const totalSavings = totalMarketPrice - totalOurPrice;
+    const itemUnitPrice = Number(cartItem.ourPrice || formattedPrices.rawOurPrice);
+    const itemMarketPrice = Number(cartItem.marketPrice || formattedPrices.rawMarketPrice);
+    const totalMarketPrice = quantity * itemMarketPrice;
+    const totalOurPrice = quantity * itemUnitPrice;
+    const totalSavings = Math.max(0, totalMarketPrice - totalOurPrice);
 
     return {
       totalSavings,
@@ -414,7 +503,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       quantity,
       totalMarketPrice
     };
-  }, [cartItem, currentVariant]);
+  }, [cartItem, formattedPrices.rawOurPrice, formattedPrices.rawMarketPrice]);
 
   const formattedCalculations = useMemo(() => ({
     totalSavings: cartCalculations.totalSavings.toLocaleString("en-IN"),
@@ -575,6 +664,20 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               <span>{kit.warrantyYears} Years</span>
             </div>
           )}
+          {hasDatasheets && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDatasheetModal(true);
+              }}
+              title="View Manufacturer Datasheets"
+              className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/20 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer ml-auto"
+            >
+              <FaFilePdf className="text-[11px]" />
+              <span>Datasheets</span>
+            </button>
+          )}
         </div>
 
         <KitComponentsRow kit={kit} />
@@ -637,13 +740,32 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
         {/* Pricing Info */}
         <div className="flex items-end justify-between mb-4 border-t border-border pt-4">
           <div className="text-left">
-            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-0.5">Special Price</span>
-            <div className="flex items-center gap-1">
-              <span className="text-lg font-extrabold text-text-primary leading-none">₹{formattedPrices.ourPrice}</span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Special Price</span>
+              {activeTierPricing && (
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                  activeTierPricing.type === 'po'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                    : 'bg-primary/10 text-primary dark:text-info border border-primary/20'
+                }`}>
+                  {activeTierPricing.type === 'po' ? 'PO Bulk Tier' : 'Loose Tier'}
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-xl font-extrabold text-text-primary leading-none">₹{formattedPrices.ourPrice}</span>
+              <span className="text-[10px] text-text-secondary font-semibold">/ kit</span>
               {discountPercentage > 0 && (
                 <del className="text-xs text-text-muted font-semibold ml-1">₹{formattedPrices.marketPrice}</del>
               )}
             </div>
+            {selectedOrderQty > 1 && (
+              <div className="text-xs font-black text-primary dark:text-info mt-1 flex items-center gap-1">
+                <span>Batch Total:</span>
+                <span>₹{formattedPrices.totalOrderValue}</span>
+                <span className="text-[10px] font-normal text-text-muted">({selectedOrderQty} kits)</span>
+              </div>
+            )}
             {formattedPrices.gstIncluded && (
               <span className="text-[10px] text-success font-semibold block mt-0.5">
                 (Includes ₹{formattedPrices.gstIncluded} GST @ {formattedPrices.gstRate}%)
@@ -741,17 +863,45 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
         <div className="mt-auto pt-2">
           {hasOrderQuantities ? (
             /* Order Quantity Chips Mode */
-            <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-2.5" onClick={(e) => e.stopPropagation()}>
+              {/* Category Switcher Tabs (Loose vs PO) if both exist */}
+              {hasLooseQuantities && hasPoQuantities && (
+                <div className="flex rounded-lg bg-surface-hover p-0.5 border border-border text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setActiveTierType("loose"); }}
+                    className={`flex-1 py-1 px-1.5 rounded-md transition-all text-center ${
+                      activeTierType === "loose"
+                        ? "bg-surface text-primary shadow-xs font-black"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Loose ({looseOrderQuantities[0] || 5}-{looseOrderQuantities[looseOrderQuantities.length - 1] || 25})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setActiveTierType("po"); }}
+                    className={`flex-1 py-1 px-1.5 rounded-md transition-all text-center ${
+                      activeTierType === "po"
+                        ? "bg-surface text-amber-600 dark:text-amber-400 shadow-xs font-black"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Bulk PO ({poOrderQuantities[0] || 100}+)
+                  </button>
+                </div>
+              )}
+
               {!cartItem && (
                 <div className="flex flex-wrap gap-1.5 mb-1.5">
-                  {orderQuantities.map((qty) => (
+                  {currentCategoryQuantities.map((qty) => (
                     <button
                       key={qty}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setSelectedOrderQty(qty); }}
                       className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
                         ${selectedOrderQty === qty
-                          ? 'bg-primary text-white border-primary shadow-md'
+                          ? 'bg-primary text-white border-primary shadow-md scale-102'
                           : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
                         }`}
                     >
@@ -769,18 +919,24 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                   leftIcon={<FaShoppingCart />}
                   className="bg-gradient-to-r from-primary to-primary-end text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
                 >
-                  Add {selectedOrderQty || orderQuantities[0]} Kits to Cart
+                  Add {selectedOrderQty || currentCategoryQuantities[0] || 1} Kits to Cart
                 </Button>
               ) : (
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap gap-1.5">
-                    {orderQuantities.map((qty) => (
+                    {currentCategoryQuantities.map((qty) => (
                       <button
                         key={qty}
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                          dispatch(addToCart({
+                            id: kit.id,
+                            variantIndex: selectedVariant,
+                            qty,
+                            replace: true,
+                            price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
+                          }));
                           setSelectedOrderQty(qty);
                         }}
                         className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
@@ -849,7 +1005,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
             </Button>
           )}
 
-          {hasTrialKit && !isCart && (
+          {canShowTrialButton && (
             <button
               type="button"
               onClick={(e) => {
@@ -862,10 +1018,38 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
               <span>Order Trial Kit ({trialKitQty} Kits)</span>
             </button>
           )}
+
+          {/* Download Datasheet Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDatasheetModal(true);
+            }}
+            className={`w-full mt-2 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all duration-200 cursor-pointer group/datasheet hover:scale-[1.01] ${
+              hasDatasheets
+                ? "bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30"
+                : "bg-surface-hover hover:bg-surface-hover/80 text-text-secondary border border-border"
+            }`}
+          >
+            <FaFilePdf className={`${hasDatasheets ? "text-red-500" : "text-text-muted"} group-hover/datasheet:scale-110 transition-transform`} size={13} />
+            <span>{hasDatasheets ? "Download Datasheet (PDF)" : "View Datasheet (PDF)"}</span>
+          </button>
         </div>
 
         {/* Eco footer stats */}
-        <div className="mt-4 flex justify-end items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
+        <div className="mt-4 flex justify-between items-center text-[10px] text-text-muted font-bold border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDatasheetModal(true);
+            }}
+            className="flex items-center gap-1.5 text-red-600 hover:text-red-700 dark:text-red-400 cursor-pointer font-black transition-colors"
+          >
+            <FaFilePdf size={12} className="text-red-500" />
+            <span>{hasDatasheets ? "Datasheet Available" : "Technical Specs"}</span>
+          </button>
           <span className="flex items-center gap-1 text-primary dark:text-info">
             <FaLeaf />
             Clean Energy
@@ -1061,13 +1245,30 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
           <div className="flex-shrink-0 w-full md:w-52 flex flex-col justify-between border-t md:border-t-0 md:border-l border-border pt-3 md:pt-0 md:pl-4">
             {/* Pricing Section */}
             <div className="mb-3 text-left md:text-right">
-              <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block mb-0.5">Special Price</span>
+              <div className="flex items-center md:justify-end gap-1.5 mb-0.5">
+                <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Special Price</span>
+                {activeTierPricing && (
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                    activeTierPricing.type === 'po'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                      : 'bg-primary/10 text-primary dark:text-info border border-primary/20'
+                  }`}>
+                    {activeTierPricing.type === 'po' ? 'PO Tier' : 'Loose Tier'}
+                  </span>
+                )}
+              </div>
               <div className="flex items-baseline md:justify-end gap-1.5 flex-wrap">
                 <span className="text-xl font-extrabold text-text-primary">₹{formattedPrices.ourPrice}</span>
+                <span className="text-[10px] text-text-secondary font-semibold">/ kit</span>
                 {discountPercentage > 0 && (
                   <del className="text-xs text-text-muted font-semibold">₹{formattedPrices.marketPrice}</del>
                 )}
               </div>
+              {selectedOrderQty > 1 && (
+                <div className="text-xs font-black text-primary dark:text-info mt-0.5 md:text-right">
+                  Batch: ₹{formattedPrices.totalOrderValue} <span className="text-[10px] font-normal text-text-muted">({selectedOrderQty} kits)</span>
+                </div>
+              )}
               {formattedPrices.gstIncluded && (
                 <span className="text-[10px] text-success font-semibold block mt-0.5 md:text-right">
                   (Includes ₹{formattedPrices.gstIncluded} GST @ {formattedPrices.gstRate}%)
@@ -1126,7 +1327,6 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                   </div>
                 )}
               </div>
-            </div>
 
             {/* Cart Calculations Summary */}
             {cartItem && cartCalculations.quantity > 0 && (
@@ -1148,14 +1348,42 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
             <div>
               {hasOrderQuantities ? (
                 <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                  {/* Category switcher if both Loose and PO exist */}
+                  {hasLooseQuantities && hasPoQuantities && (
+                    <div className="flex rounded-lg bg-surface-hover p-0.5 border border-border text-[9px] font-bold">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveTierType("loose"); }}
+                        className={`flex-1 py-0.5 px-1 rounded transition-all text-center ${
+                          activeTierType === "loose"
+                            ? "bg-surface text-primary shadow-xs font-black"
+                            : "text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Loose
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setActiveTierType("po"); }}
+                        className={`flex-1 py-0.5 px-1 rounded transition-all text-center ${
+                          activeTierType === "po"
+                            ? "bg-surface text-amber-600 dark:text-amber-400 shadow-xs font-black"
+                            : "text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Bulk PO
+                      </button>
+                    </div>
+                  )}
+
                   {!cartItem && (
                     <div className="flex flex-wrap gap-1.5 mb-1.5">
-                      {orderQuantities.map((qty) => (
+                      {currentCategoryQuantities.map((qty) => (
                         <button
                           key={qty}
                           type="button"
                           onClick={(e) => { e.stopPropagation(); setSelectedOrderQty(qty); }}
-                          className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-black border transition-all duration-150 cursor-pointer
                             ${selectedOrderQty === qty
                               ? 'bg-primary text-white border-primary shadow-md'
                               : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
@@ -1173,23 +1401,29 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                       size="md"
                       fullWidth
                       leftIcon={<FaShoppingCart />}
-                      className="bg-gradient-to-r from-primary to-primary-end text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+                      className="bg-gradient-to-r from-primary to-primary-end text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200 text-xs py-2"
                     >
-                      Add {selectedOrderQty || orderQuantities[0]} Kits to Cart
+                      Add {selectedOrderQty || currentCategoryQuantities[0] || 1} Kits to Cart
                     </Button>
                   ) : (
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap gap-1.5">
-                        {orderQuantities.map((qty) => (
+                        {currentCategoryQuantities.map((qty) => (
                           <button
                             key={qty}
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                              dispatch(addToCart({
+                                id: kit.id,
+                                variantIndex: selectedVariant,
+                                qty,
+                                replace: true,
+                                price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
+                              }));
                               setSelectedOrderQty(qty);
                             }}
-                            className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all duration-150 cursor-pointer
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-black border transition-all duration-150 cursor-pointer
                               ${cartItem.qty === qty
                                 ? 'bg-primary text-white border-primary shadow-md'
                                 : 'bg-surface border-border text-text-secondary hover:border-primary/50 hover:text-primary'
@@ -1255,7 +1489,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                 </div>
               )}
 
-              {hasTrialKit && !isCart && (
+              {canShowTrialButton && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1268,10 +1502,28 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
                   <span>Order Trial Kit ({trialKitQty} Kits)</span>
                 </button>
               )}
+
+              {/* Download Datasheet Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDatasheetModal(true);
+                }}
+                className={`w-full mt-2 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all duration-200 cursor-pointer group/datasheet hover:scale-[1.01] ${
+                  hasDatasheets
+                    ? "bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30"
+                    : "bg-surface-hover hover:bg-surface-hover/80 text-text-secondary border border-border"
+                }`}
+              >
+                <FaFilePdf className={`${hasDatasheets ? "text-red-500" : "text-text-muted"} group-hover/datasheet:scale-110 transition-transform`} size={13} />
+                <span>{hasDatasheets ? "Download Datasheet (PDF)" : "View Datasheet (PDF)"}</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
+    </div>
   );
 
   return (
@@ -1284,6 +1536,13 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
           kit={kit}
           currentVariant={currentVariant}
           selectedVariantIndex={selectedVariant}
+        />
+      )}
+      {showDatasheetModal && (
+        <DatasheetModal
+          isOpen={showDatasheetModal}
+          onClose={() => setShowDatasheetModal(false)}
+          kit={kit}
         />
       )}
     </>

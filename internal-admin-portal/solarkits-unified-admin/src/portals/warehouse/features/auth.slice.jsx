@@ -12,28 +12,43 @@ export const refreshAccessToken = createAsyncThunk(
   async (_, { rejectWithValue, getState }) => {
     try {
       const localToken = getState()?.auth?.token || safeParse('login', null)?.token;
+      const storedRefreshToken = localStorage.getItem('refresh_token');
       const headers = {};
       if (localToken) {
         headers['Authorization'] = localToken.startsWith('Bearer ') ? localToken : `Bearer ${localToken}`;
       }
+      if (storedRefreshToken) {
+        headers['x-refresh-token'] = storedRefreshToken;
+      }
 
-      const res = await axios.post(`${import.meta.env.VITE_AUTH_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/auth-api'}/refresh-access-token`, {}, {
-        headers,
-        withCredentials: true,
-        timeout: ms_conversion('30s'),
-      });
-      const { token, url_prefix } = res.data || {};
+      const res = await axios.post(
+        `${import.meta.env.VITE_AUTH_API_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000/auth-api'}/refresh-access-token`,
+        storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
+        {
+          headers,
+          withCredentials: true,
+          timeout: ms_conversion('30s'),
+        }
+      );
+      const { token, refresh_token: newRefreshToken, url_prefix } = res.data || {};
       if (token) {
         localStorage.setItem('login', JSON.stringify({ token }));
       }
-      return { token: token || null, url_prefix: url_prefix || null };
+      if (newRefreshToken) {
+        localStorage.setItem('refresh_token', newRefreshToken);
+      }
+      if (token && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('token_refreshed', { detail: token }));
+      }
+      return { token: token || null, refresh_token: newRefreshToken || null, url_prefix: url_prefix || null };
     } catch (err) {
       const message = err.response?.data?.message || err.message || 'Failed to refresh access token';
-      const localToken = safeParse('login', null)?.token;
-      if (!localToken && (err.response?.data?.auth === false || err.response?.status === 401)) {
+      if (err.response?.data?.auth === false || err.response?.status === 401) {
+        localStorage.removeItem('login');
+        localStorage.removeItem('refresh_token');
         const publicPaths = ["/login", "/verify", "/forgot-password", "/set-passcode"];
         const targetLogin = '/login';
-        if (window.location.pathname !== targetLogin && !publicPaths.includes(window.location.pathname)) {
+        if (typeof window !== 'undefined' && window.location.pathname !== targetLogin && !publicPaths.includes(window.location.pathname)) {
           window.location.href = targetLogin;
         }
       }
@@ -125,6 +140,9 @@ const authSlice = createSlice({
         localStorage.setItem('user', JSON.stringify(action.payload.user || null));
         if (action.payload.token) {
           localStorage.setItem('login', JSON.stringify({ token: action.payload.token }));
+        }
+        if (action.payload.refresh_token) {
+          localStorage.setItem('refresh_token', action.payload.refresh_token);
         }
       })
       .addCase(loginUser.rejected, (state, action) => {

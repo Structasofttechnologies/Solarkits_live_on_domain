@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiShoppingCart,
@@ -67,6 +67,16 @@ function StatusBadge({ status }) {
 export default function LooseOrder() {
   const [searchParams] = useSearchParams();
   const queryPoId = searchParams.get("po_id");
+
+  const outletContext = useOutletContext?.() || {};
+  const rawAllowed = outletContext?.allowedOrderTypes || outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
+  const allowedOrderTypes = Array.isArray(rawAllowed)
+    ? rawAllowed
+    : typeof rawAllowed === "string"
+    ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
+    : ["po_order"];
+
+  const allowsLoose = allowedOrderTypes.includes("loose_order");
 
   const [loading, setLoading] = useState(true);
   const [planData, setPlanData] = useState(null);
@@ -267,14 +277,33 @@ export default function LooseOrder() {
       return selectedParentPo.items[0].unit_price_paise / 100;
     }
     if (!selectedKit) return 0;
+
+    // Check separate Loose Order Tier Pricing
+    const loosePricing = selectedKit.loose_order_pricing || selectedKit.looseOrderPricing;
+    if (Array.isArray(loosePricing) && loosePricing.length > 0) {
+      const matchedTier = loosePricing.find(
+        (t) => Number(t.quantity) === Number(totalLooseQuantity)
+      );
+      if (matchedTier && matchedTier.price_per_kit > 0) {
+        return matchedTier.price_per_kit;
+      }
+      // If not an exact match, find highest tier where quantity <= totalLooseQuantity
+      const lowerTiers = loosePricing
+        .filter((t) => Number(t.quantity) <= Number(totalLooseQuantity) && t.price_per_kit > 0)
+        .sort((a, b) => Number(b.quantity) - Number(a.quantity));
+      if (lowerTiers.length > 0) {
+        return lowerTiers[0].price_per_kit;
+      }
+    }
+
     if (selectedKit.dealer_price) return selectedKit.dealer_price;
     if (selectedKit.selling_price_cached) return selectedKit.selling_price_cached;
     if (selectedKit.base_price_cached) return selectedKit.base_price_cached;
     if (selectedKit.unit_price) return selectedKit.unit_price;
     if (selectedKit.price) return selectedKit.price;
     if (selectedKit.base_price) return selectedKit.base_price;
-    return 45000;
-  }, [selectedParentPo, selectedKit]);
+    return 0;
+  }, [selectedParentPo, selectedKit, totalLooseQuantity]);
 
   const gstRatePercent = selectedKit?.gst_rate || 12;
   const subtotalINR = totalLooseQuantity * unitPriceINR;
@@ -499,20 +528,43 @@ export default function LooseOrder() {
             >
               <FiRefreshCw size={17} className={loading ? "animate-spin" : ""} />
             </button>
-            <button
-              onClick={() => {
-                setFormError("");
-                setCreateModal(true);
-              }}
-              disabled={!planData?.has_active_plan && !planData?.combo_kits?.length}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <FiPlus size={18} />
-              <span>Place Loose Solar Kit Order</span>
-            </button>
+            {allowsLoose ? (
+              <button
+                onClick={() => {
+                  setFormError("");
+                  setCreateModal(true);
+                }}
+                disabled={!planData?.has_active_plan && !planData?.combo_kits?.length}
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FiPlus size={18} />
+                <span>Place Loose Solar Kit Order</span>
+              </button>
+            ) : (
+              <Link
+                to="/po-order"
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-blue-900 hover:bg-white/90 text-sm font-black shadow-lg transition-all transform active:scale-95"
+              >
+                <FiArrowRight size={18} />
+                <span>Go to PO Orders</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
+
+      {/* ── Advisory Banner for Non-Loose Order Stores ───────────────────────── */}
+      {!allowsLoose && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <FiAlertCircle size={18} className="text-amber-600 shrink-0" />
+            <span>Your store is configured for Purchase Orders only. Direct Loose Order creation is not permitted for your Store Type.</span>
+          </div>
+          <Link to="/po-order" className="px-3.5 py-1.5 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-500 transition-colors shrink-0">
+            Open PO Orders
+          </Link>
+        </div>
+      )}
 
       {/* ── ACTIVE PRICE-LOCKED PO QUOTA BANNER ───────────────────────────────── */}
       {activePos.length > 0 && (
@@ -956,48 +1008,56 @@ export default function LooseOrder() {
                   Step 1: Select Solar Combo Kit
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {(planData?.combo_kits || []).map((kit) => {
-                    const kitId = kit._id || kit.id;
-                    const isSelected = selectedKitId?.toString() === kitId?.toString();
-                    const kitPrice =
-                      selectedParentPo?.items?.[0]?.unit_price_paise
-                        ? selectedParentPo.items[0].unit_price_paise / 100
-                        : kit.dealer_price || kit.selling_price_cached || kit.base_price_cached || 45000;
+                  {(planData?.combo_kits || []).length === 0 ? (
+                    <div className="col-span-full p-6 text-center rounded-2xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 bg-surface">
+                      <FiAlertCircle size={22} className="text-amber-500" />
+                      <p className="text-xs font-bold text-text-primary">No Combo Kits Available</p>
+                      <p className="text-[11px] text-text-muted">Kits must be active in warehouse with pricing configured to appear for loose orders.</p>
+                    </div>
+                  ) : (
+                    (planData?.combo_kits || []).map((kit) => {
+                      const kitId = kit._id || kit.id;
+                      const isSelected = selectedKitId?.toString() === kitId?.toString();
+                      const kitPrice =
+                        selectedParentPo?.items?.[0]?.unit_price_paise
+                          ? selectedParentPo.items[0].unit_price_paise / 100
+                          : (kit.dealer_price || kit.selling_price_cached || kit.base_price_cached || 0);
 
-                    return (
-                      <div
-                        key={kitId}
-                        onClick={() => setSelectedKitId(kitId)}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
-                            ? "bg-primary/10 border-primary shadow-sm"
-                            : "bg-surface hover:bg-surface-hover border-border"
-                        }`}
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-primary uppercase font-mono">
-                              {kit.capacityKW ? `${kit.capacityKW} kW Kit` : "Solar Combo"}
-                            </span>
-                            {isSelected && <FiCheck className="text-primary font-black" />}
+                      return (
+                        <div
+                          key={kitId}
+                          onClick={() => setSelectedKitId(kitId)}
+                          className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? "bg-primary/10 border-primary shadow-sm"
+                              : "bg-surface hover:bg-surface-hover border-border"
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-primary uppercase font-mono">
+                                {kit.capacityKW ? `${kit.capacityKW} kW Kit` : (kit.capacity ? `${kit.capacity} kW Kit` : "Solar Combo")}
+                              </span>
+                              {isSelected && <FiCheck className="text-primary font-black" />}
+                            </div>
+                            <h5 className="font-extrabold text-text-primary text-xs leading-tight">
+                              {kit.name || kit.kit_name || "Solar Kit Package"}
+                            </h5>
+                            <p className="text-[11px] text-text-muted">
+                              {kit.brandName || "Tier-1 Components"} • {kit.phase || "Single"} Phase
+                            </p>
                           </div>
-                          <h5 className="font-extrabold text-text-primary text-xs leading-tight">
-                            {kit.name || kit.kit_name || "Solar Kit Package"}
-                          </h5>
-                          <p className="text-[11px] text-text-muted">
-                            {kit.brandName || "Tier-1 Components"} • {kit.phase || "Single"} Phase
-                          </p>
-                        </div>
 
-                        <div className="pt-2 mt-2 border-t border-border flex justify-between items-baseline">
-                          <span className="text-[10px] text-text-muted">Unit Rate</span>
-                          <span className="font-black text-text-primary text-sm">
-                            ₹{kitPrice.toLocaleString("en-IN")}
-                          </span>
+                          <div className="pt-2 mt-2 border-t border-border flex justify-between items-baseline">
+                            <span className="text-[10px] text-text-muted">Unit Rate</span>
+                            <span className="font-black text-text-primary text-sm">
+                              {kitPrice > 0 ? `₹${kitPrice.toLocaleString("en-IN")}` : "Price Pending"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
 

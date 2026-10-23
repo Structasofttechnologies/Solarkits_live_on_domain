@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import axiosInstance from "@/utils/axiosInstance";
 import {
   FaShoppingCart, FaEye, FaRegClock, FaCheckCircle,
   FaTimesCircle, FaMapMarkerAlt, FaEdit, FaTimes, FaTruck,
   FaWarehouse, FaTruckLoading, FaFileInvoice, FaRedo, FaUpload,
   FaBuilding, FaExclamationTriangle, FaCopy, FaCheck, FaExternalLinkAlt,
-  FaSearch, FaBoxOpen, FaRoute
+  FaSearch, FaBoxOpen, FaRoute, FaBolt, FaUniversity
 } from "react-icons/fa";
 import { BsArrowRepeat } from "react-icons/bs";
 import Button from "@/Components/Button";
@@ -13,6 +14,7 @@ import CustomInput from "@/Components/CustomInput";
 import MapLocationPicker from "@/Components/MapLocationPicker";
 
 export default function ProjectOrderStatus() {
+  const { user } = useSelector((state) => state.auth_slice || {});
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -39,6 +41,32 @@ export default function ProjectOrderStatus() {
   const [newReceiptPreview, setNewReceiptPreview] = useState(null);
   const [resubmitLoading, setResubmitLoading] = useState(false);
   const [resubmitError, setResubmitError] = useState("");
+
+  // ── Milestone 2 Payment Modal State ─────────────────────────────────────────
+  const [milestonePaymentModalOrder, setMilestonePaymentModalOrder] = useState(null);
+  const [milestonePaymentGateway, setMilestonePaymentGateway] = useState("icici"); // 'icici' | 'offline'
+  const [regionPaymentMode, setRegionPaymentMode] = useState("both"); // 'online' | 'offline' | 'both'
+  const [firstPaymentMethodUsed, setFirstPaymentMethodUsed] = useState("icici"); // 'icici' | 'offline'
+  const [isRegionOnlineEnabled, setIsRegionOnlineEnabled] = useState(true);
+  const [isRegionOfflineEnabled, setIsRegionOfflineEnabled] = useState(true);
+  const [iciciVanDetails, setIciciVanDetails] = useState(null);
+  const [vanLoading, setVanLoading] = useState(false);
+  const [copiedModalField, setCopiedModalField] = useState(null);
+  const [milestoneUtr, setMilestoneUtr] = useState("");
+  const [milestoneAmount, setMilestoneAmount] = useState("");
+  const [milestoneDate, setMilestoneDate] = useState(new Date().toISOString().slice(0, 10));
+  const [milestoneBank, setMilestoneBank] = useState("");
+  const [milestoneReceiptFile, setMilestoneReceiptFile] = useState(null);
+  const [milestoneReceiptPreview, setMilestoneReceiptPreview] = useState(null);
+  const [milestoneSubmitting, setMilestoneSubmitting] = useState(false);
+  const [milestoneError, setMilestoneError] = useState("");
+
+  const handleCopyModalText = (text, fieldKey) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedModalField(fieldKey);
+    setTimeout(() => setCopiedModalField(null), 2000);
+  };
 
   // Invoice view modal state
   const [viewingInvoice, setViewingInvoice] = useState(null);
@@ -250,6 +278,168 @@ export default function ProjectOrderStatus() {
     }
   };
 
+  // ── Milestone 2 Payment Handlers ──────────────────────────────────────────
+  const handleOpenMilestonePay = async (order) => {
+    const remaining = order.payment_milestones?.remaining_amount || Math.round((order.total_amount || 0) * 0.7);
+    setMilestonePaymentModalOrder(order);
+    setMilestoneUtr("");
+    setMilestoneAmount(String(remaining));
+    setMilestoneDate(new Date().toISOString().slice(0, 10));
+    setMilestoneBank("");
+    setMilestoneReceiptFile(null);
+    setMilestoneReceiptPreview(null);
+    setMilestoneError("");
+    setCopiedModalField(null);
+
+    // 1. Detect if the first payment was made via ICICI e-Collection
+    const firstPaymentWasIcici = Boolean(
+      order.is_online ||
+      order.payment_method === "icici_ecollection" || 
+      order.payment_gateway_used === "icici_ecollection" || 
+      order.payment_gateway_used === "icici" ||
+      order.payment_info?.payment_method === "icici_ecollection" ||
+      order.payment_info?.payment_gateway_used === "icici_ecollection" ||
+      order.offline_payment?.payment_method === "icici_ecollection" ||
+      order.offline_payment?.payment_gateway_used === "icici_ecollection" ||
+      order.offline_payment?.admin_remarks?.toLowerCase().includes("icici") ||
+      order.offline_payment?.sender_bank_name?.toLowerCase().includes("icici")
+    );
+
+    setFirstPaymentMethodUsed(firstPaymentWasIcici ? "icici" : "offline");
+    // Default gateway selection strictly based on first payment
+    let initialGateway = firstPaymentWasIcici ? "icici" : "offline";
+    setMilestonePaymentGateway(initialGateway);
+
+    // 2. Check region payment configuration
+    const districtId = order.delivery_address?.district_id || order.delivery_address?.district;
+    const stateId = order.delivery_address?.state_id || order.delivery_address?.state;
+    if (districtId) {
+      try {
+        const cfgRes = await axiosInstance.get(`/payment-config/resolve?district_id=${districtId}&state_id=${stateId || ""}&order_type=epc_order`);
+        const cfg = cfgRes.data?.config;
+        if (cfg) {
+          const onlineOn = Boolean(cfg.online_enabled || cfg.payment_mode === "online" || cfg.payment_mode === "both");
+          const offlineOn = Boolean(cfg.offline_enabled || cfg.payment_mode === "offline" || cfg.payment_mode === "both");
+          setIsRegionOnlineEnabled(onlineOn);
+          setIsRegionOfflineEnabled(offlineOn);
+
+          const mode = (onlineOn && offlineOn) ? "both" : onlineOn ? "online" : "offline";
+          setRegionPaymentMode(mode);
+
+          if (onlineOn && !offlineOn) {
+            // Region ONLY has ICICI / online enabled
+            setMilestonePaymentGateway("icici");
+          } else if (!onlineOn && offlineOn) {
+            // Region ONLY has offline enabled
+            setMilestonePaymentGateway("offline");
+          } else {
+            // Region supports both: keep what was used in first payment
+            setMilestonePaymentGateway(firstPaymentWasIcici ? "icici" : "offline");
+          }
+        }
+      } catch (err) {
+        console.warn("Could not resolve region payment config for milestone pay:", err);
+      }
+    }
+
+    // 3. Fetch ICICI Virtual Account (VAN) details
+    const userPhone = order.delivery_address?.contact_phone || order.buyer_phone || user?.whatsapp || user?.mobile || "9876543210";
+    const cleanPhone = String(userPhone).replace(/\D/g, "");
+    setVanLoading(true);
+    try {
+      const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const baseUrl = rawApiUrl.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+      const res = await fetch(`${baseUrl}/api/v1/payments/icici/van-details?phone=${cleanPhone || "9876543210"}`);
+      const d = await res.json();
+      if (d?.success && d.data) {
+        setIciciVanDetails(d.data);
+      } else {
+        setIciciVanDetails({
+          beneficiary_name: "SolarKits Technologies Pvt Ltd",
+          virtual_account_number: `SLRK${cleanPhone.slice(-10)}`,
+          ifsc_code: "ICIC0000104",
+          bank_name: "ICICI Bank",
+          branch_name: "CMS Branch, Mumbai",
+          upi_handle: `SLRK${cleanPhone.slice(-10)}@icici`,
+        });
+      }
+    } catch (err) {
+      setIciciVanDetails({
+        beneficiary_name: "SolarKits Technologies Pvt Ltd",
+        virtual_account_number: `SLRK${cleanPhone.slice(-10)}`,
+        ifsc_code: "ICIC0000104",
+        bank_name: "ICICI Bank",
+        branch_name: "CMS Branch, Mumbai",
+        upi_handle: `SLRK${cleanPhone.slice(-10)}@icici`,
+      });
+    } finally {
+      setVanLoading(false);
+    }
+  };
+
+  const handleMilestoneFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setMilestoneReceiptFile(file);
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setMilestoneReceiptPreview(ev.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        setMilestoneReceiptPreview(null);
+      }
+    }
+  };
+
+  const handleSubmitMilestonePayment = async (e) => {
+    e.preventDefault();
+    if (!milestoneUtr.trim()) {
+      setMilestoneError("Please enter the UTR / Transaction Reference Number.");
+      return;
+    }
+    // For offline payment, receipt is mandatory. For ICICI online VAN, receipt is optional
+    if (!milestoneReceiptFile && milestonePaymentGateway === "offline") {
+      setMilestoneError("Please upload the payment transfer receipt / screenshot.");
+      return;
+    }
+
+    setMilestoneSubmitting(true);
+    setMilestoneError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("milestone_number", 2);
+      formData.append("utr_number", milestoneUtr.trim().toUpperCase());
+      formData.append("amount_paid", Number(milestoneAmount));
+      formData.append("payment_date", milestoneDate);
+      formData.append("sender_bank_name", milestoneBank || (milestonePaymentGateway === "icici" ? "ICICI eCollection / UPI" : ""));
+      formData.append("payment_method", milestonePaymentGateway === "icici" ? "icici_ecollection" : "offline_bank_transfer");
+      formData.append("payment_gateway_used", milestonePaymentGateway === "icici" ? "icici_ecollection" : "bank_transfer");
+      if (milestoneReceiptFile) {
+        formData.append("payment_receipt", milestoneReceiptFile);
+      }
+
+      const targetId = milestonePaymentModalOrder._id || milestonePaymentModalOrder.id;
+      const res = await axiosInstance.post(
+        `/india/v1/shop/orders/${targetId}/milestone-payment`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      if (res.data?.success) {
+        setMilestonePaymentModalOrder(null);
+        fetchOrders();
+      } else {
+        setMilestoneError(res.data?.message || "Failed to submit milestone payment.");
+      }
+    } catch (err) {
+      console.error("Milestone payment submit error:", err);
+      setMilestoneError(err.response?.data?.message || "Error submitting payment. Please try again.");
+    } finally {
+      setMilestoneSubmitting(false);
+    }
+  };
+
   // Filter orders by search query across Order #, UTR, kit name, and tracking LR
   const filteredOrders = orders.filter((o) => {
     if (!searchQuery.trim()) return true;
@@ -381,11 +571,31 @@ export default function ProjectOrderStatus() {
                 const orderId = order.order_number || order.id || order._id;
                 const items = order.items || [];
 
-                const isPendingVerification = order.payment_status === "pending_verification" || order.status === "pending_verification";
-                const isApproved = order.payment_status === "captured" || order.status === "confirmed";
+                const isIciciPayment = Boolean(
+                  order.is_online ||
+                  order.payment_method === "icici_ecollection" || 
+                  order.payment_gateway_used === "icici_ecollection" || 
+                  order.payment_gateway_used === "icici" ||
+                  order.payment_info?.payment_method === "icici_ecollection" ||
+                  order.payment_info?.payment_gateway_used === "icici_ecollection" ||
+                  order.offline_payment?.payment_method === "icici_ecollection" ||
+                  order.offline_payment?.payment_gateway_used === "icici_ecollection" ||
+                  order.offline_payment?.admin_remarks?.toLowerCase().includes("icici") ||
+                  order.offline_payment?.sender_bank_name?.toLowerCase().includes("icici")
+                );
+
+                const isApproved = isIciciPayment ||
+                  order.payment_status === "captured" || 
+                  order.status === "confirmed" || 
+                  order.order_status === "confirmed" ||
+                  order.offline_payment?.verification_status === "approved" ||
+                  order.offline_payment?.admin_approval_status === "approved";
+
                 const isDispatched = order.order_status === "dispatched" || order.status === "dispatched" || Boolean(order.dispatch_tracking?.tracking_number);
                 const isDelivered = order.order_status === "delivered" || order.status === "completed" || order.status === "delivered";
-                const isRejected = order.payment_status === "rejected" || order.status === "rejected";
+                const isRejected = order.payment_status === "rejected" || order.status === "rejected" || order.offline_payment?.verification_status === "rejected";
+
+                const isPendingVerification = !isIciciPayment && !isApproved && (order.payment_status === "pending_verification" || order.status === "pending_verification" || order.offline_payment?.verification_status === "pending");
 
                 // Determine timeline step progression (1: Order Placed, 2: Verification, 3: Approved & Packaged, 4: Dispatched & In Transit, 5: Delivered)
                 let step = 1;
@@ -887,43 +1097,117 @@ export default function ProjectOrderStatus() {
                           })()}
                         </div>
 
-                        <div className="space-y-2">
-                          <span className="font-bold text-text-secondary block">Bank Transfer / Payment Proof:</span>
-                          <div className="bg-surface-hover/70 p-4 rounded-2xl border border-border space-y-1.5 font-mono">
-                            <div className="flex justify-between items-center">
-                              <span className="text-text-secondary font-sans">UTR Ref:</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-text-primary dark:text-white">
-                                  {utrStr}
-                                </span>
-                                {utrStr !== "N/A" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopy(utrStr, `utr-${orderId}`)}
-                                    className="p-0.5 text-text-secondary hover:text-primary transition-colors cursor-pointer"
-                                    title="Copy UTR"
-                                  >
-                                    {copiedKey === `utr-${orderId}` ? (
-                                      <span className="text-[10px] font-bold text-emerald-600 font-sans">Copied!</span>
+                        {/* ── Product Payment Milestones Progress ── */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-xs text-text-primary dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                              Payment Milestones Schedule
+                            </span>
+                            <span className="text-[11px] font-bold text-text-muted">
+                              Total: ₹{(order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {/* Milestone 1: Advance */}
+                            {(() => {
+                              const m1 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 1);
+                              const isM1Verified = isIciciPayment ||
+                                m1?.payment_status === "verified" ||
+                                order.payment_milestones?.milestone_verification_status === "advance_verified" ||
+                                order.payment_milestones?.milestone_verification_status === "fully_paid" ||
+                                ["confirmed", "processing", "vehicle_assigned", "ready_for_dispatch", "dispatched", "in_transit", "reached_destination", "delivered"].includes(order.order_status || order.status);
+                              const isM1Rejected = order.payment_status === "rejected" || m1?.payment_status === "rejected";
+                              const m1Amount = order.payment_milestones?.advance_amount || order.offline_payment?.amount_paid || Math.round((order.total_amount || 0) * 0.3);
+                              const m1Utr = m1?.utr_number || order.offline_payment?.utr_number || utrStr;
+
+                              return (
+                                <div className={`p-3.5 rounded-2xl border transition-all ${isM1Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM1Rejected ? "bg-red-500/5 border-red-500/30" : "bg-amber-500/5 border-amber-500/30"}`}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                                      Milestone 1 — Advance ({order.payment_milestones?.advance_percentage || 30}%)
+                                    </span>
+                                    <span className="font-black text-sm text-text-primary dark:text-white">
+                                      ₹{Number(m1Amount).toLocaleString("en-IN")}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between mt-1.5 text-xs">
+                                    <span className="text-[11px] text-text-secondary font-mono">UTR: {m1Utr}</span>
+                                    {isM1Verified ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                        <FaCheckCircle size={10} /> Advance Verified
+                                      </span>
+                                    ) : isM1Rejected ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">
+                                        <FaTimesCircle size={10} /> Rejected
+                                      </span>
                                     ) : (
-                                      <FaCopy size={11} />
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700">
+                                        <FaRegClock size={10} /> Accounts Reviewing
+                                      </span>
                                     )}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-text-secondary font-sans">Amount Paid:</span>
-                              <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans text-sm">
-                                ₹{(order.offline_payment?.amount_paid || order.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                            {order.offline_payment?.sender_bank_name && (
-                              <div className="flex justify-between items-center text-[11px]">
-                                <span className="text-text-secondary font-sans">Bank:</span>
-                                <span className="text-text-primary font-sans">{order.offline_payment.sender_bank_name}</span>
-                              </div>
-                            )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Milestone 2: Remaining Balance */}
+                            {(() => {
+                              const m2 = order.payment_milestones?.milestones?.find(m => m.milestone_number === 2);
+                              const hasMilestones = Boolean(order.payment_milestones?.milestones?.length > 0 || order.payment_milestones?.advance_amount);
+                              const isM2Verified = hasMilestones
+                                ? (m2?.payment_status === "verified" || order.payment_milestones?.milestone_verification_status === "fully_paid")
+                                : (order.payment_status === "captured" || order.payment_status === "paid");
+                              const isM2Pending = m2?.payment_status === "pending_verification" ||
+                                order.payment_milestones?.milestone_verification_status === "final_payment_pending_verification" ||
+                                Boolean(m2?.utr_number && !isM2Verified);
+                              const m2Amount = order.payment_milestones?.remaining_amount || Math.max(0, Math.round((order.total_amount || 0) * 0.7));
+                              const m2Utr = m2?.utr_number;
+
+                              return (
+                                <div className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between ${isM2Verified ? "bg-emerald-500/5 border-emerald-500/30" : isM2Pending ? "bg-blue-500/5 border-blue-500/30" : "bg-purple-500/5 border-purple-500/30"}`}>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[11px] font-black uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                        Milestone 2 — Before Dispatch ({order.payment_milestones?.remaining_percentage || 70}%)
+                                      </span>
+                                      <span className="font-black text-sm text-text-primary dark:text-white">
+                                        ₹{Number(m2Amount).toLocaleString("en-IN")}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-text-secondary leading-tight mt-0.5">
+                                      Required before materials are released from warehouse for courier transit.
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 text-xs">
+                                    {isM2Verified ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                        <FaCheckCircle size={10} /> Fully Paid & Cleared
+                                      </span>
+                                    ) : isM2Pending ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                        <FaRegClock size={10} /> Balance UTR Submitted ({m2Utr})
+                                      </span>
+                                    ) : (
+                                      <div className="flex items-center justify-between w-full">
+                                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                          ● Balance Due
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenMilestonePay(order)}
+                                          className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-black shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                                        >
+                                          <span>Pay 70% Balance (₹{Number(m2Amount).toLocaleString("en-IN")})</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1487,6 +1771,367 @@ export default function ProjectOrderStatus() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Milestone 2 (Remaining 70%) Payment Submission Modal ────────────────── */}
+      {milestonePaymentModalOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface rounded-3xl border border-border shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-border pb-3">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-purple-500/15 text-purple-600 rounded">
+                  Milestone 2 Payment Clearance
+                </span>
+                <h3 className="text-lg font-black text-text-primary dark:text-white mt-1">
+                  Pay Remaining 70% Balance (Before Dispatch)
+                </h3>
+              </div>
+              <button
+                onClick={() => setMilestonePaymentModalOrder(null)}
+                className="text-text-secondary hover:text-text-primary p-1 cursor-pointer"
+              >
+                <FaTimes size={18} />
+              </button>
+            </div>
+
+            {/* Order & Bank Summary */}
+            <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-500/20 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">Order Reference:</span>
+                <span className="font-mono font-black text-primary">
+                  {milestonePaymentModalOrder.order_number || milestonePaymentModalOrder._id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">Milestone 1 Advance Status:</span>
+                <span className="font-bold text-emerald-600">✓ Verified & Confirmed</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-text-secondary">First Payment Method Used:</span>
+                <span className="font-bold text-primary flex items-center gap-1">
+                  {firstPaymentMethodUsed === "icici" ? "⚡ ICICI eCollection (VAN)" : "🏦 Company Escrow Bank"}
+                </span>
+              </div>
+              {milestonePaymentModalOrder.delivery_address?.district_name && (
+                <div className="flex justify-between items-center">
+                  <span className="text-text-secondary">Delivery Region Gateway:</span>
+                  <span className="font-bold text-text-primary">
+                    {milestonePaymentModalOrder.delivery_address.district_name} ({isRegionOnlineEnabled && !isRegionOfflineEnabled ? "ICICI Online Only" : !isRegionOnlineEnabled && isRegionOfflineEnabled ? "Escrow Bank Only" : "ICICI & Escrow Active"})
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-sm font-bold border-t border-purple-500/20 pt-1.5">
+                <span className="text-purple-900 dark:text-purple-200">Remaining Balance Payable:</span>
+                <span className="text-base font-black text-purple-700 dark:text-purple-300">
+                  ₹{Number(milestoneAmount).toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment Gateway Mode Selector Tabs (Shown if both are available in region, or informative header if single gateway) */}
+            {isRegionOnlineEnabled && isRegionOfflineEnabled ? (
+              <div className="flex rounded-xl bg-surface-hover p-1 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setMilestonePaymentGateway("icici")}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    milestonePaymentGateway === "icici"
+                      ? "bg-[#264baa] text-white shadow-md shadow-[#264baa]/30"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  <span>⚡ ICICI eCollection (VAN)</span>
+                  {firstPaymentMethodUsed === "icici" ? (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-400/30 text-emerald-100 font-bold">1st Payment Used</span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold">Instant</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMilestonePaymentGateway("offline")}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    milestonePaymentGateway === "offline"
+                      ? "bg-amber-600 text-white shadow-md shadow-amber-600/30"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  <span>🏦 Company Escrow Bank</span>
+                  {firstPaymentMethodUsed === "offline" ? (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-200/30 text-amber-100 font-bold">1st Payment Used</span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/20 font-bold">Manual</span>
+                  )}
+                </button>
+              </div>
+            ) : isRegionOnlineEnabled ? (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[#264baa]/10 border border-[#264baa]/30 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#264baa] animate-pulse" />
+                  <span className="font-black text-[#264baa] dark:text-blue-300">
+                    Payment Gateway: ICICI Bank eCollection (Virtual Account)
+                  </span>
+                </div>
+                <span className="text-[10px] font-extrabold bg-[#264baa] text-white px-2.5 py-0.5 rounded-md">
+                  {firstPaymentMethodUsed === "icici" ? "First Payment Gateway" : "Region Active"}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-600" />
+                  <span className="font-black text-amber-900 dark:text-amber-200">
+                    Payment Gateway: SolarKits Company Escrow Bank Transfer
+                  </span>
+                </div>
+                <span className="text-[10px] font-extrabold bg-amber-600 text-white px-2.5 py-0.5 rounded-md">
+                  {firstPaymentMethodUsed === "offline" ? "First Payment Gateway" : "Region Active"}
+                </span>
+              </div>
+            )}
+
+            {/* Dynamic Payment Gateway Details Card */}
+            {milestonePaymentGateway === "icici" ? (
+              <div className="bg-gradient-to-br from-[#264baa]/10 via-surface to-[#264baa]/5 p-4 sm:p-5 rounded-2xl border-2 border-[#264baa]/40 shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#264baa]/20 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span className="text-xs font-black text-[#264baa] dark:text-blue-300">
+                      Official ICICI Bank eCollection Virtual Account (VAN)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    Auto-Reconciled
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="bg-surface p-2.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted text-[10px] block font-medium">Beneficiary Name</span>
+                      <span className="font-bold text-text-primary dark:text-white">
+                        {iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyModalText(iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd", "modal_ben")}
+                      className="p-1.5 text-text-secondary hover:text-[#264baa] transition-colors cursor-pointer"
+                      title="Copy Beneficiary Name"
+                    >
+                      {copiedModalField === "modal_ben" ? <FaCheck className="text-emerald-500" size={12} /> : <FaCopy size={12} />}
+                    </button>
+                  </div>
+
+                  <div className="bg-surface p-2.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted text-[10px] block font-medium">Bank & Branch</span>
+                      <span className="font-bold text-text-primary dark:text-white">
+                        {iciciVanDetails?.bank_name || "ICICI Bank"}, {iciciVanDetails?.branch_name || "CMS Branch, Mumbai"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#264baa]/10 p-3 rounded-xl border-2 border-[#264baa]/50 flex justify-between items-center shadow-xs">
+                    <div>
+                      <span className="text-[#264baa] dark:text-blue-300 text-[10px] font-extrabold uppercase tracking-wide block">
+                        Your Unique Virtual Account No. (VAN)
+                      </span>
+                      <span className="font-mono font-black text-[#264baa] dark:text-blue-200 text-base tracking-wider">
+                        {iciciVanDetails?.virtual_account_number || `SLRK${(milestonePaymentModalOrder.delivery_address?.contact_phone || user?.whatsapp || '9876543210').slice(-10)}`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyModalText(iciciVanDetails?.virtual_account_number || `SLRK${(milestonePaymentModalOrder.delivery_address?.contact_phone || user?.whatsapp || '9876543210').slice(-10)}`, "modal_van")}
+                      className="px-2.5 py-1.5 bg-[#264baa] hover:bg-[#1f3f91] text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                    >
+                      {copiedModalField === "modal_van" ? <FaCheck size={11} /> : <FaCopy size={11} />}
+                      <span>{copiedModalField === "modal_van" ? "Copied" : "Copy VAN"}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="bg-surface p-2.5 rounded-xl border border-border flex justify-between items-center">
+                      <div>
+                        <span className="text-text-muted text-[10px] block font-medium">IFSC Code</span>
+                        <span className="font-mono font-black text-text-primary dark:text-white text-xs">
+                          {iciciVanDetails?.ifsc_code || "ICIC0000104"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyModalText(iciciVanDetails?.ifsc_code || "ICIC0000104", "modal_ifsc")}
+                        className="p-1 text-text-secondary hover:text-[#264baa] transition-colors cursor-pointer"
+                      >
+                        {copiedModalField === "modal_ifsc" ? <FaCheck className="text-emerald-500" size={11} /> : <FaCopy size={11} />}
+                      </button>
+                    </div>
+
+                    <div className="bg-surface p-2.5 rounded-xl border border-border flex justify-between items-center">
+                      <div>
+                        <span className="text-text-muted text-[10px] block font-medium">UPI ID</span>
+                        <span className="font-mono font-bold text-text-primary dark:text-white text-xs truncate max-w-[130px]" title={iciciVanDetails?.upi_handle || `SLRK${(milestonePaymentModalOrder.delivery_address?.contact_phone || user?.whatsapp || '9876543210').slice(-10)}@icici`}>
+                          {iciciVanDetails?.upi_handle || `SLRK${(milestonePaymentModalOrder.delivery_address?.contact_phone || user?.whatsapp || '9876543210').slice(-10)}@icici`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyModalText(iciciVanDetails?.upi_handle || `SLRK${(milestonePaymentModalOrder.delivery_address?.contact_phone || user?.whatsapp || '9876543210').slice(-10)}@icici`, "modal_upi")}
+                        className="p-1 text-text-secondary hover:text-[#264baa] transition-colors cursor-pointer"
+                      >
+                        {copiedModalField === "modal_upi" ? <FaCheck className="text-emerald-500" size={11} /> : <FaCopy size={11} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                  <span>
+                    <strong>Instant Auto-Reconciled:</strong> Transfer ₹{Number(milestoneAmount).toLocaleString("en-IN")} via NetBanking (RTGS / NEFT / IMPS) or UPI to the VAN above.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/25 text-xs space-y-2.5">
+                <div className="flex justify-between items-center border-b border-amber-500/20 pb-2">
+                  <div className="font-bold text-amber-900 dark:text-amber-200">SolarKits Escrow Bank Account:</div>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-500/20 px-2 py-0.5 rounded">Accounts Verification Required</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-surface p-2 rounded-lg border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted text-[10px] block">Account Name</span>
+                      <span className="font-bold text-text-primary">SolarKits Technologies Pvt Ltd</span>
+                    </div>
+                  </div>
+                  <div className="bg-surface p-2 rounded-lg border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted text-[10px] block">Bank Name</span>
+                      <span className="font-bold text-text-primary">HDFC Bank</span>
+                    </div>
+                  </div>
+                  <div className="bg-surface p-2 rounded-lg border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted text-[10px] block">A/C Number</span>
+                      <span className="font-mono font-black text-text-primary">50200088991122</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyModalText("50200088991122", "modal_off_acc")}
+                      className="p-1 text-text-secondary hover:text-primary transition-colors cursor-pointer"
+                    >
+                      {copiedModalField === "modal_off_acc" ? <FaCheck className="text-emerald-500" size={11} /> : <FaCopy size={11} />}
+                    </button>
+                  </div>
+                  <div className="bg-surface p-2 rounded-lg border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted text-[10px] block">IFSC Code</span>
+                      <span className="font-mono font-black text-text-primary">HDFC0001234</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyModalText("HDFC0001234", "modal_off_ifsc")}
+                      className="p-1 text-text-secondary hover:text-primary transition-colors cursor-pointer"
+                    >
+                      {copiedModalField === "modal_off_ifsc" ? <FaCheck className="text-emerald-500" size={11} /> : <FaCopy size={11} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitMilestonePayment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  UTR / Transaction Ref No. <span className="text-red-500">*</span>
+                </label>
+                <CustomInput
+                  value={milestoneUtr}
+                  onChange={(e) => setMilestoneUtr(e.target.value.toUpperCase())}
+                  required
+                  placeholder={milestonePaymentGateway === "icici" ? "e.g. ICIC0001928374 or UPI Ref" : "e.g. HDFC0001928374 or 239847192834"}
+                  className="font-mono uppercase font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                    Amount Paid (₹) <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="number"
+                    value={milestoneAmount}
+                    onChange={(e) => setMilestoneAmount(e.target.value)}
+                    required
+                    className="font-bold font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                    Payment Date <span className="text-red-500">*</span>
+                  </label>
+                  <CustomInput
+                    type="date"
+                    value={milestoneDate}
+                    onChange={(e) => setMilestoneDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  Sender Bank Name
+                </label>
+                <CustomInput
+                  value={milestoneBank}
+                  onChange={(e) => setMilestoneBank(e.target.value)}
+                  placeholder={milestonePaymentGateway === "icici" ? "e.g. ICICI Bank / HDFC / GPay / PhonePe" : "e.g. State Bank of India"}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-text-primary dark:text-white mb-1">
+                  Upload Payment Transfer Receipt / Screenshot {milestonePaymentGateway === "offline" && <span className="text-red-500">*</span>}
+                </label>
+                <div className="border-2 border-dashed border-border rounded-xl p-4 text-center cursor-pointer relative bg-surface-hover">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleMilestoneFileChange}
+                    required={milestonePaymentGateway === "offline" && !milestoneReceiptFile}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {milestoneReceiptPreview ? (
+                    <img src={milestoneReceiptPreview} alt="Preview" className="max-h-28 mx-auto rounded object-contain" />
+                  ) : (
+                    <p className="text-xs text-text-secondary">
+                      {milestoneReceiptFile ? milestoneReceiptFile.name : "Click to attach payment transfer receipt or bank screenshot"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {milestoneError && (
+                <div className="text-xs text-red-500 font-bold p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  {milestoneError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                <Button type="button" variant="secondary" onClick={() => setMilestonePaymentModalOrder(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" loading={milestoneSubmitting}>
+                  {milestonePaymentGateway === "icici" ? "Confirm ICICI 70% Payment Reference" : "Submit 70% Payment for Verification"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

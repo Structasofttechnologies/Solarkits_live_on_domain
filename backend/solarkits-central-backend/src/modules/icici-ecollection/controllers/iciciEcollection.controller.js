@@ -275,20 +275,75 @@ async function handleMisPosting(req, res) {
 
       eventType = resolution.franchisePartner ? 'ONBOARDED_EPC_PAYMENT' : 'DIRECT_EPC_PAYMENT';
 
-      await EpcOrder.findByIdAndUpdate(resolution.pendingOrder._id, {
-        payment_method: 'offline_bank_transfer',
-        payment_status: 'captured',
-        order_status: 'confirmed',
-        'offline_payment.utr_number': UTR,
-        'offline_payment.amount_paid': amountNum,
-        'offline_payment.payment_date': new Date(),
-        'offline_payment.sender_bank_name': PayerBankIFSC || 'Bank Transfer',
-        'offline_payment.account_holder_name': PayerName || buyerDisplayName,
-        'offline_payment.verification_status': 'approved',
-        'offline_payment.verified_at': new Date()
-      });
+      const pendingOrder = resolution.pendingOrder;
+      const hasMilestones = Boolean(pendingOrder.payment_milestones?.milestones?.length > 0);
+      const m2 = hasMilestones ? pendingOrder.payment_milestones.milestones.find(m => m.milestone_number === 2) : null;
+      const isM2Pending = m2 && (m2.payment_status === 'pending_verification' || pendingOrder.payment_milestones?.milestone_verification_status === 'final_payment_pending_verification');
 
-      console.log(`✅ [ICICI MIS_POSTING] Auto-reconciled EPC Order: ${reconciledOrderNumber} with UTR: ${UTR}`);
+      if (hasMilestones && !isM2Pending) {
+        // Milestone 1 (30% Advance) Auto-Approval
+        await EpcOrder.findByIdAndUpdate(pendingOrder._id, {
+          payment_method: 'icici_ecollection',
+          payment_gateway_used: 'icici_ecollection',
+          payment_status: 'captured',
+          order_status: 'confirmed',
+          is_official_order_generated: true,
+          'offline_payment.utr_number': UTR,
+          'offline_payment.amount_paid': amountNum,
+          'offline_payment.payment_date': new Date(),
+          'offline_payment.sender_bank_name': PayerBankIFSC || 'ICICI Bank',
+          'offline_payment.account_holder_name': PayerName || buyerDisplayName,
+          'offline_payment.verification_status': 'approved',
+          'offline_payment.admin_approval_status': 'approved',
+          'offline_payment.admin_remarks': 'Advance (30%) Auto-approved via ICICI E-Collection. No Admin Approval Needed.',
+          'offline_payment.verified_at': new Date(),
+          'payment_milestones.milestone_verification_status': 'advance_verified',
+          'payment_milestones.current_milestone_due': 2,
+          'payment_milestones.milestones.0.payment_status': 'verified',
+          'payment_milestones.milestones.0.utr_number': UTR,
+          'payment_milestones.milestones.0.amount_paid': amountNum,
+          'payment_milestones.milestones.0.verified_at': new Date(),
+          'payment_tracking.customer_payment_status': 'Partially Paid',
+          'payment_tracking.current_stage': 'production_milestone',
+          'payment_tracking.delay_signal': 'green',
+          'payment_tracking.days_elapsed': 0,
+          'payment_tracking.total_verified_amount': amountNum,
+          'payment_tracking.outstanding_amount': pendingOrder.payment_milestones.remaining_amount
+        });
+      } else {
+        // Milestone 2 or Full Order Payment
+        await EpcOrder.findByIdAndUpdate(pendingOrder._id, {
+          payment_method: 'icici_ecollection',
+          payment_gateway_used: 'icici_ecollection',
+          payment_status: 'captured',
+          order_status: ['pending', 'confirmed', 'processing'].includes(pendingOrder.order_status) ? 'ready_for_dispatch' : pendingOrder.order_status,
+          is_official_order_generated: true,
+          'offline_payment.utr_number': UTR,
+          'offline_payment.amount_paid': amountNum,
+          'offline_payment.payment_date': new Date(),
+          'offline_payment.sender_bank_name': PayerBankIFSC || 'ICICI Bank',
+          'offline_payment.account_holder_name': PayerName || buyerDisplayName,
+          'offline_payment.verification_status': 'approved',
+          'offline_payment.admin_approval_status': 'approved',
+          'offline_payment.admin_remarks': 'Auto-approved via ICICI E-Collection (Direct Instant Credit). No Admin Approval Needed.',
+          'offline_payment.verified_at': new Date(),
+          ...(hasMilestones && m2 ? {
+            'payment_milestones.milestone_verification_status': 'fully_paid',
+            'payment_milestones.milestones.1.payment_status': 'verified',
+            'payment_milestones.milestones.1.utr_number': UTR,
+            'payment_milestones.milestones.1.amount_paid': amountNum,
+            'payment_milestones.milestones.1.verified_at': new Date(),
+          } : {}),
+          'payment_tracking.customer_payment_status': 'Paid',
+          'payment_tracking.current_stage': 'delivery_milestone',
+          'payment_tracking.delay_signal': 'green',
+          'payment_tracking.days_elapsed': 0,
+          'payment_tracking.total_verified_amount': (pendingOrder.grand_total_paise || 0) / 100 || amountNum,
+          'payment_tracking.outstanding_amount': 0
+        });
+      }
+
+      console.log(`✅ [ICICI MIS_POSTING] Auto-reconciled EPC Order (Auto-Approved): ${reconciledOrderNumber} with UTR: ${UTR}`);
     }
     // Scenario B: Franchise PO Order Reconcile
     else if (resolution.pendingPo) {
@@ -392,6 +447,9 @@ async function handleMisPosting(req, res) {
           }],
           order_status: 'confirmed',
           payment_status: 'captured',
+          payment_method: 'icici_ecollection',
+          payment_gateway_used: 'icici_ecollection',
+          is_official_order_generated: true,
           offline_payment: {
             utr_number: UTR,
             amount_paid: amountNum,
@@ -399,7 +457,17 @@ async function handleMisPosting(req, res) {
             sender_bank_name: PayerBankIFSC || 'ICICI Bank',
             account_holder_name: PayerName || buyerDisplayName,
             verification_status: 'approved',
+            admin_approval_status: 'approved',
+            admin_remarks: 'Auto-approved via ICICI E-Collection (Direct Credit). No Admin Approval Needed.',
             verified_at: new Date()
+          },
+          payment_tracking: {
+            customer_payment_status: 'Paid',
+            current_stage: 'final_settlement',
+            delay_signal: 'green',
+            days_elapsed: 0,
+            total_verified_amount: amountNum,
+            outstanding_amount: 0
           }
         });
 
@@ -445,6 +513,9 @@ async function handleMisPosting(req, res) {
           }],
           order_status: 'confirmed',
           payment_status: 'captured',
+          payment_method: 'icici_ecollection',
+          payment_gateway_used: 'icici_ecollection',
+          is_official_order_generated: true,
           offline_payment: {
             utr_number: UTR,
             amount_paid: amountNum,
@@ -452,7 +523,17 @@ async function handleMisPosting(req, res) {
             sender_bank_name: PayerBankIFSC || 'ICICI Bank',
             account_holder_name: PayerName || buyerDisplayName,
             verification_status: 'approved',
+            admin_approval_status: 'approved',
+            admin_remarks: 'Auto-approved via ICICI E-Collection (Direct Credit). No Admin Approval Needed.',
             verified_at: new Date()
+          },
+          payment_tracking: {
+            customer_payment_status: 'Paid',
+            current_stage: 'final_settlement',
+            delay_signal: 'green',
+            days_elapsed: 0,
+            total_verified_amount: amountNum,
+            outstanding_amount: 0
           }
         });
 

@@ -4,6 +4,7 @@ import { FaAward } from "react-icons/fa";
 import Dialog from "../Dialog";
 import SelectedKitCard from "../../Pages/dashboard/components/SelectedKitCard";
 import KitCard from "../../Pages/dashboard/components/KitCard";
+import axiosInstance from "@/utils/axiosInstance";
 
 export default function OurBestSellerSection() {
   const dispatch = useDispatch();
@@ -26,8 +27,6 @@ export default function OurBestSellerSection() {
     return bestSellers.find((k) => k.id === kitId) || null;
   }, [selected, bestSellers]);
 
-  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
   // Fetch Best Sellers whenever district or state changes
   useEffect(() => {
     let isMounted = true;
@@ -36,14 +35,14 @@ export default function OurBestSellerSection() {
       try {
         const districtId = selectedDistrict?.id || selectedDistrict?._id || "";
         const stateId = selectedState?.id || selectedState?._id || "";
-        const params = new URLSearchParams();
-        if (districtId) params.append("district_id", districtId);
-        if (stateId) params.append("state_id", stateId);
+        const params = {};
+        if (districtId) params.district_id = districtId;
+        if (stateId) params.state_id = stateId;
 
-        const res = await fetch(`${apiBase}/india/v1/shop/best-sellers?${params.toString()}`);
-        const json = await res.json();
+        const res = await axiosInstance.get("/india/v1/shop/best-sellers", { params });
+        const json = res.data;
 
-        if (isMounted && json.success) {
+        if (isMounted && json?.success) {
           setBestSellers(json.data || []);
           if (json.location) {
             setLocationInfo(json.location);
@@ -58,7 +57,7 @@ export default function OurBestSellerSection() {
 
     fetchBestSellers();
     return () => { isMounted = false; };
-  }, [selectedDistrict?.id, selectedDistrict?._id, selectedState?.id, selectedState?._id, apiBase]);
+  }, [selectedDistrict?.id, selectedDistrict?._id, selectedState?.id, selectedState?._id]);
 
   // Current display location string
   const currentRegionText = useMemo(() => {

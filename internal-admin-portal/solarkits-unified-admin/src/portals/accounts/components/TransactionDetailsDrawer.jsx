@@ -50,17 +50,27 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
     }
   }, [isOpen, transaction]);
 
-  const handleApprovePayment = async () => {
-    if (!window.confirm("Confirm that bank transfer UTR and funds have been verified in company bank statement? This will automatically generate the official Tax Invoice.")) return;
+  const handleApprovePayment = async (targetMilestoneNum = null) => {
+    const isM1 = targetMilestoneNum === 1;
+    const isM2 = targetMilestoneNum === 2;
+    const confirmPrompt = isM1
+      ? "Confirm that Advance Payment (Milestone 1) UTR and funds have been verified in company bank statement? This will generate the Proforma Invoice (PI) and confirm the order for processing."
+      : isM2
+      ? "Confirm that Final Balance Payment (Milestone 2) UTR and funds have been verified in company bank statement? This will mark payment as captured, generate the official Tax Invoice, and stage the order for dispatch."
+      : "Confirm that bank transfer UTR and funds have been verified in company bank statement? This will automatically generate the official Tax Invoice.";
+
+    if (!window.confirm(confirmPrompt)) return;
 
     setActionLoading(true);
     setActionSuccessMsg("");
     setActionErrorMsg("");
     try {
       const orderId = details?.id || details?._id || transaction?.id || transaction?._id;
-      const res = await verifyEpcOrderPayment(orderId, { decision: "approved" });
+      const payload = { decision: "approved" };
+      if (targetMilestoneNum) payload.milestone_number = targetMilestoneNum;
+      const res = await verifyEpcOrderPayment(orderId, payload);
       if (res.status === "success") {
-        setActionSuccessMsg(res.message || "Payment approved successfully! Tax invoice generated.");
+        setActionSuccessMsg(res.message || "Payment approved successfully!");
         fetchFullDetails();
         if (onStatusUpdated) onStatusUpdated();
       }
@@ -821,6 +831,130 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                     )}
                   </div>
 
+                  {/* Payment Milestone Plan Card (If Configured) */}
+                  {(() => {
+                    const pm = details?.payment_milestones || details?.payment_info?.payment_milestones || transaction?.payment_milestones;
+                    if (!pm) return null;
+                    const mList = pm.milestones || [];
+                    const m1 = mList.find(m => m.milestone_number === 1) || {};
+                    const m2 = mList.find(m => m.milestone_number === 2) || {};
+                    const m1Done = m1.payment_status === 'verified' || ['advance_verified', 'fully_paid'].includes(pm.milestone_verification_status);
+                    const m2Done = m2.payment_status === 'verified' || pm.milestone_verification_status === 'fully_paid';
+                    const m2Submitted = m2.payment_status === 'pending_verification' || pm.milestone_verification_status === 'final_payment_pending_verification' || Boolean(m2.utr_number);
+
+                    const m1Required = pm.advance_amount || m1.amount || (details?.financial_breakdown?.total_amount ? Math.round(details.financial_breakdown.total_amount * 0.3) : 0);
+                    const m1Paid = m1.amount_paid != null ? m1.amount_paid : (details?.offline_payment?.amount_paid != null ? details.offline_payment.amount_paid : null);
+
+                    const m2Pct = pm.remaining_percentage || pm.balance_percentage || m2.percentage || 70;
+                    const m2Required = pm.remaining_amount || pm.balance_amount || m2.amount || (details?.financial_breakdown?.total_amount ? Math.round(details.financial_breakdown.total_amount * 0.7) : 0);
+                    const m2Paid = m2.amount_paid != null ? m2.amount_paid : 0;
+
+                    return (
+                      <div className="p-4 rounded-xl bg-surface border border-primary/20 space-y-3">
+                        <div className="flex items-center justify-between pb-1 border-b border-border/50">
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
+                            <FaBolt className="text-amber-500" />
+                            Configured Payment Milestones
+                          </h3>
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+                            {pm.is_default ? 'Default Milestone Plan' : 'Product Milestone Plan'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          {/* Milestone 1 */}
+                          <div className={`p-3 rounded-xl border ${m1Done ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-amber-500/5 border-amber-500/30'} space-y-1.5`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-text-primary text-[11px]">
+                                Milestone 1 ({pm.advance_percentage || 30}% Advance)
+                              </span>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                m1Done ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600 animate-pulse'
+                              }`}>
+                                {m1Done ? 'Verified' : 'Pending Verification'}
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-1 flex-wrap">
+                              <div className="text-base font-black text-text-primary">
+                                {formatCurrency(m1Required)}
+                              </div>
+                              {m1Paid != null && m1Paid > 0 && m1Paid !== m1Required && (
+                                <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                  Paid: {formatCurrency(m1Paid)}
+                                </span>
+                              )}
+                            </div>
+                            {m1Paid != null && m1Paid > 0 && m1Paid < m1Required && (
+                              <div className="text-[10px] font-bold text-rose-500">
+                                Shortfall: {formatCurrency(m1Required - m1Paid)}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-text-muted">
+                              Stage: Advance Payment at Order Placement
+                            </div>
+                            {m1.utr_number && (
+                              <div className="text-[10px] font-mono text-text-secondary truncate">
+                                UTR: <strong className="text-primary">{m1.utr_number}</strong>
+                              </div>
+                            )}
+                            {m1Done && (details?.payment_info?.invoice?.invoice_number || details?.invoice?.invoice_number) && (
+                              <div className="text-[10px] font-mono font-bold text-emerald-600 flex items-center gap-1">
+                                <MdReceipt size={12} />
+                                PI: {details?.payment_info?.invoice?.invoice_number || details?.invoice?.invoice_number}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Milestone 2 */}
+                          <div className={`p-3 rounded-xl border ${m2Done ? 'bg-emerald-500/5 border-emerald-500/30' : m2Submitted ? 'bg-amber-500/5 border-amber-500/30' : 'bg-surface-hover/50 border-border'} space-y-1.5`}>
+                            <div className="flex items-center justify-between">
+                              <span className="font-extrabold text-text-primary text-[11px]">
+                                Milestone 2 ({m2Pct}% Balance)
+                              </span>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                m2Done ? 'bg-emerald-500/15 text-emerald-600' : m2Submitted ? 'bg-amber-500/15 text-amber-600 animate-pulse' : 'bg-slate-500/10 text-text-muted'
+                              }`}>
+                                {m2Done ? 'Verified' : m2Submitted ? 'Proof Submitted' : 'Awaiting Stage'}
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between gap-1 flex-wrap">
+                              <div className="text-base font-black text-text-primary">
+                                {formatCurrency(m2Required)}
+                              </div>
+                              {m2Paid > 0 && (
+                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                  Paid: {formatCurrency(m2Paid)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-text-muted">
+                              Stage: Before Dispatch
+                            </div>
+                            {m2.utr_number ? (
+                              <div className="text-[10px] font-mono text-text-secondary truncate">
+                                UTR: <strong className="text-primary">{m2.utr_number}</strong>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-text-muted italic">
+                                UTR: Not submitted yet
+                              </div>
+                            )}
+                            {m2.receipt_url && (
+                              <a
+                                href={m2.receipt_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] text-primary font-bold hover:underline inline-flex items-center gap-1"
+                              >
+                                <MdReceipt size={11} /> View Balance Receipt
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Payment, Settlement & Audit Information */}
                   <div className="p-4 rounded-xl bg-surface border border-border space-y-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5 pb-1 border-b border-border/50">
@@ -910,52 +1044,96 @@ export default function TransactionDetailsDrawer({ isOpen, onClose, transaction,
                   )}
 
                   {/* Accounts Verification Action Panel */}
-                  {((
-                    String(
-                      details?.payment_info?.payment_status ||
-                      details?.payment_status ||
-                      transaction?.payment_status ||
-                      transaction?.status ||
-                      ""
-                    ).toLowerCase().includes("pending") ||
-                    details?.payment_info?.verification_status === "pending_verification" ||
-                    details?.payment_status === "pending_verification" ||
-                    transaction?.payment_status === "pending_verification"
-                  ) && (details?.payment_info?.payment_status !== "Paid" && details?.payment_status !== "Paid" && transaction?.payment_status !== "Paid")) && (
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl space-y-3">
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-500 text-white rounded">
-                          Accounts Action Required
-                        </span>
-                        <h4 className="text-xs font-extrabold text-text-primary mt-1">
-                          Verify Bank Statement Deposit & UTR Reference
-                        </h4>
-                        <p className="text-[11px] text-text-muted mt-0.5">
-                          Confirm funds match UTR in SolarKits bank account before approving.
-                        </p>
-                      </div>
+                  {(() => {
+                    const pm = details?.payment_milestones || details?.payment_info?.payment_milestones || transaction?.payment_milestones;
+                    const mList = pm?.milestones || [];
+                    const m1 = mList.find(m => m.milestone_number === 1);
+                    const m2 = mList.find(m => m.milestone_number === 2);
 
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={handleApprovePayment}
-                          loading={actionLoading}
-                          className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-none flex-1 justify-center py-2.5"
-                        >
-                          <MdCheckCircle size={15} /> Approve & Generate Tax Invoice
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowRejectModal(true)}
-                          className="text-xs font-bold text-red-600 border-red-300 hover:bg-red-50 py-2.5"
-                        >
-                          <MdErrorOutline size={15} /> Reject
-                        </Button>
+                    const isM1Pending = pm && (m1?.payment_status === 'pending_verification' || pm.milestone_verification_status === 'advance_pending');
+                    const isM2Pending = pm && (m2?.payment_status === 'pending_verification' || pm.milestone_verification_status === 'final_payment_pending_verification');
+
+                    const isLegacyPending = !pm && ((
+                      String(
+                        details?.payment_info?.payment_status ||
+                        details?.payment_status ||
+                        transaction?.payment_status ||
+                        transaction?.status ||
+                        ""
+                      ).toLowerCase().includes("pending") ||
+                      details?.payment_info?.verification_status === "pending_verification" ||
+                      details?.payment_status === "pending_verification" ||
+                      transaction?.payment_status === "pending_verification"
+                    ) && (details?.payment_info?.payment_status !== "Paid" && details?.payment_status !== "Paid" && transaction?.payment_status !== "Paid"));
+
+                    if (!isM1Pending && !isM2Pending && !isLegacyPending) return null;
+
+                    return (
+                      <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl space-y-3">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-500 text-white rounded">
+                            Accounts Action Required
+                          </span>
+                          <h4 className="text-xs font-extrabold text-text-primary mt-1">
+                            {isM1Pending
+                              ? "Verify Milestone 1 Advance (30%) & Issue Proforma Invoice"
+                              : isM2Pending
+                              ? "Verify Milestone 2 Balance (70%) & Issue GST Tax Invoice"
+                              : "Verify Bank Statement Deposit & UTR Reference"}
+                          </h4>
+                          <p className="text-[11px] text-text-muted mt-0.5">
+                            {isM1Pending
+                              ? "Confirm advance funds match UTR in SolarKits bank account to release order for warehouse assembly."
+                              : isM2Pending
+                              ? "Confirm balance funds match UTR in SolarKits bank account to stage order for final dispatch."
+                              : "Confirm funds match UTR in SolarKits bank account before approving."}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          {isM1Pending ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleApprovePayment(1)}
+                              loading={actionLoading}
+                              className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-none flex-1 justify-center py-2.5"
+                            >
+                              <MdCheckCircle size={15} /> Approve Advance & Generate PI
+                            </Button>
+                          ) : isM2Pending ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleApprovePayment(2)}
+                              loading={actionLoading}
+                              className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-none flex-1 justify-center py-2.5"
+                            >
+                              <MdCheckCircle size={15} /> Approve Balance & Issue Tax Invoice
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleApprovePayment(null)}
+                              loading={actionLoading}
+                              className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-none flex-1 justify-center py-2.5"
+                            >
+                              <MdCheckCircle size={15} /> Approve & Generate Tax Invoice
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowRejectModal(true)}
+                            className="text-xs font-bold text-red-600 border-red-300 hover:bg-red-50 py-2.5"
+                          >
+                            <MdErrorOutline size={15} /> Reject
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Dispatch & Waybill Tracking Section */}
                   {(String(details?.payment_info?.payment_status || details?.payment_status || transaction?.status).toLowerCase() === "captured" ||

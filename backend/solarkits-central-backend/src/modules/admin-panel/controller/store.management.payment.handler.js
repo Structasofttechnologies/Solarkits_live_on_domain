@@ -69,8 +69,9 @@ const submit_fee_payment = async (req, res) => {
     // Record audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup?._id || null,
-      from_status: fromStatus,
+      from_status: fromStatus || 'draft',
       to_status: targetStatus,
       actor_type: 'franchisee',
       actor_id: actorId,
@@ -160,8 +161,9 @@ const verify_fee_payment = async (req, res) => {
     // Record audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup?._id || null,
-      from_status: fromStatus,
+      from_status: fromStatus || 'draft',
       to_status: targetStatus,
       actor_type: 'accounts',
       actor_id: actorId,
@@ -225,8 +227,9 @@ const reject_fee_payment = async (req, res) => {
     // Record audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup?._id || null,
-      from_status: fromStatus,
+      from_status: fromStatus || 'draft',
       to_status: targetStatus,
       actor_type: 'accounts',
       actor_id: actorId,

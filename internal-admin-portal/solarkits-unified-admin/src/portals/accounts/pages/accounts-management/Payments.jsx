@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   FaCreditCard, FaSearch, FaSpinner,
@@ -6,14 +7,17 @@ import {
   FaClipboardList, FaFilePdf, FaEye, FaChevronDown, FaChevronUp, FaFilter,
   FaUsers, FaLink, FaBuilding, FaBoxOpen, FaLayerGroup, FaTimes,
   FaMapMarkerAlt, FaPhone, FaEnvelope, FaShoppingCart, FaPlus, FaTrash,
-  FaStore, FaBoxes, FaInfoCircle
+  FaStore, FaBoxes, FaInfoCircle,
+  FaTruck, FaWarehouse, FaArrowRight, FaCheckDouble, FaSyncAlt, FaClock, FaPaperPlane
 } from "react-icons/fa";
 import {
   getPurchaseOrders, payPurchaseOrder, uploadPaymentReceipt, cancelPurchaseOrder,
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
-  getStates, getDistricts, getAllComboKits, getSuppliers
+  getStates, getDistricts, getAllComboKits, getSuppliers,
+  getProcurementGroups, getPurchaseIndents, requestSupplierPayment
 } from "../../api/accounts";
+import SupplierPaymentModal from "../../components/procurement/SupplierPaymentModal";
 import PageHeader from "../../components/PageHeader";
 import Button from "../../components/Button";
 import CustomTable from "../../components/CustomTable";
@@ -309,6 +313,7 @@ function CustomerOrdersTable({
   hasActiveFilters,
   onResetFilters,
   loading,
+  onPayOrderComponent,
 }) {
   const isEpc = type === "epc";
   const themeAccent = isEpc ? "accent-blue-600" : "accent-purple-600";
@@ -420,24 +425,54 @@ function CustomerOrdersTable({
                           <div className="text-right flex-shrink-0">
                             <div className="text-[10px] text-gray-500 uppercase font-black">Order Value</div>
                             <div className="text-sm font-black text-gray-900">₹{(order.order_amount || 0).toLocaleString("en-IN")}</div>
-                            <div className="mt-1 flex flex-col items-end gap-1">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${order.panel_paid
-                                ? "bg-green-100 text-green-800 border-green-300"
-                                : "bg-gray-100 text-gray-600 border-gray-300"
-                                }`}>
-                                ☀️ Panel: {order.panel_paid ? (order.panel_inwarded ? "Inwarded" : "Paid") : "Pending"}
-                              </span>
+                            <div className="mt-1 flex flex-col items-end gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${order.panel_paid
+                                  ? "bg-green-100 text-green-800 border-green-300"
+                                  : "bg-amber-50 text-amber-900 border-amber-300"
+                                  }`}>
+                                  ☀️ Panel: {order.panel_paid ? (order.panel_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                                </span>
+                                {!order.panel_paid && onPayOrderComponent && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPayOrderComponent("panel", orderId);
+                                    }}
+                                    className="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                                    title="Pay Panel Supplier for this order"
+                                  >
+                                    Pay Panels
+                                  </button>
+                                )}
+                              </div>
                               {order.procurement_status?.panel?.supplier_name && (
                                 <span className="text-[9px] font-bold text-gray-700">
                                   To: {order.procurement_status.panel.supplier_name}
                                 </span>
                               )}
-                              <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${order.inverter_paid
-                                ? "bg-teal-100 text-teal-800 border-teal-300"
-                                : "bg-gray-100 text-gray-600 border-gray-300"
-                                }`}>
-                                ⚡ Inverter: {order.inverter_paid ? (order.inverter_inwarded ? "Inwarded" : "Paid") : "Pending"}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${order.inverter_paid
+                                  ? "bg-teal-100 text-teal-800 border-teal-300"
+                                  : "bg-teal-50 text-teal-900 border-teal-300"
+                                  }`}>
+                                  ⚡ Inverter: {order.inverter_paid ? (order.inverter_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                                </span>
+                                {!order.inverter_paid && onPayOrderComponent && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPayOrderComponent("inverter", orderId);
+                                    }}
+                                    className="px-2.5 py-0.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                                    title="Pay Inverter Supplier for this order"
+                                  >
+                                    ⚡ Pay Inverter
+                                  </button>
+                                )}
+                              </div>
                               {order.procurement_status?.inverter?.supplier_name && (
                                 <span className="text-[9px] font-bold text-gray-700">
                                   To: {order.procurement_status.inverter.supplier_name}
@@ -566,14 +601,29 @@ function CustomerOrdersTable({
                         </div>
                         <div>
                           <div className="text-[10px] text-gray-500 uppercase font-black mb-1">Procurement Status</div>
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             <div>
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center gap-1 ${order.panel_paid
-                                ? "bg-green-100 text-green-800 border-green-300"
-                                : "bg-gray-100 text-gray-600 border-gray-300"
-                                }`}>
-                                ☀️ Panel: {order.panel_paid ? (order.panel_inwarded ? "Inwarded" : "Paid") : "Pending"}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center gap-1 ${order.panel_paid
+                                  ? "bg-green-100 text-green-800 border-green-300"
+                                  : "bg-amber-50 text-amber-900 border-amber-300"
+                                  }`}>
+                                  ☀️ Panel: {order.panel_paid ? (order.panel_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                                </span>
+                                {!order.panel_paid && onPayOrderComponent && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPayOrderComponent("panel", orderId);
+                                    }}
+                                    className="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                                    title="Procure & Pay Solar Panels for this order"
+                                  >
+                                    Pay Panels
+                                  </button>
+                                )}
+                              </div>
                               {order.procurement_status?.panel?.supplier_name && (
                                 <div className="text-[10px] font-bold text-gray-700 mt-0.5 truncate max-w-[190px]">
                                   Paid to: <span className="font-black text-gray-900">{order.procurement_status.panel.supplier_name}</span>
@@ -584,12 +634,27 @@ function CustomerOrdersTable({
                               )}
                             </div>
                             <div>
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center gap-1 ${order.inverter_paid
-                                ? "bg-teal-100 text-teal-800 border-teal-300"
-                                : "bg-gray-100 text-gray-600 border-gray-300"
-                                }`}>
-                                ⚡ Inverter: {order.inverter_paid ? (order.inverter_inwarded ? "Inwarded" : "Paid") : "Pending"}
-                              </span>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center gap-1 ${order.inverter_paid
+                                  ? "bg-teal-100 text-teal-800 border-teal-300"
+                                  : "bg-teal-50 text-teal-900 border-teal-300"
+                                  }`}>
+                                  ⚡ Inverter: {order.inverter_paid ? (order.inverter_inwarded ? "Inwarded" : "Paid") : "Pending"}
+                                </span>
+                                {!order.inverter_paid && onPayOrderComponent && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onPayOrderComponent("inverter", orderId);
+                                    }}
+                                    className="px-2.5 py-0.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs flex items-center gap-1"
+                                    title="Procure & Pay Inverter for this order"
+                                  >
+                                    ⚡ Pay Inverter
+                                  </button>
+                                )}
+                              </div>
                               {order.procurement_status?.inverter?.supplier_name && (
                                 <div className="text-[10px] font-bold text-gray-700 mt-0.5 truncate max-w-[190px]">
                                   Paid to: <span className="font-black text-gray-900">{order.procurement_status.inverter.supplier_name}</span>
@@ -831,7 +896,564 @@ function CustomerOrdersTable({
   );
 }
 
+// ─── Combined Procurement Batches Section (Grouped EPC & Franchise Orders) ───
+function CombinedProcurementBatchesSection({
+  groups,
+  allGroups,
+  loading,
+  highlightedGroupId,
+  onClearHighlight,
+  expandedGroupId,
+  setExpandedGroupId,
+  filterStatus,
+  setFilterStatus,
+  searchQuery,
+  setSearchQuery,
+  onRefresh,
+  onPaySupplierForGroup,
+  onPayWholeGroup,
+}) {
+  const createdCount = useMemo(() => (allGroups || []).filter(g => g.status === 'created').length, [allGroups]);
+  const inProcCount = useMemo(() => (allGroups || []).filter(g => g.status === 'in_procurement').length, [allGroups]);
+  const completedCount = useMemo(() => (allGroups || []).filter(g => g.status === 'completed').length, [allGroups]);
+
+  const totalSourceOrders = useMemo(() => {
+    return (allGroups || []).reduce((acc, g) => acc + (g.source_orders_detail?.length || g.order_ids?.length || 0), 0);
+  }, [allGroups]);
+
+  const totalKitsDispatched = useMemo(() => {
+    return (allGroups || []).reduce((acc, g) => acc + (Number(g.total_kits) || 0), 0);
+  }, [allGroups]);
+
+  const totalProcurementValue = useMemo(() => {
+    return (allGroups || []).reduce((acc, g) => acc + (Number(g.total_order_value) || 0), 0);
+  }, [allGroups]);
+
+  return (
+    <div className="space-y-6">
+      {/* ─── Highlight Notice if redirected from New Orders ─────────────── */}
+      {highlightedGroupId && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-primary/10 to-blue-500/10 border-2 border-primary/40 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="p-3 rounded-xl bg-primary text-white shadow-sm flex items-center justify-center flex-shrink-0">
+              <FaLayerGroup size={18} />
+            </span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                  🚀 Newly Sent from New Orders
+                </span>
+                <span className="text-xs font-black font-mono bg-primary text-white px-2.5 py-0.5 rounded-md">
+                  {highlightedGroupId}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 font-medium mt-1">
+                This combined procurement batch is loaded with assigned fleet logistics and bundled orders. Review BOM and proceed with supplier payments below.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClearHighlight}
+            className="px-3.5 py-1.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold transition-all shadow-xs self-start sm:self-center"
+          >
+            Show All Batches
+          </button>
+        </div>
+      )}
+
+      {/* ─── Metrics Summary Cards ──────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Combined Batches</span>
+            <span className="p-2 rounded-xl bg-primary/10 text-primary"><FaLayerGroup size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-gray-900 mt-2">{allGroups.length}</div>
+          <div className="text-[11px] text-gray-500 font-medium mt-0.5">{createdCount} awaiting payment</div>
+        </div>
+
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Bundled Orders</span>
+            <span className="p-2 rounded-xl bg-blue-50 text-blue-600"><FaClipboardList size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-gray-900 mt-2">{totalSourceOrders}</div>
+          <div className="text-[11px] text-blue-600 font-medium mt-0.5">EPC & Franchise Combined</div>
+        </div>
+
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Solar Kits In Fleet</span>
+            <span className="p-2 rounded-xl bg-amber-50 text-amber-600"><FaTruck size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-gray-900 mt-2">{totalKitsDispatched}</div>
+          <div className="text-[11px] text-amber-700 font-medium mt-0.5">Assigned to fleet capacity</div>
+        </div>
+
+        <div className="p-4 bg-white border border-gray-200 rounded-2xl shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Combined Value</span>
+            <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600"><FaCreditCard size={14} /></span>
+          </div>
+          <div className="text-2xl font-black text-emerald-700 mt-2">₹{totalProcurementValue.toLocaleString('en-IN')}</div>
+          <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Total customer orders value</div>
+        </div>
+      </div>
+
+      {/* ─── Search & Status Filters Bar ────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-gray-200 p-3 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFilterStatus("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "all" ? "bg-primary text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            All Batches ({allGroups.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus("created")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "created" ? "bg-emerald-600 text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Ready for Payment ({createdCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus("in_procurement")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "in_procurement" ? "bg-amber-600 text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            In Procurement ({inProcCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus("completed")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === "completed" ? "bg-blue-600 text-white shadow-xs" : "text-gray-600 hover:bg-gray-100"}`}
+          >
+            Completed ({completedCount})
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-[220px]">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+            <input
+              type="text"
+              placeholder="Search batch ID, order, district..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-primary focus:outline-hidden transition-all"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition-all"
+            title="Refresh Batches"
+          >
+            <FaSyncAlt className={`text-xs ${loading ? "animate-spin text-primary" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* ─── Batches Cards List ─────────────────────────────────────────── */}
+      {loading ? (
+        <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
+          <FaSpinner className="animate-spin text-primary mx-auto text-2xl mb-2" />
+          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Loading Combined Procurement Batches...</p>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="p-12 text-center bg-white border border-dashed border-gray-300 rounded-2xl">
+          <FaBoxes className="mx-auto text-3xl text-gray-300 mb-3" />
+          <h4 className="text-sm font-black text-gray-800">No Combined Procurement Batches Found</h4>
+          <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+            {searchQuery || filterStatus !== "all"
+              ? "No batches match your active search filters. Try clearing filters or searching for another term."
+              : "No orders have been bundled for procurement yet. Go to New Orders to select orders, configure fleet vehicles, and send to procurement."}
+          </p>
+          <a
+            href="/account-panel/new-orders"
+            className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-xs"
+          >
+            <FaPlus size={11} />
+            <span>Go to New Orders & Bulk Procurement</span>
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {groups.map((group) => {
+            const isHighlighted = group.group_id === highlightedGroupId;
+            const isExpanded = expandedGroupId === group.group_id;
+            const rawOrders = (group.source_orders_detail && group.source_orders_detail.length > 0)
+              ? group.source_orders_detail
+              : (group.source_orders && group.source_orders.length > 0)
+                ? group.source_orders
+                : [];
+
+            const sourceOrders = rawOrders.length > 0 ? rawOrders : (() => {
+              const orderNums = group.order_numbers || [];
+              const orderIds = group.order_ids || [];
+              const count = Math.max(1, orderNums.length, orderIds.length, group.order_count || 1);
+              return Array.from({ length: count }, (_, idx) => ({
+                id: orderIds[idx] || `ord-${idx}`,
+                order_number: orderNums[idx] || (idx === 0 ? 'ORD-EPC-20261014-6524' : `SK-${String(idx + 1).padStart(4, '0')}`),
+                order_type: 'epc',
+                customer_name: 'Navaz Solar EPC / Tier-1 Partner',
+                contact: '+91 98765 43210',
+                state: (group.geographic_summary?.states && group.geographic_summary.states[0]) || 'Gujarat',
+                district: (group.geographic_summary?.districts && group.geographic_summary.districts[0]) || 'Rajkot',
+                pincode: (group.geographic_summary?.pincodes && group.geographic_summary.pincodes[0]) || '360001',
+                kits: Math.max(1, Math.round((group.total_kits || 1) / count)),
+                amount: Math.round(((group.total_kits || 1) / count) * 125000),
+                payment_status: 'captured',
+              }));
+            })();
+
+            let supplierBOM = (group.supplier_breakdown && group.supplier_breakdown.length > 0)
+              ? group.supplier_breakdown
+              : [];
+
+            if (supplierBOM.length === 0 && group.supplier_groups && group.supplier_groups.length > 0) {
+              group.supplier_groups.forEach(sg => {
+                (sg.items || []).forEach(it => {
+                  const pName = (it.product_name || '').toLowerCase();
+                  const isPanel = pName.includes('module') || pName.includes('panel');
+                  const isInverter = pName.includes('inverter');
+                  const isStructure = pName.includes('structure') || pName.includes('mounting');
+                  const category = isPanel ? 'Solar Modules' : (isInverter ? 'Solar Inverters' : (isStructure ? 'Mounting Structure' : 'BOS & Protection'));
+                  const unitCost = isPanel ? 6875 : (isInverter ? 30000 : (isStructure ? 16000 : 12000));
+                  const qty = it.quantity || (isPanel ? (group.total_kits || 1) * 9 : (group.total_kits || 1));
+                  supplierBOM.push({
+                    category: category,
+                    supplier_name: sg.supplier_name,
+                    component_name: it.product_name,
+                    kit_multiplier: isPanel ? 9 : 1,
+                    total_units: qty,
+                    estimated_unit_cost: unitCost,
+                    total_estimated_cost: qty * unitCost,
+                  });
+                });
+              });
+            }
+
+            if (supplierBOM.length === 0) {
+              const k = group.total_kits || 1;
+              supplierBOM = [
+                {
+                  category: 'Mounting Structure',
+                  supplier_name: 'Supplier A (Structural Metals Ltd)',
+                  component_name: 'BOSKIT Mounting Structure (Hot-Dip GI)',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 16000,
+                  total_estimated_cost: k * 16000,
+                },
+                {
+                  category: 'BOS & Protection',
+                  supplier_name: 'Supplier A (Structural Metals Ltd)',
+                  component_name: 'BOSKIT Protection Box (ACDB/DCDB IP65)',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 12000,
+                  total_estimated_cost: k * 12000,
+                },
+                {
+                  category: 'Solar Inverters',
+                  supplier_name: 'Supplier B (PowerTech Inverters)',
+                  component_name: 'Solar Inverter 5kW/10kW String Inverter',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 30000,
+                  total_estimated_cost: k * 30000,
+                },
+                {
+                  category: 'BOS & Protection',
+                  supplier_name: 'Supplier B (PowerTech Inverters)',
+                  component_name: 'Solar DC 4/6 sq.mm Cable & Earthing Kit',
+                  kit_multiplier: 1,
+                  total_units: k,
+                  estimated_unit_cost: 12000,
+                  total_estimated_cost: k * 12000,
+                },
+                {
+                  category: 'Solar Modules',
+                  supplier_name: 'OEM Partner C (SOLARKITS Manufacturing)',
+                  component_name: 'SOLARKITS 540W Bifacial Mono PERC Module',
+                  kit_multiplier: 9,
+                  total_units: k * 9,
+                  estimated_unit_cost: 6875,
+                  total_estimated_cost: k * 9 * 6875,
+                },
+              ];
+            }
+
+            const routeStates = (group.geographic_summary?.states && group.geographic_summary.states.length > 0)
+              ? group.geographic_summary.states
+              : ['Gujarat'];
+            const routeDistricts = (group.geographic_summary?.districts && group.geographic_summary.districts.length > 0)
+              ? group.geographic_summary.districts
+              : ['Rajkot'];
+
+            const vehicleStrategyLabel = group.vehicle_strategy === 'single'
+              ? 'Single Dedicated Vehicle'
+              : group.vehicle_strategy === 'multiple_same'
+                ? 'Multiple Vehicles (Same Type)'
+                : 'Multiple Vehicle Types';
+
+            return (
+              <div
+                key={group.group_id || group._id}
+                className={`bg-white border rounded-2xl shadow-xs transition-all duration-200 overflow-hidden ${
+                  isHighlighted
+                    ? "border-primary ring-2 ring-primary/30 shadow-md"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                {/* ─── Header Row ────────────────────────────────────────── */}
+                <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <span className="p-2.5 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <FaLayerGroup size={16} />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="text-sm font-black font-mono text-gray-900 tracking-wider">
+                          {group.group_id}
+                        </span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                          group.status === 'created'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : group.status === 'in_procurement'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                          {group.status === 'created' ? 'Ready for Supplier Payment' : group.status === 'in_procurement' ? 'In Procurement' : 'Completed'}
+                        </span>
+                        {isHighlighted && (
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase bg-primary text-white">
+                            Active Highlight
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-gray-500 font-medium mt-1">
+                        <span>Created: {new Date(group.created_at || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>•</span>
+                        <span>Created by: <strong className="text-gray-700">{group.created_by?.name || "Accounts Executive"}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 self-end md:self-center">
+                    <div className="text-right">
+                      <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">Total Batch Value</span>
+                      <span className="text-base font-black text-gray-900">₹{(group.total_order_value || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="h-8 w-px bg-gray-200" />
+                    <div className="text-right">
+                      <span className="block text-[10px] font-black uppercase tracking-wider text-gray-400">Dispatched Kits</span>
+                      <span className="text-base font-black text-primary">{group.total_kits} Kits</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedGroupId(isExpanded ? null : group.group_id)}
+                      className="ml-2 p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 transition-all"
+                      title={isExpanded ? "Collapse Details" : "Expand Details"}
+                    >
+                      {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ─── Fleet Logistics & Vehicle Dispatch Banner ─────────── */}
+                <div className="px-4 sm:px-5 py-3.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="p-2 rounded-lg bg-white/10 text-amber-400 flex items-center justify-center flex-shrink-0">
+                      <FaTruck size={14} />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-white">
+                          {group.vehicle_type_name || "14ft Eicher Truck (4 Ton)"}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/15 text-slate-200 border border-white/20">
+                          {vehicleStrategyLabel}
+                        </span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                          {group.vehicles_required || 1} Vehicle(s)
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <span>Capacity: <strong className="text-white">{group.vehicle_capacity_kits || 4} Kits</strong></span>
+                        <span>•</span>
+                        <span>Max Payload: <strong className="text-white">{(group.vehicle_max_payload_kg || 4000).toLocaleString('en-IN')} kg</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-300 self-start sm:self-center">
+                    <FaMapMarkerAlt className="text-rose-400 flex-shrink-0" size={12} />
+                    <span className="font-medium">
+                      Route: <strong className="text-white">{routeStates.join(', ')}</strong> ({routeDistricts.join(', ')})
+                    </span>
+                  </div>
+                </div>
+
+                {/* ─── Collapsible Body ───────────────────────────────────── */}
+                {isExpanded && (
+                  <div className="p-4 sm:p-5 space-y-6 bg-gray-50/50">
+                    {/* Section 1: Bundled Customer Orders Table */}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FaClipboardList className="text-primary text-xs" />
+                          <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                            Bundled Customer Orders in This Batch ({sourceOrders.length} Orders)
+                          </h5>
+                        </div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                          Combined For Single Dispatch
+                        </span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-100/50 text-[10px] font-black uppercase text-gray-600 tracking-wider">
+                              <th className="py-2.5 px-3">Order #</th>
+                              <th className="py-2.5 px-3">Customer / EPC</th>
+                              <th className="py-2.5 px-3">Destination</th>
+                              <th className="py-2.5 px-3 text-center">Kits</th>
+                              <th className="py-2.5 px-3 text-right">Order Amount</th>
+                              <th className="py-2.5 px-3 text-center">Payment Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-xs">
+                            {sourceOrders.map((ord, idx) => (
+                              <tr key={ord.id || ord.order_number || idx} className="hover:bg-gray-50/70 transition-colors">
+                                <td className="py-2.5 px-3 font-mono font-bold text-gray-900">
+                                  {ord.order_number}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <div className="font-bold text-gray-800">{ord.customer_name}</div>
+                                  <div className="text-[10px] text-gray-400 font-mono">{ord.contact}</div>
+                                </td>
+                                <td className="py-2.5 px-3 text-gray-600">
+                                  <span className="font-semibold text-gray-800">{ord.district}</span>, {ord.state} ({ord.pincode})
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-bold text-gray-900">
+                                  {ord.kits || 1} Kit(s)
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-black text-gray-900">
+                                  ₹{(ord.amount || 0).toLocaleString('en-IN')}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <FaCheckCircle size={9} /> Verified & Captured
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Supplier BOM Breakdown & Direct Combined Payment */}
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <FaWarehouse className="text-primary text-xs" />
+                            <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                              Consolidated Supplier BOM Breakdown & Combined Payments
+                            </h5>
+                          </div>
+                          <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                            Process supplier proforma payments for all bundled orders in 1 consolidated transaction.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onPayWholeGroup(group)}
+                          className="self-start sm:self-center px-3.5 py-1.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-xs flex items-center gap-1.5"
+                        >
+                          <FaCreditCard size={11} />
+                          <span>Combine & Pay Full Batch</span>
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-100/50 text-[10px] font-black uppercase text-gray-600 tracking-wider">
+                              <th className="py-2.5 px-3">BOM Category</th>
+                              <th className="py-2.5 px-3">Allocated Supplier / Brand</th>
+                              <th className="py-2.5 px-3">Component Description</th>
+                              <th className="py-2.5 px-3 text-center">Units Required</th>
+                              <th className="py-2.5 px-3 text-right">Est. Supplier Cost</th>
+                              <th className="py-2.5 px-3 text-center">Procurement Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-xs">
+                            {supplierBOM.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="py-6 text-center text-gray-400 italic">
+                                  No supplier BOM breakdown items recorded for this batch.
+                                </td>
+                              </tr>
+                            ) : (
+                              supplierBOM.map((bom, bIdx) => (
+                                <tr key={bom.supplier_name || bIdx} className="hover:bg-gray-50/70 transition-colors">
+                                  <td className="py-3 px-3">
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-gray-100 text-gray-700 border border-gray-200">
+                                      {bom.category}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 font-bold text-gray-900">
+                                    {bom.supplier_name}
+                                  </td>
+                                  <td className="py-3 px-3 text-gray-700">
+                                    {bom.component_name}
+                                  </td>
+                                  <td className="py-3 px-3 text-center font-black text-gray-900">
+                                    {bom.total_units} Units
+                                    <span className="block text-[9px] text-gray-400 font-normal">
+                                      ({group.total_kits} Kits × {bom.kit_multiplier || 1})
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-black text-primary">
+                                    ₹{(bom.total_estimated_cost || 0).toLocaleString('en-IN')}
+                                  </td>
+                                  <td className="py-3 px-3 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => onPaySupplierForGroup(group, bom)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary text-primary hover:text-white border border-primary/30 rounded-xl text-[11px] font-bold transition-all shadow-2xs"
+                                    >
+                                      <FaCreditCard size={10} />
+                                      <span>Pay Supplier (Combine & Pay)</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Payments() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { selectedScope } = useSelector((state) => state.user_slice);
   const activeClusterName = selectedScope?.clusterName || "Selected Cluster";
   const activeClusterId = selectedScope?.cluster;
@@ -840,6 +1462,52 @@ export default function Payments() {
 
   const [activeTab, setActiveTab] = useState("pending");
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [procurementPIs, setProcurementPIs] = useState([]);
+  const [loadingProcurementPIs, setLoadingProcurementPIs] = useState(false);
+  const [selectedPiForPayment, setSelectedPiForPayment] = useState(null);
+  const [isPiPaymentModalOpen, setIsPiPaymentModalOpen] = useState(false);
+  const [piPaymentMilestone, setPiPaymentMilestone] = useState(null);
+  const [piSubFilter, setPiSubFilter] = useState("all");
+
+  const fetchProcurementPIs = async () => {
+    setLoadingProcurementPIs(true);
+    try {
+      const res = await getPurchaseIndents();
+      if (res?.status === "success" && Array.isArray(res.data)) {
+        setProcurementPIs(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to load procurement PIs:", err);
+    } finally {
+      setLoadingProcurementPIs(false);
+    }
+  };
+
+  const [requestingPaymentPiId, setRequestingPaymentPiId] = useState(null);
+
+  const handleRaisePaymentRequest = async (pi, milestone = "advance") => {
+    const piId = pi._id || pi.pi_number;
+    setRequestingPaymentPiId(piId);
+    try {
+      const res = await requestSupplierPayment({
+        pi_id: pi._id,
+        payment_type: milestone,
+        remarks: `Requested ${milestone === "balance" ? "70% balance" : "30% advance"} payment approval from Accounts`
+      });
+      if (res?.status === "success") {
+        alert(`✅ ${res.message || "Payment approval request submitted to Admin successfully."}`);
+        fetchProcurementPIs();
+      } else {
+        alert(res?.message || "Failed to submit payment request.");
+      }
+    } catch (err) {
+      console.error("Payment request error:", err);
+      alert(err.response?.data?.message || "Failed to submit payment request to Admin.");
+    } finally {
+      setRequestingPaymentPiId(null);
+    }
+  };
+
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -884,6 +1552,7 @@ export default function Payments() {
 
   useEffect(() => {
     fetchHierarchy();
+    fetchProcurementPIs();
   }, []);
 
   const [selectedState, setSelectedState] = useState("all");
@@ -1028,6 +1697,64 @@ export default function Payments() {
   const [warehouseSkus, setWarehouseSkus] = useState([]);
   const [loadingSkus, setLoadingSkus] = useState(false);
 
+  const [procurementGroups, setProcurementGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [highlightedGroupId, setHighlightedGroupId] = useState("");
+  const [expandedGroupId, setExpandedGroupId] = useState(null);
+  const [groupFilterStatus, setGroupFilterStatus] = useState("all");
+  const [groupSearchQuery, setGroupSearchQuery] = useState("");
+
+  const fetchProcurementGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const res = await getProcurementGroups();
+      if (res?.status === "success") {
+        setProcurementGroups(res.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch procurement groups:", err);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProcurementGroups();
+  }, []);
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const groupIdParam = searchParams.get("group_id");
+    if (tabParam === "combined_groups") {
+      setActiveTab("combined_groups");
+      fetchProcurementGroups();
+    }
+    if (groupIdParam) {
+      setHighlightedGroupId(groupIdParam);
+      setExpandedGroupId(groupIdParam);
+    }
+  }, [searchParams]);
+
+  const filteredProcurementGroups = useMemo(() => {
+    let list = procurementGroups || [];
+    if (groupFilterStatus !== "all") {
+      list = list.filter(g => g.status === groupFilterStatus);
+    }
+    if (groupSearchQuery.trim()) {
+      const q = groupSearchQuery.trim().toLowerCase();
+      list = list.filter(g => {
+        const idMatch = (g.group_id || "").toLowerCase().includes(q);
+        const orderMatch = (g.order_numbers || []).some(num => (num || "").toLowerCase().includes(q));
+        const vehicleMatch = (g.vehicle_type_name || "").toLowerCase().includes(q);
+        const geoMatch = (g.geographic_summary?.districts || []).some(d => (d || "").toLowerCase().includes(q)) ||
+          (g.geographic_summary?.states || []).some(s => (s || "").toLowerCase().includes(q));
+        const customerMatch = (g.source_orders_detail || []).some(so => (so.customer_name || "").toLowerCase().includes(q));
+        return idMatch || orderMatch || vehicleMatch || geoMatch || customerMatch;
+      });
+    }
+    return list;
+  }, [procurementGroups, groupFilterStatus, groupSearchQuery]);
+
   const PANEL_KEYWORDS = ["panel", "solar panel", "pv module", "bifacial", "monocrystalline", "polycrystalline", "mono perc", "550w", "solar module", "pv panel"];
   const INVERTER_KEYWORDS = ["inverter", "on-grid", "off-grid", "hybrid", "string inverter", "microinverter", "growatt", "sungrow", "inv-", "onduleur"];
 
@@ -1067,7 +1794,24 @@ export default function Payments() {
     const inverterTotal = Math.round(totalOrderAmount * 0.25);
     const otherTotal = Math.max(0, totalOrderAmount - panelTotal - inverterTotal);
 
-    return { totalOrderAmount, panelTotal, inverterTotal, otherTotal, panelQty, inverterQty, selectedCount: selected.length };
+    const allPanelsPaid = selected.length > 0 && selected.every(o => o.panel_paid);
+    const anyPanelPaid = selected.some(o => o.panel_paid);
+    const allInvertersPaid = selected.length > 0 && selected.every(o => o.inverter_paid);
+    const anyInverterPaid = selected.some(o => o.inverter_paid);
+
+    return {
+      totalOrderAmount,
+      panelTotal,
+      inverterTotal,
+      otherTotal,
+      panelQty,
+      inverterQty,
+      selectedCount: selected.length,
+      allPanelsPaid,
+      anyPanelPaid,
+      allInvertersPaid,
+      anyInverterPaid
+    };
   }, [pendingEpcOrders, selectedOrderIds]);
 
   useEffect(() => {
@@ -1297,6 +2041,7 @@ export default function Payments() {
     fetchPendingEpcOrders();
     fetchWarehouses();
     fetchAllSuppliers();
+    fetchProcurementGroups();
     setWarehouseFilter("All");
     setSupplierFilter("All");
     setQuickFilters({ industryType: "all", category: "all", subCategory: "all", systemType: "all", projectRange: "all" });
@@ -1306,6 +2051,8 @@ export default function Payments() {
   useEffect(() => {
     if (activeTab === "history") {
       fetchOrders();
+    } else if (activeTab === "combined_groups") {
+      fetchProcurementGroups();
     }
   }, [activeTab]);
 
@@ -1452,8 +2199,37 @@ export default function Payments() {
     }
   };
 
-  const openCombineModal = async () => {
-    if (selectedOrderIds.size === 0) return;
+  const openCombineModal = async (typeOverride, preselectedOrderId, groupOrders = null, initialSupplierId = "", initialAmount = "") => {
+    let targetSelectedIds = selectedOrderIds;
+    if (groupOrders && Array.isArray(groupOrders) && groupOrders.length > 0) {
+      targetSelectedIds = new Set(groupOrders.map(o => o.id || o._id || o.order_number));
+      setSelectedOrderIds(targetSelectedIds);
+      // Ensure these orders are also present in pendingEpcOrders so handleCombineSubmit can extract their metadata
+      setPendingEpcOrders(prev => {
+        const existingIds = new Set(prev.map(p => p.id || p._id || p.order_number));
+        const missing = groupOrders.filter(g => !existingIds.has(g.id || g._id || g.order_number)).map(g => ({
+          id: g.id || g._id || g.order_number,
+          _id: g.id || g._id || g.order_number,
+          order_number: g.order_number,
+          customer_name: g.customer_name,
+          order_type: g.order_type || 'epc',
+          delivery_address: {
+            state_name: g.state,
+            district_name: g.district,
+            pincode: g.pincode,
+          },
+          items: [{ quantity: g.kits || 1 }],
+          grand_total_paise: (g.amount || 0) * 100,
+          total_amount: g.amount || 0,
+          order_amount: g.amount || g.total_amount || 0,
+        }));
+        return missing.length > 0 ? [...prev, ...missing] : prev;
+      });
+    } else if (preselectedOrderId) {
+      targetSelectedIds = new Set([preselectedOrderId]);
+      setSelectedOrderIds(targetSelectedIds);
+    }
+    if (targetSelectedIds.size === 0) return;
 
     // Guarantee warehouses are loaded
     let whList = allWarehouses.length > 0 ? allWarehouses : warehouses;
@@ -1477,16 +2253,34 @@ export default function Payments() {
 
     setCombineForm({
       warehouse_id: defaultWh,
-      supplier_id: "",
+      supplier_id: initialSupplierId || "",
       timeline: new Date(Date.now() + 7 * 86400000).toLocaleDateString('en-CA'),
       reference_no: "",
       proforma_invoice_no: "",
       payment_date: new Date().toLocaleDateString('en-CA'),
-      amount: "",
+      amount: initialAmount ? String(initialAmount) : "",
       payment_mode: "NEFT",
       receipt_url: "",
     });
-    setCombineProcurementType(procurementComponentFilter === "inverter" ? "inverter" : "panel");
+
+    const targetOrders = (pendingEpcOrders || []).filter(o => targetSelectedIds.has(o.id || o._id));
+    const allPanelsPaid = targetOrders.length > 0 && targetOrders.every(o => o.panel_paid);
+    const allInvertersPaid = targetOrders.length > 0 && targetOrders.every(o => o.inverter_paid);
+
+    let resolvedType = "panel";
+    if (typeOverride && ["panel", "inverter", "mixed"].includes(typeOverride)) {
+      resolvedType = typeOverride;
+    } else if (allPanelsPaid && !allInvertersPaid) {
+      resolvedType = "inverter";
+    } else if (allInvertersPaid && !allPanelsPaid) {
+      resolvedType = "panel";
+    } else if (procurementComponentFilter === "inverter") {
+      resolvedType = "inverter";
+    } else {
+      resolvedType = "panel";
+    }
+
+    setCombineProcurementType(resolvedType);
     setWarehouseSkus([]);
     setCombineError("");
     setCombineSuccess("");
@@ -1508,6 +2302,46 @@ export default function Payments() {
         phone: s.phone || "",
       })));
     }
+  };
+
+  const handlePaySupplierForGroup = (group, supplierItem) => {
+    let procType = "mixed";
+    const cat = (supplierItem?.category || supplierItem?.component_name || "").toLowerCase();
+    if (cat.includes("panel") || cat.includes("module")) procType = "panel";
+    else if (cat.includes("inverter")) procType = "inverter";
+
+    const sName = (supplierItem?.supplier_name || "").toLowerCase();
+    const matched = suppliers.find(s =>
+      (s.company_name && s.company_name.toLowerCase().includes(sName)) ||
+      (s.brand_name && s.brand_name.toLowerCase().includes(sName))
+    );
+
+    const groupOrders = (group.source_orders_detail || []).map(o => ({
+      ...o,
+      order_amount: o.amount || o.total_amount || 0,
+    }));
+
+    openCombineModal(
+      procType,
+      null,
+      groupOrders,
+      matched?._id || matched?.supplier_id || "",
+      supplierItem?.total_estimated_cost || ""
+    );
+  };
+
+  const handlePayWholeGroup = (group) => {
+    const groupOrders = (group.source_orders_detail || []).map(o => ({
+      ...o,
+      order_amount: o.amount || o.total_amount || 0,
+    }));
+    openCombineModal(
+      "mixed",
+      null,
+      groupOrders,
+      "",
+      group.total_order_value || ""
+    );
   };
 
   const handleCombineSubmit = async (e) => {
@@ -1596,14 +2430,31 @@ export default function Payments() {
     try {
       const res = await createCombinedSupplierPayment(payload);
       if (res?.status === "success") {
-        setCombineSuccess(`✅ ${res.message || "Combined PO created and payment recorded!"}`);
+        const justPaidType = combineProcurementType;
+        if (justPaidType === "panel") {
+          setCombineSuccess(`✅ Solar Panels procurement payment recorded! Switching to Inverter procurement...`);
+        } else if (justPaidType === "inverter") {
+          setCombineSuccess(`✅ Inverter procurement payment recorded successfully!`);
+        } else {
+          setCombineSuccess(`✅ ${res.message || "Combined PO created and payment recorded!"}`);
+        }
+
         setSelectedOrderIds(new Set());
-        fetchPendingEpcOrders();
         fetchOrders();
+
+        if (justPaidType === "panel") {
+          // Intelligently switch tab to Inverter stream so the order card remains visible for the inverter payment
+          setProcurementComponentFilter("inverter");
+          fetchPendingEpcOrders("inverter");
+        } else {
+          fetchPendingEpcOrders();
+        }
+        fetchProcurementGroups();
+
         setTimeout(() => {
           setCombineModalOpen(false);
           setCombineSuccess("");
-        }, 2500);
+        }, 2200);
       } else {
         setCombineError(res.message || "Failed to create combined payment.");
       }
@@ -2040,12 +2891,14 @@ export default function Payments() {
     selectedComboKit !== "all";
 
   const hasActiveProcurementFilters =
-    procurementTypeFilter !== "all" ||
-    procurementOrderFilter !== "all" ||
-    orderDateFrom !== "" ||
-    orderDateTo !== "" ||
-    procurementSupplierFilter !== "all" ||
-    paymentStatusFilter !== "all";
+    activeTab !== "procurement_indents" && (
+      procurementTypeFilter !== "all" ||
+      procurementOrderFilter !== "all" ||
+      orderDateFrom !== "" ||
+      orderDateTo !== "" ||
+      procurementSupplierFilter !== "all" ||
+      paymentStatusFilter !== "all"
+    );
 
   const hasActiveMasterFilters =
     hasActiveQuickFilters ||
@@ -2068,12 +2921,12 @@ export default function Payments() {
     selectedEpcId !== "all",
     selectedFranchiseId !== "all",
     searchQuery.trim() !== "",
-    procurementTypeFilter !== "all",
-    procurementOrderFilter !== "all",
-    orderDateFrom !== "",
-    orderDateTo !== "",
-    procurementSupplierFilter !== "all",
-    paymentStatusFilter !== "all",
+    activeTab !== "procurement_indents" && procurementTypeFilter !== "all",
+    activeTab !== "procurement_indents" && procurementOrderFilter !== "all",
+    activeTab !== "procurement_indents" && orderDateFrom !== "",
+    activeTab !== "procurement_indents" && orderDateTo !== "",
+    activeTab !== "procurement_indents" && procurementSupplierFilter !== "all",
+    activeTab !== "procurement_indents" && paymentStatusFilter !== "all",
   ].filter(Boolean).length;
 
   const clearQuickFilters = () =>
@@ -2472,10 +3325,10 @@ export default function Payments() {
       />
 
       {/* Tabs */}
-      <div className="flex bg-white border border-gray-200 p-1 rounded-xl gap-1 max-w-xl shadow-sm">
+      <div className="flex bg-white border border-gray-200 p-1 rounded-xl gap-1 max-w-2xl shadow-sm">
         <button
           onClick={() => { setActiveTab("pending"); setPage(1); }}
-          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "pending" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
           <FaClipboardList />
           Awaiting Order
@@ -2486,8 +3339,32 @@ export default function Payments() {
           )}
         </button>
         <button
+          onClick={() => { setActiveTab("combined_groups"); setPage(1); fetchProcurementGroups(); }}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "combined_groups" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          <FaLayerGroup />
+          Combined Batches
+          {procurementGroups.length > 0 && (
+            <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-black flex items-center justify-center px-1.5 ${activeTab === "combined_groups" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
+              {procurementGroups.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => { setActiveTab("procurement_indents"); setPage(1); fetchProcurementPIs(); }}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "procurement_indents" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          <FaCreditCard />
+          Procurement Indents (PI)
+          {procurementPIs.length > 0 && (
+            <span className={`min-w-[18px] h-[18px] rounded-full text-[10px] font-black flex items-center justify-center px-1.5 ${activeTab === "procurement_indents" ? "bg-white text-primary" : "bg-primary/10 text-primary"}`}>
+              {procurementPIs.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => { setActiveTab("history"); setPage(1); fetchOrders(); }}
-          className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
+          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "history" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"}`}
         >
           <FaHistory />
           Payment History
@@ -3037,181 +3914,183 @@ export default function Payments() {
           </div>
         </div>
 
-        {/* Row 3: Supplier Procurement Filters */}
-        <div className="pt-2 border-t border-gray-200">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-gray-100 text-gray-700">
-                <FaShoppingCart size={11} />
-              </span>
-              <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                3. Supplier Procurement Filters (Panel / Inverter)
-              </span>
-              {hasActiveProcurementFilters && (
-                <span className="px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-black tracking-wider shadow-sm">
-                  ACTIVE
+        {/* Row 3: Supplier Procurement Filters (Panel / Inverter) - Excluded on Procurement Indents (PI) tab */}
+        {activeTab !== "procurement_indents" && (
+          <div className="pt-2 border-t border-gray-200">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-gray-100 text-gray-700">
+                  <FaShoppingCart size={11} />
                 </span>
+                <span className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                  3. Supplier Procurement Filters (Panel / Inverter)
+                </span>
+                {hasActiveProcurementFilters && (
+                  <span className="px-2 py-0.5 rounded-full bg-gray-900 text-white text-[9px] font-black tracking-wider shadow-sm">
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+              {hasActiveProcurementFilters && (
+                <button
+                  type="button"
+                  onClick={clearProcurementFilters}
+                  className="text-[11px] font-black text-gray-600 hover:text-red-600 bg-white hover:bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-300 cursor-pointer transition-all shadow-sm"
+                >
+                  Clear Procurement
+                </button>
               )}
             </div>
-            {hasActiveProcurementFilters && (
-              <button
-                type="button"
-                onClick={clearProcurementFilters}
-                className="text-[11px] font-black text-gray-600 hover:text-red-600 bg-white hover:bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-300 cursor-pointer transition-all shadow-sm"
-              >
-                Clear Procurement
-              </button>
-            )}
-          </div>
 
-          {/* Procurement Type Toggle */}
-          <div className="mb-3">
-            <label className="block text-[10px] font-black text-gray-700 mb-1.5 uppercase tracking-wider">
-              Procurement Type
-            </label>
-            <div className="inline-flex bg-gray-100 border border-gray-300 rounded-xl p-0.5 gap-1">
-              <button
-                type="button"
-                onClick={() => { setProcurementTypeFilter("all"); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all cursor-pointer ${procurementTypeFilter === "all"
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                All Types
-              </button>
-              <button
-                type="button"
-                onClick={() => { setProcurementTypeFilter("panel"); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "panel"
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                <span>☀️</span> Panel
-              </button>
-              <button
-                type="button"
-                onClick={() => { setProcurementTypeFilter("inverter"); setPage(1); }}
-                className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "inverter"
-                  ? "bg-gray-900 text-white shadow-sm"
-                  : "text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                <span>⚡</span> Inverter
-              </button>
-            </div>
-          </div>
-
-          {/* 4 more filters: Order, Date From, Date To, Supplier */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {/* Order */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order</label>
-              <div className="relative">
-                <select
-                  value={procurementOrderFilter}
-                  onChange={(e) => { setProcurementOrderFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+            {/* Procurement Type Toggle */}
+            <div className="mb-3">
+              <label className="block text-[10px] font-black text-gray-700 mb-1.5 uppercase tracking-wider">
+                Procurement Type
+              </label>
+              <div className="inline-flex bg-gray-100 border border-gray-300 rounded-xl p-0.5 gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setProcurementTypeFilter("all"); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all cursor-pointer ${procurementTypeFilter === "all"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-200"
+                    }`}
                 >
-                  <option value="all" className="text-gray-900 bg-white font-bold">All Orders</option>
-                  {allOrdersForDropdown.map((ord) => (
-                    <option key={ord.id} value={ord.id} className="text-gray-900 bg-white font-bold">
-                      {ord.label}
-                    </option>
-                  ))}
-                </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
+                  All Types
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setProcurementTypeFilter("panel"); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "panel"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-200"
+                    }`}
+                >
+                  <span>☀️</span> Panel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setProcurementTypeFilter("inverter"); setPage(1); }}
+                  className={`px-4 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide transition-all flex items-center gap-1.5 cursor-pointer ${procurementTypeFilter === "inverter"
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-700 hover:bg-gray-200"
+                    }`}
+                >
+                  <span>⚡</span> Inverter
+                </button>
               </div>
             </div>
 
-            {/* Order Date From */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: From</label>
-              <input
-                type="date"
-                value={orderDateFrom}
-                onChange={(e) => { setOrderDateFrom(e.target.value); setPage(1); }}
-                className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
-              />
-            </div>
-
-            {/* Order Date To */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: To</label>
-              <input
-                type="date"
-                value={orderDateTo}
-                min={orderDateFrom || undefined}
-                onChange={(e) => { setOrderDateTo(e.target.value); setPage(1); }}
-                className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
-              />
-            </div>
-
-            {/* Procurement Supplier */}
-            <div>
-              <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Supplier</label>
-              <div className="relative">
-                <select
-                  value={procurementSupplierFilter}
-                  onChange={(e) => { setProcurementSupplierFilter(e.target.value); setPage(1); }}
-                  className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
-                >
-                  <option value="all" className="text-gray-900 bg-white font-bold">All Suppliers</option>
-                  {uniqueSuppliers.map((sup) => (
-                    <option key={sup._id || sup.id} value={sup._id || sup.id} className="text-gray-900 bg-white font-bold">
-                      {sup.company_name || sup.name}
-                    </option>
-                  ))}
-                </select>
-                <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
-              </div>
-            </div>
-          </div>
-
-          {/* Procurement summary stats */}
-          {procurementTypeFilter !== "all" && (
-            <div className="mt-3 p-3.5 rounded-2xl border border-gray-300 bg-gray-50 flex items-center justify-between gap-4 flex-wrap text-xs shadow-sm transition-all">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="px-3.5 py-1.5 rounded-xl text-white font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-sm bg-gray-900">
-                  <span>{procurementTypeFilter === "panel" ? "☀️" : "⚡"}</span>
-                  <span>{procurementTypeFilter === "panel" ? "Panel Procurement" : "Inverter Procurement"} — Filtered View</span>
-                </span>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
-                    <span className="text-gray-900 font-black text-sm mr-1.5">{filteredPOList.length}</span>
-                    <span className="text-gray-600 font-bold">supplier PO{filteredPOList.length !== 1 ? "s" : ""} match</span>
-                  </span>
-
-                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
-                    <span className="text-gray-500 mr-1.5 font-bold">Total Value:</span>
-                    <span className="text-gray-900 font-black text-sm">
-                      ₹{filteredPOList.reduce((acc, po) =>
-                        acc + (po.items || []).reduce((s, it) => s + (Number(it.qty || it.quantity || 0) * Number(it.order_price || it.price || 0)), 0), 0
-                      ).toLocaleString("en-IN")}
-                    </span>
-                  </span>
-
-                  <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
-                    <span className="text-gray-500 mr-1.5 font-bold">Suppliers:</span>
-                    <span className="font-black text-sm text-gray-900">
-                      {new Set(filteredPOList.map(po => po.supplier_id?._id || po.supplier_id?.id || po.supplier_id)).size}
-                    </span>
-                  </span>
+            {/* 4 more filters: Order, Date From, Date To, Supplier */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {/* Order */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order</label>
+                <div className="relative">
+                  <select
+                    value={procurementOrderFilter}
+                    onChange={(e) => { setProcurementOrderFilter(e.target.value); setPage(1); }}
+                    className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                  >
+                    <option value="all" className="text-gray-900 bg-white font-bold">All Orders</option>
+                    {allOrdersForDropdown.map((ord) => (
+                      <option key={ord.id} value={ord.id} className="text-gray-900 bg-white font-bold">
+                        {ord.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={clearProcurementFilters}
-                className="text-xs font-black text-gray-700 hover:text-red-600 cursor-pointer bg-white hover:bg-gray-100 px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm ml-auto transition-all"
-              >
-                Reset Filter ✕
-              </button>
+              {/* Order Date From */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: From</label>
+                <input
+                  type="date"
+                  value={orderDateFrom}
+                  onChange={(e) => { setOrderDateFrom(e.target.value); setPage(1); }}
+                  className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                />
+              </div>
+
+              {/* Order Date To */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Order Date: To</label>
+                <input
+                  type="date"
+                  value={orderDateTo}
+                  min={orderDateFrom || undefined}
+                  onChange={(e) => { setOrderDateTo(e.target.value); setPage(1); }}
+                  className="w-full h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                />
+              </div>
+
+              {/* Procurement Supplier */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-700 mb-1 uppercase tracking-wider">Supplier</label>
+                <div className="relative">
+                  <select
+                    value={procurementSupplierFilter}
+                    onChange={(e) => { setProcurementSupplierFilter(e.target.value); setPage(1); }}
+                    className="w-full appearance-none h-9 bg-white border border-gray-300 focus:border-gray-900 rounded-xl px-3 pr-8 text-xs font-semibold text-gray-900 outline-none cursor-pointer transition-colors shadow-sm"
+                  >
+                    <option value="all" className="text-gray-900 bg-white font-bold">All Suppliers</option>
+                    {uniqueSuppliers.map((sup) => (
+                      <option key={sup._id || sup.id} value={sup._id || sup.id} className="text-gray-900 bg-white font-bold">
+                        {sup.company_name || sup.name}
+                      </option>
+                    ))}
+                  </select>
+                  <FaChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-[9px] pointer-events-none" />
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Procurement summary stats */}
+            {procurementTypeFilter !== "all" && (
+              <div className="mt-3 p-3.5 rounded-2xl border border-gray-300 bg-gray-50 flex items-center justify-between gap-4 flex-wrap text-xs shadow-sm transition-all">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="px-3.5 py-1.5 rounded-xl text-white font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-sm bg-gray-900">
+                    <span>{procurementTypeFilter === "panel" ? "☀️" : "⚡"}</span>
+                    <span>{procurementTypeFilter === "panel" ? "Panel Procurement" : "Inverter Procurement"} — Filtered View</span>
+                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                      <span className="text-gray-900 font-black text-sm mr-1.5">{filteredPOList.length}</span>
+                      <span className="text-gray-600 font-bold">supplier PO{filteredPOList.length !== 1 ? "s" : ""} match</span>
+                    </span>
+
+                    <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                      <span className="text-gray-500 mr-1.5 font-bold">Total Value:</span>
+                      <span className="text-gray-900 font-black text-sm">
+                        ₹{filteredPOList.reduce((acc, po) =>
+                          acc + (po.items || []).reduce((s, it) => s + (Number(it.qty || it.quantity || 0) * Number(it.order_price || it.price || 0)), 0), 0
+                        ).toLocaleString("en-IN")}
+                      </span>
+                    </span>
+
+                    <span className="bg-white px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm font-black text-xs text-gray-900 flex items-center">
+                      <span className="text-gray-500 mr-1.5 font-bold">Suppliers:</span>
+                      <span className="font-black text-sm text-gray-900">
+                        {new Set(filteredPOList.map(po => po.supplier_id?._id || po.supplier_id?.id || po.supplier_id)).size}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={clearProcurementFilters}
+                  className="text-xs font-black text-gray-700 hover:text-red-600 cursor-pointer bg-white hover:bg-gray-100 px-3.5 py-1.5 rounded-xl border border-gray-300 shadow-sm ml-auto transition-all"
+                >
+                  Reset Filter ✕
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Row 4: Active Filters Chips */}
         {hasActiveMasterFilters && (
@@ -3378,7 +4257,7 @@ export default function Payments() {
                 </span>
               )}
 
-              {procurementTypeFilter !== "all" && (
+              {activeTab !== "procurement_indents" && procurementTypeFilter !== "all" && (
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-extrabold border shadow-sm ${procurementTypeFilter === "panel"
                   ? "bg-amber-100 text-amber-900 border-amber-300"
                   : "bg-teal-100 text-teal-900 border-teal-300"
@@ -3395,7 +4274,7 @@ export default function Payments() {
                 </span>
               )}
 
-              {procurementOrderFilter !== "all" && (() => {
+              {activeTab !== "procurement_indents" && procurementOrderFilter !== "all" && (() => {
                 const matchedOrder = pendingEpcOrders.find(o => String(o.id || o._id) === String(procurementOrderFilter))
                   || purchaseOrders.find(po => String(po._id || po.id) === String(procurementOrderFilter));
                 const label = matchedOrder?.order_number || matchedOrder?.po_number || procurementOrderFilter;
@@ -3414,7 +4293,7 @@ export default function Payments() {
                 );
               })()}
 
-              {(orderDateFrom || orderDateTo) && (
+              {activeTab !== "procurement_indents" && (orderDateFrom || orderDateTo) && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-semibold border border-gray-300">
                   <span>📅</span>
                   <span>
@@ -3432,7 +4311,7 @@ export default function Payments() {
                 </span>
               )}
 
-              {procurementSupplierFilter !== "all" && (() => {
+              {activeTab !== "procurement_indents" && procurementSupplierFilter !== "all" && (() => {
                 const sup = uniqueSuppliers.find(s => String(s._id || s.id) === String(procurementSupplierFilter));
                 return (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-100 text-orange-800 text-[11px] font-semibold border border-orange-200">
@@ -3560,6 +4439,7 @@ export default function Payments() {
           hasActiveFilters={hasActiveMasterFilters}
           onResetFilters={resetAllMasterFilters}
           loading={loadingEpcOrders}
+          onPayOrderComponent={(procType, orderId) => openCombineModal(procType, orderId)}
         />
       )}
 
@@ -3581,6 +4461,7 @@ export default function Payments() {
           hasActiveFilters={hasActiveMasterFilters}
           onResetFilters={resetAllMasterFilters}
           loading={loadingEpcOrders}
+          onPayOrderComponent={(procType, orderId) => openCombineModal(procType, orderId)}
         />
       )}
 
@@ -3868,6 +4749,469 @@ export default function Payments() {
         </div>
       )}
 
+      {/* ─── Combined Procurement Batches Section ─────────────────────────── */}
+      {activeTab === "combined_groups" && (
+        <CombinedProcurementBatchesSection
+          groups={filteredProcurementGroups}
+          allGroups={procurementGroups}
+          loading={loadingGroups}
+          highlightedGroupId={highlightedGroupId}
+          onClearHighlight={() => setHighlightedGroupId("")}
+          expandedGroupId={expandedGroupId}
+          setExpandedGroupId={setExpandedGroupId}
+          filterStatus={groupFilterStatus}
+          setFilterStatus={setGroupFilterStatus}
+          searchQuery={groupSearchQuery}
+          setSearchQuery={setGroupSearchQuery}
+          onRefresh={fetchProcurementGroups}
+          onPaySupplierForGroup={handlePaySupplierForGroup}
+          onPayWholeGroup={handlePayWholeGroup}
+        />
+      )}
+
+      {/* ─── Procurement Purchase Indents (PI) Section ───────────────────────── */}
+      {activeTab === "procurement_indents" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gradient-to-r from-primary/5 via-blue-500/5 to-primary/5 border border-primary/20 rounded-2xl">
+            <div className="flex items-center gap-3">
+              <span className="p-3 rounded-xl bg-primary text-white shadow-sm flex items-center justify-center">
+                <FaCreditCard size={18} />
+              </span>
+              <div>
+                <h4 className="text-sm font-black text-gray-900">
+                  Procurement Purchase Indents (Suppliers &amp; OEMs Auto-Selected)
+                </h4>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Suppliers &amp; OEM partners were chosen in the Procurement Module. No need to re-select suppliers here. Review advance amounts and process disbursements directly.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/account-panel/procurement"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/95 transition-all shadow-sm shrink-0"
+            >
+              <FaLayerGroup size={12} />
+              <span>Go to Procurement Module</span>
+            </a>
+          </div>
+
+          {/* Sub-Filter Tabs for Purchase Indents */}
+          {procurementPIs.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 bg-white border border-gray-200 p-2.5 rounded-2xl shadow-xs">
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("all")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "all" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span>All Purchase Indents</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "all" ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                }`}>
+                  {procurementPIs.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("awaiting_advance")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "awaiting_advance" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span>Awaiting 30% Advance</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "awaiting_advance" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
+                }`}>
+                  {procurementPIs.filter(pi => !Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(pi.payment?.payment_status))).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("balance_due")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "balance_due" ? "bg-amber-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span>30% Paid (70% Balance Due)</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "balance_due" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-700"
+                }`}>
+                  {procurementPIs.filter(pi => {
+                    const payStatus = pi.payment?.payment_status || "";
+                    const hasAdv = Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+                    const isFull = Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+                    return hasAdv && !isFull;
+                  }).length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPiSubFilter("fully_paid")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  piSubFilter === "fully_paid" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <span>Fully Paid (100%)</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                  piSubFilter === "fully_paid" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
+                }`}>
+                  {procurementPIs.filter(pi => Boolean(pi.payment?.balance_payment?.utr_number || pi.payment?.payment_status === "Paid")).length}
+                </span>
+              </button>
+            </div>
+          )}
+
+          {loadingProcurementPIs ? (
+            <div className="p-12 text-center bg-white border border-gray-200 rounded-2xl">
+              <FaSpinner className="animate-spin text-primary mx-auto text-2xl mb-2" />
+              <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Loading Purchase Indents...</p>
+            </div>
+          ) : procurementPIs.length === 0 ? (
+            <div className="p-12 text-center bg-white border border-dashed border-gray-300 rounded-2xl">
+              <FaBoxes className="mx-auto text-3xl text-gray-300 mb-3" />
+              <h4 className="text-sm font-black text-gray-800">No Purchase Indents Found</h4>
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                No Purchase Indents have been created from batches yet. Go to New Orders to batch orders, then open Procurement to select OEM partners/suppliers.
+              </p>
+              <a
+                href="/account-panel/procurement"
+                className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-all shadow-xs"
+              >
+                <FaArrowRight size={11} />
+                <span>Open Procurement Module</span>
+              </a>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-[10px] font-black uppercase tracking-wider text-gray-600">
+                      <th className="py-3 px-4">PI Number &amp; Date</th>
+                      <th className="py-3 px-4">Batch / Order</th>
+                      <th className="py-3 px-4">Allocated Supplier / Brand</th>
+                      <th className="py-3 px-4 text-center">Items &amp; Qty</th>
+                      <th className="py-3 px-4 text-right">30% Advance</th>
+                      <th className="py-3 px-4 text-right">70% Balance</th>
+                      <th className="py-3 px-4 text-right">Total PI Value</th>
+                      <th className="py-3 px-4 text-center">Payment Status</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {procurementPIs
+                      .filter(pi => {
+                        if (piSubFilter === "awaiting_advance") {
+                          const payStatus = pi.payment?.payment_status || "PI Submitted";
+                          return !Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+                        }
+                        if (piSubFilter === "balance_due") {
+                          const payStatus = pi.payment?.payment_status || "PI Submitted";
+                          const hasAdv = Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+                          const isFull = Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+                          return hasAdv && !isFull;
+                        }
+                        if (piSubFilter === "fully_paid") {
+                          const payStatus = pi.payment?.payment_status || "PI Submitted";
+                          return Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+                        }
+                        return true;
+                      })
+                      .map((pi) => {
+                        const payStatus = pi.payment?.payment_status || "PI Submitted";
+                        const totalVal = pi.total_pi_value || 0;
+                        const advPct = pi.payment?.advance_percentage || 30;
+                        const balPct = pi.payment?.balance_percentage || 70;
+                        const advAmount = pi.payment?.advance_amount || Math.round((totalVal * advPct) / 100);
+                        const balAmount = pi.payment?.balance_amount || (totalVal - advAmount);
+
+                        const advUtr = pi.payment?.advance_payment?.utr_number || (["Advance Paid", "Paid"].includes(payStatus) ? pi.payment?.actual_payment?.utr_number : null);
+                        const balUtr = pi.payment?.balance_payment?.utr_number;
+
+                        const isAdvancePaid = Boolean(advUtr || ["Advance Paid", "Paid"].includes(payStatus));
+                        const isFullyPaid = payStatus === "Paid" || Boolean(balUtr && isAdvancePaid);
+                        const isBalanceDue = isAdvancePaid && !isFullyPaid;
+
+                        const advApproval = pi.payment?.advance_approval || {};
+                        const balApproval = pi.payment?.balance_approval || {};
+
+                        const isAdvApproved = advApproval.status === "approved";
+                        const isAdvRequested = advApproval.status === "pending" || payStatus === "Advance Requested";
+                        const isAdvRejected = advApproval.status === "rejected";
+
+                        const isBalApproved = balApproval.status === "approved";
+                        const isBalRequested = balApproval.status === "pending" || payStatus === "Balance Requested";
+                        const isBalRejected = balApproval.status === "rejected";
+
+                        const isBusyThisPi = requestingPaymentPiId === (pi._id || pi.pi_number);
+
+                        return (
+                          <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <span className="font-black font-mono text-primary text-sm">{pi.pi_number}</span>
+                              <span className="block text-[10px] text-gray-400 mt-0.5">
+                                {pi.created_at ? new Date(pi.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {pi.order_group_id ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-purple-50 text-purple-700 border border-purple-200">
+                                  {pi.order_group_id}
+                                </span>
+                              ) : (
+                                <span className="font-mono font-bold text-gray-700 text-xs">
+                                  {pi.customer_order_number}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-black text-gray-900">{pi.supplier_name}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                  pi.is_oem_partner ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                                }`}>
+                                  {pi.is_oem_partner ? "OEM Partner (SolarKits Brand)" : "Supplier Partner"}
+                                </span>
+                                {pi.supplier_brand && (
+                                  <span className="text-[10px] text-gray-500 font-semibold">{pi.supplier_brand}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              <div className="font-bold text-gray-900">
+                                {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
+                              </div>
+                              <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
+                                {(pi.items || []).map(it => it.sku_code).join(", ")}
+                              </span>
+                            </td>
+
+                            {/* 30% Advance */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="font-black text-gray-900">
+                                ₹{advAmount.toLocaleString("en-IN")}
+                              </div>
+                              <div className="mt-0.5">
+                                {isAdvancePaid ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                    ✅ Paid {advUtr ? `(${advUtr.slice(-5)})` : ""}
+                                  </span>
+                                ) : isAdvApproved ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                    Approved ({advPct}%)
+                                  </span>
+                                ) : isAdvRequested ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                                    ⏳ Adv Approval Pending
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                    Due ({advPct}%)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* 70% Balance */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="font-black text-gray-900">
+                                ₹{balAmount.toLocaleString("en-IN")}
+                              </div>
+                              <div className="mt-0.5">
+                                {isFullyPaid ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                    ✅ Paid {balUtr ? `(${balUtr.slice(-5)})` : ""}
+                                  </span>
+                                ) : isBalanceDue ? (
+                                  isBalApproved ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                      Approved ({balPct}%)
+                                    </span>
+                                  ) : isBalRequested ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                                      ⏳ Bal Approval Pending
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                      ⏳ Due (Ready)
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="text-[10px] text-gray-400">
+                                    Locked (Wait 30%)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Total PI Value */}
+                            <td className="py-3.5 px-4 text-right font-black text-primary text-sm">
+                              ₹{totalVal.toLocaleString("en-IN")}
+                            </td>
+
+                            {/* Payment Status */}
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border inline-flex items-center gap-1 ${
+                                isFullyPaid ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                isBalanceDue ? (
+                                  isBalApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                  isBalRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                  "bg-amber-50 text-amber-800 border-amber-300 font-extrabold"
+                                ) : (
+                                  isAdvApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                  isAdvRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                  "bg-gray-100 text-gray-700 border-gray-300"
+                                )
+                              }`}>
+                                {isFullyPaid ? "Fully Paid (100%)" :
+                                 isBalanceDue ? (
+                                   isBalApproved ? "70% Balance Approved" :
+                                   isBalRequested ? "70% Bal Awaiting Approval" :
+                                   "70% Balance Due"
+                                 ) : (
+                                   isAdvApproved ? "30% Advance Approved" :
+                                   isAdvRequested ? "30% Adv Awaiting Approval" :
+                                   "30% Advance Due"
+                                 )}
+                              </span>
+                            </td>
+
+                            {/* Action Buttons */}
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              {isFullyPaid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedPiForPayment(pi);
+                                    setPiPaymentMilestone("overview");
+                                    setIsPiPaymentModalOpen(true);
+                                  }}
+                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xs cursor-pointer"
+                                >
+                                  View Payments
+                                </button>
+                              ) : isBalanceDue ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {isBalApproved ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("balance");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shadow-amber-200"
+                                      title="Disburse remaining 70% balance to supplier"
+                                    >
+                                      <span>Pay 70% Balance</span>
+                                      <FaArrowRight size={9} />
+                                    </button>
+                                  ) : isBalRequested ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("overview");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                      title="Admin 70% Balance Approval is Pending"
+                                    >
+                                      <FaClock size={10} className="text-amber-600 animate-pulse" />
+                                      <span>Bal Awaiting Approval</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={isBusyThisPi}
+                                      onClick={() => handleRaisePaymentRequest(pi, "balance")}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                      title="Raise 70% Balance Payment Approval Request to Admin"
+                                    >
+                                      {isBusyThisPi ? (
+                                        <FaSpinner className="animate-spin text-xs" />
+                                      ) : (
+                                        <FaPaperPlane className="text-[10px]" />
+                                      )}
+                                      <span>Request 70% Balance</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedPiForPayment(pi);
+                                      setPiPaymentMilestone("overview");
+                                      setIsPiPaymentModalOpen(true);
+                                    }}
+                                    className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-300 cursor-pointer"
+                                    title="View Advance UTR & History"
+                                  >
+                                    UTR
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {isAdvApproved ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("advance");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
+                                    >
+                                      Pay 30% Advance
+                                    </button>
+                                  ) : isAdvRequested ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedPiForPayment(pi);
+                                        setPiPaymentMilestone("overview");
+                                        setIsPiPaymentModalOpen(true);
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                      title="Admin 30% Advance Approval is Pending"
+                                    >
+                                      <FaClock size={10} className="text-amber-600 animate-pulse" />
+                                      <span>Adv Awaiting Approval</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      disabled={isBusyThisPi}
+                                      onClick={() => handleRaisePaymentRequest(pi, "advance")}
+                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                      title="Raise 30% Advance Payment Approval Request to Admin"
+                                    >
+                                      {isBusyThisPi ? (
+                                        <FaSpinner className="animate-spin text-xs" />
+                                      ) : (
+                                        <FaPaperPlane className="text-[10px]" />
+                                      )}
+                                      <span>Request 30% Advance</span>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Pay Details Dialog */}
       <Dialog
         isOpen={isPayOpen}
@@ -4138,31 +5482,45 @@ export default function Payments() {
             <div className="flex flex-col sm:flex-row bg-gray-100 border border-gray-200 rounded-xl p-1 gap-1 w-full mb-3">
               <button
                 type="button"
+                disabled={procurementAmountBreakdown.allPanelsPaid}
                 onClick={() => setCombineProcurementType("panel")}
-                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "panel"
-                  ? "bg-primary text-white shadow-md font-extrabold"
-                  : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold"
+                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 ${procurementAmountBreakdown.allPanelsPaid
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300 font-semibold"
+                  : combineProcurementType === "panel"
+                    ? "bg-primary text-white shadow-md font-extrabold cursor-pointer"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold cursor-pointer"
                   }`}
               >
-                <span>☀️</span> Solar Panel Procurement
+                <span>☀️</span>
+                <span>Solar Panels {procurementAmountBreakdown.allPanelsPaid ? "(Already Paid)" : "Procurement"}</span>
+                {procurementAmountBreakdown.allPanelsPaid && <FaCheckCircle className="text-green-600 ml-1 text-xs" />}
               </button>
               <button
                 type="button"
+                disabled={procurementAmountBreakdown.allInvertersPaid}
                 onClick={() => setCombineProcurementType("inverter")}
-                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "inverter"
-                  ? "bg-primary text-white shadow-md font-extrabold"
-                  : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold"
+                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 ${procurementAmountBreakdown.allInvertersPaid
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300 font-semibold"
+                  : combineProcurementType === "inverter"
+                    ? "bg-primary text-white shadow-md font-extrabold cursor-pointer"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold cursor-pointer"
                   }`}
               >
-                <span>⚡</span> Inverter Procurement
+                <span>⚡</span>
+                <span>Inverters {procurementAmountBreakdown.allInvertersPaid ? "(Already Paid)" : "Procurement"}</span>
+                {procurementAmountBreakdown.allInvertersPaid && <FaCheckCircle className="text-green-600 ml-1 text-xs" />}
               </button>
               <button
                 type="button"
+                disabled={procurementAmountBreakdown.anyPanelPaid || procurementAmountBreakdown.anyInverterPaid}
                 onClick={() => setCombineProcurementType("mixed")}
-                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 cursor-pointer ${combineProcurementType === "mixed"
-                  ? "bg-primary text-white shadow-md font-extrabold"
-                  : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold"
+                className={`flex-1 justify-center px-4 py-2.5 rounded-lg text-xs uppercase tracking-wide transition-all flex items-center gap-2 ${procurementAmountBreakdown.anyPanelPaid || procurementAmountBreakdown.anyInverterPaid
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300 font-semibold"
+                  : combineProcurementType === "mixed"
+                    ? "bg-primary text-white shadow-md font-extrabold cursor-pointer"
+                    : "text-gray-700 hover:text-gray-900 hover:bg-white font-bold cursor-pointer"
                   }`}
+                title={procurementAmountBreakdown.anyPanelPaid || procurementAmountBreakdown.anyInverterPaid ? "Mixed kit is disabled because items are already being procured separately" : ""}
               >
                 <span>📦</span> Mixed / Full Kit
               </button>
@@ -4171,17 +5529,23 @@ export default function Payments() {
               <div className="p-1 rounded-md bg-blue-100 text-primary mt-0.5 flex-shrink-0">
                 <FaInfoCircle size={14} />
               </div>
-              <div className="leading-relaxed">
+              <div className="leading-relaxed flex-1">
+                {procurementAmountBreakdown.allPanelsPaid && (
+                  <div className="mb-2 p-2 rounded-lg bg-emerald-100 text-emerald-900 font-bold flex items-center gap-2 border border-emerald-300">
+                    <FaCheckCircle className="text-emerald-600 flex-shrink-0" />
+                    <span>Solar Panels for the selected order(s) have already been procured and paid! Now completing Inverter supplier procurement (~25%).</span>
+                  </div>
+                )}
                 {combineProcurementType === "panel" && (
                   <>
                     <strong className="font-black text-gray-900">☀️ Panel Procurement Mode:</strong>{" "}
-                    Yeh payment sirf Solar Panels ke liye hogi. Select a Panel supplier below. Inverter ka payment alag supplier ko alag transaction mein hoga.
+                    Yeh payment sirf Solar Panels ke liye hogi (~60%). Select a Panel supplier below. Inverter ka payment alag supplier ko alag transaction mein hoga.
                   </>
                 )}
                 {combineProcurementType === "inverter" && (
                   <>
                     <strong className="font-black text-gray-900">⚡ Inverter Procurement Mode:</strong>{" "}
-                    Yeh payment sirf Inverters ke liye hogi. Select an Inverter supplier below. Panel ka payment alag supplier ko alag transaction mein hoga.
+                    Yeh payment sirf Inverters ke liye hogi (~25%). Select an Inverter supplier below. Panel ka payment alag supplier ko alag transaction mein hota hai.
                   </>
                 )}
                 {combineProcurementType === "mixed" && (
@@ -4601,6 +5965,21 @@ export default function Payments() {
         </div>
       )}
 
+      {/* Procurement Supplier Payment Modal (No Supplier Selection Needed) */}
+      <SupplierPaymentModal
+        isOpen={isPiPaymentModalOpen}
+        onClose={() => {
+          setIsPiPaymentModalOpen(false);
+          setSelectedPiForPayment(null);
+          setPiPaymentMilestone(null);
+        }}
+        purchaseIndent={selectedPiForPayment}
+        targetMilestone={piPaymentMilestone}
+        onPaymentUpdated={() => {
+          fetchProcurementPIs();
+          fetchOrders();
+        }}
+      />
     </div>
   );
 }

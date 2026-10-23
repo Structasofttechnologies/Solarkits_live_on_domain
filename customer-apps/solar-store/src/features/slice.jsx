@@ -108,6 +108,26 @@ export const fetchShopHierarchy = createAsyncThunk(
 // ─────────────────────────────────────────────────────────────────
 // Helper
 // ─────────────────────────────────────────────────────────────────
+export const getKitTierPrice = (kitOrProduct, qty) => {
+  const q = Number(qty);
+  if (!kitOrProduct || !q || q <= 0) return null;
+
+  const looseList = Array.isArray(kitOrProduct.loose_order_pricing) ? kitOrProduct.loose_order_pricing : [];
+  const poList = Array.isArray(kitOrProduct.po_order_pricing) ? kitOrProduct.po_order_pricing : [];
+
+  const matchedLoose = looseList.find((t) => Number(t.quantity) === q && Number(t.price_per_kit) > 0);
+  if (matchedLoose) {
+    return Number(matchedLoose.price_per_kit);
+  }
+
+  const matchedPo = poList.find((t) => Number(t.quantity) === q && Number(t.price_per_kit) > 0);
+  if (matchedPo) {
+    return Number(matchedPo.price_per_kit);
+  }
+
+  return null;
+};
+
 const generateCartItemId = (kitId, variantIndex, districtId) => {
   return districtId ? `${kitId}-${variantIndex}-${districtId}` : `${kitId}-${variantIndex}`;
 };
@@ -266,9 +286,21 @@ const slice = createSlice({
 
         const effectiveGstRate = Number(currentVariant.gstRate ?? kit.gstRate ?? kit.pricing?.gstRate ?? 13.8);
 
-        const orderQuantities = Array.isArray(kit.orderQuantities || kit.order_quantities)
-          ? (kit.orderQuantities || kit.order_quantities).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b)
+        const rawLooseQtys = Array.isArray(kit.looseOrderQuantities || kit.loose_order_quantities)
+          ? (kit.looseOrderQuantities || kit.loose_order_quantities).map(Number).filter(n => !isNaN(n) && n > 0)
           : [];
+        const rawPoQtys = Array.isArray(kit.orderQuantities || kit.order_quantities)
+          ? (kit.orderQuantities || kit.order_quantities).map(Number).filter(n => !isNaN(n) && n > 0)
+          : [];
+
+        const pricingLooseQtys = (kit.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+        const pricingPoQtys = (kit.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+
+        const looseOrderQuantities = [...new Set([...rawLooseQtys, ...pricingLooseQtys])].sort((a, b) => a - b);
+        const orderQuantities = [...new Set([...rawPoQtys, ...pricingPoQtys, ...rawLooseQtys, ...pricingLooseQtys])].sort((a, b) => a - b);
+
+        const tierPrice = Number(payload?.price_per_kit || getKitTierPrice(kit, requestedQty));
+        const effectiveOurPrice = tierPrice > 0 ? tierPrice : currentVariant.ourPrice;
 
         const cartItem = {
           ...kit,
@@ -286,14 +318,21 @@ const slice = createSlice({
           delivery_district: deliveryDistrict,
           delivery_state: deliveryState,
           delivery_estimated_days: deliveryEstimatedDays,
+          loose_order_quantities: looseOrderQuantities,
+          looseOrderQuantities: looseOrderQuantities,
           orderQuantities,
           order_quantities: orderQuantities,
+          loose_order_pricing: kit.loose_order_pricing || [],
+          po_order_pricing: kit.po_order_pricing || [],
           productTier: currentVariant.productTier,
           tierBenefits: currentVariant.tierBenefits,
           marketPrice: currentVariant.marketPrice,
-          ourPrice: currentVariant.ourPrice,
+          ourPrice: effectiveOurPrice,
+          selling_price_inr: effectiveOurPrice,
+          price_before_tax_inr: Math.round(effectiveOurPrice / (1 + (effectiveGstRate / 100))),
+          taxes_and_charges_inr: Math.max(0, effectiveOurPrice - Math.round(effectiveOurPrice / (1 + (effectiveGstRate / 100)))),
           gstRate: effectiveGstRate,
-          gstIncluded: currentVariant.gstIncluded ?? (currentVariant.ourPrice - Math.round(currentVariant.ourPrice / (1 + (effectiveGstRate / 100)))),
+          gstIncluded: Math.max(0, effectiveOurPrice - Math.round(effectiveOurPrice / (1 + (effectiveGstRate / 100)))),
           includedDeliveryCharge: currentVariant.includedDeliveryCharge,
           inStock: currentVariant.inStock,
           availableStock: liveAvailable,
@@ -316,6 +355,16 @@ const slice = createSlice({
             if (isBulkOrderQty || currentCartQtySum + requestedQty <= liveAvailable) {
               exists.qty += requestedQty;
             }
+          }
+          // Re-evaluate tier pricing for the updated quantity
+          const updatedTierPrice = Number(payload?.price_per_kit || getKitTierPrice(exists, exists.qty));
+          if (updatedTierPrice > 0) {
+            exists.ourPrice = updatedTierPrice;
+            exists.selling_price_inr = updatedTierPrice;
+            const gstR = Number(exists.gstRate || effectiveGstRate);
+            exists.price_before_tax_inr = Math.round(updatedTierPrice / (1 + (gstR / 100)));
+            exists.taxes_and_charges_inr = Math.max(0, updatedTierPrice - exists.price_before_tax_inr);
+            exists.gstIncluded = exists.taxes_and_charges_inr;
           }
         } else {
           if (isBulkOrderQty || (requestedQty <= liveAvailable && liveAvailable > 0)) {
@@ -375,6 +424,17 @@ const slice = createSlice({
             product.qty += 1;
           }
         }
+
+        // Update tier price for the new quantity
+        const updatedTierPrice = getKitTierPrice(product, product.qty);
+        if (updatedTierPrice > 0) {
+          product.ourPrice = updatedTierPrice;
+          product.selling_price_inr = updatedTierPrice;
+          const gstR = Number(product.gstRate || 13.8);
+          product.price_before_tax_inr = Math.round(updatedTierPrice / (1 + (gstR / 100)));
+          product.taxes_and_charges_inr = Math.max(0, updatedTierPrice - product.price_before_tax_inr);
+          product.gstIncluded = product.taxes_and_charges_inr;
+        }
       }
     },
 
@@ -390,6 +450,17 @@ const slice = createSlice({
           }
         } else {
           if (product.qty > 1) product.qty -= 1;
+        }
+
+        // Update tier price for the new quantity
+        const updatedTierPrice = getKitTierPrice(product, product.qty);
+        if (updatedTierPrice > 0) {
+          product.ourPrice = updatedTierPrice;
+          product.selling_price_inr = updatedTierPrice;
+          const gstR = Number(product.gstRate || 13.8);
+          product.price_before_tax_inr = Math.round(updatedTierPrice / (1 + (gstR / 100)));
+          product.taxes_and_charges_inr = Math.max(0, updatedTierPrice - product.price_before_tax_inr);
+          product.gstIncluded = product.taxes_and_charges_inr;
         }
       }
     },

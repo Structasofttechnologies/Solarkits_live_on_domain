@@ -148,6 +148,62 @@ export default function DeliveryApprovalQueue() {
   const [rejectModalBatch, setRejectModalBatch] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
+  const fetchLiveQueue = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/delivery-management/approval-queue`, {
+        headers: authHeaderObj(),
+      });
+      if (res.data?.status === "success" && res.data.data?.records?.length > 0) {
+        const liveRecords = res.data.data.records.map((d) => ({
+          id: d._id,
+          batch_number: d.delivery_number,
+          orders_count: d.stops?.length || 1,
+          destination_cluster: d.stops?.[0]?.destination?.district || "Destination Cluster",
+          destination_state: d.stops?.[0]?.destination?.state || "State",
+          vehicle_type: d.vehicles_allocated?.[0]?.vehicle_type_name || "Assigned Fleet",
+          vehicle_number: d.vehicles_allocated?.[0]?.registration_number || "Pending Reg",
+          service_provider: d.service_provider_id?.name || "Transporter Fleet",
+          benchmark_cost: d.company_benchmark_cost || 4500,
+          proposed_cost: d.actual_vendor_cost || 4500,
+          difference_amount: Math.max(0, (d.actual_vendor_cost || 0) - (d.company_benchmark_cost || 0)),
+          difference_pct: d.company_benchmark_cost > 0
+            ? Number((((Math.max(0, (d.actual_vendor_cost || 0) - (d.company_benchmark_cost || 0))) / d.company_benchmark_cost) * 100).toFixed(1))
+            : 0,
+          max_overdue_days: Math.round((d.hours_waiting || 0) / 24),
+          submitted_by: d.delivery_approval?.requested_by?.first_name ? `${d.delivery_approval.requested_by.first_name} ${d.delivery_approval.requested_by.last_name || ''}` : "Dispatch Manager",
+          submitted_at: new Date(d.createdAt).toLocaleString("en-IN"),
+          status: d.delivery_approval?.status === "approved" || d.status === "cost_approved"
+            ? "Approved"
+            : d.delivery_approval?.status === "rejected" || d.status === "cost_rejected"
+            ? "Rejected"
+            : "Pending Approval",
+          override_reason: d.override_details?.reason || d.delivery_approval?.approval_remarks || "Freight rate exceeds standard baseline benchmark.",
+          load_weight_kg: d.cargo_summary?.total_shipment_weight_kg || 1500,
+          vehicle_capacity_kg: 2500,
+          orders: (d.stops || []).map((st) => ({
+            order_no: st.order_number,
+            customer: st.recipient_name,
+            kit: `${st.cargo?.total_kits || 1} Kit(s)`,
+            weight: st.cargo?.total_weight_kg || 100,
+            overdue: 0,
+          })),
+        }));
+        setBatches(liveRecords);
+      }
+    } catch (err) {
+      console.warn("Notice loading live delivery queue, falling back to mock:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchLiveQueue();
+    }
+  }, [token]);
+
   // Sort batches: highest overdue days first
   const sortedBatches = useMemo(() => {
     return [...batches].sort((a, b) => b.max_overdue_days - a.max_overdue_days);
@@ -165,18 +221,30 @@ export default function DeliveryApprovalQueue() {
     return { pending, approved, rejected, totalOverdueOrders };
   }, [batches]);
 
-  const handleApprove = (batch) => {
-    setBatches((prev) =>
-      prev.map((b) => (b.id === batch.id ? { ...b, status: "Approved" } : b))
-    );
-    dispatch(
-      setAlert({
-        type: "success",
-        message: `Batch ${batch.batch_number} approved! Dispatch release triggered.`,
-      })
-    );
-    if (selectedBatch?.id === batch.id) {
-      setSelectedBatch((prev) => ({ ...prev, status: "Approved" }));
+  const handleApprove = async (batch) => {
+    try {
+      if (batch.id && !batch.id.startsWith("batch-")) {
+        await axios.post(
+          `${API_URL}/delivery-management/approval-queue/${batch.id}/decision`,
+          { decision: "approve", remarks: "Approved by Admin" },
+          { headers: authHeaderObj() }
+        );
+      }
+      setBatches((prev) =>
+        prev.map((b) => (b.id === batch.id ? { ...b, status: "Approved" } : b))
+      );
+      dispatch(
+        setAlert({
+          type: "success",
+          message: `Batch ${batch.batch_number} approved! Dispatch release triggered.`,
+        })
+      );
+      if (selectedBatch?.id === batch.id) {
+        setSelectedBatch((prev) => ({ ...prev, status: "Approved" }));
+      }
+    } catch (err) {
+      console.error("Error approving batch:", err);
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Approval failed." }));
     }
   };
 
@@ -185,25 +253,37 @@ export default function DeliveryApprovalQueue() {
     setRejectionReason("");
   };
 
-  const handleConfirmReject = () => {
+  const handleConfirmReject = async () => {
     if (!rejectionReason.trim()) {
       dispatch(setAlert({ type: "warning", message: "Rejection reason is required." }));
       return;
     }
 
-    setBatches((prev) =>
-      prev.map((b) => (b.id === rejectModalBatch.id ? { ...b, status: "Rejected" } : b))
-    );
-    dispatch(
-      setAlert({
-        type: "info",
-        message: `Batch ${rejectModalBatch.batch_number} rejected and returned to dispatcher.`,
-      })
-    );
-    if (selectedBatch?.id === rejectModalBatch.id) {
-      setSelectedBatch((prev) => ({ ...prev, status: "Rejected" }));
+    try {
+      if (rejectModalBatch.id && !rejectModalBatch.id.startsWith("batch-")) {
+        await axios.post(
+          `${API_URL}/delivery-management/approval-queue/${rejectModalBatch.id}/decision`,
+          { decision: "reject", remarks: rejectionReason },
+          { headers: authHeaderObj() }
+        );
+      }
+      setBatches((prev) =>
+        prev.map((b) => (b.id === rejectModalBatch.id ? { ...b, status: "Rejected" } : b))
+      );
+      dispatch(
+        setAlert({
+          type: "info",
+          message: `Batch ${rejectModalBatch.batch_number} rejected and returned to dispatcher.`,
+        })
+      );
+      if (selectedBatch?.id === rejectModalBatch.id) {
+        setSelectedBatch((prev) => ({ ...prev, status: "Rejected" }));
+      }
+      setRejectModalBatch(null);
+    } catch (err) {
+      console.error("Error rejecting batch:", err);
+      dispatch(setAlert({ type: "error", message: err.response?.data?.message || "Rejection failed." }));
     }
-    setRejectModalBatch(null);
   };
 
   return (

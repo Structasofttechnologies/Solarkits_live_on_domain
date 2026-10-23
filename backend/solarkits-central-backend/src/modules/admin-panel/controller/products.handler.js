@@ -238,6 +238,8 @@ const create_product = async (req, res) => {
     const image = req.files?.find(f => f.fieldname === "product_image");
     if (!image) throw new Error("Primary Product Image is mandatory.");
 
+    const datasheetFile = req.files?.find(f => f.fieldname === "product_datasheet");
+
     const product = await Product.create({
       name,
       description,
@@ -247,6 +249,7 @@ const create_product = async (req, res) => {
       template_id: subtype.template_id,
       scope_ids: parsedScopes,
       image: image.path,
+      datasheet: datasheetFile ? datasheetFile.path : null,
       sku_config: parsedSkuConfig
     });
 
@@ -330,6 +333,7 @@ const get_products = async (req, res) => {
         id: p._id,
         name: p.name,
         image: p.image,
+        datasheet: p.datasheet || null,
         description: p.description,
         features: p.features,
         brand_id: p.brand_id?._id || p.brand_id,
@@ -355,7 +359,7 @@ const get_products = async (req, res) => {
 
 const update_product = async (req, res) => {
   try {
-    const { product_id, name, description, features, brand_id, attributes, scope_ids, sku_config } = req.body;
+    const { product_id, name, description, features, brand_id, attributes, scope_ids, sku_config, remove_datasheet } = req.body;
     const parsedAttrs = parseJSON(attributes) || [];
     const parsedScopes = parseJSON(scope_ids) || [];
     const parsedFeatures = parseJSON(features) || [];
@@ -367,6 +371,16 @@ const update_product = async (req, res) => {
     const image = req.files?.find(f => f.fieldname === "product_image");
     if (image && product.image) delete_uploaded_files([{ path: product.image }]);
 
+    const datasheetFile = req.files?.find(f => f.fieldname === "product_datasheet");
+    let updatedDatasheet = product.datasheet;
+    if (datasheetFile) {
+      if (product.datasheet) delete_uploaded_files([{ path: product.datasheet }]);
+      updatedDatasheet = datasheetFile.path;
+    } else if (remove_datasheet === "true" || remove_datasheet === true) {
+      if (product.datasheet) delete_uploaded_files([{ path: product.datasheet }]);
+      updatedDatasheet = null;
+    }
+
     await Product.updateOne({ _id: product._id }, {
       $set: {
         name,
@@ -375,6 +389,7 @@ const update_product = async (req, res) => {
         brand_id: brand_id || product.brand_id,
         scope_ids: parsedScopes,
         image: image ? image.path : product.image,
+        datasheet: updatedDatasheet,
         sku_config: parsedSkuConfig
       }
     });

@@ -34,6 +34,7 @@ import {
   FiCpu,
   FiActivity,
   FiInfo,
+  FiUsers,
 } from "react-icons/fi";
 import { authHeaderObj } from "@/app/authHeader";
 import { setAlert } from "../../../features/alert.slice";
@@ -54,25 +55,25 @@ const TERRITORY_LEVELS = [
 
 const ORDER_TYPES = [
   {
-    value: "both",
-    label: "Both (PO & Loose)",
-    description: "Allows both bulk Purchase Orders & on-demand loose kits",
-    icon: FiPackage,
-    badgeColor: "bg-purple-50 text-purple-700 border-purple-200",
+    value: "loose_order",
+    label: "Loose Order",
+    description: "Direct individual kit / loose components on-demand dispatch",
+    icon: FiTruck,
+    badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400",
+  },
+  {
+    value: "combine_po_order",
+    label: "Combine PO Order",
+    description: "Pool demand across multiple EPC contractors into a combined PO",
+    icon: FiUsers,
+    badgeColor: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400",
   },
   {
     value: "po_order",
-    label: "PO Order Only",
-    description: "Strict Purchase Order fulfillment with scheduled lead-time",
+    label: "PO Order",
+    description: "Strict Purchase Order fulfillment for single EPC or Franchise inventory",
     icon: FiFileText,
-    badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
-  },
-  {
-    value: "loose_order",
-    label: "Loose Order Only",
-    description: "Direct individual kit / loose components on-demand dispatch",
-    icon: FiTruck,
-    badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    badgeColor: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400",
   },
 ];
 
@@ -128,12 +129,44 @@ function WarehouseBadge({ required, count, sqft }) {
 }
 
 function OrderTypeBadge({ orderType }) {
-  const cfg = ORDER_TYPES.find((ot) => ot.value === orderType) || ORDER_TYPES[0];
-  const Icon = cfg.icon;
+  let types = [];
+  if (Array.isArray(orderType)) {
+    types = orderType;
+  } else if (typeof orderType === "string") {
+    if (orderType === "both") types = ["po_order", "loose_order"];
+    else types = orderType.split(",").map((s) => s.trim());
+  } else {
+    types = ["po_order"];
+  }
+
+  const matched = types
+    .map((t) => ORDER_TYPES.find((ot) => ot.value === t))
+    .filter(Boolean);
+
+  if (matched.length === 0) {
+    const fallback = ORDER_TYPES[2];
+    const Icon = fallback.icon;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${fallback.badgeColor}`}>
+        <Icon size={11} /> {fallback.label}
+      </span>
+    );
+  }
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${cfg.badgeColor}`}>
-      <Icon size={11} /> {cfg.label}
-    </span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      {matched.map((cfg) => {
+        const Icon = cfg.icon;
+        return (
+          <span
+            key={cfg.value}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${cfg.badgeColor}`}
+          >
+            <Icon size={11} /> {cfg.label}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -268,8 +301,16 @@ function FormModal({ mode, initial, onClose, onSaved }) {
     warehouse_count: initial?.warehouse_count ?? 0,
     warehouse_space_sqft: initial?.warehouse_space_sqft ?? 0,
 
-    // Order Fulfillment Type
-    order_type_allowed: initial?.order_type_allowed || "both",
+    // Order Fulfillment Type (Array for multi-selection)
+    order_type_allowed: (() => {
+      const raw = initial?.order_type_allowed;
+      if (Array.isArray(raw)) return raw.length > 0 ? raw : ["po_order"];
+      if (typeof raw === "string") {
+        if (raw === "both") return ["po_order", "loose_order"];
+        return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : ["po_order"];
+      }
+      return ["po_order"];
+    })(),
 
     description: initial?.description || "",
     sort_order: initial?.sort_order ?? 0,
@@ -678,28 +719,58 @@ function FormModal({ mode, initial, onClose, onSaved }) {
 
           {/* 5. Allowed Order Fulfillment Type */}
           <div className="space-y-2.5">
-            <h4 className="text-xs font-black uppercase tracking-wider text-purple-600 flex items-center gap-1.5">
-              <FiPackage size={14} /> 5. Allowed Order Fulfillment Type <span className="text-danger">*</span>
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black uppercase tracking-wider text-purple-600 flex items-center gap-1.5">
+                <FiPackage size={14} /> 5. Allowed Order Fulfillment Type <span className="text-danger">*</span>
+              </h4>
+              <span className="text-[10px] text-text-muted">Multi-selection enabled</span>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {ORDER_TYPES.map((ot) => {
                 const Icon = ot.icon;
-                const sel = form.order_type_allowed === ot.value;
+                const currentList = Array.isArray(form.order_type_allowed)
+                  ? form.order_type_allowed
+                  : [form.order_type_allowed].filter(Boolean);
+                const sel = currentList.includes(ot.value);
+
+                const handleToggle = () => {
+                  let updated;
+                  if (sel) {
+                    if (currentList.length <= 1) {
+                      dispatch(setAlert({ type: "warning", message: "At least one order fulfillment type must be selected" }));
+                      return;
+                    }
+                    updated = currentList.filter((v) => v !== ot.value);
+                  } else {
+                    updated = [...currentList, ot.value];
+                  }
+                  setForm({ ...form, order_type_allowed: updated });
+                };
+
                 return (
                   <button
                     key={ot.value}
                     type="button"
-                    onClick={() => setForm({ ...form, order_type_allowed: ot.value })}
-                    className={`flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all ${
+                    onClick={handleToggle}
+                    className={`relative flex flex-col items-start p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
                       sel
-                        ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 shadow-sm"
-                        : "border-border bg-bg text-text-secondary hover:border-purple-300"
+                        ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300 shadow-sm ring-1 ring-purple-500/20"
+                        : "border-border bg-bg text-text-secondary hover:border-purple-300 opacity-70 hover:opacity-100"
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon size={16} className={sel ? "text-purple-600" : "text-text-muted"} />
-                      <span className="text-xs font-bold text-text-primary">{ot.label}</span>
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className="flex items-center gap-2">
+                        <Icon size={16} className={sel ? "text-purple-600" : "text-text-muted"} />
+                        <span className="text-xs font-bold text-text-primary">{ot.label}</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded flex items-center justify-center border transition-all ${
+                          sel ? "bg-purple-600 border-purple-600 text-white" : "border-border bg-surface"
+                        }`}
+                      >
+                        {sel && <FiCheck size={11} strokeWidth={3} />}
+                      </div>
                     </div>
                     <p className="text-[10px] text-text-muted leading-tight">{ot.description}</p>
                   </button>

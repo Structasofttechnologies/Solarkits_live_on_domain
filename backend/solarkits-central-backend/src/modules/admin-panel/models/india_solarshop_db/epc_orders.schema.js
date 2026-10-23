@@ -21,6 +21,8 @@ const epcOrderItemSchema = new mongoose.Schema({
   gst_rate:                  { type: Number, default: 13.8 },
   tax_paise:                 { type: Number, required: true, min: 0 },
   total_price_paise:         { type: Number, required: true, min: 0 },
+  is_trial_kit:              { type: Boolean, default: false },
+  trial_kit_quantity:        { type: Number, default: null },
 }, { _id: false });
 
 /**
@@ -34,6 +36,22 @@ const schema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true,
+  },
+  order_request_id: {
+    type: String,
+    default: null,
+    trim: true,
+    index: true,
+  },
+  is_official_order_generated: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  is_trial_order: {
+    type: Boolean,
+    default: false,
+    index: true,
   },
   epc_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -87,8 +105,14 @@ const schema = new mongoose.Schema({
   commission_notes: { type: String, default: null },
   payment_method: {
     type: String,
-    enum: ['offline_bank_transfer'],
+    enum: ['offline_bank_transfer', 'bank_transfer', 'icici_ecollection'],
     default: 'offline_bank_transfer',
+  },
+  // Which payment gateway was actually used for this order
+  payment_gateway_used: {
+    type: String,
+    enum: ['icici_ecollection', 'offline_utr', 'bank_transfer', 'offline_bank_transfer', null],
+    default: null,
   },
   payment_status: {
     type: String,
@@ -173,19 +197,117 @@ const schema = new mongoose.Schema({
 
   // ── Offline Bank Transfer & Verification Details ──────────────────────────
   offline_payment: {
-    utr_number:          { type: String, default: null, trim: true, uppercase: true },
-    amount_paid:         { type: Number, default: 0 },
-    payment_date:        { type: Date, default: null },
-    receipt_url:         { type: String, default: null },
-    receipt_filename:    { type: String, default: null },
-    sender_bank_name:    { type: String, default: null, trim: true },
-    account_holder_name: { type: String, default: null, trim: true },
-    verification_status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
-    verified_by:         { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
-    verified_at:         { type: Date, default: null },
-    rejection_reason:    { type: String, default: null, trim: true },
-    resubmitted_count:   { type: Number, default: 0 },
-    notes:               { type: String, default: null },
+    utr_number:                  { type: String, default: null, trim: true, uppercase: true },
+    amount_paid:                 { type: Number, default: 0 },
+    payment_mode:                { type: String, enum: ['bank_transfer', 'neft', 'rtgs', 'imps', 'upi', 'cheque', 'other'], default: 'bank_transfer' },
+    payment_date:                { type: Date, default: null },
+    receipt_url:                 { type: String, default: null },
+    receipt_filename:            { type: String, default: null },
+    sender_bank_name:            { type: String, default: null, trim: true },
+    account_holder_name:         { type: String, default: null, trim: true },
+    receiving_account_reference: { type: String, default: 'HDFC Bank - Current A/c 50200088991122', trim: true },
+    verification_status:         { type: String, enum: ['pending', 'submitted_for_approval', 'returned', 'approved', 'rejected'], default: 'pending' },
+    verified_by:                 { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    verified_at:                 { type: Date, default: null },
+    accounts_remarks:            { type: String, default: null, trim: true },
+    rejection_reason:            { type: String, default: null, trim: true },
+    returned_reason:             { type: String, default: null, trim: true },
+    resubmitted_count:           { type: Number, default: 0 },
+    notes:                       { type: String, default: null },
+    // ── Admin Approval (after Accounts verification) ───────────────────────
+    admin_approval_status:       { type: String, enum: ['pending', 'approved', 'returned', 'rejected'], default: 'pending' },
+    admin_approved_by:           { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    admin_approved_at:           { type: Date, default: null },
+    admin_remarks:               { type: String, default: null, trim: true },
+  },
+
+  // ── Audit Trail of All Verification & Approval Events ─────────────────────
+  audit_trail: [{
+    action:         { type: String, required: true },
+    performed_by:   { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    performer_name: { type: String, default: 'System' },
+    role:           { type: String, enum: ['Accounts', 'Admin', 'Solar EPC', 'System'], default: 'Accounts' },
+    timestamp:      { type: Date, default: Date.now },
+    notes:          { type: String, default: null },
+    details:        { type: mongoose.Schema.Types.Mixed, default: {} },
+  }],
+
+  // ── Customer Payment Tracking & Stage Delay Signals ──────────────────────
+  payment_tracking: {
+    customer_payment_status: {
+      type: String,
+      enum: [
+        'Payment Pending',
+        'Payment Initiated',
+        'Verification Pending',
+        'Awaiting Admin Approval',
+        'Partially Paid',
+        'Paid',
+        'Payment Failed',
+        'Overdue',
+        'Refund Pending',
+        'Refunded',
+      ],
+      default: 'Verification Pending',
+    },
+    current_stage: {
+      type: String,
+      enum: [
+        'initial_payment',
+        'accounts_verification',
+        'admin_approval',
+        'advance_payment',
+        'production_milestone',
+        'delivery_milestone',
+        'final_settlement',
+        'refund_processing',
+      ],
+      default: 'accounts_verification',
+    },
+    stage_entered_at:       { type: Date, default: Date.now },
+    configured_tat_days:    { type: Number, default: 2 },
+    warning_threshold_days: { type: Number, default: 1 },
+    delay_signal:           { type: String, enum: ['green', 'orange', 'red'], default: 'green' },
+    days_elapsed:           { type: Number, default: 0 },
+    total_verified_amount:  { type: Number, default: 0 },
+    outstanding_amount:     { type: Number, default: 0 },
+    is_overdue:             { type: Boolean, default: false },
+  },
+
+  // ── Product-Wise Payment Milestones Tracking ─────────────────────────────
+  payment_milestones: {
+    configured_milestone_id: { type: mongoose.Schema.Types.ObjectId, ref: 'product_payment_milestones', default: null },
+    total_order_amount:       { type: Number, default: 0 },
+    advance_percentage:       { type: Number, default: 30 },
+    advance_amount:           { type: Number, default: 0 },
+    remaining_percentage:     { type: Number, default: 70 },
+    remaining_amount:         { type: Number, default: 0 },
+    current_milestone_due:    { type: Number, default: 1 }, // 1 or 2
+    milestone_verification_status: {
+      type: String,
+      enum: ['awaiting_advance', 'advance_verified', 'awaiting_final_payment', 'final_payment_pending_verification', 'fully_paid', 'rejected'],
+      default: 'awaiting_advance',
+    },
+    milestones: [{
+      milestone_number:   { type: Number, required: true },
+      title:              { type: String, required: true },
+      percentage:         { type: Number, required: true },
+      amount:             { type: Number, required: true },
+      stage:              { type: String, required: true },
+      tat_days:           { type: Number, default: 2 },
+      payment_status:     { type: String, enum: ['unpaid', 'pending_verification', 'verified', 'rejected'], default: 'unpaid' },
+      utr_number:         { type: String, default: null, trim: true, uppercase: true },
+      amount_paid:        { type: Number, default: 0 },
+      payment_date:       { type: Date, default: null },
+      receipt_url:        { type: String, default: null },
+      receipt_filename:   { type: String, default: null },
+      sender_bank_name:   { type: String, default: null, trim: true },
+      account_holder_name:{ type: String, default: null, trim: true },
+      verified_by:        { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      verified_at:        { type: Date, default: null },
+      rejection_reason:   { type: String, default: null, trim: true },
+      notes:              { type: String, default: null },
+    }],
   },
 
   // ── Tax Invoice Details ──────────────────────────────────────────────────
@@ -223,6 +345,29 @@ const schema = new mongoose.Schema({
     estimated_delivery: { type: Date, default: null },
     dispatched_by:      { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
     dispatch_notes:     { type: String, default: null },
+  },
+
+  // ── Customer Payment & Follow-up Tracking ────────────────────────────────
+  follow_up: {
+    status: {
+      type: String,
+      enum: ['pending', 'contacted', 'promised_to_pay', 'details_sent', 'second_payment_submitted', 'completed'],
+      default: 'pending',
+    },
+    last_contacted_at:     { type: Date, default: null },
+    last_contacted_by:     { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+    next_follow_up_date:   { type: Date, default: null },
+    promised_payment_date: { type: Date, default: null },
+    remarks:               { type: String, default: null, trim: true },
+    history: [{
+      contacted_at:          { type: Date, default: Date.now },
+      contacted_by:          { type: mongoose.Schema.Types.ObjectId, ref: 'cms_users', default: null },
+      contacted_by_name:     { type: String, default: null },
+      contact_mode:          { type: String, enum: ['call', 'whatsapp', 'email', 'in_person'], default: 'call' },
+      status:                { type: String, default: 'contacted' },
+      remarks:               { type: String, default: null },
+      promised_payment_date: { type: Date, default: null },
+    }],
   },
 
   // ── Module 1.3: In-Transit Milestone Updates (Stage 6) ───────────────────

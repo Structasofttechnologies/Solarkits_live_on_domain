@@ -47,6 +47,12 @@ export default function CheckOut() {
   const [copiedField, setCopiedField] = useState("");
   const [iciciVanDetails, setIciciVanDetails] = useState(null);
 
+  // ── Region Payment Configuration ──────────────────────────────────────────
+  const [regionConfig, setRegionConfig] = useState(null);
+  const [effectivePaymentMode, setEffectivePaymentMode] = useState("offline"); // 'offline' | 'online' | 'both'
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("offline"); // 'offline' | 'online'
+  const [_loadingConfig, setLoadingConfig] = useState(false);
+
   // Offline Payment Form State
   const [utrNumber, setUtrNumber] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
@@ -55,6 +61,10 @@ export default function CheckOut() {
   const [accountHolderName, _setAccountHolderName] = useState("");
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
+
+  // ── Payment Milestone Configuration ───────────────────────────────────────
+  const [milestoneConfig, setMilestoneConfig] = useState(null);
+  const [payFullAmount, setPayFullAmount] = useState(false);
 
   // Timer State
   const [timerEnabled, setTimerEnabled] = useState(true);
@@ -161,6 +171,7 @@ export default function CheckOut() {
               fulfillment_mode: fulfillmentMode,
               cart_items: JSON.stringify(cartItemsParam),
               district_id: selectedDistrict?.id || selectedDistrict?._id,
+              franchisee_id: user?.primary_reseller_id || user?.reseller_id || undefined,
             },
             withCredentials: true,
           }
@@ -239,6 +250,64 @@ export default function CheckOut() {
 
     return () => es.close();
   }, [user, dispatch]);
+
+  // ── Fetch Region-wise Payment Gateway Configuration ───────────────────────
+  useEffect(() => {
+    const distId =
+      selectedDistrict?.id ||
+      selectedDistrict?._id ||
+      (cart[0]?.districtId && cart[0].districtId !== "default" ? cart[0].districtId : null);
+    const stateId = selectedState?.id || selectedState?._id;
+
+    if (!distId && !stateId) return;
+
+    const params = new URLSearchParams();
+    if (distId) params.append("district_id", distId);
+    if (stateId) params.append("state_id", stateId);
+    params.append("order_type", "epc_order");
+
+    setLoadingConfig(true);
+    axios
+      .get(`${API_URL}/payment-config/resolve?${params.toString()}`)
+      .then((res) => {
+        const cfg = res.data?.config;
+        if (cfg) {
+          setRegionConfig(cfg);
+          const mode = cfg.payment_mode || "offline";
+          setEffectivePaymentMode(mode);
+          if (mode === "online") {
+            setSelectedPaymentMethod("online");
+          } else {
+            setSelectedPaymentMethod("offline");
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not resolve region payment config, defaulting to offline:", err);
+      })
+      .finally(() => setLoadingConfig(false));
+  }, [selectedDistrict, selectedState, cart]);
+
+  // ── Resolve Product Payment Milestone Configuration ───────────────────────
+  useEffect(() => {
+    if (!cart || cart.length === 0) return;
+    const primaryKit = cart.find((item) => item.id || item.kit_id);
+    const kitId = primaryKit?.kit_id || primaryKit?.id;
+    const url = kitId
+      ? `${API_URL}/india/v1/shop/payment-milestones/resolve?kit_id=${kitId}`
+      : `${API_URL}/india/v1/shop/payment-milestones/resolve`;
+
+    axios
+      .get(url)
+      .then((res) => {
+        if (res.data?.success && res.data?.milestone_config) {
+          setMilestoneConfig(res.data.milestone_config);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not resolve payment milestones, defaulting:", err);
+      });
+  }, [cart]);
 
   const checkGstStatus = async () => {
     const stateId = selectedState?.id || selectedState?._id;
@@ -522,7 +591,11 @@ export default function CheckOut() {
     }
 
     const totalDeliveryFreight = cart.reduce((sum, item) => sum + (Number(item.delivery_cost) || 0), 0);
-    const finalTotal = Math.max(0, subtotal - appliedDiscountValue) + totalDeliveryFreight;
+    const fallbackRate = Number(checkoutSettings.gst_rate ?? 13.8);
+    const taxableSubtotal = Math.max(0, subtotal - appliedDiscountValue);
+    // Align with backend calculateCheckoutPrice: subtotal + GST
+    const computedGst = Math.round(taxableSubtotal * (fallbackRate / 100));
+    const finalTotal = taxableSubtotal + computedGst + totalDeliveryFreight;
 
     return {
       discountAmount: appliedDiscountValue,
@@ -530,16 +603,54 @@ export default function CheckOut() {
       offerName: activeOfferName,
       offerType: activeOfferType,
       totalDeliveryFreight,
+      computedGst,
+      gstRate: fallbackRate,
       finalTotal,
     };
-  }, [cart, totalKitsQuantity, totalCapacityKW, appliedCoupon, activeOffers, subtotal]);
+  }, [cart, totalKitsQuantity, totalCapacityKW, appliedCoupon, activeOffers, subtotal, checkoutSettings]);
 
-  // Set default amount paid once total is computed
+  // ── Calculate Milestone Breakdown ──────────────────────────────────────────
+  const milestoneBreakdown = useMemo(() => {
+    const m1 = milestoneConfig?.milestones?.[0] || {
+      percentage: 30,
+      title: "Milestone 1 — Advance Payment",
+      description: "Advance payment to confirm order & reserve inventory",
+    };
+    const m2 = milestoneConfig?.milestones?.[1] || {
+      percentage: 70,
+      title: "Milestone 2 — Final Payment",
+      description: "Remaining balance payable before warehouse dispatch clearance",
+    };
+    const total = calculatedDiscounts.finalTotal || 0;
+    const m1Pct = Number(m1.percentage) || 30;
+    const m2Pct = Number(m2.percentage) || (100 - m1Pct);
+    const advanceAmount = Math.round((total * m1Pct) / 100);
+    const remainingAmount = Math.max(0, total - advanceAmount);
+
+    return {
+      m1Pct,
+      m1Title: m1.title || "Milestone 1 — Advance Payment",
+      m1Desc: m1.description || "Advance payment at order placement",
+      advanceAmount,
+      m2Pct,
+      m2Title: m2.title || "Milestone 2 — Final Payment",
+      m2Desc: m2.description || "Payable before warehouse dispatch",
+      remainingAmount,
+      totalAmount: total,
+      stages: milestoneConfig?.order_stages_config || [],
+    };
+  }, [milestoneConfig, calculatedDiscounts.finalTotal]);
+
+  // Set default amount paid based on milestone advance or full amount
   useEffect(() => {
-    if (calculatedDiscounts.finalTotal > 0 && !amountPaid) {
-      setAmountPaid(calculatedDiscounts.finalTotal);
+    if (calculatedDiscounts.finalTotal > 0) {
+      if (payFullAmount) {
+        setAmountPaid(String(calculatedDiscounts.finalTotal));
+      } else if (milestoneBreakdown.advanceAmount > 0) {
+        setAmountPaid(String(milestoneBreakdown.advanceAmount));
+      }
     }
-  }, [calculatedDiscounts.finalTotal]);
+  }, [calculatedDiscounts.finalTotal, milestoneBreakdown.advanceAmount, payFullAmount]);
 
   const handleCopyText = (text, fieldName) => {
     navigator.clipboard.writeText(text);
@@ -703,8 +814,12 @@ export default function CheckOut() {
           payment_date: paymentDate,
           sender_bank_name: senderBankName,
           account_holder_name: accountHolderName,
+          payment_method: selectedPaymentMethod === "online" ? "icici_ecollection" : "offline_bank_transfer",
+          payment_gateway_used: selectedPaymentMethod === "online" ? "icici_ecollection" : "bank_transfer",
         })
       );
+      formData.append("payment_method", selectedPaymentMethod === "online" ? "icici_ecollection" : "offline_bank_transfer");
+      formData.append("payment_gateway_used", selectedPaymentMethod === "online" ? "icici_ecollection" : "bank_transfer");
       formData.append("payment_receipt", receiptFile);
 
       const res = await axios.post(`${API_URL}/india/v1/shop/offline-checkout/create`, formData, {
@@ -718,11 +833,16 @@ export default function CheckOut() {
         setOrderConfirmed(true);
         setErrorMsg("");
         setLoading(false);
-        dispatch(clearCart());
+        const isOnlineOrder = selectedPaymentMethod === "online" || 
+          orderData.payment_method === "icici_ecollection" || 
+          orderData.payment_gateway_used === "icici_ecollection";
+
         dispatch(
           setAlert({
             type: "success",
-            message: "Order submitted! Your payment receipt is being verified by Accounts.",
+            message: isOnlineOrder
+              ? "Payment verified instantly via ICICI! Your order is confirmed."
+              : "Order submitted! Your payment receipt is being verified by Accounts.",
           })
         );
       } else {
@@ -741,8 +861,14 @@ export default function CheckOut() {
     }
   };
 
-  // ── Success State: Order Submitted for Accounts Verification (Render First) ──────────────
+  // ── Success State: Order Submitted (Render First) ──────────────
   if (orderConfirmed && confirmedOrderData) {
+    const isOnlineSuccess = confirmedOrderData.payment_method === "icici_ecollection" ||
+      confirmedOrderData.payment_gateway_used === "icici_ecollection" ||
+      selectedPaymentMethod === "online" ||
+      confirmedOrderData.payment_status === "captured" ||
+      confirmedOrderData.offline_payment?.verification_status === "approved";
+
     return (
       <div className="max-w-xl mx-auto my-10 bg-surface p-8 rounded-3xl border border-border shadow-2xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
         <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-inner border border-emerald-500/20">
@@ -755,7 +881,15 @@ export default function CheckOut() {
           </span>
           <h2 className="text-3xl font-black text-text-primary dark:text-white">Order Confirmed!</h2>
           <p className="text-sm text-text-secondary mt-1.5 max-w-md mx-auto">
-            Aapka Order Confirm Ho Gaya Hai! Your payment receipt & UTR reference have been forwarded to our <strong>Accounts Department</strong> for authorization.
+            {isOnlineSuccess ? (
+              <>
+                Aapka Order Confirm Ho Gaya Hai! Your payment has been <strong>instantly verified</strong> via ICICI Bank e-Collection. Materials are moving to warehouse assembly.
+              </>
+            ) : (
+              <>
+                Aapka Order Confirm Ho Gaya Hai! Your payment receipt & UTR reference have been forwarded to our <strong>Accounts Department</strong> for authorization.
+              </>
+            )}
           </p>
         </div>
 
@@ -771,20 +905,34 @@ export default function CheckOut() {
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-text-secondary">Amount Paid:</span>
+            <span className="text-text-secondary">Milestone 1 Advance Paid:</span>
             <span className="font-black text-emerald-600 dark:text-emerald-400">
-              ₹{(confirmedOrderData.offline_payment?.amount_paid || calculatedDiscounts.finalTotal).toLocaleString("en-IN")}
+              ₹{(confirmedOrderData.offline_payment?.amount_paid || milestoneBreakdown.advanceAmount).toLocaleString("en-IN")} ({milestoneBreakdown.m1Pct}%)
             </span>
           </div>
+          {milestoneBreakdown.remainingAmount > 0 && !payFullAmount && (
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-text-secondary">Milestone 2 Due Before Dispatch:</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400">
+                ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")} ({milestoneBreakdown.m2Pct}%)
+              </span>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span className="text-text-secondary">Verification Status:</span>
-            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
-              <FiClock size={12} /> Pending Accounts Approval
-            </span>
+            {isOnlineSuccess ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                <FiCheckCircle size={12} /> Auto-Verified (ICICI Instant)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                <FiClock size={12} /> Pending Accounts Verification
+              </span>
+            )}
           </div>
           <div className="flex justify-between items-center">
             <span className="text-text-secondary">Warehouse Stock:</span>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Reserved (48-hr Hold)</span>
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Reserved (Assembly Stage)</span>
           </div>
           {deliveryAddress.pincode && (
             <div className="flex justify-between items-center pt-2 border-t border-border text-xs">
@@ -919,97 +1067,210 @@ export default function CheckOut() {
             </div>
           </div>
 
-          {/* =========================================================================
-              TEMPORARILY HIDDEN: ICICI Virtual Account (VAN) Details Card
-              To re-enable: Remove the comment tags below and at the end of the card
-             ========================================================================= */}
-          {/*
-          <div className="bg-gradient-to-br from-[#264baa]/10 via-surface to-[#264baa]/5 p-5 sm:p-6 rounded-2xl border-2 border-[#264baa]/40 shadow-md space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#264baa]/20 pb-3.5">
-              <div>
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-[#264baa]/15 text-[#264baa] dark:text-blue-300 rounded-md border border-[#264baa]/25">
-                  <span className="flex h-1.5 w-1.5 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#264baa] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#264baa]"></span>
-                  </span>
-                  Official ICICI Virtual Account (VAN)
-                </span>
-                <h3 className="text-lg sm:text-xl font-black text-text-primary dark:text-white mt-1.5 flex items-center gap-2">
-                  <FiDollarSign className="text-[#264baa] dark:text-blue-400" /> Transfer to ICICI Virtual Account
-                </h3>
-              </div>
-              <span className="text-xs font-bold text-[#264baa] dark:text-blue-300 bg-[#264baa]/10 px-3 py-1.5 rounded-lg border border-[#264baa]/30 shadow-sm">
-                Zero Gateway Fees • RTGS / NEFT / IMPS / UPI
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
-              <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
-                <div>
-                  <span className="text-text-muted block text-[11px] font-medium">Beneficiary Name</span>
-                  <span className="font-bold text-text-primary dark:text-white text-sm">
-                    {iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd"}
-                  </span>
-                </div>
+          {/* ── Region-wise Payment Gateway Selection ───────────────────────────── */}
+          <div className="space-y-4">
+            {/* Mode Switcher Tabs (Shown when mode is 'both') */}
+            {effectivePaymentMode === "both" && (
+              <div className="bg-surface p-2 rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row gap-2">
                 <button
                   type="button"
-                  onClick={() => handleCopyText(iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd", "name")}
-                  className="p-1.5 text-text-secondary hover:text-[#264baa] rounded-lg hover:bg-surface-hover transition-colors"
-                  title="Copy Beneficiary Name"
+                  onClick={() => setSelectedPaymentMethod("online")}
+                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    selectedPaymentMethod === "online"
+                      ? "bg-[#264baa] text-white shadow-md shadow-[#264baa]/30"
+                      : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                  }`}
                 >
-                  {copiedField === "name" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                  <FiDollarSign className="text-base" />
+                  <span>Instant Online Transfer (ICICI VAN)</span>
                 </button>
-              </div>
-
-              <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
-                <div>
-                  <span className="text-text-muted block text-[11px] font-medium">Bank & Branch</span>
-                  <span className="font-bold text-text-primary dark:text-white text-sm">
-                    {iciciVanDetails?.bank_name || "ICICI Bank"}, {iciciVanDetails?.branch_name || "CMS Branch, Mumbai"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-[#264baa]/10 dark:bg-[#264baa]/20 p-4 rounded-xl border-2 border-[#264baa]/50 flex justify-between items-center shadow-sm">
-                <div>
-                  <span className="text-[#264baa] dark:text-blue-300 block text-[11px] font-extrabold uppercase tracking-wide">
-                    Your Unique Virtual Account No (VAN)
-                  </span>
-                  <span className="font-mono font-black text-[#264baa] dark:text-blue-200 text-lg tracking-wider">
-                    {iciciVanDetails?.virtual_account_number || `SLRK${(user?.whatsapp || user?.mobile || '9876543210').slice(-10)}`}
-                  </span>
-                </div>
                 <button
                   type="button"
-                  onClick={() => handleCopyText(iciciVanDetails?.virtual_account_number || `SLRK${(user?.whatsapp || user?.mobile || '9876543210').slice(-10)}`, "van")}
-                  className="px-3 py-2 bg-[#264baa] hover:bg-[#1f3f91] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-[#264baa]/30 transition-all active:scale-95"
+                  onClick={() => setSelectedPaymentMethod("offline")}
+                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                    selectedPaymentMethod === "offline"
+                      ? "bg-primary text-white shadow-md shadow-primary/30"
+                      : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                  }`}
                 >
-                  {copiedField === "van" ? <FiCheck /> : <FiCopy />}
-                  <span>{copiedField === "van" ? "Copied" : "Copy VAN"}</span>
+                  <FiUploadCloud className="text-base" />
+                  <span>Offline Bank Transfer (UTR + Receipt)</span>
                 </button>
               </div>
+            )}
 
-              <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
-                <div>
-                  <span className="text-text-muted block text-[11px] font-medium">IFSC Code</span>
-                  <span className="font-mono font-black text-text-primary dark:text-white text-base">
-                    {iciciVanDetails?.ifsc_code || "ICIC0000104"}
+            {/* Online ICICI Virtual Account (VAN) Details Card */}
+            {(selectedPaymentMethod === "online" || effectivePaymentMode === "online") && (
+              <div className="bg-gradient-to-br from-[#264baa]/10 via-surface to-[#264baa]/5 p-5 sm:p-6 rounded-2xl border-2 border-[#264baa]/40 shadow-md space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#264baa]/20 pb-3.5">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 bg-[#264baa]/15 text-[#264baa] dark:text-blue-300 rounded-md border border-[#264baa]/25">
+                      <span className="flex h-1.5 w-1.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#264baa] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#264baa]"></span>
+                      </span>
+                      Official ICICI Bank eCollection Virtual Account (VAN)
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-black text-text-primary dark:text-white mt-1.5 flex items-center gap-2">
+                      <FiDollarSign className="text-[#264baa] dark:text-blue-400" /> Transfer to ICICI Virtual Account
+                    </h3>
+                  </div>
+                  <span className="text-xs font-bold text-[#264baa] dark:text-blue-300 bg-[#264baa]/10 px-3 py-1.5 rounded-lg border border-[#264baa]/30 shadow-sm">
+                    Zero Gateway Fees • Real-Time Auto Confirmation
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || "ICIC0000104", "ifsc")}
-                  className="p-1.5 text-text-secondary hover:text-[#264baa] rounded-lg hover:bg-surface-hover transition-colors"
-                  title="Copy IFSC Code"
-                >
-                  {copiedField === "ifsc" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
-                </button>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+                  <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">Beneficiary Name</span>
+                      <span className="font-bold text-text-primary dark:text-white text-sm">
+                        {iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(iciciVanDetails?.beneficiary_name || "SolarKits Technologies Pvt Ltd", "name")}
+                      className="p-1.5 text-text-secondary hover:text-[#264baa] rounded-lg hover:bg-surface-hover transition-colors"
+                      title="Copy Beneficiary Name"
+                    >
+                      {copiedField === "name" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                    </button>
+                  </div>
+
+                  <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">Bank & Branch</span>
+                      <span className="font-bold text-text-primary dark:text-white text-sm">
+                        {iciciVanDetails?.bank_name || "ICICI Bank"}, {iciciVanDetails?.branch_name || "CMS Branch, Mumbai"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#264baa]/10 dark:bg-[#264baa]/20 p-4 rounded-xl border-2 border-[#264baa]/50 flex justify-between items-center shadow-sm md:col-span-2">
+                    <div>
+                      <span className="text-[#264baa] dark:text-blue-300 block text-[11px] font-extrabold uppercase tracking-wide">
+                        Your Unique Virtual Account No (VAN)
+                      </span>
+                      <span className="font-mono font-black text-[#264baa] dark:text-blue-200 text-lg tracking-wider">
+                        {iciciVanDetails?.virtual_account_number || `SLRK${(user?.whatsapp || user?.mobile || '9876543210').slice(-10)}`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(iciciVanDetails?.virtual_account_number || `SLRK${(user?.whatsapp || user?.mobile || '9876543210').slice(-10)}`, "van")}
+                      className="px-3 py-2 bg-[#264baa] hover:bg-[#1f3f91] text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-md shadow-[#264baa]/30 transition-all active:scale-95"
+                    >
+                      {copiedField === "van" ? <FiCheck /> : <FiCopy />}
+                      <span>{copiedField === "van" ? "Copied" : "Copy VAN"}</span>
+                    </button>
+                  </div>
+
+                  <div className="bg-surface p-3.5 rounded-xl border border-border flex justify-between items-center md:col-span-2">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">IFSC Code</span>
+                      <span className="font-mono font-black text-text-primary dark:text-white text-base">
+                        {iciciVanDetails?.ifsc_code || "ICIC0000104"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(iciciVanDetails?.ifsc_code || "ICIC0000104", "ifsc")}
+                      className="p-1.5 text-text-secondary hover:text-[#264baa] rounded-lg hover:bg-surface-hover transition-colors"
+                      title="Copy IFSC Code"
+                    >
+                      {copiedField === "ifsc" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Real-time SSE Listening Notice */}
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-3 text-xs text-emerald-800 dark:text-emerald-300">
+                  <span className="flex h-2.5 w-2.5 relative shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
+                  </span>
+                  <span>
+                    <strong>Real-time Payment Listener Active:</strong> Transfer ₹{calculatedDiscounts.finalTotal.toLocaleString("en-IN")} directly from your net banking / UPI app to the VAN above. Your order will be detected and confirmed automatically.
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
+            {/* Offline Company Bank Transfer Details Card */}
+            {(selectedPaymentMethod === "offline" || effectivePaymentMode === "offline") && (
+              <div className="bg-surface p-5 sm:p-6 rounded-2xl border border-border shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+                  <div>
+                    <h3 className="text-lg font-black text-text-primary dark:text-white flex items-center gap-2">
+                      <FiUploadCloud className="text-primary" /> Company Escrow Bank Account Details
+                    </h3>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      Transfer exact order amount to our verified current account via RTGS / NEFT / IMPS
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
+                    Accounts Team Verification Required
+                  </span>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+                  <div className="bg-surface-hover p-3.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">Beneficiary Name</span>
+                      <span className="font-bold text-text-primary dark:text-white text-sm">{bankDetails.account_name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(bankDetails.account_name, "acc_name")}
+                      className="p-1.5 text-text-secondary hover:text-primary rounded-lg transition-colors"
+                    >
+                      {copiedField === "acc_name" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                    </button>
+                  </div>
+
+                  <div className="bg-surface-hover p-3.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">Bank Name</span>
+                      <span className="font-bold text-text-primary dark:text-white text-sm">{bankDetails.bank_name}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-surface-hover p-3.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">Account Number</span>
+                      <span className="font-mono font-black text-text-primary dark:text-white text-base">
+                        {bankDetails.account_number}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(bankDetails.account_number, "acc_no")}
+                      className="p-1.5 text-text-secondary hover:text-primary rounded-lg transition-colors"
+                    >
+                      {copiedField === "acc_no" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                    </button>
+                  </div>
+
+                  <div className="bg-surface-hover p-3.5 rounded-xl border border-border flex justify-between items-center">
+                    <div>
+                      <span className="text-text-muted block text-[11px] font-medium">IFSC Code</span>
+                      <span className="font-mono font-black text-text-primary dark:text-white text-base">
+                        {bankDetails.ifsc_code}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(bankDetails.ifsc_code, "ifsc_offline")}
+                      className="p-1.5 text-text-secondary hover:text-primary rounded-lg transition-colors"
+                    >
+                      {copiedField === "ifsc_offline" ? <FiCheck className="text-emerald-500" /> : <FiCopy />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-          */}
 
           {/* Checkout Submission Form */}
           <form onSubmit={handleSubmitOfflineOrder} className="space-y-6">
@@ -1234,11 +1495,106 @@ export default function CheckOut() {
             <div className="bg-surface p-6 rounded-2xl border border-border shadow-sm space-y-5">
               <div className="border-b border-border pb-3">
                 <h3 className="text-lg font-black text-text-primary dark:text-white flex items-center gap-2">
-                  <FiUploadCloud className="text-primary" /> Step 2: Upload Payment Receipt & Enter UTR
+                  <FiUploadCloud className="text-primary" /> Step 2: Payment Milestones & Receipt Upload
                 </h3>
                 <p className="text-xs text-text-secondary mt-0.5">
-                  Complete bank transfer using company bank account details above and attach verification proof below.
+                  Admin-configured payment milestones applied. Pay advance to confirm order; remaining balance due before warehouse dispatch.
                 </p>
+              </div>
+
+              {/* ── Product Payment Milestone Breakdown Card ── */}
+              <div className="bg-gradient-to-br from-amber-500/10 via-surface to-blue-500/10 p-4 sm:p-5 rounded-2xl border border-amber-500/30 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-md">
+                      Official Payment Milestone Policy
+                    </span>
+                    <h4 className="text-sm font-black text-text-primary dark:text-white mt-1">
+                      {milestoneConfig?.rule_name || "Product Payment Milestone Schedule"}
+                    </h4>
+                  </div>
+                  <span className="text-xs font-bold text-text-secondary bg-surface px-2.5 py-1 rounded-lg border border-border">
+                    Total Order Value: <strong className="text-text-primary dark:text-white">₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")}</strong>
+                  </span>
+                </div>
+
+                {/* Milestone Stepper */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* Milestone 1 (Advance) */}
+                  <div className={`p-3.5 rounded-xl border-2 transition-all ${!payFullAmount ? "bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-sm" : "bg-surface border-border"}`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-extrabold uppercase tracking-wider text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        {milestoneBreakdown.m1Title} ({milestoneBreakdown.m1Pct}%)
+                      </span>
+                      <span className="font-black text-amber-800 dark:text-amber-200 text-sm">
+                        ₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary leading-relaxed">
+                      {milestoneBreakdown.m1Desc}
+                    </p>
+                    <div className="mt-2 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                      ● Status: Due Now at Order Placement
+                    </div>
+                  </div>
+
+                  {/* Milestone 2 (Before Dispatch) */}
+                  <div className={`p-3.5 rounded-xl border transition-all ${payFullAmount ? "bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/20 shadow-sm" : "bg-surface border-border"}`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-extrabold uppercase tracking-wider text-[11px] text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        {milestoneBreakdown.m2Title} ({milestoneBreakdown.m2Pct}%)
+                      </span>
+                      <span className="font-black text-blue-800 dark:text-blue-200 text-sm">
+                        ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-text-secondary leading-relaxed">
+                      {milestoneBreakdown.m2Desc}
+                    </p>
+                    <div className="mt-2 text-[10px] font-bold text-blue-700 dark:text-blue-400">
+                      ○ Status: Due Before Warehouse Dispatch
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Selection Options */}
+                <div className="pt-2 border-t border-border/60 flex flex-col sm:flex-row gap-3">
+                  <label
+                    onClick={() => setPayFullAmount(false)}
+                    className={`flex-1 flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${!payFullAmount ? "border-amber-500 bg-amber-500/5 font-bold text-amber-900 dark:text-amber-200" : "border-border bg-surface text-text-secondary"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment_plan"
+                      checked={!payFullAmount}
+                      onChange={() => setPayFullAmount(false)}
+                      className="text-amber-600 focus:ring-amber-500"
+                    />
+                    <div className="text-xs">
+                      <span className="block font-bold">Pay {milestoneBreakdown.m1Pct}% Advance (₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")})</span>
+                      <span className="text-[10px] font-normal opacity-80">Remaining ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")} payable before dispatch</span>
+                    </div>
+                  </label>
+
+                  <label
+                    onClick={() => setPayFullAmount(true)}
+                    className={`flex-1 flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${payFullAmount ? "border-blue-500 bg-blue-500/5 font-bold text-blue-900 dark:text-blue-200" : "border-border bg-surface text-text-secondary"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment_plan"
+                      checked={payFullAmount}
+                      onChange={() => setPayFullAmount(true)}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <div className="text-xs">
+                      <span className="block font-bold">Pay 100% Full Order (₹{milestoneBreakdown.totalAmount.toLocaleString("en-IN")})</span>
+                      <span className="text-[10px] font-normal opacity-80">Clear full payment now for direct express dispatch</span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1351,22 +1707,41 @@ export default function CheckOut() {
               Order Pricing Summary
             </h3>
 
+            {/* Items in this order */}
+            <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1 divide-y divide-border/60 border-b border-border pb-3">
+              {cart.map((item) => (
+                <div key={item.cartItemId || item.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs">
+                  <div className="flex-1 pr-2">
+                    <p className="font-bold text-text-primary dark:text-white truncate">{item.kitName || item.title || "Solar Kit"}</p>
+                    <p className="text-[11px] text-text-muted font-medium">
+                      {item.qty} {item.qty === 1 ? 'kit' : 'kits'} × ₹{Number(item.ourPrice || 0).toLocaleString("en-IN")} / kit
+                    </p>
+                  </div>
+                  <span className="font-black text-text-primary dark:text-white">
+                    ₹{(Number(item.qty || 1) * Number(item.ourPrice || 0)).toLocaleString("en-IN")}
+                  </span>
+                </div>
+              ))}
+            </div>
+
             <div className="space-y-2 text-sm border-b border-border pb-3">
               <div className="flex justify-between text-text-secondary">
-                <span>Items Total (Excl. GST):</span>
+                <span>Items Base Subtotal (Excl. GST):</span>
                 <span className="font-semibold text-text-primary dark:text-white">
-                  ₹{getTaxBreakdown(subtotal).taxable.toLocaleString("en-IN")}
+                  ₹{subtotal.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary">
-                <span>GST ({getTaxBreakdown(subtotal).gstRate}%):</span>
+                <span>GST ({calculatedDiscounts.gstRate}%):</span>
                 <span className="font-semibold text-text-primary dark:text-white">
-                  ₹{getTaxBreakdown(subtotal).gstAmount.toLocaleString("en-IN")}
+                  +₹{(calculatedDiscounts.computedGst || 0).toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-text-secondary border-t border-border pt-2">
                 <span>Subtotal (Incl. GST):</span>
-                <span className="font-black text-text-primary dark:text-white">₹{subtotal.toLocaleString("en-IN")}</span>
+                <span className="font-black text-text-primary dark:text-white">
+                  ₹{(subtotal + (calculatedDiscounts.computedGst || 0)).toLocaleString("en-IN")}
+                </span>
               </div>
               <div className="flex justify-between text-text-secondary">
                 <span>Total Capacity:</span>
@@ -1394,11 +1769,37 @@ export default function CheckOut() {
               )}
             </div>
 
-            <div className="flex justify-between items-baseline pt-2">
-              <span className="font-black text-text-primary dark:text-white">Total Payable:</span>
-              <span className="text-2xl font-black text-primary">
-                ₹{calculatedDiscounts.finalTotal.toLocaleString("en-IN")}
-              </span>
+            <div className="space-y-2 pt-2 border-t border-border">
+              <div className="flex justify-between items-baseline">
+                <span className="text-xs text-text-secondary">Total Order Value:</span>
+                <span className="text-sm font-bold text-text-primary dark:text-white">
+                  ₹{calculatedDiscounts.finalTotal.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-amber-800 dark:text-amber-200">
+                    Milestone 1 Advance Due Now ({milestoneBreakdown.m1Pct}%):
+                  </span>
+                  <span className="font-black text-amber-800 dark:text-amber-200 text-sm">
+                    ₹{milestoneBreakdown.advanceAmount.toLocaleString("en-IN")}
+                  </span>
+                </div>
+                {!payFullAmount && (
+                  <div className="flex justify-between items-center text-[11px] text-text-secondary pt-1 border-t border-amber-500/10">
+                    <span>Milestone 2 Before Dispatch ({milestoneBreakdown.m2Pct}%):</span>
+                    <span className="font-bold text-text-primary dark:text-white">
+                      ₹{milestoneBreakdown.remainingAmount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between items-baseline pt-1">
+                <span className="font-black text-text-primary dark:text-white">Amount Due Today:</span>
+                <span className="text-2xl font-black text-primary">
+                  ₹{(payFullAmount ? calculatedDiscounts.finalTotal : milestoneBreakdown.advanceAmount).toLocaleString("en-IN")}
+                </span>
+              </div>
             </div>
           </div>
 

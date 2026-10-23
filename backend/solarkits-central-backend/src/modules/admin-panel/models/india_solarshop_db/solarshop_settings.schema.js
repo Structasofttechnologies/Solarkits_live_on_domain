@@ -27,6 +27,30 @@ const schema = new mongoose.Schema({
   combokit_bulk_panels_limit: { type: Number, default: 30 },
   gst_rate:                   { type: Number, default: 13.8 },
 
+  // ── Stage TATs & Procurement Settings ──────────────────────────────────────
+  payment_stage_tats: { type: mongoose.Schema.Types.Mixed, default: {} },
+  procurement_settings: {
+    production_tat_days:      { type: Number, default: 5 },
+    supply_tat_days:          { type: Number, default: 3 },
+    estimated_transport_cost: { type: Number, default: 0 },
+  },
+
+  // ── Centralized Order & Operational Stage Approval Workflow Settings ────────
+  approval_workflow_config: {
+    require_order_approval:            { type: Boolean, default: true },
+    require_po_approval:               { type: Boolean, default: true },
+    require_advance_payment_approval:  { type: Boolean, default: true },
+    require_balance_payment_approval:  { type: Boolean, default: true },
+    require_delivery_charge_approval:  { type: Boolean, default: true },
+    stage_tat_hours: {
+      order:          { type: Number, default: 24 },
+      po:             { type: Number, default: 24 },
+      first_payment:  { type: Number, default: 24 },
+      second_payment: { type: Number, default: 24 },
+      delivery:       { type: Number, default: 12 },
+    }
+  },
+
   // ── Phase R1: Territory Exclusivity Policy ──────────────────────────────────
   /**
    * territory_exclusivity_mode:

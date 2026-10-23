@@ -191,5 +191,89 @@ export const getOrderStageDetails = async (orderType, id) => {
   return res.data;
 };
 
+export const getOfflineOrdersForVerification = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/offline-orders${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const verifyFpoOrderPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/fpo-orders/${id}/verify-payment`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getUnifiedEpcOrders = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/epc-orders-unified${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const checkDuplicateUtr = async (utr, excludeOrderId = null) => {
+  const params = { utr };
+  if (excludeOrderId) params.exclude_order_id = excludeOrderId;
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/epc-orders/check-duplicate-utr?${query}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const accountsVerifyEpcPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/accounts-verify`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const adminApproveEpcPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/epc-orders/${id}/admin-approve`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getPaymentTatConfig = async () => {
+  const res = await axios.get(`${BASE_URL}/epc-orders/tat-config`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const updatePaymentTatConfig = async (data) => {
+  const res = await axios.put(`${BASE_URL}/epc-orders/tat-config`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+// ── Customer Payment & Follow-up API Methods ────────────────────────────────
+export const getCustomerPaymentFollowups = async (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await axios.get(`${BASE_URL}/customer-payment-followups${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const logCustomerPaymentFollowup = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/customer-payment-followups/${id}/log`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const recordMilestoneTwoPayment = async (id, data) => {
+  const res = await axios.post(`${BASE_URL}/customer-payment-followups/${id}/record-payment`, data, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 
 

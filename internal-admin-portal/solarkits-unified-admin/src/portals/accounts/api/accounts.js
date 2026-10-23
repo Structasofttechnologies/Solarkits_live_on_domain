@@ -270,3 +270,164 @@ export const createCombinedSupplierPayment = async (payload) => {
   });
   return res.data;
 };
+
+// ── New Orders & Bulk Procurement Grouping ──────────────────────────────────
+
+export const getEligibleNewOrders = async (params = {}) => {
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== ''))
+  ).toString();
+  const url = `${API_URL}/accounts/new-orders${query ? `?${query}` : ''}`;
+  const res = await axios.get(url, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getNewOrdersFilterOptions = async () => {
+  const res = await axios.get(`${API_URL}/accounts/new-orders/filter-options`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getVehiclesMaster = async () => {
+  const res = await axios.get(`${API_URL}/accounts/vehicles-master`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const calculateProcurementGrouping = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement-groups/calculate`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const submitProcurementGroup = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement-groups`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getProcurementGroups = async (params = {}) => {
+  const cleanParams = Object.fromEntries(
+    Object.entries(params || {}).filter(([_, v]) => v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null')
+  );
+  const query = new URLSearchParams(cleanParams).toString();
+  const res = await axios.get(`${API_URL}/accounts/procurement-groups${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+// ── Dedicated Procurement Module APIs ───────────────────────────────────────
+export const getBatchReadyOrders = async (params = {}) => {
+  const cleanParams = Object.fromEntries(
+    Object.entries(params || {}).filter(([_, v]) => v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null')
+  );
+  const query = new URLSearchParams(cleanParams).toString();
+  const res = await axios.get(`${API_URL}/accounts/procurement/batch-ready-orders${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const calculateProcurementBom = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/bom-calculate`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const reserveInventoryStock = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/reserve-stock`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const releaseInventoryStock = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/release-stock`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const createPurchaseIndent = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/purchase-indents`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getPurchaseIndents = async (params = {}) => {
+  const cleanParams = Object.fromEntries(
+    Object.entries(params || {}).filter(([_, v]) => v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null')
+  );
+  const query = new URLSearchParams(cleanParams).toString();
+  const res = await axios.get(`${API_URL}/accounts/procurement/purchase-indents${query ? `?${query}` : ''}`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const requestSupplierPayment = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/payments/request`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const adminApproveSupplierPayment = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/payments/approval`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const recordBankPayment = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/payments/bank-record`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const saveSupplyFulfilment = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/fulfilment-method`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const supplierUpdateDispatch = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/supplier-dispatch`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const warehouseConfirmInward = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/inward-verify`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const handoverToDeliveryManager = async (payload) => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/handover-delivery`, payload, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+export const getProcurementPartners = async () => {
+  const res = await axios.get(`${API_URL}/accounts/procurement/partners`, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
+

@@ -40,6 +40,9 @@ export const getRelatedProducts = (industry_type_id, page = 1, limit = 20) =>
 
 // ── Analytics (fire-and-forget) ───────────────────────────────────────────────
 
+const BACKEND_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
+const ADMIN_API_BASE = import.meta.env.VITE_ADMIN_API_URL || `${BACKEND_BASE}/admin-api`;
+
 /**
  * Track content interaction event. Silently fails if request errors.
  * @param {object} payload - { content_id, industry_type_id, event_type, placement, device_type }
@@ -47,13 +50,12 @@ export const getRelatedProducts = (industry_type_id, page = 1, limit = 20) =>
 export const trackContentEvent = (payload) => {
   // Fire-and-forget — use navigator.sendBeacon if available for better reliability
   try {
-    const base = import.meta.env.VITE_ADMIN_API_URL || 'http://localhost:4000/admin-api';
     const data = JSON.stringify(payload);
     if (navigator.sendBeacon) {
       const blob = new Blob([data], { type: 'application/json' });
-      navigator.sendBeacon(`${base}/industry-content/analytics/track`, blob);
+      navigator.sendBeacon(`${ADMIN_API_BASE}/industry-content/analytics/track`, blob);
     } else {
-      api.post(`${base}/industry-content/analytics/track`, payload).catch(() => {});
+      api.post(`${ADMIN_API_BASE}/industry-content/analytics/track`, payload).catch(() => {});
     }
   } catch (_) { /* silent */ }
 };

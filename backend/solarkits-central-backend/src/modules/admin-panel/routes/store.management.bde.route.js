@@ -13,14 +13,14 @@ const check_permissions = require('../middlewares/check.permissions');
 const handler = require('../controller/store.management.bde.handler');
 
 const VIEW_PERMISSIONS = [
-  { unique_code: 'STR_MGMT', permissions: ['view'] },
   { unique_code: 'RSL_MGMT', permissions: ['view'] },
+  { unique_code: 'STR_MGMT', permissions: ['view'] },
   { unique_code: 'BDE_MGMT', permissions: ['view'] },
 ];
 
 const EDIT_PERMISSIONS = [
-  { unique_code: 'STR_MGMT', permissions: ['edit'] },
   { unique_code: 'RSL_MGMT', permissions: ['edit'] },
+  { unique_code: 'STR_MGMT', permissions: ['edit'] },
   { unique_code: 'BDE_MGMT', permissions: ['edit'] },
 ];
 

@@ -48,6 +48,7 @@ const {
   FranchiseeAlert,
   EpcSignupRequest,
 } = require('../../admin-panel/models/india_solarshop_db');
+const EpcAccountLocation = require('../models/india_solarshop_db/epc_account_locations.schema');
 const { EpcCompany } = require('../../admin-panel/models/india_core_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
 const { generate_token } = require('../utils/jsonwebtoken');
@@ -824,6 +825,108 @@ exports.create_epc_lead = async (req, res) => {
   }
 };
 
+/**
+ * Auto-syncs any EPC accounts (e.g. onboarded via GST Wizard or Reseller) into EPCLead records
+ * so they appear seamlessly in the EPC Leads Pipeline.
+ */
+async function _syncOnboardedEpcAccountsToLeads(bdeId, territory) {
+  try {
+    const stateName = territory?.state_name;
+    const accountFilter = {
+      deleted_at: null,
+      $or: [
+        { onboarded_by_bde_id: bdeId },
+        { onboarding_source: 'bde' },
+      ],
+    };
+    if (stateName) {
+      accountFilter.$or.push({ state_name: new RegExp(`^${stateName.trim()}$`, 'i'), gstin: { $ne: null } });
+    }
+
+    const accounts = await EpcAccount.find(accountFilter).lean();
+    for (const acc of accounts) {
+      const matchQuery = {
+        deleted_at: null,
+        $or: [
+          { onboarded_epc_account_id: acc._id },
+          ...(acc.gstin ? [{ gst_number: acc.gstin.trim().toUpperCase() }] : []),
+          ...(acc.email ? [{ email: acc.email.trim().toLowerCase() }] : []),
+        ],
+      };
+
+      const existingLead = await EPCLead.findOne(matchQuery);
+      let targetFranchisee = null;
+      if (acc.primary_reseller_id) {
+        targetFranchisee = await Reseller.findById(acc.primary_reseller_id).select('business_name reseller_code').lean();
+      }
+
+      const assignedResellerId = acc.primary_reseller_id || null;
+      const assignedResellerName = targetFranchisee?.business_name || null;
+      const leadStatus = assignedResellerId ? 'Assigned to Franchisee' : 'Onboarded';
+
+      const validSources = ['direct_visit', 'phone_call', 'referral', 'trade_show', 'digital', 'cold_outreach', 'portal', 'head_office_assigned'];
+      const leadSource = validSources.includes(acc.onboarding_source) ? acc.onboarding_source : 'portal';
+
+      if (!existingLead) {
+        const leadId = await _generateNextEpcLeadId();
+        await EPCLead.create({
+          lead_id: leadId,
+          company_name: acc.company_name || acc.name || 'EPC Contractor',
+          contact_person: acc.contact_person || acc.name || 'Contact Person',
+          mobile_number: acc.mobile || acc.whatsapp || '',
+          email: acc.email || '',
+          gst_number: acc.gstin ? acc.gstin.trim().toUpperCase() : null,
+          gst_verified: Boolean(acc.gstin),
+          state_name: acc.state_name || stateName || 'Gujarat',
+          district_name: acc.district_name || 'Ahmedabad',
+          pincode: acc.pincode || null,
+          address_line: acc.address || null,
+          lead_source: leadSource,
+          interested_products: ['Residential On-Grid'],
+          created_by_bde_id: acc.onboarded_by_bde_id || bdeId,
+          current_bde_id: acc.onboarded_by_bde_id || bdeId,
+          lead_status: leadStatus,
+          onboarded_at: acc.created_at || new Date(),
+          onboarded_epc_account_id: acc._id,
+          onboarded_epc_company_id: acc.company_id || null,
+          assigned_franchisee_id: assignedResellerId,
+          assigned_franchisee_name: assignedResellerName,
+          history: [
+            {
+              activity_type: 'status_change',
+              notes: `EPC Account synced to Pipeline${assignedResellerName ? ` (Franchisee: ${assignedResellerName})` : ''}`,
+              actor_id: bdeId,
+              actor_name: 'System Sync',
+              new_status: leadStatus,
+            },
+          ],
+        });
+      } else {
+        // If existing lead is missing onboarded link or status is outdated
+        const updates = {};
+        if (!existingLead.onboarded_epc_account_id) updates.onboarded_epc_account_id = acc._id;
+        if (!existingLead.onboarded_epc_company_id && acc.company_id) updates.onboarded_epc_company_id = acc.company_id;
+        if (!existingLead.gst_number && acc.gstin) updates.gst_number = acc.gstin;
+        if (!existingLead.assigned_franchisee_id && assignedResellerId) {
+          updates.assigned_franchisee_id = assignedResellerId;
+          updates.assigned_franchisee_name = assignedResellerName;
+        }
+        if (acc.state_name && existingLead.state_name !== acc.state_name) updates.state_name = acc.state_name;
+        if (acc.district_name && existingLead.district_name !== acc.district_name) updates.district_name = acc.district_name;
+        if (!existingLead.address_line && acc.address) updates.address_line = acc.address;
+        if (existingLead.lead_status !== 'Assigned to Franchisee' && existingLead.lead_status !== 'Onboarded') {
+          updates.lead_status = leadStatus;
+        }
+        if (Object.keys(updates).length > 0) {
+          await EPCLead.updateOne({ _id: existingLead._id }, { $set: updates });
+        }
+      }
+    }
+  } catch (syncErr) {
+    console.error('[_syncOnboardedEpcAccountsToLeads Error]', syncErr);
+  }
+}
+
 exports.list_epc_leads = async (req, res) => {
   try {
     const bdeId = req.user.id;
@@ -833,18 +936,21 @@ exports.list_epc_leads = async (req, res) => {
     const stateName = territory?.state_name;
     const districtNames = territory?.district_names || [];
 
-    const query = { deleted_at: null };
+    // Ensure all onboarded EPC accounts in this scope have an EPCLead entry
+    await _syncOnboardedEpcAccountsToLeads(bdeId, territory);
+
+    const baseQuery = { deleted_at: null };
 
     // Scoping
     if (stateName) {
-      query.$or = [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }];
+      baseQuery.$or = [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }];
     } else {
-      query.current_bde_id = bdeId;
+      baseQuery.current_bde_id = bdeId;
     }
 
     if (search && search.trim()) {
       const s = search.trim();
-      query.$and = [
+      baseQuery.$and = [
         {
           $or: [
             { company_name: { $regex: s, $options: 'i' } },
@@ -858,21 +964,23 @@ exports.list_epc_leads = async (req, res) => {
       ];
     }
 
+    if (district && district !== 'all') {
+      baseQuery.district_name = new RegExp(`^${district}$`, 'i');
+    }
+    if (state && state !== 'all') {
+      baseQuery.state_name = new RegExp(`^${state}$`, 'i');
+    }
+    if (franchisee && franchisee !== 'all') {
+      baseQuery.assigned_franchisee_id = franchisee;
+    }
+
+    const query = { ...baseQuery };
     if (status && status !== 'all') {
       query.lead_status = status;
     }
-    if (district && district !== 'all') {
-      query.district_name = new RegExp(`^${district}$`, 'i');
-    }
-    if (state && state !== 'all') {
-      query.state_name = new RegExp(`^${state}$`, 'i');
-    }
-    if (franchisee && franchisee !== 'all') {
-      query.assigned_franchisee_id = franchisee;
-    }
 
     const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
-    const [leads, total] = await Promise.all([
+    const [leads, total, totalAll] = await Promise.all([
       EPCLead.find(query)
         .populate('assigned_franchisee_id', 'business_name reseller_code mobile')
         .sort({ created_at: -1 })
@@ -880,9 +988,10 @@ exports.list_epc_leads = async (req, res) => {
         .limit(parseInt(limit, 10))
         .lean(),
       EPCLead.countDocuments(query),
+      EPCLead.countDocuments(baseQuery),
     ]);
 
-    // Counts per status stage
+    // Counts per status stage (computed across baseQuery so tabs always show counts)
     const stages = [
       'New',
       'Contacted',
@@ -898,15 +1007,17 @@ exports.list_epc_leads = async (req, res) => {
 
     const stageCounts = {};
     for (const st of stages) {
-      stageCounts[st] = await EPCLead.countDocuments({ ...query, lead_status: st });
+      stageCounts[st] = await EPCLead.countDocuments({ ...baseQuery, lead_status: st });
     }
 
     return res.status(200).json({
       status: 'success',
       data: leads,
       stage_counts: stageCounts,
+      total_all_leads: totalAll,
       pagination: {
-        total,
+        total: totalAll,
+        filtered_total: total,
         page: parseInt(page, 10),
         limit: parseInt(limit, 10),
         pages: Math.ceil(total / parseInt(limit, 10)) || 1,
@@ -1276,9 +1387,48 @@ exports.onboard_epc_with_gst = async (req, res) => {
       }
     }
 
+    const gstPrefix = cleanGst ? cleanGst.substring(0, 2) : null;
+    const gstStateName = gstPrefix ? GST_STATE_CODE_MAP[gstPrefix] : null;
     const territory = await _getBdeTerritoryScope(bdeId);
-    const resolvedState = state_name || territory?.state_name || 'Maharashtra';
-    const resolvedDistrict = district_name || (territory?.district_names && territory.district_names[0]) || 'Pune';
+    const resolvedState = state_name || gstStateName || territory?.state_name || 'Gujarat';
+
+    // Geolocation matching
+    const geoState = await GeoLevel1.findOne({ name: new RegExp(`^${resolvedState.trim()}$`, 'i') }).lean();
+    let geoDistrict = null;
+
+    if (geoState) {
+      if (district_name && district_name.trim()) {
+        geoDistrict = await GeoLevel2.findOne({
+          level_1: geoState._id,
+          name: new RegExp(`^${district_name.trim()}$`, 'i'),
+        }).lean();
+      }
+
+      // If district wasn't found or if address has a matching district in this state
+      if ((!geoDistrict || geoDistrict.name === 'Ahmedabad') && address) {
+        const districtsInState = await GeoLevel2.find({ level_1: geoState._id, is_active: true }).lean();
+        const combinedText = (address + ' ' + (district_name || '')).toLowerCase();
+        const sorted = [...districtsInState].sort((a, b) => b.name.length - a.name.length);
+        for (const d of sorted) {
+          const dName = d.name.trim().toLowerCase();
+          const reg = new RegExp(`(\\b|,|\\s)${dName}(\\b|,|\\s)`, 'i');
+          if (reg.test(combinedText) || combinedText.includes(dName)) {
+            geoDistrict = d;
+            break;
+          }
+        }
+      }
+
+      if (!geoDistrict) {
+        geoDistrict = await GeoLevel2.findOne({
+          level_1: geoState._id,
+          name: new RegExp(`^${(district_name || (territory?.district_names && territory.district_names[0]) || 'Ahmedabad').trim()}$`, 'i'),
+        }).lean();
+      }
+    }
+
+    const finalStateName = geoState ? geoState.name : resolvedState;
+    const finalDistrictName = geoDistrict ? geoDistrict.name : (district_name || 'Ahmedabad');
 
     // Auto-detect district franchise if not passed
     let targetFranchisee = null;
@@ -1288,12 +1438,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
         .lean();
     }
     if (!targetFranchisee) {
-      targetFranchisee = await _findDistrictFranchisee(resolvedDistrict, resolvedState);
+      targetFranchisee = await _findDistrictFranchisee(finalDistrictName, finalStateName);
     }
-
-    // Geolocation matching
-    const geoState = await GeoLevel1.findOne({ name: new RegExp(`^${resolvedState.trim()}$`, 'i') }).lean();
-    const geoDistrict = await GeoLevel2.findOne({ name: new RegExp(`^${resolvedDistrict.trim()}$`, 'i') }).lean();
 
     // 1. Create or Find EpcCompany in Core DB
     let epcCompany = await EpcCompany.findOne({ email: cleanEmail, deleted_at: null });
@@ -1327,8 +1473,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
       password_hash: passwordHash,
       states: geoState ? [geoState._id] : (territory?.state_id ? [territory.state_id] : []),
       districts: geoDistrict ? [geoDistrict._id] : [],
-      state_name: resolvedState,
-      district_name: resolvedDistrict,
+      state_name: finalStateName,
+      district_name: finalDistrictName,
       address: address ? address.trim() : null,
       pincode: pincode ? pincode.trim() : null,
       status: 'pending', // Pending Admin Approval
@@ -1339,6 +1485,21 @@ exports.onboard_epc_with_gst = async (req, res) => {
       onboarded_by_reseller_id: assignedResellerId,
     });
 
+    // 3b. Create EpcAccountLocation for reliable primary location resolution
+    if (geoState && geoDistrict) {
+      await EpcAccountLocation.findOneAndUpdate(
+        { account_id: epcAccount._id, is_primary: true },
+        {
+          account_id: epcAccount._id,
+          state_id: geoState._id,
+          district_id: geoDistrict._id,
+          is_primary: true,
+          deleted_at: null,
+        },
+        { upsert: true, new: true }
+      );
+    }
+
     // 4. Create EpcSignupRequest for Admin Approval at /admin-panel/solar-shop/india/approve-new-epc
     const signupRequest = await EpcSignupRequest.create({
       account_id: epcAccount._id,
@@ -1348,8 +1509,8 @@ exports.onboard_epc_with_gst = async (req, res) => {
       status: 'pending',
       state_id: geoState?._id || territory?.state_id || null,
       district_id: geoDistrict?._id || null,
-      state_name: resolvedState,
-      district_name: resolvedDistrict,
+      state_name: finalStateName,
+      district_name: finalDistrictName,
       gstin: cleanGst,
       onboarding_source: 'bde',
       onboarded_by_bde_id: bdeId,
@@ -1360,17 +1521,87 @@ exports.onboard_epc_with_gst = async (req, res) => {
       auto_assigned: Boolean(assignedResellerId),
     });
 
-    // 5. Update EPCLead if linked
+    // 5. Update or Create EPCLead
+    let linkedLead = null;
     if (lead_id) {
-      await EPCLead.findByIdAndUpdate(lead_id, {
+      linkedLead = await EPCLead.findById(lead_id);
+    }
+    if (!linkedLead && cleanGst) {
+      linkedLead = await EPCLead.findOne({ gst_number: cleanGst, deleted_at: null });
+    }
+    if (!linkedLead && (cleanEmail || cleanMobile)) {
+      linkedLead = await EPCLead.findOne({
+        deleted_at: null,
+        $or: [
+          ...(cleanEmail ? [{ email: cleanEmail }] : []),
+          ...(cleanMobile ? [{ mobile_number: cleanMobile }] : []),
+        ],
+      });
+    }
+
+    const finalLeadStatus = assignedResellerId ? 'Assigned to Franchisee' : 'Onboarded';
+
+    if (linkedLead) {
+      await EPCLead.findByIdAndUpdate(linkedLead._id, {
+        company_name: cleanName,
+        contact_person: contact_person ? contact_person.trim() : linkedLead.contact_person,
+        mobile_number: cleanMobile,
+        email: cleanEmail,
         gst_number: cleanGst,
         gst_verified: true,
-        lead_status: 'Under Verification',
+        state_name: finalStateName,
+        district_name: finalDistrictName,
+        pincode: pincode ? pincode.trim() : linkedLead.pincode,
+        address_line: address ? address.trim() : linkedLead.address_line,
+        lead_status: finalLeadStatus,
         onboarded_at: new Date(),
         onboarded_epc_account_id: epcAccount._id,
         onboarded_epc_company_id: epcCompany._id,
         assigned_franchisee_id: assignedResellerId,
         assigned_franchisee_name: assignedResellerName,
+        $push: {
+          history: {
+            activity_type: 'status_change',
+            notes: `EPC Onboarded via GST Wizard by BDE ${req.user.full_name || 'BDE'}${assignedResellerName ? ` (Auto-assigned to Franchisee ${assignedResellerName})` : ''}`,
+            actor_id: bdeId,
+            actor_name: req.user.full_name || 'BDE Representative',
+            new_status: finalLeadStatus,
+          },
+        },
+      });
+    } else {
+      const newLeadId = await _generateNextEpcLeadId();
+      await EPCLead.create({
+        lead_id: newLeadId,
+        company_name: cleanName,
+        contact_person: contact_person ? contact_person.trim() : cleanName,
+        mobile_number: cleanMobile,
+        email: cleanEmail,
+        gst_number: cleanGst,
+        gst_verified: true,
+        state_name: finalStateName,
+        district_name: finalDistrictName,
+        pincode: pincode ? pincode.trim() : null,
+        address_line: address ? address.trim() : null,
+        lead_source: 'portal',
+        interested_products: ['Residential On-Grid'],
+        created_by_bde_id: bdeId,
+        current_bde_id: bdeId,
+        lead_status: finalLeadStatus,
+        onboarded_at: new Date(),
+        onboarded_epc_account_id: epcAccount._id,
+        onboarded_epc_company_id: epcCompany._id,
+        assigned_franchisee_id: assignedResellerId,
+        assigned_franchisee_name: assignedResellerName,
+        history: [
+          {
+            activity_type: 'status_change',
+            notes: `EPC Onboarded via GST Wizard by BDE ${req.user.full_name || 'BDE'}${assignedResellerName ? ` (Auto-assigned to Franchisee ${assignedResellerName})` : ''}`,
+            actor_id: bdeId,
+            actor_name: req.user.full_name || 'BDE Representative',
+            new_status: finalLeadStatus,
+          },
+        ],
       });
     }
 

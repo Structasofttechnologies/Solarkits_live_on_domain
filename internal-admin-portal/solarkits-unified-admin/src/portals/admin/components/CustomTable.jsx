@@ -1,3 +1,4 @@
+import React from "react";
 import { motion } from "framer-motion";
 import { FiInbox } from "react-icons/fi";
 import Loader from "./Loader";
@@ -61,6 +62,16 @@ const CustomTable = ({
                   const rendered = renderRow(item, index);
                   if (rendered && (rendered.type === 'tr' || rendered.type === motion.tr || rendered.type?.name === 'motion.tr')) {
                     return rendered;
+                  }
+                  const isFragment = rendered && (rendered.type === React.Fragment || rendered.type === Symbol.for('react.fragment'));
+                  if (isFragment) {
+                    const children = React.Children.toArray(rendered.props?.children);
+                    const hasTr = children.some(
+                      (child) => child && (child.type === 'tr' || child.type === motion.tr || child.type?.name === 'motion.tr')
+                    );
+                    if (hasTr) {
+                      return rendered;
+                    }
                   }
                   return (
                     <motion.tr

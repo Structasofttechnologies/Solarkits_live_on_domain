@@ -26,6 +26,23 @@ import { setAlert } from "../../../features/alert.slice";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
+const getOrderTypeDisplay = (type) => {
+  let types = [];
+  if (Array.isArray(type)) types = type;
+  else if (typeof type === "string") types = type === "both" ? ["po_order", "loose_order"] : type.split(",").map((s) => s.trim());
+  else types = ["po_order"];
+
+  const map = {
+    loose_order: "Loose Order",
+    combine_po_order: "Combine PO Order",
+    combined_po_orders: "Combine PO Order",
+    po_order: "PO Order",
+  };
+
+  const labels = types.map((t) => map[t]).filter(Boolean);
+  return labels.length > 0 ? labels.join(", ") : "PO Order";
+};
+
 export default function StoreCreationWizard() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -71,14 +88,19 @@ export default function StoreCreationWizard() {
         const [plansRes, subtypesRes, bdesRes, whRes] = await Promise.all([
           axios.get(`${API_BASE}/resellers/plans/list?active_only=true`, { headers }),
           axios.get(`${API_BASE}/store-management/subtypes/list?active_only=true`, { headers }),
-          axios.get(`${API_BASE}/store-management/bde/list`, { headers }),
+          axios
+            .get(`${API_BASE}/store-management/bde/list?unique_id=RSL_MGMT&req_for=view`, { headers })
+            .catch(() =>
+              axios.get(`${API_BASE}/bde/list?unique_id=RSL_MGMT&req_for=view&limit=100`, { headers }).catch(() => null)
+            ),
           axios.get(`${API_BASE}/store-management/warehouses/list?active_only=true`, { headers }),
         ]);
 
-        if (plansRes.data?.data) setPlans(plansRes.data.data);
-        if (subtypesRes.data?.data) setSubtypes(subtypesRes.data.data);
-        if (bdesRes.data?.data) setBdes(bdesRes.data.data);
-        if (whRes.data?.data) setWarehouses(whRes.data.data);
+        if (plansRes?.data?.data) setPlans(plansRes.data.data);
+        if (subtypesRes?.data?.data) setSubtypes(subtypesRes.data.data);
+        const loadedBdes = bdesRes?.data?.data || bdesRes?.data?.coordinators || [];
+        if (loadedBdes) setBdes(loadedBdes);
+        if (whRes?.data?.data) setWarehouses(whRes.data.data);
       } catch (err) {
         console.error("Failed to load setup metadata:", err);
         dispatch(
@@ -202,9 +224,11 @@ export default function StoreCreationWizard() {
         warehouse_id: formData.warehouse_id || undefined,
       };
 
-      const res = await axios.post(`${API_BASE}/store-management/onboarding/create`, payload, {
-        headers: authHeaderObj(),
-      });
+      const res = await axios.post(
+        `${API_BASE}/store-management/onboarding/create?unique_id=RSL_MGMT&req_for=add`,
+        payload,
+        { headers: authHeaderObj() }
+      );
 
       if (res.data?.status === "success") {
         dispatch(
@@ -218,13 +242,18 @@ export default function StoreCreationWizard() {
       }
     } catch (err) {
       console.error("Store creation failed:", err);
+      const errorMsg = err.response?.data?.message || "Failed to initialize store.";
       dispatch(
         setAlert({
           show: true,
           type: "error",
-          message: err.response?.data?.message || "Failed to initialize store.",
+          message: errorMsg,
         })
       );
+      if (err.response?.status === 409) {
+        // Conflict on mobile or email: switch user back to Step 2 to fix it
+        setCurrentStep(2);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -407,6 +436,10 @@ export default function StoreCreationWizard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredPlans.map((p) => {
                       const isSelected = formData.plan_id === (p.id || p._id);
+                      const feeAmount = p.setup_cost_amount != null ? Number(p.setup_cost_amount) : Number(p.one_time_fee || 0);
+                      const hasSetupCost = p.setup_cost_enabled !== false && feeAmount > 0;
+                      const isCommissionOn = p.commission_enabled !== false;
+
                       return (
                         <div
                           key={p.id || p._id}
@@ -414,38 +447,53 @@ export default function StoreCreationWizard() {
                           className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
                             isSelected
                               ? "border-amber-500 bg-amber-50/40 dark:bg-amber-950/20 shadow-sm"
-                              : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                              : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-bold text-slate-900 dark:text-white">{p.name}</span>
+                          <div className="flex items-center justify-between mb-2 gap-2">
+                            <div>
+                              <div className="font-bold text-slate-900 dark:text-white">{p.name}</div>
+                              {p.slug && <div className="text-[11px] text-slate-400 font-mono">{p.slug}</div>}
+                            </div>
                             <span
-                              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                                p.setup_cost_enabled
-                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 border ${
+                                hasSetupCost
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+                                  : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
                               }`}
                             >
-                              {p.setup_cost_enabled ? `₹${(p.setup_cost_amount || 0).toLocaleString()} Setup Fee` : "Zero Setup Cost"}
+                              {hasSetupCost ? `₹${feeAmount.toLocaleString("en-IN")} Setup Fee` : "Zero Setup Cost"}
                             </span>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400 mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
                             <div>
                               <span className="text-slate-400">Commission:</span>{" "}
-                              <span className="font-semibold">{p.commission_enabled ? "Enabled" : "Disabled"}</span>
+                              <span className={`font-semibold ${isCommissionOn ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"}`}>
+                                {isCommissionOn ? "Enabled" : "Disabled"}
+                              </span>
                             </div>
                             <div>
                               <span className="text-slate-400">Order Allocation:</span>{" "}
-                              <span className="font-semibold uppercase">{p.order_type_allocation || "Loose & PO"}</span>
+                              <span className="font-semibold">{getOrderTypeDisplay(p.order_type_allowed || p.order_type_allocation)}</span>
                             </div>
                             <div>
                               <span className="text-slate-400">EPC Scope:</span>{" "}
-                              <span className="font-semibold capitalize">{p.epc_onboarding_scope || "District"}</span>
+                              <span className="font-semibold capitalize">{p.epc_onboarding_scope || p.territory_level || "District"}</span>
                             </div>
                             <div>
-                              <span className="text-slate-400">Billing:</span>{" "}
-                              <span className="font-semibold capitalize">{p.billing_cycle || "Annual"}</span>
+                              <span className="text-slate-400">Warehouse Req:</span>{" "}
+                              <span className="font-semibold">
+                                {p.warehouse_required
+                                  ? `${p.warehouse_count || 1} WH${p.warehouse_space_sqft > 0 ? ` (${Number(p.warehouse_space_sqft).toLocaleString("en-IN")} sq.ft.)` : ""}`
+                                  : "No WH Req."}
+                              </span>
+                            </div>
+                            <div className="col-span-2 pt-1 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
+                              <span className="text-slate-400">Plan Validity:</span>{" "}
+                              <span className="font-medium text-slate-600 dark:text-slate-300">
+                                {p.validity_value ? `${p.validity_value} ${p.validity_unit || "years"}` : (p.billing_cycle || "Annual")}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -690,7 +738,7 @@ export default function StoreCreationWizard() {
                       <option value="">-- Select BDE Profile --</option>
                       {bdes.map((b) => (
                         <option key={b.id || b._id} value={b.id || b._id}>
-                          {b.name} ({b.employee_id || "No ID"}) — {b.mobile}
+                          {b.name || b.full_name} ({b.employee_id || b.bde_id || "BDE"}){b.mobile || b.mobile_number ? ` — ${b.mobile || b.mobile_number}` : ""}
                         </option>
                       ))}
                     </select>
@@ -753,12 +801,26 @@ export default function StoreCreationWizard() {
                     <div className="flex justify-between">
                       <span className="text-slate-500">Setup Fee:</span>
                       <span className="font-semibold">
-                        {selectedPlan?.setup_cost_enabled ? `₹${(selectedPlan.setup_cost_amount || 0).toLocaleString()}` : "Zero Fee"}
+                        {(selectedPlan?.setup_cost_enabled !== false && ((selectedPlan?.setup_cost_amount || 0) > 0 || (selectedPlan?.one_time_fee || 0) > 0))
+                          ? `₹${Number(selectedPlan.setup_cost_amount || selectedPlan.one_time_fee || 0).toLocaleString("en-IN")}`
+                          : "Zero Fee"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Commission:</span>
-                      <span className="font-semibold">{selectedPlan?.commission_enabled ? "Enabled" : "Disabled"}</span>
+                      <span className="font-semibold">{selectedPlan?.commission_enabled !== false ? "Enabled" : "Disabled"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Order Allocation:</span>
+                      <span className="font-semibold">{getOrderTypeDisplay(selectedPlan?.order_type_allowed || selectedPlan?.order_type_allocation)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Warehouse Req:</span>
+                      <span className="font-semibold">
+                        {selectedPlan?.warehouse_required
+                          ? `${selectedPlan.warehouse_count || 1} WH${selectedPlan.warehouse_space_sqft > 0 ? ` (${Number(selectedPlan.warehouse_space_sqft).toLocaleString("en-IN")} sq.ft.)` : ""}`
+                          : "No WH Req."}
+                      </span>
                     </div>
                   </div>
 
@@ -798,7 +860,9 @@ export default function StoreCreationWizard() {
                     <div className="flex justify-between">
                       <span className="text-slate-500">Assigned BDE:</span>
                       <span className="font-semibold">
-                        {bdes.find((b) => (b.id || b._id) === (formData.company_store_bde_id || formData.bde_id))?.name || "Pending Assignment"}
+                        {bdes.find((b) => (b.id || b._id) === (formData.company_store_bde_id || formData.bde_id))?.name ||
+                         bdes.find((b) => (b.id || b._id) === (formData.company_store_bde_id || formData.bde_id))?.full_name ||
+                         "Pending Assignment"}
                       </span>
                     </div>
                     <div className="flex justify-between">

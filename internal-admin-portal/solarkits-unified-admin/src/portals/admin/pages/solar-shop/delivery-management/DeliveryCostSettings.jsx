@@ -190,38 +190,16 @@ export default function DeliveryCostSettings() {
       const rawKits = Array.isArray(fetchedKits) ? fetchedKits : (fetchedKits?.data || []);
       rawKits.forEach((k) => {
         const id = getCleanId(k);
-        if (id) combinedKitsMap.set(id, k);
-      });
-
-      (kwRes?.data || []).forEach((w) => {
-        const kId = getCleanId(w.kit_id?._id || w.kit_id);
-        if (kId && !combinedKitsMap.has(kId)) {
-          combinedKitsMap.set(kId, {
-            _id: kId,
-            name: w.kit_name || w.kit_id?.name || 'Solar Kit',
-            capacity: w.capacity_kw || w.kit_id?.capacity || 0,
-          });
-        }
+        if (id && !k.deleted_at && k.is_active !== false) combinedKitsMap.set(id, k);
       });
 
       (kwRes?.unconfigured_kits || []).forEach((u) => {
         const kId = getCleanId(u._id || u.id);
-        if (kId && !combinedKitsMap.has(kId)) {
+        if (kId && !combinedKitsMap.has(kId) && !u.deleted_at && u.is_active !== false) {
           combinedKitsMap.set(kId, {
             _id: kId,
             name: u.name || 'Solar Kit',
             capacity: u.capacity || 0,
-          });
-        }
-      });
-
-      (rRes?.data || []).forEach((r) => {
-        const kId = getCleanId(r.kit_id);
-        if (kId && !combinedKitsMap.has(kId)) {
-          combinedKitsMap.set(kId, {
-            _id: kId,
-            name: r.kit_id?.name || 'Solar Kit',
-            capacity: r.kit_id?.capacity || 0,
           });
         }
       });

@@ -545,10 +545,16 @@ exports.bulk_delete_benchmarks = async (req, res) => {
 exports.get_kit_rules = async (req, res) => {
   try {
     const list = await KitDeliveryCostRule.find({ deleted_at: null })
-      .populate('kit_id', 'name capacity')
+      .populate({
+        path: 'kit_id',
+        match: { deleted_at: null },
+        select: 'name capacity deleted_at is_active'
+      })
       .populate('vehicle_master_id', 'name max_load_kg')
       .sort({ created_at: -1 })
       .lean();
+
+    const activeList = list.filter((r) => r.kit_id && !r.kit_id.deleted_at);
 
     // Fetch active combokit weights to enrich/fallback shipment_weight_kg
     const allWeights = await ComboKitWeightMaster.find({ deleted_at: null }).lean();
@@ -559,7 +565,7 @@ exports.get_kit_rules = async (req, res) => {
       }
     }
 
-    const enrichedList = list.map((r) => {
+    const enrichedList = activeList.map((r) => {
       const kitIdStr = r.kit_id?._id?.toString() || r.kit_id?.toString();
       const unitWeight = weightMap[kitIdStr] || 0;
       let shipmentWeight = unitWeight > 0
@@ -1080,3 +1086,44 @@ exports.get_warehouses_list = async (req, res) => {
     return res.status(500).json({ status: 'error', message: err.message });
   }
 };
+
+// ─── 15. DELIVERY COST APPROVAL QUEUE & ADMIN ACTIONS ─────────────────────────
+exports.get_delivery_approval_queue = async (req, res) => {
+  try {
+    const result = await deliveryService.getDeliveryApprovalQueue(req.query);
+    return res.status(200).json({ status: 'success', data: result });
+  } catch (err) {
+    console.error('get_delivery_approval_queue error:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.submit_delivery_approval_decision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, remarks } = req.body;
+
+    if (!decision || !['approve', 'reject', 'return'].includes(decision)) {
+      return res.status(400).json({ status: 'error', message: 'Valid decision (approve, reject, return) is required.' });
+    }
+    if ((decision === 'reject' || decision === 'return') && (!remarks || !remarks.trim())) {
+      return res.status(400).json({ status: 'error', message: 'Remarks are mandatory when rejecting or returning an approval.' });
+    }
+
+    const updated = await deliveryService.adminApproveDeliveryCost(id, {
+      decision,
+      remarks,
+      adminUser: req.user,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: updated,
+      message: `Delivery cost ${decision}d successfully.`,
+    });
+  } catch (err) {
+    console.error('submit_delivery_approval_decision error:', err);
+    return res.status(400).json({ status: 'error', message: err.message });
+  }
+};
+

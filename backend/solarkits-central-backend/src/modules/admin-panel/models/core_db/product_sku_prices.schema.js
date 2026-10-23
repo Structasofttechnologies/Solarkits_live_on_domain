@@ -18,6 +18,10 @@ const schema = new mongoose.Schema({
 });
 
 schema.index({ sku_id: 1, cluster_id: 1 }, { unique: true });
+schema.index(
+  { sku_id: 1, warehouse_id: 1 },
+  { unique: true, partialFilterExpression: { warehouse_id: { $type: 'objectId' } } }
+);
 
 schema.virtual('id').get(function () { return this._id; });
 

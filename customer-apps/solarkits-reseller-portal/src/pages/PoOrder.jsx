@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, Fragment } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiShoppingCart,
@@ -99,22 +99,20 @@ function PoStageStepper({ stepNumber }) {
         return (
           <React.Fragment key={s.num}>
             <div
-              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${
-                isDone
-                  ? "bg-emerald-500 text-white shadow-2xs"
-                  : isCurrent
+              className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${isDone
+                ? "bg-emerald-500 text-white shadow-2xs"
+                : isCurrent
                   ? "bg-primary text-white ring-2 ring-primary/25 scale-105"
                   : "bg-surface-hover text-text-muted border border-border"
-              }`}
+                }`}
               title={`Stage ${s.num}: ${s.label}`}
             >
               {isDone ? <FiCheck size={9} /> : s.num}
             </div>
             {idx < steps.length - 1 && (
               <div
-                className={`h-0.5 w-2.5 rounded-full transition-all ${
-                  stepNumber > s.num ? "bg-emerald-500" : "bg-border"
-                }`}
+                className={`h-0.5 w-2.5 rounded-full transition-all ${stepNumber > s.num ? "bg-emerald-500" : "bg-border"
+                  }`}
               />
             )}
           </React.Fragment>
@@ -123,88 +121,6 @@ function PoStageStepper({ stepNumber }) {
     </div>
   );
 }
-
-// ── DEFAULT COMBO KITS (Matching Exactly with Configured Admin Solar Shop Catalog) ──
-const DEFAULT_COMBO_KITS = [
-  {
-    _id: "kit-01",
-    id: "kit-01",
-    name: "5 kW Premium Bifacial Rooftop Solar Combo Kit",
-    kit_name: "5 kW Premium Bifacial Rooftop Solar Combo Kit",
-    capacity_kw: 5,
-    system_type: "On-Grid",
-    industry_type_name: "Solar PV",
-    category_name: "Residential Solar",
-    subcategory_name: "Individual Home",
-    project_type_name: "Rooftop Solar",
-    project_range_label: "3 - 10 kW",
-    min_kw: 3,
-    max_kw: 10,
-    dealer_price: 367500,
-    unit_price: 367500,
-    price: 367500,
-    base_price_paise: 36750000,
-    token_rate_per_kit_paise: 500000, // ₹5,000 / kit
-    trial_kit_quantity: 10,
-    is_trial_allowed: true,
-    order_quantities: [200, 500, 1000],
-    loose_order_quantities: [5, 10, 15, 20, 25, 30],
-    min_po_quantity: 200,
-    specifications: "High performance 5 kW Bifacial solar kit featuring top-tier string inverter and heavy-duty GI mounting structure.",
-  },
-  {
-    _id: "kit-02",
-    id: "kit-02",
-    name: "50 kW Commercial LT On-Grid Rooftop Solution",
-    kit_name: "50 kW Commercial LT On-Grid Rooftop Solution",
-    capacity_kw: 50,
-    system_type: "On-Grid",
-    industry_type_name: "Solar PV",
-    category_name: "Commercial Solar",
-    subcategory_name: "Commercial LT",
-    project_type_name: "Rooftop Solution",
-    project_range_label: "10 - 50 kW",
-    min_kw: 10,
-    max_kw: 50,
-    dealer_price: 3457720,
-    unit_price: 3457720,
-    price: 3457720,
-    base_price_paise: 345772000,
-    token_rate_per_kit_paise: 500000, // ₹5,000 / kit
-    trial_kit_quantity: 5,
-    is_trial_allowed: true,
-    order_quantities: [100, 200, 400, 500],
-    loose_order_quantities: [5, 10, 15, 20, 25],
-    min_po_quantity: 100,
-    specifications: "Commercial 50 kW rooftop solar blueprint with high wattage bifacial panels and heavy-duty 3-phase LT ACDB.",
-  },
-  {
-    _id: "kit-03",
-    id: "kit-03",
-    name: "3 kW Residential Single-Phase On-Grid Solar Kit",
-    kit_name: "3 kW Residential Single-Phase On-Grid Solar Kit",
-    capacity_kw: 3,
-    system_type: "On-Grid",
-    industry_type_name: "Solar PV",
-    category_name: "Residential Solar",
-    subcategory_name: "Individual Home",
-    project_type_name: "Rooftop Solar",
-    project_range_label: "1 - 3 kW",
-    min_kw: 1,
-    max_kw: 3,
-    dealer_price: 165000,
-    unit_price: 165000,
-    price: 165000,
-    base_price_paise: 16500000,
-    token_rate_per_kit_paise: 500000,
-    trial_kit_quantity: 10,
-    is_trial_allowed: true,
-    order_quantities: [50, 100, 200],
-    loose_order_quantities: [5, 10, 15, 20],
-    min_po_quantity: 50,
-    specifications: "Standard Indian Home Rooftop On-Grid Solar Package with DCR TopCon Modules and 3.3kW Grid Inverter.",
-  },
-];
 
 // SessionStorage Caching Helpers
 const CACHE_KEYS = {
@@ -240,6 +156,7 @@ export default function PoOrder() {
   const cachedPlan = getCached(CACHE_KEYS.PLAN, null);
   const cachedGoal = getCached(CACHE_KEYS.GOAL, null);
 
+  const outletContext = useOutletContext?.() || {};
   const [ordersLoading, setOrdersLoading] = useState(cachedOrders === null);
   const [planLoading, setPlanLoading] = useState(cachedPlan === null);
   const [goalLoading, setGoalLoading] = useState(cachedGoal === null);
@@ -253,8 +170,31 @@ export default function PoOrder() {
   const [viewMode, setViewMode] = useState("table"); // Default to 'table' view
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [categoryTab, setCategoryTab] = useState("ALL"); // "ALL" | "SINGLE_PO" | "COMBINE_PO"
+
+  const rawAllowed = outletContext?.allowedOrderTypes || outletContext?.allowedOrderType || planData?.plan?.order_type_allowed || outletContext?.reseller?.order_type_allowed || "po_order";
+  const allowedOrderTypes = Array.isArray(rawAllowed)
+    ? rawAllowed
+    : typeof rawAllowed === "string"
+      ? (rawAllowed === "both" ? ["po_order", "loose_order"] : rawAllowed.split(",").map((s) => s.trim()))
+      : ["po_order"];
+
+  const allowsLoose = allowedOrderTypes.includes("loose_order");
+  const allowsCombinePo = allowedOrderTypes.includes("combine_po_order");
+  const allowsPo = allowedOrderTypes.includes("po_order");
+  const allowsAnyPo = allowsPo || allowsCombinePo;
+
+  const [categoryTab, setCategoryTab] = useState(() => (allowsCombinePo && !allowsPo ? "COMBINE_PO" : "ALL"));
   const [expandedRowId, setExpandedRowId] = useState(null);
+
+  useEffect(() => {
+    if (allowsCombinePo && !allowsPo) {
+      setCategoryTab((prev) => (prev === "SINGLE_PO" ? "COMBINE_PO" : prev));
+      setPoCategory("COMBINE_PO");
+    } else if (allowsPo && !allowsCombinePo) {
+      setCategoryTab((prev) => (prev === "COMBINE_PO" ? "SINGLE_PO" : prev));
+      setPoCategory("SINGLE_PO");
+    }
+  }, [allowsCombinePo, allowsPo]);
 
   // ── Quick Filters State & Shop Hierarchy (Matches Screenshot 1) ──
   const [shopHierarchy, setShopHierarchy] = useState([]);
@@ -268,7 +208,7 @@ export default function PoOrder() {
 
   // ── Create Order Modal State (Stage 1 with ComboKit & Configured PO Qty) ──
   const [createModal, setCreateModal] = useState(false);
-  const [selectedKitId, setSelectedKitId] = useState("kit-01");
+  const [selectedKitId, setSelectedKitId] = useState("");
   const [selectedPoQty, setSelectedPoQty] = useState(200);
   const [poCategory, setPoCategory] = useState("SINGLE_PO"); // "SINGLE_PO" | "COMBINE_PO"
   const [submitting, setSubmitting] = useState(false);
@@ -357,7 +297,7 @@ export default function PoOrder() {
         const looseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
           ? k.loose_order_quantities.map(Number).filter((n) => n > 0).sort((a, b) => a - b)
           : [5, 10, 15, 20, 25, 30];
-        const price = k.dealer_price || k.selling_price_cached || k.unit_price || k.price || 367500;
+        const price = k.dealer_price || k.selling_price_cached || k.unit_price || k.price || 0;
 
         return {
           _id: (k._id || k.id)?.toString(),
@@ -382,7 +322,7 @@ export default function PoOrder() {
           unit_price: price,
           price: price,
           base_price_paise: Math.round(price * 100),
-          token_rate_per_kit_paise: k.token_rate_per_kit_paise || 500000,
+          token_rate_per_kit_paise: k.token_rate_per_kit_paise || 0,
           trial_kit_quantity: k.trial_kit_quantity || 10,
           is_trial_allowed: k.is_trial_allowed !== false,
           order_quantities: orderQtys,
@@ -392,7 +332,7 @@ export default function PoOrder() {
         };
       });
     }
-    return DEFAULT_COMBO_KITS;
+    return [];
   }, [planData]);
 
   // Fetch Shop Hierarchy for Quick Filters
@@ -822,9 +762,31 @@ export default function PoOrder() {
   }, []); // Run ONLY once on mount
 
   // Calculation for Create Modal
-  const kitUnitPrice = selectedKit?.dealer_price || selectedKit?.unit_price || 367500;
-  const tokenRatePerKit = Math.round((selectedKit?.token_rate_per_kit_paise || 500000) / 100);
   const targetQuantity = Math.max(1, parseInt(selectedPoQty, 10) || selectedKit?.min_po_quantity || 200);
+
+  // Dynamic Unit Price using PO Order Tier Pricing
+  const kitUnitPrice = useMemo(() => {
+    if (!selectedKit) return 0;
+    const poPricing = selectedKit.po_order_pricing || selectedKit.poOrderPricing;
+    if (Array.isArray(poPricing) && poPricing.length > 0) {
+      const matchedTier = poPricing.find(
+        (t) => Number(t.quantity) === Number(targetQuantity)
+      );
+      if (matchedTier && matchedTier.price_per_kit > 0) {
+        return matchedTier.price_per_kit;
+      }
+      // If not an exact match, find highest tier where quantity <= targetQuantity
+      const lowerTiers = poPricing
+        .filter((t) => Number(t.quantity) <= Number(targetQuantity) && t.price_per_kit > 0)
+        .sort((a, b) => Number(b.quantity) - Number(a.quantity));
+      if (lowerTiers.length > 0) {
+        return lowerTiers[0].price_per_kit;
+      }
+    }
+    return selectedKit.dealer_price || selectedKit.unit_price || selectedKit.selling_price_cached || 0;
+  }, [selectedKit, targetQuantity]);
+
+  const tokenRatePerKit = selectedKit?.token_rate_per_kit_paise ? Math.round(selectedKit.token_rate_per_kit_paise / 100) : 0;
   const estimatedSubtotal = targetQuantity * kitUnitPrice;
   const estimatedGst = Math.round((estimatedSubtotal * 12) / 100);
   const estimatedGrandTotal = estimatedSubtotal + estimatedGst;
@@ -832,9 +794,17 @@ export default function PoOrder() {
 
   // ── Open Create PO Modal ──
   const handleOpenCreateModal = () => {
+    if (!allowsAnyPo) {
+      return;
+    }
     setFormError("");
     fetchBuyers();
     fetchHierarchy();
+    if (allowsCombinePo && !allowsPo) {
+      setPoCategory("COMBINE_PO");
+    } else if (allowsPo && !allowsCombinePo) {
+      setPoCategory("SINGLE_PO");
+    }
     setCreateModal(true);
   };
 
@@ -856,7 +826,7 @@ export default function PoOrder() {
         item_name: selectedKit.name || selectedKit.kit_name,
         quantity: targetQuantity,
         unit_price_paise: selectedKit.base_price_paise || Math.round(kitUnitPrice * 100),
-        token_rate_paise: selectedKit.token_rate_per_kit_paise || 500000,
+        token_rate_paise: selectedKit.token_rate_per_kit_paise || 0,
         total_price_paise: targetQuantity * (selectedKit.base_price_paise || Math.round(kitUnitPrice * 100)),
         subtotal_paise: targetQuantity * (selectedKit.base_price_paise || Math.round(kitUnitPrice * 100)),
         gst_rate: 12,
@@ -965,7 +935,7 @@ export default function PoOrder() {
             buyer_name: buyer?.name || buyer?.company_name || "EPC Buyer",
             gstin: buyer?.gstin || null,
             allocated_quantity: allocQ,
-            token_amount_paise: allocQ * (kitObj.token_rate_per_kit_paise || 500000),
+            token_amount_paise: allocQ * (kitObj.token_rate_per_kit_paise || 0),
             payment_status: "PENDING",
           };
         });
@@ -983,7 +953,7 @@ export default function PoOrder() {
             buyer_name: buyer?.name || buyer?.company_name || "EPC Partner",
             gstin: buyer?.gstin || null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 500000),
+            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 0),
             payment_status: "PENDING",
           },
         ];
@@ -995,7 +965,7 @@ export default function PoOrder() {
             buyer_name: "Warehouse Stock",
             gstin: null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 500000),
+            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 0),
             payment_status: "PENDING",
           },
         ];
@@ -1008,7 +978,7 @@ export default function PoOrder() {
       quantity: totalCommitted,
       unit_price_paise: kitObj.base_price_paise,
       gst_rate: 12,
-      token_rate_paise: kitObj.token_rate_per_kit_paise || 500000,
+      token_rate_paise: kitObj.token_rate_per_kit_paise || 0,
       epc_allocations: epcList,
     };
 
@@ -1329,19 +1299,42 @@ export default function PoOrder() {
             <FiRefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
           </button>
 
-          <button
-            onClick={handleOpenCreateModal}
-            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-xs font-black shadow-lg hover:shadow-xl transition-all cursor-pointer transform active:scale-95"
-          >
-            <FiPlus size={16} />
-            <span>Create Purchase Order</span>
-          </button>
+          {!allowsAnyPo ? (
+            <Link
+              to="/loose-order"
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black shadow-lg transition-all"
+            >
+              <FiTruck size={16} />
+              <span>Go to Loose Orders</span>
+            </Link>
+          ) : (
+            <button
+              onClick={handleOpenCreateModal}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-900 text-xs font-black shadow-lg hover:shadow-xl transition-all cursor-pointer transform active:scale-95"
+            >
+              <FiPlus size={16} />
+              <span>Create {allowsCombinePo && !allowsPo ? "Combine PO" : "Purchase Order"}</span>
+            </button>
+          )}
         </div>
 
         {/* Decorative Background Elements */}
         <div className="absolute -right-10 -bottom-10 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
         <div className="absolute left-1/2 -top-10 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
       </div>
+
+      {/* Advisory Banner for Loose Order Store Types */}
+      {!allowsAnyPo && allowsLoose && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <FiAlertCircle size={18} className="text-amber-600 shrink-0" />
+            <span>Your store is configured for <strong>Loose Orders only</strong>. Direct Purchase Order creation is disabled for this Store Type.</span>
+          </div>
+          <Link to="/loose-order" className="px-3.5 py-1.5 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-500 transition-colors shrink-0">
+            Open Loose Orders
+          </Link>
+        </div>
+      )}
 
 
       {/* ── Control Bar: Tabs, Search, Filter & View Toggle ── */}
@@ -1351,30 +1344,34 @@ export default function PoOrder() {
           <button
             onClick={() => setCategoryTab("ALL")}
             className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "ALL"
-                ? "bg-surface text-primary shadow-xs"
-                : "text-text-muted hover:text-text-primary"
+              ? "bg-surface text-primary shadow-xs"
+              : "text-text-muted hover:text-text-primary"
               }`}
           >
             All Orders ({orders.length})
           </button>
-          <button
-            onClick={() => setCategoryTab("SINGLE_PO")}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "SINGLE_PO"
+          {allowsPo && (
+            <button
+              onClick={() => setCategoryTab("SINGLE_PO")}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "SINGLE_PO"
                 ? "bg-surface text-primary shadow-xs"
                 : "text-text-muted hover:text-text-primary"
-              }`}
-          >
-            Single PO ({orders.filter((o) => o.po_category !== "COMBINE_PO").length})
-          </button>
-          <button
-            onClick={() => setCategoryTab("COMBINE_PO")}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "COMBINE_PO"
+                }`}
+            >
+              Single PO ({orders.filter((o) => o.po_category !== "COMBINE_PO").length})
+            </button>
+          )}
+          {allowsCombinePo && (
+            <button
+              onClick={() => setCategoryTab("COMBINE_PO")}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${categoryTab === "COMBINE_PO"
                 ? "bg-surface text-purple-600 shadow-xs"
                 : "text-text-muted hover:text-text-primary"
-              }`}
-          >
-            Combine PO ({orders.filter((o) => o.po_category === "COMBINE_PO").length})
-          </button>
+                }`}
+            >
+              Combine PO ({orders.filter((o) => o.po_category === "COMBINE_PO").length})
+            </button>
+          )}
         </div>
 
         {/* Search, Status Filter & View Toggle */}
@@ -1557,11 +1554,10 @@ export default function PoOrder() {
                             </div>
                             <div>
                               <span
-                                className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${
-                                  isBdeCreated
-                                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
-                                    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
-                                }`}
+                                className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-semibold border ${isBdeCreated
+                                  ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                  : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                                  }`}
                               >
                                 {isBdeCreated ? `BDE: ${order.creator_name || "Officer"}` : "Direct"}
                               </span>
@@ -1741,11 +1737,10 @@ export default function PoOrder() {
                             {/* Expand/Collapse Toggle */}
                             <button
                               onClick={() => setExpandedRowId(isExpanded ? null : order._id)}
-                              className={`p-1 rounded-lg transition-all cursor-pointer border ${
-                                isExpanded
-                                  ? "bg-surface-hover text-text-primary border-border"
-                                  : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
-                              }`}
+                              className={`p-1 rounded-lg transition-all cursor-pointer border ${isExpanded
+                                ? "bg-surface-hover text-text-primary border-border"
+                                : "text-text-muted hover:text-text-primary bg-surface-hover/60 hover:bg-surface-hover border-border/80"
+                                }`}
                               title="Toggle Details"
                             >
                               <FiChevronDown size={12} className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
@@ -1862,7 +1857,7 @@ export default function PoOrder() {
                                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary hover:opacity-90 text-white shadow-xs transition-all cursor-pointer"
                                   >
                                     <FiPlus size={12} />
-                                    <span>+ Place Reorder</span>
+                                    <span> Place Reorder</span>
                                   </button>
                                 )}
                               </div>
@@ -2244,8 +2239,8 @@ export default function PoOrder() {
                     <div className="grid grid-cols-1 gap-2.5 max-h-72 overflow-y-auto pr-1">
                       {filteredComboKits.map((kit) => {
                         const isSelected = String(selectedKitId) === String(kit._id);
-                        const priceINR = kit.dealer_price || kit.unit_price || 367500;
-                        const tokenINR = Math.round((kit.token_rate_per_kit_paise || 500000) / 100);
+                        const priceINR = kit.dealer_price || kit.unit_price || kit.selling_price_cached || 0;
+                        const tokenINR = kit.token_rate_per_kit_paise ? Math.round(kit.token_rate_per_kit_paise / 100) : 0;
 
                         return (
                           <div
@@ -2256,8 +2251,8 @@ export default function PoOrder() {
                               setSelectedPoQty(firstQty);
                             }}
                             className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSelected
-                                ? "border-primary bg-primary/5 shadow-xs"
-                                : "border-border hover:border-primary/40 bg-surface"
+                              ? "border-primary bg-primary/5 shadow-xs"
+                              : "border-border hover:border-primary/40 bg-surface"
                               }`}
                           >
                             <div className="space-y-1 flex-1">
@@ -2283,11 +2278,21 @@ export default function PoOrder() {
 
                             <div className="sm:text-right pl-7 sm:pl-0 shrink-0">
                               <div className="text-sm font-black text-text-primary">
-                                ₹{priceINR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-text-muted">/kit</span>
+                                {priceINR > 0 ? (
+                                  <>₹{priceINR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-text-muted">/kit</span></>
+                                ) : (
+                                  <span className="text-xs text-amber-600 font-semibold">Price Pending</span>
+                                )}
                               </div>
-                              <div className="text-[10px] font-bold text-emerald-600">
-                                Token: ₹{tokenINR.toLocaleString("en-IN")}/kit
-                              </div>
+                              {tokenINR > 0 ? (
+                                <div className="text-[10px] font-bold text-emerald-600">
+                                  Token: ₹{tokenINR.toLocaleString("en-IN")}/kit
+                                </div>
+                              ) : (
+                                <div className="text-[10px] font-medium text-text-muted">
+                                  Token: Not Configured
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -2323,8 +2328,8 @@ export default function PoOrder() {
                               type="button"
                               onClick={() => setSelectedPoQty(qty)}
                               className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border ${selectedPoQty === qty
-                                  ? "bg-amber-500 text-white border-amber-500 shadow-xs scale-105"
-                                  : "bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 border-amber-500/20"
+                                ? "bg-amber-500 text-white border-amber-500 shadow-xs scale-105"
+                                : "bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 border-amber-500/20"
                                 }`}
                             >
                               {qty} KITS
@@ -2352,51 +2357,89 @@ export default function PoOrder() {
 
                     {/* ── 3. SELECT PO CATEGORY ── */}
                     <div className="space-y-2">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
-                        3. Select Purchase Order Type <span className="text-rose-500">*</span>
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-text-muted">
+                          3. Purchase Order Type <span className="text-rose-500">*</span>
+                        </label>
+                        {allowsCombinePo && !allowsPo && (
+                          <span className="text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-full border border-purple-200">
+                            Locked to Combine PO by Store Type
+                          </span>
+                        )}
+                        {allowsPo && !allowsCombinePo && (
+                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                            Locked to Single PO by Store Type
+                          </span>
+                        )}
+                        {allowsPo && allowsCombinePo && (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200">
+                            All PO Types Permitted
+                          </span>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Single PO Card */}
                         <div
-                          onClick={() => setPoCategory("SINGLE_PO")}
-                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "SINGLE_PO"
+                          onClick={() => {
+                            if (allowsPo) {
+                              setPoCategory("SINGLE_PO");
+                            }
+                          }}
+                          className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${!allowsPo
+                            ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
+                            : "cursor-pointer " + (poCategory === "SINGLE_PO"
                               ? "border-primary bg-primary/5 shadow-xs"
-                              : "border-border hover:border-primary/40 bg-surface"
+                              : "border-border hover:border-primary/40 bg-surface")
                             }`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "SINGLE_PO" && allowsPo ? "bg-primary text-white" : "bg-primary/10 text-primary"
                             }`}>
                             <FiUserCheck size={16} />
                           </div>
                           <div>
                             <div className="font-black text-xs text-text-primary flex items-center gap-1">
                               Single PO
-                              {poCategory === "SINGLE_PO" && <FiCheck className="text-primary" size={13} />}
+                              {poCategory === "SINGLE_PO" && allowsPo && <FiCheck className="text-primary" size={13} />}
                             </div>
                             <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
                               Dedicated to 1 EPC Partner or Franchise Warehouse stock.
                             </p>
+                            {!allowsPo && (
+                              <span className="text-[10px] text-rose-500 font-bold block mt-1">Not permitted for this store plan</span>
+                            )}
                           </div>
                         </div>
 
+                        {/* Combine PO Card */}
                         <div
-                          onClick={() => setPoCategory("COMBINE_PO")}
-                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start gap-3 ${poCategory === "COMBINE_PO"
+                          onClick={() => {
+                            if (allowsCombinePo) {
+                              setPoCategory("COMBINE_PO");
+                            }
+                          }}
+                          className={`p-3.5 rounded-2xl border-2 transition-all flex items-start gap-3 ${!allowsCombinePo
+                            ? "opacity-40 cursor-not-allowed border-border bg-surface-hover"
+                            : "cursor-pointer " + (poCategory === "COMBINE_PO"
                               ? "border-purple-600 bg-purple-500/5 shadow-xs"
-                              : "border-border hover:border-purple-400 bg-surface"
+                              : "border-border hover:border-purple-400 bg-surface")
                             }`}
                         >
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${poCategory === "COMBINE_PO" && allowsCombinePo ? "bg-purple-600 text-white" : "bg-purple-500/10 text-purple-600"
                             }`}>
                             <FiUsers size={16} />
                           </div>
                           <div>
                             <div className="font-black text-xs text-text-primary flex items-center gap-1">
                               Combine PO (Multi-EPC)
-                              {poCategory === "COMBINE_PO" && <FiCheck className="text-purple-600" size={13} />}
+                              {poCategory === "COMBINE_PO" && allowsCombinePo && <FiCheck className="text-purple-600" size={13} />}
                             </div>
                             <p className="text-[11px] text-text-muted mt-0.5 leading-tight">
                               Pool demand across multiple onboarded EPC contractors.
                             </p>
+                            {!allowsCombinePo && (
+                              <span className="text-[10px] text-rose-500 font-bold block mt-1">Not permitted for this store plan</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2680,8 +2723,8 @@ export default function PoOrder() {
                                           type="button"
                                           onClick={() => handleAllocateLooseChange(bId, lq)}
                                           className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${Number(currentVal) === lq
-                                              ? "bg-primary text-white border-primary shadow-2xs"
-                                              : "bg-surface-hover text-text-secondary border-border hover:border-primary/40"
+                                            ? "bg-primary text-white border-primary shadow-2xs"
+                                            : "bg-surface-hover text-text-secondary border-border hover:border-primary/40"
                                             }`}
                                         >
                                           {lq} K
@@ -3094,8 +3137,8 @@ export default function PoOrder() {
                                 type="button"
                                 onClick={() => setReorderQty(lq)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${reorderQty === lq
-                                    ? "bg-sky-600 text-white border-sky-600 shadow-xs scale-105"
-                                    : "bg-sky-500/10 text-sky-800 hover:bg-sky-500/20 border-sky-500/20"
+                                  ? "bg-sky-600 text-white border-sky-600 shadow-xs scale-105"
+                                  : "bg-sky-500/10 text-sky-800 hover:bg-sky-500/20 border-sky-500/20"
                                   }`}
                               >
                                 {lq} KITS
@@ -3106,8 +3149,8 @@ export default function PoOrder() {
                                 type="button"
                                 onClick={() => setReorderQty(remaining)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${reorderQty === remaining
-                                    ? "bg-primary text-white border-primary shadow-xs scale-105"
-                                    : "bg-surface-hover text-text-secondary border-border"
+                                  ? "bg-primary text-white border-primary shadow-xs scale-105"
+                                  : "bg-surface-hover text-text-secondary border-border"
                                   }`}
                               >
                                 All Remaining ({remaining})

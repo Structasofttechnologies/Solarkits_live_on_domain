@@ -135,10 +135,12 @@ const create_store = async (req, res) => {
       });
     }
 
-    // 4. Validate Company Store BDE rule
+    // 4. Validate BDE rules
     let assignedCompanyBdeId = null;
+    let assignedFranchiseeBdeId = null;
+    const bdeCandidate = company_store_bde_id || bde_id;
+
     if (store_category === 'company_store') {
-      const bdeCandidate = company_store_bde_id || bde_id;
       if (plan.bde_assignment_mandatory && !bdeCandidate) {
         return res.status(400).json({
           status: 'error',
@@ -150,10 +152,17 @@ const create_store = async (req, res) => {
           return res.status(400).json({ status: 'error', message: 'Invalid company_store_bde_id.' });
         }
         const bde = await BDEProfile.findById(bdeCandidate).lean();
-        if (!bde || !bde.is_active || bde.is_deleted) {
+        if (!bde || bde.deleted_at || (bde.status && ['inactive', 'suspended'].includes(bde.status))) {
           return res.status(404).json({ status: 'error', message: 'Assigned BDE not found or inactive.' });
         }
         assignedCompanyBdeId = bde._id;
+      }
+    } else if (store_category === 'franchisee_store' && bde_id) {
+      if (mongoose.Types.ObjectId.isValid(bde_id)) {
+        const bde = await BDEProfile.findById(bde_id).lean();
+        if (bde && !bde.deleted_at && !(bde.status && ['inactive', 'suspended'].includes(bde.status))) {
+          assignedFranchiseeBdeId = bde._id;
+        }
       }
     }
 
@@ -228,10 +237,10 @@ const create_store = async (req, res) => {
       activation_status: 'pending',
       fee_payment_status: feeStatus,
       fee_payment_amount: plan.setup_cost_enabled ? (plan.setup_cost_amount || 0) : 0,
-      bde_id: store_category === 'franchisee_store' && bde_id ? bde_id : null,
-      company_store_bde_id: assignedCompanyBdeId,
-      company_store_bde_assigned_at: assignedCompanyBdeId ? new Date() : null,
-      company_store_bde_assigned_by: assignedCompanyBdeId ? actorId : null,
+      bde_id: assignedCompanyBdeId || assignedFranchiseeBdeId || null,
+      company_store_bde_id: assignedCompanyBdeId || assignedFranchiseeBdeId || null,
+      company_store_bde_assigned_at: (assignedCompanyBdeId || assignedFranchiseeBdeId) ? new Date() : null,
+      company_store_bde_assigned_by: (assignedCompanyBdeId || assignedFranchiseeBdeId) ? actorId : null,
       address: {
         line: address.line || null,
         country_id: address.country_id || null,
@@ -244,17 +253,31 @@ const create_store = async (req, res) => {
     });
 
     // 10. Create Plan Subscription
+    // Calculate expiry_date from plan validity
+    const subscriptionStartDate = new Date();
+    const subscriptionExpiryDate = new Date(subscriptionStartDate);
+    const validityValue = plan.validity_value || 1;
+    const validityUnit = plan.validity_unit || 'years';
+    if (validityUnit === 'days') {
+      subscriptionExpiryDate.setDate(subscriptionExpiryDate.getDate() + validityValue);
+    } else if (validityUnit === 'months') {
+      subscriptionExpiryDate.setMonth(subscriptionExpiryDate.getMonth() + validityValue);
+    } else {
+      // default: years
+      subscriptionExpiryDate.setFullYear(subscriptionExpiryDate.getFullYear() + validityValue);
+    }
+    const subscriptionAmountPaid = plan.setup_cost_enabled ? (plan.setup_cost_amount || 0) : 0;
+
     const subscription = await ResellerPlanSubscription.create({
       reseller_id: newReseller._id,
       plan_id: plan._id,
-      commercial_mode: plan.commercial_mode || 'commission',
-      billing_cycle: plan.billing_cycle || 'annual',
-      fee_amount: plan.setup_cost_enabled ? (plan.setup_cost_amount || 0) : 0,
-      security_deposit: plan.security_deposit || 0,
-      min_quarterly_commitment: plan.min_quarterly_commitment || 0,
-      status: 'active',
-      start_date: new Date(),
-      created_by: actorId,
+      start_date: subscriptionStartDate,
+      expiry_date: subscriptionExpiryDate,
+      amount_paid: subscriptionAmountPaid,
+      currency: 'INR',
+      payment_method: 'offline_manual',
+      payment_status: plan.setup_cost_enabled ? 'pending_payment' : 'verified',
+      status: plan.setup_cost_enabled ? 'pending_payment' : 'active',
     });
 
     newReseller.plan_subscription_id = subscription._id;
@@ -269,8 +292,8 @@ const create_store = async (req, res) => {
       store_setup_id: storeSetupId,
       franchisee_id: newReseller._id,
       store_type: store_category,
-      original_bde_id: assignedCompanyBdeId || newReseller.bde_id || null,
-      current_bde_id: assignedCompanyBdeId || newReseller.bde_id || null,
+      original_bde_id: assignedCompanyBdeId || assignedFranchiseeBdeId || null,
+      current_bde_id: assignedCompanyBdeId || assignedFranchiseeBdeId || null,
       franchisee_name: newReseller.business_name,
       gst_number: newReseller.gst_number || null,
       mobile: newReseller.mobile,
@@ -301,6 +324,7 @@ const create_store = async (req, res) => {
     // 12. Record Initial Store Status History
     await StoreStatusHistory.create({
       store_id: newReseller._id,
+      reseller_id: newReseller._id,
       store_setup_id: newStoreSetup._id,
       from_status: null,
       to_status: initialStatus,
@@ -381,7 +405,10 @@ const advance_status = async (req, res) => {
     }
 
     const currentStatus = store.reseller_lifecycle_status || 'draft';
-    const storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    let storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    if (!storeSetup && store.store_setup_id) {
+      storeSetup = await StoreSetup.findById(store.store_setup_id);
+    }
 
     // Load Plan to check business rules
     let plan = null;
@@ -471,6 +498,7 @@ const advance_status = async (req, res) => {
     // Record immutable audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup?._id || null,
       from_status: currentStatus,
       to_status: target_status,
@@ -533,7 +561,10 @@ const reject_or_hold_store = async (req, res) => {
 
     await store.save();
 
-    const storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    let storeSetup = await StoreSetup.findOne({ franchisee_id: store._id });
+    if (!storeSetup && store.store_setup_id) {
+      storeSetup = await StoreSetup.findById(store.store_setup_id);
+    }
     if (action === 'reject' && storeSetup) {
       storeSetup.status = 'cancelled';
       await storeSetup.save();
@@ -542,6 +573,7 @@ const reject_or_hold_store = async (req, res) => {
     // Record audit history
     await StoreStatusHistory.create({
       store_id: store._id,
+      reseller_id: store._id,
       store_setup_id: storeSetup?._id || null,
       from_status: currentStatus,
       to_status: targetStatus,
@@ -581,8 +613,11 @@ const get_status_history = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Valid store_id parameter required.' });
     }
 
-    const history = await StoreStatusHistory.find({ store_id })
+    const history = await StoreStatusHistory.find({
+      $or: [{ store_id }, { reseller_id: store_id }],
+    })
       .populate('actor_id', 'name email')
+      .populate('changed_by', 'name email')
       .sort({ created_at: -1 })
       .lean();
 
@@ -590,10 +625,10 @@ const get_status_history = async (req, res) => {
       id: h._id,
       from_status: h.from_status,
       to_status: h.to_status,
-      actor_type: h.actor_type,
-      actor_name: h.actor_id?.name || 'System Admin',
-      actor_email: h.actor_id?.email || null,
-      remarks: h.remarks,
+      actor_type: h.actor_type || h.changed_by_role || 'admin',
+      actor_name: h.actor_id?.name || h.changed_by?.name || 'System Admin',
+      actor_email: h.actor_id?.email || h.changed_by?.email || null,
+      remarks: h.remarks || h.reason,
       metadata: h.metadata,
       created_at: h.created_at,
     }));
@@ -639,13 +674,19 @@ const get_onboarding_queue = async (req, res) => {
       Reseller.find(query)
         .populate('reseller_type_id', 'name slug commercial_mode')
         .populate('franchisee_subtype_id', 'name slug badge_color category_level')
-        .populate('company_store_bde_id', 'name employee_id mobile email')
-        .populate('bde_id', 'name employee_id mobile email')
+        .populate('company_store_bde_id', 'full_name bde_id mobile_number email name employee_id mobile')
+        .populate('bde_id', 'full_name bde_id mobile_number email name employee_id mobile')
         .populate({
           path: 'plan_subscription_id',
           populate: { path: 'plan_id', select: 'name store_category commission_enabled setup_cost_enabled setup_cost_amount epc_onboarding_scope' },
         })
-        .populate('store_setup_id')
+        .populate({
+          path: 'store_setup_id',
+          populate: [
+            { path: 'current_bde_id', select: 'full_name bde_id mobile_number email name employee_id mobile' },
+            { path: 'warehouse_id', select: 'warehouse_code address pincode' },
+          ],
+        })
         .sort({ created_at: -1 })
         .skip(skip)
         .limit(limit)
@@ -653,9 +694,22 @@ const get_onboarding_queue = async (req, res) => {
       Reseller.countDocuments(query),
     ]);
 
+    // Fallback lookup: find StoreSetup by franchisee_id for rows without store_setup_id
+    const unlinkedStoreIds = rows.filter((r) => !r.store_setup_id).map((r) => r._id);
+    const unlinkedSetupsMap = {};
+    if (unlinkedStoreIds.length > 0) {
+      const foundSetups = await StoreSetup.find({ franchisee_id: { $in: unlinkedStoreIds } })
+        .populate('current_bde_id', 'full_name bde_id mobile_number email name employee_id mobile')
+        .populate('warehouse_id', 'warehouse_code address pincode')
+        .lean();
+      foundSetups.forEach((s) => {
+        unlinkedSetupsMap[String(s.franchisee_id)] = s;
+      });
+    }
+
     const data = rows.map((r) => {
       const plan = r.plan_subscription_id?.plan_id;
-      const setup = r.store_setup_id;
+      const setup = r.store_setup_id || unlinkedSetupsMap[String(r._id)] || null;
       return {
         id: r._id,
         business_name: r.business_name,
@@ -685,22 +739,30 @@ const get_onboarding_queue = async (req, res) => {
           setup_cost_amount: plan.setup_cost_amount,
           epc_onboarding_scope: plan.epc_onboarding_scope,
         } : null,
-        bde: r.store_category === 'company_store' ? (r.company_store_bde_id ? {
-          id: r.company_store_bde_id._id,
-          name: r.company_store_bde_id.name,
-          employee_id: r.company_store_bde_id.employee_id,
-        } : null) : (r.bde_id ? {
-          id: r.bde_id._id,
-          name: r.bde_id.name,
-          employee_id: r.bde_id.employee_id,
-        } : null),
+        bde: (() => {
+          const bdeDoc = r.company_store_bde_id || r.bde_id || setup?.current_bde_id;
+          if (!bdeDoc) return null;
+          const bdeName = bdeDoc.full_name || bdeDoc.name || 'BDE Assigned';
+          const bdeEmpId = bdeDoc.bde_id || bdeDoc.employee_id || '';
+          const bdeMobile = bdeDoc.mobile_number || bdeDoc.mobile || '';
+          return {
+            id: bdeDoc._id,
+            name: bdeName,
+            full_name: bdeName,
+            employee_id: bdeEmpId,
+            bde_id: bdeEmpId,
+            mobile: bdeMobile,
+            email: bdeDoc.email || '',
+          };
+        })(),
         store_setup: setup ? {
           id: setup._id,
           store_setup_id: setup.store_setup_id,
           status: setup.status,
           warehouse_allocated: setup.warehouse_allocated,
           warehouse_allocation_verified: setup.warehouse_allocation_verified,
-          warehouse_id: setup.warehouse_id,
+          warehouse_id: setup.warehouse_id?._id || setup.warehouse_id,
+          warehouse_details: setup.warehouse_id,
           payment_verified_by_accounts: setup.payment_verified_by_accounts,
         } : null,
         address: r.address,

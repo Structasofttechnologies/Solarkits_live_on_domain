@@ -130,6 +130,7 @@ const create_combo_kit = async (req, res) => {
         const loose_order_quantities = parseJSON(req.body.loose_order_quantities, []);
         const allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
         const trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
+        const trial_kit_max_orders_per_buyer = req.body.trial_kit_max_orders_per_buyer !== undefined ? Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0) : 1;
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -232,6 +233,7 @@ const create_combo_kit = async (req, res) => {
                 loose_order_quantities: (loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
                 allow_trial_kit,
                 trial_kit_quantity,
+                trial_kit_max_orders_per_buyer,
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -527,6 +529,9 @@ const update_combo_kit = async (req, res) => {
         if (req.body.trial_kit_quantity !== undefined) {
             existingKit.trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
         }
+        if (req.body.trial_kit_max_orders_per_buyer !== undefined) {
+            existingKit.trial_kit_max_orders_per_buyer = Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0);
+        }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
         existingKit.inverter_mode = inverter_mode !== undefined ? inverter_mode : existingKit.inverter_mode;
@@ -605,7 +610,16 @@ const delete_combo_kit = async (req, res) => {
                     { $set: { deleted_at: kit.deleted_at } }
                 );
             }
-        } catch (e) {}
+            const { WarehouseKitActivation } = require('../models/core_db');
+            const { KitDeliveryCostRule, ComboKitWeightMaster } = require('../models/india_solarshop_db');
+            await Promise.allSettled([
+                WarehouseKitActivation.updateMany({ combo_kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false, is_combokit_active: false } }),
+                KitDeliveryCostRule.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false } }),
+                ComboKitWeightMaster.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at } }),
+            ]);
+        } catch (e) {
+            console.warn('[delete_combo_kit] Cascade delete warning:', e.message);
+        }
 
         res.status(200).json({ status: 'success', message: 'Combo Kit deleted successfully.' });
     } catch (error) {
@@ -625,6 +639,7 @@ const create_combo_kit_india = async (req, res) => {
         const loose_order_quantities = parseJSON(req.body.loose_order_quantities, []);
         const allow_trial_kit = req.body.allow_trial_kit === 'true' || req.body.allow_trial_kit === true;
         const trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
+        const trial_kit_max_orders_per_buyer = req.body.trial_kit_max_orders_per_buyer !== undefined ? Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0) : 1;
         const base_components = parseJSON(req.body.base_components, []);
         const bos_kits = parseJSON(req.body.bos_kits, []);
         const solarKitIds = parseJSON(req.body.solar_kit_ids, []);
@@ -728,6 +743,7 @@ const create_combo_kit_india = async (req, res) => {
                 loose_order_quantities: (loose_order_quantities || []).map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b),
                 allow_trial_kit,
                 trial_kit_quantity,
+                trial_kit_max_orders_per_buyer,
                 base_components: mappedBaseComponents,
                 bos_kits: mappedBosKits,
                 is_custom
@@ -1083,6 +1099,9 @@ const update_combo_kit_india = async (req, res) => {
         if (req.body.trial_kit_quantity !== undefined) {
             existingKit.trial_kit_quantity = parseInt(req.body.trial_kit_quantity, 10) || 10;
         }
+        if (req.body.trial_kit_max_orders_per_buyer !== undefined) {
+            existingKit.trial_kit_max_orders_per_buyer = Math.max(0, parseInt(req.body.trial_kit_max_orders_per_buyer, 10) || 0);
+        }
         existingKit.capacity = capacity !== undefined ? capacity : existingKit.capacity;
         existingKit.inverter_tolerance = inverter_tolerance !== undefined ? inverter_tolerance : existingKit.inverter_tolerance;
         existingKit.inverter_mode = inverter_mode !== undefined ? inverter_mode : existingKit.inverter_mode;
@@ -1127,7 +1146,7 @@ const update_combo_kit_india = async (req, res) => {
 
         await existingKit.save();
 
-        if (req.body.order_quantities !== undefined || req.body.loose_order_quantities !== undefined || req.body.allow_trial_kit !== undefined || req.body.trial_kit_quantity !== undefined) {
+        if (req.body.order_quantities !== undefined || req.body.loose_order_quantities !== undefined || req.body.allow_trial_kit !== undefined || req.body.trial_kit_quantity !== undefined || req.body.trial_kit_max_orders_per_buyer !== undefined) {
             try {
                 const otherModel = existingKit.constructor.modelName === 'pc_combo_kits' ? ComboKitIndia : IndiaComboKit;
                 const syncData = {};
@@ -1135,6 +1154,7 @@ const update_combo_kit_india = async (req, res) => {
                 if (req.body.loose_order_quantities !== undefined) syncData.loose_order_quantities = (existingKit.loose_order_quantities || []);
                 if (req.body.allow_trial_kit !== undefined) syncData.allow_trial_kit = existingKit.allow_trial_kit;
                 if (req.body.trial_kit_quantity !== undefined) syncData.trial_kit_quantity = existingKit.trial_kit_quantity;
+                if (req.body.trial_kit_max_orders_per_buyer !== undefined) syncData.trial_kit_max_orders_per_buyer = existingKit.trial_kit_max_orders_per_buyer;
                 await otherModel.updateMany(
                     { name: { $regex: new RegExp(`^${existingKit.name.trim()}$`, 'i') }, deleted_at: null },
                     { $set: syncData }
@@ -1178,7 +1198,16 @@ const delete_combo_kit_india = async (req, res) => {
                     { $set: { deleted_at: kit.deleted_at } }
                 );
             }
-        } catch (e) {}
+            const { WarehouseKitActivation } = require('../models/core_db');
+            const { KitDeliveryCostRule, ComboKitWeightMaster } = require('../models/india_solarshop_db');
+            await Promise.allSettled([
+                WarehouseKitActivation.updateMany({ combo_kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false, is_combokit_active: false } }),
+                KitDeliveryCostRule.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at, is_active: false } }),
+                ComboKitWeightMaster.updateMany({ kit_id: kit._id }, { $set: { deleted_at: kit.deleted_at } }),
+            ]);
+        } catch (e) {
+            console.warn('[delete_combo_kit_india] Cascade delete warning:', e.message);
+        }
 
         res.status(200).json({ status: 'success', message: 'Combo Kit deleted successfully.' });
     } catch (error) {
@@ -1274,6 +1303,112 @@ const get_combo_kit_status = async (req, res) => {
     }
 };
 
+const upload_combokit_datasheet = async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) {
+            return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
+        }
+
+        let uploadedUrl = null;
+        if (req.files && req.files.length > 0) {
+            const datasheetFile = req.files.find(f => f.fieldname === 'datasheet') || req.files[0];
+            if (datasheetFile) {
+                uploadedUrl = datasheetFile.path;
+            }
+        } else if (req.body.datasheet) {
+            uploadedUrl = req.body.datasheet;
+        }
+
+        if (!uploadedUrl) {
+            return res.status(400).json({ status: 'error', message: 'No datasheet file was provided.' });
+        }
+
+        const objId = new mongoose.Types.ObjectId(id);
+        const rawDb = mongoose.connection.db;
+
+        const existingDoc = await rawDb.collection('pc_comobo_kit').findOne({ _id: objId })
+            || await rawDb.collection('pc_combo_kits').findOne({ _id: objId });
+
+        if (!existingDoc) {
+            return res.status(404).json({ status: 'error', message: 'Combo Kit not found.' });
+        }
+
+        const oldDatasheet = existingDoc.datasheet;
+
+        await rawDb.collection('pc_comobo_kit').updateOne(
+            { _id: objId },
+            { $set: { datasheet: uploadedUrl } }
+        );
+        await rawDb.collection('pc_combo_kits').updateOne(
+            { _id: objId },
+            { $set: { datasheet: uploadedUrl } }
+        ).catch(() => {});
+
+        if (oldDatasheet && oldDatasheet !== uploadedUrl) {
+            delete_uploaded_files([{ path: oldDatasheet }]).catch(() => {});
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Datasheet uploaded and attached to combo kit successfully!',
+            data: {
+                id,
+                datasheet: uploadedUrl
+            }
+        });
+    } catch (error) {
+        console.error("Error in upload_combokit_datasheet:", error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Internal Server Error' });
+    }
+};
+
+const remove_combokit_datasheet = async (req, res) => {
+    try {
+        const { id } = req.body;
+        if (!id) {
+            return res.status(400).json({ status: 'error', message: 'Combo Kit ID is required.' });
+        }
+
+        const objId = new mongoose.Types.ObjectId(id);
+        const rawDb = mongoose.connection.db;
+
+        const existingDoc = await rawDb.collection('pc_comobo_kit').findOne({ _id: objId })
+            || await rawDb.collection('pc_combo_kits').findOne({ _id: objId });
+
+        if (!existingDoc) {
+            return res.status(404).json({ status: 'error', message: 'Combo Kit not found.' });
+        }
+
+        const oldDatasheet = existingDoc.datasheet;
+
+        await rawDb.collection('pc_comobo_kit').updateOne(
+            { _id: objId },
+            { $set: { datasheet: null } }
+        );
+        await rawDb.collection('pc_combo_kits').updateOne(
+            { _id: objId },
+            { $set: { datasheet: null } }
+        ).catch(() => {});
+
+        if (oldDatasheet) {
+            delete_uploaded_files([{ path: oldDatasheet }]).catch(() => {});
+        }
+
+        return res.status(200).json({
+            status: 'success',
+            message: 'Datasheet removed from combo kit successfully!',
+            data: {
+                id,
+                datasheet: null
+            }
+        });
+    } catch (error) {
+        console.error("Error in remove_combokit_datasheet:", error);
+        return res.status(500).json({ status: 'error', message: error.message || 'Internal Server Error' });
+    }
+};
+
 module.exports = {
     create_combo_kit,
     get_combo_kits,
@@ -1283,5 +1418,7 @@ module.exports = {
     get_combo_kits_india,
     update_combo_kit_india,
     delete_combo_kit_india,
-    get_combo_kit_status
+    get_combo_kit_status,
+    upload_combokit_datasheet,
+    remove_combokit_datasheet
 };

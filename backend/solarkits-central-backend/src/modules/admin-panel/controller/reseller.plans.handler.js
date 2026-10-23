@@ -28,6 +28,20 @@ const slugify = (str) =>
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
+const VALID_ORDER_TYPES = ['loose_order', 'combine_po_order', 'po_order'];
+const normalizeOrderTypes = (val) => {
+  if (!val) return ['po_order'];
+  let arr = [];
+  if (Array.isArray(val)) {
+    arr = val;
+  } else if (typeof val === 'string') {
+    if (val === 'both') return ['po_order', 'loose_order'];
+    arr = val.split(',').map((s) => s.trim());
+  }
+  const filtered = arr.filter((t) => VALID_ORDER_TYPES.includes(t));
+  return filtered.length > 0 ? filtered : ['po_order'];
+};
+
 // ─── 1. LIST ──────────────────────────────────────────────────────────────────
 /**
  * GET /admin-api/resellers/plans/list
@@ -150,7 +164,7 @@ const list_reseller_plans = async (req, res) => {
         moq_description:          r.moq_description || null,
 
         // ─── 3. Order Type Support ─────────────────────────────────────────────
-        order_type_allowed:       r.order_type_allowed || 'both',
+        order_type_allowed:       normalizeOrderTypes(r.order_type_allowed),
 
         // ─── 4. Company Fixed Franchisee Margins & Commissions ──────────────────
         default_dealer_margin:      r.default_dealer_margin ?? 5,
@@ -159,6 +173,16 @@ const list_reseller_plans = async (req, res) => {
         fixed_amount_per_kit_paise: r.fixed_amount_per_kit_paise || 0,
         min_eligible_quantity:      r.min_eligible_quantity || 0,
         max_commission_paise:       r.max_commission_paise || null,
+
+        // ─── 5. Store Management Fields ────────────────────────────────────────
+        store_category:            r.store_category || 'franchisee_store',
+        franchisee_subtype_id:     r.franchisee_subtype_id || null,
+        commission_enabled:        r.commission_enabled !== undefined ? Boolean(r.commission_enabled) : (r.store_category !== 'company_store'),
+        setup_cost_enabled:        r.setup_cost_enabled !== undefined ? Boolean(r.setup_cost_enabled) : (r.one_time_fee > 0),
+        setup_cost_amount:         r.setup_cost_amount != null ? Number(r.setup_cost_amount) : (r.one_time_fee || 0),
+        epc_onboarding_scope:      r.epc_onboarding_scope || r.territory_level || 'district',
+        bde_assignment_mandatory:  r.bde_assignment_mandatory ?? (r.store_category === 'company_store'),
+        order_type_allocation:     normalizeOrderTypes(r.order_type_allowed),
 
         description:               r.description,
         sort_order:                r.sort_order,
@@ -267,7 +291,7 @@ const add_reseller_plan = async (req, res) => {
       moq_description:          moq_description ? moq_description.trim() : null,
 
       // 3. Order Type Support
-      order_type_allowed:       ['po_order', 'loose_order', 'both'].includes(order_type_allowed) ? order_type_allowed : 'both',
+      order_type_allowed:       normalizeOrderTypes(order_type_allowed),
 
       // 4. Fixed Dealer Margin & Commission
       default_dealer_margin:      req.body.default_dealer_margin != null ? Number(req.body.default_dealer_margin) : 5,
@@ -426,8 +450,8 @@ const update_reseller_plan = async (req, res) => {
     if (fields.moq_description !== undefined) updateData.moq_description = fields.moq_description ? fields.moq_description.trim() : null;
 
     // 3. Order Type Support
-    if (fields.order_type_allowed && ['po_order', 'loose_order', 'both'].includes(fields.order_type_allowed)) {
-      updateData.order_type_allowed = fields.order_type_allowed;
+    if (fields.order_type_allowed !== undefined) {
+      updateData.order_type_allowed = normalizeOrderTypes(fields.order_type_allowed);
     }
 
     // 4. Fixed Dealer Margin & Commission

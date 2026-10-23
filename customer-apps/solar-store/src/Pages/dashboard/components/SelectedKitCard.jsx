@@ -3,7 +3,7 @@ import {
   FaPlus, FaMinus, FaSolarPanel, FaBolt, FaBatteryFull, FaCogs,
   FaLayerGroup, FaBoxOpen, FaRupeeSign, FaCheck, FaShoppingCart, FaPiggyBank,
   FaGem, FaStar, FaHome, FaInfoCircle, FaTruck, FaTag, FaChevronDown, FaChevronUp,
-  FaBalanceScale, FaAward, FaMapMarkerAlt
+  FaBalanceScale, FaAward, FaMapMarkerAlt, FaFilePdf
 } from "react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import Button from "@/Components/Button";
@@ -13,6 +13,7 @@ import { addToCart, decreaseQty, increaseQty, removeFromCart, setShowAuthDialog 
 import { setAlert } from "@/features/alert.slice";
 import { hasPermission } from "@/utils/permissions";
 import TrialKitOrderModal from "./TrialKitOrderModal";
+import DatasheetModal from "@/Components/storefront/DatasheetModal";
 
 const DEFAULT_KIT_IMAGE = "https://images.unsplash.com/photo-1509391365360-2e959784a276?w=600&auto=format&fit=crop&q=80";
 
@@ -171,24 +172,62 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
   const [trialModalOpen, setTrialModalOpen] = useState(false);
   const hasTrialKit = Boolean(kit?.allow_trial_kit || kit?.allowTrialKit);
   const trialKitQty = Number(kit?.trial_kit_quantity || 10);
+  const trialLimit = Number(kit?.trial_kit_max_orders_per_buyer ?? kit?.trialKitMaxOrdersPerBuyer ?? 1);
+  const purchasedTrialCount = Number(kit?.trial_kit_purchased_count ?? kit?.trialKitPurchasedCount ?? 0);
+  const isTrialLimitReached = Boolean(kit?.trial_kit_limit_reached ?? kit?.trialKitLimitReached) ||
+    (trialLimit > 0 && purchasedTrialCount >= trialLimit);
+  const canShowTrialButton = hasTrialKit && !isTrialLimitReached && !isCart;
 
-  // Order quantities from kit configuration
+  // Loose order quantities (e.g. 5, 10, 15, 20, 25 kits)
+  const looseOrderQuantities = useMemo(() => {
+    const rawLoose = kit?.looseOrderQuantities || kit?.loose_order_quantities || [];
+    const fromPricing = (kit?.loose_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+    const combined = [...new Set([...(Array.isArray(rawLoose) ? rawLoose.map(Number) : []), ...fromPricing])]
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    return combined;
+  }, [kit?.looseOrderQuantities, kit?.loose_order_quantities, kit?.loose_order_pricing]);
+
+  // PO (Purchase Order) bulk quantities (e.g. 100, 200, 400, 500 kits)
+  const poOrderQuantities = useMemo(() => {
+    const rawPo = kit?.orderQuantities || kit?.order_quantities || [];
+    const fromPricing = (kit?.po_order_pricing || []).map(t => Number(t.quantity)).filter(n => !isNaN(n) && n > 0);
+    const combined = [...new Set([...(Array.isArray(rawPo) ? rawPo.map(Number) : []), ...fromPricing])]
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    return combined;
+  }, [kit?.orderQuantities, kit?.order_quantities, kit?.po_order_pricing]);
+
+  const hasLooseQuantities = looseOrderQuantities.length > 0;
+  const hasPoQuantities = poOrderQuantities.length > 0;
+  const hasOrderQuantities = hasLooseQuantities || hasPoQuantities;
+
+  // Active pricing category tab: 'loose' | 'po'
+  const [activeTierType, setActiveTierType] = useState(() => (hasLooseQuantities ? "loose" : "po"));
+
+  // Active quantities array for the selected tab
+  const currentCategoryQuantities = useMemo(() => {
+    if (activeTierType === "loose") {
+      return hasLooseQuantities ? looseOrderQuantities : poOrderQuantities;
+    }
+    return hasPoQuantities ? poOrderQuantities : looseOrderQuantities;
+  }, [activeTierType, hasLooseQuantities, hasPoQuantities, looseOrderQuantities, poOrderQuantities]);
+
   const orderQuantities = useMemo(() => {
-    const rawQtys = kit?.orderQuantities || kit?.order_quantities || [];
-    return Array.isArray(rawQtys) ? rawQtys.map(Number).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b) : [];
-  }, [kit?.orderQuantities, kit?.order_quantities]);
-
-  const hasOrderQuantities = orderQuantities.length > 0;
+    const all = [...new Set([...looseOrderQuantities, ...poOrderQuantities])].sort((a, b) => a - b);
+    return all.length > 0 ? all : (currentCategoryQuantities.length > 0 ? currentCategoryQuantities : [10, 25]);
+  }, [looseOrderQuantities, poOrderQuantities, currentCategoryQuantities]);
 
   useEffect(() => {
     setSelectedVariant(initialVariantIndex);
-    if (hasOrderQuantities) {
-      setSelectedOrderQty(orderQuantities[0]);
+    if (currentCategoryQuantities.length > 0) {
+      setSelectedOrderQty(currentCategoryQuantities[0]);
     }
-  }, [kit?.id, hasOrderQuantities, initialVariantIndex]);
+  }, [kit?.id, activeTierType, currentCategoryQuantities, initialVariantIndex]);
 
   const [showVariants, setShowVariants] = useState(false);
   const [showVariantComparison, setShowVariantComparison] = useState(false);
+  const [showDatasheetModal, setShowDatasheetModal] = useState(false);
   const [showBosPopup, setShowBosPopup] = useState(false);
   const [selectedBosComp, setSelectedBosComp] = useState(null);
   const scrollRef = useRef(null);
@@ -286,6 +325,69 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
     setIsScrolling(false);
   }, []);
 
+  // Look up quantity tier pricing for current selection
+  const activeTierPricing = useMemo(() => {
+    const qty = Number(selectedOrderQty);
+    if (!qty) return null;
+
+    const looseList = Array.isArray(kit?.loose_order_pricing) ? kit.loose_order_pricing : [];
+    const poList = Array.isArray(kit?.po_order_pricing) ? kit.po_order_pricing : [];
+
+    const matchedLoose = looseList.find((t) => Number(t.quantity) === qty && Number(t.price_per_kit) > 0);
+    if (matchedLoose) {
+      return {
+        type: "loose",
+        quantity: qty,
+        price_per_kit: Number(matchedLoose.price_per_kit),
+        discount_amount: Number(matchedLoose.discount_amount || 0),
+      };
+    }
+
+    const matchedPo = poList.find((t) => Number(t.quantity) === qty && Number(t.price_per_kit) > 0);
+    if (matchedPo) {
+      return {
+        type: "po",
+        quantity: qty,
+        price_per_kit: Number(matchedPo.price_per_kit),
+        discount_amount: Number(matchedPo.discount_amount || 0),
+      };
+    }
+
+    return null;
+  }, [selectedOrderQty, kit?.loose_order_pricing, kit?.po_order_pricing]);
+
+  // Memoize formatted prices and calculations
+  const formattedPrices = useMemo(() => {
+    const baselineOurPrice = Number(currentVariant?.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
+    const ourPriceNum = activeTierPricing?.price_per_kit > 0
+      ? activeTierPricing.price_per_kit
+      : baselineOurPrice;
+
+    const baseMarketPrice = Number(currentVariant?.marketPrice || kit?.marketPrice || (baselineOurPrice > 0 ? Math.round(baselineOurPrice * 1.15) : 0));
+    const marketPriceNum = (activeTierPricing?.discount_amount > 0)
+      ? (ourPriceNum + activeTierPricing.discount_amount)
+      : baseMarketPrice;
+
+    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
+    const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
+      ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
+      : 0;
+
+    const orderQtyNum = Number(selectedOrderQty) || 1;
+    const totalOrderValue = ourPriceNum * orderQtyNum;
+
+    return {
+      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
+      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0",
+      rawOurPrice: ourPriceNum,
+      rawMarketPrice: marketPriceNum,
+      totalOrderValue: totalOrderValue > 0 ? totalOrderValue.toLocaleString("en-IN") : "0",
+      rawTotalOrderValue: totalOrderValue,
+      gstIncluded: gstIncludedAmount > 0 ? gstIncludedAmount.toLocaleString("en-IN") : "0",
+      gstRate: !isNaN(gstRate) ? gstRate : 13.8,
+    };
+  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, currentVariant?.gstRate, kit, activeTierPricing, selectedOrderQty]);
+
   // Cart actions
   const handleAddToCart = useCallback(() => {
     if (!isAuthenticated) {
@@ -293,29 +395,28 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
       return;
     }
 
-    if (user && !hasPermission(user, 'can_add_to_cart')) {
-      dispatch(setAlert({
-        type: 'error',
-        message: 'Your sub-user account is not authorized to add items to cart. Please contact your EPC Administrator.'
-      }));
-      return;
-    }
-
-    const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || orderQuantities[0] || 1) : 1;
+    const qtyToAdd = hasOrderQuantities ? (selectedOrderQty || currentCategoryQuantities[0] || 1) : 1;
 
     dispatch(addToCart({
       id: kit.id,
       variantIndex: selectedVariant,
       qty: qtyToAdd,
+      price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
     }));
-  }, [dispatch, kit?.id, selectedVariant, isAuthenticated, user, hasOrderQuantities, selectedOrderQty, orderQuantities]);
+  }, [dispatch, kit?.id, selectedVariant, isAuthenticated, user, hasOrderQuantities, selectedOrderQty, currentCategoryQuantities, activeTierPricing, formattedPrices?.rawOurPrice]);
 
   const handleDecreaseQty = useCallback(() => {
     if (hasOrderQuantities) {
       const currentQty = cartItem?.qty || 0;
-      const prevQty = [...orderQuantities].reverse().find(q => q < currentQty);
+      const prevQty = [...currentCategoryQuantities].reverse().find(q => q < currentQty);
       if (prevQty) {
-        dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty: prevQty, replace: true }));
+        dispatch(addToCart({
+          id: kit.id,
+          variantIndex: selectedVariant,
+          qty: prevQty,
+          replace: true,
+          price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
+        }));
       } else {
         dispatch(removeFromCart(cartItemId));
       }
@@ -326,19 +427,25 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
         dispatch(removeFromCart(cartItemId));
       }
     }
-  }, [dispatch, cartItemId, cartItem?.qty, hasOrderQuantities, orderQuantities, kit?.id, selectedVariant]);
+  }, [dispatch, cartItemId, cartItem?.qty, hasOrderQuantities, currentCategoryQuantities, kit?.id, selectedVariant, activeTierPricing, formattedPrices?.rawOurPrice]);
 
   const handleIncreaseQty = useCallback(() => {
     if (hasOrderQuantities) {
       const currentQty = cartItem?.qty || 0;
-      const nextQty = orderQuantities.find(q => q > currentQty);
+      const nextQty = currentCategoryQuantities.find(q => q > currentQty);
       if (nextQty) {
-        dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty: nextQty, replace: true }));
+        dispatch(addToCart({
+          id: kit.id,
+          variantIndex: selectedVariant,
+          qty: nextQty,
+          replace: true,
+          price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
+        }));
       }
     } else {
       dispatch(increaseQty(cartItemId));
     }
-  }, [dispatch, cartItemId, hasOrderQuantities, orderQuantities, kit?.id, selectedVariant, cartItem?.qty]);
+  }, [dispatch, cartItemId, hasOrderQuantities, currentCategoryQuantities, kit?.id, selectedVariant, cartItem?.qty, activeTierPricing, formattedPrices?.rawOurPrice]);
 
   const handleVariantChange = useCallback((index) => {
     setSelectedVariant(index);
@@ -346,22 +453,12 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
     setShowVariantComparison(false);
   }, []);
 
-  // Memoize formatted prices and calculations
-  const formattedPrices = useMemo(() => {
-    const ourPriceNum = Number(currentVariant?.ourPrice || kit?.ourPrice || kit?.selling_price_inr || 0);
-    const marketPriceNum = Number(currentVariant?.marketPrice || kit?.marketPrice || (ourPriceNum > 0 ? Math.round(ourPriceNum * 1.15) : 0));
-    return {
-      marketPrice: marketPriceNum > 0 ? marketPriceNum.toLocaleString("en-IN") : "",
-      ourPrice: ourPriceNum > 0 ? ourPriceNum.toLocaleString("en-IN") : "0"
-    };
-  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, kit]);
-
   const discountPercentage = useMemo(() => {
-    const mkt = Number(currentVariant?.marketPrice || kit?.marketPrice || 0);
-    const our = Number(currentVariant?.ourPrice || kit?.ourPrice || 0);
+    const mkt = formattedPrices.rawMarketPrice || 0;
+    const our = formattedPrices.rawOurPrice || 0;
     if (!mkt || !our || mkt <= our) return 0;
     return Math.round(((mkt - our) / mkt) * 100);
-  }, [currentVariant?.marketPrice, currentVariant?.ourPrice, kit]);
+  }, [formattedPrices.rawMarketPrice, formattedPrices.rawOurPrice]);
 
   // Safe display variables
   const displayKitName = useMemo(() => {
@@ -812,10 +909,23 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
         {displayKitName}
       </h2>
       {(kit.districtName || selectedDistrict?.name) && (
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-3">
           <span className="bg-primary/10 text-primary border border-primary/20 text-xs font-black px-3 py-1 rounded-full flex items-center gap-1.5">
             <FaMapMarkerAlt size={12} className="text-primary dark:text-info shrink-0" /> District: {kit.districtName || selectedDistrict?.name}
           </span>
+        </div>
+      )}
+
+      {kit?.hasDatasheet && (
+        <div className="flex justify-center mb-5">
+          <button
+            type="button"
+            onClick={() => setShowDatasheetModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 text-xs font-black uppercase tracking-wider transition-all duration-200 shadow-xs cursor-pointer hover:scale-105"
+          >
+            <FaFilePdf size={14} className="text-red-500" />
+            <span>View / Download System Datasheet</span>
+          </button>
         </div>
       )}
 
@@ -915,13 +1025,30 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                   <span className="text-3xl font-black tracking-tight">
                     {formattedPrices.ourPrice}
                   </span>
+                  <span className="text-xs text-text-secondary font-semibold ml-1">/ kit</span>
                 </div>
+                {activeTierPricing && (
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    activeTierPricing.type === 'po'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                      : 'bg-primary/10 text-primary dark:text-info border border-primary/20'
+                  }`}>
+                    {activeTierPricing.type === 'po' ? 'PO Bulk Tier' : 'Loose Tier'}
+                  </span>
+                )}
                 {discountPercentage > 0 && (
                   <span className="bg-emerald-500 text-white text-[11px] font-black px-2.5 py-1 rounded-full shadow-xs">
                     Save {discountPercentage}%
                   </span>
                 )}
               </div>
+              {selectedOrderQty > 1 && (
+                <div className="text-sm font-black text-primary dark:text-info flex items-center gap-1.5 pt-1">
+                  <span>Batch Total:</span>
+                  <span>₹{formattedPrices.totalOrderValue}</span>
+                  <span className="text-xs font-normal text-text-muted">({selectedOrderQty} kits)</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -929,20 +1056,26 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
           <div className="bg-surface rounded-xl p-4 border border-border shadow-xs flex flex-col justify-between">
             <h4 className="font-bold text-text-primary mb-2.5 flex items-center gap-1.5 text-xs uppercase tracking-wider">
               <FaTag className="text-primary text-[10px]" />
-              Per Kit Detail
+              Batch & Price Summary
             </h4>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center pb-1.5 border-b border-border">
-                <span className="text-text-muted font-medium">Price:</span>
+                <span className="text-text-muted font-medium">Price / Kit:</span>
                 <span className="font-black text-text-primary">₹{formattedPrices.ourPrice}</span>
               </div>
+              {selectedOrderQty > 1 && (
+                <div className="flex justify-between items-center pb-1.5 border-b border-border">
+                  <span className="text-text-muted font-medium">Batch Total ({selectedOrderQty} kits):</span>
+                  <span className="font-black text-primary">₹{formattedPrices.totalOrderValue}</span>
+                </div>
+              )}
               {currentVariant?.includedDeliveryCharge > 0 && (
                 <div className="flex justify-between items-center text-success font-semibold">
                   <span className="flex items-center gap-1">
                     <FaTruck size={10} />
                     Free Delivery:
                   </span>
-                  <span className="font-bold">Saved ₹{currentVariant.includedDeliveryCharge.toLocaleString("en-IN")}</span>
+                  <span className="font-bold">Saved ₹{((currentVariant.includedDeliveryCharge) * (Number(selectedOrderQty) || 1)).toLocaleString("en-IN")}</span>
                 </div>
               )}
             </div>
@@ -1033,10 +1166,38 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                 )}
               </div>
 
+              {/* Category Switcher Tabs (Loose vs PO) if both exist */}
+              {hasLooseQuantities && hasPoQuantities && (
+                <div className="flex rounded-xl bg-surface-hover p-1 border border-border text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTierType("loose")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg transition-all text-center ${
+                      activeTierType === "loose"
+                        ? "bg-surface text-primary shadow-xs font-black"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Loose Orders ({looseOrderQuantities[0] || 5}-{looseOrderQuantities[looseOrderQuantities.length - 1] || 25} Kits)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTierType("po")}
+                    className={`flex-1 py-1.5 px-3 rounded-lg transition-all text-center ${
+                      activeTierType === "po"
+                        ? "bg-surface text-amber-600 dark:text-amber-400 shadow-xs font-black"
+                        : "text-text-secondary hover:text-text-primary"
+                    }`}
+                  >
+                    Bulk PO Orders ({poOrderQuantities[0] || 100}+ Kits)
+                  </button>
+                </div>
+              )}
+
               {!cartItem ? (
                 <>
                   <div className="flex flex-wrap gap-2">
-                    {orderQuantities.map((qty) => (
+                    {currentCategoryQuantities.map((qty) => (
                       <button
                         key={qty}
                         type="button"
@@ -1059,19 +1220,24 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                     className="w-full rounded-xl py-3 font-black bg-gradient-to-r from-primary to-primary-end shadow-md hover:shadow-lg transition-all duration-200 transform active:scale-98 mt-2"
                     leftIcon={<FaShoppingCart />}
                   >
-                    Add {selectedOrderQty || orderQuantities[0]} Kits to Cart
+                    Add {selectedOrderQty || currentCategoryQuantities[0] || 1} Kits to Cart • ₹{formattedPrices.totalOrderValue}
                   </Button>
                 </>
               ) : (
                 <div className="space-y-3">
-
                   <div className="flex flex-wrap gap-2">
-                    {orderQuantities.map((qty) => (
+                    {currentCategoryQuantities.map((qty) => (
                       <button
                         key={qty}
                         type="button"
                         onClick={() => {
-                          dispatch(addToCart({ id: kit.id, variantIndex: selectedVariant, qty, replace: true }));
+                          dispatch(addToCart({
+                            id: kit.id,
+                            variantIndex: selectedVariant,
+                            qty,
+                            replace: true,
+                            price_per_kit: activeTierPricing?.price_per_kit || formattedPrices.rawOurPrice,
+                          }));
                           setSelectedOrderQty(qty);
                         }}
                         className={`px-4 py-2 rounded-xl text-xs font-black border transition-all duration-150 cursor-pointer
@@ -1136,7 +1302,7 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
             </div>
           )}
 
-          {hasTrialKit && !isCart && (
+          {canShowTrialButton && (
             <button
               type="button"
               onClick={() => setTrialModalOpen(true)}
@@ -1261,6 +1427,34 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                   </ul>
                 </div>
               )}
+              {section.data?.datasheet ? (
+                <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <FaFilePdf className="text-red-500" /> Datasheet Attached
+                  </span>
+                  <a
+                    href={section.data.datasheet}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold rounded-lg border border-red-500/20 transition-all cursor-pointer"
+                  >
+                    <FaFilePdf size={11} /> Download PDF
+                  </a>
+                </div>
+              ) : (
+                <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
+                  <span className="text-[10px] text-text-muted flex items-center gap-1 font-medium">
+                    <FaFilePdf className="text-text-muted" /> Datasheet
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowDatasheetModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-surface-hover hover:bg-surface-hover/80 text-text-primary text-xs font-bold rounded-lg border border-border transition-all cursor-pointer"
+                  >
+                    <FaFilePdf size={11} className="text-red-500" /> View Datasheet
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1371,6 +1565,14 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
           kit={kit}
           currentVariant={currentVariant}
           selectedVariantIndex={selectedVariant}
+        />
+      )}
+
+      {showDatasheetModal && (
+        <DatasheetModal
+          isOpen={showDatasheetModal}
+          onClose={() => setShowDatasheetModal(false)}
+          kit={kit}
         />
       )}
     </div>

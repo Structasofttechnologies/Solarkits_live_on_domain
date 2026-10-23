@@ -63,7 +63,12 @@ axios.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            const authVal = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+            if (originalRequest.headers?.set) {
+              originalRequest.headers.set('Authorization', authVal);
+            } else {
+              originalRequest.headers = { ...originalRequest.headers, Authorization: authVal };
+            }
             return axios(originalRequest);
           })
           .catch((err) => Promise.reject(err));
@@ -99,8 +104,16 @@ axios.interceptors.response.use(
           if (res.data?.refresh_token) {
             localStorage.setItem('refresh_token', res.data.refresh_token);
           }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('token_refreshed', { detail: newToken }));
+          }
           processQueue(null, newToken);
-          originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+          const authVal = newToken.startsWith('Bearer ') ? newToken : `Bearer ${newToken}`;
+          if (originalRequest.headers?.set) {
+            originalRequest.headers.set('Authorization', authVal);
+          } else {
+            originalRequest.headers = { ...originalRequest.headers, Authorization: authVal };
+          }
           return axios(originalRequest);
         } else {
           processQueue(new Error('No token received from refresh'), null);
@@ -128,27 +141,44 @@ export const refreshAccessToken = createAsyncThunk(
     async (_, { rejectWithValue, getState }) => {
         try {
             const localToken = getState()?.auth?.token || safeParse('login', null)?.token;
+            const storedRefreshToken = localStorage.getItem('refresh_token');
             const headers = {};
             if (localToken) {
                 headers['Authorization'] = localToken.startsWith('Bearer ') ? localToken : `Bearer ${localToken}`;
             }
+            if (storedRefreshToken) {
+                headers['x-refresh-token'] = storedRefreshToken;
+            }
 
-            const res = await axios.post(`${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5000/auth-api')}/refresh-access-token`, {}, {
-                headers,
-                withCredentials: true,
-                timeout: ms_conversion('30s'),
-            });
+            const res = await axios.post(
+                `${resolveApiUrl(import.meta.env.VITE_AUTH_API_URL, 'http://localhost:5000/auth-api')}/refresh-access-token`,
+                storedRefreshToken ? { refresh_token: storedRefreshToken } : {},
+                {
+                    headers,
+                    withCredentials: true,
+                    timeout: ms_conversion('30s'),
+                }
+            );
 
-            const { token, url_prefix } = res.data || {};
+            const { token, refresh_token: newRefreshToken, url_prefix } = res.data || {};
             if (token) {
                 localStorage.setItem('login', JSON.stringify({ token }));
             }
-            return { token: token || null, url_prefix: url_prefix || null };
+            if (newRefreshToken) {
+                localStorage.setItem('refresh_token', newRefreshToken);
+            }
+            if (token && typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('token_refreshed', { detail: token }));
+            }
+            return { token: token || null, refresh_token: newRefreshToken || null, url_prefix: url_prefix || null };
         } catch (err) {
             const message = err.response?.data?.message || err.message || 'Failed to refresh access token';
-            const localToken = safeParse('login', null)?.token;
-            if (!localToken && (err.response?.data?.auth === false || err.response?.status === 401)) {
-                window.location.href = getAuthPortalUrl();
+            if (err.response?.data?.auth === false || err.response?.status === 401) {
+                localStorage.removeItem('login');
+                localStorage.removeItem('refresh_token');
+                if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+                    window.location.href = getAuthPortalUrl();
+                }
             }
             return rejectWithValue(message);
         }
@@ -214,6 +244,10 @@ const authSlice = createSlice({
     name: 'auth',
     initialState,
     reducers: {
+        setAuthToken(state, action) {
+            state.token = action.payload;
+            state.expiresAt = action.payload ? Date.now() + 14 * 60 * 1000 : null;
+        },
         clearAuth(state) {
             state.token = null;
             state.url_prefix = null;
@@ -258,5 +292,5 @@ const authSlice = createSlice({
     },
 });
 
-export const { clearAuth } = authSlice.actions;
+export const { clearAuth, setAuthToken } = authSlice.actions;
 export default authSlice.reducer;

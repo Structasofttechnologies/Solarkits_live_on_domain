@@ -27,6 +27,8 @@ import CustomFilePicker from "../../components/CustomFilePicker";
 import Dialog from "../../components/Dialog";
 import PageHeader from "../../components/PageHeader";
 import NewOrdersDeliveryManager from "./NewOrdersDeliveryManager";
+import InwardVerificationModal from "../../../accounts/components/procurement/InwardVerificationModal";
+import { warehouseConfirmInward } from "../../../accounts/api/accounts";
 
 // ─── Inline Proforma Invoice Modal ────────────────────────────────────────────
 // ─── Inline Proforma Invoice Modal ────────────────────────────────────────────
@@ -731,6 +733,28 @@ export default function MaterialInward() {
     awaiting_inward: 0,
     awaiting_payment: 0
   });
+
+  const [selectedPiForInward, setSelectedPiForInward] = useState(null);
+  const [isPiInwardModalOpen, setIsPiInwardModalOpen] = useState(false);
+
+  const handleConfirmPiInward = async (payload) => {
+    try {
+      setIsDelivering(true);
+      const res = await warehouseConfirmInward(payload);
+      if (res?.status === "success") {
+        showAlert(res.message || `Inward verified and GRN generated: ${res.data?.grn_number || 'Success'}`, "Success", "success");
+        setIsPiInwardModalOpen(false);
+        setSelectedPiForInward(null);
+        fetchFulfillment();
+      } else {
+        showAlert(res?.message || "Failed to confirm inward", "Error", "danger");
+      }
+    } catch (err) {
+      showAlert(err?.response?.data?.message || err.message || "Failed to confirm inward", "Error", "danger");
+    } finally {
+      setIsDelivering(false);
+    }
+  };
 
   const fetchFulfillment = async () => {
     setLoadingFulfillment(true);
@@ -2520,10 +2544,18 @@ export default function MaterialInward() {
                               <td className="px-5 py-4 text-right whitespace-nowrap">
                                 {isAwaitingInward ? (
                                   <button
-                                    onClick={() => handleTabChange("local")}
-                                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all"
+                                    onClick={() => {
+                                      const pendingPi = (ord.purchase_indents || []).find(pi => pi.fulfilment?.supply_status !== 'Inward Completed');
+                                      if (pendingPi) {
+                                        setSelectedPiForInward(pendingPi);
+                                        setIsPiInwardModalOpen(true);
+                                      } else {
+                                        handleTabChange("local");
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all flex items-center gap-1.5 ml-auto"
                                   >
-                                    Receive Inward
+                                    <FaBoxes className="text-xs" /> Receive Inward
                                   </button>
                                 ) : isReady ? (
                                   <button
@@ -3102,6 +3134,7 @@ export default function MaterialInward() {
         log={selectedInwardLog}
         activeSkus={activeSkus}
       />
+<<<<<<< HEAD
 
       {/* ── Order-Specific Material Inward Modal (Account Manager Forwarded Inward List) ── */}
       <Dialog
@@ -3480,6 +3513,19 @@ export default function MaterialInward() {
           </form>
         )}
       </Dialog>
+
+      {/* Procurement Inward Verification Modal */}
+      <InwardVerificationModal
+        isOpen={isPiInwardModalOpen}
+        onClose={() => {
+          setIsPiInwardModalOpen(false);
+          setSelectedPiForInward(null);
+        }}
+        purchaseIndent={selectedPiForInward}
+        destinationWarehouse={{ id: selectedPiForInward?.destination_warehouse_id }}
+        onConfirmInward={handleConfirmPiInward}
+        loading={isDelivering}
+      />
       {renderSkuInfoModal()}
     </div>
   );

@@ -151,11 +151,35 @@ async function createPoDraft({
       reseller_id: franchisee_id,
       status: 'active',
     })
+      .populate('plan_id')
       .sort({ start_date: -1 })
       .lean();
     if (!subscription) throw new Error('No active plan subscription found for this franchisee.');
 
-    plan_id = subscription.plan_id;
+    const activePlan = subscription.plan_id;
+    plan_id = activePlan?._id || subscription.plan_id;
+
+    // Enforce Store Type Order Fulfillment Rules
+    const rawAllowed = activePlan?.order_type_allowed;
+    const allowedTypes = Array.isArray(rawAllowed)
+      ? rawAllowed
+      : typeof rawAllowed === 'string'
+      ? (rawAllowed === 'both' ? ['po_order', 'loose_order'] : rawAllowed.split(',').map((s) => s.trim()))
+      : ['po_order'];
+
+    const allowsPo = allowedTypes.includes('po_order');
+    const allowsCombinePo = allowedTypes.includes('combine_po_order');
+
+    if (!allowsPo && !allowsCombinePo) {
+      throw new Error('Your Store Type only permits Loose Orders. Purchase Orders cannot be placed under this plan.');
+    }
+    if (po_category === 'COMBINE_PO' && !allowsCombinePo) {
+      throw new Error('Your Store Type does not permit Combine PO Orders.');
+    }
+    if (po_category !== 'COMBINE_PO' && !allowsPo) {
+      throw new Error('Your Store Type does not permit standard Single PO Orders.');
+    }
+
     custDetails = {
       name: franchisee.contact_person || franchisee.name || custDetails.name,
       company_name: franchisee.business_name || custDetails.company_name,

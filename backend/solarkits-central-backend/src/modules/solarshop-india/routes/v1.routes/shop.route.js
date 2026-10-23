@@ -43,7 +43,9 @@ const {
   create_epc_po_order,
   preview_epc_po_penalty,
   request_epc_po_refund,
-  reorder_against_epc_po
+  reorder_against_epc_po,
+  submit_epc_milestone_payment,
+  resolve_payment_milestones
 } = require("../../controller/v1.handlers/shop.handler");
 
 const { verify_reseller_auth } = require('../../middlewares/verify_reseller_auth');
@@ -57,8 +59,8 @@ const { get_epc_catalogue } = require("../../controller/epc.catalogue.handler");
 router.get("/hierarchy", get_shop_hierarchy);
 router.get("/industry-types", get_shop_hierarchy);
 router.get("/stores", get_nearby_stores);
-router.get("/combo-kits", get_combo_kits_by_district);
-router.get("/best-sellers", get_best_seller_kits);
+router.get("/combo-kits", optional_auth, get_combo_kits_by_district);
+router.get("/best-sellers", optional_auth, get_best_seller_kits);
 router.get("/delivery-cost/calculate", calculate_pincode_delivery_cost);
 router.get("/epc-catalogue", verify_auth, get_epc_catalogue);
 router.get("/epc-catalogue/status", verify_auth, require("../../controller/epc.catalogue.handler").get_epc_catalogue_status);
@@ -116,6 +118,9 @@ router.get("/checkout/warehouse-capacity-check", optional_auth, checkout_warehou
 router.post("/offline-checkout/create", verify_auth, epcReceiptUpload, create_epc_offline_checkout);
 router.post("/offline-checkout/:id/resubmit", verify_auth, epcReceiptUpload, resubmit_epc_offline_payment);
 router.get("/orders/:id/invoice-data", verify_auth, get_epc_order_invoice_data);
+// Product-wise payment milestone routes
+router.get("/payment-milestones/resolve", resolve_payment_milestones);
+router.post("/orders/:id/milestone-payment", verify_auth, epcReceiptUpload, submit_epc_milestone_payment);
 
 // ── EPC PO Allocations from Franchisees ───────────────────────────────────
 router.get("/po-allocations", verify_auth, get_epc_po_allocations);
