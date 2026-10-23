@@ -9,8 +9,10 @@ import {
   HiOutlineHashtag, HiOutlineQrcode, HiOutlineDownload,
   HiOutlineSearch, HiOutlinePlus, HiOutlineTrash, HiDuplicate
 } from 'react-icons/hi';
-import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers, FaLock, FaCheckDouble } from "react-icons/fa";
+import { FaBoxes, FaBarcode, FaListAlt, FaExchangeAlt, FaDollyFlatbed, FaBuilding, FaCheckCircle, FaSpinner, FaFilePdf, FaEye, FaShippingFast, FaHandshake, FaInfoCircle, FaClock, FaUser, FaFileInvoice, FaUsers, FaLock, FaCheckDouble, FaPhoneAlt, FaTools, FaCheck, FaTruck, FaWarehouse } from "react-icons/fa";
+import { HiOutlineClock, HiOutlineEye, HiOutlineClipboardCheck, HiOutlineTruck, HiOutlineLocationMarker, HiOutlineExclamation } from "react-icons/hi";
 import { getInwardActiveSkus, saveInward, getInwardLogs, getInwardStockStatus, getWarehousePurchaseOrders, markPurchaseOrderDelivered, uploadTaxInvoice, createPoRequest, getPoRequests, getOrderInwardFulfillment } from "../../api/inward";
+import { getDeliveryOrders, inwardDeliveryOrder, recordInwardDiscrepancy } from "../../api/deliveryOrders";
 import axios from "axios";
 import { authHeaderObj } from "../../app/authHeader";
 
@@ -410,7 +412,8 @@ export default function MaterialInward() {
   };
 
   const [activeTab, setActiveTab] = useState(() => {
-    return sessionStorage.getItem("inwardActiveTab") || "new_orders";
+    const saved = sessionStorage.getItem("inwardActiveTab");
+    return saved === "inventory" ? "inventory" : "local";
   });
 
   const handleTabChange = (tabId) => {
@@ -422,19 +425,257 @@ export default function MaterialInward() {
     setFulfillmentPage(1);
   };
 
-  useEffect(() => {
-    if (warehouseMode !== 'sub' && activeTab === 'transfers') {
-      handleTabChange('new_orders');
-    }
-  }, [warehouseMode, activeTab]);
-
   const tabs = useMemo(() => [
-    { id: "new_orders", label: "New Orders" },
     { id: "local", label: "Inventory Inward" },
-    { id: "supplier", label: "Order Inward" },
-    ...(warehouseMode === 'sub' ? [{ id: "transfers", label: "Stock Transfers" }] : []),
     { id: "inventory", label: "Stock Updates" }
-  ], [warehouseMode]);
+  ], []);
+
+  // ── Delivery Orders Inward State (Client Orders Inward Fulfillment) ──
+  const [deliveryOrders, setDeliveryOrders] = useState([]);
+  const [loadingDeliveryOrders, setLoadingDeliveryOrders] = useState(false);
+  const [deliveryOrdersFilter, setDeliveryOrdersFilter] = useState("all"); // "all" | "pending" | "partial" | "completed"
+  const [deliveryOrdersSearch, setDeliveryOrdersSearch] = useState("");
+  const [inwardSubTab, setInwardSubTab] = useState("orders"); // "orders" (Customer Orders Inward) | "stock" (Warehouse Stock POs)
+
+  // Order Inward Modal State
+  const [orderInwardModalOpen, setOrderInwardModalOpen] = useState(false);
+  const [selectedOrderForInward, setSelectedOrderForInward] = useState(null);
+  const [inwardInputs, setInwardInputs] = useState({});
+  const [inwardRemarks, setInwardRemarks] = useState('');
+  const [submittingOrderInward, setSubmittingOrderInward] = useState(false);
+  const [inwardType, setInwardType] = useState('warehouse');
+  const [inwardExecutionMode, setInwardExecutionMode] = useState('manual');
+  const [scannerInput, setScannerInput] = useState('');
+  const [scannedSerials, setScannedSerials] = useState([]);
+  const [pickupLocationDetails, setPickupLocationDetails] = useState({
+    location_name: '',
+    address: '',
+    contact_person: '',
+    contact_phone: ''
+  });
+
+  const fetchDeliveryOrders = async () => {
+    try {
+      setLoadingDeliveryOrders(true);
+      const res = await getDeliveryOrders();
+      if (res.status === 'success') {
+        setDeliveryOrders(res.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch delivery orders for inward:', err);
+    } finally {
+      setLoadingDeliveryOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeliveryOrders();
+  }, []);
+
+  const filteredDeliveryOrders = useMemo(() => {
+    return deliveryOrders.filter(ord => {
+      const items = ord.items || [];
+      const totalPending = items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+      const totalReceived = items.reduce((acc, it) => acc + (it.received_qty || 0), 0);
+      const isComplete = totalPending === 0 || ord.delivery_status === 'ready_for_dispatch';
+
+      if (deliveryOrdersFilter === 'pending' && !(totalPending > 0 && totalReceived === 0)) return false;
+      if (deliveryOrdersFilter === 'partial' && !(totalPending > 0 && totalReceived > 0)) return false;
+      if (deliveryOrdersFilter === 'completed' && !isComplete) return false;
+
+      if (deliveryOrdersSearch.trim()) {
+        const q = deliveryOrdersSearch.toLowerCase().trim();
+        const ordNo = (ord.order_number || '').toLowerCase();
+        const doId = (ord.delivery_order_id || '').toLowerCase();
+        const cust = (ord.customer_name || '').toLowerCase();
+        const city = (ord.destination?.city || ord.destination?.district || '').toLowerCase();
+        const truck = (ord.incoming_truck_group?.vehicle_number || '').toLowerCase();
+        return ordNo.includes(q) || doId.includes(q) || cust.includes(q) || city.includes(q) || truck.includes(q);
+      }
+      return true;
+    });
+  }, [deliveryOrders, deliveryOrdersFilter, deliveryOrdersSearch]);
+
+  const deliveryOrderCounts = useMemo(() => {
+    let pending = 0;
+    let partial = 0;
+    let completed = 0;
+    deliveryOrders.forEach(ord => {
+      const items = ord.items || [];
+      const totalPending = items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+      const totalReceived = items.reduce((acc, it) => acc + (it.received_qty || 0), 0);
+      if (totalPending === 0 || ord.delivery_status === 'ready_for_dispatch') completed++;
+      else if (totalReceived > 0) partial++;
+      else pending++;
+    });
+    return { total: deliveryOrders.length, pending, partial, completed };
+  }, [deliveryOrders]);
+
+  const handleOpenOrderInwardModal = (order) => {
+    setSelectedOrderForInward(order);
+    const initialInputs = {};
+    (order.items || []).forEach(it => {
+      initialInputs[it.sku] = {
+        qty: it.pending_qty,
+        damaged_qty: 0,
+        missing_qty: 0,
+        rack_location: it.rack_location || ''
+      };
+    });
+    setInwardInputs(initialInputs);
+    setInwardRemarks('');
+    setInwardType(order.inward_type || 'warehouse');
+    setInwardExecutionMode('manual');
+    setPickupLocationDetails(order.pickup_location_details || {
+      location_name: '',
+      address: '',
+      contact_person: '',
+      contact_phone: ''
+    });
+    setScannerInput('');
+    setScannedSerials(order.scanned_serials || []);
+    setOrderInwardModalOpen(true);
+  };
+
+  const handleScanItem = (e) => {
+    if (e) e.preventDefault();
+    const barcode = scannerInput.trim();
+    if (!barcode || !selectedOrderForInward) return;
+
+    const items = selectedOrderForInward.items || [];
+    let matchedItem = items.find(it => it.sku.toLowerCase() === barcode.toLowerCase() || barcode.toLowerCase().includes(it.sku.toLowerCase()));
+    if (!matchedItem) {
+      matchedItem = items.find(it => (it.pending_qty || 0) > 0 && barcode.toLowerCase().includes((it.product_name || '').toLowerCase().slice(0, 5)));
+    }
+    if (!matchedItem) {
+      matchedItem = items.find(it => (it.pending_qty || 0) > 0) || items[0];
+    }
+    if (!matchedItem) {
+      dispatch(setAlert({ message: `Scanned code "${barcode}" could not be matched to any order item.`, type: 'warning' }));
+      return;
+    }
+    if (scannedSerials.some(s => s.serial_code === barcode)) {
+      dispatch(setAlert({ message: `Serial / QR "${barcode}" is already scanned!`, type: 'warning' }));
+      setScannerInput('');
+      return;
+    }
+    const currentQty = parseInt(inwardInputs[matchedItem.sku]?.qty) || 0;
+    if (currentQty >= matchedItem.pending_qty) {
+      dispatch(setAlert({ message: `All ${matchedItem.pending_qty} units of ${matchedItem.product_name} already accounted for!`, type: 'warning' }));
+      setScannerInput('');
+      return;
+    }
+    const newSerial = {
+      sku: matchedItem.sku,
+      product_name: matchedItem.product_name,
+      serial_code: barcode,
+      scanned_at: new Date().toISOString()
+    };
+    setScannedSerials(prev => [newSerial, ...prev]);
+    setInwardInputs(prev => ({
+      ...prev,
+      [matchedItem.sku]: {
+        ...prev[matchedItem.sku],
+        qty: currentQty + 1
+      }
+    }));
+    dispatch(setAlert({
+      message: `Scanned: ${matchedItem.product_name} (Serial: ${barcode})`,
+      type: 'success'
+    }));
+    setScannerInput('');
+  };
+
+  const handleSubmitOrderInward = async (e) => {
+    e.preventDefault();
+    if (!selectedOrderForInward) return;
+
+    const itemsToInward = [];
+    let hasDiscrepancy = false;
+
+    for (const it of (selectedOrderForInward?.items || [])) {
+      const input = inwardInputs[it.sku];
+      const qty = parseInt(input?.qty) || 0;
+      const damagedQty = parseInt(input?.damaged_qty) || 0;
+      const missingQty = parseInt(input?.missing_qty) || 0;
+
+      if (damagedQty > 0 || missingQty > 0) {
+        hasDiscrepancy = true;
+      }
+
+      if (qty > 0 || damagedQty > 0 || missingQty > 0) {
+        itemsToInward.push({
+          sku: it.sku,
+          qty,
+          damaged_qty: damagedQty,
+          missing_qty: missingQty,
+          rack_location: input?.rack_location || it.rack_location
+        });
+      }
+    }
+
+    if (itemsToInward.length === 0) {
+      dispatch(setAlert({
+        message: 'Please enter at least one positive inward quantity.',
+        type: 'warning'
+      }));
+      return;
+    }
+
+    try {
+      setSubmittingOrderInward(true);
+      if (hasDiscrepancy) {
+        for (const itm of itemsToInward) {
+          if (itm.damaged_qty > 0 || itm.missing_qty > 0) {
+            await recordInwardDiscrepancy(selectedOrderForInward._id, {
+              sku: itm.sku,
+              received_qty: itm.qty,
+              damaged_qty: itm.damaged_qty,
+              missing_qty: itm.missing_qty,
+              remarks: inwardRemarks
+            });
+          } else if (itm.qty > 0) {
+            await inwardDeliveryOrder(selectedOrderForInward._id, {
+              items: [{ sku: itm.sku, qty: itm.qty, rack_location: itm.rack_location }],
+              remarks: inwardRemarks,
+              inward_type: inwardType,
+              inward_mode: inwardExecutionMode,
+              scanned_serials: scannedSerials,
+              pickup_location_details: inwardType === 'pickup_location' ? pickupLocationDetails : null
+            });
+          }
+        }
+        dispatch(setAlert({
+          message: 'Inward recorded with discrepancy logging. Accounts team notified for debit note/replacement.',
+          type: 'warning'
+        }));
+      } else {
+        const res = await inwardDeliveryOrder(selectedOrderForInward._id, {
+          items: itemsToInward,
+          remarks: inwardRemarks,
+          inward_type: inwardType,
+          inward_mode: inwardExecutionMode,
+          scanned_serials: scannedSerials,
+          pickup_location_details: inwardType === 'pickup_location' ? pickupLocationDetails : null
+        });
+        dispatch(setAlert({
+          message: res.message || 'Material inward verified & updated!',
+          type: 'success'
+        }));
+      }
+
+      setOrderInwardModalOpen(false);
+      fetchDeliveryOrders();
+    } catch (err) {
+      console.error('Inward error:', err);
+      dispatch(setAlert({
+        message: err.response?.data?.message || 'Failed to record material inward.',
+        type: 'error'
+      }));
+    } finally {
+      setSubmittingOrderInward(false);
+    }
+  };
 
   // Dynamic States
   const [activeSkus, setActiveSkus] = useState([]);
@@ -1515,24 +1756,21 @@ export default function MaterialInward() {
         icon={HiCube}
       />
 
-      {/* Premium Tab Navigation */}
-      <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-3xl shadow-inner relative overflow-hidden backdrop-blur-md overflow-x-auto">
+      {/* Premium Tab Navigation: 2 tabs (Inventory Inward & Stock Updates) */}
+      <div className="flex bg-surface border border-border/60 p-1.5 rounded-2xl gap-1 max-w-xl shadow-inner relative overflow-hidden backdrop-blur-md overflow-x-auto">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex-1 relative py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap
+              className={`flex-1 relative py-2.5 px-4 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap cursor-pointer
                 ${isSelected
                   ? "gradient-primary text-white shadow-md shadow-primary/20 scale-[1.02]"
                   : "text-text-secondary hover:bg-surface-hover hover:text-primary"
                 }`}
             >
-              {tab.id === 'new_orders' && <FaBoxes className="text-base text-amber-300" />}
               {tab.id === 'local' && <HiOutlineClipboardList className="text-base" />}
-              {tab.id === 'supplier' && <HiCube className="text-base" />}
-              {tab.id === 'transfers' && <FaExchangeAlt className="text-base" />}
               {tab.id === 'inventory' && <HiCube className="text-base" />}
               {tab.label}
               {isSelected && (
@@ -1556,27 +1794,261 @@ export default function MaterialInward() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="w-full"
         >
-          {activeTab === "new_orders" && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
-              <NewOrdersDeliveryManager
-                onNavigateToOutward={(ord) => {
-                  const prefix = location.pathname.startsWith("/warehouse-management-panel")
-                    ? "/warehouse-management-panel"
-                    : "/warehouse";
-                  navigate(`${prefix}/delivery-management`);
-                }}
-              />
-            </div>
-          )}
-
           {activeTab === "local" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-full overflow-hidden">
-              <div className="card p-6 space-y-4 w-full max-w-full overflow-hidden">
-                <div className="border-b border-border pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
-                    <FaBoxes className="text-primary" />
-                    Supplier Purchase Orders (Inventory Inward)
-                  </h3>
+              {/* Sub-Switch: Order-Specific Inward vs Warehouse Stock Replenishment */}
+              <div className="flex bg-surface border border-border p-1.5 rounded-2xl max-w-xl gap-1 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setInwardSubTab("orders")}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    inwardSubTab === "orders"
+                      ? "gradient-primary text-white shadow-sm"
+                      : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                  }`}
+                >
+                  <FaBoxes className="text-sm" />
+                  <span>Order-Specific Inward ({deliveryOrders.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInwardSubTab("stock")}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    inwardSubTab === "stock"
+                      ? "gradient-primary text-white shadow-sm"
+                      : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+                  }`}
+                >
+                  <HiCube className="text-sm" />
+                  <span>Warehouse Stock POs ({purchaseOrders.length})</span>
+                </button>
+              </div>
+
+              {inwardSubTab === "orders" ? (
+                /* ── SUB-VIEW A: Customer Orders Inward (Account Manager Inward Lists) ── */
+                <div className="space-y-4">
+                  {/* Filter & Search Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-4 rounded-2xl border border-border shadow-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        { id: 'all', label: 'All Orders', count: deliveryOrderCounts.total },
+                        { id: 'pending', label: 'Pending Inward', count: deliveryOrderCounts.pending },
+                        { id: 'partial', label: 'Partially Inwarded', count: deliveryOrderCounts.partial },
+                        { id: 'completed', label: 'Inward Completed', count: deliveryOrderCounts.completed },
+                      ].map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => setDeliveryOrdersFilter(f.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
+                            deliveryOrdersFilter === f.id
+                              ? 'bg-primary text-white border-primary shadow-xs'
+                              : 'bg-surface-hover hover:bg-surface border-border text-text-secondary hover:text-text-primary'
+                          }`}
+                        >
+                          <span>{f.label}</span>
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${deliveryOrdersFilter === f.id ? 'bg-white/20 text-white' : 'bg-surface text-text-primary'}`}>
+                            {f.count}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 sm:w-64">
+                        <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm" />
+                        <input
+                          type="text"
+                          placeholder="Search order #, client, DO..."
+                          value={deliveryOrdersSearch}
+                          onChange={(e) => setDeliveryOrdersSearch(e.target.value)}
+                          className="w-full pl-9 pr-3 py-1.5 text-xs bg-surface-hover border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <button
+                        onClick={fetchDeliveryOrders}
+                        disabled={loadingDeliveryOrders}
+                        className="p-2 rounded-xl bg-surface-hover border border-border text-text-secondary hover:text-text-primary transition-all text-xs cursor-pointer"
+                        title="Refresh delivery orders"
+                      >
+                        <FaSpinner className={loadingDeliveryOrders ? "animate-spin" : ""} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Orders Cards List */}
+                  {loadingDeliveryOrders ? (
+                    <div className="p-12 text-center text-text-muted flex items-center justify-center gap-2">
+                      <FaSpinner className="animate-spin text-xl text-primary" />
+                      <span className="text-xs">Loading customer orders for inward...</span>
+                    </div>
+                  ) : filteredDeliveryOrders.length === 0 ? (
+                    <div className="card p-12 text-center text-text-muted space-y-2 bg-surface border border-border rounded-2xl">
+                      <FaBoxes className="mx-auto text-3xl opacity-30" />
+                      <div className="text-sm font-bold text-text-primary">No orders found</div>
+                      <div className="text-xs">No customer delivery orders match the current inward filter.</div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredDeliveryOrders.map((ord) => {
+                        const items = ord.items || [];
+                        const totalOrdered = items.reduce((acc, it) => acc + (it.ordered_qty || 0), 0);
+                        const totalReceived = items.reduce((acc, it) => acc + (it.received_qty || 0), 0);
+                        const totalPending = items.reduce((acc, it) => acc + (it.pending_qty || 0), 0);
+                        const inwardPercent = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
+                        const isComplete = totalPending === 0 || ord.delivery_status === 'ready_for_dispatch';
+                        const isPartial = totalReceived > 0 && totalPending > 0;
+
+                        return (
+                          <div key={ord._id} className="card p-5 space-y-3.5 bg-surface border border-border hover:border-primary/40 rounded-2xl shadow-xs transition-all">
+                            {/* Card Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className="text-base font-black text-text-primary font-mono">
+                                  Order #{ord.order_number}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-lg font-mono text-xs font-bold bg-primary/15 text-primary border border-primary/30">
+                                  {ord.delivery_order_id}
+                                </span>
+                                {ord.incoming_truck_group?.vehicle_number && (
+                                  <span className="px-2 py-0.5 rounded-lg font-mono text-xs font-bold bg-surface-hover text-text-secondary border border-border flex items-center gap-1">
+                                    <FaTruck className="text-[10px] text-primary" /> {ord.incoming_truck_group.vehicle_number}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1">
+                                  <FaCheckCircle className="text-[10px]" /> Payment Verified
+                                </span>
+
+                                {isComplete ? (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
+                                    <FaCheckCircle className="text-[10px]" /> Inward Complete (100%)
+                                  </span>
+                                ) : isPartial ? (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1">
+                                    <HiOutlineExclamation className="text-xs" /> Partially Inwarded ({inwardPercent}%)
+                                  </span>
+                                ) : (
+                                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-500/15 text-orange-400 border border-orange-500/30 flex items-center gap-1">
+                                    <HiOutlineClock className="text-xs" /> Inward Pending
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Client & Destination strip */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary bg-surface-hover/40 px-3.5 py-2 rounded-xl border border-border/40">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <span className="font-bold text-text-primary flex items-center gap-1.5">
+                                  <FaBuilding className="text-primary text-xs" />
+                                  {ord.customer_name}
+                                </span>
+                                {ord.customer_phone && (
+                                  <span className="text-text-muted flex items-center gap-1 font-medium">
+                                    <FaPhoneAlt className="text-[10px] text-primary" /> {ord.customer_phone}
+                                  </span>
+                                )}
+                                {(ord.destination?.city || ord.destination?.district || ord.destination?.state) && (
+                                  <span className="text-text-muted flex items-center gap-1 font-medium">
+                                    <HiOutlineLocationMarker className="text-xs text-primary" />
+                                    {ord.destination?.city || ord.destination?.district || ''}{ord.destination?.state ? `, ${ord.destination.state}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-text-muted">
+                                Ordered: {new Date(ord.order_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </span>
+                            </div>
+
+                            {/* Items Inward Fulfillment Table */}
+                            <div className="border border-border rounded-xl overflow-hidden bg-surface">
+                              <table className="w-full text-left text-xs">
+                                <thead className="bg-surface-hover/70 border-b border-border text-[10px] font-black uppercase text-text-muted">
+                                  <tr>
+                                    <th className="p-2.5">Item / SKU</th>
+                                    <th className="p-2.5">Sourcing / Supplier</th>
+                                    <th className="p-2.5 text-center">Ordered</th>
+                                    <th className="p-2.5 text-center">Inwarded</th>
+                                    <th className="p-2.5 text-center">Pending</th>
+                                    <th className="p-2.5 text-right">Rack Location</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                  {items.map((it) => (
+                                    <tr key={it.sku} className="hover:bg-surface-hover/30">
+                                      <td className="p-2.5">
+                                        <div className="font-bold text-text-primary">{it.product_name}</div>
+                                        <div className="text-[10px] font-mono text-primary">{it.sku}</div>
+                                      </td>
+                                      <td className="p-2.5 text-text-secondary text-[11px]">
+                                        <div>{it.supplier_name || 'Warehouse Stock'}</div>
+                                        {it.supply_status && (
+                                          <span className="text-[9px] uppercase font-bold text-text-muted">{it.supply_status.replace(/_/g, ' ')}</span>
+                                        )}
+                                      </td>
+                                      <td className="p-2.5 text-center font-bold text-text-primary">{it.ordered_qty}</td>
+                                      <td className="p-2.5 text-center font-bold text-success">{it.received_qty}</td>
+                                      <td className="p-2.5 text-center">
+                                        {(it.pending_qty || 0) === 0 ? (
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/15 text-success">0 Pcs</span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-warning/15 text-warning">{it.pending_qty} Pcs</span>
+                                        )}
+                                      </td>
+                                      <td className="p-2.5 text-right font-mono text-[11px] text-text-secondary">
+                                        {it.rack_location || '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Card Footer: Progress & Inward Button */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-black text-text-muted uppercase tracking-wider">
+                                  Inward Progress:
+                                </span>
+                                <div className="w-32 sm:w-44 h-2 rounded-full bg-border overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all duration-500 ${inwardPercent === 100 ? 'bg-success' : 'bg-primary'}`}
+                                    style={{ width: `${inwardPercent}%` }}
+                                  />
+                                </div>
+                                <span className={`text-xs font-mono font-bold ${inwardPercent === 100 ? 'text-success' : 'text-primary'}`}>
+                                  {totalReceived} / {totalOrdered} Pcs ({inwardPercent}%)
+                                </span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenOrderInwardModal(ord)}
+                                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 shadow-sm cursor-pointer ${
+                                  isComplete
+                                    ? 'bg-surface-hover text-text-secondary border border-border hover:text-text-primary'
+                                    : 'gradient-primary text-white hover:opacity-95 active:scale-95'
+                                }`}
+                              >
+                                <HiOutlineClipboardCheck className="text-base" />
+                                <span>{isComplete ? 'Inward Completed (Edit)' : 'Inward Material'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* ── SUB-VIEW B: Warehouse Stock Purchase Orders ── */
+                <div className="card p-6 space-y-4 w-full max-w-full overflow-hidden">
+                  <div className="border-b border-border pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                      <FaBoxes className="text-primary" />
+                      Supplier Purchase Orders (Warehouse Stock Replenishment)
+                    </h3>
                   {/* Status Filter */}
                   <div className="flex flex-wrap gap-1.5">
                     {["All", "Pending", "Accepted", "Invoiced", "Delivered", "Overdue"].map(st => (
@@ -1757,8 +2229,9 @@ export default function MaterialInward() {
                   pageSize={posPageSize}
                 />
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
           {activeTab === "supplier" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1947,7 +2420,10 @@ export default function MaterialInward() {
                               <td className="px-5 py-4">
                                 <div className="font-bold text-text-primary text-xs flex items-center gap-1.5">
                                   <FaBuilding className="text-text-muted text-[10px]" />
-                                  {ord.destination}
+                                  {ord.destination?.address || ord.destination?.district
+                                    ? `${ord.destination?.address || ''}, ${ord.destination?.district || ''}, ${ord.destination?.state || ''}`.replace(/^,\s*|,\s*$/g, '')
+                                    : ord.destination?.pincode || '—'
+                                  }
                                 </div>
                                 <div className="text-[11px] text-text-muted mt-0.5">Assigned: {ord.warehouse_code}</div>
                                 <div className="text-[10px] text-text-muted mt-1">
@@ -2626,6 +3102,384 @@ export default function MaterialInward() {
         log={selectedInwardLog}
         activeSkus={activeSkus}
       />
+
+      {/* ── Order-Specific Material Inward Modal (Account Manager Forwarded Inward List) ── */}
+      <Dialog
+        isOpen={orderInwardModalOpen}
+        onClose={() => setOrderInwardModalOpen(false)}
+        title={
+          selectedOrderForInward
+            ? `Inward Materials: Order #${selectedOrderForInward.order_number} (${selectedOrderForInward.delivery_order_id})`
+            : "Inward Materials"
+        }
+        size="xl"
+      >
+        {selectedOrderForInward && (
+          <form onSubmit={handleSubmitOrderInward} className="space-y-4 p-1">
+            {/* Header Strip with Order Details & Inward Source */}
+            <div className="bg-surface-hover/60 border border-border p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-extrabold text-text-primary text-sm font-mono">
+                    Order #{selectedOrderForInward.order_number}
+                  </span>
+                  <span className="px-2 py-0.5 rounded font-mono font-bold bg-primary/10 text-primary border border-primary/20 text-xs">
+                    {selectedOrderForInward.delivery_order_id}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    Payment Verified by Accounts
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-text-muted text-[11px]">
+                  <span className="flex items-center gap-1 font-semibold text-text-primary">
+                    <FaBuilding className="text-primary text-xs" /> {selectedOrderForInward.customer_name}
+                  </span>
+                  {selectedOrderForInward.customer_phone && (
+                    <span className="flex items-center gap-1">
+                      <FaPhoneAlt className="text-text-muted text-[10px]" /> {selectedOrderForInward.customer_phone}
+                    </span>
+                  )}
+                  {selectedOrderForInward.incoming_truck_group?.vehicle_number && (
+                    <span className="flex items-center gap-1 font-mono text-primary font-bold">
+                      <FaTruck className="text-xs" /> Truck: {selectedOrderForInward.incoming_truck_group.vehicle_number}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Inward Mode Switch (Manual vs Barcode Scanner) */}
+              <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-border shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setInwardExecutionMode('manual')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    inwardExecutionMode === 'manual'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  Manual Entry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInwardExecutionMode('scanner')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    inwardExecutionMode === 'scanner'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  <FaBarcode className="text-sm" />
+                  <span>Barcode Scanner Gun</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Inward Execution: Barcode Scanning Box if Scanner Mode Active */}
+            {inwardExecutionMode === 'scanner' && (
+              <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FaBarcode className="text-primary text-lg" />
+                    <span className="text-xs font-bold text-text-primary">
+                      Scan SKU / QR / Serial Code (Gun Mode)
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-text-muted">
+                    Total Scanned: <strong className="text-primary">{scannedSerials.length}</strong>
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={scannerInput}
+                    onChange={(e) => setScannerInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleScanItem();
+                      }
+                    }}
+                    placeholder="Focus here & scan barcode or serial code..."
+                    className="flex-1 px-3.5 py-2 text-xs font-mono font-bold bg-surface border border-primary/40 rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleScanItem}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary-hover shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <HiOutlineCheckCircle className="text-base" />
+                    <span>Enter Code</span>
+                  </button>
+                </div>
+                {scannedSerials.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pt-1">
+                    {scannedSerials.map((s, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-surface border border-border text-text-primary flex items-center gap-1"
+                      >
+                        <FaCheck className="text-emerald-400 text-[9px]" />
+                        <span>{s.serial_code}</span>
+                        <span className="text-text-muted">({s.sku})</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Inward Type Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                  inwardType === 'warehouse'
+                    ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                    : 'border-border bg-surface hover:bg-surface-hover'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="inward_type"
+                  value="warehouse"
+                  checked={inwardType === 'warehouse'}
+                  onChange={() => setInwardType('warehouse')}
+                  className="accent-primary"
+                />
+                <div>
+                  <div className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                    <FaWarehouse className="text-primary text-xs" /> Warehouse Inward (Physical Hub Dock)
+                  </div>
+                  <div className="text-[11px] text-text-muted mt-0.5">
+                    Goods received, verified and stored in warehouse racks.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                  inwardType === 'pickup_location'
+                    ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
+                    : 'border-border bg-surface hover:bg-surface-hover'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="inward_type"
+                  value="pickup_location"
+                  checked={inwardType === 'pickup_location'}
+                  onChange={() => setInwardType('pickup_location')}
+                  className="accent-primary"
+                />
+                <div>
+                  <div className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                    <HiOutlineLocationMarker className="text-primary text-sm" /> Third-Party / Direct Pickup Point
+                  </div>
+                  <div className="text-[11px] text-text-muted mt-0.5">
+                    Goods dispatched directly from manufacturer or supplier point.
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            {/* Pickup Location fields if pickup_location selected */}
+            {inwardType === 'pickup_location' && (
+              <div className="p-3.5 bg-surface-hover/50 rounded-xl border border-border space-y-2 text-xs">
+                <div className="font-bold text-text-primary text-[11px] uppercase tracking-wider">
+                  Pickup Location & Dispatch Contact Details
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <input
+                    type="text"
+                    placeholder="Location / Hub Name (e.g. Surat OEM Depot)"
+                    value={pickupLocationDetails.location_name}
+                    onChange={(e) => setPickupLocationDetails(prev => ({ ...prev, location_name: e.target.value }))}
+                    className="p-2 text-xs bg-surface border border-border rounded-lg text-text-primary focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Contact Person Name"
+                    value={pickupLocationDetails.contact_person}
+                    onChange={(e) => setPickupLocationDetails(prev => ({ ...prev, contact_person: e.target.value }))}
+                    className="p-2 text-xs bg-surface border border-border rounded-lg text-text-primary focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Contact Phone / Mobile"
+                    value={pickupLocationDetails.contact_phone}
+                    onChange={(e) => setPickupLocationDetails(prev => ({ ...prev, contact_phone: e.target.value }))}
+                    className="p-2 text-xs bg-surface border border-border rounded-lg text-text-primary focus:border-primary"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Full Address & Landmark"
+                    value={pickupLocationDetails.address}
+                    onChange={(e) => setPickupLocationDetails(prev => ({ ...prev, address: e.target.value }))}
+                    className="p-2 text-xs bg-surface border border-border rounded-lg text-text-primary focus:border-primary"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Items Inward Table (Account Manager's List) */}
+            <div className="border border-border rounded-xl overflow-hidden bg-surface">
+              <div className="bg-surface-hover/80 px-4 py-2.5 border-b border-border flex items-center justify-between">
+                <span className="text-[11px] font-black text-text-muted uppercase tracking-wider">
+                  Account Manager's Bill of Materials / Inward List
+                </span>
+                <span className="text-[11px] text-text-muted">
+                  Confirm physical counts received & allocate racks
+                </span>
+              </div>
+              <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-surface-hover/50 border-b border-border text-[10px] font-black uppercase text-text-muted sticky top-0 bg-surface">
+                    <tr>
+                      <th className="p-3">SKU & Item Details</th>
+                      <th className="p-3 text-center">Ordered</th>
+                      <th className="p-3 text-center">Already Inwarded</th>
+                      <th className="p-3 text-center">Pending</th>
+                      <th className="p-3 text-center">Received Now (Qty)</th>
+                      <th className="p-3">Rack Location</th>
+                      <th className="p-3 text-center">Discrepancy (Dmg / Miss)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {(selectedOrderForInward.items || []).map((it) => {
+                      const input = inwardInputs[it.sku] || { qty: 0, damaged_qty: 0, missing_qty: 0, rack_location: '' };
+                      return (
+                        <tr key={it.sku} className="hover:bg-surface-hover/30 transition-colors">
+                          <td className="p-3">
+                            <div className="font-extrabold text-primary font-mono text-xs">{it.sku}</div>
+                            <div className="font-semibold text-text-primary text-[11px]">{it.product_name || it.item_name}</div>
+                            <div className="text-[10px] text-text-secondary">{it.category || 'General Component'}</div>
+                          </td>
+                          <td className="p-3 text-center font-bold text-text-primary">
+                            {it.ordered_qty}
+                          </td>
+                          <td className="p-3 text-center font-bold text-emerald-400">
+                            {it.received_qty || 0}
+                          </td>
+                          <td className="p-3 text-center font-mono font-bold text-amber-400">
+                            {it.pending_qty || 0}
+                          </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={it.pending_qty || it.ordered_qty}
+                              value={input.qty}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setInwardInputs(prev => ({
+                                  ...prev,
+                                  [it.sku]: { ...prev[it.sku], qty: val }
+                                }));
+                              }}
+                              className="w-20 p-1.5 text-center text-xs font-mono font-bold bg-surface-hover border border-border rounded-lg text-text-primary focus:border-primary"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <input
+                              type="text"
+                              placeholder="e.g. Rack A-04"
+                              value={input.rack_location}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setInwardInputs(prev => ({
+                                  ...prev,
+                                  [it.sku]: { ...prev[it.sku], rack_location: val }
+                                }));
+                              }}
+                              className="w-28 p-1.5 text-xs bg-surface-hover border border-border rounded-lg text-text-primary focus:border-primary"
+                            />
+                          </td>
+                          <td className="p-3 text-center">
+                            <div className="inline-flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min="0"
+                                placeholder="Dmg"
+                                title="Damaged units"
+                                value={input.damaged_qty || ''}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  setInwardInputs(prev => ({
+                                    ...prev,
+                                    [it.sku]: { ...prev[it.sku], damaged_qty: val }
+                                  }));
+                                }}
+                                className="w-14 p-1 text-center text-[11px] font-mono bg-danger/10 border border-danger/30 rounded text-danger placeholder:text-danger/50"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                placeholder="Miss"
+                                title="Missing / Shortage units"
+                                value={input.missing_qty || ''}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  setInwardInputs(prev => ({
+                                    ...prev,
+                                    [it.sku]: { ...prev[it.sku], missing_qty: val }
+                                  }));
+                                }}
+                                className="w-14 p-1 text-center text-[11px] font-mono bg-warning/10 border border-warning/30 rounded text-warning placeholder:text-warning/50"
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Remarks Textarea */}
+            <div>
+              <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
+                Inward Inspection Notes / Delivery Remarks
+              </label>
+              <textarea
+                rows="2"
+                placeholder="Add any notes regarding truck arrival, seal condition, damages, or rack placement..."
+                value={inwardRemarks}
+                onChange={(e) => setInwardRemarks(e.target.value)}
+                className="w-full p-2 text-xs bg-surface-hover border border-border rounded-xl text-text-primary placeholder:text-text-muted focus:border-primary"
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-border">
+              <div className="text-xs text-text-secondary">
+                <span>Verified items will immediately update inward progress for </span>
+                <strong className="text-primary">Order #{selectedOrderForInward.order_number}</strong>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={submittingOrderInward}
+                  onClick={() => setOrderInwardModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={submittingOrderInward}
+                  loading={submittingOrderInward}
+                  leftIcon={<HiOutlineClipboardCheck className="text-base" />}
+                >
+                  Confirm & Inward Materials
+                </Button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Dialog>
       {renderSkuInfoModal()}
     </div>
   );

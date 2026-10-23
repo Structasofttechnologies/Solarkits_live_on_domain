@@ -35,6 +35,7 @@ const Home = lazy(() => import("../pages/dashboard/Home"));
 
 /* ── Delivery Manager Standalone Modules ── */
 const NewOrdersPage = lazy(() => import("../pages/warehouse-management/NewOrdersPage"));
+const BosKitAssemblyPage = lazy(() => import("../pages/warehouse-management/BosKitAssemblyPage"));
 const OutForDeliveryPage = lazy(() => import("../pages/warehouse-management/OutForDeliveryPage"));
 const TrackDeliveryPage = lazy(() => import("../pages/warehouse-management/TrackDeliveryPage"));
 
@@ -63,6 +64,12 @@ const getMenusForMode = (mode, prefix = "/warehouse-management-panel") => {
         name: "New Orders",
         icon: <FaClipboardList />,
         path: `${prefix}/new-orders`,
+        unique_id: "WH_DELIVERY_MGMT"
+      },
+      {
+        name: "BOS Kit Assembly",
+        icon: <FaTools />,
+        path: `${prefix}/bos-kit-assembly`,
         unique_id: "WH_DELIVERY_MGMT"
       },
       {
@@ -301,6 +308,7 @@ export default function Dashboard() {
     const path = location.pathname;
     if (path.includes('/home')) return 'Warehouse Dashboard';
     if (path.includes('/new-orders')) return 'New Orders (Procurement Fulfillment)';
+    if (path.includes('/bos-kit-assembly')) return 'BOS Kit Assembly & Preparation Workstation';
     if (path.includes('/out-for-delivery')) return 'Out for Delivery (Dispatch Gate)';
     if (path.includes('/track-delivery')) return 'Track Delivery & Dual POD';
     if (path.includes('/material-inward')) return 'Material Inward Entry';
@@ -495,6 +503,16 @@ export default function Dashboard() {
                       <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
                         <Suspense fallback={<Loader text="Loading new orders..." />}>
                           <NewOrdersPage />
+                        </Suspense>
+                      </PermissionGuard>
+                    }
+                  />
+                  <Route
+                    path="bos-kit-assembly/*"
+                    element={
+                      <PermissionGuard requiredUniqueId="WH_DELIVERY_MGMT">
+                        <Suspense fallback={<Loader text="Loading BOS Kit Assembly..." />}>
+                          <BosKitAssemblyPage />
                         </Suspense>
                       </PermissionGuard>
                     }

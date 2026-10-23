@@ -44,11 +44,15 @@ export const requestDeliveryOrderProcurement = async (id, { sku, requested_qty, 
   return res.data;
 };
 
-export const inwardDeliveryOrder = async (id, { items, remarks, batch_id }) => {
+export const inwardDeliveryOrder = async (id, { items, remarks, batch_id, inward_type, inward_mode, scanned_serials, pickup_location_details }) => {
   const res = await axios.post(`${API_URL}/warehouse/delivery-orders/${id}/inward`, {
     items,
     remarks,
-    batch_id
+    batch_id,
+    inward_type,
+    inward_mode,
+    scanned_serials,
+    pickup_location_details
   }, {
     headers: authHeaderObj()
   });

@@ -118,9 +118,30 @@ const schema = new mongoose.Schema({
       product_name: { type: String },
       qty:          { type: Number }
     }],
+    inward_type:     { type: String, default: 'warehouse' },
+    inward_mode:     { type: String, default: 'manual' },
+    scanned_serials: [{
+      sku:          { type: String },
+      serial_code:  { type: String },
+      scanned_at:   { type: Date, default: Date.now }
+    }],
     inwarded_by_name:{ type: String, default: 'Delivery Manager' },
     timestamp:       { type: Date, default: Date.now },
     remarks:         { type: String, default: '' }
+  }],
+  inward_type: { type: String, default: 'warehouse' },
+  pickup_location_details: {
+    location_name: { type: String, default: '' },
+    address: { type: String, default: '' },
+    contact_person: { type: String, default: '' },
+    contact_phone: { type: String, default: '' }
+  },
+  scanned_serials: [{
+    sku: { type: String },
+    serial_code: { type: String },
+    inwarded_at: { type: Date, default: Date.now },
+    verified_for_outward: { type: Boolean, default: false },
+    outwarded_at: { type: Date, default: null }
   }],
   delivery_status: {
     type: String,
@@ -203,8 +224,10 @@ const schema = new mongoose.Schema({
   kit_assembly_details: {
     picked_at:           { type: Date, default: null },
     picked_by:           { type: String, default: '' },
+    assembly_status:     { type: String, enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
     assembled_at:        { type: Date, default: null },
     assembled_by:        { type: String, default: '' },
+    qc_status:           { type: String, enum: ['pending', 'passed', 'failed'], default: 'pending' },
     qc_verified:         { type: Boolean, default: false },
     qc_verified_by:      { type: String, default: '' },
     packed_and_labeled:  { type: Boolean, default: false },

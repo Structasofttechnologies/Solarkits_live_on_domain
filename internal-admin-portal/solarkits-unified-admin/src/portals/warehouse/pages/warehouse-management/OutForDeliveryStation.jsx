@@ -11,7 +11,7 @@ import {
   FaTimesCircle, FaSpinner, FaPhoneAlt, FaCalendarAlt,
   FaExternalLinkAlt, FaInfoCircle, FaLock, FaCheckDouble, FaUserCheck,
   FaLayerGroup, FaUserMinus, FaMoneyBillWave, FaExclamationTriangle,
-  FaArrowRight, FaShieldAlt
+  FaArrowRight, FaShieldAlt, FaTimes, FaArrowLeft
 } from 'react-icons/fa';
 import { useDispatch } from 'react-redux';
 import { setAlert } from '@/features/alert.slice';
@@ -39,6 +39,8 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeOrderId, setActiveOrderId] = useState(null);
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1); // 1 to 4 horizontal stepper
 
   // Multi-EPC Ungrouped Map and Action States
   const [ungroupedMap, setUngroupedMap] = useState({});
@@ -390,412 +392,398 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* ── Left Column: Orders Ready for Dispatch List ── */}
-          <div className="lg:col-span-4 space-y-3">
-            <div className="text-xs font-black text-text-muted uppercase tracking-wider px-1">
-              Orders Awaiting Dispatch ({orders.length})
-            </div>
+        /* ── Full Horizontal Cards List for All Orders Awaiting Dispatch (Boss Requirement 4) ── */
+        <div className="space-y-4">
+          <div className="text-xs font-black text-text-muted uppercase tracking-wider px-1 flex items-center justify-between">
+            <span>Orders Awaiting Dispatch ({orders.length})</span>
+            <span className="text-[11px] font-normal text-text-muted">Click any order to open horizontal dispatch workflow</span>
+          </div>
 
-            <div className="space-y-2.5 max-h-[700px] overflow-y-auto pr-1">
-              {orders.map((ord) => {
-                const isSelected = ord._id === activeOrderId;
-                const isReadyToInitiate = ord.delivery_status === 'ready_to_initiate';
-                const isAwaitingEwb = ord.delivery_status === 'awaiting_eway_bill';
-                const isDispatched = ord.delivery_status === 'in_transit';
+          <div className="space-y-3">
+            {orders.map((ord) => {
+              const isReadyToInitiate = ord.delivery_status === 'ready_to_initiate';
+              const isAwaitingEwb = ord.delivery_status === 'awaiting_eway_bill';
+              const isDispatched = ord.delivery_status === 'in_transit';
 
-                return (
-                  <div
-                    key={ord._id}
-                    onClick={() => setActiveOrderId(ord._id)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-primary ring-2 ring-primary/20 bg-primary/5 shadow-md'
-                        : 'border-border bg-surface hover:border-primary/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-black text-primary">
+              const epcList = ord.epcs || [];
+              const activeList = epcList.filter(e => !e.is_removed_by_account);
+              const unpaid = activeList.filter(e => e.payment_second_half?.status !== 'done');
+              const isAllPaid = epcList.length === 0 || unpaid.length === 0;
+
+              return (
+                <div
+                  key={ord._id}
+                  onClick={() => {
+                    setActiveOrderId(ord._id);
+                    setCurrentStep(1);
+                    setDispatchModalOpen(true);
+                  }}
+                  className="p-5 rounded-2xl border border-border bg-surface hover:border-primary/50 transition-all shadow-xs cursor-pointer space-y-4 group"
+                >
+                  {/* Top Bar: Order ID + Status Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border/70 pb-3">
+                    <div className="flex items-center flex-wrap gap-2.5">
+                      <span className="font-mono text-sm font-black text-primary">
+                        {ord.order_number}
+                      </span>
+                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-surface-hover text-text-muted border border-border">
                         {ord.delivery_order_id}
                       </span>
+
+                      {/* Delivery Status Badge */}
                       {isReadyToInitiate ? (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-success/15 text-success border border-success/30">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-success/15 text-success border border-success/30">
                           Ready to Initiate
                         </span>
                       ) : isAwaitingEwb ? (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-warning/15 text-warning border border-warning/30 animate-pulse">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-warning/15 text-warning border border-warning/30 animate-pulse">
                           Awaiting E-Way Bill
                         </span>
                       ) : isDispatched ? (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-primary/15 text-primary border border-primary/30">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-primary/15 text-primary border border-primary/20">
                           In Transit
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-surface-hover text-text-secondary border border-border">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-surface-hover text-text-secondary border border-border">
                           Ready for Dispatch
                         </span>
                       )}
-                    </div>
 
-                    <div className="font-bold text-text-primary text-xs mt-1.5 truncate flex items-center justify-between gap-1">
-                      <span className="truncate">{ord.customer_name}</span>
-                      {ord.epcs && ord.epcs.length > 0 && (
-                        <span className="shrink-0 px-1.5 py-0.2 rounded bg-primary/10 text-primary font-mono text-[9px] font-bold">
-                          {ord.epcs.length} EPCs
+                      {/* 2nd Half Payment Clearance Badge */}
+                      {isAllPaid ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          ✅ 100% Paid (Cleared)
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                          ⚠️ 2nd Payment Due ({unpaid.length} EPCs)
                         </span>
                       )}
                     </div>
 
-                    <div className="text-[11px] text-text-muted mt-0.5 flex items-center justify-between">
-                      <span>{ord.destination?.district}, {ord.destination?.state}</span>
-                      <span className="font-mono">PIN: {ord.destination?.pincode}</span>
-                    </div>
-
-                    <div className="mt-2 pt-2 border-t border-border/50 flex items-center justify-between text-[10px]">
-                      {/* Payment Clearance Status Chip */}
-                      {(() => {
-                        const epcList = ord.epcs || [];
-                        if (epcList.length === 0) {
-                          return <span className="text-text-muted">{(ord.items || []).length} SKUs</span>;
-                        }
-                        const activeList = epcList.filter(e => !e.is_removed_by_account);
-                        const unpaid = activeList.filter(e => e.payment_second_half?.status !== 'done');
-                        if (unpaid.length > 0) {
-                          return (
-                            <span className="text-[9px] font-black text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-                              ⚠️ 2nd Pay Due ({unpaid.length})
-                            </span>
-                          );
-                        }
-                        return (
-                          <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                            ✅ 100% Paid
-                          </span>
-                        );
-                      })()}
-                      <span className="font-bold text-primary flex items-center gap-1">
-                        {ord.required_vehicle || 'Tata Ace'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ── Right Column: 3-Step Dispatch Workflow Card ── */}
-          <div className="lg:col-span-8">
-            {activeOrder ? (
-              <div className="card p-6 rounded-2xl border border-border bg-surface space-y-6 shadow-sm">
-                {/* DO Header Summary */}
-                <div className="border-b border-border pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-black text-text-primary">{activeOrder.delivery_order_id}</span>
-                      <span className="text-xs text-text-muted font-mono">• {activeOrder.order_number}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20">
-                        {activeOrder.delivery_status.replace(/_/g, ' ')}
+                      <span className="text-[10px] font-bold text-text-muted uppercase">Recommended:</span>
+                      <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary font-bold text-xs border border-primary/20">
+                        {ord.required_vehicle || 'Tata Ace (1.5 Ton)'}
                       </span>
-                    </div>
-                    <div className="text-xs text-text-secondary mt-1">
-                      Recipient: <strong>{activeOrder.customer_name}</strong> ({activeOrder.customer_phone})
-                    </div>
-                    <div className="text-[11px] text-text-muted">
-                      Address: {activeOrder.destination?.address}, {activeOrder.destination?.district}, {activeOrder.destination?.state} - {activeOrder.destination?.pincode}
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold text-text-muted uppercase block">Recommended Vehicle</span>
-                    <span className="text-xs font-black text-primary px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 inline-block mt-0.5">
-                      {activeOrder.required_vehicle || 'Tata Ace (1.5 Ton)'}
-                    </span>
+                  {/* Middle Section: Recipient + Destination + Packages */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <div className="text-[10px] uppercase font-black text-text-muted tracking-wider">Client / Recipient</div>
+                      <div className="font-bold text-text-primary text-sm mt-0.5">{ord.customer_name}</div>
+                      <div className="text-text-muted mt-0.5">{ord.customer_phone || 'N/A'}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] uppercase font-black text-text-muted tracking-wider">Destination</div>
+                      <div className="font-medium text-text-primary mt-0.5 truncate">{ord.destination?.address || 'Site Warehouse'}</div>
+                      <div className="text-text-muted mt-0.5">
+                        {ord.destination?.district}, {ord.destination?.state} - <span className="font-mono">{ord.destination?.pincode}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] uppercase font-black text-text-muted tracking-wider">Consignment Packages</div>
+                      <div className="font-semibold text-text-primary mt-0.5 flex items-center gap-2">
+                        <span>{activeList.length > 0 ? `${activeList.length} Consolidated EPCs` : `${(ord.items || []).length} SKUs`}</span>
+                        {ord.kit_preparation_status && ord.kit_preparation_status !== 'not_required' && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            BOS Kit Attached
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-text-muted mt-0.5">
+                        Total Items: {(ord.items || []).reduce((acc, it) => acc + (it.received_qty || it.ordered_qty || 0), 0)} Units Verified
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer Row */}
+                  <div className="flex items-center justify-between pt-3 border-t border-border/60">
+                    <div className="text-[11px] text-text-muted">
+                      {ord.transport_details?.vehicle_number ? (
+                        <span className="font-mono text-emerald-400 font-bold">
+                          Assigned: {ord.transport_details.vehicle_number} ({ord.transport_details.transporter_name || 'Transporter'})
+                        </span>
+                      ) : (
+                        <span>Vehicle details & E-Way Bill pending setup</span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveOrderId(ord._id);
+                        setCurrentStep(1);
+                        setDispatchModalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-bold gradient-primary text-white hover:opacity-95 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                    >
+                      <span>Prepare & Dispatch Workflow</span>
+                      <FaArrowRight className="text-xs group-hover:translate-x-0.5 transition-transform" />
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                {/* ── MULTI-EPC CONSIGNMENT MANAGEMENT & PAYMENT CLEARANCE (BOSS REQUIREMENT) ── */}
-                <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-surface via-surface to-primary/5 p-5 space-y-4 shadow-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-3">
-                    <div>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-sm">
-                          <FaLayerGroup />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-black text-text-primary flex items-center gap-2">
-                            Consolidated Multi-EPC Packages
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-primary/15 text-primary">
-                              {activeEpcs.length} Active EPCs
-                            </span>
-                          </h4>
-                          <p className="text-[11px] text-text-muted mt-0.5">
-                            Ungroup order to inspect individual contractor items and verify 2nd half payment. Unpaid EPCs can be removed by Account Manager.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+      {/* ── SLEEK HORIZONTAL STEPPER DISPATCH WORKFLOW MODAL (Boss Requirement 4) ── */}
+      {dispatchModalOpen && activeOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-5xl bg-surface border border-border rounded-3xl shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-border bg-surface-hover/50 flex items-center justify-between gap-3 shrink-0">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-base font-black text-text-primary">{activeOrder.order_number}</span>
+                  <span className="font-mono text-xs text-primary font-bold px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                    {activeOrder.delivery_order_id}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20">
+                    {activeOrder.delivery_status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="text-xs text-text-muted">
+                  Recipient: <strong className="text-text-primary">{activeOrder.customer_name}</strong> ({activeOrder.customer_phone}) • {activeOrder.destination?.district}, {activeOrder.destination?.state}
+                </div>
+              </div>
 
-                    {/* Ungroup Toggle Button */}
-                    <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setDispatchModalOpen(false)}
+                className="w-9 h-9 rounded-xl bg-surface hover:bg-surface-hover border border-border text-text-secondary hover:text-text-primary flex items-center justify-center transition-all cursor-pointer"
+                title="Close dispatch workflow"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable */}
+            <div className="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1">
+              
+              {/* ── HORIZONTAL STEPPER TRACKER (E-COMMERCE TRACKING STYLE) ── */}
+              <div className="p-4 rounded-2xl bg-surface-hover/40 border border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { step: 1, title: 'Delivery Method', desc: 'Manual / Fleet Match', isDone: !!activeForm.delivery_method },
+                    { step: 2, title: 'Transport Details', desc: 'Vehicle & Driver Info', isDone: !!(activeForm.vehicle_number && activeForm.driver_mobile) },
+                    { step: 3, title: 'E-Way Bill', desc: 'AM Verification', isDone: isEwayValid },
+                    { step: 4, title: 'Gate & Dispatch', desc: 'Photo, Docket & Release', isDone: isDispatchAllowed },
+                  ].map((s) => {
+                    const isActive = currentStep === s.step;
+                    const isCompleted = s.isDone && currentStep > s.step;
+
+                    return (
                       <button
+                        key={s.step}
                         type="button"
-                        onClick={() => handleToggleUngroup(activeOrder._id)}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
-                          isUngrouped
-                            ? 'gradient-primary text-white shadow-primary/20'
-                            : 'bg-surface-hover text-text-primary border border-border hover:border-primary'
+                        onClick={() => setCurrentStep(s.step)}
+                        className={`text-left p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                          isActive
+                            ? 'bg-primary/15 border-primary shadow-xs ring-1 ring-primary'
+                            : isCompleted
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-surface border-border hover:border-border/80 text-text-muted'
                         }`}
-                        title="Click to toggle separated EPC material & payment view"
                       >
-                        <FaLayerGroup className="text-xs" />
-                        <span>{isUngrouped ? 'Ungrouped View (Active)' : 'Ungroup EPCs'}</span>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${
+                            isActive
+                              ? 'bg-primary text-white'
+                              : isCompleted
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-surface-hover border border-border text-text-muted'
+                          }`}>
+                            {isCompleted ? <FaCheckCircle className="text-xs" /> : s.step}
+                          </span>
+                          <span className={`text-[10px] font-mono font-bold ${
+                            isActive ? 'text-primary' : isCompleted ? 'text-emerald-400' : 'text-text-muted'
+                          }`}>
+                            Step {s.step}
+                          </span>
+                        </div>
+                        <div className={`text-xs font-bold ${isActive ? 'text-text-primary' : isCompleted ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          {s.title}
+                        </div>
+                        <div className="text-[10px] text-text-muted mt-0.5 truncate">{s.desc}</div>
                       </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── MULTI-EPC UNGROUP CONSIGNMENT ACCORDION ── */}
+              <div className="rounded-2xl border border-primary/20 bg-surface p-4 space-y-3 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold text-sm">
+                      <FaLayerGroup />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-text-primary flex items-center gap-2">
+                        Consolidated Multi-EPC Packages
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-primary/15 text-primary">
+                          {activeEpcs.length} Active EPCs
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-text-muted">
+                        Inspect contractor items and verify 2nd half payment before release.
+                      </p>
                     </div>
                   </div>
 
-                  {/* Payment Clearance Status Notification */}
-                  {unpaidEpcs.length > 0 ? (
-                    <div className="p-3.5 rounded-xl bg-danger/10 border border-danger/30 text-xs flex items-start gap-3">
-                      <FaExclamationTriangle className="text-danger text-base shrink-0 mt-0.5 animate-bounce" />
-                      <div className="space-y-1">
-                        <div className="font-bold text-danger flex items-center gap-1.5">
-                          <span>2nd Half Payment Pending for {unpaidEpcs.length} EPC(s)</span>
-                          <span className="px-1.5 py-0.2 rounded bg-danger text-white text-[9px] font-black uppercase">Dispatch Blocked</span>
-                        </div>
-                        <div className="text-[11px] text-text-secondary leading-relaxed">
-                          Consignment cannot be dispatched because 2nd payment is due for: <strong className="text-text-primary">{unpaidEpcs.map(e => e.epc_name).join(', ')}</strong>.
-                          The Account Manager must remove unpaid EPCs or record 2nd payment confirmation to unlock <strong>Dispatch for Delivery</strong>.
-                        </div>
-                      </div>
+                  {/* Ungroup Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleUngroup(activeOrder._id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                      isUngrouped
+                        ? 'gradient-primary text-white shadow-primary/20'
+                        : 'bg-surface-hover text-text-primary border border-border hover:border-primary'
+                    }`}
+                  >
+                    <FaLayerGroup className="text-xs" />
+                    <span>{isUngrouped ? 'Ungrouped View (Active)' : 'Ungroup EPCs'}</span>
+                  </button>
+                </div>
+
+                {/* Payment Clearance Status Alert */}
+                {unpaidEpcs.length > 0 ? (
+                  <div className="p-3 rounded-xl bg-danger/10 border border-danger/30 text-xs flex items-start gap-2.5">
+                    <FaExclamationTriangle className="text-danger text-sm shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-danger">2nd Half Payment Pending for {unpaidEpcs.length} EPC(s): </span>
+                      <span className="text-text-secondary">{unpaidEpcs.map(e => e.epc_name).join(', ')}. Must clear payment or remove unpaid EPCs before dispatch.</span>
                     </div>
-                  ) : (
-                    <div className="p-3 rounded-xl bg-success/10 border border-success/30 text-xs flex items-center justify-between gap-3 text-success font-bold">
-                      <div className="flex items-center gap-2">
-                        <FaCheckCircle className="text-base shrink-0" />
-                        <span>All {activeEpcs.length} Active EPCs 100% Cleared (1st & 2nd Half Payments Received)</span>
-                      </div>
-                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-success text-white">
-                        Dispatch Ready
-                      </span>
-                    </div>
-                  )}
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-400 flex items-center gap-2 font-bold">
+                    <FaCheckCircle />
+                    <span>All active EPC packages 100% paid & approved for delivery!</span>
+                  </div>
+                )}
 
-                  {/* ── Ungrouped View: Individual EPC Cards with Dedicated Materials & Payment Badges ── */}
-                  {isUngrouped ? (
-                    <div className="space-y-3.5">
-                      {activeEpcs.map((epc, idx) => {
-                        const isSecondPaid = epc.payment_second_half?.status === 'done';
-                        const isItemsExpanded = expandedEpcItems[epc.epc_id] !== false;
-                        const epcTotalQty = (epc.items || []).reduce((s, it) => s + (it.ordered_qty || 0), 0);
+                {/* Ungrouped EPC Detail Cards */}
+                {isUngrouped && activeEpcs.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    {activeEpcs.map((epc, idx) => {
+                      const isSecondPaid = epc.payment_second_half?.status === 'done';
+                      const isItemsExpanded = expandedEpcItems[epc.epc_id] !== false;
+                      const epcTotalQty = (epc.items || []).reduce((acc, it) => acc + (it.received_qty || it.ordered_qty || 0), 0);
 
-                        return (
-                          <div
-                            key={epc.epc_id || idx}
-                            className={`rounded-xl border transition-all duration-200 overflow-hidden ${
-                              isSecondPaid
-                                ? 'border-emerald-500/40 bg-surface shadow-xs'
-                                : 'border-rose-500/40 bg-gradient-to-r from-rose-500/5 via-surface to-surface shadow-xs'
-                            }`}
-                          >
-                            {/* EPC Card Header Strip */}
-                            <div className="p-4 border-b border-border/70 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-surface-hover/30">
-                              <div className="space-y-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="px-2 py-0.5 rounded-md bg-surface border border-border text-[10px] font-mono font-bold text-primary">
-                                    {epc.epc_id}
-                                  </span>
-                                  <span className="text-xs font-black text-text-primary">
-                                    {epc.epc_name}
-                                  </span>
-                                  <span className="text-[11px] text-text-muted">
-                                    • {epc.contact_person || 'Representative'} ({epc.phone})
-                                  </span>
-                                </div>
-                                <div className="text-[11px] text-text-secondary flex items-center gap-1.5 flex-wrap">
-                                  <span>📍 Site Destination:</span>
-                                  <strong className="text-text-primary">{epc.destination?.address}, {epc.destination?.district}, {epc.destination?.state} - {epc.destination?.pincode}</strong>
-                                </div>
-                              </div>
-
-                              {/* Payment Status Badges & AM Actions */}
-                              <div className="flex flex-wrap items-center gap-2">
-                                {/* 1st Payment Badge (Always 50% Done) */}
-                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
-                                  <FaCheckCircle className="text-[9px]" /> 1st Half: 50% Paid
-                                </span>
-
-                                {/* 2nd Payment Badge (User Requirement: GREEN button if Done, RED button if Pending) */}
+                      return (
+                        <div key={epc.epc_id || idx} className="rounded-xl border border-border bg-surface-hover/30 overflow-hidden">
+                          <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-text-primary">{epc.epc_name}</span>
+                                <span className="text-[10px] font-mono text-text-muted">({epc.epc_id})</span>
                                 {isSecondPaid ? (
-                                  <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 text-white flex items-center gap-1.5 shadow-sm shadow-emerald-500/20">
-                                    <FaCheckCircle className="text-xs" />
-                                    <span>Payment Done - Ready for Delivery</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    ✅ 2nd Pay Cleared
                                   </span>
                                 ) : (
-                                  <span className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-600 text-white flex items-center gap-1.5 shadow-sm shadow-rose-500/20 animate-pulse">
-                                    <FaTimesCircle className="text-xs" />
-                                    <span>2nd Payment Not Done</span>
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                    ⚠️ 2nd Pay Due
                                   </span>
                                 )}
-
-                                {/* Account Manager Control Buttons */}
-                                {!isSecondPaid && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAccountRemoveEpc(activeOrder._id, epc.epc_id, epc.epc_name)}
-                                    disabled={removingEpcId === epc.epc_id}
-                                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider bg-danger/10 text-danger border border-danger/30 hover:bg-danger hover:text-white transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-                                    title="Account Manager action: Remove unpaid EPC from this delivery order"
-                                  >
-                                    {removingEpcId === epc.epc_id ? (
-                                      <FaSpinner className="animate-spin text-xs" />
-                                    ) : (
-                                      <FaUserMinus className="text-xs" />
-                                    )}
-                                    <span>Account: Remove EPC</span>
-                                  </button>
-                                )}
-
-                                {/* Simulate / Record 2nd payment */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleEpcSecondPayment(activeOrder._id, epc.epc_id, epc.payment_second_half?.status)}
-                                  disabled={updatingPaymentEpcId === epc.epc_id}
-                                  className="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-surface-hover text-text-secondary border border-border hover:border-primary hover:text-primary transition-all flex items-center gap-1 cursor-pointer"
-                                  title="Record or toggle 2nd payment status"
-                                >
-                                  {updatingPaymentEpcId === epc.epc_id ? (
-                                    <FaSpinner className="animate-spin text-[10px]" />
-                                  ) : (
-                                    <FaMoneyBillWave className="text-[10px]" />
-                                  )}
-                                  <span>{isSecondPaid ? 'Revert to Pending' : 'Record 2nd Payment'}</span>
-                                </button>
-
-                                {/* Toggle Items table */}
-                                <button
-                                  type="button"
-                                  onClick={() => toggleEpcItems(epc.epc_id)}
-                                  className="p-2 rounded-xl bg-surface border border-border text-text-muted hover:text-text-primary text-xs cursor-pointer"
-                                  title="Toggle item details"
-                                >
-                                  {isItemsExpanded ? <HiOutlineChevronUp /> : <HiOutlineChevronDown />}
-                                </button>
+                              </div>
+                              <div className="text-[11px] text-text-muted mt-0.5">
+                                Site: {epc.site_location || activeOrder.destination?.address} • {epc.contact_phone || 'No Phone'}
                               </div>
                             </div>
 
-                            {/* EPC Materials Breakdown Table ("ek order ke andar sab epc ka maal alag alag show hoga") */}
-                            {isItemsExpanded && (
-                              <div className="p-3.5 bg-surface-hover/10">
-                                <div className="text-[10px] font-black uppercase text-text-muted tracking-wider mb-2 flex items-center justify-between">
-                                  <span className="flex items-center gap-1.5">
-                                    <FaBoxes className="text-primary text-xs" /> Allocated Materials & BOS Kit for {epc.epc_name}
-                                  </span>
-                                  <span className="font-mono text-text-secondary text-[10px]">
-                                    {epcTotalQty} Total Units Verified & Packed
-                                  </span>
-                                </div>
-
-                                <div className="overflow-x-auto border border-border/80 rounded-xl bg-surface">
-                                  <table className="w-full text-left text-xs">
-                                    <thead>
-                                      <tr className="border-b border-border bg-surface-hover/60 text-[10px] font-black uppercase tracking-wider text-text-muted">
-                                        <th className="p-2.5">SKU & Product Name</th>
-                                        <th className="p-2.5 text-center">Ordered Qty</th>
-                                        <th className="p-2.5 text-center">Inward / Packed</th>
-                                        <th className="p-2.5 text-center">Rack Location</th>
-                                        <th className="p-2.5 text-right">Pack Status</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/60">
-                                      {(epc.items || []).map((it, itemIdx) => (
-                                        <tr key={it.sku || itemIdx} className="hover:bg-surface-hover/40 transition-colors">
-                                          <td className="p-2.5">
-                                            <div className="font-bold text-text-primary text-xs">{it.product_name}</div>
-                                            <div className="text-[10px] font-mono text-primary">{it.sku}</div>
-                                          </td>
-                                          <td className="p-2.5 text-center font-bold text-text-primary">
-                                            {it.ordered_qty}
-                                          </td>
-                                          <td className="p-2.5 text-center">
-                                            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold font-mono text-[11px]">
-                                              {it.received_qty || it.ordered_qty} / {it.ordered_qty}
-                                            </span>
-                                          </td>
-                                          <td className="p-2.5 text-center text-[11px] font-mono text-text-secondary">
-                                            {it.rack_location || 'Rack-A1'}
-                                          </td>
-                                          <td className="p-2.5 text-right">
-                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-success/15 text-success border border-success/30 inline-flex items-center gap-1">
-                                              <FaCheckCircle className="text-[8px]" /> Ready for Truck
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* Archived / Removed EPCs section */}
-                      {removedEpcs.length > 0 && (
-                        <div className="p-3.5 rounded-xl bg-danger/5 border border-danger/20 text-xs space-y-2">
-                          <div className="font-bold text-danger flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-                            <FaUserMinus /> Removed by Account Manager ({removedEpcs.length} Unpaid EPCs Excluded from Consignment)
-                          </div>
-                          <div className="space-y-1.5">
-                            {removedEpcs.map((re) => (
-                              <div key={re.epc_id} className="flex items-center justify-between text-[11px] p-2.5 bg-surface rounded-lg border border-border">
-                                <span className="line-through text-text-muted">
-                                  <strong>{re.epc_name}</strong> ({re.epc_id}) — Reason: {re.removal_reason || '2nd payment pending'}
-                                </span>
+                            <div className="flex items-center gap-2">
+                              {!isSecondPaid && (
                                 <button
                                   type="button"
-                                  onClick={() => handleToggleEpcSecondPayment(activeOrder._id, re.epc_id, 'pending')}
-                                  className="text-primary hover:underline font-bold text-[10px]"
+                                  onClick={() => handleAccountRemoveEpc(activeOrder._id, epc.epc_id, epc.epc_name)}
+                                  disabled={removingEpcId === epc.epc_id}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase bg-danger/10 text-danger border border-danger/30 hover:bg-danger hover:text-white transition-all flex items-center gap-1 cursor-pointer"
                                 >
-                                  Restore & Clear Payment
+                                  {removingEpcId === epc.epc_id ? <FaSpinner className="animate-spin text-xs" /> : <FaUserMinus className="text-xs" />}
+                                  <span>Remove EPC</span>
                                 </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    /* Grouped Summary Card */
-                    <div className="p-4 rounded-xl border border-border bg-surface-hover/40 text-xs flex items-center justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="font-bold text-text-primary">
-                          All {activeEpcs.length} EPCs Consolidated under Order #{activeOrder.order_number}
-                        </div>
-                        <div className="text-[11px] text-text-muted">
-                          Click <strong>"Ungroup EPCs"</strong> to inspect individual contractor packages, verify 2nd half payment statuses, and remove unpaid clients.
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleUngroup(activeOrder._id)}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase bg-primary text-white hover:bg-primary-hover flex items-center gap-1 cursor-pointer shrink-0"
-                      >
-                        <FaLayerGroup /> Ungroup Now
-                      </button>
-                    </div>
-                  )}
-                </div>
+                              )}
 
-                {/* ── STEP 1: Select Delivery Method ── */}
-                <div className="space-y-3">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleEpcSecondPayment(activeOrder._id, epc.epc_id, epc.payment_second_half?.status)}
+                                disabled={updatingPaymentEpcId === epc.epc_id}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-surface border border-border hover:border-primary text-text-secondary hover:text-primary transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                {updatingPaymentEpcId === epc.epc_id ? <FaSpinner className="animate-spin text-[10px]" /> : <FaMoneyBillWave className="text-[10px]" />}
+                                <span>{isSecondPaid ? 'Revert Pending' : 'Record 2nd Pay'}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => toggleEpcItems(epc.epc_id)}
+                                className="p-1.5 rounded-lg bg-surface border border-border text-text-muted hover:text-text-primary text-xs cursor-pointer"
+                              >
+                                {isItemsExpanded ? <HiOutlineChevronUp /> : <HiOutlineChevronDown />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Items Table */}
+                          {isItemsExpanded && (
+                            <div className="p-3 bg-surface text-xs overflow-x-auto">
+                              <table className="w-full text-left">
+                                <thead>
+                                  <tr className="border-b border-border text-[10px] font-black uppercase text-text-muted">
+                                    <th className="p-2">Item</th>
+                                    <th className="p-2 text-center">Ordered</th>
+                                    <th className="p-2 text-center">Inward / Packed</th>
+                                    <th className="p-2 text-right">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/60">
+                                  {(epc.items || []).map((it, itemIdx) => (
+                                    <tr key={it.sku || itemIdx}>
+                                      <td className="p-2">
+                                        <div className="font-bold text-text-primary">{it.product_name}</div>
+                                        <div className="text-[10px] font-mono text-primary">{it.sku}</div>
+                                      </td>
+                                      <td className="p-2 text-center font-bold text-text-primary">{it.ordered_qty}</td>
+                                      <td className="p-2 text-center font-mono font-bold text-emerald-400">
+                                        {it.received_qty || it.ordered_qty} / {it.ordered_qty}
+                                      </td>
+                                      <td className="p-2 text-right">
+                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-success/15 text-success border border-success/30 inline-flex items-center gap-1">
+                                          <FaCheckCircle className="text-[8px]" /> Ready
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── STEP 1 VIEW: SELECT DELIVERY METHOD ── */}
+              {currentStep === 1 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">1</span>
                     <h4 className="text-sm font-bold text-text-primary">Step 1: Select Delivery Method</h4>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-8">
-                    {/* Manual Delivery Option */}
                     <div
                       onClick={() => handleInputChange(activeOrder._id, 'delivery_method', 'manual')}
                       className={`p-4 rounded-xl border transition-all cursor-pointer ${
@@ -821,7 +809,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       </p>
                     </div>
 
-                    {/* Auto Delivery Option */}
                     <div
                       onClick={() => handleInputChange(activeOrder._id, 'delivery_method', 'auto')}
                       className={`p-4 rounded-xl border transition-all cursor-pointer ${
@@ -848,9 +835,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* ── STEP 2: Enter Delivery Details ── */}
-                <div className="space-y-3 pt-2 border-t border-border/70">
+              {/* ── STEP 2 VIEW: VEHICLE & TRANSPORT DETAILS ── */}
+              {currentStep === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">2</span>
@@ -860,15 +849,14 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       type="button"
                       onClick={() => handleSaveTransport(activeOrder._id)}
                       disabled={savingTransport}
-                      className="px-3 py-1 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 flex items-center gap-1 transition-all cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                     >
-                      {savingTransport ? <FaSpinner className="animate-spin" /> : null}
+                      {savingTransport ? <FaSpinner className="animate-spin text-xs" /> : <FaCheckCircle className="text-xs" />}
                       <span>Save Transport Info</span>
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pl-8 text-xs">
-                    {/* Vehicle Number */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Vehicle Number *
@@ -882,7 +870,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       />
                     </div>
 
-                    {/* Vehicle Type */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Vehicle Type
@@ -901,7 +888,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       </select>
                     </div>
 
-                    {/* Transporter Name */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Transporter Name
@@ -915,7 +901,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       />
                     </div>
 
-                    {/* Driver Name */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Driver Name
@@ -929,7 +914,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       />
                     </div>
 
-                    {/* Driver Mobile */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Driver Mobile *
@@ -943,7 +927,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       />
                     </div>
 
-                    {/* Docket / Challan Details */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Delivery Docket / Challan No. *
@@ -957,21 +940,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       />
                     </div>
 
-                    {/* Transport LR Number */}
-                    <div>
-                      <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
-                        Transport / LR Number
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. LR-99120"
-                        value={activeForm.lr_number || ''}
-                        onChange={(e) => handleInputChange(activeOrder._id, 'lr_number', e.target.value)}
-                        className="w-full p-2 bg-surface-hover border border-border rounded-lg text-text-primary font-mono focus:outline-none focus:border-primary"
-                      />
-                    </div>
-
-                    {/* Dispatch Date */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Dispatch Date
@@ -984,7 +952,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       />
                     </div>
 
-                    {/* Expected Delivery Date */}
                     <div>
                       <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">
                         Expected Delivery Date
@@ -998,9 +965,11 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* ── STEP 3: Request & Verify E-Way Bill ── */}
-                <div className="space-y-3 pt-2 border-t border-border/70">
+              {/* ── STEP 3 VIEW: E-WAY BILL & AM VERIFICATION ── */}
+              {currentStep === 3 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">3</span>
                     <h4 className="text-sm font-bold text-text-primary">Step 3: Request & Verify E-Way Bill (Account Manager Approval)</h4>
@@ -1012,15 +981,15 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-black uppercase text-text-muted tracking-wider">E-Way Bill Status:</span>
                           {activeOrder.eway_bill?.status === 'generated' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-success/15 text-success border border-success/30 flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-success/15 text-success border border-success/30 flex items-center gap-1">
                               <FaCheckCircle /> Approved & Issued
                             </span>
                           ) : activeOrder.eway_bill?.status === 'pending' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-warning/15 text-warning border border-warning/30 flex items-center gap-1 animate-pulse">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-warning/15 text-warning border border-warning/30 flex items-center gap-1 animate-pulse">
                               <HiOutlineClock /> Awaiting Account Manager Action
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-surface border border-border text-text-muted">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-surface border border-border text-text-muted">
                               Not Requested Yet
                             </span>
                           )}
@@ -1052,7 +1021,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                         )}
                       </div>
 
-                      {/* E-Way Bill Action Buttons */}
                       <div className="flex flex-wrap items-center gap-2">
                         {activeOrder.eway_bill?.status !== 'generated' && (
                           <button
@@ -1066,7 +1034,6 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                           </button>
                         )}
 
-                        {/* Quick Simulation / Approve Button for testing */}
                         {activeOrder.eway_bill?.status !== 'generated' && (
                           <button
                             type="button"
@@ -1083,15 +1050,20 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* ── MANUAL DELIVERY ACTIVATION EVIDENCE CHECKPOINTS ── */}
-                <div className="space-y-3 pt-2 border-t border-border/70">
+              {/* ── STEP 4 VIEW: GATE EVIDENCE & FINAL DISPATCH ── */}
+              {currentStep === 4 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-black text-text-primary flex items-center gap-2">
-                      <HiOutlineShieldCheck className="text-success text-base" />
-                      Pre-Dispatch Verification Gate & Evidence
-                    </h4>
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">4</span>
+                      <h4 className="text-sm font-black text-text-primary flex items-center gap-2">
+                        <HiOutlineShieldCheck className="text-success text-base" />
+                        Pre-Dispatch Verification Gate & Evidence
+                      </h4>
+                    </div>
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
                       isDispatchGateCleared
                         ? 'bg-success/15 text-success border border-success/30'
                         : 'bg-danger/10 text-danger border border-danger/20'
@@ -1100,7 +1072,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs pl-8">
                     {/* Checkpoint 1: Rear Loaded Photo */}
                     <div className={`p-3.5 rounded-xl border space-y-2 ${
                       hasLoadedPhoto ? 'bg-success/5 border-success/30' : 'bg-surface-hover border-border'
@@ -1122,7 +1094,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                           <button
                             type="button"
                             onClick={() => handleInputChange(activeOrder._id, 'vehicle_rear_photo', '')}
-                            className="absolute top-1 right-1 bg-danger text-white rounded p-1 text-[9px] font-bold"
+                            className="absolute top-1 right-1 bg-danger text-white rounded p-1 text-[9px] font-bold cursor-pointer"
                           >
                             Remove
                           </button>
@@ -1158,7 +1130,7 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                           <button
                             type="button"
                             onClick={() => handleInputChange(activeOrder._id, 'docket_doc', '')}
-                            className="text-danger font-bold text-[10px]"
+                            className="text-danger font-bold text-[10px] cursor-pointer"
                           >
                             Clear
                           </button>
@@ -1199,76 +1171,115 @@ export default function OutForDeliveryStation({ onNavigateToTracking }) {
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* ── FINAL DISPATCH ACTION BAR (BOSS RULE: "Dispatch for Delivery" button enabled only when all active EPCs have 2nd half payment done) ── */}
-                <div className="p-5 bg-surface-hover rounded-2xl border border-border space-y-3">
-                  {!allEpcsPaymentDone && (
-                    <div className="p-3 rounded-xl bg-danger/10 border border-danger/30 text-xs text-danger flex items-center gap-2 font-bold animate-pulse">
-                      <FaExclamationTriangle className="text-sm shrink-0" />
-                      <span>
-                        Dispatch Blocked: {unpaidEpcs.length} EPC(s) have 2nd half payment pending ({unpaidEpcs.map(e => e.epc_name).join(', ')}). All active EPCs must complete 2nd payment or be removed by Account Manager before dispatch.
-                      </span>
-                    </div>
-                  )}
+                  {/* Final Release Callout */}
+                  <div className="pl-8 pt-2">
+                    <div className="p-4 rounded-xl bg-surface-hover/80 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold text-text-primary flex items-center gap-2">
+                          <span>Dispatch Clearance Status:</span>
+                          {allEpcsPaymentDone ? (
+                            <span className="text-emerald-400 font-bold flex items-center gap-1">
+                              <FaCheckCircle className="text-xs" /> All EPCs 100% Paid
+                            </span>
+                          ) : (
+                            <span className="text-danger font-bold flex items-center gap-1">
+                              <FaTimesCircle className="text-xs" /> {unpaidEpcs.length} EPC(s) 2nd Half Unpaid
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-text-muted mt-0.5">
+                          {isDispatchAllowed
+                            ? 'Ready for dispatch! Clicking button will move order and all ungrouped EPCs to Track Delivery.'
+                            : !allEpcsPaymentDone
+                            ? 'Locked: 2nd half payment pending for some EPCs.'
+                            : 'Locked: Please upload loaded vehicle photo and docket.'}
+                        </div>
+                      </div>
 
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="text-xs">
-                      <div className="font-bold text-text-primary flex items-center gap-2">
-                        <span>Dispatch Clearance Status:</span>
-                        {allEpcsPaymentDone ? (
-                          <span className="text-emerald-500 font-bold flex items-center gap-1">
-                            <FaCheckCircle className="text-xs" /> All {activeEpcs.length} EPCs 100% Paid
-                          </span>
+                      <button
+                        type="button"
+                        disabled={!isDispatchAllowed || initiatingDispatch}
+                        onClick={() => handleInitiateDelivery(activeOrder)}
+                        className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
+                          isDispatchAllowed
+                            ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer animate-pulse'
+                            : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
+                        }`}
+                      >
+                        {initiatingDispatch ? (
+                          <>
+                            <FaSpinner className="animate-spin text-sm" />
+                            <span>Dispatching Order...</span>
+                          </>
                         ) : (
-                          <span className="text-danger font-bold flex items-center gap-1">
-                            <FaTimesCircle className="text-xs" /> {unpaidEpcs.length} EPC(s) Unpaid (2nd Half)
-                          </span>
+                          <>
+                            {isDispatchAllowed ? <FaTruck className="text-base" /> : <FaLock className="text-xs" />}
+                            <span>Dispatch for Delivery</span>
+                            {isDispatchAllowed && <FaArrowRight className="text-xs" />}
+                          </>
                         )}
-                      </div>
-                      <div className="text-[11px] text-text-muted mt-0.5">
-                        {isDispatchAllowed
-                          ? `Ready for final dispatch! Clicking "Dispatch for Delivery" will move all ${activeEpcs.length} ungrouped EPCs to Track Delivery with individual tracking.`
-                          : !allEpcsPaymentDone
-                          ? 'Dispatch button is disabled until all active EPCs complete their 2nd payment or are removed by Account Manager.'
-                          : 'Satisfy pre-dispatch gate checks (Photo, Docket, E-Way Bill) to dispatch.'}
-                      </div>
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      disabled={!isDispatchAllowed || initiatingDispatch}
-                      onClick={() => handleInitiateDelivery(activeOrder)}
-                      className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
-                        isDispatchAllowed
-                          ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer shadow-emerald-500/25 active:scale-95 animate-pulse'
-                          : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
-                      }`}
-                      title={
-                        !allEpcsPaymentDone
-                          ? `Locked: 2nd half payment pending for ${unpaidEpcs.length} EPC(s)`
-                          : !isDispatchGateCleared
-                          ? 'Locked: Pre-dispatch photo, docket, or E-Way Bill incomplete'
-                          : 'Dispatch for Delivery'
-                      }
-                    >
-                      {initiatingDispatch ? (
-                        <>
-                          <FaSpinner className="animate-spin text-sm" />
-                          <span>Dispatching Order...</span>
-                        </>
-                      ) : (
-                        <>
-                          {isDispatchAllowed ? <FaTruck className="text-base" /> : <FaLock className="text-xs" />}
-                          <span>Dispatch for Delivery</span>
-                          {isDispatchAllowed && <FaArrowRight className="text-xs" />}
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* Modal Navigation Footer */}
+            <div className="p-4 border-t border-border bg-surface-hover/60 flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
+                disabled={currentStep === 1}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  currentStep === 1
+                    ? 'opacity-40 cursor-not-allowed bg-surface border border-border text-text-muted'
+                    : 'bg-surface hover:bg-surface-hover border border-border text-text-primary cursor-pointer'
+                }`}
+              >
+                <FaArrowLeft className="text-xs" />
+                <span>Previous Step</span>
+              </button>
+
+              <div className="text-xs text-text-muted font-bold font-mono">
+                Step {currentStep} of 4
               </div>
-            ) : null}
+
+              {currentStep < 4 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(prev => Math.min(4, prev + 1))}
+                  className="px-5 py-2 rounded-xl text-xs font-bold gradient-primary text-white hover:opacity-95 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                >
+                  <span>Next Step</span>
+                  <FaArrowRight className="text-xs" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!isDispatchAllowed || initiatingDispatch}
+                  onClick={() => handleInitiateDelivery(activeOrder)}
+                  className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-md ${
+                    isDispatchAllowed
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white cursor-pointer'
+                      : 'bg-surface border border-border text-text-muted opacity-50 cursor-not-allowed'
+                  }`}
+                >
+                  {initiatingDispatch ? (
+                    <>
+                      <FaSpinner className="animate-spin text-xs" />
+                      <span>Dispatching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaTruck className="text-sm" />
+                      <span>Dispatch for Delivery</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

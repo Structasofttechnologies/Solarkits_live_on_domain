@@ -958,8 +958,20 @@ exports.get_delivery_orders = async (req, res) => {
             tracking_consignment_id: `TRK-${ordObj.order_number}-EPC1`
           }];
 
+      // If 100% components are fulfilled (either inwarded or allocated from warehouse stock)
+      let effectiveKitStatus = ordObj.kit_preparation_status;
+      const unallocatedShortage = (ordObj.items || []).reduce((acc, it) => {
+        const pending = it.pending_qty || 0;
+        const allocated = it.allocated_stock || 0;
+        return acc + Math.max(0, pending - allocated);
+      }, 0);
+      if (effectiveKitStatus === 'awaiting_components' && unallocatedShortage === 0) {
+        effectiveKitStatus = 'ready_for_assembly';
+      }
+
       return {
         ...ordObj,
+        kit_preparation_status: effectiveKitStatus,
         epcs: epcsList,
         items: enrichedItems,
         days_elapsed: daysElapsed,
@@ -1134,7 +1146,15 @@ exports.request_procurement = async (req, res) => {
  */
 exports.inward_material = async (req, res) => {
   try {
-    const { items = [], remarks = '', batch_id } = req.body;
+    const {
+      items = [],
+      remarks = '',
+      batch_id,
+      inward_type = 'warehouse',
+      inward_mode = 'manual',
+      scanned_serials = [],
+      pickup_location_details
+    } = req.body;
     const order = await DeliveryOrder.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ status: 'error', message: 'Delivery order not found.' });
@@ -1192,6 +1212,34 @@ exports.inward_material = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Please enter valid inward quantities greater than 0.' });
     }
 
+    // Update Inward Type and Pickup Location Details if provided
+    order.inward_type = inward_type;
+    if (pickup_location_details) {
+      order.pickup_location_details = {
+        location_name: pickup_location_details.location_name || '',
+        address: pickup_location_details.address || '',
+        contact_person: pickup_location_details.contact_person || '',
+        contact_phone: pickup_location_details.contact_phone || ''
+      };
+    }
+
+    // Store Scanned Serials (Barcode / QR gun registry) for matching during outward
+    if (Array.isArray(scanned_serials) && scanned_serials.length > 0) {
+      if (!order.scanned_serials) order.scanned_serials = [];
+      scanned_serials.forEach(sn => {
+        const serialCode = typeof sn === 'string' ? sn : sn.serial_code;
+        const skuCode = typeof sn === 'object' ? sn.sku : '';
+        if (serialCode) {
+          order.scanned_serials.push({
+            sku: skuCode || '',
+            serial_code: serialCode,
+            inwarded_at: new Date(),
+            verified_for_outward: false
+          });
+        }
+      });
+    }
+
     // Generate Delivery Number upon inwarding if not already present
     if (!order.delivery_number || order.delivery_number.startsWith('DO-')) {
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -1201,7 +1249,7 @@ exports.inward_material = async (req, res) => {
         action: 'Delivery Number Generated',
         performed_by_name: req.user?.name || 'Delivery Manager',
         timestamp: new Date(),
-        notes: `Delivery Number ${order.delivery_number} generated upon material inward.`
+        notes: `Delivery Number ${order.delivery_number} generated upon material inward (${inward_type === 'pickup_location' ? 'Direct Pickup from Site/Supplier' : 'Warehouse Dock Inward'}).`
       });
     }
 
@@ -1210,9 +1258,12 @@ exports.inward_material = async (req, res) => {
     order.inward_history.push({
       batch_id: generatedBatchId,
       inwarded_items: inwardedItemsLog,
+      inward_type,
+      inward_mode,
+      scanned_serials: Array.isArray(scanned_serials) ? scanned_serials : [],
       inwarded_by_name: req.user?.name || 'Delivery Manager (Abhishek Sharma)',
       timestamp: new Date(),
-      remarks: remarks || 'Material received and verified at warehouse dock.'
+      remarks: remarks || (inward_type === 'pickup_location' ? 'Material directly picked up from site/supplier location.' : 'Material received and verified at warehouse dock.')
     });
 
     // Check if 100% inward complete across all items
@@ -2030,30 +2081,57 @@ exports.update_kit_assembly = async (req, res) => {
     const { stage, kit_serial_barcode, notes } = req.body || {};
     order.kit_assembly_details = order.kit_assembly_details || {};
 
-    if (stage === 'picked') {
-      order.kit_assembly_details.picked_at = new Date();
-      order.kit_assembly_details.picked_by = req.user?.name || 'Delivery Manager';
+    // 1. Picking -> Assembly Station
+    if (stage === 'picked' || stage === 'in_assembly') {
+      order.kit_assembly_details.picked_at = order.kit_assembly_details.picked_at || new Date();
+      order.kit_assembly_details.picked_by = order.kit_assembly_details.picked_by || (req.user?.name || 'Delivery Manager');
+      order.kit_assembly_details.assembly_status = order.kit_assembly_details.assembly_status === 'completed' ? 'completed' : 'in_progress';
       order.kit_preparation_status = 'in_assembly';
-    } else if (stage === 'assembled') {
+    }
+    // 2. Assembly Station Completed
+    else if (stage === 'assembled') {
+      order.kit_assembly_details.picked_at = order.kit_assembly_details.picked_at || new Date();
       order.kit_assembly_details.assembled_at = new Date();
       order.kit_assembly_details.assembled_by = req.user?.name || 'Delivery Manager';
+      order.kit_assembly_details.assembly_status = 'completed';
       order.kit_preparation_status = 'in_assembly';
-    } else if (stage === 'qc_verified') {
+    }
+    // 3. QC Inspection Passed
+    else if (stage === 'qc_verified' || stage === 'quality_check') {
+      order.kit_assembly_details.assembled_at = order.kit_assembly_details.assembled_at || new Date();
+      order.kit_assembly_details.assembly_status = 'completed';
       order.kit_assembly_details.qc_verified = true;
+      order.kit_assembly_details.qc_status = 'passed';
       order.kit_assembly_details.qc_verified_by = req.user?.name || 'QC Inspector (Ramesh Shinde)';
-    } else if (stage === 'packed_and_labeled') {
+      order.kit_preparation_status = 'in_assembly';
+    }
+    // 4. Packaging & Barcode Label
+    else if (stage === 'packed_and_labeled' || stage === 'packed') {
+      order.kit_assembly_details.qc_verified = true;
+      order.kit_assembly_details.qc_status = 'passed';
       order.kit_assembly_details.packed_and_labeled = true;
       order.kit_assembly_details.packed_at = new Date();
-      order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
-    } else if (stage === 'mark_kit_ready') {
-      const missingItems = order.items.filter(it => (it.pending_qty || 0) > 0);
+      order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || order.kit_assembly_details.kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
+      order.kit_preparation_status = 'in_assembly';
+    }
+    // 5. Final Dispatch Staging / Kit Ready
+    else if (stage === 'mark_kit_ready' || stage === 'kit_ready') {
+      const missingItems = order.items.filter(it => {
+        const pending = it.pending_qty || 0;
+        const allocated = it.allocated_stock || 0;
+        return Math.max(0, pending - allocated) > 0;
+      });
       if (missingItems.length > 0) {
         order.kit_preparation_status = 'awaiting_components';
         return res.status(400).json({
           status: 'error',
-          message: `Cannot mark kit ready: ${missingItems.length} component(s) are still pending inward or have shortages.`
+          message: `Cannot mark kit ready: ${missingItems.length} component(s) still have unallocated shortages.`
         });
       }
+      order.kit_assembly_details.qc_verified = true;
+      order.kit_assembly_details.qc_status = 'passed';
+      order.kit_assembly_details.packed_and_labeled = true;
+      order.kit_assembly_details.kit_serial_barcode = kit_serial_barcode || order.kit_assembly_details.kit_serial_barcode || `SK-KIT-${order.order_number}-${Date.now().toString().slice(-4)}`;
       order.kit_preparation_status = 'kit_ready';
     }
 
@@ -2068,7 +2146,7 @@ exports.update_kit_assembly = async (req, res) => {
 
     return res.status(200).json({
       status: 'success',
-      message: `BOSKIT preparation updated to stage "${stage}".`,
+      message: `BOSKIT preparation successfully updated to stage "${stage}".`,
       data: order
     });
   } catch (error) {

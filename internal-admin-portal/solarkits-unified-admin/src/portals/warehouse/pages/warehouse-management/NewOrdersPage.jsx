@@ -8,10 +8,15 @@ export default function NewOrdersPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const prefix = location.pathname.startsWith('/warehouse-management-panel')
+    ? '/warehouse-management-panel'
+    : '/warehouse';
+
+  const handleNavigateToBosKit = (ord) => {
+    navigate(`${prefix}/bos-kit-assembly`);
+  };
+
   const handleNavigateToOutward = (ord) => {
-    const prefix = location.pathname.startsWith('/warehouse-management-panel')
-      ? '/warehouse-management-panel'
-      : '/warehouse';
     navigate(`${prefix}/out-for-delivery`);
   };
 
@@ -20,12 +25,15 @@ export default function NewOrdersPage() {
       {/* Module A Header */}
       <PageHeader
         title="New Orders (Procurement Fulfillment)"
-        subtitle="Review sales orders confirmed by Account Manager, check warehouse BOS Kit inventory, allocate stock, order shortages via Account Panel, and inward materials."
+        subtitle="Review sales orders confirmed by Account Manager with verified payment, monitor inward progress, and dispatch to BOS Kit Assembly once inwarding is complete."
         icon={FaBoxes}
       />
 
       {/* Main Delivery Manager Module */}
-      <NewOrdersDeliveryManager onNavigateToOutward={handleNavigateToOutward} />
+      <NewOrdersDeliveryManager
+        onNavigateToBosKit={handleNavigateToBosKit}
+        onNavigateToOutward={handleNavigateToOutward}
+      />
     </div>
   );
 }
