@@ -430,4 +430,11 @@ export const getProcurementPartners = async () => {
   return res.data;
 };
 
+export const syncWarehouseDeliveryOrders = async () => {
+  const res = await axios.post(`${API_URL}/accounts/procurement/sync-warehouse-delivery-orders`, {}, {
+    headers: authHeaderObj(),
+  });
+  return res.data;
+};
+
 

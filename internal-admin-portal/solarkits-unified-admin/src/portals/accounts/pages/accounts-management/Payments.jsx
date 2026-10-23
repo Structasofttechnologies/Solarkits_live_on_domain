@@ -15,7 +15,8 @@ import {
   getHierarchyOptions, getWarehouses, getWarehouseSuppliers, getWarehouseSkus,
   getPendingEpcFranchiseOrders, createCombinedSupplierPayment,
   getStates, getDistricts, getAllComboKits, getSuppliers,
-  getProcurementGroups, getPurchaseIndents, requestSupplierPayment
+  getProcurementGroups, getPurchaseIndents, requestSupplierPayment,
+  syncWarehouseDeliveryOrders
 } from "../../api/accounts";
 import SupplierPaymentModal from "../../components/procurement/SupplierPaymentModal";
 import PageHeader from "../../components/PageHeader";
@@ -1506,6 +1507,179 @@ export default function Payments() {
     } finally {
       setRequestingPaymentPiId(null);
     }
+  };
+
+  const [syncingWarehouseDO, setSyncingWarehouseDO] = useState(false);
+  const handleSyncWarehouseDO = async () => {
+    setSyncingWarehouseDO(true);
+    try {
+      const res = await syncWarehouseDeliveryOrders();
+      if (res?.status === "success") {
+        alert(`✅ ${res.message || "Warehouse Delivery Orders synced successfully!"}`);
+        fetchProcurementPIs();
+      } else {
+        alert(res?.message || "Failed to sync delivery orders.");
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
+      alert(err.response?.data?.message || "Failed to sync with warehouse.");
+    } finally {
+      setSyncingWarehouseDO(false);
+    }
+  };
+
+  const groupedProcurementOrders = useMemo(() => {
+    const map = new Map();
+
+    (procurementPIs || []).forEach((pi) => {
+      const groupKey = pi.order_group_id || pi.customer_order_number || pi._id;
+      if (!map.has(groupKey)) {
+        map.set(groupKey, {
+          key: groupKey,
+          order_group_id: pi.order_group_id || null,
+          customer_order_number: pi.customer_order_number || pi.order_group_id || "Direct Batch",
+          destination_warehouse_name: pi.destination_warehouse_name || "Ahmedabad Central Warehouse (WH-IND-GJ-001)",
+          created_at: pi.created_at,
+          pis: [],
+        });
+      }
+      map.get(groupKey).pis.push(pi);
+    });
+
+    const result = [];
+    map.forEach((grp) => {
+      let totalValue = 0;
+      let totalAdvanceAmount = 0;
+      let totalAdvancePaid = 0;
+      let totalBalanceAmount = 0;
+      let totalBalancePaid = 0;
+
+      let panelPiCount = 0;
+      let inverterPiCount = 0;
+      let bosPiCount = 0;
+
+      let totalPanelUnits = 0;
+      let totalInverterUnits = 0;
+      let totalBosUnits = 0;
+
+      grp.pis.forEach((pi) => {
+        const payStatus = pi.payment?.payment_status || "PI Submitted";
+        const totalVal = pi.total_pi_value || 0;
+        const advPct = pi.payment?.advance_percentage || 30;
+        const balPct = pi.payment?.balance_percentage || 70;
+        const advAmount = pi.payment?.advance_amount || Math.round((totalVal * advPct) / 100);
+        const balAmount = pi.payment?.balance_amount || (totalVal - advAmount);
+
+        const advUtr = pi.payment?.advance_payment?.utr_number || (["Advance Paid", "Paid"].includes(payStatus) ? pi.payment?.actual_payment?.utr_number : null);
+        const balUtr = pi.payment?.balance_payment?.utr_number;
+
+        const isAdvancePaid = Boolean(advUtr || ["Advance Paid", "Paid"].includes(payStatus));
+        const isFullyPaid = payStatus === "Paid" || Boolean(balUtr && isAdvancePaid);
+
+        totalValue += totalVal;
+        totalAdvanceAmount += advAmount;
+        if (isAdvancePaid) totalAdvancePaid += advAmount;
+        totalBalanceAmount += balAmount;
+        if (isFullyPaid) totalBalancePaid += balAmount;
+
+        const cType = (pi.component_type || "").toLowerCase();
+        const allText = [
+          cType,
+          pi.supplier_name || "",
+          pi.supplier_brand || "",
+          ...(pi.items || []).map(it => `${it.sku_code || ''} ${it.item_name || ''} ${it.component_category || ''}`)
+        ].join(" ").toLowerCase();
+
+        const units = (pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0);
+
+        if (cType.includes("panel") || allText.includes("panel") || allText.includes("module")) {
+          panelPiCount++;
+          totalPanelUnits += units;
+        } else if (cType.includes("inverter") || allText.includes("inverter")) {
+          inverterPiCount++;
+          totalInverterUnits += units;
+        } else {
+          bosPiCount++;
+          totalBosUnits += units;
+        }
+      });
+
+      const allAdvancePaid = grp.pis.length > 0 && grp.pis.every(pi => {
+        const payStatus = pi.payment?.payment_status || "";
+        return Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+      });
+
+      const anyAdvancePaid = grp.pis.some(pi => {
+        const payStatus = pi.payment?.payment_status || "";
+        return Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
+      });
+
+      const allFullyPaid = grp.pis.length > 0 && grp.pis.every(pi => {
+        const payStatus = pi.payment?.payment_status || "";
+        return Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
+      });
+
+      result.push({
+        ...grp,
+        totalValue,
+        totalAdvanceAmount,
+        totalAdvancePaid,
+        totalAdvanceDue: Math.max(0, totalAdvanceAmount - totalAdvancePaid),
+        totalBalanceAmount,
+        totalBalancePaid,
+        totalBalanceDue: Math.max(0, totalBalanceAmount - totalBalancePaid),
+        allAdvancePaid,
+        anyAdvancePaid,
+        allFullyPaid,
+        panelPiCount,
+        inverterPiCount,
+        bosPiCount,
+        totalPanelUnits,
+        totalInverterUnits,
+        totalBosUnits,
+      });
+    });
+
+    return result;
+  }, [procurementPIs]);
+
+  const filteredGroupedOrders = useMemo(() => {
+    return groupedProcurementOrders.filter((grp) => {
+      if (piSubFilter === "awaiting_advance") {
+        return !grp.allAdvancePaid;
+      }
+      if (piSubFilter === "balance_due") {
+        return grp.anyAdvancePaid && !grp.allFullyPaid;
+      }
+      if (piSubFilter === "fully_paid") {
+        return grp.allFullyPaid;
+      }
+      return true;
+    });
+  }, [groupedProcurementOrders, piSubFilter]);
+
+  // Open / Close (Expand / Collapse) state for Consolidated Order Cards
+  const [collapsedOrderKeys, setCollapsedOrderKeys] = useState(new Set());
+
+  const toggleOrderCollapse = (key) => {
+    setCollapsedOrderKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const handleExpandAllOrders = () => {
+    setCollapsedOrderKeys(new Set());
+  };
+
+  const handleCollapseAllOrders = () => {
+    const allKeys = new Set(filteredGroupedOrders.map((g) => g.key));
+    setCollapsedOrderKeys(allKeys);
   };
 
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -4797,72 +4971,92 @@ export default function Payments() {
 
           {/* Sub-Filter Tabs for Purchase Indents */}
           {procurementPIs.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 bg-white border border-gray-200 p-2.5 rounded-2xl shadow-xs">
-              <button
-                type="button"
-                onClick={() => setPiSubFilter("all")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  piSubFilter === "all" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <span>All Purchase Indents</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                  piSubFilter === "all" ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
-                }`}>
-                  {procurementPIs.length}
-                </span>
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-gray-200 p-2.5 rounded-2xl shadow-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPiSubFilter("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    piSubFilter === "all" ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <span>All Orders / Batches</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    piSubFilter === "all" ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                  }`}>
+                    {groupedProcurementOrders.length} Orders ({procurementPIs.length} PIs)
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setPiSubFilter("awaiting_advance")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  piSubFilter === "awaiting_advance" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <span>Awaiting 30% Advance</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                  piSubFilter === "awaiting_advance" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
-                }`}>
-                  {procurementPIs.filter(pi => !Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(pi.payment?.payment_status))).length}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPiSubFilter("awaiting_advance")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    piSubFilter === "awaiting_advance" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <span>Awaiting 30% Advance</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    piSubFilter === "awaiting_advance" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
+                  }`}>
+                    {groupedProcurementOrders.filter(g => !g.allAdvancePaid).length}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setPiSubFilter("balance_due")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  piSubFilter === "balance_due" ? "bg-amber-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <span>30% Paid (70% Balance Due)</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                  piSubFilter === "balance_due" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-700"
-                }`}>
-                  {procurementPIs.filter(pi => {
-                    const payStatus = pi.payment?.payment_status || "";
-                    const hasAdv = Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
-                    const isFull = Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
-                    return hasAdv && !isFull;
-                  }).length}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPiSubFilter("balance_due")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    piSubFilter === "balance_due" ? "bg-amber-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>30% Paid (70% Balance Due)</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    piSubFilter === "balance_due" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-700"
+                  }`}>
+                    {groupedProcurementOrders.filter(g => g.anyAdvancePaid && !g.allFullyPaid).length}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setPiSubFilter("fully_paid")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  piSubFilter === "fully_paid" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                <span>Fully Paid (100%)</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
-                  piSubFilter === "fully_paid" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
-                }`}>
-                  {procurementPIs.filter(pi => Boolean(pi.payment?.balance_payment?.utr_number || pi.payment?.payment_status === "Paid")).length}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPiSubFilter("fully_paid")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    piSubFilter === "fully_paid" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <span>Fully Paid (100%)</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                    piSubFilter === "fully_paid" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"
+                  }`}>
+                    {groupedProcurementOrders.filter(g => g.allFullyPaid).length}
+                  </span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={collapsedOrderKeys.size === 0 ? handleCollapseAllOrders : handleExpandAllOrders}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-300 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title={collapsedOrderKeys.size === 0 ? "Close all open cards" : "Open all closed cards"}
+                >
+                  {collapsedOrderKeys.size === 0 ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
+                  <span>{collapsedOrderKeys.size === 0 ? "Close All Cards" : "Open All Cards"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncWarehouseDO}
+                  disabled={syncingWarehouseDO}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Sync all advance-paid orders to Warehouse New Orders Delivery Manager"
+                >
+                  <FaSyncAlt className={syncingWarehouseDO ? "animate-spin" : ""} size={11} />
+                  <span>{syncingWarehouseDO ? "Syncing..." : "Sync Warehouse Orders"}</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -4886,327 +5080,491 @@ export default function Payments() {
                 <span>Open Procurement Module</span>
               </a>
             </div>
+          ) : filteredGroupedOrders.length === 0 ? (
+            <div className="p-10 text-center bg-white border border-dashed border-gray-300 rounded-2xl">
+              <FaBoxes className="mx-auto text-3xl text-gray-300 mb-2 opacity-50" />
+              <h4 className="text-sm font-bold text-gray-700">No Orders in this Status</h4>
+              <p className="text-xs text-gray-500 mt-1">Try switching to another sub-filter tab above.</p>
+            </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-gray-200 bg-gray-50 text-[10px] font-black uppercase tracking-wider text-gray-600">
-                      <th className="py-3 px-4">PI Number &amp; Date</th>
-                      <th className="py-3 px-4">Batch / Order</th>
-                      <th className="py-3 px-4">Allocated Supplier / Brand</th>
-                      <th className="py-3 px-4 text-center">Items &amp; Qty</th>
-                      <th className="py-3 px-4 text-right">30% Advance</th>
-                      <th className="py-3 px-4 text-right">70% Balance</th>
-                      <th className="py-3 px-4 text-right">Total PI Value</th>
-                      <th className="py-3 px-4 text-center">Payment Status</th>
-                      <th className="py-3 px-4 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {procurementPIs
-                      .filter(pi => {
-                        if (piSubFilter === "awaiting_advance") {
-                          const payStatus = pi.payment?.payment_status || "PI Submitted";
-                          return !Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
-                        }
-                        if (piSubFilter === "balance_due") {
-                          const payStatus = pi.payment?.payment_status || "PI Submitted";
-                          const hasAdv = Boolean(pi.payment?.advance_payment?.utr_number || ["Advance Paid", "Paid"].includes(payStatus));
-                          const isFull = Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
-                          return hasAdv && !isFull;
-                        }
-                        if (piSubFilter === "fully_paid") {
-                          const payStatus = pi.payment?.payment_status || "PI Submitted";
-                          return Boolean(pi.payment?.balance_payment?.utr_number || payStatus === "Paid");
-                        }
-                        return true;
-                      })
-                      .map((pi) => {
-                        const payStatus = pi.payment?.payment_status || "PI Submitted";
-                        const totalVal = pi.total_pi_value || 0;
-                        const advPct = pi.payment?.advance_percentage || 30;
-                        const balPct = pi.payment?.balance_percentage || 70;
-                        const advAmount = pi.payment?.advance_amount || Math.round((totalVal * advPct) / 100);
-                        const balAmount = pi.payment?.balance_amount || (totalVal - advAmount);
-
-                        const advUtr = pi.payment?.advance_payment?.utr_number || (["Advance Paid", "Paid"].includes(payStatus) ? pi.payment?.actual_payment?.utr_number : null);
-                        const balUtr = pi.payment?.balance_payment?.utr_number;
-
-                        const isAdvancePaid = Boolean(advUtr || ["Advance Paid", "Paid"].includes(payStatus));
-                        const isFullyPaid = payStatus === "Paid" || Boolean(balUtr && isAdvancePaid);
-                        const isBalanceDue = isAdvancePaid && !isFullyPaid;
-
-                        const advApproval = pi.payment?.advance_approval || {};
-                        const balApproval = pi.payment?.balance_approval || {};
-
-                        const isAdvApproved = advApproval.status === "approved";
-                        const isAdvRequested = advApproval.status === "pending" || payStatus === "Advance Requested";
-                        const isAdvRejected = advApproval.status === "rejected";
-
-                        const isBalApproved = balApproval.status === "approved";
-                        const isBalRequested = balApproval.status === "pending" || payStatus === "Balance Requested";
-                        const isBalRejected = balApproval.status === "rejected";
-
-                        const isBusyThisPi = requestingPaymentPiId === (pi._id || pi.pi_number);
-
-                        return (
-                          <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
-                            <td className="py-3.5 px-4">
-                              <span className="font-black font-mono text-primary text-sm">{pi.pi_number}</span>
-                              <span className="block text-[10px] text-gray-400 mt-0.5">
-                                {pi.created_at ? new Date(pi.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+            <div className="space-y-6">
+              {filteredGroupedOrders.map((grp) => {
+                const isCollapsed = collapsedOrderKeys.has(grp.key);
+                return (
+                  <div
+                    key={grp.key}
+                    className="bg-white border-2 border-gray-200/90 rounded-2xl shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden"
+                  >
+                    {/* ─── Card Header: Batch & Consolidated Financials (Clickable) ──────── */}
+                    <div
+                      onClick={() => toggleOrderCollapse(grp.key)}
+                      className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none hover:brightness-110 transition-all"
+                      title={isCollapsed ? "Click to Open / Expand Card" : "Click to Close / Collapse Card"}
+                    >
+                      <div className="flex items-start sm:items-center gap-3.5">
+                        <span className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 flex items-center justify-center text-xl shrink-0 shadow-inner">
+                          <FaLayerGroup />
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            {grp.order_group_id && (
+                              <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/40">
+                                Batch #{grp.order_group_id}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-4">
-                              {pi.order_group_id ? (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-black bg-purple-50 text-purple-700 border border-purple-200">
-                                  {pi.order_group_id}
-                                </span>
-                              ) : (
-                                <span className="font-mono font-bold text-gray-700 text-xs">
-                                  {pi.customer_order_number}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <div className="font-black text-gray-900">{pi.supplier_name}</div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
-                                  pi.is_oem_partner ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
-                                }`}>
-                                  {pi.is_oem_partner ? "OEM Partner (SolarKits Brand)" : "Supplier Partner"}
-                                </span>
-                                {pi.supplier_brand && (
-                                  <span className="text-[10px] text-gray-500 font-semibold">{pi.supplier_brand}</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-4 text-center">
-                              <div className="font-bold text-gray-900">
-                                {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
-                              </div>
-                              <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
-                                {(pi.items || []).map(it => it.sku_code).join(", ")}
-                              </span>
-                            </td>
+                            )}
+                            <span className="text-sm sm:text-base font-black tracking-tight text-white font-mono">
+                              {grp.customer_order_number}
+                            </span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                              grp.allFullyPaid
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                                : grp.allAdvancePaid
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                                  : grp.anyAdvancePaid
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-400/30"
+                                    : "bg-blue-500/20 text-blue-300 border-blue-400/30"
+                            }`}>
+                              {grp.allFullyPaid
+                                ? "100% Fully Settled"
+                                : grp.allAdvancePaid
+                                  ? "30% Advance Fully Disbursed"
+                                  : grp.anyAdvancePaid
+                                    ? `30% Advance Partially Paid (${grp.pis.filter(p => Boolean(p.payment?.advance_payment?.utr_number || ['Advance Paid', 'Paid'].includes(p.payment?.payment_status))).length}/${grp.pis.length} PIs)`
+                                    : "30% Advance Due"}
+                            </span>
+                          </div>
 
-                            {/* 30% Advance */}
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="font-black text-gray-900">
-                                ₹{advAmount.toLocaleString("en-IN")}
-                              </div>
-                              <div className="mt-0.5">
-                                {isAdvancePaid ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                                    ✅ Paid {advUtr ? `(${advUtr.slice(-5)})` : ""}
-                                  </span>
-                                ) : isAdvApproved ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
-                                    Approved ({advPct}%)
-                                  </span>
-                                ) : isAdvRequested ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
-                                    ⏳ Adv Approval Pending
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                                    Due ({advPct}%)
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 mt-1.5 font-medium">
+                            <span className="inline-flex items-center gap-1.5 text-slate-300">
+                              <FaWarehouse size={11} className="text-indigo-400" />
+                              <span>Destination: <strong className="text-white">{grp.destination_warehouse_name}</strong></span>
+                            </span>
+                            <span className="text-slate-500">•</span>
+                            <span>Created: {grp.created_at ? new Date(grp.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Today"}</span>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-indigo-300 font-bold">{grp.pis.length} Component PIs Bundled in this Order</span>
+                          </div>
+                        </div>
+                      </div>
 
-                            {/* 70% Balance */}
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="font-black text-gray-900">
-                                ₹{balAmount.toLocaleString("en-IN")}
-                              </div>
-                              <div className="mt-0.5">
-                                {isFullyPaid ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                                    ✅ Paid {balUtr ? `(${balUtr.slice(-5)})` : ""}
-                                  </span>
-                                ) : isBalanceDue ? (
-                                  isBalApproved ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
-                                      Approved ({balPct}%)
-                                    </span>
-                                  ) : isBalRequested ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
-                                      ⏳ Bal Approval Pending
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                                      ⏳ Due (Ready)
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="text-[10px] text-gray-400">
-                                    Locked (Wait 30%)
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                      {/* Financial Snapshot & Open/Close Toggle Button */}
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0">
+                        <div className="flex flex-wrap items-center gap-4 sm:gap-6 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+                          <div>
+                            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Total Batch Value</span>
+                            <span className="text-base sm:text-lg font-black text-white">₹{grp.totalValue.toLocaleString("en-IN")}</span>
+                          </div>
+                          <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
+                          <div>
+                            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">30% Advance</span>
+                            <span className="text-xs sm:text-sm font-black text-emerald-400">
+                              ₹{grp.totalAdvancePaid.toLocaleString("en-IN")}
+                              <span className="text-[10px] text-slate-400 font-normal"> / ₹{grp.totalAdvanceAmount.toLocaleString("en-IN")}</span>
+                            </span>
+                          </div>
+                          <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
+                          <div>
+                            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">70% Balance Due</span>
+                            <span className="text-xs sm:text-sm font-black text-amber-300">
+                              ₹{grp.totalBalanceDue.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                        </div>
 
-                            {/* Total PI Value */}
-                            <td className="py-3.5 px-4 text-right font-black text-primary text-sm">
-                              ₹{totalVal.toLocaleString("en-IN")}
-                            </td>
+                        {/* Open / Close Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOrderCollapse(grp.key);
+                          }}
+                          className={`flex items-center gap-2 px-3.5 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-sm cursor-pointer border ${
+                            isCollapsed
+                              ? "bg-primary text-white border-primary hover:bg-primary/90"
+                              : "bg-white/15 text-white border-white/20 hover:bg-white/25"
+                          }`}
+                          title={isCollapsed ? "Click to Open Card" : "Click to Close Card"}
+                        >
+                          <span>{isCollapsed ? "Open Card" : "Close Card"}</span>
+                          {isCollapsed ? (
+                            <FaChevronDown size={11} className="text-white" />
+                          ) : (
+                            <FaChevronUp size={11} className="text-white" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
 
-                            {/* Payment Status */}
-                            <td className="py-3.5 px-4 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border inline-flex items-center gap-1 ${
-                                isFullyPaid ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
-                                isBalanceDue ? (
-                                  isBalApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
-                                  isBalRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
-                                  "bg-amber-50 text-amber-800 border-amber-300 font-extrabold"
-                                ) : (
-                                  isAdvApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
-                                  isAdvRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
-                                  "bg-gray-100 text-gray-700 border-gray-300"
-                                )
-                              }`}>
-                                {isFullyPaid ? "Fully Paid (100%)" :
-                                 isBalanceDue ? (
-                                   isBalApproved ? "70% Balance Approved" :
-                                   isBalRequested ? "70% Bal Awaiting Approval" :
-                                   "70% Balance Due"
-                                 ) : (
-                                   isAdvApproved ? "30% Advance Approved" :
-                                   isAdvRequested ? "30% Adv Awaiting Approval" :
-                                   "30% Advance Due"
-                                 )}
-                              </span>
-                            </td>
+                    {/* ─── Card Body (Rendered when NOT collapsed) ──────────── */}
+                    {!isCollapsed && (
+                      <>
+                        {/* ─── Component Pillars Strip (Panels, Inverter, BOS) ──── */}
+                        <div className="bg-slate-50 border-b border-gray-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider mr-1">
+                              Components In This Order:
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs">
+                              <span>☀️</span>
+                              <span>Solar Panels: <strong>{grp.totalPanelUnits > 0 ? `${grp.totalPanelUnits} Pcs` : `${grp.panelPiCount} PI`}</strong></span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs">
+                              <span>⚡</span>
+                              <span>Solar Inverter: <strong>{grp.totalInverterUnits > 0 ? `${grp.totalInverterUnits} Pcs` : `${grp.inverterPiCount} PI`}</strong></span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-900 border border-purple-200 shadow-2xs">
+                              <span>📦</span>
+                              <span>Complete BOS Kit: <strong>{grp.totalBosUnits > 0 ? `${grp.totalBosUnits} Sets` : `${grp.bosPiCount} PI`}</strong></span>
+                            </span>
+                          </div>
 
-                            {/* Action Buttons */}
-                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                              {isFullyPaid ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedPiForPayment(pi);
-                                    setPiPaymentMilestone("overview");
-                                    setIsPiPaymentModalOpen(true);
-                                  }}
-                                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xs cursor-pointer"
-                                >
-                                  View Payments
-                                </button>
-                              ) : isBalanceDue ? (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {isBalApproved ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedPiForPayment(pi);
-                                        setPiPaymentMilestone("balance");
-                                        setIsPiPaymentModalOpen(true);
-                                      }}
-                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shadow-amber-200"
-                                      title="Disburse remaining 70% balance to supplier"
-                                    >
-                                      <span>Pay 70% Balance</span>
-                                      <FaArrowRight size={9} />
-                                    </button>
-                                  ) : isBalRequested ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedPiForPayment(pi);
-                                        setPiPaymentMilestone("overview");
-                                        setIsPiPaymentModalOpen(true);
-                                      }}
-                                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                      title="Admin 70% Balance Approval is Pending"
-                                    >
-                                      <FaClock size={10} className="text-amber-600 animate-pulse" />
-                                      <span>Bal Awaiting Approval</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      disabled={isBusyThisPi}
-                                      onClick={() => handleRaisePaymentRequest(pi, "balance")}
-                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-                                      title="Raise 70% Balance Payment Approval Request to Admin"
-                                    >
-                                      {isBusyThisPi ? (
-                                        <FaSpinner className="animate-spin text-xs" />
+                          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                            <FaTruck className="text-emerald-600" size={12} />
+                            <span>Warehouse New Order Auto-Linked (Full BOM Ready)</span>
+                          </div>
+                        </div>
+
+                        {/* ─── Inner Component PIs Table ────────────────────────── */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200 bg-gray-100/70 text-[10px] font-black uppercase tracking-wider text-gray-600">
+                                <th className="py-3 px-4">Component &amp; PI No.</th>
+                                <th className="py-3 px-4">Allocated Supplier / Brand</th>
+                                <th className="py-3 px-4 text-center">Items &amp; Qty</th>
+                                <th className="py-3 px-4 text-right">30% Advance</th>
+                                <th className="py-3 px-4 text-right">70% Balance</th>
+                                <th className="py-3 px-4 text-right">Total PI Value</th>
+                                <th className="py-3 px-4 text-center">Payment Status</th>
+                                <th className="py-3 px-4 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {grp.pis.map((pi) => {
+                                const payStatus = pi.payment?.payment_status || "PI Submitted";
+                                const totalVal = pi.total_pi_value || 0;
+                                const advPct = pi.payment?.advance_percentage || 30;
+                                const balPct = pi.payment?.balance_percentage || 70;
+                                const advAmount = pi.payment?.advance_amount || Math.round((totalVal * advPct) / 100);
+                                const balAmount = pi.payment?.balance_amount || (totalVal - advAmount);
+
+                                const advUtr = pi.payment?.advance_payment?.utr_number || (["Advance Paid", "Paid"].includes(payStatus) ? pi.payment?.actual_payment?.utr_number : null);
+                                const balUtr = pi.payment?.balance_payment?.utr_number;
+
+                                const isAdvancePaid = Boolean(advUtr || ["Advance Paid", "Paid"].includes(payStatus));
+                                const isFullyPaid = payStatus === "Paid" || Boolean(balUtr && isAdvancePaid);
+                                const isBalanceDue = isAdvancePaid && !isFullyPaid;
+
+                                const advApproval = pi.payment?.advance_approval || {};
+                                const balApproval = pi.payment?.balance_approval || {};
+
+                                const isAdvApproved = advApproval.status === "approved";
+                                const isAdvRequested = advApproval.status === "pending" || payStatus === "Advance Requested";
+                                const isAdvRejected = advApproval.status === "rejected";
+
+                                const isBalApproved = balApproval.status === "approved";
+                                const isBalRequested = balApproval.status === "pending" || payStatus === "Balance Requested";
+                                const isBalRejected = balApproval.status === "rejected";
+
+                                const isBusyThisPi = requestingPaymentPiId === (pi._id || pi.pi_number);
+
+                                // Detect component type
+                                const cType = (pi.component_type || "").toLowerCase();
+                                const allItemText = (pi.items || []).map(it => `${it.sku_code || ''} ${it.item_name || ''} ${it.component_category || ''}`).join(" ").toLowerCase();
+
+                                let compIcon = "📦";
+                                let compLabel = "Complete BOS Kit";
+                                let compPill = "bg-purple-50 text-purple-700 border-purple-200";
+
+                                if (cType.includes("panel") || allItemText.includes("panel") || allItemText.includes("module")) {
+                                  compIcon = "☀️";
+                                  compLabel = "Solar Panels";
+                                  compPill = "bg-amber-50 text-amber-800 border-amber-200";
+                                } else if (cType.includes("inverter") || allItemText.includes("inverter")) {
+                                  compIcon = "⚡";
+                                  compLabel = "Solar Inverter";
+                                  compPill = "bg-blue-50 text-blue-700 border-blue-200";
+                                }
+
+                                return (
+                                  <tr key={pi._id || pi.pi_number} className="hover:bg-gray-50/70 transition-colors">
+                                    <td className="py-3.5 px-4">
+                                      <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black border inline-flex items-center gap-1 ${compPill}`}>
+                                          <span>{compIcon}</span>
+                                          <span>{compLabel}</span>
+                                        </span>
+                                      </div>
+                                      <span className="font-black font-mono text-primary text-sm mt-1 block">{pi.pi_number}</span>
+                                      <span className="block text-[10px] text-gray-400 mt-0.5">
+                                        {pi.created_at ? new Date(pi.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                                      </span>
+                                    </td>
+                                    <td className="py-3.5 px-4">
+                                      <div className="font-black text-gray-900">{pi.supplier_name}</div>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                          pi.is_oem_partner ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                                        }`}>
+                                          {pi.is_oem_partner ? "OEM Partner (SolarKits Brand)" : "Supplier Partner"}
+                                        </span>
+                                        {pi.supplier_brand && (
+                                          <span className="text-[10px] text-gray-500 font-semibold">{pi.supplier_brand}</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-3.5 px-4 text-center">
+                                      <div className="font-bold text-gray-900">
+                                        {(pi.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} Units
+                                      </div>
+                                      <span className="text-[10px] text-gray-400 block truncate max-w-[140px] mx-auto">
+                                        {(pi.items || []).map(it => it.sku_code).join(", ")}
+                                      </span>
+                                    </td>
+
+                                    {/* 30% Advance */}
+                                    <td className="py-3.5 px-4 text-right">
+                                      <div className="font-black text-gray-900">
+                                        ₹{advAmount.toLocaleString("en-IN")}
+                                      </div>
+                                      <div className="mt-0.5">
+                                        {isAdvancePaid ? (
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                            ✅ Paid {advUtr ? `(${advUtr.slice(-5)})` : ""}
+                                          </span>
+                                        ) : isAdvApproved ? (
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                            Approved ({advPct}%)
+                                          </span>
+                                        ) : isAdvRequested ? (
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                                            ⏳ Adv Approval Pending
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                            Due ({advPct}%)
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* 70% Balance */}
+                                    <td className="py-3.5 px-4 text-right">
+                                      <div className="font-black text-gray-900">
+                                        ₹{balAmount.toLocaleString("en-IN")}
+                                      </div>
+                                      <div className="mt-0.5">
+                                        {isFullyPaid ? (
+                                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                            ✅ Paid {balUtr ? `(${balUtr.slice(-5)})` : ""}
+                                          </span>
+                                        ) : isBalanceDue ? (
+                                          isBalApproved ? (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                              Approved ({balPct}%)
+                                            </span>
+                                          ) : isBalRequested ? (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded">
+                                              ⏳ Bal Approval Pending
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                              ⏳ Due (Ready)
+                                            </span>
+                                          )
+                                        ) : (
+                                          <span className="text-[10px] text-gray-400">
+                                            Locked (Wait 30%)
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* Total PI Value */}
+                                    <td className="py-3.5 px-4 text-right font-black text-primary text-sm">
+                                      ₹{totalVal.toLocaleString("en-IN")}
+                                    </td>
+
+                                    {/* Payment Status */}
+                                    <td className="py-3.5 px-4 text-center">
+                                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border inline-flex items-center gap-1 ${
+                                        isFullyPaid ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                        isBalanceDue ? (
+                                          isBalApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                          isBalRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                          "bg-amber-50 text-amber-800 border-amber-300 font-extrabold"
+                                        ) : (
+                                          isAdvApproved ? "bg-emerald-50 text-emerald-700 border-emerald-300" :
+                                          isAdvRequested ? "bg-amber-50 text-amber-700 border-amber-300" :
+                                          "bg-gray-100 text-gray-700 border-gray-300"
+                                        )
+                                      }`}>
+                                        {isFullyPaid ? "Fully Paid (100%)" :
+                                         isBalanceDue ? (
+                                           isBalApproved ? "70% Balance Approved" :
+                                           isBalRequested ? "70% Bal Awaiting Approval" :
+                                           "70% Balance Due"
+                                         ) : (
+                                           isAdvApproved ? "30% Advance Approved" :
+                                           isAdvRequested ? "30% Adv Awaiting Approval" :
+                                           "30% Advance Due"
+                                         )}
+                                      </span>
+                                    </td>
+
+                                    {/* Action Buttons */}
+                                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                      {isFullyPaid ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedPiForPayment(pi);
+                                            setPiPaymentMilestone("overview");
+                                            setIsPiPaymentModalOpen(true);
+                                          }}
+                                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gray-900 text-white hover:bg-black transition-all shadow-xs cursor-pointer"
+                                        >
+                                          View Payments
+                                        </button>
+                                      ) : isBalanceDue ? (
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          {isBalApproved ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedPiForPayment(pi);
+                                                setPiPaymentMilestone("balance");
+                                                setIsPiPaymentModalOpen(true);
+                                              }}
+                                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shadow-amber-200"
+                                              title="Disburse remaining 70% balance to supplier"
+                                            >
+                                              <span>Pay 70% Balance</span>
+                                              <FaArrowRight size={9} />
+                                            </button>
+                                          ) : isBalRequested ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedPiForPayment(pi);
+                                                setPiPaymentMilestone("overview");
+                                                setIsPiPaymentModalOpen(true);
+                                              }}
+                                              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                              title="Admin 70% Balance Approval is Pending"
+                                            >
+                                              <FaClock size={10} className="text-amber-600 animate-pulse" />
+                                              <span>Bal Awaiting Approval</span>
+                                            </button>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              disabled={isBusyThisPi}
+                                              onClick={() => handleRaisePaymentRequest(pi, "balance")}
+                                              className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                              title="Raise 70% Balance Payment Approval Request to Admin"
+                                            >
+                                              {isBusyThisPi ? (
+                                                <FaSpinner className="animate-spin text-xs" />
+                                              ) : (
+                                                <FaPaperPlane className="text-[10px]" />
+                                              )}
+                                              <span>Request 70% Balance</span>
+                                            </button>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedPiForPayment(pi);
+                                              setPiPaymentMilestone("overview");
+                                              setIsPiPaymentModalOpen(true);
+                                            }}
+                                            className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-300 cursor-pointer"
+                                            title="View Advance UTR & History"
+                                          >
+                                            UTR
+                                          </button>
+                                        </div>
                                       ) : (
-                                        <FaPaperPlane className="text-[10px]" />
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          {isAdvApproved ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedPiForPayment(pi);
+                                                setPiPaymentMilestone("advance");
+                                                setIsPiPaymentModalOpen(true);
+                                              }}
+                                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
+                                            >
+                                              Pay 30% Advance
+                                            </button>
+                                          ) : isAdvRequested ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedPiForPayment(pi);
+                                                setPiPaymentMilestone("overview");
+                                                setIsPiPaymentModalOpen(true);
+                                              }}
+                                              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                              title="Admin 30% Advance Approval is Pending"
+                                            >
+                                              <FaClock size={10} className="text-amber-600 animate-pulse" />
+                                              <span>Adv Awaiting Approval</span>
+                                            </button>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              disabled={isBusyThisPi}
+                                              onClick={() => handleRaisePaymentRequest(pi, "advance")}
+                                              className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                                              title="Raise 30% Advance Payment Approval Request to Admin"
+                                            >
+                                              {isBusyThisPi ? (
+                                                <FaSpinner className="animate-spin text-xs" />
+                                              ) : (
+                                                <FaPaperPlane className="text-[10px]" />
+                                              )}
+                                              <span>Request 30% Advance</span>
+                                            </button>
+                                          )}
+                                        </div>
                                       )}
-                                      <span>Request 70% Balance</span>
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedPiForPayment(pi);
-                                      setPiPaymentMilestone("overview");
-                                      setIsPiPaymentModalOpen(true);
-                                    }}
-                                    className="px-2 py-1.5 rounded-xl text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all border border-gray-300 cursor-pointer"
-                                    title="View Advance UTR & History"
-                                  >
-                                    UTR
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  {isAdvApproved ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedPiForPayment(pi);
-                                        setPiPaymentMilestone("advance");
-                                        setIsPiPaymentModalOpen(true);
-                                      }}
-                                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
-                                    >
-                                      Pay 30% Advance
-                                    </button>
-                                  ) : isAdvRequested ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedPiForPayment(pi);
-                                        setPiPaymentMilestone("overview");
-                                        setIsPiPaymentModalOpen(true);
-                                      }}
-                                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                      title="Admin 30% Advance Approval is Pending"
-                                    >
-                                      <FaClock size={10} className="text-amber-600 animate-pulse" />
-                                      <span>Adv Awaiting Approval</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      disabled={isBusyThisPi}
-                                      onClick={() => handleRaisePaymentRequest(pi, "advance")}
-                                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-                                      title="Raise 30% Advance Payment Approval Request to Admin"
-                                    >
-                                      {isBusyThisPi ? (
-                                        <FaSpinner className="animate-spin text-xs" />
-                                      ) : (
-                                        <FaPaperPlane className="text-[10px]" />
-                                      )}
-                                      <span>Request 30% Advance</span>
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* ─── Card Footer: Warehouse Linkage ────────────────────── */}
+                        <div className="bg-gray-50/80 border-t border-gray-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 text-gray-600 font-medium">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>
+                              Once 30% advance is paid, this order automatically appears in Warehouse <strong>New Orders</strong> with all 3 components (Panels, Inverter, BOS) ready for inward inspection.
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleSyncWarehouseDO}
+                              disabled={syncingWarehouseDO}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white border border-gray-300 hover:border-gray-400 text-gray-700 text-[11px] font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                              title="Sync advance-paid PIs with Warehouse Delivery Orders"
+                            >
+                              <FaSyncAlt className={syncingWarehouseDO ? "animate-spin" : ""} size={10} />
+                              <span>{syncingWarehouseDO ? "Syncing..." : "Sync Warehouse Orders"}</span>
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

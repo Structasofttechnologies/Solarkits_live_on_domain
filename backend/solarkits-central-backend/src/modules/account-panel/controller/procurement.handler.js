@@ -9,6 +9,8 @@ const {
   WarehouseInventoryReservation
 } = require('../models/company_warehouse_db');
 
+const { DeliveryOrder: WarehouseDeliveryOrder } = require('../../warehouse-panel/models/company_warehouse_db');
+
 const {
   EpcOrder,
   FpoOrder,
@@ -1288,6 +1290,264 @@ exports.admin_approve_supplier_payment = async (req, res) => {
 };
 
 /**
+ * Helper: Sync or Create Warehouse Delivery Order upon Advance Payment to Supplier / OEM Partner
+ * Pushes the order directly into the Warehouse's "New Orders (Procurement Fulfillment)" queue
+ * without changing any Warehouse logic or contracts.
+ */
+async function syncDeliveryOrderFromPi(pi, reqUser = null) {
+  if (!pi) return null;
+
+  // 1. Resolve parent Procurement Group (batch) if exists
+  let group = null;
+  if (pi.order_group_id) {
+    group = await ProcurementGroup.findOne({ group_id: pi.order_group_id.toUpperCase() }).lean();
+  }
+
+  // 2. Identify source order details from group.source_orders or fallback to order models
+  let matchedSourceOrder = null;
+  if (group && Array.isArray(group.source_orders) && group.source_orders.length > 0) {
+    matchedSourceOrder = group.source_orders.find(so =>
+      (so.order_number && pi.customer_order_number && so.order_number.toString() === pi.customer_order_number.toString()) ||
+      (so.id && pi.customer_order_id && so.id.toString() === pi.customer_order_id.toString())
+    ) || group.source_orders[0];
+  }
+
+  // Fallback to epc_orders / fpo_orders
+  let epcOrderDoc = null;
+  if (!matchedSourceOrder && pi.customer_order_number) {
+    epcOrderDoc = await EpcOrder.findOne({ order_number: pi.customer_order_number }).lean();
+    if (!epcOrderDoc) {
+      epcOrderDoc = await FpoOrder.findOne({ order_number: pi.customer_order_number }).lean();
+    }
+  }
+
+  const customerName = matchedSourceOrder?.customer_name ||
+                       matchedSourceOrder?.company_name ||
+                       epcOrderDoc?.buyer_name ||
+                       epcOrderDoc?.customer_name ||
+                       'Dwarka Solar EPC Solutions';
+
+  const customerPhone = matchedSourceOrder?.customer_contact ||
+                        matchedSourceOrder?.phone ||
+                        epcOrderDoc?.buyer_phone ||
+                        epcOrderDoc?.customer_phone ||
+                        '+91 98765 43210';
+
+  const customerEmail = matchedSourceOrder?.customer_email ||
+                        matchedSourceOrder?.email ||
+                        epcOrderDoc?.buyer_email ||
+                        epcOrderDoc?.customer_email ||
+                        'epc@solarkits.in';
+
+  const destinationState = matchedSourceOrder?.state_name ||
+                          matchedSourceOrder?.state ||
+                          epcOrderDoc?.delivery_address?.state_name ||
+                          'Gujarat';
+
+  const destinationDistrict = matchedSourceOrder?.district_name ||
+                             matchedSourceOrder?.district ||
+                             epcOrderDoc?.delivery_address?.district_name ||
+                             'Devbhoomi Dwarka';
+
+  const destinationPincode = matchedSourceOrder?.pincode ||
+                            epcOrderDoc?.delivery_address?.pincode ||
+                            '380001';
+
+  const destinationAddress = matchedSourceOrder?.delivery_destination ||
+                            epcOrderDoc?.delivery_address?.address_line_1 ||
+                            `${destinationDistrict}, ${destinationState} - ${destinationPincode}`;
+
+  const destinationLandmark = matchedSourceOrder?.route_group ||
+                             epcOrderDoc?.delivery_address?.landmark ||
+                             '';
+
+  const warehouseId = pi.destination_warehouse_id || matchedSourceOrder?.warehouse_id || null;
+  const warehouseCode = pi.destination_warehouse_name || matchedSourceOrder?.warehouse_code || 'WH-IND-GJ-001';
+  const orderDate = matchedSourceOrder?.created_at ? new Date(matchedSourceOrder.created_at) : (pi.created_at || new Date());
+
+  const orderNumberToMatch = pi.customer_order_number || (group ? group.group_id : `ORD-${Date.now()}`);
+
+  // 3. Find if DeliveryOrder already exists for this order/batch
+  let deliveryOrder = await WarehouseDeliveryOrder.findOne({
+    $or: [
+      { order_number: orderNumberToMatch },
+      { order_id: orderNumberToMatch },
+      ...(pi.order_group_id ? [{ order_number: pi.order_group_id }, { 'epcs.epc_id': pi.order_group_id }] : [])
+    ]
+  });
+
+  // 4. Map PI items to DeliveryOrder item schema
+  const newItemsForDO = (pi.items || []).map(it => {
+    const qty = Number(it.quantity) || 1;
+    return {
+      sku: it.sku_code || 'SKU-ITEM',
+      product_name: it.product_name || 'Solar Product',
+      category: it.component_type === 'panel' ? 'Solar Panels' : (it.component_type || 'BOS Kit'),
+      ordered_qty: qty,
+      received_qty: 0,
+      pending_qty: qty,
+      available_inventory_stock: 0,
+      allocated_stock: 0,
+      rack_location: 'Dock-Receiving',
+      qc_status: 'Passed',
+      sourcing_type: 'supplier_procurement',
+      supply_fulfilment_method: (pi.fulfilment?.method === 'Company Pickup') ? 'company_pickup' : 'supplier_delivery',
+      supplier_name: pi.supplier_name,
+      supplier_id: pi.supplier_id ? pi.supplier_id.toString() : '',
+      supplier_warehouse: {
+        name: pi.fulfilment?.supplier_warehouse_address || 'Supplier Works',
+        address: pi.fulfilment?.supplier_warehouse_address || '',
+        city: destinationDistrict,
+        state: destinationState,
+        pincode: destinationPincode,
+        contact_person: pi.supplier_name,
+        phone: customerPhone
+      },
+      pi_reference: {
+        pi_number: pi.pi_number,
+        pi_date: pi.created_at || new Date(),
+        pi_value: pi.total_pi_value || 0
+      },
+      transport_responsibility: pi.fulfilment?.transport_responsibility?.toLowerCase() === 'company' ? 'company' : 'supplier',
+      transport_cost: Number(pi.fulfilment?.transport_cost) || 0,
+      expected_pickup_date: pi.fulfilment?.expected_pickup_date || null,
+      expected_inward_date: pi.fulfilment?.expected_inward_date || null,
+      supply_status: 'pending',
+      damaged_qty: 0,
+      missing_qty: 0
+    };
+  });
+
+  const performerName = reqUser?.name || reqUser?.email || 'Accounts Manager';
+
+  if (!deliveryOrder) {
+    // Generate unique DO-YYYY-XXXX
+    const year = new Date().getFullYear();
+    const doCount = await WarehouseDeliveryOrder.countDocuments({});
+    let doSeq = doCount + 1;
+    let deliveryOrderId = `DO-${year}-${String(doSeq).padStart(4, '0')}`;
+    while (await WarehouseDeliveryOrder.findOne({ delivery_order_id: deliveryOrderId })) {
+      doSeq++;
+      deliveryOrderId = `DO-${year}-${String(doSeq).padStart(4, '0')}`;
+    }
+
+    deliveryOrder = new WarehouseDeliveryOrder({
+      delivery_order_id: deliveryOrderId,
+      delivery_number: deliveryOrderId,
+      order_id: pi.customer_order_id ? pi.customer_order_id.toString() : orderNumberToMatch,
+      order_number: orderNumberToMatch,
+      warehouse_id: warehouseId,
+      warehouse_code: warehouseCode,
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      customer_email: customerEmail,
+      destination: {
+        address: destinationAddress,
+        state: destinationState,
+        district: destinationDistrict,
+        pincode: destinationPincode,
+        landmark: destinationLandmark
+      },
+      required_vehicle: group?.vehicle_details?.vehicle_name || '14ft Eicher (4.0 Ton)',
+      order_date: orderDate,
+      delivery_status: 'new_order',
+      delivery_method: 'manual',
+      kit_preparation_status: 'awaiting_components',
+      items: newItemsForDO,
+      epcs: [{
+        epc_id: pi.order_group_id || 'EPC-01',
+        epc_name: customerName,
+        contact_person: customerName,
+        phone: customerPhone,
+        email: customerEmail,
+        destination: {
+          address: destinationAddress,
+          district: destinationDistrict,
+          state: destinationState,
+          pincode: destinationPincode
+        },
+        payment_first_half: {
+          status: 'done',
+          percentage: pi.payment?.advance_percentage || 30,
+          amount: pi.payment?.advance_payment?.paid_amount || pi.payment?.advance_amount || 0,
+          paid_at: pi.payment?.advance_payment?.payment_date || new Date(),
+          verified_by: 'Accounts (Advance UTR Recorded)'
+        },
+        payment_second_half: {
+          status: 'pending',
+          percentage: pi.payment?.balance_percentage || 70,
+          amount: pi.payment?.balance_amount || 0,
+          paid_at: null,
+          verified_by: ''
+        },
+        items: newItemsForDO.map(it => ({
+          sku: it.sku,
+          product_name: it.product_name,
+          category: it.category,
+          ordered_qty: it.ordered_qty,
+          received_qty: 0,
+          pending_qty: it.pending_qty,
+          rack_location: it.rack_location
+        })),
+        is_removed_by_account: false,
+        dispatch_status: 'pending'
+      }],
+      audit_trail: [{
+        action: `Order Confirmed for Procurement (Advance Paid to ${pi.is_oem_partner ? 'OEM Partner' : 'Supplier'})`,
+        performed_by_name: performerName,
+        timestamp: new Date(),
+        notes: `Transferred to Warehouse New Orders upon advance payment for PI #${pi.pi_number} (${pi.supplier_name})`
+      }]
+    });
+
+    await deliveryOrder.save();
+  } else {
+    // DeliveryOrder exists for this order; merge items from this PI
+    for (const newItem of newItemsForDO) {
+      const existingItemIndex = deliveryOrder.items.findIndex(it =>
+        it.sku === newItem.sku && it.pi_reference?.pi_number === newItem.pi_reference?.pi_number
+      );
+      if (existingItemIndex >= 0) {
+        deliveryOrder.items[existingItemIndex].supplier_name = newItem.supplier_name;
+        deliveryOrder.items[existingItemIndex].ordered_qty = newItem.ordered_qty;
+        deliveryOrder.items[existingItemIndex].pending_qty = Math.max(0, newItem.ordered_qty - deliveryOrder.items[existingItemIndex].received_qty);
+        deliveryOrder.items[existingItemIndex].pi_reference = newItem.pi_reference;
+      } else {
+        deliveryOrder.items.push(newItem);
+      }
+    }
+
+    deliveryOrder.audit_trail.push({
+      action: `Advance Payment Recorded for PI #${pi.pi_number} (${pi.supplier_name})`,
+      performed_by_name: performerName,
+      timestamp: new Date(),
+      notes: `Updated Warehouse Delivery Order items with PI #${pi.pi_number}`
+    });
+
+    await deliveryOrder.save();
+  }
+
+  // Update group batch handover if group exists
+  if (group) {
+    await ProcurementGroup.updateOne(
+      { _id: group._id },
+      {
+        $set: {
+          batch_status: 'Transferred to Delivery',
+          delivery_handover: {
+            transferred_at: new Date(),
+            transferred_by: reqUser?._id || null,
+            delivery_order_id: deliveryOrder.delivery_order_id
+          }
+        }
+      }
+    ).catch(() => {});
+  }
+
+  return deliveryOrder;
+}
+
+/**
  * 9. Record Actual Bank Payment
  * Actual payment completion after Admin approval (Separation of duties: Admin approves, Accounts pays)
  */
@@ -1500,9 +1760,18 @@ exports.record_bank_payment = async (req, res) => {
 
     await pi.save();
 
+    // Auto-transfer / sync order to Warehouse New Orders upon 30% Advance (or Full) payment
+    try {
+      if (targetMilestone === 'advance' || targetMilestone === 'full' || ['Advance Paid', 'Paid'].includes(pi.payment?.payment_status)) {
+        await syncDeliveryOrderFromPi(pi, req.user);
+      }
+    } catch (syncErr) {
+      console.error(`Failed to sync Warehouse Delivery Order for PI ${pi.pi_number}:`, syncErr);
+    }
+
     return res.status(200).json({
       status: 'success',
-      message: `Bank payment (${targetMilestone}) recorded for PI #${pi.pi_number}. Status: ${pi.payment.payment_status}.`,
+      message: `Bank payment (${targetMilestone}) recorded for PI #${pi.pi_number}. Status: ${pi.payment.payment_status}. Transferred to Warehouse New Orders.`,
       data: pi
     });
   } catch (err) {
@@ -1999,4 +2268,41 @@ exports.get_sourcing_partners = async (req, res) => {
     });
   }
 };
+
+/**
+ * 15. Sync All Advance Paid PIs to Warehouse Delivery Orders
+ */
+exports.sync_all_advance_paid_pis = async (req, res) => {
+  try {
+    const advancePaidPIs = await PurchaseIndent.find({
+      $or: [
+        { 'payment.advance_payment.utr_number': { $exists: true, $ne: '' } },
+        { 'payment.payment_status': { $in: ['Advance Paid', 'Paid'] } }
+      ]
+    });
+
+    const results = [];
+    for (const pi of advancePaidPIs) {
+      const doDoc = await syncDeliveryOrderFromPi(pi, req.user);
+      if (doDoc) {
+        results.push({
+          pi_number: pi.pi_number,
+          order_number: doDoc.order_number,
+          delivery_order_id: doDoc.delivery_order_id
+        });
+      }
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: `Successfully synced ${results.length} advance-paid orders to Warehouse New Orders.`,
+      data: results
+    });
+  } catch (err) {
+    console.error('Error in sync_all_advance_paid_pis:', err);
+    return res.status(500).json({ status: 'error', message: err.message });
+  }
+};
+
+exports.sync_delivery_order_from_pi = syncDeliveryOrderFromPi;
 

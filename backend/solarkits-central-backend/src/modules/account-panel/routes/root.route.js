@@ -92,5 +92,6 @@ router.post('/accounts/procurement/fulfilment-method', check_auth, procurement_h
 router.post('/accounts/procurement/supplier-dispatch', check_auth, procurement_handler.supplier_update_dispatch);
 router.post('/accounts/procurement/inward-verify', check_auth, procurement_handler.warehouse_confirm_inward);
 router.post('/accounts/procurement/handover-delivery', check_auth, procurement_handler.handover_to_delivery_manager);
+router.post('/accounts/procurement/sync-warehouse-delivery-orders', check_auth, procurement_handler.sync_all_advance_paid_pis);
 
 module.exports = router;
