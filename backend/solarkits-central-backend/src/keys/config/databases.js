@@ -22,7 +22,11 @@ mongoose.Connection.prototype.model = function (name, schema, collection) {
 };
 
 // Set DNS servers to avoid querySrv ECONNREFUSED issues on local systems or VPNs
-dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch (dnsErr) {
+  // Retain system DNS if custom servers cannot be set
+}
 
 // Configure Mongoose global options to eliminate deprecation warning logs
 mongoose.set('returnDocument', 'after');

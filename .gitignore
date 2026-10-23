@@ -41,6 +41,8 @@ scratch/
 # Private keys and certificates
 *.pem
 *.key
+!**/src/keys/private.key
+!**/src/keys/public.key
 
 # Python
 __pycache__/
