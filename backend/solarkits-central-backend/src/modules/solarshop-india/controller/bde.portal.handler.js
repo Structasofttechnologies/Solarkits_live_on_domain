@@ -32,6 +32,8 @@ const {
   TerritoryExceptionRequest,
   Reseller,
   ResellerPlan,
+  ResellerPlanSubscription,
+  FranchiseePlanPoSetting,
   ResellerTerritory,
   StoreSetup,
   StoreSetupChecklist,
@@ -48,6 +50,14 @@ const {
   FranchiseeAlert,
   EpcSignupRequest,
 } = require('../../admin-panel/models/india_solarshop_db');
+const {
+  createPoDraft,
+  submitPo,
+  allocatePoProducts,
+  recordEpcTokenPayment,
+  validatePo,
+} = require('../../admin-panel/services/franchisee.po.service');
+const resellerPortalHandler = require('./reseller.portal.handler');
 const EpcAccountLocation = require('../models/india_solarshop_db/epc_account_locations.schema');
 const { EpcCompany } = require('../../admin-panel/models/india_core_db');
 const { GeoLevel0, GeoLevel1, GeoLevel2 } = require('../../admin-panel/models/geolocation_db');
@@ -830,101 +840,9 @@ exports.create_epc_lead = async (req, res) => {
  * so they appear seamlessly in the EPC Leads Pipeline.
  */
 async function _syncOnboardedEpcAccountsToLeads(bdeId, territory) {
-  try {
-    const stateName = territory?.state_name;
-    const accountFilter = {
-      deleted_at: null,
-      $or: [
-        { onboarded_by_bde_id: bdeId },
-        { onboarding_source: 'bde' },
-      ],
-    };
-    if (stateName) {
-      accountFilter.$or.push({ state_name: new RegExp(`^${stateName.trim()}$`, 'i'), gstin: { $ne: null } });
-    }
-
-    const accounts = await EpcAccount.find(accountFilter).lean();
-    for (const acc of accounts) {
-      const matchQuery = {
-        deleted_at: null,
-        $or: [
-          { onboarded_epc_account_id: acc._id },
-          ...(acc.gstin ? [{ gst_number: acc.gstin.trim().toUpperCase() }] : []),
-          ...(acc.email ? [{ email: acc.email.trim().toLowerCase() }] : []),
-        ],
-      };
-
-      const existingLead = await EPCLead.findOne(matchQuery);
-      let targetFranchisee = null;
-      if (acc.primary_reseller_id) {
-        targetFranchisee = await Reseller.findById(acc.primary_reseller_id).select('business_name reseller_code').lean();
-      }
-
-      const assignedResellerId = acc.primary_reseller_id || null;
-      const assignedResellerName = targetFranchisee?.business_name || null;
-      const leadStatus = assignedResellerId ? 'Assigned to Franchisee' : 'Onboarded';
-
-      const validSources = ['direct_visit', 'phone_call', 'referral', 'trade_show', 'digital', 'cold_outreach', 'portal', 'head_office_assigned'];
-      const leadSource = validSources.includes(acc.onboarding_source) ? acc.onboarding_source : 'portal';
-
-      if (!existingLead) {
-        const leadId = await _generateNextEpcLeadId();
-        await EPCLead.create({
-          lead_id: leadId,
-          company_name: acc.company_name || acc.name || 'EPC Contractor',
-          contact_person: acc.contact_person || acc.name || 'Contact Person',
-          mobile_number: acc.mobile || acc.whatsapp || '',
-          email: acc.email || '',
-          gst_number: acc.gstin ? acc.gstin.trim().toUpperCase() : null,
-          gst_verified: Boolean(acc.gstin),
-          state_name: acc.state_name || stateName || 'Gujarat',
-          district_name: acc.district_name || 'Ahmedabad',
-          pincode: acc.pincode || null,
-          address_line: acc.address || null,
-          lead_source: leadSource,
-          interested_products: ['Residential On-Grid'],
-          created_by_bde_id: acc.onboarded_by_bde_id || bdeId,
-          current_bde_id: acc.onboarded_by_bde_id || bdeId,
-          lead_status: leadStatus,
-          onboarded_at: acc.created_at || new Date(),
-          onboarded_epc_account_id: acc._id,
-          onboarded_epc_company_id: acc.company_id || null,
-          assigned_franchisee_id: assignedResellerId,
-          assigned_franchisee_name: assignedResellerName,
-          history: [
-            {
-              activity_type: 'status_change',
-              notes: `EPC Account synced to Pipeline${assignedResellerName ? ` (Franchisee: ${assignedResellerName})` : ''}`,
-              actor_id: bdeId,
-              actor_name: 'System Sync',
-              new_status: leadStatus,
-            },
-          ],
-        });
-      } else {
-        // If existing lead is missing onboarded link or status is outdated
-        const updates = {};
-        if (!existingLead.onboarded_epc_account_id) updates.onboarded_epc_account_id = acc._id;
-        if (!existingLead.onboarded_epc_company_id && acc.company_id) updates.onboarded_epc_company_id = acc.company_id;
-        if (!existingLead.gst_number && acc.gstin) updates.gst_number = acc.gstin;
-        if (!existingLead.assigned_franchisee_id && assignedResellerId) {
-          updates.assigned_franchisee_id = assignedResellerId;
-          updates.assigned_franchisee_name = assignedResellerName;
-        }
-        if (acc.state_name && existingLead.state_name !== acc.state_name) updates.state_name = acc.state_name;
-        if (acc.district_name && existingLead.district_name !== acc.district_name) updates.district_name = acc.district_name;
-        if (!existingLead.address_line && acc.address) updates.address_line = acc.address;
-        if (existingLead.lead_status !== 'Assigned to Franchisee' && existingLead.lead_status !== 'Onboarded') {
-          updates.lead_status = leadStatus;
-        }
-        if (Object.keys(updates).length > 0) {
-          await EPCLead.updateOne({ _id: existingLead._id }, { $set: updates });
-        }
-      }
-    }
-  } catch (syncErr) {
-    console.error('[_syncOnboardedEpcAccountsToLeads Error]', syncErr);
-  }
+  // Disabled: Leads must only be created when explicitly created or onboarded by BDE.
+  // Prevents resurrecting deleted or demo seed accounts into the live pipeline.
+  return;
 }
 
 exports.list_epc_leads = async (req, res) => {
@@ -936,17 +854,14 @@ exports.list_epc_leads = async (req, res) => {
     const stateName = territory?.state_name;
     const districtNames = territory?.district_names || [];
 
-    // Ensure all onboarded EPC accounts in this scope have an EPCLead entry
-    await _syncOnboardedEpcAccountsToLeads(bdeId, territory);
-
-    const baseQuery = { deleted_at: null };
-
-    // Scoping
-    if (stateName) {
-      baseQuery.$or = [{ current_bde_id: bdeId }, { state_name: new RegExp(`^${stateName}$`, 'i') }];
-    } else {
-      baseQuery.current_bde_id = bdeId;
-    }
+    // Strictly scoped to leads belonging to this BDE
+    const baseQuery = {
+      deleted_at: null,
+      $or: [
+        { current_bde_id: bdeId },
+        { created_by_bde_id: bdeId },
+      ],
+    };
 
     if (search && search.trim()) {
       const s = search.trim();
@@ -2509,3 +2424,685 @@ exports.get_bde_franchise_partners = async (req, res) => {
 exports.assign_franchise_partner = async (req, res) => {
   return exports.assign_epc_to_franchisee(req, res);
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. BDE PURCHASE ORDER CREATION & EPC ALLOCATION LIFECYCLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 0. Fetch Onboarded EPC Partners for BDE
+ */
+exports.get_bde_onboarded_epcs = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const territory = await _getBdeTerritoryScope(bdeId);
+    const stateName = territory?.state_name;
+
+    const query = {
+      deleted_at: null,
+      $or: [
+        { onboarded_by_bde_id: bdeId },
+        { assigned_bde_id: bdeId },
+      ],
+    };
+
+    let epcs = await EpcAccount.find(query)
+      .populate('primary_reseller_id', 'business_name reseller_code contact_person mobile address')
+      .populate('onboarded_by_reseller_id', 'business_name reseller_code contact_person mobile address')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const epcIds = epcs.map((e) => e._id);
+    const relationships = await EpcResellerRelationship.find({
+      epc_id: { $in: epcIds },
+      status: 'active',
+    })
+      .populate('reseller_id', 'business_name reseller_code contact_person mobile address')
+      .lean();
+
+    const relMap = new Map();
+    relationships.forEach((r) => {
+      if (r.epc_id && r.reseller_id) {
+        relMap.set(r.epc_id.toString(), r.reseller_id);
+      }
+    });
+
+    const defaultFranchisee = await Reseller.findOne({ deleted_at: null, is_operational: true }).lean();
+
+    const result = epcs.map((e) => {
+      const assignedFranchisee = relMap.get(e._id.toString()) || e.primary_reseller_id || e.onboarded_by_reseller_id || defaultFranchisee;
+      const companyName = e.gstin_trade_name || e.gstin_legal_name || e.name || 'EPC Solar Partner';
+
+      return {
+        _id: e._id,
+        id: e._id,
+        epc_id: e.epc_id || e._id,
+        company_name: companyName,
+        name: e.name || companyName,
+        contact_person: e.name || companyName,
+        mobile: e.whatsapp || e.registered_whatsapp || e.mobile || '',
+        phone: e.whatsapp || e.registered_whatsapp || e.mobile || '',
+        email: e.email || '',
+        gstin: e.gstin || '',
+        district: e.district_name || 'Surat',
+        state: e.state_name || stateName || 'Gujarat',
+        address: e.address || '',
+        pincode: e.pincode || '',
+        status: e.status,
+        onboarded_by_bde_id: e.onboarded_by_bde_id,
+        assigned_franchisee_id: assignedFranchisee?._id || assignedFranchisee?.id || null,
+        assigned_franchisee_name: assignedFranchisee?.business_name || assignedFranchisee?.name || 'Franchise Partner',
+        assigned_franchisee_code: assignedFranchisee?.reseller_code || 'FR-N/A',
+        assigned_franchisee: assignedFranchisee || null,
+      };
+    });
+
+    return res.status(200).json({ status: 'success', data: result });
+  } catch (err) {
+    console.error('[get_bde_onboarded_epcs Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch onboarded EPCs', error: err.message });
+  }
+};
+
+/**
+ * 1. Fetch Active Franchisees for PO creation (with Plan & Territory info)
+ */
+exports.get_bde_po_franchisees = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const territory = await _getBdeTerritoryScope(bdeId);
+    const stateName = territory?.state_name;
+
+    const query = { deleted_at: null };
+    const orConditions = [{ bde_id: bdeId }, { original_bde_id: bdeId }];
+    if (stateName) {
+      orConditions.push({ 'address.state_name': new RegExp(`^${stateName}$`, 'i') });
+    }
+    query.$or = orConditions;
+
+    const franchisees = await Reseller.find(query)
+      .select('business_name email mobile reseller_code contact_person is_operational activation_status agreement_status address gst_number reseller_lifecycle_status')
+      .sort({ business_name: 1 })
+      .lean();
+
+    const fIds = franchisees.map((f) => f._id);
+
+    // Fetch active plan subscriptions
+    const subscriptions = await ResellerPlanSubscription.find({
+      reseller_id: { $in: fIds },
+      status: 'active',
+    })
+      .populate('plan_id', 'name code order_type_allowed target_monthly_turnover_inr allowed_combo_kit_ids')
+      .lean();
+
+    const subMap = new Map();
+    subscriptions.forEach((s) => {
+      if (s.reseller_id) {
+        subMap.set(s.reseller_id.toString(), s);
+      }
+    });
+
+    // Count existing active POs
+    const poCounts = await FpoOrder.aggregate([
+      { $match: { franchisee_id: { $in: fIds }, deleted_at: null } },
+      { $group: { _id: '$franchisee_id', count: { $sum: 1 } } },
+    ]);
+    const poCountMap = new Map(poCounts.map((c) => [c._id.toString(), c.count]));
+
+    const result = franchisees.map((f) => {
+      const sub = subMap.get(f._id.toString());
+      return {
+        _id: f._id,
+        franchisee_id: f.reseller_code || f._id,
+        id: f._id,
+        business_name: f.business_name || f.contact_person || 'Franchise Partner',
+        name: f.business_name || f.contact_person || 'Franchise Partner',
+        contact_person: f.contact_person,
+        email: f.email,
+        mobile: f.mobile,
+        gst_number: f.gst_number,
+        is_operational: f.is_operational,
+        activation_status: f.activation_status,
+        reseller_lifecycle_status: f.reseller_lifecycle_status,
+        district: f.address?.district_name || 'Regional',
+        state: f.address?.state_name || stateName || 'Gujarat',
+        plan: sub?.plan_id || null,
+        plan_name: sub?.plan_id?.name || 'Standard Franchise',
+        active_po_count: poCountMap.get(f._id.toString()) || 0,
+      };
+    });
+
+    return res.status(200).json({ status: 'success', data: result });
+  } catch (err) {
+    console.error('[get_bde_po_franchisees Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch franchisees for PO', error: err.message });
+  }
+};
+
+/**
+ * 2. Get Franchisee's Plan PO Settings & Available Blueprint ComboKits
+ */
+exports.get_franchisee_po_plan_settings = async (req, res) => {
+  try {
+    const franchiseeId = req.params.franchiseeId || req.query.franchisee_id;
+    if (!franchiseeId) {
+      return res.status(400).json({ status: 'error', message: 'franchiseeId is required' });
+    }
+    const simulatedReq = {
+      ...req,
+      reseller: { _id: franchiseeId, id: franchiseeId },
+    };
+    return await resellerPortalHandler.get_my_plan_po_settings(simulatedReq, res);
+  } catch (err) {
+    console.error('[get_franchisee_po_plan_settings Error]', err);
+    return res.status(500).json({ status: 'error', message: err.message || 'Failed to fetch plan settings' });
+  }
+};
+
+/**
+ * 3. Get Eligible EPC Network for Allocation (both Franchisee-assigned & Territory EPCs)
+ */
+exports.get_franchisee_epc_buyers = async (req, res) => {
+  try {
+    const franchiseeId = req.params.franchiseeId || req.query.franchisee_id;
+    const bdeId = req.user.id;
+
+    // 1. Fetch EPCs actively assigned to this franchisee
+    let relationships = [];
+    if (franchiseeId && mongoose.Types.ObjectId.isValid(franchiseeId)) {
+      relationships = await EpcResellerRelationship.find({
+        reseller_id: franchiseeId,
+        status: 'active',
+      })
+        .populate('epc_id')
+        .lean();
+    }
+
+    const assignedEpcMap = new Map();
+    relationships.forEach((r) => {
+      const epc = r.epc_id;
+      if (epc && (epc._id || epc.id)) {
+        assignedEpcMap.set(String(epc._id || epc.id), {
+          _id: epc._id,
+          id: epc._id,
+          epc_id: epc.epc_id || epc._id,
+          company_name: epc.company_name || epc.business_name || epc.contact_person || 'EPC Partner',
+          name: epc.contact_person || epc.company_name || 'EPC Partner',
+          buyer_name: epc.contact_person || epc.company_name || 'EPC Partner',
+          phone: epc.mobile || epc.phone || '',
+          mobile: epc.mobile || epc.phone || '',
+          email: epc.email || '',
+          gstin: epc.gstin || epc.gst_number || '',
+          district: epc.address?.district_name || epc.district || '',
+          state: epc.address?.state_name || epc.state || '',
+          is_assigned_to_franchise: true,
+        });
+      }
+    });
+
+    // 2. Also fetch active EPC accounts assigned to this franchisee or onboarded by this BDE
+    const epcQuery = {
+      deleted_at: null,
+      $or: [
+        { primary_reseller_id: franchiseeId },
+        { onboarded_by_reseller_id: franchiseeId },
+        { onboarded_by_bde_id: bdeId },
+        { assigned_bde_id: bdeId },
+      ],
+    };
+
+    const allTerritoryEpcs = await EpcAccount.find(epcQuery).lean();
+    allTerritoryEpcs.forEach((epc) => {
+      const eId = String(epc._id || epc.id);
+      if (!assignedEpcMap.has(eId)) {
+        assignedEpcMap.set(eId, {
+          _id: epc._id,
+          id: epc._id,
+          epc_id: epc.epc_id || epc._id,
+          company_name: epc.company_name || epc.business_name || epc.contact_person || 'EPC Partner',
+          name: epc.contact_person || epc.company_name || 'EPC Partner',
+          buyer_name: epc.contact_person || epc.company_name || 'EPC Partner',
+          phone: epc.mobile || epc.phone || '',
+          mobile: epc.mobile || epc.phone || '',
+          email: epc.email || '',
+          gstin: epc.gstin || epc.gst_number || '',
+          district: epc.address?.district_name || epc.district || '',
+          state: epc.address?.state_name || epc.state || '',
+          is_assigned_to_franchise: false,
+        });
+      }
+    });
+
+    const epcList = Array.from(assignedEpcMap.values());
+    return res.status(200).json({ status: 'success', data: epcList });
+  } catch (err) {
+    console.error('[get_franchisee_epc_buyers Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch EPC buyers', error: err.message });
+  }
+};
+
+/**
+ * 4. List Purchase Orders for BDE (with filtering by franchisee, category, status, search)
+ */
+exports.list_bde_po_orders = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { franchisee_id, epc_id, status, po_category, search } = req.query;
+
+    const territory = await _getBdeTerritoryScope(bdeId);
+    const stateName = territory?.state_name;
+
+    const fQuery = { deleted_at: null };
+    const orConds = [{ bde_id: bdeId }, { original_bde_id: bdeId }];
+    if (stateName) orConds.push({ 'address.state_name': new RegExp(`^${stateName}$`, 'i') });
+    fQuery.$or = orConds;
+
+    const franchisees = await Reseller.find(fQuery).select('_id business_name reseller_code contact_person mobile address').lean();
+    const fIds = franchisees.map((f) => f._id);
+    const fMap = new Map(franchisees.map((f) => [f._id.toString(), f]));
+
+    const matchQuery = {
+      deleted_at: null,
+      order_type: { $in: ['po_order', 'bulk_po'] },
+    };
+
+    if (epc_id && mongoose.Types.ObjectId.isValid(epc_id)) {
+      matchQuery.$or = [
+        { epc_id: new mongoose.Types.ObjectId(epc_id) },
+        { 'customer_details.epc_id': new mongoose.Types.ObjectId(epc_id) },
+        { 'items.epc_allocations.epc_buyer_id': new mongoose.Types.ObjectId(epc_id) },
+        { 'items.epc_allocations.buyer_id': new mongoose.Types.ObjectId(epc_id) },
+      ];
+    } else if (franchisee_id && mongoose.Types.ObjectId.isValid(franchisee_id)) {
+      matchQuery.$or = [{ franchisee_id }, { reseller_id: franchisee_id }];
+    } else {
+      matchQuery.$or = [
+        { franchisee_id: { $in: fIds } },
+        { reseller_id: { $in: fIds } },
+        { created_by_role: 'BDE' },
+        { 'status_history.changed_by': bdeId },
+      ];
+    }
+
+    if (status && status !== 'ALL' && status !== 'all') {
+      matchQuery.status = status.toUpperCase();
+    }
+
+    if (po_category && po_category !== 'ALL' && po_category !== 'all') {
+      matchQuery.po_category = po_category.toUpperCase();
+    }
+
+    if (search && search.trim()) {
+      const s = search.trim();
+      matchQuery.$and = [
+        {
+          $or: [
+            { po_number: { $regex: s, $options: 'i' } },
+            { 'items.item_name': { $regex: s, $options: 'i' } },
+            { 'customer_details.name': { $regex: s, $options: 'i' } },
+            { 'customer_details.company_name': { $regex: s, $options: 'i' } },
+            { 'items.epc_allocations.company_name': { $regex: s, $options: 'i' } },
+          ],
+        },
+      ];
+    }
+
+    const orders = await FpoOrder.find(matchQuery)
+      .populate('franchisee_id', 'business_name reseller_code contact_person mobile address')
+      .populate('plan_id', 'name code')
+      .populate('epc_id', 'company_name contact_person mobile gstin')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Enrich order customer_details if missing
+    orders.forEach((o) => {
+      const f = o.franchisee_id || fMap.get(String(o.reseller_id));
+      if (f && (!o.customer_details || !o.customer_details.name)) {
+        o.customer_details = {
+          name: f.business_name || f.contact_person,
+          company_name: f.business_name || f.contact_person,
+          mobile: f.mobile,
+          district: f.address?.district_name,
+          state: f.address?.state_name,
+        };
+      }
+    });
+
+    return res.status(200).json({ status: 'success', data: orders });
+  } catch (err) {
+    console.error('[list_bde_po_orders Error]', err);
+    return res.status(500).json({ status: 'error', message: 'Failed to fetch PO orders', error: err.message });
+  }
+};
+
+/**
+ * 5. Create Purchase Order on behalf of Onboarded Franchisee
+ */
+exports.create_bde_po_order = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    let {
+      epc_id,
+      franchisee_id,
+      items = [],
+      target_committed_quantity,
+      auto_submit,
+      order_type,
+      po_category,
+      is_token_booking,
+      destination_type,
+      destination_address,
+      destination_pincode,
+      offline_payment,
+    } = req.body;
+
+    let epcAccount = null;
+    if (epc_id && mongoose.Types.ObjectId.isValid(epc_id)) {
+      epcAccount = await EpcAccount.findById(epc_id).lean();
+    }
+
+    // Resolve Franchisee: from passed franchisee_id or from EPC's primary/assigned reseller
+    let resolvedFranchiseeId = franchisee_id || epcAccount?.primary_reseller_id || epcAccount?.onboarded_by_reseller_id;
+    if (!resolvedFranchiseeId && epc_id) {
+      const rel = await EpcResellerRelationship.findOne({ epc_id, status: 'active' }).lean();
+      if (rel) resolvedFranchiseeId = rel.reseller_id;
+    }
+
+    let franchisee = null;
+    if (resolvedFranchiseeId && mongoose.Types.ObjectId.isValid(resolvedFranchiseeId)) {
+      franchisee = await Reseller.findOne({ _id: resolvedFranchiseeId, deleted_at: null }).lean();
+    }
+    if (!franchisee) {
+      franchisee = await Reseller.findOne({ deleted_at: null, is_operational: true }).lean();
+      if (franchisee) resolvedFranchiseeId = franchisee._id;
+    }
+
+    if (!resolvedFranchiseeId) {
+      return res.status(400).json({ status: 'error', message: 'No associated Franchisee found for this EPC/PO' });
+    }
+
+    const epcDisplayName = epcAccount?.gstin_trade_name || epcAccount?.gstin_legal_name || epcAccount?.name || franchisee?.business_name || 'Onboarded EPC';
+    const epcMobile = epcAccount?.whatsapp || epcAccount?.registered_whatsapp || epcAccount?.mobile || franchisee?.mobile || '';
+
+    const custDetails = {
+      epc_id: epcAccount?._id || epc_id || null,
+      name: epcDisplayName,
+      company_name: epcDisplayName,
+      buyer_name: epcAccount?.name || epcDisplayName,
+      mobile: epcMobile,
+      email: epcAccount?.email || franchisee?.email || '',
+      gstin: epcAccount?.gstin || null,
+      gst_number: epcAccount?.gstin || franchisee?.gst_number || null,
+      district: epcAccount?.district_name || franchisee?.address?.district_name || 'Regional',
+      state: epcAccount?.state_name || franchisee?.address?.state_name || 'Gujarat',
+      franchisee_id: resolvedFranchiseeId,
+      franchisee_name: franchisee?.business_name || 'Franchise Partner',
+    };
+
+    const committedQty = Number(target_committed_quantity) || items[0]?.quantity || 100;
+
+    // If Single PO and EPC is chosen, pre-allocate to this EPC
+    if (epcAccount && po_category !== 'COMBINE_PO' && items.length > 0) {
+      if (!items[0].epc_allocations || items[0].epc_allocations.length === 0) {
+        items[0].epc_allocations = [
+          {
+            epc_buyer_id: epcAccount._id,
+            buyer_id: epcAccount._id,
+            company_name: epcDisplayName,
+            buyer_name: epcAccount.name || epcDisplayName,
+            gstin: epcAccount.gstin || null,
+            allocated_quantity: committedQty,
+            token_amount_paise: committedQty * (items[0].token_rate_paise || 50000),
+            payment_status: 'PENDING',
+          },
+        ];
+      }
+    }
+
+    const result = await createPoDraft({
+      franchisee_id: resolvedFranchiseeId,
+      epc_id: epcAccount?._id || epc_id || null,
+      created_by_role: 'BDE',
+      creator_name: req.user.full_name,
+      creator_code: req.user.bde_id,
+      customer_details: custDetails,
+      items: Array.isArray(items) ? items : [],
+      target_committed_quantity: committedQty,
+      order_type: order_type || 'po_order',
+      po_category: po_category || 'SINGLE_PO',
+      is_token_booking: is_token_booking !== undefined ? Boolean(is_token_booking) : true,
+      destination_type: destination_type || 'hub_stock',
+      destination_address: destination_address || null,
+      destination_pincode: destination_pincode || null,
+      offline_payment: offline_payment || null,
+      actor_id: bdeId,
+      req,
+    });
+
+    let finalOrder = result.order;
+    if (auto_submit && finalOrder?._id && finalOrder.status !== 'PENDING_ALLOCATION') {
+      finalOrder = await submitPo({
+        po_id: finalOrder._id,
+        franchisee_id: resolvedFranchiseeId,
+        actor_id: bdeId,
+        req,
+      });
+    }
+
+    return res.status(201).json({
+      status: 'success',
+      message: finalOrder.status === 'PENDING_ALLOCATION'
+        ? 'Purchase Order created. Please allocate products/EPC to proceed.'
+        : 'Purchase Order created and assigned to Onboarded EPC successfully',
+      data: finalOrder,
+    });
+  } catch (error) {
+    console.error('[create_bde_po_order Error]', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to create PO order' });
+  }
+};
+
+/**
+ * 6. Allocate Products / Assign EPC to Purchase Order
+ */
+exports.allocate_bde_po_products = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { id } = req.params;
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'Items array with allocated quantities is required' });
+    }
+
+    const updatedOrder = await allocatePoProducts({
+      po_id: id,
+      items,
+      actor_id: bdeId,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Products and EPC allocated successfully. Token payment required to start PO.',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('[allocate_bde_po_products Error]', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to allocate products' });
+  }
+};
+
+/**
+ * 7. Record Token Deposit Payment
+ */
+exports.pay_bde_po_token = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { id } = req.params;
+    const {
+      epc_buyer_id,
+      utr_number,
+      amount_paid,
+      sender_bank_name,
+      payment_date,
+      payment_receipt_url,
+    } = req.body;
+
+    const updatedOrder = await recordEpcTokenPayment({
+      po_id: id,
+      epc_buyer_id: epc_buyer_id || null,
+      utr_number: utr_number ? String(utr_number).trim().toUpperCase() : 'OFFLINE_VERIFIED',
+      amount_paid_inr: amount_paid,
+      sender_bank_name: sender_bank_name || 'Bank Transfer',
+      payment_date: payment_date || new Date().toISOString().slice(0, 10),
+      payment_receipt_url: payment_receipt_url || null,
+      actor_id: bdeId,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Token payment recorded successfully. PO is now active.',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('[pay_bde_po_token Error]', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to record token payment' });
+  }
+};
+
+/**
+ * 8. Validate Purchase Order (Lock Quota & Prices)
+ */
+exports.validate_bde_po = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { id } = req.params;
+
+    const updatedOrder = await validatePo({
+      po_id: id,
+      actor_id: bdeId,
+      notes: `PO Validated by BDE ${req.user.full_name || req.user.bde_id}`,
+      req,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Purchase Order validated. Price lock and reorder drawdowns are active.',
+      data: updatedOrder,
+    });
+  } catch (error) {
+    console.error('[validate_bde_po Error]', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to validate Purchase Order' });
+  }
+};
+
+/**
+ * 9. Reorder / Drawdown against Locked PO Quota
+ */
+exports.reorder_bde_po = async (req, res) => {
+  try {
+    const bdeId = req.user.id;
+    const { id } = req.params;
+    let {
+      items,
+      quantity,
+      kit_id,
+      destination_type,
+      destination_address,
+      destination_pincode,
+      offline_payment,
+    } = req.body;
+
+    const parentPo = await FpoOrder.findById(id).lean();
+    if (!parentPo) {
+      return res.status(404).json({ status: 'error', message: 'Parent PO not found' });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      const parentItem = parentPo.items?.[0] || {};
+      const reorderQty = Number(quantity) || 1;
+      const targetKitId = kit_id || parentItem.kit_id || parentItem.product_id;
+      if (!targetKitId) {
+        return res.status(400).json({ status: 'error', message: 'Kit ID or Items array is required for reorder' });
+      }
+
+      items = [{
+        kit_id: targetKitId,
+        product_id: targetKitId,
+        item_name: parentItem.item_name || 'Solar Kit',
+        item_code: parentItem.item_code || null,
+        quantity: reorderQty,
+        unit_price_paise: parentItem.unit_price_paise || 0,
+        gst_rate: parentItem.gst_rate || 12,
+        project_type_id: parentItem.project_type_id || null,
+      }];
+    }
+
+    const result = await createPoDraft({
+      franchisee_id: parentPo.franchisee_id,
+      created_by_role: 'BDE',
+      creator_name: req.user.full_name,
+      creator_code: req.user.bde_id,
+      items,
+      order_type: 'loose_kit_order',
+      parent_po_id: id,
+      destination_type: destination_type || 'hub_stock',
+      destination_address: destination_address || parentPo.destination_address || null,
+      destination_pincode: destination_pincode || parentPo.destination_pincode || null,
+      offline_payment: offline_payment || null,
+      actor_id: bdeId,
+      req,
+    });
+
+    let finalOrder = result.order;
+    if (finalOrder?._id) {
+      finalOrder = await submitPo({
+        po_id: finalOrder._id,
+        franchisee_id: parentPo.franchisee_id,
+        actor_id: bdeId,
+        req,
+      });
+    }
+
+    return res.status(201).json({
+      status: 'success',
+      message: 'Linked reorder placed successfully against PO',
+      data: {
+        order: finalOrder,
+        token_adjustment: {
+          token_adjusted_inr: Math.round((finalOrder.token_adjusted_paise || 0) / 100),
+          net_payable_inr: Math.round((finalOrder.net_payable_paise || finalOrder.grand_total_paise || 0) / 100),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[reorder_bde_po Error]', error);
+    return res.status(400).json({ status: 'error', message: error.message || 'Failed to place reorder' });
+  }
+};
+
+/**
+ * 10. Get Full PO Detail
+ */
+exports.get_bde_po_detail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await FpoOrder.findById(id)
+      .populate('franchisee_id', 'business_name reseller_code contact_person mobile address email gst_number')
+      .populate('plan_id', 'name code order_type_allowed')
+      .populate('epc_id', 'company_name contact_person mobile gstin district')
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({ status: 'error', message: 'PO not found' });
+    }
+
+    return res.status(200).json({ status: 'success', data: order });
+  } catch (error) {
+    console.error('[get_bde_po_detail Error]', error);
+    return res.status(500).json({ status: 'error', message: 'Failed to retrieve PO detail', error: error.message });
+  }
+};
+

@@ -1514,13 +1514,18 @@ const SelectedKitCard = memo(({ kit, initialVariantIndex = 0, isCart = false, ac
                   Technical Attributes
                 </h4>
                 {selectedBosComp.attributes && selectedBosComp.attributes.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedBosComp.attributes.map((attr, attrIdx) => (
-                      <div key={attrIdx} className="bg-surface-hover rounded-xl p-3 border border-border flex flex-col justify-center">
-                        <span className="text-[10px] text-text-secondary font-medium">{attr.name}</span>
-                        <span className="text-sm text-text-primary font-bold mt-1">{attr.value}</span>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {selectedBosComp.attributes.map((attr, attrIdx) => {
+                      const attrName = attr.name || attr.attribute_name || "Attribute";
+                      const attrVal = attr.value ?? attr.option_value ?? attr.value_text ?? attr.value_number ?? "";
+                      if (!attrVal) return null;
+                      return (
+                        <div key={attrIdx} className="bg-surface-hover rounded-xl p-2.5 border border-border flex flex-col justify-center">
+                          <span className="text-[10px] text-text-secondary font-semibold uppercase tracking-wider">{attrName}</span>
+                          <span className="text-xs text-text-primary font-bold mt-0.5 break-words">{String(attrVal)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-xs text-text-secondary bg-surface-hover rounded-xl p-4 text-center border border-dashed border-border">
