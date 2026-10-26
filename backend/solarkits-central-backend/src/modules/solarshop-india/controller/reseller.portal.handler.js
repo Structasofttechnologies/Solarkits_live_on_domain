@@ -3357,6 +3357,22 @@ const get_my_plan_po_settings = async (req, res) => {
         }
       });
 
+      // Also query CompanyMargin for these kits to load Admin-configured GST Rate and Tier Pricing
+      const CompanyMargin = require('../models/india_solarshop_db/company_margins.schema');
+      const activeMargins = await CompanyMargin.find({
+        combo_kit_id: { $in: foundKitIds },
+        deleted_at: null,
+        is_active: true,
+      }).lean();
+      const marginMap = new Map();
+      activeMargins.forEach((m) => {
+        const kId = String(m.combo_kit_id);
+        const cur = marginMap.get(kId);
+        if (!cur || (targetWarehouseId && String(m.warehouse_id) === String(targetWarehouseId))) {
+          marginMap.set(kId, m);
+        }
+      });
+
       // Filter: only kits actively activated in warehouse with configured pricing
       foundKits = foundKits
         .filter((k) => {
@@ -3367,7 +3383,52 @@ const get_my_plan_po_settings = async (req, res) => {
         })
         .map((k) => {
           const act = activationMap.get(String(k._id));
+          const marginDoc = marginMap.get(String(k._id));
           const effPrice = Number(act?.selling_price_cached || k.selling_price_cached || act?.base_price_cached || k.base_price_cached || 0);
+
+          // GST Rate directly from Admin Configuration (CompanyMargin or Kit setting or Activation) - NO hardcoded default
+          let resolvedGstRate = null;
+          if (marginDoc?.gst_rate != null && !isNaN(Number(marginDoc.gst_rate))) {
+            resolvedGstRate = Number(marginDoc.gst_rate);
+          } else if (k.gst_rate != null && !isNaN(Number(k.gst_rate))) {
+            resolvedGstRate = Number(k.gst_rate);
+          } else if (k.tax_pct != null && !isNaN(Number(k.tax_pct))) {
+            resolvedGstRate = Number(k.tax_pct);
+          } else if (k.gst_pct != null && !isNaN(Number(k.gst_pct))) {
+            resolvedGstRate = Number(k.gst_pct);
+          } else if (act?.gst_rate != null && !isNaN(Number(act.gst_rate))) {
+            resolvedGstRate = Number(act.gst_rate);
+          } else {
+            resolvedGstRate = 0;
+          }
+
+          // PO and Loose Tier Pricing from Admin Configuration
+          const poPricing = Array.isArray(marginDoc?.po_order_pricing) && marginDoc.po_order_pricing.length > 0
+            ? marginDoc.po_order_pricing
+            : (k.po_order_pricing || []);
+          const loosePricing = Array.isArray(marginDoc?.loose_order_pricing) && marginDoc.loose_order_pricing.length > 0
+            ? marginDoc.loose_order_pricing
+            : (k.loose_order_pricing || []);
+
+          // Prioritize Admin configured order_quantities and loose_order_quantities from ComboKit ("Trial Kits / MOQ")
+          const kitOrderQtys = Array.isArray(k.order_quantities) && k.order_quantities.length > 0
+            ? k.order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+            : [];
+          const poQtysFromPricing = poPricing
+            .map((p) => Number(p.quantity))
+            .filter((n) => !isNaN(n) && n > 0)
+            .sort((a, b) => a - b);
+          const resolvedPoQtys = kitOrderQtys.length > 0 ? kitOrderQtys : poQtysFromPricing;
+
+          const kitLooseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
+            ? k.loose_order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+            : [];
+          const looseQtysFromPricing = loosePricing
+            .map((p) => Number(p.quantity))
+            .filter((n) => !isNaN(n) && n > 0)
+            .sort((a, b) => a - b);
+          const resolvedLooseQtys = kitLooseQtys.length > 0 ? kitLooseQtys : looseQtysFromPricing;
+
           return {
             ...k,
             base_price_cached: Number(act?.base_price_cached || k.base_price_cached || effPrice),
@@ -3377,6 +3438,15 @@ const get_my_plan_po_settings = async (req, res) => {
             price: effPrice,
             warehouse_activation_id: act?._id || null,
             warehouse_id: act?.warehouse_id || targetWarehouseId || null,
+            gst_rate: resolvedGstRate,
+            tax_pct: resolvedGstRate,
+            gst_pct: resolvedGstRate,
+            common_gst_rate: resolvedGstRate,
+            po_order_pricing: poPricing,
+            loose_order_pricing: loosePricing,
+            order_quantities: resolvedPoQtys,
+            loose_order_quantities: resolvedLooseQtys,
+            min_po_quantity: resolvedPoQtys[0] || (kitOrderQtys[0] || k.min_order_quantity || 0),
           };
         });
     }

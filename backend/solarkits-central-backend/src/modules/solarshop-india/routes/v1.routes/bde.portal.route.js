@@ -99,6 +99,7 @@ router.use('/quotes', require('./bde.quotes.route'));
 
 // ── 13. Franchisee Purchase Order & EPC Allocation Module ────────────────────
 router.get('/po/onboarded-epcs',                         verify_bde_auth, handler.get_bde_onboarded_epcs);
+router.get('/po/combokits',                             verify_bde_auth, handler.get_bde_company_combokits);
 router.get('/po/franchisees',                            verify_bde_auth, handler.get_bde_po_franchisees);
 router.get('/po/franchisee/:franchiseeId/plan-settings', verify_bde_auth, handler.get_franchisee_po_plan_settings);
 router.get('/po/franchisee/:franchiseeId/epc-buyers',    verify_bde_auth, handler.get_franchisee_epc_buyers);
@@ -109,5 +110,7 @@ router.post('/po/:id/pay-token',                         verify_bde_auth, handle
 router.post('/po/:id/validate',                          verify_bde_auth, handler.validate_bde_po);
 router.post('/po/:id/reorder',                           verify_bde_auth, handler.reorder_bde_po);
 router.get('/po/detail/:id',                             verify_bde_auth, handler.get_bde_po_detail);
+router.get('/shop-hierarchy',                            verify_bde_auth, require('../../controller/v1.handlers/shop.handler').get_shop_hierarchy);
 
 module.exports = router;
+

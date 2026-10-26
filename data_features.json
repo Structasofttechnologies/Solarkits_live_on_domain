@@ -880,5 +880,203 @@
     "backend": "/api/india/v1/reseller/goals/my-goal, /admin-api/goals/*",
     "status": "Fully Connected",
     "desc": "Target management system tracking monthly kit procurement goals, evaluating progress percentage in real time, and displaying visual achievement milestones on franchisee dashboards."
+  },
+  {
+    "id": "F099",
+    "module": "Procurement & Accounts",
+    "name": "Order BOM Calculation & Stock Shortage Explosion",
+    "frontend": "internal-admin-portal/accounts/NewOrdersProcurement.jsx, Procurement.jsx",
+    "backend": "/api/account/procurement/bom-calculate, procurement.handler.js, ProcurementGroup.schema.js",
+    "status": "Fully Connected",
+    "desc": "Automated BOM explosion algorithm calculating raw material and component requirements (solar panels, inverters, structures, cables, BOS kits) against customer orders, determining warehouse stock shortages and generating indented procurement requirements."
+  },
+  {
+    "id": "F100",
+    "module": "Procurement & Accounts",
+    "name": "Multi-Order Batch Purchase Indent (PI) Consolidation",
+    "frontend": "accounts/PurchaseIndentModal.jsx, accounts/Procurement.jsx",
+    "backend": "/api/account/procurement/purchase-indents, PurchaseIndent.schema.js, sync_advance_paid_pis.js",
+    "status": "Fully Connected",
+    "desc": "Multi-order consolidation engine grouping indented material requirements across multiple confirmed client orders into unified supplier Purchase Indents (PI) with automated batch synchronization and pricing verification."
+  },
+  {
+    "id": "F101",
+    "module": "Procurement & Accounts",
+    "name": "Supplier Advance & Balance Payment Workflow",
+    "frontend": "accounts/SupplierPaymentModal.jsx, accounts/Payments.jsx",
+    "backend": "/api/account/procurement/supplier-payment, PurchaseIndent.schema.js, accounts.handler.js",
+    "status": "Fully Connected",
+    "desc": "Dual-stage supplier payment management supporting initial advance disbursement (e.g. 20-50%), UTR logging, balance payment settlement upon GRN receipt verification, and automated ledger entries."
+  },
+  {
+    "id": "F102",
+    "module": "Warehouse & Logistics",
+    "name": "Delivery Manager Station 1: New Orders & Material Inward",
+    "frontend": "warehouse/NewOrdersDeliveryManager.jsx, NewOrdersPage.jsx, MaterialInward.jsx",
+    "backend": "/warehouse-api/delivery-orders, delivery.order.handler.js, DeliveryOrder.schema.js",
+    "status": "Fully Connected",
+    "desc": "First station of the Delivery Manager module displaying auto-generated Delivery Orders (DO) from confirmed sales orders, enabling BOS kit inventory stock matching, physical inward logging, partial/full inward tracking, and auto-transition to dispatch upon 100% inwarding."
+  },
+  {
+    "id": "F103",
+    "module": "Warehouse & Logistics",
+    "name": "Delivery Manager Station 2: Out for Delivery & 3-Gate Check",
+    "frontend": "warehouse/OutForDeliveryStation.jsx, OutForDeliveryPage.jsx, UnifiedCustomerOutward.jsx",
+    "backend": "/warehouse-api/delivery-orders/:id/dispatch, delivery.order.handler.js",
+    "status": "Fully Connected",
+    "desc": "Pre-dispatch staging portal supporting Manual and System-Assisted vehicle/driver assignment, Account Manager E-Way Bill verification, and strict 3-point gate checks (Vehicle Rear Photo, Delivery Docket/Challan, Valid E-Way Bill) before unlocking dispatch initiation."
+  },
+  {
+    "id": "F104",
+    "module": "Warehouse & Logistics",
+    "name": "Delivery Manager Station 3: Track Delivery Hub & Dual POD",
+    "frontend": "warehouse/TrackDeliveryHub.jsx, TrackDeliveryPage.jsx, Trip POD Manager",
+    "backend": "/warehouse-api/delivery-orders/:id/track, deliveryOrders.js, delivery.order.handler.js",
+    "status": "Fully Connected",
+    "desc": "Real-time delivery progress tracking hub featuring live transit milestone timelines (Dispatched -> In Transit -> Destination Reached -> Delivered) and dual Proof of Delivery mechanics: Manual Delivery Destination Photo POD upload vs. Auto Delivery Customer OTP verification."
+  },
+  {
+    "id": "F105",
+    "module": "Delivery Logistics",
+    "name": "Delivery Cost Settings & Benchmark Freight Rate Engine",
+    "frontend": "admin/DeliveryCostSettings.jsx, delivery-management/settings",
+    "backend": "/admin-api/delivery/cost-settings, delivery_cost_benchmark.schema.js, delivery.management.handler.js",
+    "status": "Fully Connected",
+    "desc": "Configurable logistics pricing system allowing administrators to set state/district distance-based freight slabs, vehicle payload multipliers, minimum benchmark costs, and transporter rate cards with automated freight calculations during checkout."
+  },
+  {
+    "id": "F106",
+    "module": "Franchise & Admin",
+    "name": "Store Creation Wizard & Multi-Department Onboarding Queue",
+    "frontend": "admin/StoreCreationWizard.jsx, admin/StoreOnboardingQueue.jsx",
+    "backend": "/admin-api/store-management/onboarding/*, store.setup.service.js, store_setups.schema.js",
+    "status": "Fully Connected",
+    "desc": "End-to-end multi-step onboarding wizard for physical franchisee store setup across BDE field inspection, Accounts fee verification, Warehouse initial kit stock allocation, and Super Admin final store activation."
+  },
+  {
+    "id": "F107",
+    "module": "Franchise & Admin",
+    "name": "Franchisee Subtypes & Tiered Channel Configuration",
+    "frontend": "admin/FranchiseeSubtypes.jsx, admin/ResellerManagement.jsx",
+    "backend": "/admin-api/franchisee-subtypes/*, franchisee_subtypes.schema.js, franchisee.subtypes.handler.js",
+    "status": "Fully Connected",
+    "desc": "Hierarchical classification engine defining distinct franchisee tiers (Master Distributor, District Franchisee, Tehsil Retailer, Solar Mitra) with customized commission splits, security deposit requirements, MOQ rules, and territory rights."
+  },
+  {
+    "id": "F108",
+    "module": "Franchise & Admin",
+    "name": "Store Status History & State Transition Audit Trail",
+    "frontend": "admin/ResellerDetail.jsx, admin/StoreOnboardingQueue.jsx",
+    "backend": "store_status_history.schema.js, store.management.onboarding.handler.js",
+    "status": "Fully Connected",
+    "desc": "Immutable historical tracking service recording every store onboarding and operational state transition (Draft -> Lead -> Document Uploaded -> Fee Verified -> Kit Allocated -> Activated / Suspended) with timestamp, actor ID, and audit comments."
+  },
+  {
+    "id": "F109",
+    "module": "BDE Management",
+    "name": "BDE Store Assignment & Field Commission Mapping",
+    "frontend": "admin/ResellerDetail.jsx, BDE-modules/BdeLayout.jsx",
+    "backend": "/admin-api/store-management/bde-assignment, company_store_bde_assignments.schema.js, store.management.bde.handler.js",
+    "status": "Fully Connected",
+    "desc": "Dynamic mapping engine assigning dedicated Business Development Executives (BDE) to physical stores and districts, routing onboarding tasks, and attributing target performance commissions to field agents."
+  },
+  {
+    "id": "F110",
+    "module": "Solar Store (EPC)",
+    "name": "EPC Contractor Corporate Profile & Branch Office Management",
+    "frontend": "customer-apps/solar-store/src/Pages/profile/EpcProfile.jsx",
+    "backend": "/api/india/v1/epc/profile/*, epc.profile.handler.js, epc_offices.schema.js, epc_accounts.schema.js",
+    "status": "Fully Connected",
+    "desc": "Comprehensive corporate EPC profile dashboard allowing solar installation firms to manage company registrations, primary warehouse/office addresses, branch regional offices, and billing/shipping tax profiles."
+  },
+  {
+    "id": "F111",
+    "module": "Solar Store (EPC)",
+    "name": "EPC Corporate Multi-User Team & Permission Matrix",
+    "frontend": "customer-apps/solar-store/src/Pages/users/EpcTeamUsers.jsx, permissions.js",
+    "backend": "/api/india/v1/epc/team/*, epc.profile.handler.js, epc_accounts.schema.js",
+    "status": "Fully Connected",
+    "desc": "Role-based multi-user workspace within the EPC store allowing company admins to invite team members (Project Engineers, Procurement Officers, Site In-charges) with granular permission flags (Can View Prices, Can Place Orders, Can Approve Quotations)."
+  },
+  {
+    "id": "F112",
+    "module": "Solar Store (EPC)",
+    "name": "Server-Side Reseller Pricing & Margin Calculation Engine",
+    "frontend": "solar-store/CheckOut.jsx, solar-store/EpcCatalogue.jsx",
+    "backend": "/api/india/v1/epc/catalogue/pricing, reseller.pricing.service.js, epc.offline.checkout.service.js",
+    "status": "Fully Connected",
+    "desc": "Tamper-proof server-side pricing engine dynamically computing landed kit prices, company margins, franchisee commissions, tax breakdowns, and payment terms during live catalog browsing and checkout."
+  },
+  {
+    "id": "F113",
+    "module": "Admin Panel",
+    "name": "Combo Kit Form Drawer & Multi-Component Variant Builder",
+    "frontend": "admin/ComboKitFormDrawer.jsx, solar-store/SolarBosKit.jsx",
+    "backend": "/admin-api/combo-kits/*, combo_kits.handler.js, combo_kits.schema.js",
+    "status": "Fully Connected",
+    "desc": "Dynamic configuration drawer allowing platform admins to assemble custom solar combo kits by selecting module types, inverter ratings, mounting structures, and electrical BOS components with live BOM summary and variant preview."
+  },
+  {
+    "id": "F114",
+    "module": "Admin Panel",
+    "name": "Kit Tier Pricing Modal & Company Margin Slabs",
+    "frontend": "admin/KitTierPricingModal.jsx, admin/KitProductPriceBreakdown.jsx, admin/WarehouseMarginConfig.jsx",
+    "backend": "/admin-api/company-margins/*, company_margins.handler.js, company_margin.schema.js",
+    "status": "Fully Connected",
+    "desc": "Multi-tier pricing matrix configuration enabling percentage or flat margin markups per kit category, warehouse zone, and customer tier (Retail, Regular EPC, Gold EPC, Master Partner) with automated price breakdown visualization."
+  },
+  {
+    "id": "F115",
+    "module": "Authentication & Security",
+    "name": "Quick eKYC Automated GSTIN Verification Engine",
+    "frontend": "solar-store/AuthDialog.jsx, BDE-modules/BdeEpcLeads.jsx",
+    "backend": "/api/india/v1/gst/verify, quickekyc.provider.js, gstStateCodes.js, epcs.handler.js",
+    "status": "Fully Connected",
+    "desc": "Instant external API integration with Quick eKYC provider verifying 15-digit GSTIN numbers in real-time, fetching legal entity names, registered trade names, active status, tax filing status, and address proofs, eliminating KYC fraud."
+  },
+  {
+    "id": "F116",
+    "module": "Payments & Accounts",
+    "name": "Regional Payment Configuration & Product Milestone Slabs",
+    "frontend": "admin/RegionPaymentConfig.jsx, admin/PaymentMilestoneSettings.jsx",
+    "backend": "/admin-api/region-payment-config/*, region_payment_configs.schema.js, product_payment_milestones.schema.js",
+    "status": "Fully Connected",
+    "desc": "Administrative controls enabling state/regional customization of payment terms (100% advance, 20% advance + 80% on dispatch, credit line options) and milestone triggers based on order size and territory credit risk."
+  },
+  {
+    "id": "F117",
+    "module": "Payments & Accounts",
+    "name": "SolarShop Accounts Dashboard & Payment Follow-Up System",
+    "frontend": "accounts/SolarShopAccountsDashboard.jsx, accounts/CustomerPaymentFollowup.jsx, accounts/EpcOrdersManagement.jsx",
+    "backend": "/api/account/solarshop/*, solarshop.accounts.handler.js, epc_orders.schema.js",
+    "status": "Fully Connected",
+    "desc": "Consolidated finance workbench for Accounts personnel providing aging analysis of pending customer balances, automated payment follow-up reminders, UTR receipt validation queue, and one-click order confirmation."
+  },
+  {
+    "id": "F118",
+    "module": "Security & Infrastructure",
+    "name": "Centralized RSA Key Provider & Cloud Deployment Hardening",
+    "frontend": "All Portals & API Gateways",
+    "backend": "src/utils/jwtKeyProvider.js, src/utils/rsaKeyProvider.js, src/index.js",
+    "status": "Fully Connected",
+    "desc": "Enterprise cryptographic key management service eliminating decentralized file-based private/public RSA keys in favor of a centralized environment-aware provider with runtime key generation fallback, ensuring seamless CI/CD deploys on Render."
+  },
+  {
+    "id": "F119",
+    "module": "Warehouse & Logistics",
+    "name": "BOS Kit Assembly Station & Inventory Reservation Service",
+    "frontend": "warehouse/BosKitAssemblyPage.jsx, warehouse/MaterialInward.jsx",
+    "backend": "/warehouse-api/bos-kit-assembly, WarehouseInventoryReservation.schema.js, procurement.handler.js",
+    "status": "Fully Connected",
+    "desc": "Warehouse workbench allowing assembly technicians to bundle individual balance-of-system items (rails, clamps, MC4, DC cable rolls) into standardized BOS kits, reserving warehouse stock against order queues to prevent inventory race conditions."
+  },
+  {
+    "id": "F120",
+    "module": "Website CMS & Storefront",
+    "name": "Product Technical Datasheet Modal & Document Repository",
+    "frontend": "solar-store/DatasheetModal.jsx, admin/ProductDatasheets.jsx",
+    "backend": "/api/india/v1/products/datasheet/:id, products.handler.js, products.schema.js",
+    "status": "Fully Connected",
+    "desc": "Interactive technical specification viewer allowing EPC contractors to inspect solar module curves, inverter efficiency data, warranty certificates, and downloadable factory compliance PDF datasheets directly from store cards."
   }
 ]

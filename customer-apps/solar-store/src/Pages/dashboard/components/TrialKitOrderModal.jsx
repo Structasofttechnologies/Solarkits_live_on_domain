@@ -86,6 +86,13 @@ export default function TrialKitOrderModal({
               kit_id: kit?._id || kit?.id,
               quantity: trialQty,
               unit_price: unitPrice,
+              gst_rate:
+                currentVariant?.gstRate ??
+                currentVariant?.gst_rate ??
+                kit?.gstRate ??
+                kit?.gst_rate ??
+                kit?.pricing?.gstRate ??
+                kit?.pricing?.gst_rate,
             },
           }
         );
@@ -105,7 +112,7 @@ export default function TrialKitOrderModal({
         setLoading(false);
       }
     },
-    [pincode, kit?._id, kit?.id, trialQty, unitPrice]
+    [pincode, kit?._id, kit?.id, trialQty, unitPrice, currentVariant, kit]
   );
 
   // Auto-calculate if 6-digit pin is present on open
@@ -129,8 +136,22 @@ export default function TrialKitOrderModal({
   // Grand total calculation
   const deliveryFreight = deliveryData ? Number(deliveryData.delivery_cost || 0) : 0;
   const grandTotal = kitSubtotal + deliveryFreight;
-  const gstRate = 13.8;
-  const gstIncludedAmount = grandTotal > 0 ? Math.round(grandTotal - grandTotal / (1 + gstRate / 100)) : 0;
+  const gstRate = useMemo(() => {
+    const rawRate =
+      deliveryData?.pricing?.gst_rate ??
+      currentVariant?.gstRate ??
+      currentVariant?.gst_rate ??
+      kit?.gstRate ??
+      kit?.gst_rate ??
+      kit?.pricing?.gstRate ??
+      kit?.pricing?.gst_rate;
+    return rawRate !== undefined && rawRate !== null && !isNaN(Number(rawRate))
+      ? Number(rawRate)
+      : 13.8;
+  }, [deliveryData, currentVariant, kit]);
+
+  const gstIncludedAmount =
+    grandTotal > 0 ? Math.round(grandTotal - grandTotal / (1 + gstRate / 100)) : 0;
 
   // Handle Add to Cart
   const handleConfirmAddToCart = () => {
@@ -333,7 +354,7 @@ export default function TrialKitOrderModal({
               </div>
 
               <div className="flex justify-between items-center text-text-secondary pt-1 border-t border-dashed border-border">
-                <span>Estimated GST Included (13.8%):</span>
+                <span>Estimated GST Included ({gstRate}%):</span>
                 <span className="font-medium text-text-muted">
                   ₹{gstIncludedAmount.toLocaleString("en-IN")}
                 </span>

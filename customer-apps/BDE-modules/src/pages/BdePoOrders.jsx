@@ -92,10 +92,10 @@ function PoStageStepper({ stepNumber }) {
           <React.Fragment key={s.num}>
             <div
               className={`flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-black transition-all ${isDone
-                  ? 'bg-emerald-500 text-white shadow-xs'
-                  : isCurrent
-                    ? 'bg-blue-600 text-white ring-2 ring-blue-300 scale-105'
-                    : 'bg-slate-200 text-slate-500 border border-slate-300'
+                ? 'bg-emerald-500 text-white shadow-xs'
+                : isCurrent
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-300 scale-105'
+                  : 'bg-slate-200 text-slate-500 border border-slate-300'
                 }`}
               title={`Stage ${s.num}: ${s.label}`}
             >
@@ -150,6 +150,7 @@ export default function BdePoOrders() {
   // Selected EPC & Franchisee for PO Creation
   const [modalEpcId, setModalEpcId] = useState('');
   const [modalFranchiseeId, setModalFranchiseeId] = useState('');
+  const [companyKits, setCompanyKits] = useState([]);
   const [franchiseePlanData, setFranchiseePlanData] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [epcBuyers, setEpcBuyers] = useState([]);
@@ -186,7 +187,7 @@ export default function BdePoOrders() {
   const [tokenModal, setTokenModal] = useState(false);
   const [tokenOrder, setTokenOrder] = useState(null);
   const [tokenPayingEpcId, setTokenPayingEpcId] = useState('');
-  const [tokenPayAmount, setTokenPayAmount] = useState(50000);
+  const [tokenPayAmount, setTokenPayAmount] = useState(0);
   const [tokenUtr, setTokenUtr] = useState('');
   const [tokenBank, setTokenBank] = useState('ICICI Bank Corporate');
   const [tokenDate, setTokenDate] = useState(new Date().toISOString().slice(0, 10));
@@ -288,16 +289,48 @@ export default function BdePoOrders() {
   // ── 4. Fetch Shop Hierarchy for Blueprint Taxonomy Filters ──
   const fetchHierarchy = useCallback(async () => {
     try {
-      const res = await api.get('/india/v1/shop/hierarchy').catch(() => null);
-      if (res?.data?.status === 'success' && Array.isArray(res.data.data)) {
-        setShopHierarchy(res.data.data);
+      let res = await api.get('/shop-hierarchy').catch(() => null);
+      if (!res?.data?.data) {
+        res = await api.get('/india/v1/shop/hierarchy').catch(() => null);
+      }
+      const data = res?.data?.data;
+      if (Array.isArray(data)) {
+        setShopHierarchy(data);
+      } else if (Array.isArray(data?.shopHierarchy)) {
+        setShopHierarchy(data.shopHierarchy);
       }
     } catch (err) {
       console.warn('Shop hierarchy load failed (non-fatal):', err);
     }
   }, []);
 
-  // ── 5. Fetch Plan Settings & ComboKits for Selected Franchisee ──
+
+  // ── 5. Fetch Company ComboKit Blueprints for BDE PO Creation ──
+  const fetchCompanyCombokits = useCallback(async (epcId = null, fId = null) => {
+    setPlanLoading(true);
+    try {
+      const params = {};
+      const targetEpc = epcId || modalEpcId || (selectedEpcFilter !== 'ALL' ? selectedEpcFilter : '');
+      const targetFId = fId || modalFranchiseeId || (selectedFranchiseeFilter !== 'ALL' ? selectedFranchiseeFilter : '');
+      if (targetEpc) params.epc_id = targetEpc;
+      if (targetFId) params.franchisee_id = targetFId;
+
+      let res = await api.get('/po/combokits', { params }).catch(() => null);
+      if (!res?.data?.data?.combo_kits || res.data.data.combo_kits.length === 0) {
+        res = await api.get('/po/franchisee/company/plan-settings').catch(() => null);
+      }
+      if (res?.data?.data?.combo_kits && res.data.data.combo_kits.length > 0) {
+        setCompanyKits(res.data.data.combo_kits);
+        setFranchiseePlanData(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load company combokits:', err);
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [modalEpcId, modalFranchiseeId, selectedEpcFilter, selectedFranchiseeFilter]);
+
+  // ── 5b. Fetch Plan Settings for Selected Franchisee (For Network / Buyer Reference) ──
   const fetchFranchiseePlanSettings = useCallback(async (franchiseeId) => {
     if (!franchiseeId) return;
     setPlanLoading(true);
@@ -308,7 +341,6 @@ export default function BdePoOrders() {
       }
     } catch (err) {
       console.error('Failed to load franchisee plan settings:', err);
-      setFranchiseePlanData(null);
     } finally {
       setPlanLoading(false);
     }
@@ -337,7 +369,8 @@ export default function BdePoOrders() {
     fetchOnboardedEpcs();
     fetchFranchisees();
     fetchHierarchy();
-  }, [fetchOrders, fetchOnboardedEpcs, fetchFranchisees, fetchHierarchy]);
+    fetchCompanyCombokits();
+  }, [fetchOrders, fetchOnboardedEpcs, fetchFranchisees, fetchHierarchy, fetchCompanyCombokits]);
 
   // Handle URL Query Params (e.g. from EPC Leads / Franchisee page ?action=create&epc_id=...)
   useEffect(() => {
@@ -371,21 +404,40 @@ export default function BdePoOrders() {
   // Refresh helper
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.allSettled([fetchOrders(true), fetchOnboardedEpcs(), fetchFranchisees(), fetchHierarchy()]);
+    await Promise.allSettled([
+      fetchOrders(true),
+      fetchOnboardedEpcs(),
+      fetchFranchisees(),
+      fetchHierarchy(),
+      fetchCompanyCombokits(),
+    ]);
     setIsRefreshing(false);
   };
 
-  // ── Available ComboKit Blueprints ──
+  // ── Available ComboKit Blueprints (Pure Company Blueprints) ──
   const availableKits = useMemo(() => {
-    if (Array.isArray(franchiseePlanData?.combo_kits) && franchiseePlanData.combo_kits.length > 0) {
-      return franchiseePlanData.combo_kits.map((k) => {
+    const rawKits = companyKits;
+
+    if (rawKits.length > 0) {
+      return rawKits.map((k) => {
         const orderQtys = Array.isArray(k.order_quantities) && k.order_quantities.length > 0
-          ? k.order_quantities.map(Number).filter((n) => n > 0).sort((a, b) => a - b)
-          : [100, 200, 500, 1000];
+          ? k.order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+          : (Array.isArray(k.po_order_pricing) && k.po_order_pricing.length > 0
+            ? k.po_order_pricing.map((p) => Number(p.quantity)).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+            : []);
         const looseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
-          ? k.loose_order_quantities.map(Number).filter((n) => n > 0).sort((a, b) => a - b)
-          : [5, 10, 15, 20, 25, 30];
+          ? k.loose_order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+          : (Array.isArray(k.loose_order_pricing) && k.loose_order_pricing.length > 0
+            ? k.loose_order_pricing.map((p) => Number(p.quantity)).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+            : []);
         const price = k.dealer_price || k.selling_price_cached || k.unit_price || k.price || 0;
+        const gstRate = k.gst_rate != null && !isNaN(Number(k.gst_rate))
+          ? Number(k.gst_rate)
+          : (k.tax_pct != null && !isNaN(Number(k.tax_pct))
+            ? Number(k.tax_pct)
+            : (k.gst_pct != null && !isNaN(Number(k.gst_pct))
+              ? Number(k.gst_pct)
+              : (k.common_gst_rate != null && !isNaN(Number(k.common_gst_rate)) ? Number(k.common_gst_rate) : 0)));
 
         return {
           _id: (k._id || k.id)?.toString(),
@@ -410,17 +462,24 @@ export default function BdePoOrders() {
           unit_price: price,
           price: price,
           base_price_paise: Math.round(price * 100),
-          token_rate_per_kit_paise: k.token_rate_per_kit_paise || 50000, // default ₹500/kit
+          token_booking_enabled: k.token_booking_enabled !== false,
+          token_type: k.token_type || 'FIXED_AMOUNT',
+          token_value: k.token_value != null ? Number(k.token_value) : 0,
+          token_rate_per_kit_paise: k.token_rate_per_kit_paise != null ? Number(k.token_rate_per_kit_paise) : 0,
+          gst_rate: gstRate,
+          tax_pct: gstRate,
+          gst_pct: gstRate,
+          common_gst_rate: gstRate,
           order_quantities: orderQtys,
           loose_order_quantities: looseQtys,
-          min_po_quantity: orderQtys[0] || 100,
+          min_po_quantity: orderQtys[0] || (k.min_po_quantity || 0),
           specifications: k.description || k.specifications || 'High performance solar kit with tier-1 inverter, solar panels, and GI mounting structure.',
           po_order_pricing: k.po_order_pricing || k.poOrderPricing || [],
         };
       });
     }
     return [];
-  }, [franchiseePlanData]);
+  }, [companyKits, franchiseePlanData]);
 
   // ── Filter Blueprints by QuickFilters ──
   const filteredComboKits = useMemo(() => {
@@ -455,6 +514,252 @@ export default function BdePoOrders() {
     });
   }, [availableKits, quickFilters]);
 
+  // ── Cascading Quick Filter Options derived from shopHierarchy & availableKits ──
+  const industryTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      shopHierarchy.forEach((ind) => {
+        const name = ind.name;
+        if (name && !seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          list.push({ value: name, label: name, id: ind.id || ind._id });
+        }
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const name = kit.industry_type_name;
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ value: name, label: name, id: kit.industry_type_id });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Industry Types' }, ...list];
+  }, [shopHierarchy, availableKits]);
+
+  const categoryOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          if (cat.name && !seen.has(cat.name.toLowerCase())) {
+            seen.add(cat.name.toLowerCase());
+            list.push({ value: cat.name, label: cat.name, id: cat.id || cat._id });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === 'all' ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      if (indOk && kit.category_name && !seen.has(kit.category_name.toLowerCase())) {
+        seen.add(kit.category_name.toLowerCase());
+        list.push({ value: kit.category_name, label: kit.category_name, id: kit.category_id });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Categories' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType]);
+
+  const subCategoryOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === 'all' ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase() ||
+            String(cat.id || cat._id) === String(quickFilters.category);
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              if (sub.name && !seen.has(sub.name.toLowerCase())) {
+                seen.add(sub.name.toLowerCase());
+                list.push({ value: sub.name, label: sub.name, id: sub.id || sub._id });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === 'all' ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      const catOk =
+        quickFilters.category === 'all' ||
+        kit.category_name?.toLowerCase() === quickFilters.category.toLowerCase();
+      if (indOk && catOk && kit.subcategory_name && !seen.has(kit.subcategory_name.toLowerCase())) {
+        seen.add(kit.subcategory_name.toLowerCase());
+        list.push({ value: kit.subcategory_name, label: kit.subcategory_name, id: kit.subcategory_id });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Sub-Categories' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category]);
+
+  const systemTypeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === 'all' ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase();
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              const subOk =
+                quickFilters.subCategory === 'all' ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+              if (subOk) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  if (mt.name && !seen.has(mt.name.toLowerCase())) {
+                    seen.add(mt.name.toLowerCase());
+                    list.push({ value: mt.name, label: mt.name, id: mt.id || mt.type_id });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const indOk =
+        quickFilters.industryType === 'all' ||
+        kit.industry_type_name?.toLowerCase() === quickFilters.industryType.toLowerCase();
+      const catOk =
+        quickFilters.category === 'all' ||
+        kit.category_name?.toLowerCase() === quickFilters.category.toLowerCase();
+      const subOk =
+        quickFilters.subCategory === 'all' ||
+        kit.subcategory_name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+      if (indOk && catOk && subOk) {
+        const sys = kit.system_type || 'On-Grid';
+        if (sys && !seen.has(sys.toLowerCase())) {
+          seen.add(sys.toLowerCase());
+          list.push({ value: sys, label: sys, id: sys });
+        }
+      }
+    });
+
+    return [{ value: 'all', label: 'All System Types' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category, quickFilters.subCategory]);
+
+  const projectRangeOptions = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(shopHierarchy) && shopHierarchy.length > 0) {
+      let relevantInds = shopHierarchy;
+      if (quickFilters.industryType !== 'all') {
+        relevantInds = shopHierarchy.filter(
+          (ind) =>
+            ind.name?.toLowerCase() === quickFilters.industryType.toLowerCase() ||
+            String(ind.id || ind._id) === String(quickFilters.industryType)
+        );
+      }
+      relevantInds.forEach((ind) => {
+        (ind.categories || []).forEach((cat) => {
+          const catOk =
+            quickFilters.category === 'all' ||
+            cat.name?.toLowerCase() === quickFilters.category.toLowerCase();
+          if (catOk) {
+            (cat.subcategories || []).forEach((sub) => {
+              const subOk =
+                quickFilters.subCategory === 'all' ||
+                sub.name?.toLowerCase() === quickFilters.subCategory.toLowerCase();
+              if (subOk) {
+                (sub.mappedTypes || []).forEach((mt) => {
+                  const typeOk =
+                    quickFilters.systemType === 'all' ||
+                    mt.name?.toLowerCase() === quickFilters.systemType.toLowerCase() ||
+                    quickFilters.systemType.toLowerCase().includes(mt.name?.toLowerCase());
+                  if (typeOk) {
+                    (mt.ranges || []).forEach((r) => {
+                      const label = r.range_label || `${r.min_value} - ${r.max_value} ${r.unit_symbol || 'kW'}`;
+                      if (label && !seen.has(label.toLowerCase())) {
+                        seen.add(label.toLowerCase());
+                        list.push({ value: label, label: label, id: r.id || r._id, min: r.min_value, max: r.max_value });
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+
+    availableKits.forEach((kit) => {
+      const label = kit.project_range_label || (kit.capacity_kw ? `${kit.capacity_kw} kW System` : null);
+      if (label && !seen.has(label.toLowerCase())) {
+        seen.add(label.toLowerCase());
+        list.push({ value: label, label: label, id: kit.project_range_id, min: kit.min_kw, max: kit.max_kw });
+      }
+    });
+
+    return [{ value: 'all', label: 'All Project Ranges' }, ...list];
+  }, [shopHierarchy, availableKits, quickFilters.industryType, quickFilters.category, quickFilters.subCategory, quickFilters.systemType]);
+
+  const handleClearMainFilters = () => {
+    setQuickFilters({
+      industryType: 'all',
+      category: 'all',
+      subCategory: 'all',
+      systemType: 'all',
+      projectRange: 'all',
+    });
+  };
+
+  const hasActiveQuickFilters = useMemo(() => {
+    return (
+      quickFilters.industryType !== 'all' ||
+      quickFilters.category !== 'all' ||
+      quickFilters.subCategory !== 'all' ||
+      quickFilters.systemType !== 'all' ||
+      quickFilters.projectRange !== 'all'
+    );
+  }, [quickFilters]);
+
+
   // Selected Kit in Create Modal
   const selectedKit = useMemo(() => {
     return (
@@ -478,10 +783,10 @@ export default function BdePoOrders() {
   // Sync selectedPoQty on kit switch
   useEffect(() => {
     if (selectedKit) {
-      const defaultQty = selectedKit.order_quantities?.[0] || selectedKit.min_po_quantity || 200;
-      setSelectedPoQty((prev) => (selectedKit.order_quantities?.includes(prev) ? prev : defaultQty));
+      const defaultQty = selectedKit.order_quantities?.[0] || selectedKit.min_po_quantity || 0;
+      setSelectedPoQty((prev) => (selectedKit.order_quantities?.includes(Number(prev)) ? Number(prev) : defaultQty));
     }
-  }, [selectedKit?._id]);
+  }, [selectedKit?._id, selectedKit?.order_quantities]);
 
   // Pricing calculations for Create Modal
   const targetQuantity = Math.max(1, parseInt(selectedPoQty, 10) || selectedKit?.min_po_quantity || 200);
@@ -500,11 +805,29 @@ export default function BdePoOrders() {
     return selectedKit.dealer_price || selectedKit.unit_price || 0;
   }, [selectedKit, targetQuantity]);
 
-  const tokenRatePerKit = selectedKit?.token_rate_per_kit_paise ? Math.round(selectedKit.token_rate_per_kit_paise / 100) : 500;
+  const kitGstRate = useMemo(() => {
+    if (!selectedKit) return 0;
+    const rawRate = selectedKit.gst_rate ?? selectedKit.tax_pct ?? selectedKit.gst_pct ?? selectedKit.common_gst_rate;
+    if (rawRate !== undefined && rawRate !== null && !isNaN(Number(rawRate))) {
+      return Number(rawRate);
+    }
+    return 0;
+  }, [selectedKit]);
+
+  const isTokenBookingActive = selectedKit?.token_booking_enabled !== false && Number(selectedKit?.token_value || selectedKit?.token_rate_per_kit_paise || 0) > 0;
+  const tokenBookingType = selectedKit?.token_type || 'FIXED_AMOUNT';
+  const rawTokenValue = Number(selectedKit?.token_value || (selectedKit?.token_rate_per_kit_paise ? selectedKit.token_rate_per_kit_paise / 100 : 0));
+
   const estimatedSubtotal = targetQuantity * kitUnitPrice;
-  const estimatedGst = Math.round((estimatedSubtotal * 12) / 100);
+  const estimatedGst = Math.round((estimatedSubtotal * kitGstRate) / 100);
   const estimatedGrandTotal = estimatedSubtotal + estimatedGst;
-  const estimatedTokenDeposit = targetQuantity * tokenRatePerKit;
+
+  // PO-level Token Deposit: If FIXED_AMOUNT, flat tokenValue (e.g. ₹60,000 for the whole PO). If PERCENTAGE, X% of total PO value.
+  const estimatedTokenDeposit = isTokenBookingActive
+    ? (tokenBookingType === 'PERCENTAGE'
+        ? Math.round(estimatedGrandTotal * (rawTokenValue / 100))
+        : rawTokenValue)
+    : 0;
 
   // Active Onboarded EPC Object
   const activeEpcObj = useMemo(() => {
@@ -540,18 +863,18 @@ export default function BdePoOrders() {
       const targetFId =
         activeEpcObj.assigned_franchisee_id ||
         activeEpcObj.assigned_franchisee?._id ||
-        modalFranchiseeId ||
-        franchisees[0]?._id;
+        null;
 
-      if (targetFId && targetFId !== modalFranchiseeId) {
-        setModalFranchiseeId(targetFId);
+      if (targetFId !== modalFranchiseeId) {
+        setModalFranchiseeId(targetFId || '');
       }
     }
-  }, [activeEpcObj, modalFranchiseeId, franchisees]);
+  }, [activeEpcObj, modalFranchiseeId]);
 
   // ── Open Create Modal ──
   const handleOpenCreateModal = (preselectedEpcId = null) => {
     setCreateError('');
+    fetchCompanyCombokits();
     const targetEpcId =
       preselectedEpcId ||
       (selectedEpcFilter !== 'ALL' ? selectedEpcFilter : (onboardedEpcs[0]?._id || ''));
@@ -562,17 +885,15 @@ export default function BdePoOrders() {
       const targetFId =
         epc?.assigned_franchisee_id ||
         epc?.assigned_franchisee?._id ||
-        modalFranchiseeId ||
-        franchisees[0]?._id;
+        null;
 
+      setModalFranchiseeId(targetFId || '');
       if (targetFId) {
-        setModalFranchiseeId(targetFId);
         fetchFranchiseePlanSettings(targetFId);
         fetchEpcBuyers(targetFId);
       }
-    } else if (franchisees[0]?._id) {
-      setModalFranchiseeId(franchisees[0]._id);
-      fetchFranchiseePlanSettings(franchisees[0]._id);
+    } else {
+      setModalFranchiseeId('');
     }
     setCreateModal(true);
   };
@@ -591,12 +912,7 @@ export default function BdePoOrders() {
       modalFranchiseeId ||
       activeEpcObj?.assigned_franchisee_id ||
       activeEpcObj?.assigned_franchisee?._id ||
-      franchisees[0]?._id;
-
-    if (!resolvedFranchiseeId) {
-      setCreateError('Please link or select a Franchisee Store Hub to fulfill this Purchase Order.');
-      return;
-    }
+      null;
 
     if (!selectedKit) {
       setCreateError('Please select an authorized ComboKit blueprint.');
@@ -609,16 +925,18 @@ export default function BdePoOrders() {
 
     setCreateSubmitting(true);
     try {
+      const poTokenPaise = Math.round(estimatedTokenDeposit * 100);
+
       const itemPayload = {
         combo_kit_id: selectedKit._id || selectedKit.id,
         kit_id: selectedKit._id || selectedKit.id,
         item_name: selectedKit.name || selectedKit.kit_name,
         quantity: targetQuantity,
         unit_price_paise: Math.round(kitUnitPrice * 100),
-        token_rate_paise: selectedKit.token_rate_per_kit_paise || 50000,
+        token_rate_paise: poTokenPaise,
         total_price_paise: targetQuantity * Math.round(kitUnitPrice * 100),
         subtotal_paise: targetQuantity * Math.round(kitUnitPrice * 100),
-        gst_rate: 12,
+        gst_rate: kitGstRate,
         epc_allocations: [],
       };
 
@@ -628,7 +946,8 @@ export default function BdePoOrders() {
         order_type: 'po_order',
         po_category: poCategory,
         target_committed_quantity: targetQuantity,
-        is_token_booking: true,
+        is_token_booking: isTokenBookingActive,
+        token_amount_paise: poTokenPaise,
         items: [itemPayload],
       };
 
@@ -704,11 +1023,12 @@ export default function BdePoOrders() {
     if (!allocatingOrder) return;
 
     const totalCommitted = allocatingOrder.target_committed_quantity || allocatingOrder.total_booked_quantity || 200;
-    const kitObj = availableKits.find((k) => String(k._id) === String(allocatingOrder.items?.[0]?.kit_id)) || availableKits[0] || {
-      name: allocatingOrder.items?.[0]?.item_name || 'Solar Kit',
-      token_rate_per_kit_paise: 50000,
-      base_price_paise: allocatingOrder.items?.[0]?.unit_price_paise || 20000000,
-    };
+    const allocItem = allocatingOrder.items?.[0];
+    const poTotalTokenPaise = Number(
+      allocatingOrder.token_amount_paise ||
+      allocItem?.token_rate_paise ||
+      (kitObj.token_value ? kitObj.token_value * 100 : (kitObj.token_rate_per_kit_paise || 0))
+    );
 
     const isCombine = allocatingOrder.po_category === 'COMBINE_PO';
     let epcList = [];
@@ -724,6 +1044,7 @@ export default function BdePoOrders() {
         .map(([buyerId, qty]) => {
           const buyer = combinedEpcList.find((b) => (b._id || b.id)?.toString() === buyerId?.toString());
           const allocQ = parseInt(qty, 10);
+          const allocTokenPaise = totalCommitted > 0 ? Math.round(poTotalTokenPaise * (allocQ / totalCommitted)) : 0;
           return {
             epc_buyer_id: buyerId,
             buyer_id: buyerId,
@@ -731,7 +1052,7 @@ export default function BdePoOrders() {
             buyer_name: buyer?.buyer_name || buyer?.name || 'EPC Buyer',
             gstin: buyer?.gstin || null,
             allocated_quantity: allocQ,
-            token_amount_paise: allocQ * (kitObj.token_rate_per_kit_paise || 50000),
+            token_amount_paise: allocTokenPaise,
             payment_status: 'PENDING',
           };
         });
@@ -749,7 +1070,7 @@ export default function BdePoOrders() {
             buyer_name: buyer?.buyer_name || buyer?.name || 'EPC Partner',
             gstin: buyer?.gstin || null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 50000),
+            token_amount_paise: poTotalTokenPaise,
             payment_status: 'PENDING',
           },
         ];
@@ -761,20 +1082,24 @@ export default function BdePoOrders() {
             buyer_name: 'Warehouse Stock',
             gstin: null,
             allocated_quantity: totalCommitted,
-            token_amount_paise: totalCommitted * (kitObj.token_rate_per_kit_paise || 50000),
+            token_amount_paise: poTotalTokenPaise,
             payment_status: 'PENDING',
           },
         ];
       }
     }
 
+    const allocGstRate = allocatingOrder.items?.[0]?.gst_rate != null
+      ? Number(allocatingOrder.items[0].gst_rate)
+      : (kitObj?.gst_rate != null ? Number(kitObj.gst_rate) : 0);
+
     const itemPayload = {
       kit_id: allocatingOrder.items?.[0]?.kit_id || kitObj._id,
       item_name: allocatingOrder.items?.[0]?.item_name || kitObj.name,
       quantity: totalCommitted,
       unit_price_paise: allocatingOrder.items?.[0]?.unit_price_paise || kitObj.base_price_paise,
-      gst_rate: 12,
-      token_rate_paise: kitObj.token_rate_per_kit_paise || 50000,
+      gst_rate: allocGstRate,
+      token_rate_paise: poTotalTokenPaise,
       epc_allocations: epcList,
     };
 
@@ -810,7 +1135,18 @@ export default function BdePoOrders() {
 
     const defaultEpcId = epcBuyerId || (order.po_category === 'SINGLE_PO' && order.items?.[0]?.epc_allocations?.[0]?.epc_buyer_id) || '';
     setTokenPayingEpcId(defaultEpcId);
-    setTokenPayAmount(remainingToken > 0 ? remainingToken : totalTokenReq > 0 ? totalTokenReq : 50000);
+
+    let targetEpcAmount = 0;
+    if (defaultEpcId && order.items?.[0]?.epc_allocations) {
+      const matchedAlloc = order.items[0].epc_allocations.find(
+        (a) => String(a.epc_buyer_id || a.buyer_id) === String(defaultEpcId)
+      );
+      if (matchedAlloc && matchedAlloc.token_amount_paise != null) {
+        targetEpcAmount = Math.round(matchedAlloc.token_amount_paise / 100);
+      }
+    }
+
+    setTokenPayAmount(targetEpcAmount > 0 ? targetEpcAmount : (remainingToken > 0 ? remainingToken : (totalTokenReq > 0 ? totalTokenReq : 0)));
     setTokenUtr(`ICICI-UTR-${Math.floor(10000000 + Math.random() * 90000000)}`);
     setTokenBank('ICICI Bank Corporate');
     setTokenDate(new Date().toISOString().slice(0, 10));
@@ -1056,27 +1392,6 @@ export default function BdePoOrders() {
             </select>
           </div>
 
-          {/* Franchisee Filter */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
-              <Store className="w-4 h-4 text-indigo-600" />
-              <span>Franchise Hub:</span>
-            </div>
-
-            <select
-              value={selectedFranchiseeFilter}
-              onChange={(e) => setSelectedFranchiseeFilter(e.target.value)}
-              className="text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-[220px]"
-            >
-              <option value="ALL">All Franchise Hubs ({franchisees.length})</option>
-              {franchisees.map((f) => (
-                <option key={f._id || f.id} value={f._id || f.id}>
-                  {f.business_name} • {f.district} ({f.franchisee_id || f.reseller_code})
-                </option>
-              ))}
-            </select>
-          </div>
-
           {(selectedEpcFilter !== 'ALL' || selectedFranchiseeFilter !== 'ALL') && (
             <button
               onClick={() => {
@@ -1116,8 +1431,8 @@ export default function BdePoOrders() {
           <button
             onClick={() => setCategoryTab('ALL')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${categoryTab === 'ALL'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
           >
             All Orders ({allOrdersCount})
@@ -1125,8 +1440,8 @@ export default function BdePoOrders() {
           <button
             onClick={() => setCategoryTab('SINGLE_PO')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${categoryTab === 'SINGLE_PO'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
           >
             Single PO ({singlePoCount})
@@ -1134,8 +1449,8 @@ export default function BdePoOrders() {
           <button
             onClick={() => setCategoryTab('COMBINE_PO')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${categoryTab === 'COMBINE_PO'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
               }`}
           >
             Combine PO ({combinePoCount})
@@ -1216,7 +1531,7 @@ export default function BdePoOrders() {
             className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl shadow-md text-xs inline-flex items-center gap-2 transition"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Create New Purchase Order</span>
+            <span>Create New Purchase Order</span>
           </button>
         </div>
       ) : viewMode === 'table' ? (
@@ -1239,6 +1554,7 @@ export default function BdePoOrders() {
               <tbody className="divide-y divide-slate-100">
                 {filteredOrders.map((order) => {
                   const item = order.items?.[0] || {};
+                  const orderGstRate = item.gst_rate != null ? Number(item.gst_rate) : (order.pricing?.tax_rate != null ? Number(order.pricing.tax_rate) : null);
                   const totalCommitted = order.target_committed_quantity || order.total_booked_quantity || item.quantity || 100;
                   const fulfilled = order.fulfilled_quantity || 0;
                   const remaining = order.remaining_quantity != null ? order.remaining_quantity : Math.max(0, totalCommitted - fulfilled);
@@ -1336,7 +1652,9 @@ export default function BdePoOrders() {
                       {/* Commercial Value */}
                       <td className="px-4 py-3.5">
                         <div className="font-bold text-slate-900">₹{grandTotalInr.toLocaleString('en-IN')}</div>
-                        <div className="text-[11px] text-slate-500">Incl. 12% GST</div>
+                        <div className="text-[11px] text-slate-500">
+                          {orderGstRate != null ? `Incl. ${orderGstRate}% GST` : 'Incl. GST'}
+                        </div>
                       </td>
 
                       {/* Token Deposit */}
@@ -1608,7 +1926,7 @@ export default function BdePoOrders() {
       {/* ── 5. MODAL 1: CREATE PURCHASE ORDER ── */}
       {createModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-5xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="p-6 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
               <div>
@@ -1654,18 +1972,13 @@ export default function BdePoOrders() {
                   onChange={(e) => {
                     const chosenEpcId = e.target.value;
                     setModalEpcId(chosenEpcId);
-                    const epc = onboardedEpcs.find((item) => String(item._id || item.id) === String(chosenEpcId));
-                    if (epc) {
-                      const fId =
-                        epc.assigned_franchisee_id ||
-                        epc.assigned_franchisee?._id ||
-                        modalFranchiseeId ||
-                        franchisees[0]?._id;
-                      if (fId) {
-                        setModalFranchiseeId(fId);
-                        fetchFranchiseePlanSettings(fId);
-                        fetchEpcBuyers(fId);
-                      }
+                    const chosenEpc = onboardedEpcs.find((item) => String(item._id || item.id) === String(chosenEpcId));
+                    const targetFId = chosenEpc?.assigned_franchisee_id || chosenEpc?.assigned_franchisee?._id || '';
+                    setModalFranchiseeId(targetFId);
+                    fetchCompanyCombokits(chosenEpcId, targetFId);
+                    if (targetFId) {
+                      fetchFranchiseePlanSettings(targetFId);
+                      fetchEpcBuyers(targetFId);
                     }
                   }}
                   required
@@ -1709,26 +2022,13 @@ export default function BdePoOrders() {
                         )}
                       </div>
 
-                      {/* Associated Fulfillment Franchisee Store */}
+                      {/* PO Fulfillment: Direct Company Order */}
                       <div className="flex items-center gap-1.5">
-                        <Store className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="text-slate-500">Fulfillment Store Hub:</span>
-                        <select
-                          value={modalFranchiseeId}
-                          onChange={(e) => {
-                            const newFId = e.target.value;
-                            setModalFranchiseeId(newFId);
-                            fetchFranchiseePlanSettings(newFId);
-                            fetchEpcBuyers(newFId);
-                          }}
-                          className="bg-white border border-indigo-200 text-indigo-900 font-bold px-2 py-0.5 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                        >
-                          {franchisees.map((f) => (
-                            <option key={f._id || f.id} value={f._id || f.id}>
-                              {f.business_name} ({f.district})
-                            </option>
-                          ))}
-                        </select>
+                        <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span className="text-slate-500">Order Fulfillment:</span>
+                        <span className="bg-white border border-blue-200 text-blue-800 font-bold px-2.5 py-0.5 rounded-full text-xs shadow-2xs">
+                          SolarKits Direct (Company PO)
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1745,8 +2045,8 @@ export default function BdePoOrders() {
                     type="button"
                     onClick={() => setPoCategory('SINGLE_PO')}
                     className={`p-3.5 rounded-xl border text-left transition ${poCategory === 'SINGLE_PO'
-                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 hover:bg-slate-50'
+                      ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 hover:bg-slate-50'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -1762,8 +2062,8 @@ export default function BdePoOrders() {
                     type="button"
                     onClick={() => setPoCategory('COMBINE_PO')}
                     className={`p-3.5 rounded-xl border text-left transition ${poCategory === 'COMBINE_PO'
-                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
-                        : 'border-slate-200 hover:bg-slate-50'
+                      ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 hover:bg-slate-50'
                       }`}
                   >
                     <div className="flex items-center justify-between">
@@ -1790,92 +2090,299 @@ export default function BdePoOrders() {
                   )}
                 </div>
 
-                {/* Quick Filters */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">System Type</label>
-                    <select
-                      value={quickFilters.systemType}
-                      onChange={(e) => setQuickFilters({ ...quickFilters, systemType: e.target.value })}
-                      className="w-full mt-1 bg-white border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800"
-                    >
-                      <option value="all">All System Types</option>
-                      <option value="on-grid">On-Grid</option>
-                      <option value="hybrid">Hybrid</option>
-                      <option value="off-grid">Off-Grid</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Industry</label>
-                    <select
-                      value={quickFilters.industryType}
-                      onChange={(e) => setQuickFilters({ ...quickFilters, industryType: e.target.value })}
-                      className="w-full mt-1 bg-white border border-slate-200 rounded-lg p-1.5 text-xs text-slate-800"
-                    >
-                      <option value="all">All Industries</option>
-                      <option value="solar pv">Solar PV</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-2 sm:col-span-1 flex items-end">
+                {/* ── Quick Filters Bar (Matches Screenshot 1) ── */}
+                <div className="bg-slate-50/80 rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-2xs mb-4">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                        <Package className="w-4 h-4" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-sm text-slate-800">Quick Filters</h4>
+                        <span className="text-[11px] font-semibold text-slate-600 px-2 py-0.5 rounded-full bg-white border border-slate-200 shadow-2xs">
+                          {filteredComboKits.length} of {availableKits.length} Kits
+                        </span>
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() =>
-                        setQuickFilters({
-                          industryType: 'all',
-                          category: 'all',
-                          subCategory: 'all',
-                          systemType: 'all',
-                          projectRange: 'all',
-                        })
-                      }
-                      className="w-full py-1.5 px-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-[11px] font-bold text-slate-700 transition"
+                      onClick={handleClearMainFilters}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline transition cursor-pointer"
                     >
-                      Reset Filters
+                      Clear Main
                     </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    {/* 1. Industry Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Industry Type
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.industryType}
+                          onChange={(e) =>
+                            setQuickFilters({
+                              industryType: e.target.value,
+                              category: 'all',
+                              subCategory: 'all',
+                              systemType: 'all',
+                              projectRange: 'all',
+                            })
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {industryTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 2. Category */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Category
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.category}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              category: e.target.value,
+                              subCategory: 'all',
+                              systemType: 'all',
+                              projectRange: 'all',
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {categoryOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 3. Sub Category */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Sub Category
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.subCategory}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              subCategory: e.target.value,
+                              systemType: 'all',
+                              projectRange: 'all',
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {subCategoryOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 4. System Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        System Type
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.systemType}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              systemType: e.target.value,
+                              projectRange: 'all',
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {systemTypeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
+
+                    {/* 5. Project Range */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Project Range
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={quickFilters.projectRange}
+                          onChange={(e) =>
+                            setQuickFilters((prev) => ({
+                              ...prev,
+                              projectRange: e.target.value,
+                            }))
+                          }
+                          className="w-full appearance-none px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8 cursor-pointer shadow-2xs"
+                        >
+                          {projectRangeOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none w-3.5 h-3.5" />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {/* Blueprint Cards */}
                 {availableKits.length === 0 ? (
-                  <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
-                    <p className="text-xs text-slate-500">
-                      {modalFranchiseeId
-                        ? 'No active blueprint ComboKits found for this franchisee plan.'
-                        : 'Please choose a franchisee first to load authorized ComboKit blueprints.'}
+                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    <p className="text-xs font-bold text-slate-700">
+                      No active blueprint ComboKits found.
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Please ensure active ComboKit blueprints are configured in the system catalog.
                     </p>
                   </div>
+                ) : filteredComboKits.length === 0 ? (
+                  <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    <p className="text-xs font-bold text-slate-800">
+                      No ComboKits found matching the selected Quick Filters
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Try resetting or adjusting the Industry Type, Category, Sub Category, System Type, or Project Range filters above.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleClearMainFilters}
+                      className="mt-1 px-4 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold transition border border-blue-200 cursor-pointer"
+                    >
+                      Clear Quick Filters
+                    </button>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-56 overflow-y-auto p-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-84 overflow-y-auto p-1 pr-1.5">
                     {filteredComboKits.map((kit) => {
                       const isSel = String(kit._id) === String(selectedKitId);
                       return (
                         <div
                           key={kit._id}
-                          onClick={() => setSelectedKitId(kit._id)}
-                          className={`p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between ${isSel
-                              ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20 shadow-xs'
-                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          onClick={() => {
+                            setSelectedKitId(kit._id);
+                            const firstQty = kit.order_quantities?.[0] || kit.min_po_quantity || 0;
+                            setSelectedPoQty(firstQty);
+                          }}
+                          className={`p-4 sm:p-4.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${isSel
+                            ? 'border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-500/20'
+                            : 'border-slate-200 hover:border-blue-300 bg-white hover:shadow-xs'
                             }`}
                         >
                           <div>
-                            <div className="flex items-start justify-between gap-1">
-                              <span className="font-bold text-xs text-slate-900">{kit.name}</span>
-                              {isSel && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                            {/* Card Header: Selection Circle + Kit Title + kW Badge */}
+                            <div className="flex items-start justify-between gap-2.5">
+                              <div className="flex items-start gap-2.5">
+                                <div
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center text-xs mt-0.5 shrink-0 transition-colors ${isSel
+                                    ? 'bg-blue-600 text-white shadow-xs'
+                                    : 'border-2 border-slate-300 text-transparent'
+                                    }`}
+                                >
+                                  {isSel && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-sm text-slate-900 leading-snug">{kit.name}</h4>
+                                  {kit.category_name && (
+                                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                                      {kit.category_name} {kit.subcategory_name ? `• ${kit.subcategory_name}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Capacity kW Pill */}
+                              <div className="shrink-0 text-right">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 font-extrabold text-xs shadow-2xs">
+                                  <Zap className="w-3 h-3 text-blue-600 shrink-0" />
+                                  {kit.capacity_kw} kW
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
-                              <span className="font-bold text-blue-700">{kit.capacity_kw} kW</span>
-                              <span>•</span>
-                              <span>{kit.system_type}</span>
+
+                            {/* Taxonomy Badges */}
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md border border-slate-200">
+                                ☀️ {kit.system_type || 'On-Grid'}
+                              </span>
+                              {kit.project_range_label && (
+                                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-md border border-indigo-200">
+                                  📐 {kit.project_range_label}
+                                </span>
+                              )}
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-md border border-emerald-200">
+                                ✓ Authorized Blueprint
+                              </span>
+                              {kit.gst_rate != null && (
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-md border border-blue-200">
+                                  GST: {kit.gst_rate}%
+                                </span>
+                              )}
                             </div>
-                            <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{kit.specifications}</p>
+
+                            {/* Specifications Summary */}
+                            <p className="text-[11px] text-slate-600 mt-2 line-clamp-2 leading-relaxed">
+                              {kit.specifications}
+                            </p>
                           </div>
-                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                            <span className="text-[10px] text-slate-400 font-bold">Base Price</span>
-                            <span className="font-extrabold text-slate-900">
-                              ₹{(kit.dealer_price || 0).toLocaleString('en-IN')}/kit
-                            </span>
+
+                          {/* Card Bottom: Commercials & Pricing Section */}
+                          <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-end justify-between">
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Committed Quota Base</span>
+                              <div className="flex items-baseline gap-1 mt-0.5">
+                                <span className="text-base font-extrabold text-slate-900">
+                                  ₹{(kit.dealer_price || 0).toLocaleString('en-IN')}
+                                </span>
+                                <span className="text-[11px] font-bold text-slate-500">/ kit</span>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Token Booking</span>
+                              {kit.token_booking_enabled !== false && (kit.token_value > 0 || kit.token_rate_per_kit_paise > 0) ? (
+                                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 inline-block mt-0.5 shadow-2xs">
+                                  {kit.token_type === 'PERCENTAGE'
+                                    ? `${kit.token_value || 10}% PO Deposit`
+                                    : `₹${Number(kit.token_value || (kit.token_rate_per_kit_paise ? kit.token_rate_per_kit_paise / 100 : 0)).toLocaleString('en-IN')} PO Deposit`}
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1887,30 +2394,52 @@ export default function BdePoOrders() {
               {/* Step 4: Quota Quantity Tiers */}
               {selectedKit && (
                 <div>
-                  <label className="block text-xs font-bold uppercase text-slate-700 mb-1.5">
-                    4. Select Committed PO Quota Quantity (Kits) <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-4 gap-2.5">
-                    {selectedKit.order_quantities.map((qty) => {
-                      const isSel = Number(selectedPoQty) === Number(qty);
-                      return (
-                        <button
-                          key={qty}
-                          type="button"
-                          onClick={() => setSelectedPoQty(qty)}
-                          className={`py-3 px-2 rounded-xl border text-center transition ${isSel
-                              ? 'bg-blue-600 text-white font-extrabold border-blue-600 shadow-md shadow-blue-600/25'
-                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 font-bold'
-                            }`}
-                        >
-                          <div className="text-base">{qty}</div>
-                          <div className={`text-[10px] uppercase font-bold ${isSel ? 'text-blue-100' : 'text-slate-400'}`}>
-                            Kits
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase text-slate-700">
+                      4. Select Committed PO Quota Quantity (Kits) <span className="text-rose-500">*</span>
+                    </label>
+                    {selectedKit.order_quantities?.length > 0 && (
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        Configured MOQ: {selectedKit.order_quantities[0]} Kits
+                      </span>
+                    )}
                   </div>
+                  {Array.isArray(selectedKit.order_quantities) && selectedKit.order_quantities.length > 0 ? (
+                    <div
+                      className={`grid gap-2.5 ${selectedKit.order_quantities.length === 1
+                        ? 'grid-cols-1 sm:grid-cols-2'
+                        : selectedKit.order_quantities.length === 2
+                          ? 'grid-cols-2'
+                          : selectedKit.order_quantities.length === 3
+                            ? 'grid-cols-3'
+                            : 'grid-cols-2 sm:grid-cols-4'
+                        }`}
+                    >
+                      {selectedKit.order_quantities.map((qty) => {
+                        const isSel = Number(selectedPoQty) === Number(qty);
+                        return (
+                          <button
+                            key={qty}
+                            type="button"
+                            onClick={() => setSelectedPoQty(qty)}
+                            className={`py-3 px-2 rounded-xl border text-center transition ${isSel
+                              ? 'bg-blue-600 text-white font-extrabold border-blue-600 shadow-md shadow-blue-600/25 ring-2 ring-blue-500/20'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 font-bold'
+                              }`}
+                          >
+                            <div className="text-base">{qty}</div>
+                            <div className={`text-[10px] uppercase font-bold ${isSel ? 'text-blue-100' : 'text-slate-400'}`}>
+                              Kits
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
+                      No PO Quota Quantities configured for this kit in Admin. Please configure them under Trial Kits / MOQ.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1936,7 +2465,7 @@ export default function BdePoOrders() {
                       <div className="font-bold text-sm text-white mt-0.5">₹{estimatedSubtotal.toLocaleString('en-IN')}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] text-slate-400 uppercase">GST (12%)</div>
+                      <div className="text-[10px] text-slate-400 uppercase">GST ({kitGstRate}%)</div>
                       <div className="font-bold text-sm text-white mt-0.5">₹{estimatedGst.toLocaleString('en-IN')}</div>
                     </div>
                     <div>
@@ -1950,7 +2479,9 @@ export default function BdePoOrders() {
                   <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5 text-amber-200">
                       <Lock className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Required Escrow Token Deposit ({targetQuantity} × ₹{tokenRatePerKit}):</span>
+                      <span>
+                        Required Escrow Token Deposit ({tokenBookingType === 'PERCENTAGE' ? `${rawTokenValue}% of PO Value` : 'Fixed PO Quota Token'}):
+                      </span>
                     </div>
                     <span className="text-base font-black text-amber-300">
                       ₹{estimatedTokenDeposit.toLocaleString('en-IN')}
@@ -2053,8 +2584,8 @@ export default function BdePoOrders() {
                       type="button"
                       onClick={() => setAllocateSingleTarget('single_epc')}
                       className={`p-3.5 rounded-xl border text-left transition ${allocateSingleTarget === 'single_epc'
-                          ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
-                          : 'border-slate-200 hover:bg-slate-50'
+                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 hover:bg-slate-50'
                         }`}
                     >
                       <div className="flex items-center justify-between">
@@ -2068,8 +2599,8 @@ export default function BdePoOrders() {
                       type="button"
                       onClick={() => setAllocateSingleTarget('warehouse')}
                       className={`p-3.5 rounded-xl border text-left transition ${allocateSingleTarget === 'warehouse'
-                          ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
-                          : 'border-slate-200 hover:bg-slate-50'
+                        ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 hover:bg-slate-50'
                         }`}
                     >
                       <div className="flex items-center justify-between">
@@ -2416,8 +2947,8 @@ export default function BdePoOrders() {
                       type="button"
                       onClick={() => setReorderQty(q)}
                       className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition ${Number(reorderQty) === q
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                          : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
                         }`}
                     >
                       {q} Kits
@@ -2436,32 +2967,40 @@ export default function BdePoOrders() {
               </div>
 
               {/* Commercials */}
-              <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1.5">
-                <div className="flex justify-between text-slate-600">
-                  <span>Gross Value:</span>
-                  <span className="font-bold text-slate-900">
-                    ₹
-                    {(
-                      reorderQty *
-                      Math.round(((reorderOrder.items?.[0]?.unit_price_paise || 0) / 100) * 1.12)
-                    ).toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between text-emerald-700">
-                  <span>Pro-rata Token Escrow Adjusted:</span>
-                  <span className="font-bold">-₹{(reorderQty * 500).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between text-slate-900 font-extrabold border-t border-indigo-200 pt-1.5">
-                  <span>Net Payable Amount:</span>
-                  <span className="text-indigo-900">
-                    ₹
-                    {(
-                      reorderQty * Math.round(((reorderOrder.items?.[0]?.unit_price_paise || 0) / 100) * 1.12) -
-                      reorderQty * 500
-                    ).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const reorderItem = reorderOrder.items?.[0] || {};
+                const reorderGstRate = reorderItem.gst_rate != null ? Number(reorderItem.gst_rate) : 0;
+                const reorderUnitPrice = (reorderItem.unit_price_paise || 0) / 100;
+                const reorderTaxPerKit = Math.round((reorderUnitPrice * reorderGstRate) / 100);
+                const totalPoCommitted = Number(reorderOrder.total_booked_quantity || reorderOrder.target_committed_quantity || reorderItem.quantity || 1);
+                const totalPoTokenInr = Number(reorderOrder.token_amount_paise || reorderOrder.token_paid_paise || 0) / 100;
+                const reorderTokenPerKit = totalPoCommitted > 0 ? Math.round(totalPoTokenInr / totalPoCommitted) : 0;
+                const numQty = Number(reorderQty) || 0;
+                const reorderGrossValue = numQty * reorderUnitPriceWithTax;
+                const reorderEscrowAdj = numQty * reorderTokenPerKit;
+                const reorderNetPayable = Math.max(0, reorderGrossValue - reorderEscrowAdj);
+
+                return (
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs space-y-1.5">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Gross Value (Incl. {reorderGstRate}% GST):</span>
+                      <span className="font-bold text-slate-900">
+                        ₹{reorderGrossValue.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Pro-rata Token Escrow Adjusted ({numQty} × ₹{reorderTokenPerKit}):</span>
+                      <span className="font-bold">-₹{reorderEscrowAdj.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-900 font-extrabold border-t border-indigo-200 pt-1.5">
+                      <span>Net Payable Amount:</span>
+                      <span className="text-indigo-900 font-black">
+                        ₹{reorderNetPayable.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Payment Details */}
               <div>
@@ -2613,8 +3152,8 @@ export default function BdePoOrders() {
                             <td className="px-3 py-2">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${alloc.payment_status === 'PAID'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-amber-100 text-amber-800'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
                                   }`}
                               >
                                 {alloc.payment_status || 'PENDING'}

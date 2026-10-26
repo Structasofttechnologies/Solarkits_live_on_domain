@@ -208,7 +208,7 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
     }
     const ourP = Number(kit.ourPrice || kit.selling_price_inr || kit.price || kit.discounted_price || kit.mrp || 0);
     const mktP = Number(kit.marketPrice || kit.mrp || (ourP > 0 ? Math.round(ourP * 1.15) : 0));
-    const gstR = Number(kit.gstRate ?? kit.pricing?.gstRate ?? (kit.taxes_and_charges_inr ? 13.8 : 13.8));
+    const gstR = Number(kit.gstRate ?? kit.gst_rate ?? kit.pricing?.gstRate ?? kit.pricing?.gst_rate ?? 13.8);
     const cap = kit.capacityKW || (kit.wattage ? (kit.wattage >= 100 ? (kit.wattage / 1000) : kit.wattage) : 0.55);
     return {
       productTier: kit.productTier || kit.tier || kit.sku_code || "Tier-1 High Efficiency",
@@ -360,7 +360,15 @@ const KitCard = memo(({ kit, selected, setSelected, viewMode = "grid", compact =
       ? (ourPriceNum + activeTierPricing.discount_amount)
       : baseMarketPrice;
 
-    const gstRate = Number(currentVariant?.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
+    const gstRate = Number(
+      currentVariant?.gstRate ??
+      currentVariant?.gst_rate ??
+      kit?.gstRate ??
+      kit?.gst_rate ??
+      kit?.pricing?.gstRate ??
+      kit?.pricing?.gst_rate ??
+      13.8
+    );
     const gstIncludedAmount = ourPriceNum > 0 && !isNaN(ourPriceNum)
       ? Math.max(0, ourPriceNum - Math.round(ourPriceNum / (1 + (gstRate / 100))))
       : 0;

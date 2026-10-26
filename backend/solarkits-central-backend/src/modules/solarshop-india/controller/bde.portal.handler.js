@@ -2580,22 +2580,327 @@ exports.get_bde_po_franchisees = async (req, res) => {
 };
 
 /**
- * 2. Get Franchisee's Plan PO Settings & Available Blueprint ComboKits
+ * 2a. Get Available Company ComboKits for BDE PO Creation (Direct Company PO for EPCs)
+ */
+exports.get_bde_company_combokits = async (req, res) => {
+  try {
+    const {
+      WarehouseComboKit,
+      CompanyMargin,
+      FranchiseePlanPoSetting,
+      ResellerPlanSubscription,
+      EpcAccount,
+      ResellerPlan,
+    } = require('../../admin-panel/models/india_solarshop_db');
+    const {
+      SolarKit,
+      ProjectCategory,
+      IndustryType,
+      ProjectSubcategory,
+      ProjectSubcategoryType,
+      ProjectType,
+      ProjectRange,
+    } = require('../../admin-panel/models/core_db');
+
+    const epcId = req.query.epc_id;
+    const fId = req.query.franchisee_id;
+    let targetPlanId = null;
+
+    if (fId && mongoose.Types.ObjectId.isValid(fId)) {
+      const sub = await ResellerPlanSubscription.findOne({ reseller_id: fId, status: 'active' }).sort({ start_date: -1 }).lean();
+      if (sub?.plan_id) targetPlanId = sub.plan_id;
+    } else if (epcId && mongoose.Types.ObjectId.isValid(epcId)) {
+      const epc = await EpcAccount.findById(epcId).lean();
+      const resellerId = epc?.primary_reseller_id || epc?.onboarded_by_reseller_id || epc?.assigned_franchisee_id;
+      if (resellerId && mongoose.Types.ObjectId.isValid(resellerId)) {
+        const sub = await ResellerPlanSubscription.findOne({ reseller_id: resellerId, status: 'active' }).sort({ start_date: -1 }).lean();
+        if (sub?.plan_id) targetPlanId = sub.plan_id;
+      }
+    }
+
+    const companyPlan = await ResellerPlan.findOne({
+      deleted_at: null,
+      $or: [{ store_category: 'company_store' }, { slug: 'company-store' }, { name: /company/i }],
+    }).lean();
+
+    const allPoSettings = await FranchiseePlanPoSetting.find({ deleted_at: null, po_enabled: true }).sort({ updated_at: -1, created_at: -1 }).lean();
+
+    const kits = await WarehouseComboKit.find({ deleted_at: null, is_active: { $ne: false } }).lean();
+    const kitIds = kits.map((k) => k._id);
+
+    const activeMargins = await CompanyMargin.find({
+      combo_kit_id: { $in: kitIds },
+      deleted_at: null,
+      is_active: true,
+    }).lean();
+
+    const marginMap = new Map();
+    activeMargins.forEach((m) => {
+      const kId = String(m.combo_kit_id);
+      if (!marginMap.has(kId)) {
+        marginMap.set(kId, m);
+      }
+    });
+
+    const solarKitIds = kits.map((k) => k.solar_kit_id).filter(Boolean);
+    const [solarDefs, allRanges] = await Promise.all([
+      solarKitIds.length > 0 ? SolarKit.find({ _id: { $in: solarKitIds } }).lean() : [],
+      ProjectRange.find({ deleted_at: null }).lean(),
+    ]);
+
+    const defMap = new Map(solarDefs.map((d) => [d._id.toString(), d]));
+    const catIds = solarDefs.map((d) => d.category_id).filter(Boolean);
+    const subcatIds = solarDefs.map((d) => d.subcategory_id).filter(Boolean);
+    const typeIds = solarDefs.map((d) => d.type_id).filter(Boolean);
+
+    const [categories, subcategories, subcatTypes, projTypes] = await Promise.all([
+      catIds.length > 0 ? ProjectCategory.find({ _id: { $in: catIds } }).lean() : [],
+      subcatIds.length > 0 ? ProjectSubcategory.find({ _id: { $in: subcatIds } }).lean() : [],
+      typeIds.length > 0 ? ProjectSubcategoryType.find({ _id: { $in: typeIds } }).populate('type').populate('subcategory').lean() : [],
+      typeIds.length > 0 ? ProjectType.find({ _id: { $in: typeIds } }).lean() : [],
+    ]);
+
+    const catMap = new Map(categories.map((c) => [c._id.toString(), c]));
+    const indIds = categories.map((c) => c.industry_type_id).filter(Boolean);
+    const industries = indIds.length > 0 ? await IndustryType.find({ _id: { $in: indIds } }).lean() : [];
+    const indMap = new Map(industries.map((i) => [i._id.toString(), i]));
+    const subcatMap = new Map(subcategories.map((s) => [s._id.toString(), s]));
+    const subcatTypeMap = new Map(subcatTypes.map((st) => [st._id.toString(), st]));
+    const projTypeMap = new Map(projTypes.map((p) => [p._id.toString(), p]));
+
+    const enrichedKits = kits.map((k) => {
+      const margin = marginMap.get(String(k._id));
+      const def = defMap.get(k.solar_kit_id?.toString());
+      const cat = def ? catMap.get(def.category_id?.toString()) : null;
+      const ind = cat ? indMap.get(cat.industry_type_id?.toString()) : null;
+      const subcatType = def ? subcatTypeMap.get(def.type_id?.toString()) : null;
+      const directSubcat = def ? subcatMap.get(def.subcategory_id?.toString()) : null;
+      const directProjType = def ? projTypeMap.get(def.type_id?.toString()) : null;
+
+      const subcatId = subcatType?.subcategory?._id || directSubcat?._id || null;
+      const subcatName = subcatType?.subcategory?.name || directSubcat?.name || 'Individual Home';
+
+      let projTypeName = 'Rooftop Solar';
+      let projTypeId = null;
+      if (subcatType?.type) {
+        projTypeId = subcatType.type._id;
+        projTypeName = subcatType.type.name;
+        if (subcatType.subcategory?.name) {
+          projTypeName = `${subcatType.subcategory.name} - ${projTypeName}`;
+        }
+      } else if (directProjType) {
+        projTypeId = directProjType._id;
+        projTypeName = directProjType.name;
+      }
+
+      const kitCap = Number(k.capacity || 0);
+      const matchedRange = allRanges.find((r) =>
+        (subcatType && String(r.subcategory_type) === String(subcatType._id)) ||
+        (kitCap >= Number(r.min_value || 0) && kitCap <= Number(r.max_value || 999999))
+      );
+
+      const price = Number(k.selling_price_cached || k.base_price_cached || 0);
+      const gstRate = margin?.gst_rate != null ? Number(margin.gst_rate) : (k.gst_rate != null ? Number(k.gst_rate) : 0);
+
+      const poPricing = Array.isArray(margin?.po_order_pricing) && margin.po_order_pricing.length > 0
+        ? margin.po_order_pricing
+        : (k.po_order_pricing || []);
+      const loosePricing = Array.isArray(margin?.loose_order_pricing) && margin.loose_order_pricing.length > 0
+        ? margin.loose_order_pricing
+        : (k.loose_order_pricing || []);
+
+      // Prioritize Admin configured order_quantities and loose_order_quantities from ComboKit ("Trial Kits / MOQ")
+      const kitOrderQtys = Array.isArray(k.order_quantities) && k.order_quantities.length > 0
+        ? k.order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+        : [];
+      const poQtysFromPricing = poPricing
+        .map((p) => Number(p.quantity))
+        .filter((n) => !isNaN(n) && n > 0)
+        .sort((a, b) => a - b);
+      const resolvedPoQtys = kitOrderQtys.length > 0 ? kitOrderQtys : poQtysFromPricing;
+
+      const kitLooseQtys = Array.isArray(k.loose_order_quantities) && k.loose_order_quantities.length > 0
+        ? k.loose_order_quantities.map(Number).filter((n) => !isNaN(n) && n > 0).sort((a, b) => a - b)
+        : [];
+      const looseQtysFromPricing = loosePricing
+        .map((p) => Number(p.quantity))
+        .filter((n) => !isNaN(n) && n > 0)
+        .sort((a, b) => a - b);
+      const resolvedLooseQtys = kitLooseQtys.length > 0 ? kitLooseQtys : looseQtysFromPricing;
+
+      // Dynamically resolve kit-specific PO settings
+      const kIdStr = String(k._id);
+      let matchedSetting = null;
+
+      // 1. Dedicated kit-specific rule for Company Store plan
+      if (companyPlan) {
+        matchedSetting = allPoSettings.find((s) =>
+          String(s.plan_id) === String(companyPlan._id) &&
+          Array.isArray(s.allowed_combo_kit_ids) &&
+          s.allowed_combo_kit_ids.map(String).includes(kIdStr)
+        );
+      }
+
+      // 2. Any dedicated kit-specific rule across all PO settings
+      if (!matchedSetting) {
+        matchedSetting = allPoSettings.find((s) =>
+          Array.isArray(s.allowed_combo_kit_ids) &&
+          s.allowed_combo_kit_ids.map(String).includes(kIdStr)
+        );
+      }
+
+      // 3. Specific rule for this kit on targetPlanId (if requested)
+      if (!matchedSetting && targetPlanId) {
+        matchedSetting = allPoSettings.find((s) =>
+          String(s.plan_id) === String(targetPlanId) &&
+          Array.isArray(s.allowed_combo_kit_ids) &&
+          s.allowed_combo_kit_ids.map(String).includes(kIdStr)
+        );
+      }
+
+      // 4. Fallback to Company Store plan-wide default (empty allowed_combo_kit_ids)
+      if (!matchedSetting && companyPlan) {
+        matchedSetting = allPoSettings.find((s) =>
+          String(s.plan_id) === String(companyPlan._id) &&
+          (!s.allowed_combo_kit_ids || s.allowed_combo_kit_ids.length === 0)
+        );
+      }
+
+      // 5. Fallback to targetPlanId plan-wide default (empty allowed_combo_kit_ids)
+      if (!matchedSetting && targetPlanId) {
+        matchedSetting = allPoSettings.find((s) =>
+          String(s.plan_id) === String(targetPlanId) &&
+          (!s.allowed_combo_kit_ids || s.allowed_combo_kit_ids.length === 0)
+        );
+      }
+
+      // 6. Generic plan-wide default
+      if (!matchedSetting) {
+        matchedSetting = allPoSettings.find((s) =>
+          s.token_booking_enabled &&
+          (!s.allowed_combo_kit_ids || s.allowed_combo_kit_ids.length === 0)
+        ) || allPoSettings[0] || null;
+      }
+
+      let resolvedTokenRatePaise = 0;
+      let tokenBookingEnabled = false;
+      let tokenType = 'FIXED_AMOUNT';
+      let tokenValue = 0;
+
+      if (matchedSetting) {
+        tokenBookingEnabled = matchedSetting.token_booking_enabled !== false;
+        tokenType = matchedSetting.token_type || 'FIXED_AMOUNT';
+        tokenValue = Number(matchedSetting.token_value || 0);
+
+        if (tokenBookingEnabled) {
+          if (matchedSetting.token_rate_per_kit_paise != null && Number(matchedSetting.token_rate_per_kit_paise) > 0) {
+            resolvedTokenRatePaise = Number(matchedSetting.token_rate_per_kit_paise);
+          } else if (tokenType === 'FIXED_AMOUNT' && tokenValue > 0) {
+            resolvedTokenRatePaise = Math.round(tokenValue * 100);
+          } else if (tokenType === 'PERCENTAGE' && tokenValue > 0) {
+            resolvedTokenRatePaise = Math.round((price * 100) * (tokenValue / 100));
+          }
+        }
+      }
+
+      return {
+        _id: k._id,
+        id: k._id,
+        name: k.name,
+        kit_name: k.name,
+        capacity_kw: k.capacity || (matchedRange ? matchedRange.min_value : 5),
+        capacity: k.capacity || (matchedRange ? matchedRange.min_value : 5),
+        price,
+        unit_price: price,
+        dealer_price: price,
+        base_price_paise: Math.round(price * 100),
+        token_rate_per_kit_paise: resolvedTokenRatePaise,
+        token_booking_enabled: tokenBookingEnabled,
+        token_type: tokenType,
+        token_value: tokenValue,
+        gst_rate: gstRate,
+        tax_pct: gstRate,
+        gst_pct: gstRate,
+        common_gst_rate: gstRate,
+        industry_type_id: ind?._id || cat?.industry_type_id || null,
+        industry_type_name: ind?.name || 'Solar PV',
+        category_id: cat?._id || null,
+        category_name: cat?.name || 'Residential Solar',
+        subcategory_id: subcatId,
+        subcategory_name: subcatName,
+        project_type_id: projTypeId,
+        project_type_name: projTypeName,
+        system_type: k.system_type || (k.inverter_mode === 'hybrid' ? 'Hybrid' : (k.inverter_mode === 'offgrid' ? 'Off-Grid' : 'On-Grid')),
+        project_range_id: matchedRange?._id || null,
+        project_range_label: matchedRange ? `${matchedRange.min_value} - ${matchedRange.max_value} kW` : (k.capacity ? `${k.capacity} kW System` : 'Standard Range'),
+        min_kw: matchedRange?.min_value ?? (k.capacity || 0),
+        max_kw: matchedRange?.max_value ?? (k.capacity || 0),
+        order_quantities: resolvedPoQtys,
+        loose_order_quantities: resolvedLooseQtys,
+        min_po_quantity: resolvedPoQtys[0] || (kitOrderQtys[0] || 0),
+        is_trial_available: k.is_trial_available ?? false,
+        max_trial_count_per_buyer: k.max_trial_count_per_buyer || 10,
+        specifications: k.description || 'High performance solar kit with tier-1 inverter, solar panels, and GI mounting structure.',
+        po_order_pricing: poPricing,
+        loose_order_pricing: loosePricing,
+      };
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        combo_kits: enrichedKits,
+        has_active_plan: true,
+      },
+    });
+  } catch (err) {
+    console.error('[get_bde_company_combokits Error]', err);
+    return res.status(500).json({ status: 'error', message: err.message || 'Failed to fetch company combokits' });
+  }
+};
+
+/**
+ * 2. Get Franchisee's Plan PO Settings & Available Blueprint ComboKits (Falls back to Company ComboKits)
  */
 exports.get_franchisee_po_plan_settings = async (req, res) => {
   try {
     const franchiseeId = req.params.franchiseeId || req.query.franchisee_id;
-    if (!franchiseeId) {
-      return res.status(400).json({ status: 'error', message: 'franchiseeId is required' });
+    if (!franchiseeId || franchiseeId === 'company' || franchiseeId === 'direct') {
+      return await exports.get_bde_company_combokits(req, res);
     }
     const simulatedReq = {
       ...req,
       reseller: { _id: franchiseeId, id: franchiseeId },
     };
-    return await resellerPortalHandler.get_my_plan_po_settings(simulatedReq, res);
+
+    let capturedBody = null;
+    let capturedStatus = 200;
+    const mockRes = {
+      status(code) {
+        capturedStatus = code;
+        return this;
+      },
+      json(body) {
+        capturedBody = body;
+        return this;
+      },
+    };
+
+    await resellerPortalHandler.get_my_plan_po_settings(simulatedReq, mockRes);
+
+    if (
+      !capturedBody ||
+      !capturedBody.data ||
+      !Array.isArray(capturedBody.data.combo_kits) ||
+      capturedBody.data.combo_kits.length === 0
+    ) {
+      return await exports.get_bde_company_combokits(req, res);
+    }
+
+    return res.status(capturedStatus).json(capturedBody);
   } catch (err) {
     console.error('[get_franchisee_po_plan_settings Error]', err);
-    return res.status(500).json({ status: 'error', message: err.message || 'Failed to fetch plan settings' });
+    return await exports.get_bde_company_combokits(req, res);
   }
 };
 
@@ -2801,8 +3106,8 @@ exports.create_bde_po_order = async (req, res) => {
       epcAccount = await EpcAccount.findById(epc_id).lean();
     }
 
-    // Resolve Franchisee: from passed franchisee_id or from EPC's primary/assigned reseller
-    let resolvedFranchiseeId = franchisee_id || epcAccount?.primary_reseller_id || epcAccount?.onboarded_by_reseller_id;
+    // Optional Franchisee association (BDE creates PO for EPC on behalf of company)
+    let resolvedFranchiseeId = franchisee_id || epcAccount?.primary_reseller_id || epcAccount?.onboarded_by_reseller_id || null;
     if (!resolvedFranchiseeId && epc_id) {
       const rel = await EpcResellerRelationship.findOne({ epc_id, status: 'active' }).lean();
       if (rel) resolvedFranchiseeId = rel.reseller_id;
@@ -2812,17 +3117,9 @@ exports.create_bde_po_order = async (req, res) => {
     if (resolvedFranchiseeId && mongoose.Types.ObjectId.isValid(resolvedFranchiseeId)) {
       franchisee = await Reseller.findOne({ _id: resolvedFranchiseeId, deleted_at: null }).lean();
     }
-    if (!franchisee) {
-      franchisee = await Reseller.findOne({ deleted_at: null, is_operational: true }).lean();
-      if (franchisee) resolvedFranchiseeId = franchisee._id;
-    }
 
-    if (!resolvedFranchiseeId) {
-      return res.status(400).json({ status: 'error', message: 'No associated Franchisee found for this EPC/PO' });
-    }
-
-    const epcDisplayName = epcAccount?.gstin_trade_name || epcAccount?.gstin_legal_name || epcAccount?.name || franchisee?.business_name || 'Onboarded EPC';
-    const epcMobile = epcAccount?.whatsapp || epcAccount?.registered_whatsapp || epcAccount?.mobile || franchisee?.mobile || '';
+    const epcDisplayName = epcAccount?.gstin_trade_name || epcAccount?.gstin_legal_name || epcAccount?.name || 'Onboarded EPC';
+    const epcMobile = epcAccount?.whatsapp || epcAccount?.registered_whatsapp || epcAccount?.mobile || '';
 
     const custDetails = {
       epc_id: epcAccount?._id || epc_id || null,
@@ -2830,18 +3127,29 @@ exports.create_bde_po_order = async (req, res) => {
       company_name: epcDisplayName,
       buyer_name: epcAccount?.name || epcDisplayName,
       mobile: epcMobile,
-      email: epcAccount?.email || franchisee?.email || '',
+      email: epcAccount?.email || '',
       gstin: epcAccount?.gstin || null,
-      gst_number: epcAccount?.gstin || franchisee?.gst_number || null,
-      district: epcAccount?.district_name || franchisee?.address?.district_name || 'Regional',
-      state: epcAccount?.state_name || franchisee?.address?.state_name || 'Gujarat',
-      franchisee_id: resolvedFranchiseeId,
-      franchisee_name: franchisee?.business_name || 'Franchise Partner',
+      gst_number: epcAccount?.gstin || null,
+      district: epcAccount?.district_name || epcAccount?.district || 'Regional',
+      state: epcAccount?.state_name || epcAccount?.state || 'Gujarat',
+      franchisee_id: resolvedFranchiseeId || null,
+      franchisee_name: franchisee ? franchisee.business_name : 'SolarKits Direct (Company PO)',
     };
 
     const committedQty = Number(target_committed_quantity) || items[0]?.quantity || 100;
 
-    // If Single PO and EPC is chosen, pre-allocate to this EPC
+    // Compute total PO token amount (in paise)
+    let poTokenAmountPaise = 0;
+    const isTokenBooking = is_token_booking !== undefined ? Boolean(is_token_booking) : true;
+    if (isTokenBooking) {
+      if (req.body.token_amount_paise != null && Number(req.body.token_amount_paise) >= 0) {
+        poTokenAmountPaise = Number(req.body.token_amount_paise);
+      } else if (items[0]?.token_rate_paise != null && Number(items[0].token_rate_paise) >= 0) {
+        poTokenAmountPaise = Number(items[0].token_rate_paise);
+      }
+    }
+
+    // If Single PO and EPC is chosen, pre-allocate to this EPC with full PO token
     if (epcAccount && po_category !== 'COMBINE_PO' && items.length > 0) {
       if (!items[0].epc_allocations || items[0].epc_allocations.length === 0) {
         items[0].epc_allocations = [
@@ -2852,7 +3160,7 @@ exports.create_bde_po_order = async (req, res) => {
             buyer_name: epcAccount.name || epcDisplayName,
             gstin: epcAccount.gstin || null,
             allocated_quantity: committedQty,
-            token_amount_paise: committedQty * (items[0].token_rate_paise || 50000),
+            token_amount_paise: poTokenAmountPaise,
             payment_status: 'PENDING',
           },
         ];
@@ -2870,7 +3178,8 @@ exports.create_bde_po_order = async (req, res) => {
       target_committed_quantity: committedQty,
       order_type: order_type || 'po_order',
       po_category: po_category || 'SINGLE_PO',
-      is_token_booking: is_token_booking !== undefined ? Boolean(is_token_booking) : true,
+      is_token_booking: isTokenBooking,
+      token_amount_paise: poTokenAmountPaise,
       destination_type: destination_type || 'hub_stock',
       destination_address: destination_address || null,
       destination_pincode: destination_pincode || null,

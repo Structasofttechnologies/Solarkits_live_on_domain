@@ -91,7 +91,15 @@ export default function KitProductCard({
     ? Math.max(0, Math.round(((currentVariant.marketPrice - currentVariant.ourPrice) / currentVariant.marketPrice) * 100))
     : 0;
 
-  const gstRate = Number(currentVariant.gstRate ?? kit?.gstRate ?? kit?.pricing?.gstRate ?? 13.8);
+  const gstRate = Number(
+    currentVariant.gstRate ??
+    currentVariant.gst_rate ??
+    kit?.gstRate ??
+    kit?.gst_rate ??
+    kit?.pricing?.gstRate ??
+    kit?.pricing?.gst_rate ??
+    13.8
+  );
   const gstAmount = currentVariant.ourPrice
     ? currentVariant.ourPrice - Math.round(currentVariant.ourPrice / (1 + (gstRate / 100)))
     : 0;

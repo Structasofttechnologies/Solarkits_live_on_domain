@@ -3400,8 +3400,30 @@ const calculate_pincode_delivery_cost = async (req, res) => {
       ? Number(kitDoc.selling_price_inr || kitDoc.selling_price_cached || kitDoc.base_price_cached || 0)
       : 0;
     const itemsSubtotal = unitPrice * qty;
-    const gstRate = 13.8; // Standard Solar Kit GST in India
-    const gstAmount = Math.round((itemsSubtotal * gstRate) / 100);
+
+    let gstRate = 13.8;
+    if (req.query.gst_rate !== undefined && req.query.gst_rate !== null && !isNaN(Number(req.query.gst_rate))) {
+      gstRate = Number(req.query.gst_rate);
+    } else if (targetKitId) {
+      const marginDoc = await CompanyMargin.findOne({
+        combo_kit_id: targetKitId,
+        is_active: true,
+        deleted_at: null,
+      }).sort({ updated_at: -1 }).lean();
+
+      if (marginDoc?.gst_rate != null && !isNaN(Number(marginDoc.gst_rate))) {
+        gstRate = Number(marginDoc.gst_rate);
+      } else if (kitDoc?.gst_rate != null && !isNaN(Number(kitDoc.gst_rate))) {
+        gstRate = Number(kitDoc.gst_rate);
+      } else {
+        const shopSettings = (await SolarShopSettings.findOne().lean()) || {};
+        if (shopSettings?.gst_rate != null && !isNaN(Number(shopSettings.gst_rate))) {
+          gstRate = Number(shopSettings.gst_rate);
+        }
+      }
+    }
+
+    const gstAmount = itemsSubtotal > 0 ? Math.round(itemsSubtotal - itemsSubtotal / (1 + gstRate / 100)) : 0;
     const totalPayable = itemsSubtotal + deliveryCost;
 
     return res.status(200).json({
@@ -3423,6 +3445,7 @@ const calculate_pincode_delivery_cost = async (req, res) => {
           delivery_cost: deliveryCost,
           total_payable: totalPayable,
           gst_rate: gstRate,
+          gst_amount: gstAmount,
         },
         message: isServiceable
           ? `Delivery available to ${districtName ? districtName + ', ' : ''}${stateName || ''} (${cleanPincode})`
